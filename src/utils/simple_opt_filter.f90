@@ -22,7 +22,7 @@ type optfilt2Dvars
     real, allocatable :: cur_fil(:)
     type(image)       :: odd_copy_rmat, even_copy_rmat
     type(image)       :: odd_copy_cmat, even_copy_cmat
-    type(image)       :: odd_filt, even_filt, diff_img, diff_img_opt
+    type(image)       :: odd_filt, even_filt, diff_img_odd, diff_img_even, diff_img_opt_odd, diff_img_opt_even
     integer           :: lplim_hres
     logical           :: have_mask = .false.
 end type optfilt2Dvars
@@ -252,8 +252,10 @@ contains
             call odd(iptcl)%pad_mirr(ldim_pd)
             call optf2Dvars(iptcl)%even_filt%copy(even(iptcl))
             call optf2Dvars(iptcl)%odd_filt %copy( odd(iptcl))
-            call optf2Dvars(iptcl)%diff_img    %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_opt%new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_odd    %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_even   %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_opt_odd %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_opt_even%new(ldim_pd, smpd, .false.)
             call optf2Dvars(iptcl)%odd_copy_rmat%copy(odd(iptcl))
             call optf2Dvars(iptcl)%odd_copy_cmat%copy(odd(iptcl))
             call optf2Dvars(iptcl)%odd_copy_cmat%fft
@@ -320,8 +322,10 @@ contains
             call optf2Dvars(iptcl)%even_copy_cmat%kill
             call optf2Dvars(iptcl)%even_filt%kill
             call optf2Dvars(iptcl)%odd_filt%kill
-            call optf2Dvars(iptcl)%diff_img%kill
-            call optf2Dvars(iptcl)%diff_img_opt%kill
+            call optf2Dvars(iptcl)%diff_img_odd%kill
+            call optf2Dvars(iptcl)%diff_img_even%kill
+            call optf2Dvars(iptcl)%diff_img_opt_odd%kill
+            call optf2Dvars(iptcl)%diff_img_opt_even%kill
             call even(iptcl)%clip_inplace(ldim)
             call odd( iptcl)%clip_inplace(ldim)
             call fftwf_free(optf2Dvars(iptcl)%fft_ptr)
@@ -393,7 +397,7 @@ contains
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         integer         :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cur_ind, lb(3), ub(3)
         real            :: find_stepsz, val
-        type(image_ptr) :: pdiff_opt, pdiff, pweights
+        type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
         ! init
         ldim        = odd%get_ldim()
         box         = ldim(1)
@@ -407,9 +411,12 @@ contains
         ub          = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
-        call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
-        call optf2Dvars%diff_img_opt%get_mat_ptrs(pdiff_opt)
-        pdiff_opt%rmat = huge(val)
+        call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
+        call optf2Dvars%diff_img_even%get_mat_ptrs(pdiff_even)
+        call optf2Dvars%diff_img_opt_odd %get_mat_ptrs(pdiff_opt_odd)
+        call optf2Dvars%diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
+        pdiff_opt_odd %rmat = huge(val)
+        pdiff_opt_even%rmat = huge(val)
         call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
         call optf2Dvars%odd_filt%get_rmat_ptr(rmat_odd_filt)
@@ -424,18 +431,21 @@ contains
             call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
             call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
             call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
-            call optf2Dvars%even_filt%opt_filter_costfun(optf2Dvars%odd_copy_rmat,&
-            &optf2Dvars%odd_filt, optf2Dvars%even_copy_rmat, optf2Dvars%diff_img)
+            call optf2Dvars%diff_img_odd %copy_fast(optf2Dvars%odd_copy_rmat)
+            call optf2Dvars%diff_img_even%copy_fast(optf2Dvars%even_copy_rmat)
+            call optf2Dvars%diff_img_odd %sqeuclid_matrix(optf2Dvars%odd_filt,  optf2Dvars%diff_img_odd)
+            call optf2Dvars%diff_img_even%sqeuclid_matrix(optf2Dvars%even_filt, optf2Dvars%diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
-            call optf2Dvars%diff_img%fft
-            pdiff%cmat  = pdiff%cmat * pweights%cmat
-            call optf2Dvars%diff_img%ifft
+            call batch_fft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
+            pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
+            pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
+            call batch_ifft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
             do l = lb(2),ub(2)
                 do k = lb(1),ub(1)
-                    if( pdiff%rmat(k,l,1) < pdiff_opt%rmat(k,l,1) )then
+                    if( pdiff_odd%rmat(k,l,1) < pdiff_opt_odd%rmat(k,l,1) )then
                         rmat_odd( k,l,1)      = rmat_odd_filt( k,l,1)
                         rmat_even(k,l,1)      = rmat_even_filt(k,l,1)
-                        pdiff_opt%rmat(k,l,1) = pdiff%rmat(k,l,1)
+                        pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
                     endif
                 enddo
             enddo
@@ -450,7 +460,7 @@ contains
         type(image)     :: odd_filt_lowres, even_filt_lowres
         integer         :: k, l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cur_ind, lb(3), ub(3)
         real            :: find_stepsz, val, m
-        type(image_ptr) :: pdiff_opt, pdiff, pweights
+        type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
         if( .not. optf2Dvars%have_mask )then
             call opt_filter_2D(odd, even, weights_img, optf2Dvars)
             return
@@ -468,9 +478,12 @@ contains
         ub          = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
-        call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
-        call optf2Dvars%diff_img_opt%get_mat_ptrs(pdiff_opt)
-        pdiff_opt%rmat = huge(val)
+        call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
+        call optf2Dvars%diff_img_even%get_mat_ptrs(pdiff_even)
+        call optf2Dvars%diff_img_opt_odd %get_mat_ptrs(pdiff_opt_odd)
+        call optf2Dvars%diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
+        pdiff_opt_odd %rmat = huge(val)
+        pdiff_opt_even%rmat = huge(val)
         call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
         call optf2Dvars%odd_filt%get_rmat_ptr(rmat_odd_filt)
@@ -495,15 +508,18 @@ contains
             call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
             call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
             call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
-            call optf2Dvars%even_filt%opt_filter_costfun(optf2Dvars%odd_copy_rmat,&
-            &optf2Dvars%odd_filt, optf2Dvars%even_copy_rmat, optf2Dvars%diff_img)
+            call optf2Dvars%diff_img_odd %copy_fast(optf2Dvars%odd_copy_rmat)
+            call optf2Dvars%diff_img_even%copy_fast(optf2Dvars%even_copy_rmat)
+            call optf2Dvars%diff_img_odd %sqeuclid_matrix(optf2Dvars%odd_filt,  optf2Dvars%diff_img_odd)
+            call optf2Dvars%diff_img_even%sqeuclid_matrix(optf2Dvars%even_filt, optf2Dvars%diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
-            call optf2Dvars%diff_img%fft
-            pdiff%cmat  = pdiff%cmat * pweights%cmat
-            call optf2Dvars%diff_img%ifft
+            call batch_fft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
+            pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
+            pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
+            call batch_ifft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
             do l = lb(2),ub(2)
                 do k = lb(1),ub(1)
-                    if( pdiff%rmat(k,l,1) < pdiff_opt%rmat(k,l,1) )then
+                    if( pdiff_odd%rmat(k,l,1) < pdiff_opt_odd%rmat(k,l,1) )then
                         m = rmat_mask(k,l,1)
                         if( m > 0.99 )then
                             rmat_odd( k,l,1) = rmat_odd_filt( k,l,1)
@@ -515,7 +531,7 @@ contains
                             rmat_odd( k,l,1) = m * rmat_odd_filt( k,l,1) + (1. - m) * rmat_odd_lowres( k,l,1)
                             rmat_even(k,l,1) = m * rmat_even_filt(k,l,1) + (1. - m) * rmat_even_lowres(k,l,1)
                         endif
-                        pdiff_opt%rmat(k,l,1) = pdiff%rmat(k,l,1)
+                        pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
                     endif
                 enddo
             enddo
