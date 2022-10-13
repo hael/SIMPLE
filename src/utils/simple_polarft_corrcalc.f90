@@ -2254,5 +2254,5 @@ contains
             self%existence    = .false.
         endif
     end subroutine kill
-    
+
 end module simple_polarft_corrcalc

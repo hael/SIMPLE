@@ -46,6 +46,7 @@ type :: builder
     ! STRATEGY3D TOOLBOX
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
+    real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
@@ -371,9 +372,26 @@ contains
     subroutine build_strategy3D_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
+        real :: rot
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates) )
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
+        if( trim(params%refine).eq.'greedyc' )then
+            rot = 0.
+            params%nrots = 0
+            do while( rot < 360. )
+                params%nrots = params%nrots + 1
+                rot = rot + params%athres
+            end do
+            allocate( self%inpl_rots(params%nrots), source=0. )
+            rot = 0.
+            params%nrots = 0
+            do while( rot < 360. )
+                params%nrots = params%nrots + 1
+                self%inpl_rots(params%nrots) = rot
+                rot = rot + params%athres
+            end do
+        endif
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
@@ -389,6 +407,7 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
+            if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox
