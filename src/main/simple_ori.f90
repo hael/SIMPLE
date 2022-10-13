@@ -502,6 +502,7 @@ contains
         real    :: athres_rad, dist, rnd_perm, euls(3)
         athres_rad = deg2rad(athres)
         dist       = 2.*athres_rad
+        euls(3)    = self%e3get()
         do while( dist > athres_rad )
             call self%rnd_euler_1(eullims)
             dist = self.euldist.o_prev
@@ -509,9 +510,9 @@ contains
         euls(1) = self%e1get()
         euls(2) = self%e2get()
         if( ran3() <= 0.5 )then
-            euls(3) = self%e3get() + ran3() * athres
+            euls(3) = euls(3) + ran3() * athres
         else
-            euls(3) = self%e3get() - ran3() * athres
+            euls(3) = euls(3) - ran3() * athres
         endif
         call self%set_euler(euls)
     end subroutine rnd_euler_2
