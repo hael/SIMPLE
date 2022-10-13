@@ -695,22 +695,18 @@ contains
 
     end subroutine build_refspiral
 
-    subroutine rnd_euler_1( self, osym, eullims )
-        class(sym),     intent(inout) :: self
-        class(ori),     intent(inout) :: osym
-        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
-        call osym%rnd_euler(eullims)
-        if( self%n > 1 ) call self%rot_to_asym(osym)
+    subroutine rnd_euler_1( self, osym )
+        class(sym), intent(inout) :: self
+        class(ori), intent(inout) :: osym
+        call osym%rnd_euler(self%eullims)
     end subroutine rnd_euler_1
 
-    subroutine rnd_euler_2( self, o_prev, athres, osym, eullims)
+    subroutine rnd_euler_2( self, o_prev, athres, osym )
         class(sym),     intent(inout) :: self
         class(ori),     intent(in)    :: o_prev
         real,           intent(in)    :: athres
         class(ori),     intent(inout) :: osym
-        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
-        call osym%rnd_euler(o_prev, athres, eullims)
-        if( self%n > 1 ) call self%rot_to_asym(osym)
+        call osym%rnd_euler(o_prev, athres, self%eullims)
     end subroutine rnd_euler_2
 
     !>  \brief  SPIDER code for making c and d symmetries

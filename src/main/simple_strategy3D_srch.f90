@@ -221,6 +221,7 @@ contains
         endif
         ! prep corr
         call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev, self%prev_corr)
+        call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
     subroutine cart_shsearch( self, o )

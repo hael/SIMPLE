@@ -62,7 +62,9 @@ contains
                 ! exit condition
                 if( corr > self%s%prev_corr )then
                     call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
-                    call o%set('dist', euldist)
+                    call o%set('dist',      euldist)
+                    call o%set('dist_inpl', dist_inpl)
+                    call o%set('corr',      corr)
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit
                 endif
