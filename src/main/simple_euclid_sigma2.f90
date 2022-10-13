@@ -124,14 +124,14 @@ contains
         class(ori),           intent(in)    :: o
         integer,              intent(in)    :: iptcl
         integer              :: iref, irot
-        real                 :: sigma_contrib(params_glob%kfromto(1):params_glob%kstop)
+        real                 :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         real                 :: shvec(2)
         if ( os%get_state(iptcl)==0 ) return
         iref       = nint(o%get('proj'))
         shvec      = o%get_2Dshift()
         irot       = pftcc_glob%get_roind(360. - o%e3get())
         call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-        self%sigma2_part(params_glob%kfromto(1):params_glob%kstop,iptcl) = sigma_contrib
+        self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2
 
     subroutine write_sigma2( self )

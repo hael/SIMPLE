@@ -90,11 +90,9 @@ contains
         real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05
         real                  :: mapres(params_glob%nstates)
-        integer               :: s, loc(1), lp_ind, k_nyq
+        integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
-        ! Nyqvist index
-        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%box, params_glob%smpd)
         if( params_glob%l_lpset )then
             ! set Fourier index range
             params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
@@ -103,8 +101,6 @@ contains
                 params_glob%kfromto(2) = min(params_glob%kfromto(2),&
                     &calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
-            params_glob%kstop = params_glob%kfromto(2)
-            if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
         else
             ! check all fsc_state*.bin exist
             all_fsc_bin_exist = .true.
@@ -167,13 +163,10 @@ contains
                 params_glob%kfromto(2) = min(params_glob%kfromto(2), &
                     calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
-            ! low-pass limit equals interpolation limit for correlation search
-            params_glob%kstop = params_glob%kfromto(2)
-            if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
             ! set high-pass Fourier index limit
             params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             ! re-set the low-pass limit
-            params_glob%lp = calc_lowpass_lim(params_glob%kstop, params_glob%box, params_glob%smpd)
+            params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
@@ -183,9 +176,7 @@ contains
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
-        integer :: lpstart_find, k_nyq
-        ! Nyqvist index
-        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%box, params_glob%smpd)
+        integer :: lpstart_find
         ! High-pass index
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
@@ -208,8 +199,6 @@ contains
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
-        params_glob%kstop = params_glob%kfromto(2)
-        if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
 
@@ -327,7 +316,7 @@ contains
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(filtsz, frc, filter)
             if( params_glob%l_match_filt )then
-                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
+                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 call img_in%apply_filter_serial(filter)
@@ -507,7 +496,7 @@ contains
                         if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                         call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                         call fsc2optlp_sub(filtsz, frc, filter)
-                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
+                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     enddo
                 endif
             else
@@ -517,7 +506,7 @@ contains
                     filter = 1.
                 endif
                 do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
+                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                 enddo
             endif
         else
@@ -595,7 +584,7 @@ contains
                 else
                     filter = 1.
                 endif
-                call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kstop))
+                call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             endif
         else
             if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then

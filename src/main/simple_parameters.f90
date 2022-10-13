@@ -269,7 +269,6 @@ type :: parameters
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
-    integer :: kstop=0
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
@@ -1382,7 +1381,6 @@ contains
         ! set newbox if scale is defined
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
-        self%kstop      = self%kfromto(2)                ! -"-
         self%lp         = max(self%fny,self%lp)          ! lowpass limit
         self%lpmed      = self%lp                        ! median lp
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
