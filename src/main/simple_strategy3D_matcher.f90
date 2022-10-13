@@ -78,19 +78,11 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, imatch
         integer :: iptcl, fnr, ithr, state, n_nozero, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, ncavgs
-        logical :: doprint, do_extr, l_ctf, l_cartesian
+        logical :: doprint, do_extr, l_ctf
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
-
-        ! CARTESIAN REFINEMENT FLAG
-        select case(trim(params_glob%refine))
-            case('shcc','neighc')
-                l_cartesian = .true.
-            case DEFAULT
-                l_cartesian = .false.
-        end select
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -170,7 +162,7 @@ contains
             t_prep_pftcc = tic()
         endif
 
-        if( l_cartesian )then
+        if( params_glob%l_cartesian )then
             call prepcftcc4align(cline, batchsz_max)
         else
             call preppftcc4align(cline, batchsz_max)
@@ -188,7 +180,7 @@ contains
         ! generate particles image objects
         allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
         call prepimgbatch(batchsz_max)
-        if( l_cartesian )then
+        if( params_glob%l_cartesian )then
             !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
             do imatch=1,batchsz_max
                 call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
@@ -224,7 +216,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            if( l_cartesian )then
+            if( params_glob%l_cartesian )then
                 call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
                 if( l_ctf ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             else
@@ -316,7 +308,7 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! UPDATE PARTICLE STATS
-        if( .not. l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
+        if( .not. params_glob%l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
@@ -328,7 +320,7 @@ contains
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        if( l_cartesian )then
+        if( params_glob%l_cartesian )then
             call cftcc%kill
             do ibatch=1,batchsz_max
                 call match_imgs(ibatch)%kill

@@ -29,14 +29,14 @@ type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
     type(cftcc_shsrch_grad)  :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
-    type(ori)                :: o_prev                    !< previous orientation, used in continuous search 
+    type(ori)                :: o_prev                    !< previous orientation, used in continuous search
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                  :: nsample       = 0         !< # of continuous orientations to sample
     integer                  :: nstates       = 0         !< # states
     integer                  :: nprojs        = 0         !< # projections
-    integer                  :: nrots         = 0         !< # in-plane rotations in polar representation
+    integer                  :: nrots         = 0         !< # in-plane rotations
     integer                  :: nsym          = 0         !< symmetry order
     integer                  :: nnn           = 0         !< # nearest neighbors
     integer                  :: nbetter       = 0         !< # better orientations identified
@@ -128,14 +128,6 @@ contains
         class(strategy3D_spec), intent(in)    :: spec
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
-        logical :: l_cartesian
-        ! CARTESIAN REFINEMENT FLAG
-        select case(trim(params_glob%refine))
-            case('shcc','neighc')
-                l_cartesian = .true.
-            case DEFAULT
-                l_cartesian = .false.
-        end select
         ! set constants
         self%iptcl      = spec%iptcl
         self%nstates    = params_glob%nstates
@@ -157,10 +149,11 @@ contains
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%o_prev%new(.true.)
         ! create in-plane search object
-        if( l_cartesian )then
+        if( params_glob%l_cartesian )then
+            self%nrots = params_glob%nrots
             call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
         else
-            self%nrots      = pftcc_glob%get_nrots()
+            self%nrots = pftcc_glob%get_nrots()
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
             ! create all df:s search object

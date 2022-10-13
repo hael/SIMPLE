@@ -69,6 +69,7 @@ contains
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit
                 endif
+                !!!!!!!!!!!!!!!!!!! CARTESIAN SHIFT SRCH TO BE IMPLEMENTED
             end do
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

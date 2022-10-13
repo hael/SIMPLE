@@ -300,6 +300,7 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
+    integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=1           !< # continuous orientations to sample during stochastic search
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
@@ -448,6 +449,7 @@ type :: parameters
     logical :: l_autoscale    = .false.
     logical :: l_automsk      = .false.
     logical :: l_bfac         = .false.
+    logical :: l_cartesian    = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
     logical :: l_dev          = .false.
@@ -1428,16 +1430,6 @@ contains
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
         if( .not. cline%defined('noris') ) self%noris = self%nptcls
-        ! fix translation param
-        self%trs = abs(self%trs)
-        if( .not. cline%defined('trs') )then
-            select case(trim(self%refine))
-                case('snhc')
-                    self%trs = 0.
-                case DEFAULT
-                    self%trs = MINSHIFT
-            end select
-        endif
         self%l_doshift = .true.
         if( self%trs < 0.5 )then
             self%trs = 0.00001
@@ -1526,12 +1518,28 @@ contains
                 write(logfhandle,*) 'imgkind: ', trim(self%imgkind)
                 THROW_HARD('unsupported imgkind; new')
         end select
+        ! refine flag dependent things
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 5000
             if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
         self%l_refine_inpl = .false.
         if( trim(self%refine) .eq. 'inpl' ) self%l_refine_inpl = .true.
+        self%trs = abs(self%trs)
+        if( .not. cline%defined('trs') )then
+            select case(trim(self%refine))
+                case('snhc')
+                    self%trs = 0.
+                case DEFAULT
+                    self%trs = MINSHIFT
+            end select
+        endif
+        select case(trim(params_glob%refine))
+            case('shcc','neighc','greedyc')
+                    self%l_cartesian = .true.
+            case DEFAULT
+                    self%l_cartesian = .false.
+        end select
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
