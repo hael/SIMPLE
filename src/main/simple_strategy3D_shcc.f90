@@ -38,7 +38,7 @@ contains
         class(strategy3D_shcc), intent(inout) :: self
         integer,                 intent(in)   :: ithr
         integer   :: isample
-        type(ori) :: o
+        type(ori) :: o, osym
         real      :: corr
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
@@ -61,8 +61,11 @@ contains
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! exit condition
                 if( corr > self%s%prev_corr )then
-                    ! cartesian shift search
-                    ! call self%s%cart_shsearch(o)
+                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
+                    call o%set('dist',      euldist)
+                    call o%set('dist_inpl', dist_inpl)
+                    call o%set('corr',      corr)
+                    call o%set('frac',      100.0 * real(isample) / real(self%s%nsample))
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit
                 endif

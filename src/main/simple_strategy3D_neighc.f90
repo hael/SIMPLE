@@ -65,6 +65,7 @@ contains
                     call o%set('dist',      euldist)
                     call o%set('dist_inpl', dist_inpl)
                     call o%set('corr',      corr)
+                    call o%set('frac',      100.0 * real(isample) / real(self%s%nsample))
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit
                 endif

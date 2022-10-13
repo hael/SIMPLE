@@ -64,7 +64,7 @@ type strategy3D_srch
     procedure, private :: inpl_srch_2
     generic            :: inpl_srch => inpl_srch_1, inpl_srch_2
     procedure          :: store_solution
-    procedure          :: cart_shsearch
+    procedure          :: shift_srch_cart
     procedure          :: kill
 end type strategy3D_srch
 
@@ -131,7 +131,7 @@ contains
         logical :: l_cartesian
         ! CARTESIAN REFINEMENT FLAG
         select case(trim(params_glob%refine))
-            case('shcc','neighc','snhcc')
+            case('shcc','neighc')
                 l_cartesian = .true.
             case DEFAULT
                 l_cartesian = .false.
@@ -155,6 +155,7 @@ contains
         lims(:,2)       =  params_glob%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+        call self%o_prev%new(.true.)
         ! create in-plane search object
         if( l_cartesian )then
             call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
@@ -220,11 +221,11 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev, self%prev_corr)
-        call self%o_prev%set('corr', self%prev_corr)
+        call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev , self%prev_corr)
+        call self%o_prev %set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
-    subroutine cart_shsearch( self, o )
+    subroutine shift_srch_cart( self, o )
         class(strategy3D_srch), intent(inout) :: self
         type(ori),              intent(inout) :: o
         real :: cxy(3)
@@ -232,7 +233,7 @@ contains
         cxy = self%cart_shsrch_obj%minimize()
         call o%set('x', cxy(2))
         call o%set('y', cxy(3))
-    end subroutine cart_shsearch
+    end subroutine shift_srch_cart
 
     subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self
