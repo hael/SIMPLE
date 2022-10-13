@@ -151,6 +151,7 @@ contains
         type(cmdline)              :: cline_scale
         character(len=XLONGSTRLEN) :: cwd
         character(len=LONGSTRLEN)  :: projfile_in
+        integer :: nptcls_sel
         logical :: err
         call debug_print('in chunk%exec_classify '//int2str(self%id))
         if( .not.self%available ) return
@@ -162,6 +163,7 @@ contains
         cwd_glob    = trim(cwd)
         projfile_in = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         call simple_mkdir(STDERROUT_DIR)
+        nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
         ! scaling
         if( box /= orig_box )then
             self%projfile_out = trim(PROJNAME_CHUNK)//SCALE_SUFFIX//trim(METADATA_EXT) ! as per scale_project convention
@@ -200,8 +202,7 @@ contains
         ! chunk is now busy
         self%available = .false.
         self%converged = .false.
-        write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,&
-            &' INITIATED CLASSIFICATION WITH ',self%nptcls,' PARTICLES'
+        write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,' INITIATED CLASSIFICATION WITH ',nptcls_sel,' PARTICLES'
         call debug_print('end chunk%exec_classify')
     end subroutine exec_classify
 

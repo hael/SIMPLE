@@ -421,7 +421,7 @@ contains
         character(len=LONGSTRLEN) :: stk_relpath
         real    :: smpd_here
         integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
-        integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop
+        integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
         integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls
         logical :: l_maxed
         nchunks_imported = 0
@@ -496,8 +496,8 @@ contains
                 enddo
                 fromp = fromp + nptcls
             enddo
-            write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',fromp-fromp_prev,' PARTICLES FROM CHUNK ',&
-            &converged_chunks(ichunk)%id,' TO POOL'
+            nptcls_sel = converged_chunks(ichunk)%spproj%os_ptcl2D%get_noris(consider_state=.true.)
+            write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM CHUNK ',converged_chunks(ichunk)%id,' TO POOL'
             call flush(logfhandle)
             ! transfer classes
             l_maxed   = ncls_glob >= max_ncls ! max # of classes reached ?
@@ -1382,16 +1382,16 @@ contains
         character(len=STDLEN),    parameter :: dir_preprocess = trim(PATH_HERE)//'spprojs/'
         integer,                  parameter :: WAITTIME       = 3
         real                                :: SMPD_TARGET    = MAX_SMPD  ! target sampling distance
-        real                                   :: rarg
         type(parameters)                       :: params
         type(sp_project)                       :: spproj
         type(class_frcs)                       :: frcs, frcs_sc
+        type(oris)                             :: os_mic
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:), tmp_fnames(:), pool_stacks(:)
         character(len=:),          allocatable :: one_projfile, one_projname, fname, stack_fname, orig_stack_fname, carg
         character(len=:),          allocatable :: frcsfname, src
         integer,                   allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         logical,                   allocatable :: pool_stk_mask(:)
-        integer :: ichunk, istk, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top, nsplit
+        integer :: ichunk, istk, imic, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top, nsplit
         integer :: maxits, pool_nstks, iptcl, jptcl, jstk, nchunks_imported, tot_nchunks_imported
         logical :: all_chunks_submitted, all_chunks_imported, l_once
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
@@ -1484,12 +1484,23 @@ contains
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
         ! read strictly required fields project
-        ! call spproj%read(params%projfile)
-        ! call spproj%os_ptcl3D%kill
         call spproj%read_non_data_segments(params%projfile)
         call spproj%read_segment('mic',   params%projfile)
         call spproj%read_segment('stk',   params%projfile)
         call spproj%read_segment('ptcl2D',params%projfile)
+        nstks = spproj%os_stk%get_noris()
+        ! some selection has been performed beforehand
+        if( spproj%os_mic%get_noris() > nstks )then
+            os_mic = spproj%os_mic
+            call spproj%os_mic%kill
+            call spproj%os_mic%new(nstks, is_ptcl=.false.)
+            cnt = 0
+            do imic = 1,os_mic%get_noris()
+                if( (os_mic%get_state(imic) == 0) .or. (os_mic%get(imic,'nptcls') < 0.5) ) cycle
+                cnt = cnt + 1
+                call spproj%os_mic%transfer_ori(cnt,os_mic,imic)
+            enddo
+        endif
         ! sanity checks
         nptcls = spproj%get_nptcls()
         if( nptcls == 0 )then
@@ -1596,7 +1607,6 @@ contains
         origproj_time  = simple_gettime()
         initiated      = .true.
         ! Particles/stacks map, number of chunks
-        nstks = spproj%os_stk%get_noris()
         allocate(stk_all_nptcls(nstks),stk_nptcls(nstks),source=0)
         ntot_chunks     = 0
         cnt             = 0
@@ -1637,7 +1647,7 @@ contains
         write(logfhandle,'(A)')'>>> CHUNKS MAP: '
         do ichunk = 1,ntot_chunks
             nptcls = sum(stk_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
-            write(logfhandle,'(A,I6,A,I6,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_all_nptcls)
+            write(logfhandle,'(A,I6,A,I6,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_nptcls)
         enddo
         ! Infinite loop
         allocate(completed_fnames(nstks))
@@ -1777,6 +1787,10 @@ contains
         call starproj%export_cls2D(spproj)
         call spproj%os_cls2D%delete_entry('stk')
         ! write whole project
+        if( os_mic%get_noris() > 0 )then
+            spproj%os_mic = os_mic
+            call os_mic%kill
+        endif
         spproj%os_ptcl3D = spproj%os_ptcl2D
         call spproj%os_ptcl3D%delete_2Dclustering
         call spproj%write(orig_projfile)
