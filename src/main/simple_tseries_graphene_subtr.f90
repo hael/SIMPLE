@@ -126,7 +126,6 @@ contains
         call params%new(cline, silent=.true.)
         params_glob%kfromto(1) = 5
         params_glob%kfromto(2) = nyq-1
-        params_glob%kstop      = params_glob%kfromto(2)
         call pftcc%new(1,[1,1], .false.)
         angstep = abs(pftcc%get_rot(2)-pftcc%get_rot(1))
         nrots   = pftcc%get_nrots()

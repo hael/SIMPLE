@@ -138,11 +138,10 @@ contains
                     if( cline%defined('lpstart') )then
                         ! resolution limit update
                         lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%box,params_glob%smpd)
-                        lpind_anneal      = nint(real(lpind_start) + (1.-anneal_ratio)*real(params_glob%kstop-lpind_start))
-                        params_glob%kstop = min(lpind_anneal, params_glob%kstop)
+                        lpind_anneal      = nint(real(lpind_start) + (1.-anneal_ratio)*real(params_glob%kfromto(2)-lpind_start))
+                        params_glob%kfromto(2) = min(lpind_anneal, params_glob%kfromto(2))
                         resarr            = build_glob%img%get_res()
-                        params_glob%lp    = resarr(params_glob%kstop)
-                        if( params_glob%cc_objfun .ne. OBJFUN_EUCLID ) params_glob%kfromto(2) = params_glob%kstop
+                        params_glob%lp    = resarr(params_glob%kfromto(2))
                         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
                         deallocate(resarr)
                     endif

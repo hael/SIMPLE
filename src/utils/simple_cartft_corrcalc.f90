@@ -29,7 +29,7 @@ type :: cartft_corrcalc
     integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
     integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
     real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
-    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
+    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):params_glob%kfromto(2))
     real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),        allocatable :: optlp(:)                !< references optimal filter
     type(image),     allocatable :: particles(:)            !< particle images
@@ -118,7 +118,7 @@ contains
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%optlp(params_glob%kfromto(1):params_glob%kstop), source=0.)
+        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
         allocate(self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
@@ -225,7 +225,7 @@ contains
 
     subroutine set_optlp( self, optlp )
         class(cartft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kstop)
+        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kfromto(2))
         self%optlp(:) = optlp(:)
         self%l_filt_set = .true.
     end subroutine set_optlp
@@ -295,7 +295,7 @@ contains
                     phys = self%particles(1)%comp_addr_phys(h,k,l)
                     ! find shell
                     sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh < params_glob%kfromto(1) .or. sh > params_glob%kstop ) cycle
+                    if( sh < params_glob%kfromto(1) .or. sh > params_glob%kfromto(2) ) cycle
                     ! update logical mask
                     self%resmsk(phys(1),phys(2),phys(3)) = .true.
                 enddo
@@ -420,10 +420,10 @@ contains
         endif
         ithr = omp_get_thread_num() + 1
         if( present_grad )then
-            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kstop)
+            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kfromto(2))
             corr = self%calc_corr(iptcl, o%get_2Dshift(), grad(:))
         else
-            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kstop)
+            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kfromto(2))
             corr = self%calc_corr(iptcl, o%get_2Dshift())
         endif
     end subroutine project_and_correlate
