@@ -39,7 +39,7 @@ contains
         integer,                 intent(in)   :: ithr
         integer   :: isample
         type(ori) :: o, osym
-        real      :: corr
+        real      :: corr, euldist, dist_inpl
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
