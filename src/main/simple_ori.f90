@@ -41,9 +41,10 @@ type :: ori
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
-    procedure          :: rnd_euler_1
-    procedure          :: rnd_euler_2
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
+    procedure, private :: rnd_euler_1
+    procedure, private :: rnd_euler_2
+    procedure, private :: rnd_euler_3
+    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
@@ -468,54 +469,74 @@ contains
     end subroutine set_2
 
     !>  \brief  for generating a random Euler angle
-    subroutine rnd_euler_1( self, eullims )
-        class(ori),     intent(inout) :: self
-        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
-        logical :: found
+    subroutine rnd_euler_1( self )
+        class(ori), intent(inout) :: self
         real    :: euls(3), rmat(3,3)
-        if( present(eullims) )then
-            found = .false.
-            do while( .not.found )
-                call rnd_romat(rmat)
-                euls = m2euler(rmat)
-                if( euls(1) >= eullims(1,2) ) cycle
-                if( euls(2) >= eullims(2,2) ) cycle
-                if( euls(3) >= eullims(3,2) ) cycle
-                if( euls(1) <  eullims(1,1) ) cycle
-                if( euls(2) <  eullims(2,1) ) cycle
-                if( euls(3) <  eullims(3,1) ) cycle
-                found = .true.
-            end do
-        else
-            call rnd_romat(rmat)
-            euls = m2euler(rmat)
-        endif
+        call rnd_romat(rmat)
+        euls = m2euler(rmat)
         call self%set_euler(euls)
     end subroutine rnd_euler_1
 
+    !>  \brief  for generating a random Euler angle
+    subroutine rnd_euler_2( self, eullims )
+        class(ori), intent(inout) :: self
+        real,       intent(inout) :: eullims(3,2) !< Euler angle limits
+        logical :: found
+        real    :: euls(3), rmat(3,3)
+        found = .false.
+        do while( .not.found )
+            call rnd_romat(rmat)
+            euls = m2euler(rmat)
+            if( euls(1) >= eullims(1,2) ) cycle
+            if( euls(2) >= eullims(2,2) ) cycle
+            if( euls(3) >= eullims(3,2) ) cycle
+            if( euls(1) <  eullims(1,1) ) cycle
+            if( euls(2) <  eullims(2,1) ) cycle
+            if( euls(3) <  eullims(3,1) ) cycle
+            found = .true.
+        end do
+        call self%set_euler(euls)
+    end subroutine rnd_euler_2
+
     !>  \brief  for generating a random Euler angle neighbour to o_prev
-    subroutine rnd_euler_2( self, o_prev, athres, eullims )
+    subroutine rnd_euler_3( self, o_prev, athres, eullims )
         class(ori),     intent(inout) :: self         !< instance
         class(ori),     intent(in)    :: o_prev       !< template ori
         real,           intent(in)    :: athres       !< Euler angle threshold in degrees
-        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
-        real    :: athres_rad, dist, rnd_perm, euls(3)
-        athres_rad = deg2rad(athres)
-        dist       = 2.*athres_rad
-        euls(3)    = self%e3get()
-        do while( dist > athres_rad )
-            call self%rnd_euler_1(eullims)
-            dist = self.euldist.o_prev
-        end do
-        euls(1) = self%e1get()
-        euls(2) = self%e2get()
-        if( ran3() <= 0.5 )then
-            euls(3) = euls(3) + ran3() * athres
+        real,           intent(inout) :: eullims(3,2) !< Euler angle limits
+        real :: euls(3), ran1, ran2
+        euls(1) = o_prev%e1get()
+        euls(2) = o_prev%e2get()
+        euls(3) = o_prev%e3get()
+        ran1 = ran3()
+        ran2 = ran3() 
+        if( ran1 <= 0.5 )then
+            euls(1) = euls(1) - ran2 * athres
         else
-            euls(3) = euls(3) - ran3() * athres
+            euls(1) = euls(1) + ran2 * athres
         endif
+        ran1 = ran3()
+        ran2 = ran3() 
+        if( ran1 <= 0.5 )then
+            euls(2) = euls(2) - ran2 * athres
+        else
+            euls(2) = euls(2) + ran2 * athres
+        endif
+        ran1 = ran3()
+        ran2 = ran3() 
+        if( ran1 <= 0.5 )then
+            euls(3) = euls(3) - ran2 * athres
+        else
+            euls(3) = euls(3) + ran2 * athres
+        endif
+        euls(1) = max(eullims(1,1), euls(1))
+        euls(2) = max(eullims(2,1), euls(2))
+        euls(3) = max(eullims(3,1), euls(3))
+        euls(1) = min(eullims(1,2), euls(1))
+        euls(2) = min(eullims(2,2), euls(2))
+        euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
-    end subroutine rnd_euler_2
+    end subroutine rnd_euler_3
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
