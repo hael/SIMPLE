@@ -17,14 +17,17 @@ type, extends(commander_base) :: check_box_commander
   contains
     procedure :: execute      => exec_check_box
 end type check_box_commander
+
 type, extends(commander_base) :: check_nptcls_commander
   contains
     procedure :: execute      => exec_check_nptcls
 end type check_nptcls_commander
+
 type, extends(commander_base) :: info_image_commander
  contains
    procedure :: execute      => exec_info_image
 end type info_image_commander
+
 type, extends(commander_base) :: info_stktab_commander
  contains
    procedure :: execute      => exec_info_stktab

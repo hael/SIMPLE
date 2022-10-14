@@ -2,7 +2,6 @@
 module simple_picker_iter
 include 'simple_lib.f08'
 use simple_picker
-use simple_phasecorr_picker
 use simple_parameters, only: params_glob
 implicit none
 
@@ -36,30 +35,15 @@ contains
         else
             THROW_HARD('Need references or volume!')
         endif
-        select case(trim(params_glob%picker))
-            case('old_school')
-                if( cline%defined('thres') )then
-                    call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp,&
-                        &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
-                else
-                    call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp, &
-                        &ndev_in=params_glob%ndev, dir_out=dir_out)
-                endif
-                call exec_picker(boxfile, nptcls_out)
-                call kill_picker
-            case('phasecorr')
-                if( cline%defined('thres') )then
-                    call init_phasecorr_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp,&
-                        &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
-                else
-                    call init_phasecorr_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp, &
-                        &ndev_in=params_glob%ndev, dir_out=dir_out)
-                endif
-                call exec_phasecorr_picker(boxfile, nptcls_out)
-                call kill_phasecorr_picker
-            case DEFAULT
-                THROW_HARD('Invalid picker parameter!; iterate')
-        end select
+        if( cline%defined('thres') )then
+            call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp,&
+                &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
+        else
+            call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp, &
+                &ndev_in=params_glob%ndev, dir_out=dir_out)
+        endif
+        call exec_picker(boxfile, nptcls_out)
+        call kill_picker
     end subroutine iterate
 
 end module simple_picker_iter

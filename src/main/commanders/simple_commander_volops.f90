@@ -20,7 +20,6 @@ public :: centervol_commander
 public :: postprocess_commander
 public :: reproject_commander
 public :: volops_commander
-public :: volume_smat_commander
 public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
@@ -33,39 +32,41 @@ type, extends(commander_base) :: centervol_commander
   contains
     procedure :: execute      => exec_centervol
 end type centervol_commander
+
 type, extends(commander_base) :: postprocess_commander
  contains
    procedure :: execute      => exec_postprocess
 end type postprocess_commander
+
 type, extends(commander_base) :: reproject_commander
  contains
    procedure :: execute      => exec_reproject
 end type reproject_commander
+
 type, extends(commander_base) :: volops_commander
   contains
     procedure :: execute      => exec_volops
 end type volops_commander
-type, extends(commander_base) :: volume_smat_commander
-  contains
-    procedure :: execute      => exec_volume_smat
-end type volume_smat_commander
+
 type, extends(commander_base) :: dock_volpair_commander
   contains
     procedure :: execute      => exec_dock_volpair
 end type dock_volpair_commander
+
 type, extends(commander_base) :: symaxis_search_commander
   contains
     procedure :: execute      => exec_symaxis_search
 end type symaxis_search_commander
+
 type, extends(commander_base) :: symmetrize_map_commander
   contains
     procedure :: execute      => exec_symmetrize_map
 end type symmetrize_map_commander
+
 type, extends(commander_base) :: symmetry_test_commander
   contains
     procedure :: execute      => exec_symmetry_test
 end type symmetry_test_commander
-
 
 contains
 
@@ -404,117 +405,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
-
-    !> calculate similarity matrix between volumes
-    subroutine exec_volume_smat( self, cline )
-        class(volume_smat_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        integer          :: funit, io_stat, cnt, npairs,  nvols, loc(1)
-        integer          :: ivol, jvol, ldim(3), ipair, ifoo, i, spat_med
-        integer          :: furthest_from_spat_med
-        real             :: corr_max, corr_min, spat_med_corr
-        real             :: furthest_from_spat_med_corr
-        type(projector)  :: vol1, vol2
-        type(ori)        :: o
-        real,                      allocatable :: corrmat(:,:), corrs(:), corrs_avg(:)
-        integer,                   allocatable :: pairs(:,:)
-        character(len=LONGSTRLEN), allocatable :: vollist(:)
-        character(len=:),          allocatable :: fname
-        call params%new(cline)
-        call read_filetable(params%vollist, vollist) ! reads in list of volumes
-        nvols  = size(vollist)
-        npairs = (nvols*(nvols-1))/2
-        ! find logical dimension & make volumes for matching
-        call find_ldim_nptcls(vollist(1), ldim, ifoo)
-        if( cline%defined('part') )then
-            npairs = params%top-params%fromp+1
-            allocate(corrs(params%fromp:params%top), pairs(params%fromp:params%top,2))
-            ! read the pairs
-            allocate(fname, source='pairs_part'//int2str_pad(params%part,params%numlen)//'.bin')
-            if( .not. file_exists(fname) ) THROW_HARD('I/O; simple_volume_smat')
-            call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
-            if(io_stat/=0) call fileiochk('volops; vol_smat opening ', io_stat)
-            read(unit=funit,pos=1,iostat=io_stat) pairs(params%fromp:params%top,:)
-            ! Check if the read was successful
-            if(io_stat/=0) then
-                call fileiochk('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
-            endif
-            call fclose(funit)
-            deallocate(fname)
-            cnt = 0
-            do ipair=params%fromp,params%top
-                cnt = cnt + 1
-                call progress(cnt, npairs)
-                ivol = pairs(ipair,1)
-                jvol = pairs(ipair,2)
-                call read_and_prep_vol( vollist(ivol), vol1 )
-                call read_and_prep_vol( vollist(jvol), vol2 )
-                call volpft_srch_init(vol1, vol2, params%hp, params%lp)
-                o = volpft_srch_minimize()
-                corrs(ipair) = o%get('corr')
-            end do
-            ! write the similarities
-            allocate(fname, source='similarities_part'//int2str_pad(params%part,params%numlen)//'.bin')
-            call fopen(funit, status='REPLACE', action='WRITE', &
-                 file=fname, access='STREAM', iostat=io_stat)
-            if(io_stat/=0) call fileiochk('volops; volume smat 2  opening ', io_stat)
-            write(unit=funit,pos=1,iostat=io_stat) corrs(params%fromp:params%top)
-            ! Check if the write was successful
-            if(io_stat/=0) &
-                call fileiochk('**ERROR(simple_volume_smat): I/O error writing file: '//trim(fname), io_stat)
-            call fclose(funit)
-            deallocate(fname, corrs, pairs)
-        else
-            ! generate similarity matrix
-            allocate(corrmat(nvols,nvols), corrs_avg(nvols))
-            corrmat = -1.
-            forall(i=1:nvols) corrmat(i,i) = 1.0
-            cnt = 0
-            corr_max = -1.0
-            corr_min =  1.0
-            do ivol=1,nvols - 1
-                do jvol=ivol + 1,nvols
-                    cnt = cnt + 1
-                    call progress(cnt, npairs)
-                    call read_and_prep_vol( vollist(ivol), vol1 )
-                    call read_and_prep_vol( vollist(jvol), vol2 )
-                    call volpft_srch_init(vol1, vol2, params%hp, params%lp)
-                    o = volpft_srch_minimize()
-                    corrmat(ivol,jvol) = o%get('corr')
-                    corrmat(jvol,ivol) = corrmat(ivol,jvol)
-                    if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
-                    if( corrmat(ivol,jvol) < corr_min ) corr_min = corrmat(ivol,jvol)
-                end do
-            end do
-            do ivol=1,nvols
-                corrs_avg(ivol) = (sum(corrmat(ivol,:))-1.0)/real(nvols - 1)
-            end do
-            loc                         = maxloc(corrs_avg)
-            spat_med                    = loc(1)
-            spat_med_corr               = corrs_avg(spat_med)
-            loc                         = minloc(corrmat(spat_med,:))
-            furthest_from_spat_med      = loc(1)
-            furthest_from_spat_med_corr = corrmat(spat_med,furthest_from_spat_med)
-            write(logfhandle,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
-            write(logfhandle,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
-            write(logfhandle,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med
-            write(logfhandle,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
-            write(logfhandle,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
-            write(logfhandle,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
-            call fopen(funit, status='REPLACE', action='WRITE', file='vol_smat.bin', &
-                &access='STREAM', iostat=io_stat)
-             if(io_stat/=0)call fileiochk('volops; volume smat 3 opening ', io_stat)
-            write(unit=funit,pos=1,iostat=io_stat) corrmat
-            if(io_stat/=0) &
-                call fileiochk('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
-
-            call fclose(funit)
-            if(allocated(corrmat))deallocate(corrmat)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
-    end subroutine exec_volume_smat
 
     subroutine exec_dock_volpair( self, cline )
         use simple_vol_srch

@@ -8,7 +8,6 @@ include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_ori,        only: ori
-use simple_ori_light,  only: ori_light
 use simple_oris,       only: oris
 use simple_parameters, only: params_glob
 implicit none
@@ -47,7 +46,6 @@ type, extends(image) :: projector
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
     procedure          :: fproject_polar
-    procedure          :: fdf_project_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
     procedure          :: interp_fcomp_trilinear
@@ -313,39 +311,6 @@ contains
             end do
         end do
     end subroutine fproject_polar
-
-    !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fdf_project_polar( self, iref, euls, pftcc, iseven, mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(projector),        intent(inout) :: self    !< projector object
-        integer,                 intent(in)    :: iref    !< which reference
-        real(dp),                intent(in)    :: euls(3) !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
-        logical,                 intent(in)    :: iseven  !< eo flag
-        logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-        integer         :: irot, k, pdim(3)
-        real(dp)        :: vec(3), loc(3), dR(3,3,3)
-        complex         :: fcomp, dfcomp(3)
-        type(ori_light) :: or
-        pdim = pftcc%get_pdim()
-        call or%euler2dm(euls, dR)
-        do irot=1,pdim(1)
-            do k=pdim(2),pdim(3)
-                if( mask(k) )then
-                    vec(:2) = real(pftcc%get_coord(irot,k),kind=dp)
-                    vec(3)  = 0._dp
-                    loc     = matmul(vec,or%euler2m(euls))
-                    call self%fdf_interp_fcomp(dR, loc, vec, fcomp, dfcomp)
-                    call pftcc%set_ref_fcomp( iref, irot, k, fcomp, iseven )
-                    call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
-                else
-                    dfcomp = CMPLX_ZERO
-                    call pftcc%set_ref_fcomp( iref, irot, k, CMPLX_ZERO, iseven)
-                    call pftcc%set_dref_fcomp( iref, irot, k, dfcomp, iseven )
-                endif
-            end do
-        end do
-    end subroutine fdf_project_polar
 
     !>  \brief is to interpolate from the expanded complex matrix
     pure function interp_fcomp_norm( self, loc )result( comp )

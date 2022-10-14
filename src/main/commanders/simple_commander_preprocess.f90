@@ -42,78 +42,97 @@ type, extends(commander_base) :: preprocess_commander_stream
   contains
     procedure :: execute      => exec_preprocess_stream
 end type preprocess_commander_stream
+
 type, extends(commander_base) :: preprocess_commander_distr
   contains
     procedure :: execute      => exec_preprocess_distr
 end type preprocess_commander_distr
+
 type, extends(commander_base) :: preprocess_commander
   contains
     procedure :: execute      => exec_preprocess
 end type preprocess_commander
+
 type, extends(commander_base) :: motion_correct_commander_distr
   contains
     procedure :: execute      => exec_motion_correct_distr
 end type motion_correct_commander_distr
+
 type, extends(commander_base) :: motion_correct_tomo_commander_distr
   contains
     procedure :: execute      => exec_motion_correct_tomo_distr
 end type motion_correct_tomo_commander_distr
+
 type, extends(commander_base) :: motion_correct_commander
   contains
     procedure :: execute      => exec_motion_correct
 end type motion_correct_commander
+
 type, extends(commander_base) :: gen_pspecs_and_thumbs_commander_distr
   contains
     procedure :: execute      => exec_gen_pspecs_and_thumbs_distr
 end type gen_pspecs_and_thumbs_commander_distr
+
 type, extends(commander_base) :: gen_pspecs_and_thumbs_commander
   contains
     procedure :: execute      => exec_gen_pspecs_and_thumbs
 end type gen_pspecs_and_thumbs_commander
+
 type, extends(commander_base) :: ctf_estimate_commander_distr
   contains
     procedure :: execute      => exec_ctf_estimate_distr
 end type ctf_estimate_commander_distr
+
 type, extends(commander_base) :: ctf_estimate_commander
   contains
     procedure :: execute      => exec_ctf_estimate
 end type ctf_estimate_commander
+
 type, extends(commander_base) :: map_cavgs_selection_commander
   contains
     procedure :: execute      => exec_map_cavgs_selection
 end type map_cavgs_selection_commander
+
 type, extends(commander_base) :: map_cavgs_states_commander
   contains
     procedure :: execute      => exec_map_cavgs_states
 end type map_cavgs_states_commander
+
 type, extends(commander_base) :: pick_commander_distr
   contains
     procedure :: execute      => exec_pick_distr
 end type pick_commander_distr
+
 type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
 end type pick_commander
+
 type, extends(commander_base) :: extract_commander_distr
   contains
     procedure :: execute      => exec_extract_distr
 end type extract_commander_distr
+
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
 end type extract_commander
+
 type, extends(commander_base) :: reextract_commander_distr
   contains
     procedure :: execute      => exec_reextract_distr
 end type reextract_commander_distr
+
 type, extends(commander_base) :: reextract_commander
   contains
     procedure :: execute      => exec_reextract
 end type reextract_commander
+
 type, extends(commander_base) :: pick_extract_commander
   contains
     procedure :: execute      => exec_pick_extract
 end type pick_extract_commander
+
 type, extends(commander_base) :: make_pickrefs_commander
   contains
     procedure :: execute      => exec_make_pickrefs

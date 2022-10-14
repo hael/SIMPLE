@@ -17,6 +17,7 @@ type, extends(commander_base) :: cluster3D_commander
   contains
     procedure :: execute      => exec_cluster3D
 end type cluster3D_commander
+
 type, extends(commander_base) :: cluster3D_refine_commander
   contains
     procedure :: execute      => exec_cluster3D_refine

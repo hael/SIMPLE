@@ -30,30 +30,37 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
+
 type, extends(commander_base) :: refine3D_commander_distr
   contains
     procedure :: execute      => exec_refine3D_distr
 end type refine3D_commander_distr
+
 type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
 end type refine3D_commander
+
 type, extends(commander_base) :: check_3Dconv_commander
   contains
     procedure :: execute      => exec_check_3Dconv
 end type check_3Dconv_commander
+
 type, extends(commander_base) :: calc_pspec_commander_distr
   contains
     procedure :: execute      => exec_calc_pspec_distr
 end type calc_pspec_commander_distr
+
 type, extends(commander_base) :: calc_pspec_commander
   contains
     procedure :: execute      => exec_calc_pspec
 end type calc_pspec_commander
+
 type, extends(commander_base) :: calc_pspec_assemble_commander
   contains
     procedure :: execute      => exec_calc_pspec_assemble
 end type calc_pspec_assemble_commander
+
 type, extends(commander_base) :: calc_group_sigmas_commander
   contains
     procedure :: execute      => exec_calc_group_sigmas

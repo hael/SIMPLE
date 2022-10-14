@@ -262,7 +262,6 @@ type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
-type(simple_input_param) :: picker
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
@@ -1031,7 +1030,6 @@ contains
         call set_param(cn_min,         'cn_min',       'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
         call set_param(cn_max,         'cn_max',       'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
-        call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(phasecorr|old_school){phasecorr}','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|patch_refine){patch}','(patch|patch_refine){patch}', .false.,'patch')
@@ -2871,7 +2869,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &2, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2884,8 +2882,6 @@ contains
         call pick%set_gui_params('parm_ios', 1, submenu="picking")
         call pick%set_input('parm_ios', 2, pcontrast)
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
-        call pick%set_input('parm_ios', 3, picker)
-        call pick%set_gui_params('parm_ios', 3, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2954,7 +2950,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 12, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -2973,7 +2969,6 @@ contains
         call preprocess%set_input('parm_ios', 9,  pspecsz)
         call preprocess%set_input('parm_ios',10,  numlen)
         call preprocess%set_input('parm_ios',11,  ctfpatch)
-        call preprocess%set_input('parm_ios',12,  picker)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3021,7 +3016,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, dir_movies)
@@ -3049,7 +3044,6 @@ contains
         call preprocess_stream%set_input('parm_ios',13, smpd)
         preprocess_stream%parm_ios(13)%required = .true.
         call preprocess_stream%set_input('parm_ios',14, ctfpatch)
-        call preprocess_stream%set_input('parm_ios',15, picker)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3096,7 +3090,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 14, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3147,8 +3141,6 @@ contains
         call preprocess_stream_dev%set_gui_params('parm_ios', 13, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
         call preprocess_stream_dev%set_gui_params('parm_ios', 14, submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('parm_ios',15, picker)
-        call preprocess_stream_dev%set_gui_params('parm_ios', 15, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls

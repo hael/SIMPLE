@@ -19,7 +19,6 @@ public :: masscen_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: print_dose_weights_commander
-public :: stk_corr_commander
 public :: kstest_commander
 public :: mkdir_commander
 public :: remoc_commander
@@ -31,34 +30,37 @@ type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
 end type masscen_commander
+
 type, extends(commander_base) :: print_fsc_commander
   contains
     procedure :: execute       => exec_print_fsc
 end type print_fsc_commander
+
 type, extends(commander_base) :: print_magic_boxes_commander
   contains
     procedure :: execute       => exec_print_magic_boxes
 end type print_magic_boxes_commander
+
 type, extends(commander_base) :: print_dose_weights_commander
   contains
     procedure :: execute       => exec_print_dose_weights
 end type print_dose_weights_commander
-type, extends(commander_base) :: stk_corr_commander
-  contains
-    procedure :: execute       => exec_stk_corr
-end type stk_corr_commander
+
 type, extends(commander_base) :: kstest_commander
   contains
     procedure :: execute       => exec_kstest
 end type kstest_commander
+
 type, extends(commander_base) :: mkdir_commander
   contains
     procedure :: execute       => exec_mkdir
 end type mkdir_commander
+
 type, extends(commander_base) :: remoc_commander
   contains
     procedure :: execute       => exec_remoc
 end type remoc_commander
+
 type, extends(commander_base) :: comparemc_commander
   contains
     procedure :: execute       => exec_comparemc
@@ -144,38 +146,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS_NORMAL STOP ****')
     end subroutine exec_print_dose_weights
-
-    subroutine exec_stk_corr( self, cline )
-        class(stk_corr_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
-        logical, allocatable :: l_mask(:,:,:)
-        integer :: i
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        build%img = 1.
-        call build%img%mask(params%msk, 'hard')
-        l_mask = build%img%bin2logical()
-        do i=1,params%nptcls
-            call build%img%read(params%stk, i)
-            call build%img_copy%read(params%stk2, i)
-            if( cline%defined('lp') )then
-                call build%img%norm
-                call build%img_copy%norm
-                call build%img%mask(params%msk, 'soft')
-                call build%img_copy%mask(params%msk, 'soft')
-                call build%img%fft
-                call build%img_copy%fft
-                call build%img%bp(0.,params%lp)
-                call build%img_copy%bp(0.,params%lp)
-                call build%img%ifft
-                call build%img_copy%ifft
-            endif
-            write(logfhandle,'(I6,F8.3)')i,build%img%real_corr(build%img_copy, l_mask)
-        enddo
-        ! end gracefully
-        call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
-    end subroutine exec_stk_corr
 
     subroutine exec_kstest( self, cline )
         class(kstest_commander), intent(inout) :: self

@@ -7,15 +7,12 @@ use simple_parameters,     only: parameters
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_nanoparticle,   only: nanoparticle
-use simple_dock_coords,    only: dock_coords_init, dock_coords_minimize
 use simple_nanoparticle_utils
 implicit none
 
 public :: detect_atoms_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
-public :: dock_coords_commander
-public :: atoms_mask_commander
 private
 #include "simple_local_flags.inc"
 
@@ -33,16 +30,6 @@ type, extends(commander_base) :: tseries_atoms_analysis_commander
   contains
     procedure :: execute      => exec_tseries_atoms_analysis
 end type tseries_atoms_analysis_commander
-
-type, extends(commander_base) :: dock_coords_commander
-  contains
-    procedure :: execute      => exec_dock_coords
-end type dock_coords_commander
-
-type, extends(commander_base) :: atoms_mask_commander
-  contains
-    procedure :: execute      => exec_atoms_mask
-end type atoms_mask_commander
 
 integer, parameter :: CNMIN             = 5
 integer, parameter :: CNMAX             = 13
@@ -236,46 +223,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
     end subroutine exec_tseries_atoms_analysis
-
-    subroutine exec_dock_coords( self, cline )
-        use simple_ori ! for generation of the rotation matrix
-        use simple_atoms, only: atoms
-        class(dock_coords_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline !< command line input
-        type(parameters)       :: params
-        type(atoms)            :: a_ref, a_targ
-        real :: rot_trans(7) ! cost, rotation angles, shift
-        real :: rmat(3,3)
-        call params%new(cline)
-        call a_ref%new(basename(params%pdbfile))
-        call a_targ%new(basename(params%pdbfile2))
-        call dock_coords_init( a_ref, a_targ, params%thres )
-        rot_trans = dock_coords_minimize()
-        write(logfhandle, *) 'Docked coords have rmsd', rot_trans(1)
-        write(logfhandle, *) 'Rotation angles        ', rot_trans(2:4)
-        write(logfhandle, *) 'Translation vector     ', rot_trans(5:7)
-        ! now perform rotation and translation of the coords
-        ! and output rotshited coords
-        rmat = euler2m(rot_trans(2:4))
-        call a_targ%translate(-rot_trans(5:7))
-        call a_targ%writePDB('TranslatedCoords')
-        call a_targ%rotate(rmat)
-        call a_targ%writePDB('DockedCoords')
-        call a_ref%kill
-        call a_targ%kill
-    end subroutine exec_dock_coords
-
-    subroutine exec_atoms_mask( self, cline )
-        class(atoms_mask_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline !< command line input
-        type(parameters) :: params
-        integer          :: nremoved
-        call params%new(cline)
-        ! execute
-        call atoms_mask(params%pdbfile,params%max_rad,params%pdbfile2,nremoved)
-        write(logfhandle,*) 'REMOVED ', nremoved, 'ATOMS FROM THE PDBFILE'
-        ! end gracefully
-        call simple_end('**** SIMPLE_ATOMS_MASK NORMAL STOP ****')
-    end subroutine exec_atoms_mask
 
 end module simple_commander_atoms

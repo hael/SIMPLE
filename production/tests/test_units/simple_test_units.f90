@@ -5,7 +5,6 @@ use simple_ftiter,       only: test_ftiter
 use simple_ori,          only: test_ori
 use simple_oris,         only: test_oris
 use simple_image,        only: test_image
-use simple_cluster_shc,  only: test_cluster_shc
 use simple_args,         only: test_args
 use simple_online_var,   only: test_online_var
 use simple_imghead,      only: test_imghead
@@ -28,7 +27,6 @@ call test_ori
 call test_oris(.false.)
 call test_image(.false.)
 !call test_ftexp_shsrch
-call test_cluster_shc
 call test_ftiter
 ! LOCAL TESTFUNCTIONS
 call test_multinomal

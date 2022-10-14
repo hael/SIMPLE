@@ -20,14 +20,17 @@ type, extends(commander_base) :: reconstruct3D_commander_distr
   contains
     procedure :: execute      => exec_reconstruct3D_distr
 end type reconstruct3D_commander_distr
+
 type, extends(commander_base) :: reconstruct3D_commander
   contains
     procedure :: execute      => exec_reconstruct3D
 end type reconstruct3D_commander
+
 type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
+
 type, extends(commander_base) :: random_rec_commander_distr
   contains
     procedure :: execute      => exec_random_rec

@@ -20,10 +20,12 @@ type, extends(commander_base) :: mask_commander
  contains
    procedure :: execute      => exec_mask
 end type mask_commander
+
 type, extends(commander_base) :: automask2D_commander
   contains
     procedure :: execute      => exec_automask2D
 end type automask2D_commander
+
 type, extends(commander_base) :: automask_commander
  contains
    procedure :: execute      => exec_automask

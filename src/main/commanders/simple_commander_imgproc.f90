@@ -28,42 +28,52 @@ type, extends(commander_base) :: binarize_commander
   contains
     procedure :: execute      => exec_binarize
 end type binarize_commander
+
 type, extends(commander_base) :: edge_detect_commander
   contains
     procedure :: execute      => exec_edge_detect
 end type edge_detect_commander
+
 type, extends(commander_base) :: convert_commander
   contains
     procedure :: execute      => exec_convert
 end type convert_commander
+
 type, extends(commander_base) :: ctfops_commander
   contains
     procedure :: execute      => exec_ctfops
 end type ctfops_commander
+
 type, extends(commander_base) :: filter_commander
   contains
     procedure :: execute      => exec_filter
 end type filter_commander
+
 type, extends(commander_base) :: normalize_commander
   contains
     procedure :: execute      => exec_normalize
 end type normalize_commander
+
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
 end type scale_commander
+
 type, extends(commander_base) :: stack_commander
   contains
     procedure :: execute      => exec_stack
 end type stack_commander
+
 type, extends(commander_base) :: stackops_commander
   contains
     procedure :: execute      => exec_stackops
 end type stackops_commander
+
 type, extends(commander_base) :: pspec_int_rank_commander
   contains
     procedure :: execute      => exec_pspec_int_rank
 end type pspec_int_rank_commander
+
 type, extends(commander_base) :: estimate_diam_commander
   contains
     procedure :: execute      => exec_estimate_diam

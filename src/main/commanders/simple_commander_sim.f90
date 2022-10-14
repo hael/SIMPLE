@@ -23,18 +23,22 @@ type, extends(commander_base) :: simulate_noise_commander
   contains
     procedure :: execute      => exec_simulate_noise
 end type simulate_noise_commander
+
 type, extends(commander_base) :: simulate_particles_commander
   contains
     procedure :: execute      => exec_simulate_particles
 end type simulate_particles_commander
+
 type, extends(commander_base) :: simulate_movie_commander
   contains
     procedure :: execute      => exec_simulate_movie
 end type simulate_movie_commander
+
 type, extends(commander_base) :: simulate_subtomogram_commander
   contains
     procedure :: execute      => exec_simulate_subtomogram
 end type simulate_subtomogram_commander
+
 type, extends(commander_base) :: simulate_atoms_commander
   contains
     procedure :: execute      => exec_simulate_atoms
