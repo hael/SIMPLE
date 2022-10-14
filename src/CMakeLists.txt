@@ -20,14 +20,14 @@ file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp" PARENT_SCOPE
 file(GLOB CPLOT2D_src  "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp"  PARENT_SCOPE)
 file(GLOB XML_src      "${CMAKE_CURRENT_SOURCE_DIR}/xml/*/*.[Ff]90" PARENT_SCOPE)
 
-file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
+file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.f[90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
 file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
 list(APPEND JPG_src
   "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
 if(USE_LIBTIFF)
     list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/tiff/libtiff_funs.c")
 endif()
-file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
+file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.f[09][0-9]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
 
 # add the simple_args module to SIMPLE_src
 list(APPEND SIMPLE_src
