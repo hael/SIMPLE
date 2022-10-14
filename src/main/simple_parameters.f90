@@ -17,8 +17,8 @@ type :: parameters
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: anneal='yes'         !< use annealing or not
-    character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
+    ! character(len=3)      :: anneal='yes'         !< use annealing or not
+    ! character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
@@ -513,9 +513,9 @@ contains
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('algorithm',      self%algorithm)
-        call check_carg('anneal',         self%anneal)
+        ! call check_carg('anneal',         self%anneal)
         call check_carg('angastunit',     self%angastunit)
-        call check_carg('append',         self%append)
+        ! call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
         call check_carg('automatic',      self%automatic)
