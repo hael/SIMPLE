@@ -555,12 +555,12 @@ contains
     subroutine opt_filter_3D(odd, even, mskimg)
         class(image),           intent(inout) :: odd, even
         class(image), optional, intent(inout) :: mskimg
-        type(image)                   ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat,&
-                                        &weights_img, diff_img_opt, diff_img, odd_filt, even_filt
+        type(image)                   ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
+                                        &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
         integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
         integer                       :: filtsz, best_ind, cur_ind, lb(3), ub(3), smooth_ext
         real                          :: rad, find_stepsz, val, smpd
-        type(image_ptr)               :: pdiff, pdiff_opt, pweights
+        type(image_ptr)               :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
         type(c_ptr)                   :: plan_fwd, plan_bwd
         integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
@@ -589,12 +589,16 @@ contains
         plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim), FFTW_ESTIMATE)
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
-        call    weights_img%new(ldim, smpd)
-        call       diff_img%new(ldim, smpd)
-        call   diff_img_opt%new(ldim, smpd)
-        call    weights_img%get_mat_ptrs(pweights)
-        call       diff_img%get_mat_ptrs(pdiff)
-        call   diff_img_opt%get_mat_ptrs(pdiff_opt)
+        call       weights_img%new(ldim, smpd)
+        call      diff_img_odd%new(ldim, smpd)
+        call     diff_img_even%new(ldim, smpd)
+        call  diff_img_opt_odd%new(ldim, smpd)
+        call diff_img_opt_even%new(ldim, smpd)
+        call       weights_img%get_mat_ptrs(pweights)
+        call      diff_img_odd%get_mat_ptrs(pdiff_odd)
+        call     diff_img_even%get_mat_ptrs(pdiff_even)
+        call  diff_img_opt_odd%get_mat_ptrs(pdiff_opt_odd)
+        call diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
         call  odd_copy_rmat%copy(odd)
         call even_copy_rmat%copy(even)
         call  odd_copy_cmat%copy(odd)
@@ -625,8 +629,9 @@ contains
         enddo
         call weights_img%fft()
         ! searching for the best fourier index from here and generating the optimized filter
-        best_ind       = find_start
-        pdiff_opt%rmat = huge(val)
+        best_ind            = find_start
+        pdiff_opt_odd%rmat  = huge(val)
+        pdiff_opt_even%rmat = huge(val)
         call  odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
         rmat_odd  = 0.
@@ -641,22 +646,28 @@ contains
             call butterworth_filter( odd_filt, cur_ind, cur_fil, use_cache=.false.)
             call butterworth_filter(even_filt, cur_ind, cur_fil, use_cache=.true.)
             call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
-            call even_filt%opt_filter_costfun_workshare(odd_copy_rmat, odd_filt, even_copy_rmat, diff_img)
+            call diff_img_odd% copy( odd_copy_rmat)
+            call diff_img_even%copy(even_copy_rmat)
+            call diff_img_odd% sqeuclid_matrix( odd_filt, diff_img_odd)
+            call diff_img_even%sqeuclid_matrix(even_filt, diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
-            call diff_img%set_ft(.false.)
-            call diff_img%fft
+            call batch_fft_3D(diff_img_even, diff_img_odd, in, out, plan_fwd)
             !$omp parallel workshare
-            pdiff%cmat = pdiff%cmat * pweights%cmat
+            pdiff_odd% cmat = pdiff_odd %cmat * pweights%cmat
+            pdiff_even%cmat = pdiff_even%cmat * pweights%cmat
             !$omp end parallel workshare
-            call diff_img%ifft
+            call batch_ifft_3D(diff_img_even, diff_img_odd, in, out, plan_bwd)
             !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
             do m = lb(3),ub(3)
                 do l = lb(2),ub(2)
                     do k = lb(1),ub(1)
-                        if( pdiff%rmat(k,l,m) < pdiff_opt%rmat(k,l,m) )then
-                            rmat_odd( k,l,m)      = rmat_odd_filt( k,l,m)
-                            rmat_even(k,l,m)      = rmat_even_filt(k,l,m)
-                            pdiff_opt%rmat(k,l,m) = pdiff%rmat(k,l,m)
+                        if( pdiff_odd%rmat(k,l,m) < pdiff_opt_odd%rmat(k,l,m) )then
+                            rmat_odd(          k,l,m) = rmat_odd_filt( k,l,m)
+                            pdiff_opt_odd%rmat(k,l,m) = pdiff_odd%rmat(k,l,m)
+                        endif
+                        if( pdiff_even%rmat(k,l,m) < pdiff_opt_even%rmat(k,l,m) )then
+                            rmat_even(          k,l,m) = rmat_even_filt( k,l,m)
+                            pdiff_opt_even%rmat(k,l,m) = pdiff_even%rmat(k,l,m)
                         endif
                     enddo
                 enddo
@@ -671,8 +682,10 @@ contains
         call odd_filt%kill
         call even_filt%kill
         call weights_img%kill
-        call diff_img%kill
-        call diff_img_opt%kill
+        call diff_img_odd%kill
+        call diff_img_even%kill
+        call diff_img_opt_odd%kill
+        call diff_img_opt_even%kill
         call fftwf_destroy_plan(plan_fwd)
         call fftwf_destroy_plan(plan_bwd)
     end subroutine opt_filter_3D
