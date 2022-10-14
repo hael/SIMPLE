@@ -376,22 +376,20 @@ contains
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates) )
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        if( trim(params%refine).eq.'greedyc' )then
-            rot = 0.
-            params%nrots = 0
-            do while( rot < 360. )
-                params%nrots = params%nrots + 1
-                rot = rot + params%athres
-            end do
-            allocate( self%inpl_rots(params%nrots), source=0. )
-            rot = 0.
-            params%nrots = 0
-            do while( rot < 360. )
-                params%nrots = params%nrots + 1
-                self%inpl_rots(params%nrots) = rot
-                rot = rot + params%athres
-            end do
-        endif
+        rot = 0.
+        params%nrots = 0
+        do while( rot < 360. )
+            params%nrots = params%nrots + 1
+            rot = rot + params%athres
+        end do
+        allocate( self%inpl_rots(params%nrots), source=0. )
+        rot = 0.
+        params%nrots = 0
+        do while( rot < 360. )
+            params%nrots = params%nrots + 1
+            self%inpl_rots(params%nrots) = rot
+            rot = rot + params%athres
+        end do
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
