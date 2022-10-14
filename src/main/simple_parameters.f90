@@ -1534,7 +1534,7 @@ contains
                     self%trs = MINSHIFT
             end select
         endif
-        select case(trim(params_glob%refine))
+        select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                     self%l_cartesian = .true.
             case DEFAULT
