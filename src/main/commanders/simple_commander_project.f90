@@ -34,62 +34,77 @@ type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
 end type new_project_commander
+
 type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
+
 type, extends(commander_base) :: print_project_vals_commander
   contains
     procedure :: execute      => exec_print_project_vals
 end type print_project_vals_commander
+
 type, extends(commander_base) :: print_project_field_commander
   contains
     procedure :: execute      => exec_print_project_field
 end type print_project_field_commander
+
 type, extends(commander_base) :: update_project_commander
   contains
     procedure :: execute      => exec_update_project
 end type update_project_commander
+
 type, extends(commander_base) :: import_movies_commander
   contains
     procedure :: execute      => exec_import_movies
 end type import_movies_commander
+
 type, extends(commander_base) :: import_boxes_commander
   contains
     procedure :: execute      => exec_import_boxes
 end type import_boxes_commander
+
 type, extends(commander_base) :: import_particles_commander
   contains
     procedure :: execute      => exec_import_particles
 end type import_particles_commander
+
 type, extends(commander_base) :: import_cavgs_commander
   contains
     procedure :: execute      => exec_import_cavgs
 end type import_cavgs_commander
+
 type, extends(commander_base) :: export_cavgs_commander
   contains
     procedure :: execute      => exec_export_cavgs
 end type export_cavgs_commander
+
 type, extends(commander_base) :: selection_commander
   contains
     procedure :: execute      => exec_selection
 end type selection_commander
+
 type, extends(commander_base) :: merge_stream_projects_commander
   contains
     procedure :: execute      => exec_merge_stream_projects
 end type merge_stream_projects_commander
+
 type, extends(commander_base) :: replace_project_field_commander
   contains
     procedure :: execute      => exec_replace_project_field
 end type replace_project_field_commander
+
 type, extends(commander_base) :: scale_project_commander_distr
   contains
     procedure :: execute      => exec_scale_project_distr
 end type scale_project_commander_distr
+
 type, extends(commander_base) :: prune_project_commander_distr
   contains
     procedure :: execute      => exec_prune_project_distr
 end type prune_project_commander_distr
+
 type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project

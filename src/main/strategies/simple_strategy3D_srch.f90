@@ -5,7 +5,6 @@ use simple_oris,               only: oris
 use simple_ori,                only: ori
 use simple_sym,                only: sym
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
 use simple_cartft_corrcalc,    only: cartftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
@@ -27,7 +26,6 @@ end type strategy3D_spec
 
 type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
-    type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
     type(cftcc_shsrch_grad)  :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)                :: o_prev                    !< previous orientation, used in continuous search
     integer                  :: iptcl         = 0         !< global particle index
@@ -156,8 +154,6 @@ contains
             self%nrots = pftcc_glob%get_nrots()
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
-            ! create all df:s search object
-            call self%grad_orisrch_obj%new
         endif
         self%exists = .true.
     end subroutine new
@@ -284,7 +280,6 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        call self%grad_orisrch_obj%kill
         call self%o_prev%kill
     end subroutine kill
 

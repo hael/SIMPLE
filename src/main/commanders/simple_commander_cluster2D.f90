@@ -35,38 +35,47 @@ type, extends(commander_base) :: cleanup2D_commander_hlev
   contains
     procedure :: execute      => exec_cleanup2D
 end type cleanup2D_commander_hlev
+
 type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
     procedure :: execute      => exec_cluster2D_autoscale
 end type cluster2D_autoscale_commander
+
 type, extends(commander_base) :: cluster2D_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_distr
 end type cluster2D_commander_distr
+
 type, extends(commander_base) :: cluster2D_commander
   contains
     procedure :: execute      => exec_cluster2D
 end type cluster2D_commander
+
 type, extends(commander_base) :: make_cavgs_commander_distr
   contains
     procedure :: execute      => exec_make_cavgs_distr
 end type make_cavgs_commander_distr
+
 type, extends(commander_base) :: make_cavgs_commander
   contains
     procedure :: execute      => exec_make_cavgs
 end type make_cavgs_commander
+
 type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble
 end type cavgassemble_commander
+
 type, extends(commander_base) :: rank_cavgs_commander
   contains
     procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
+
 type, extends(commander_base) :: cluster_cavgs_commander
   contains
     procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
+
 type, extends(commander_base) :: write_classes_commander
   contains
     procedure :: execute      => exec_write_classes

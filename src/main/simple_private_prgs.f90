@@ -677,37 +677,48 @@ contains
         call private_prgs(18)%push_req_key('smpd')
         call private_prgs(18)%push_req_key('nparts')
 
-        ! STK_CORR, for correlating congruent image stacks
-        call private_prgs(19)%set_name('stk_corr')
+        ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
+        call private_prgs(19)%set_name('volassemble')
         ! required keys
-        call private_prgs(19)%push_req_key('stk')
-        call private_prgs(19)%push_req_key('stk2')
-        call private_prgs(19)%push_req_key('smpd')
+        call private_prgs(19)%push_req_key('nparts')
+        call private_prgs(19)%push_req_key('projfile')
         call private_prgs(19)%push_req_key('mskdiam')
         ! optional keys
-        call private_prgs(19)%push_opt_key('lp')
+        call private_prgs(19)%push_opt_key('nthr')
+        call private_prgs(19)%push_opt_key('state')
+        call private_prgs(19)%push_opt_key('nstates')
+        call private_prgs(19)%push_opt_key('mskfile')
 
-        ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
-        call private_prgs(20)%set_name('volassemble')
+        ! CALC_PSPEC, for asssembling power spectra for refine3D
+        call private_prgs(20)%set_name('calc_pspec')
         ! required keys
         call private_prgs(20)%push_req_key('nparts')
         call private_prgs(20)%push_req_key('projfile')
-        call private_prgs(20)%push_req_key('mskdiam')
-        ! optional keys
-        call private_prgs(20)%push_opt_key('nthr')
-        call private_prgs(20)%push_opt_key('state')
-        call private_prgs(20)%push_opt_key('nstates')
-        call private_prgs(20)%push_opt_key('mskfile')
-
-        ! CALC_PSPEC, for asssembling power spectra for refine3D
-        call private_prgs(21)%set_name('calc_pspec')
-        ! required keys
-        call private_prgs(21)%push_req_key('nparts')
-        call private_prgs(21)%push_req_key('projfile')
-        call private_prgs(21)%push_req_key('nthr')
+        call private_prgs(20)%push_req_key('nthr')
 
         ! TSERIES_MOTION_CORRECT
-        call private_prgs(22)%set_name('tseries_motion_correct')
+        call private_prgs(21)%set_name('tseries_motion_correct')
+        ! required keys
+        call private_prgs(21)%push_req_key('nthr')
+        call private_prgs(21)%push_req_key('projfile')
+        call private_prgs(21)%push_req_key('fromp')
+        call private_prgs(21)%push_req_key('top')
+        call private_prgs(21)%push_req_key('part')
+        call private_prgs(21)%push_req_key('nparts')
+        ! optional keys
+        call private_prgs(21)%push_opt_key('nframesgrp')
+        call private_prgs(21)%push_opt_key('mcpatch')
+        call private_prgs(21)%push_opt_key('nxpatch')
+        call private_prgs(21)%push_opt_key('nypatch')
+        call private_prgs(21)%push_opt_key('trs')
+        call private_prgs(21)%push_opt_key('lpstart')
+        call private_prgs(21)%push_opt_key('lpstop')
+        call private_prgs(21)%push_opt_key('bfac')
+        call private_prgs(21)%push_opt_key('groupframes')
+        call private_prgs(21)%push_opt_key('wcrit')
+
+        ! tseries_track_particles
+        call private_prgs(22)%set_name('tseries_track_particles')
         ! required keys
         call private_prgs(22)%push_req_key('nthr')
         call private_prgs(22)%push_req_key('projfile')
@@ -715,60 +726,39 @@ contains
         call private_prgs(22)%push_req_key('top')
         call private_prgs(22)%push_req_key('part')
         call private_prgs(22)%push_req_key('nparts')
+        call private_prgs(22)%push_req_key('box')
+        call private_prgs(22)%push_req_key('xcoord')
+        call private_prgs(22)%push_req_key('ycoord')
+        call private_prgs(22)%push_req_key('ind')
+        call private_prgs(22)%push_req_key('numlen')
+        call private_prgs(22)%push_req_key('nframesgrp')
         ! optional keys
-        call private_prgs(22)%push_opt_key('nframesgrp')
-        call private_prgs(22)%push_opt_key('mcpatch')
-        call private_prgs(22)%push_opt_key('nxpatch')
-        call private_prgs(22)%push_opt_key('nypatch')
-        call private_prgs(22)%push_opt_key('trs')
-        call private_prgs(22)%push_opt_key('lpstart')
-        call private_prgs(22)%push_opt_key('lpstop')
-        call private_prgs(22)%push_opt_key('bfac')
-        call private_prgs(22)%push_opt_key('groupframes')
-        call private_prgs(22)%push_opt_key('wcrit')
-
-        ! tseries_track_particles
-        call private_prgs(23)%set_name('tseries_track_particles')
-        ! required keys
-        call private_prgs(23)%push_req_key('nthr')
-        call private_prgs(23)%push_req_key('projfile')
-        call private_prgs(23)%push_req_key('fromp')
-        call private_prgs(23)%push_req_key('top')
-        call private_prgs(23)%push_req_key('part')
-        call private_prgs(23)%push_req_key('nparts')
-        call private_prgs(23)%push_req_key('box')
-        call private_prgs(23)%push_req_key('xcoord')
-        call private_prgs(23)%push_req_key('ycoord')
-        call private_prgs(23)%push_req_key('ind')
-        call private_prgs(23)%push_req_key('numlen')
-        call private_prgs(23)%push_req_key('nframesgrp')
-        ! optional keys
-        call private_prgs(23)%push_opt_key('offset')
-        call private_prgs(23)%push_opt_key('hp')
-        call private_prgs(23)%push_opt_key('lp')
-        call private_prgs(23)%push_opt_key('cenlp')
-        call private_prgs(23)%push_opt_key('neg')
-        call private_prgs(23)%push_opt_key('filter')
+        call private_prgs(22)%push_opt_key('offset')
+        call private_prgs(22)%push_opt_key('hp')
+        call private_prgs(22)%push_opt_key('lp')
+        call private_prgs(22)%push_opt_key('cenlp')
+        call private_prgs(22)%push_opt_key('neg')
+        call private_prgs(22)%push_opt_key('filter')
 
         ! PSPEC_INT_RANK
-        call private_prgs(24)%set_name('pspec_int_rank')
+        call private_prgs(23)%set_name('pspec_int_rank')
         ! required keys
-        call private_prgs(24)%push_req_key('nthr')
-        call private_prgs(24)%push_req_key('stk')
-        call private_prgs(24)%push_req_key('smpd')
-        call private_prgs(24)%push_req_key('moldiam')
+        call private_prgs(23)%push_req_key('nthr')
+        call private_prgs(23)%push_req_key('stk')
+        call private_prgs(23)%push_req_key('smpd')
+        call private_prgs(23)%push_req_key('moldiam')
         ! optional keys
-        call private_prgs(24)%push_opt_key('lp_backgr')
+        call private_prgs(23)%push_opt_key('lp_backgr')
 
         ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
-        call private_prgs(25)%set_name('calc_group_sigmas')
+        call private_prgs(24)%set_name('calc_group_sigmas')
         ! required keys
-        call private_prgs(25)%push_req_key('nparts')
-        call private_prgs(25)%push_req_key('projfile')
-        call private_prgs(25)%push_req_key('nthr')
-        call private_prgs(25)%push_req_key('which_iter')
+        call private_prgs(24)%push_req_key('nparts')
+        call private_prgs(24)%push_req_key('projfile')
+        call private_prgs(24)%push_req_key('nthr')
+        call private_prgs(24)%push_req_key('which_iter')
 
-        n_private_prgs = 25
+        n_private_prgs = 24
     end subroutine new_private_prgs
 
 end module simple_private_prgs

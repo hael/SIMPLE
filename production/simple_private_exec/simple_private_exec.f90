@@ -68,7 +68,6 @@ type(edge_detect_commander)           :: xdetector
 
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)               :: xmasscen
-type(stk_corr_commander)              :: xstk_corr
 type(kstest_commander)                :: xkstst
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
@@ -197,8 +196,6 @@ select case(prg)
     ! MISCELLANOUS PROGRAMS
     case( 'masscen' )
         call xmasscen%execute(cline)
-    case( 'stk_corr' )
-        call xstk_corr%execute(cline)
     case( 'kstest' )
         call xkstst%execute(cline)
 
