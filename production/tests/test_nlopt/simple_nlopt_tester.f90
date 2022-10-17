@@ -11,7 +11,6 @@ integer, parameter        :: NOPTS=6         ! nr of optimizers
 integer, parameter        :: NRFUNS=19       ! nr of general test functions
 integer, parameter        :: LAST2DFUN=32    ! index of last 2D function
 integer, parameter        :: NTESTS=50       ! nr of independent tests
-integer, parameter        :: NRESTARTS=1     ! nr of restarts per optimizer
 integer, parameter        :: NRDIMS=2        ! number of dimensions
 
 ! module global variables
