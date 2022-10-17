@@ -65,22 +65,17 @@ contains
                 ! fraction of search space scanned
                 frac = real(isample) / real(self%s%nsample)
                 if( corr > corr_best )then
-                    if( frac < MINFRAC )then
-                        ! cycle condition
-                        corr_best = corr
-                        cycle
-                    else
-                        ! exit condition
-                        call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
-                        call o%set('dist',      euldist)
-                        call o%set('dist_inpl', dist_inpl)
-                        call o%set('corr',      corr)
-                        call o%set('frac',      100.0 * frac)
-                        call build_glob%spproj_field%set_ori(self%s%iptcl, o)
-                        corr_best = corr
-                        obest = o
-                        exit
-                    endif
+                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
+                    call o%set('dist',      euldist)
+                    call o%set('dist_inpl', dist_inpl)
+                    call o%set('corr',      corr)
+                    call o%set('frac',      100.0 * frac)
+                    call build_glob%spproj_field%set_ori(self%s%iptcl, o)
+                    corr_best = corr
+                    obest     = o
+                    ! cycle condition
+                    if( frac < MINFRAC ) cycle
+                    exit
                 endif
             end do
             ! local refinement step
@@ -95,23 +90,17 @@ contains
                 frac = real(isample) / real(self%s%nsample)
                 ! exit condition
                 if( corr > corr_best )then
-                    if( frac < MINFRAC )then
-                        ! cycle condition
-                        corr_best = corr
-                        obest = o
-                        cycle
-                    else
-                        ! exit condition
-                        call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
-                        call o%set('dist',      euldist)
-                        call o%set('dist_inpl', dist_inpl)
-                        call o%set('corr',      corr)
-                        call o%set('frac', 100.0 * (real(self%s%nrefs_eval) / real(2. * self%s%nsample)))
-                        call build_glob%spproj_field%set_ori(self%s%iptcl, o)
-                        corr_best = corr
-                        obest = o
-                        exit
-                    endif
+                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
+                    call o%set('dist',      euldist)
+                    call o%set('dist_inpl', dist_inpl)
+                    call o%set('corr',      corr)
+                    call o%set('frac', 100.0 * (real(self%s%nrefs_eval) / real(2. * self%s%nsample)))
+                    call build_glob%spproj_field%set_ori(self%s%iptcl, o)
+                    corr_best = corr
+                    obest     = o
+                    ! cycle condition
+                    if( frac < MINFRAC ) cycle
+                    exit
                 endif
             end do
 
