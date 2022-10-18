@@ -113,7 +113,6 @@ type :: oris
     procedure          :: mul_shifts
     procedure          :: rnd_oris
     procedure          :: rnd_ori
-    procedure          :: rnd_oris_discrete_from
     procedure          :: rnd_inpls
     procedure          :: rnd_ctf
     procedure          :: rnd_states
@@ -1651,22 +1650,6 @@ contains
         end do
         if(allocated(parts))deallocate(parts)
     end subroutine ini_tseries
-
-    !>  \brief  randomizes eulers in oris from an oris object that is assumed non-redundant
-    subroutine rnd_oris_discrete_from( self, os_discrete )
-        class(oris), intent(inout) :: self, os_discrete
-        real       :: euls(3)
-        integer    :: i, irnd, ndiscrete
-        euls(3)   = 0.
-        ndiscrete = os_discrete%get_noris()
-        do i=1,self%n
-            irnd    = irnd_uni(ndiscrete)
-            euls    = os_discrete%get_euler( irnd )
-            euls(3) = self%o( i )%e3get()
-            call self%o(i)%set_euler( euls )
-            call self%o(i)%set( 'proj', real(irnd) )
-        end do
-    end subroutine rnd_oris_discrete_from
 
     !>  \brief  randomizes the in-plane degrees of freedom
     subroutine rnd_inpls( self, trs )

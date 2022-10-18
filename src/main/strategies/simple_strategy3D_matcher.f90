@@ -218,7 +218,7 @@ contains
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             if( params_glob%l_cartesian )then
                 call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                if( l_ctf ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
+                call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             else
                 call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
                 if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')

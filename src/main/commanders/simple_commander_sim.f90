@@ -79,19 +79,17 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(ori)        :: orientation
-        type(oris)       :: spiral
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
         real             :: bfac, bfacerr
         integer          :: i, cnt, ntot
         logical          :: apply_ctf
-        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir', 'yes')
-        call cline%set('nspace', cline%get_rarg('nptcls'))
-        if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
         if( .not. cline%defined('dferr')    ) call cline%set('dferr',    1.5)
         if( .not. cline%defined('astigerr') ) call cline%set('astigerr', 0.5)
         if( .not. cline%defined('bfacerr')  ) call cline%set('bfacerr',  0.0)
+        call cline%set('nspace', cline%get_rarg('nptcls'))
         call cline%set('wfun', 'kb')
         call cline%set('winsz', 1.5)
         call cline%set('alpha',  2.)
@@ -107,13 +105,8 @@ contains
         if( params%box == 0 ) THROW_HARD('box=0, something is fishy! Perhaps forgotten to input volume or stack?')
         tfun = ctf(params%smpd, params%kv, params%cs, params%fraca)
         ! generate orientation/CTF parameters
-        if( cline%defined('ndiscrete') )then
-            if( params%ndiscrete > 0 )then
-                call spiral%new(params%ndiscrete, is_ptcl=.false.)
-                call build%pgrpsyms%build_refspiral(spiral)
-                call build%spproj_field%rnd_oris_discrete_from(spiral)
-                call spiral%kill
-            endif
+        if( params%even.eq.'yes' )then
+            call build%spproj_field%spiral
             call build%spproj_field%rnd_inpls(params%trs)
         else if( .not. cline%defined('oritab') )then
             call build%spproj_field%rnd_oris(params%sherr, params%eullims)

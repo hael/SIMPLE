@@ -58,23 +58,31 @@ contains
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)
+
                 ! greedy optimization over in-plane angle
-                corr_inpl = -1.
-                do irot = 1,self%s%nrots
-                    call o%e3set(build_glob%inpl_rots(irot))
-                    ! calculate Cartesian corr
-                    call cartftcc_glob%project_and_correlate(self%s%iptcl, o, corr)
-                    if( corr > corr_inpl )then
-                        corr_inpl = corr
-                        e3 = build_glob%inpl_rots(irot)
-                    endif
-                end do
-                call o%e3set(e3)
-                corr = corr_inpl
+                ! corr_inpl = -1.
+                ! do irot = 1,self%s%nrots
+                !     call o%e3set(build_glob%inpl_rots(irot))
+                !     ! calculate Cartesian corr
+                !     corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                !     if( corr > corr_inpl )then
+                !         corr_inpl = corr
+                !         e3 = build_glob%inpl_rots(irot)
+                !     endif
+                ! end do
+                ! call o%e3set(e3)
+                ! corr = corr_inpl
+
+                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+
+                print *, o%e1get(), o%e2get(), o%e3get(), corr
+
                 ! keep track of how many references we are evaluating
-                self%s%nrefs_eval = self%s%nrefs_eval + self%s%nrots
+                ! self%s%nrefs_eval = self%s%nrefs_eval + self%s%nrots
+                self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! fraction of search space scanned
-                frac = real(isample) / real(self%s%nsample * self%s%nrots)
+                ! frac = real(isample) / real(self%s%nsample * self%s%nrots)
+                frac = real(isample) / real(self%s%nsample)
                 if( corr > corr_best )then
                     call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
                     call o%set('dist',      euldist)
@@ -84,6 +92,8 @@ contains
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     corr_best = corr
                     obest     = o
+
+                    print *, self%s%nrefs_eval, corr_best
                     ! cycle condition
                     if( frac < MINFRAC ) cycle
                     exit

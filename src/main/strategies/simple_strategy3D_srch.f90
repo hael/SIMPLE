@@ -210,7 +210,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev , self%prev_corr)
+        self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
         call self%o_prev %set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 

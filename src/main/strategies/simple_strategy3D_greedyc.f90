@@ -51,7 +51,7 @@ contains
             ! zero shifts because particle is shifted to its previous origin
             call o%set('x', 0.)
             call o%set('y', 0.)
-            corr_best = self%s%prev_corr
+            corr_best = -1.
             ! init counter
             self%s%nrefs_eval = 0
             do iproj=1,self%s%nprojs
@@ -60,7 +60,7 @@ contains
                     euls(3) = build_glob%inpl_rots(irot)
                     call o%set_euler(euls)
                     ! calculate Cartesian corr
-                    call cartftcc_glob%project_and_correlate(self%s%iptcl, o, corr)
+                    corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
                     if( corr > corr_best )then
                         corr_best = corr
                         obest = o
