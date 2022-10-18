@@ -61,7 +61,7 @@ contains
                     call o%set_euler(euls)
                     ! calculate Cartesian corr
                     call cartftcc_glob%project_and_correlate(self%s%iptcl, o, corr)
-                    if( corr < corr_best )then
+                    if( corr > corr_best )then
                         corr_best = corr
                         obest = o
                     endif
