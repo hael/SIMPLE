@@ -38,7 +38,9 @@ contains
         endif
         ! add detector noise
         call img%ifft()
-        call img%add_gauran(snr)
+        if( snr < 5 )then
+            call img%add_gauran(snr)
+        endif
         if( .not. aapply_ctf ) return
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images

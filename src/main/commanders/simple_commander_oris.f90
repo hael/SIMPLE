@@ -75,10 +75,7 @@ contains
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call spiral%new(params%ndiscrete, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(spiral)
-                call build%spproj_field%rnd_oris_discrete_from(spiral)
-                call spiral%kill
             endif
             call build%spproj_field%rnd_inpls(params%sherr)
         else if( params%even .eq. 'yes' )then

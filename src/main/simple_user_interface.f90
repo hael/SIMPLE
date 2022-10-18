@@ -4056,7 +4056,7 @@ contains
         call simulate_particles%set_input('parm_ios', 4,  oritab)
         call simulate_particles%set_input('parm_ios', 5,  outfile)
         call simulate_particles%set_input('parm_ios', 6,  outstk)
-        call simulate_particles%set_input('parm_ios', 7,  'ndiscrete', 'num', 'Number of discrete projection directions', 'Number of discrete projection directions used in simulation', '# discrete projs', .false., 0.)
+        call simulate_particles%set_input('parm_ios', 7,  'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}', '(yes|no){no}', .false., 'no')
         call simulate_particles%set_input('parm_ios', 8,  sherr)
         call simulate_particles%set_input('parm_ios', 9,  kv)
         call simulate_particles%set_input('parm_ios', 10, cs)

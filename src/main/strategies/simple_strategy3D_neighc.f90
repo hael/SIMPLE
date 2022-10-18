@@ -56,7 +56,7 @@ contains
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(self%s%o_prev, self%s%athres, o)
                 ! calculate Cartesian corr
-                call cartftcc_glob%project_and_correlate(self%s%iptcl, o, corr)
+                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! exit condition

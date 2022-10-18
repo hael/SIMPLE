@@ -12,35 +12,26 @@ public :: cartft_corrcalc, cartftcc_glob
 private
 #include "simple_local_flags.inc"
 
-type heap_vars
-    type(image)   :: img_ref
-    type(image)   :: img_ref_tmp
-    real, pointer :: frc(:) => null()
-end type heap_vars
-
 type :: cartft_corrcalc
     private
-    type(projector), pointer     :: vol_even => null(), vol_odd => null() ! prepared e/o vols
-    integer                      :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                      :: filtsz        = 0       !< Nyqvist limit
-    integer                      :: pfromto(2)    = 0       !< particle index range
-    integer                      :: ldim(3)       = 0       !< logical dimensions of original cartesian image
-    integer                      :: lims(3,2)     = 0       !< resolution mask limits
-    integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
-    integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
-    real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
-    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):params_glob%kfromto(2))
-    real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),        allocatable :: optlp(:)                !< references optimal filter
-    type(image),     allocatable :: particles(:)            !< particle images
-    logical,         allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
-    logical,         allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
-    logical                      :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
-    logical                      :: l_match_filt = .false.  !< matched filter flag
-    logical                      :: l_filt_set   = .false.  !< to indicate whether filter is set
-    logical                      :: with_ctf     = .false.  !< CTF flag
-    logical                      :: existence    = .false.  !< to indicate existence
-    type(heap_vars), allocatable :: heap_vars(:)            !< allocated fields to save stack allocation in subroutines and functions
+    type(projector), pointer :: vol_even => null(), vol_odd => null() ! prepared e/o vols
+    integer                  :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                  :: filtsz        = 0       !< Nyqvist limit
+    integer                  :: pfromto(2)    = 0       !< particle index range
+    integer                  :: ldim(3)       = 0       !< logical dimensions of original cartesian image
+    integer                  :: lims(2,2)     = 0       !< resolution mask limits
+    integer,     allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
+    real,        allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
+    real(sp),    allocatable :: ctfmats(:,:,:)          !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),    allocatable :: optlp(:)                !< references optimal filter
+    type(image), allocatable :: particles(:)            !< particle images
+    type(image), allocatable :: ref_heap(:)             !< needed for correct parallel exec 
+    logical,     allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
+    logical                  :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
+    logical                  :: l_match_filt = .false.  !< matched filter flag
+    logical                  :: l_filt_set   = .false.  !< to indicate whether filter is set
+    logical                  :: with_ctf     = .false.  !< CTF flag
+    logical                  :: existence    = .false.  !< to indicate existence
     contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -55,16 +46,13 @@ type :: cartft_corrcalc
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
     procedure          :: assign_pinds
-    ! MODIFIERS
-    procedure, private :: shellnorm_and_filter_ref
     ! MEMOIZERS
-    procedure, private :: memoize_resmsk
+    procedure          :: prep4shift_srch
     procedure, private :: setup_pxls_p_shell
-    procedure, private :: memoize_sqsum_ptcl
     ! CALCULATORS
     procedure          :: create_absctfmats
-    procedure          :: calc_corr
     procedure          :: project_and_correlate
+    procedure          :: corr_shifted
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -84,7 +72,7 @@ contains
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         logical :: even_dims, test(2)
-        integer :: i, cnt, ithr
+        integer :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -111,15 +99,11 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
-        ! input vols are prepared in preprefvol_2
-        ! if( .not. vol_even%is_expanded() ) THROW_HARD('input vol_even expected to be prepared for interpolation') 
-        ! if( .not. vol_odd%is_expanded()  ) THROW_HARD('input vol_odd expected to be prepared for interpolation')
         ! set pointers to projectors
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
-        ! allocate optimal low-pass filter & memoized sqsums
+        ! allocate optimal low-pass filter
         allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
-        allocate(self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -151,14 +135,12 @@ contains
             endif
         endif
         ! allocate the rest
-        allocate(self%particles(self%nptcls), self%heap_vars(params_glob%nthr))
+        allocate(self%particles(self%nptcls), self%ref_heap(nthr_glob))
         do i = 1,self%nptcls
             call self%particles(i)%new(self%ldim, params_glob%smpd)
         end do
-        do ithr = 1,params_glob%nthr
-            call self%heap_vars(ithr)%img_ref%new(self%ldim, params_glob%smpd)
-            call self%heap_vars(ithr)%img_ref_tmp%new(self%ldim, params_glob%smpd)
-            allocate(self%heap_vars(ithr)%frc(self%filtsz), source = 0.)
+        do i = 1,nthr_glob
+            call self%ref_heap(i)%new(self%ldim, params_glob%smpd)
         end do
         ! set CTF flag
         self%with_ctf = .false.
@@ -168,7 +150,8 @@ contains
         ! setup pxls_p_shell
         call self%setup_pxls_p_shell
         ! memoize resolution mask
-        call self%memoize_resmsk
+        lims = self%particles(1)%loop_lims(2)
+        self%lims = lims(1:2,:)
         ! flag existence
         self%existence = .true.
         ! set pointer to global instance
@@ -190,21 +173,19 @@ contains
         else
             ! re-index & reallocate
             self%nptcls = nptcls
-            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
-            if( allocated(self%iseven) )       deallocate(self%iseven)
+            if( allocated(self%iseven) ) deallocate(self%iseven)
             if( allocated(self%particles) )then
                 do i = 1, size(self%particles)
                     call self%particles(i)%kill
                 end do
                 deallocate(self%particles)
             endif
-            allocate( self%particles(self%nptcls), self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls) )
+            allocate(self%particles(self%nptcls), self%iseven(1:self%nptcls))
             do i = 1,self%nptcls
                 call self%particles(i)%new(self%ldim, params_glob%smpd)
             end do
         endif
-        self%sqsums_ptcls = 1.
-        self%iseven       = .true.
+        self%iseven = .true.
         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
         do i = 1,self%nptcls
             iptcl = pinds(i)
@@ -219,8 +200,6 @@ contains
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         if( .not. (img.eqdims.self%particles(self%pinds(iptcl))) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
         call self%particles(self%pinds(iptcl))%copy_fast(img)
-        ! calculate the square sum required for correlation calculation
-        call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl
 
     subroutine set_optlp( self, optlp )
@@ -269,39 +248,24 @@ contains
 
     ! MODIFIERS
 
-    subroutine shellnorm_and_filter_ref( self, ref_img )
-        class(cartft_corrcalc), intent(in)    :: self
-        class(image),           intent(inout) :: ref_img
-        if( self%l_match_filt .and. self%l_filt_set )then
-            call ref_img%shellnorm_and_apply_filter_serial(self%optlp(:))
-        else if( .not. params_glob%l_lpset .and. self%l_filt_set )then
-            call ref_img%apply_filter_serial(self%optlp(:))
-        endif
-    end subroutine shellnorm_and_filter_ref
-
-    ! MEMOIZERS
-
-    subroutine memoize_resmsk( self )
+    subroutine prep4shift_srch( self, iptcl, o )
         class(cartft_corrcalc), intent(inout) :: self
-        integer :: h, k, l, sh, phys(3)
-        self%lims = self%particles(1)%loop_lims(2)
-        if( allocated(self%resmsk) ) deallocate(self%resmsk)
-        self%cmat_shape = self%particles(1)%get_array_shape()
-        allocate(self%resmsk(self%cmat_shape(1),self%cmat_shape(2),self%cmat_shape(3)), source=.false.)
-        do k=self%lims(2,1),self%lims(2,2)
-            do h=self%lims(1,1),self%lims(1,2)
-                do l=self%lims(3,1),self%lims(3,2)
-                    ! compute physical address
-                    phys = self%particles(1)%comp_addr_phys(h,k,l)
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh < params_glob%kfromto(1) .or. sh > params_glob%kfromto(2) ) cycle
-                    ! update logical mask
-                    self%resmsk(phys(1),phys(2),phys(3)) = .true.
-                enddo
-            enddo
-        enddo
-    end subroutine memoize_resmsk
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        type(projector), pointer :: vol_ptr => null()
+        integer :: ithr
+        logical :: iseven
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%ref_heap(ithr))
+    end subroutine prep4shift_srch
 
     subroutine setup_pxls_p_shell( self )
         class(cartft_corrcalc), intent(inout) :: self
@@ -320,12 +284,6 @@ contains
         end do
     end subroutine setup_pxls_p_shell
 
-    subroutine memoize_sqsum_ptcl( self, i )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: i
-        self%sqsums_ptcls(i) = self%particles(i)%calc_sumsq(self%resmsk)
-    end subroutine memoize_sqsum_ptcl
-
     ! CALCULATORS
 
     subroutine create_absctfmats( self, spproj, oritype, pfromto )
@@ -338,15 +296,16 @@ contains
         type(ctfparams) :: ctfparms(nthr_glob)
         type(ctf)       :: tfuns(nthr_glob)
         real(sp)        :: inv_ldim(3),inv(2)
-        integer         :: i,h,k,iptcl,ithr,ppfromto(2),ctfmatind,phys(3)
+        integer         :: i,h,k,iptcl,ithr,ppfromto(2),ctfmatind
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(self%cmat_shape(1),self%cmat_shape(2),self%cmat_shape(3),1:self%nptcls), source=0.)
+        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        if(.not. self%with_ctf ) return
         inv_ldim = 1./real(self%ldim)
-        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,h,k,phys,inv) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,h,k,inv) schedule(static) proc_bind(close)
         do i=ppfromto(1),ppfromto(2)
             if( .not. present_pfromto )then
                 iptcl     = i
@@ -362,14 +321,12 @@ contains
                 call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
                 do h = self%lims(1,1),self%lims(1,2)
                     do k = self%lims(2,1),self%lims(2,2)
-                        ! compute physical address
-                        phys = self%particles(1)%comp_addr_phys(h,k,0)        
                         inv  = real([h,k]) * inv_ldim(1:2)
                         if( ctfparms(ithr)%l_phaseplate )then
-                            self%ctfmats(phys(1),phys(2),phys(3),self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
+                            self%ctfmats(h,k,self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
                             &ctfparms(ithr)%phshift, .not.params_glob%l_wiener_part))
                         else
-                            self%ctfmats(phys(1),phys(2),phys(3),self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
+                            self%ctfmats(h,k,self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
                             &0., .not.params_glob%l_wiener_part))
                         endif
                     end do
@@ -379,39 +336,15 @@ contains
         !$omp end parallel do
     end subroutine create_absctfmats
 
-    function calc_corr( self, iptcl, shvec, grad ) result( cc )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iptcl
-        real,                   intent(in)    :: shvec(2)
-        real,         optional, intent(inout) :: grad(2)
-        real(sp) :: cc
-        integer  :: i, ithr
-        i    =  self%pinds(iptcl)
-        ithr = omp_get_thread_num() + 1
-        ! prep ref
-        call self%heap_vars(ithr)%img_ref%fft
-        ! shell normalization and filtering
-        call self%shellnorm_and_filter_ref(self%heap_vars(ithr)%img_ref)
-        ! multiply with CTF
-        if( self%with_ctf ) call self%heap_vars(ithr)%img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
-        ! calc corr
-        if( present(grad) )then
-            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun, grad), kind=sp)
-        else
-            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun), kind=sp)
-        endif
-    end function calc_corr
-
-    subroutine project_and_correlate( self, iptcl, o, corr, grad )
+    function project_and_correlate( self, iptcl, o ) result( corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        real,                   intent(inout) :: corr
-        real, optional,         intent(inout) :: grad(2)
         type(projector), pointer :: vol_ptr => null()
-        logical :: iseven, present_grad
-        integer :: ithr
-        present_grad = present(grad)
+        real    :: corr
+        logical :: iseven
+        integer :: ithr, i
+        i      = self%pinds(iptcl)
         iseven = self%ptcl_iseven(iptcl)
         if( iseven )then
             vol_ptr => self%vol_even
@@ -419,14 +352,76 @@ contains
             vol_ptr => self%vol_odd
         endif
         ithr = omp_get_thread_num() + 1
-        if( present_grad )then
-            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kfromto(2))
-            corr = self%calc_corr(iptcl, o%get_2Dshift(), grad(:))
+        corr = vol_ptr%fproject_and_correlate_serial(o, self%particles(i), self%lims, self%ctfmats(:,:,i), params_glob%kfromto(2))
+    end function project_and_correlate
+
+    function corr_shifted( self, iptcl, o, shvec, find_lp ) result( cc )
+        class(cartft_corrcalc), intent(inout)  :: self
+        integer,                intent(in)     :: iptcl
+        class(ori),             intent(in)     :: o
+        real,                   intent(in)     :: shvec(2)
+        integer,                intent(in)    :: find_lp
+        complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
+        integer :: i, h, k, sqarg, sqlp, phys(3), ithr
+        complex :: comp1, comp2, sh
+        real    :: cc, sumsq1, sumsq2, shconst, arg, sqrt_denom
+        logical :: iseven
+        ! physical particle index
+        i = self%pinds(iptcl)
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI/real(self%ldim(1)/2.)
         else
-            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kfromto(2))
-            corr = self%calc_corr(iptcl, o%get_2Dshift())
+            shconst = PI/real((self%ldim(1)-1)/2.)
         endif
-    end subroutine project_and_correlate
+        ! associate pointers
+        call self%ref_heap(ithr)%get_cmat_ptr(cmat_ref)
+        call self%particles(i)%get_cmat_ptr(cmat_ptcl)
+        ! init
+        sqlp   = find_lp * find_lp
+        sumsq1 = 0.d0
+        sumsq2 = 0.d0
+        do h=self%lims(1,1),self%lims(1,2)
+            do k=self%lims(2,1),self%lims(2,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                ! calculate linear phase change
+                arg  = sum(real([h,k])*shvec(:)*shconst)
+                sh   = cmplx(cos(arg),sin(arg))
+                ! retrieve physical cmat indices
+                if (h > 0) then
+                    phys(1) = h + 1
+                    phys(2) = k + 1 + MERGE(self%ldim(2),0,k < 0)
+                    phys(3) = 1
+                else
+                    phys(1) = -h + 1
+                    phys(2) = -k + 1 + MERGE(self%ldim(2),0,-k < 0)
+                    phys(3) = 1
+                    comp1 = conjg(comp1)
+                endif
+                 ! multiply reference with CTF
+                comp1 = cmat_ref(phys(1),phys(2),phys(3)) * self%ctfmats(h, k, i)
+                ! shift the particle Fourier component
+                comp2 = cmat_ptcl(phys(1),phys(2),phys(3)) * sh
+                ! update cross product
+                cc    = cc  + real(comp1 * conjg(comp2))
+                ! update normalization terms
+                sumsq1 = sumsq1 + real(comp1 * conjg(comp1))
+                sumsq2 = sumsq2 + real(comp2 * conjg(comp2))
+            end do
+        end do
+        sqrt_denom = sqrt(sumsq1 * sumsq2)
+        cc = cc / sqrt(sumsq1 * sumsq2)
+        ! if( cc < eps .and. sumsq1 < eps .and. sumsq2 < eps )then
+        !     cc = 1.
+        ! elseif( sqrt_denom < eps )then
+        !     cc = 0.
+        ! else
+        !     cc = cc / sqrt_denom
+        ! endif
+    end function corr_shifted
 
     ! DESTRUCTOR
 
@@ -439,20 +434,16 @@ contains
             self%vol_odd  => null()
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
-            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
             if( allocated(self%optlp)        ) deallocate(self%optlp)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
             do i = 1,self%nptcls
                 call self%particles(i)%kill
             end do
-            do ithr = 1,params_glob%nthr
-                call self%heap_vars(ithr)%img_ref%kill
-                call self%heap_vars(ithr)%img_ref_tmp%kill
-                deallocate(self%heap_vars(ithr)%frc)
-                self%heap_vars(ithr)%frc => null()
+            do i = 1,nthr_glob
+                call self%ref_heap(i)%kill
             end do
-            deallocate(self%particles, self%heap_vars)
+            deallocate(self%particles)
             self%l_filt_set = .false.
             self%existence  = .false.
         endif
