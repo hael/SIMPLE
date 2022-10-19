@@ -37,7 +37,7 @@ contains
     subroutine srch_snhc( self, ithr )
         class(strategy3D_snhc), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, isample
+        integer :: iref, isample, loc(1)
         real    ::  inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -48,7 +48,12 @@ contains
             ! search
             do isample=1,self%spec%szsn
                 iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
-                call per_ref_srch                          ! actual search
+                ! calculate in-plane correlations
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                ! identify the top scoring in-plane angle
+                loc = maxloc(inpl_corrs)
+                ! stash
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
             end do
             self%s%nrefs_eval = self%spec%szsn
             ! output
@@ -56,19 +61,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-
-        contains
-
-            subroutine per_ref_srch
-                integer :: loc(1)
-                ! calculate in-plane correlations
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                ! identify the top scoring in-plane angle
-                loc = maxloc(inpl_corrs)
-                ! stash
-                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-            end subroutine per_ref_srch
-
     end subroutine srch_snhc
 
     subroutine oris_assign_snhc( self )

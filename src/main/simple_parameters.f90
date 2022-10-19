@@ -1528,7 +1528,7 @@ contains
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc','snhcc')
+                case('snhc')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT
@@ -1536,7 +1536,7 @@ contains
         endif
         ! -- Cartesian refinement flag
         select case(trim(self%refine))
-            case('snhcc','shcc','neighc','greedyc')
+            case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
             case DEFAULT
                 self%l_cartesian = .false.

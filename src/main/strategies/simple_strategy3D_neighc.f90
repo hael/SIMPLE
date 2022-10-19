@@ -38,39 +38,46 @@ contains
         class(strategy3D_neighc), intent(inout) :: self
         integer,                  intent(in)    :: ithr
         integer   :: isample
-        type(ori) :: o, osym
-        real      :: corr, euldist, dist_inpl
+        type(ori) :: o, osym, obest
+        real      :: corr, euldist, dist_inpl, corr_best
+        logical   :: got_better
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4_cont_srch
+            ! transfer critical per-particle params
             o = self%s%o_prev
+            obest = self%s%o_prev
             ! zero shifts because particle is shifted to its previous origin
             call o%set('x', 0.)
             call o%set('y', 0.)
-            ! init counter
-            self%s%nrefs_eval = 0
+            ! currently the best correlation is the previous one
+            corr_best  = self%s%prev_corr
+            got_better = .false.
             do isample=1,self%s%nsample
-                ! make a random rotation matrix within the assymetric unit
-                call build_glob%pgrpsyms%rnd_euler(self%s%o_prev, self%s%athres, o)
+                ! make a random rotation matrix neighboring the previous best within the assymetric unit
+                call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
                 ! calculate Cartesian corr
                 corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
-                ! keep track of how many references we are evaluating
-                self%s%nrefs_eval = self%s%nrefs_eval + 1
-                ! exit condition
-                if( corr > self%s%prev_corr )then
-                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
-                    call o%set('dist',      euldist)
-                    call o%set('dist_inpl', dist_inpl)
-                    call o%set('corr',      corr)
-                    call o%set('frac',      100.0 * real(isample) / real(self%s%nsample))
-                    call build_glob%spproj_field%set_ori(self%s%iptcl, o)
-                    exit
+                if( corr > corr_best )then
+                    corr_best  = corr
+                    obest      = o
+                    got_better = .true.
                 endif
             end do
+            if( got_better )then
+                call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
+                call obest%set('dist',      euldist)
+                call obest%set('dist_inpl', dist_inpl)
+                call obest%set('corr',      corr_best)
+                call obest%set('frac',      100.0)
+                call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
+            endif
+
             !!!!!!!!!!!!!!!!!!! CARTESIAN SHIFT SRCH TO BE IMPLEMENTED
+
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
