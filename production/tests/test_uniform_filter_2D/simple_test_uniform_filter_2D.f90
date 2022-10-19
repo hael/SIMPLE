@@ -5,6 +5,7 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_commander_volops,   only: reproject_commander
 use simple_image,              only: image
+use simple_opt_filter,         only: uniform_filter_2D
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection
@@ -85,7 +86,7 @@ do iptcl = 1, p%nptcls
     ! call noise%mask(0.4 * p%msk, 'soft')
     ! call img_noisy%add(noise)
     ! add background noise
-    call noise%gauran(0., 1.5 * sdev)
+    call noise%gauran(0., 2.5 * sdev)
     call noise%mask(1.4 * p%msk, 'soft')
     call img_noisy%add(noise)
     call img_noisy%write('stk_noisy.mrc', iptcl)
@@ -126,7 +127,7 @@ do iptcl = 1, p%nptcls
     write(*, *) 'Particle # ', iptcl
     ! comparing the nonuniform result with the original data
     call img_noisy%read('stk_noisy.mrc', iptcl)
-    call img_noisy%uniform_filter_2D(img_filt, NSEARCH)
+    call uniform_filter_2D(img_noisy, img_filt, NSEARCH)
     call img_filt%write('stk_noisy_filt.mrc', iptcl)
     call img_clean%read('stk_clean.mrc', iptcl)
     ! spherical masking
@@ -161,7 +162,7 @@ do iptcl = 1, p%nptcls
     write(*, *) 'Particle # ', iptcl
     ! comparing the nonuniform result with the original data
     call img_noisy%read('stk_noisy.mrc', iptcl)
-    call img_noisy%uniform_filter_2D(img_filt, NSEARCH)
+    call uniform_filter_2D(img_noisy, img_filt, NSEARCH)
     call img_filt%write('stk_phase_filt.mrc', iptcl)
     call img_clean%read('stk_clean.mrc', iptcl)
     ! spherical masking
