@@ -47,8 +47,8 @@ contains
             self%s%nbetter = 0
             ! search
             do isample=1,self%spec%szsn
-                iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
-                call per_ref_srch                           ! actual search
+                iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
+                call per_ref_srch                          ! actual search
             end do
             self%s%nrefs_eval = self%spec%szsn
             ! output
@@ -108,7 +108,6 @@ contains
         endif
         call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
-        call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call osym%kill
         call o1%kill
         call o2%kill

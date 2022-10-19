@@ -39,7 +39,7 @@ contains
         integer,                  intent(in)    :: ithr
         integer   :: isample
         type(ori) :: o, osym
-        real      :: cc(3), euldist, dist_inpl
+        real      :: corr, euldist, dist_inpl
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -56,16 +56,15 @@ contains
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(self%s%o_prev, self%s%athres, o)
                 ! calculate Cartesian corr
-                cc = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! exit condition
-                if( cc(1) > self%s%cc_prev(1) )then
+                if( corr > self%s%prev_corr )then
                     call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
                     call o%set('dist',      euldist)
                     call o%set('dist_inpl', dist_inpl)
-                    call o%set('corr',      norm_corr(cc))
-                    call o%set('cc_unnorm', cc(1))
+                    call o%set('corr',      corr)
                     call o%set('frac',      100.0 * real(isample) / real(self%s%nsample))
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit

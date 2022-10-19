@@ -64,8 +64,6 @@ contains
             if( corr < 0. ) corr = 0.
         end if
         call build_glob%spproj_field%set(s%iptcl, 'corr', corr)
-        ! specscore
-        call build_glob%spproj_field%set(s%iptcl, 'specscore', s%specscore)
         ! angular distances
         call build_glob%spproj_field%get_ori(s%iptcl, o_new)
         call build_glob%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
@@ -90,7 +88,7 @@ contains
             else
                 nrefs_eval = nrefs_tot  ! the case of global srch
             endif
-        else if( s%l_greedy .or. s%l_cont )then
+        else if( s%l_greedy )then
             nrefs_tot  = s%nprojs * neff_states
             nrefs_eval = nrefs_tot
         else

@@ -336,12 +336,12 @@ contains
         !$omp end parallel do
     end subroutine create_absctfmats
 
-    function project_and_correlate( self, iptcl, o ) result( cc )
+    function project_and_correlate( self, iptcl, o ) result( corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         type(projector), pointer :: vol_ptr => null()
-        real    :: cc(3)
+        real    :: corr
         logical :: iseven
         integer :: i
         i      = self%pinds(iptcl)
@@ -351,10 +351,10 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        cc = vol_ptr%fproject_and_correlate_serial(o, self%particles(i), self%lims, self%ctfmats(:,:,i), params_glob%kfromto(2))
+        corr = vol_ptr%fproject_and_correlate_serial(o, self%particles(i), self%lims, self%ctfmats(:,:,i), params_glob%kfromto(2))
     end function project_and_correlate
 
-    function corr_shifted( self, iptcl, o, shvec, find_lp ) result( cc )
+    function corr_shifted( self, iptcl, o, shvec, find_lp ) result( corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
@@ -363,7 +363,7 @@ contains
         complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
         integer :: i, h, k, sqarg, sqlp, phys(3), ithr
         complex :: comp1, comp2, sh
-        real    :: cc(3), shconst, arg
+        real    :: cc(3), shconst, arg, corr
         logical :: iseven
         ! physical particle index
         i = self%pinds(iptcl)
@@ -410,6 +410,7 @@ contains
                 cc(3) = cc(3) + real(comp2 * conjg(comp2))
             end do
         end do
+        corr = norm_corr(cc)
     end function corr_shifted
 
     ! DESTRUCTOR

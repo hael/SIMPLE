@@ -374,7 +374,7 @@ contains
         class(parameters),      intent(inout) :: params
         real :: rot
         call self%kill_strategy3D_tbox
-        allocate( self%eorecvols(params%nstates) )
+        allocate( self%eorecvols(params%nstates))
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         rot = 0.
         params%nrots = 0

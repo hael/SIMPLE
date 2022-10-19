@@ -2611,7 +2611,7 @@ contains
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL
     function find_closest_proj( self, o_in ) result( closest )
-        class(oris), intent(inout) :: self
+        class(oris), intent(in) :: self
         class(ori),  intent(in) :: o_in
         real    :: dists(self%n)
         integer :: closest, i

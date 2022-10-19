@@ -286,7 +286,7 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    function fproject_and_correlate_serial( self, e, img2cc, lims, ctfmat, find_lp ) result( cc )
+    function fproject_and_correlate_serial( self, e, img2cc, lims, ctfmat, find_lp ) result( corr )
         class(projector),  intent(inout) :: self
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: img2cc
@@ -294,7 +294,7 @@ contains
         real,              intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         integer,           intent(in)    :: find_lp
         complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)
-        real    :: loc(3), e_rotmat(3,3), cc(3)
+        real    :: loc(3), e_rotmat(3,3), cc(3), corr
         integer :: h, k, sqarg, sqlp, phys(3), ldim(3)
         complex :: comp1, comp2
         sqlp     = find_lp * find_lp
@@ -329,6 +329,7 @@ contains
                 cc(3) = cc(3) + real(comp2 * conjg(comp2))
             end do
         end do
+        corr = norm_corr(cc)
     end function fproject_and_correlate_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
