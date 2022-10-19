@@ -47,8 +47,6 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4_cont_srch
-            ! init
-            self%s%nrefs_eval = 0
             ! transfer critical per-particle params
             o = self%s%o_prev
             obest = self%s%o_prev
@@ -56,11 +54,8 @@ contains
             call o%set('x', 0.)
             call o%set('y', 0.)
             ! currently the best correlation is the previous one
-            corr_best          = self%s%prev_corr
-
-            ! print *, trim(params_glob%refine), corr_best, self%s%l_local, params_glob%nspace
-
-            got_better         = .false.
+            corr_best  = self%s%prev_corr
+            got_better = .false.
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)
@@ -94,27 +89,27 @@ contains
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             endif
             ! local refinement step
-            if( self%s%l_local )then
-                do isample=1,self%s%nsample
-                    ! make a random rotation matrix neighboring the previous best within the assymetric unit
-                    call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
-                    ! calculate Cartesian corr
-                    corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
-                    if( corr > corr_best )then
-                        corr_best  = corr
-                        obest      = o
-                        got_better = .true.
-                    endif
-                end do
-                if( got_better )then
-                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
-                    call obest%set('dist',      euldist)
-                    call obest%set('dist_inpl', dist_inpl)
-                    call obest%set('corr',      corr_best)
-                    call obest%set('frac',      100.0)
-                    call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
+            got_better = .false.
+            do isample=1,self%s%nsample
+                ! make a random rotation matrix neighboring the previous best within the assymetric unit
+                call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
+                ! calculate Cartesian corr
+                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                if( corr > corr_best )then
+                    corr_best  = corr
+                    obest      = o
+                    got_better = .true.
                 endif
+            end do
+            if( got_better )then
+                call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
+                call obest%set('dist',      euldist)
+                call obest%set('dist_inpl', dist_inpl)
+                call obest%set('corr',      corr_best)
+                call obest%set('frac',      100.0)
+                call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             endif
+
 
             !!!!!!!!!!!!!!!!!!! CARTESIAN SHIFT SRCH TO BE IMPLEMENTED
 

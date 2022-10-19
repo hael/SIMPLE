@@ -36,7 +36,7 @@ contains
     subroutine srch_shc( self, ithr )
         class(strategy3D_shc), intent(inout) :: self
         integer,                 intent(in)    :: ithr
-        integer :: iref,isample
+        integer :: iref, isample, loc(1)
         real    :: inpl_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
@@ -49,7 +49,16 @@ contains
             self%s%nrefs_eval = 0
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
-                call per_ref_srch                           ! actual search
+                if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
+                    ! identify the top scoring in-plane angle
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    loc = maxloc(inpl_corrs)
+                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                    ! update nbetter to keep track of how many improving solutions we have identified
+                    if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                    ! keep track of how many references we are evaluating
+                    self%s%nrefs_eval = self%s%nrefs_eval + 1
+                end if
                 ! exit condition
                 if( self%s%nbetter > 0 ) exit
             end do
@@ -59,23 +68,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-
-    contains
-
-        subroutine per_ref_srch
-            integer :: loc(1)
-            if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                ! identify the top scoring in-plane angle
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                loc = maxloc(inpl_corrs)
-                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                ! update nbetter to keep track of how many improving solutions we have identified
-                if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
-                ! keep track of how many references we are evaluating
-                self%s%nrefs_eval = self%s%nrefs_eval + 1
-            end if
-        end subroutine per_ref_srch
-
     end subroutine srch_shc
 
     subroutine oris_assign_shc( self )

@@ -50,7 +50,6 @@ type strategy3D_srch
     logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
     logical                 :: l_greedy      = .false.   !< greedy        refinement flag
     logical                 :: l_ptclw       = .false.   !< whether to calculate particle weight
-    logical                 :: l_local       = .false.   !< whether to do local refinement in refine=shcc mode
     logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                 :: exists        = .false.   !< 2 indicate existence
   contains
@@ -206,16 +205,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        select case(trim(params_glob%refine))
-            case('snhcc')
-                self%prev_corr = -1.
-                ! orientations always replaced with the best in stochastic neighborhood
-                self%l_local = .false. ! no local continuous refinement
-            case DEFAULT
-                self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
-                ! "traditional" stochastic hill climbing, but in continuous space
-                self%l_local = .true. ! local continuous refinement is on
-        end select
+        self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
         call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 

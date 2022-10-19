@@ -38,7 +38,7 @@ contains
         class(strategy3D_greedy_neigh), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         type(ori) :: o
-        integer   :: iref, iproj, minnrefs
+        integer   :: iref, iproj, minnrefs, loc(1)
         real      :: inpl_corrs(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
         ! execute search
@@ -55,7 +55,12 @@ contains
             do iproj=1,params_glob%nspace
                 if( .not. lnns(iproj) ) cycle
                 iref = (self%s%prev_state - 1) * params_glob%nspace + iproj
-                call per_ref_srch
+                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                    ! identify the top scoring in-plane angle
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    loc = maxloc(inpl_corrs)
+                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                endif
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nnn
@@ -66,19 +71,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-
-    contains
-
-        subroutine per_ref_srch
-            integer :: loc(1)
-            if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                ! identify the top scoring in-plane angle
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                loc = maxloc(inpl_corrs)
-                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-            endif
-        end subroutine per_ref_srch
-
     end subroutine srch_greedy_neigh
 
     subroutine oris_assign_greedy_neigh( self )
