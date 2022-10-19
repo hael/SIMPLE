@@ -240,6 +240,7 @@ contains
     procedure          :: real_space_filter
     procedure          :: NLmean
     procedure          :: NLmean3D
+    procedure          :: uniform_filter_2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -7305,6 +7306,59 @@ contains
         call find_stretch_minmax(xhist,yhist,m,npxls_at_mode,stretch_lim)
         self_out%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = (LAMBDA-1)*(rmat-stretch_lim(1))/(stretch_lim(2)-stretch_lim(1))
     end subroutine hist_stretching
+
+    subroutine uniform_filter_2D( self, out_img, nsearch )
+        class(image), intent(inout) :: self
+        type(image),  intent(inout) :: out_img
+        integer,      intent(in)    :: nsearch
+        real,         parameter     ::  LOW_RES = 10.  ! Angstrom
+        real,         parameter     :: HIGH_RES =   .5 ! Angstrom
+        integer,      parameter     :: BW_ORDER = 8
+        real,         allocatable   :: cur_fil(:)
+        type(image)     :: filt_img
+        type(image_ptr) :: filt_ptr, self_ptr
+        integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val
+        real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind
+        ! initializing parameters
+        ldim        = self%get_ldim()
+        box         = ldim(1)
+        dim3        = ldim(3)
+        smpd        = self%get_smpd()
+        find_stop   = calc_fourier_index(HIGH_RES, box, smpd)
+        find_start  = calc_fourier_index( LOW_RES, box, smpd)
+        print *, 'start = ', find_start, '; stop = ', find_stop
+        find_stepsz = real(find_stop - find_start)/(nsearch - 1)
+        ! initializing images
+        call filt_img%copy(self)
+        call  out_img%copy(self)
+        call filt_img%get_mat_ptrs(filt_ptr)
+        call     self%get_mat_ptrs(self_ptr)
+        ! allocation
+        allocate(cur_fil(box), source=0.)
+        ! optimizing over the cur_ind
+        best_cost = huge(best_cost)
+        best_ind  = find_start
+        do iter_no = 1, nsearch
+            cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
+            ! generating the Butterworth filter at this current Fourier index
+            do freq_val = 1, size(cur_fil)
+                cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
+            enddo
+            ! applying the filter to a copy of current image
+            call filt_img%copy_fast(self)
+            call filt_img%fft()
+            call filt_img%apply_filter(cur_fil)
+            call filt_img%ifft()
+            ! compute the total cost over all pixels and do the optimization
+            cur_cost = abs(sum(filt_ptr%rmat - self_ptr%rmat))
+            if( cur_cost < best_cost )then
+                call out_img%copy_fast(filt_img)
+                best_cost = cur_cost
+                best_ind  = cur_ind
+            endif
+        enddo
+        call filt_img%kill
+    end subroutine uniform_filter_2D
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
