@@ -10,7 +10,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: opt_2D_filter_sub, opt_filter_2D, opt_filter_3D, butterworth_filter
+public :: opt_2D_filter_sub, opt_filter_2D, opt_filter_3D, butterworth_filter, uniform_filter_2D
 private
 
 type optfilt2Dvars
@@ -339,6 +339,43 @@ contains
         enddo
     end subroutine opt_2D_filter_sub
 
+    ! Compute the value of the Butterworth transfer function of order n(th)
+    ! at a given frequency s, with the cut-off frequency fc
+    ! SOURCE :
+    ! https://en.wikipedia.org/wiki/Butterworth_filter
+    pure function butterworth(s, n, fc) result(val)
+        real   , intent(in)  :: s
+        integer, intent(in)  :: n
+        real   , intent(in)  :: fc
+        real                 :: val
+        real,    parameter :: AN(11,10) = reshape((/ 1., 1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 1.4142,  1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 2.    ,  2.    ,  1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 2.6131,  3.4142,  2.6131,  1.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 3.2361,  5.2361,  5.2361,  3.2361,  1.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 3.8637,  7.4641,  9.1416,  7.4641,  3.8637,  1.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 4.4940, 10.0978, 14.5918, 14.5918, 10.0978,  4.4940,  1.    ,  0.    , 0.    , 0.,&
+                                                    &1., 5.1258, 13.1371, 21.8462, 25.6884, 21.8462, 13.1371,  5.1258,  1.    , 0.    , 0.,&
+                                                    &1., 5.7588, 16.5817, 31.1634, 41.9864, 41.9864, 31.1634, 16.5817,  5.7588, 1.    , 0.,&
+                                                    &1., 6.3925, 20.4317, 42.8021, 64.8824, 74.2334, 64.8824, 42.8021, 20.4317, 6.3925, 1. /),&
+                                                    &(/11,10/))
+        complex, parameter :: J = (0, 1) ! Complex identity: j = sqrt(-1)
+        complex :: Bn, Kn                ! Normalized Butterworth polynomial, its derivative and its reciprocal
+        complex :: js                    ! frequency is multiplied by the complex identity j
+        integer :: k
+        Bn  = (0., 0.)
+        if (s/fc < 100) then
+            js  = J*s/fc
+            do k = 0, n
+                Bn  = Bn + AN(k+1,n)*js**k
+            end do
+            Kn  = 1/Bn
+            val = cabs(Kn)
+        else
+            val = epsilon(val)
+        endif
+    end function butterworth
+
     subroutine butterworth_filter(img, cur_ind, cur_fil, use_cache)
         class(image), intent(inout) :: img
         integer,      intent(in)    :: cur_ind
@@ -652,5 +689,56 @@ contains
         call fftwf_destroy_plan(plan_fwd)
         call fftwf_destroy_plan(plan_bwd)
     end subroutine opt_filter_3D
+
+    subroutine uniform_filter_2D( in_img, out_img, nsearch )
+        type(image),  intent(inout) :: in_img, out_img
+        integer,      intent(in)    :: nsearch
+        real,         parameter     ::  LOW_RES = 10.  ! Angstrom
+        real,         parameter     :: HIGH_RES =   .5 ! Angstrom
+        integer,      parameter     :: BW_ORDER = 8
+        real,         allocatable   :: cur_fil(:)
+        type(image)     :: filt_img
+        type(image_ptr) :: filt_ptr, self_ptr
+        integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val
+        real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind
+        ! initializing parameters
+        ldim        = in_img%get_ldim()
+        box         = ldim(1)
+        dim3        = ldim(3)
+        smpd        = in_img%get_smpd()
+        find_stop   = calc_fourier_index(HIGH_RES, box, smpd)
+        find_start  = calc_fourier_index( LOW_RES, box, smpd)
+        find_stepsz = real(find_stop - find_start)/(nsearch - 1)
+        ! initializing images
+        call filt_img%copy(in_img)
+        call  out_img%copy(in_img)
+        call filt_img%get_mat_ptrs(filt_ptr)
+        call   in_img%get_mat_ptrs(self_ptr)
+        ! allocation
+        allocate(cur_fil(box), source=0.)
+        ! optimizing over the cur_ind
+        best_cost = huge(best_cost)
+        best_ind  = find_start
+        do iter_no = 1, nsearch
+            cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
+            ! generating the Butterworth filter at this current Fourier index
+            do freq_val = 1, size(cur_fil)
+                cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
+            enddo
+            ! applying the filter to a copy of current image
+            call filt_img%copy_fast(in_img)
+            call filt_img%fft()
+            call filt_img%apply_filter(cur_fil)
+            call filt_img%ifft()
+            ! compute the total cost over all pixels and do the optimization
+            cur_cost = abs(sum(filt_ptr%rmat - self_ptr%rmat))
+            if( cur_cost < best_cost )then
+                call out_img%copy_fast(filt_img)
+                best_cost = cur_cost
+                best_ind  = cur_ind
+            endif
+        enddo
+        call filt_img%kill
+    end subroutine uniform_filter_2D
 
 end module simple_opt_filter
