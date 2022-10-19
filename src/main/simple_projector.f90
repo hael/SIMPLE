@@ -291,20 +291,16 @@ contains
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: img2cc
         integer,           intent(in)    :: lims(2,2)
-        real,              intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)) 
+        real,              intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         integer,           intent(in)    :: find_lp
         complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)
-        real    :: loc(3), e_rotmat(3,3), cc
+        real    :: loc(3), e_rotmat(3,3), cc(3)
         integer :: h, k, sqarg, sqlp, phys(3), ldim(3)
         complex :: comp1, comp2
-        real    :: sumsq1, sumsq2, eps, sqrt_denom
         sqlp     = find_lp * find_lp
         ldim     = img2cc%get_ldim()
         e_rotmat = e%get_mat()
-        sumsq1   = 0.
-        sumsq2   = 0.
-        cc       = 0.
-        eps      = epsilon(sumsq1)
+        cc(:)    = 0.
         call img2cc%get_cmat_ptr(cmat_ptr)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -327,20 +323,12 @@ contains
                 ! get particle Fourier component
                 comp2 = cmat_ptr(phys(1),phys(2),phys(3))
                 ! update cross product
-                cc    = cc  + real(comp1 * conjg(comp2))
+                cc(1) = cc(1) + real(comp1 * conjg(comp2))
                 ! update normalization terms
-                sumsq1 = sumsq1 + real(comp1 * conjg(comp1))
-                sumsq2 = sumsq2 + real(comp2 * conjg(comp2))
+                cc(2) = cc(2) + real(comp1 * conjg(comp1))
+                cc(3) = cc(3) + real(comp2 * conjg(comp2))
             end do
         end do
-        sqrt_denom = sqrt(sumsq1 * sumsq2)
-        if( cc < eps .and. sumsq1 < eps .and. sumsq2 < eps )then
-            cc = 1.
-        elseif( sqrt_denom < eps )then
-            cc = 0.
-        else
-            cc = cc / sqrt_denom
-        endif
     end function fproject_and_correlate_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)

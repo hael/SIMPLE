@@ -25,7 +25,7 @@ type :: cartft_corrcalc
     real(sp),    allocatable :: ctfmats(:,:,:)          !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),    allocatable :: optlp(:)                !< references optimal filter
     type(image), allocatable :: particles(:)            !< particle images
-    type(image), allocatable :: ref_heap(:)             !< needed for correct parallel exec 
+    type(image), allocatable :: ref_heap(:)             !< needed for correct parallel exec
     logical,     allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
     logical                  :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
     logical                  :: l_match_filt = .false.  !< matched filter flag
@@ -198,7 +198,7 @@ contains
         integer,                intent(in)    :: iptcl  !< particle index
         class(image),           intent(in)    :: img    !< particle image
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
-        if( .not. (img.eqdims.self%particles(self%pinds(iptcl))) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+        if( .not. (img.eqdims.self%particles(self%pinds(iptcl))) ) THROW_HARD('inconsistent image dimensions, input vs class internal')
         call self%particles(self%pinds(iptcl))%copy_fast(img)
     end subroutine set_ptcl
 
@@ -336,14 +336,14 @@ contains
         !$omp end parallel do
     end subroutine create_absctfmats
 
-    function project_and_correlate( self, iptcl, o ) result( corr )
+    function project_and_correlate( self, iptcl, o ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         type(projector), pointer :: vol_ptr => null()
-        real    :: corr
+        real    :: cc(3)
         logical :: iseven
-        integer :: ithr, i
+        integer :: i
         i      = self%pinds(iptcl)
         iseven = self%ptcl_iseven(iptcl)
         if( iseven )then
@@ -351,20 +351,19 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        ithr = omp_get_thread_num() + 1
-        corr = vol_ptr%fproject_and_correlate_serial(o, self%particles(i), self%lims, self%ctfmats(:,:,i), params_glob%kfromto(2))
+        cc = vol_ptr%fproject_and_correlate_serial(o, self%particles(i), self%lims, self%ctfmats(:,:,i), params_glob%kfromto(2))
     end function project_and_correlate
 
     function corr_shifted( self, iptcl, o, shvec, find_lp ) result( cc )
-        class(cartft_corrcalc), intent(inout)  :: self
-        integer,                intent(in)     :: iptcl
-        class(ori),             intent(in)     :: o
-        real,                   intent(in)     :: shvec(2)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        real,                   intent(in)    :: shvec(2)
         integer,                intent(in)    :: find_lp
         complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
         integer :: i, h, k, sqarg, sqlp, phys(3), ithr
         complex :: comp1, comp2, sh
-        real    :: cc, sumsq1, sumsq2, shconst, arg, sqrt_denom
+        real    :: cc(3), shconst, arg
         logical :: iseven
         ! physical particle index
         i = self%pinds(iptcl)
@@ -380,9 +379,8 @@ contains
         call self%ref_heap(ithr)%get_cmat_ptr(cmat_ref)
         call self%particles(i)%get_cmat_ptr(cmat_ptcl)
         ! init
-        sqlp   = find_lp * find_lp
-        sumsq1 = 0.d0
-        sumsq2 = 0.d0
+        sqlp  = find_lp * find_lp
+        cc(:) = 0.
         do h=self%lims(1,1),self%lims(1,2)
             do k=self%lims(2,1),self%lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
@@ -401,26 +399,17 @@ contains
                     phys(3) = 1
                     comp1 = conjg(comp1)
                 endif
-                 ! multiply reference with CTF
+                ! multiply reference with CTF
                 comp1 = cmat_ref(phys(1),phys(2),phys(3)) * self%ctfmats(h, k, i)
                 ! shift the particle Fourier component
                 comp2 = cmat_ptcl(phys(1),phys(2),phys(3)) * sh
                 ! update cross product
-                cc    = cc  + real(comp1 * conjg(comp2))
+                cc(1) = cc(1) + real(comp1 * conjg(comp2))
                 ! update normalization terms
-                sumsq1 = sumsq1 + real(comp1 * conjg(comp1))
-                sumsq2 = sumsq2 + real(comp2 * conjg(comp2))
+                cc(2) = cc(2) + real(comp1 * conjg(comp1))
+                cc(3) = cc(3) + real(comp2 * conjg(comp2))
             end do
         end do
-        sqrt_denom = sqrt(sumsq1 * sumsq2)
-        cc = cc / sqrt(sumsq1 * sumsq2)
-        ! if( cc < eps .and. sumsq1 < eps .and. sumsq2 < eps )then
-        !     cc = 1.
-        ! elseif( sqrt_denom < eps )then
-        !     cc = 0.
-        ! else
-        !     cc = cc / sqrt_denom
-        ! endif
     end function corr_shifted
 
     ! DESTRUCTOR
