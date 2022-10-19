@@ -47,9 +47,11 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4_cont_srch
-            ! init counter
+            ! init
             self%s%nrefs_eval = 0
+            ! transfer critical per-particle params
             o = self%s%o_prev
+            obest = self%s%o_prev
             ! zero shifts because particle is shifted to its previous origin
             call o%set('x', 0.)
             call o%set('y', 0.)
@@ -80,22 +82,29 @@ contains
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! fraction of search space scanned
                 ! frac = real(isample) / real(self%s%nsample * self%s%nrots)
-                frac = real(isample) / real(self%s%nsample)
+                ! frac = real(isample) / real(self%s%nsample)
                 if( cc(1) > cc_best(1) )then
-                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
-                    call o%set('dist',      euldist)
-                    call o%set('dist_inpl', dist_inpl)
-                    call o%set('corr',      norm_corr(cc))
-                    call o%set('cc_unnorm', cc(1))
-                    call o%set('frac',      100.0 * frac)
-                    call build_glob%spproj_field%set_ori(self%s%iptcl, o)
+                    ! call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
+                    ! call o%set('dist',      euldist)
+                    ! call o%set('dist_inpl', dist_inpl)
+                    ! call o%set('corr',      norm_corr(cc))
+                    ! call o%set('cc_unnorm', cc(1))
+                    ! call o%set('frac',      100.0 * frac)
+                    ! call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     cc_best = cc
                     obest   = o
                     ! cycle condition
-                    if( frac < MINFRAC ) cycle
-                    exit
+                    ! if( frac < MINFRAC ) cycle
+                    ! exit
                 endif
             end do
+            call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
+            call obest%set('dist',      euldist)
+            call obest%set('dist_inpl', dist_inpl)
+            call obest%set('corr',      norm_corr(cc_best))
+            call obest%set('cc_unnorm', cc_best(1))
+            call obest%set('frac',      100.0)
+            call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             ! local refinement step
             ! do isample=1,self%s%nsample
             !     ! make a random rotation matrix neighboring the previous best within the assymetric unit
