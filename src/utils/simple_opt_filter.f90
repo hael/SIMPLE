@@ -690,30 +690,32 @@ contains
         call fftwf_destroy_plan(plan_bwd)
     end subroutine opt_filter_3D
 
-    subroutine uniform_filter_2D( in_img, out_img, nsearch )
-        type(image),  intent(inout) :: in_img, out_img
+    ! searching for the best index of the cost function |sum(filter(img) - img)|
+    ! also return the filtered img at this best index
+    function uniform_filter_2D( noisy_img, ref_img, filt_img, low_res, high_res, nsearch ) result(best_ind)
+        type(image),  intent(inout) :: filt_img, noisy_img
+        type(image),  intent(in)    :: ref_img
         integer,      intent(in)    :: nsearch
-        real,         parameter     ::  LOW_RES = 10.  ! Angstrom
-        real,         parameter     :: HIGH_RES =   .5 ! Angstrom
+        real,         intent(in)    :: low_res, high_res
         integer,      parameter     :: BW_ORDER = 8
         real,         allocatable   :: cur_fil(:)
-        type(image)     :: filt_img
-        type(image_ptr) :: filt_ptr, self_ptr
+        type(image)     :: cur_filt_img
+        type(image_ptr) :: cur_filt_ptr, ref_ptr
         integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val
         real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind
         ! initializing parameters
-        ldim        = in_img%get_ldim()
+        ldim        = noisy_img%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
-        smpd        = in_img%get_smpd()
-        find_stop   = calc_fourier_index(HIGH_RES, box, smpd)
-        find_start  = calc_fourier_index( LOW_RES, box, smpd)
+        smpd        = noisy_img%get_smpd()
+        find_stop   = calc_fourier_index(high_res, box, smpd)
+        find_start  = calc_fourier_index( low_res, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch - 1)
         ! initializing images
-        call filt_img%copy(in_img)
-        call  out_img%copy(in_img)
-        call filt_img%get_mat_ptrs(filt_ptr)
-        call   in_img%get_mat_ptrs(self_ptr)
+        call cur_filt_img%new(ldim, smpd)
+        call cur_filt_img%get_mat_ptrs(cur_filt_ptr)
+        call      ref_img%get_mat_ptrs(ref_ptr)
+        call    noisy_img%fft
         ! allocation
         allocate(cur_fil(box), source=0.)
         ! optimizing over the cur_ind
@@ -726,19 +728,18 @@ contains
                 cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
             enddo
             ! applying the filter to a copy of current image
-            call filt_img%copy_fast(in_img)
-            call filt_img%fft()
-            call filt_img%apply_filter(cur_fil)
-            call filt_img%ifft()
+            call cur_filt_img%copy_fast(noisy_img)
+            call cur_filt_img%apply_filter(cur_fil)
+            call cur_filt_img%ifft()
             ! compute the total cost over all pixels and do the optimization
-            cur_cost = abs(sum(filt_ptr%rmat - self_ptr%rmat))
+            cur_cost = abs(sum(cur_filt_ptr%rmat - ref_ptr%rmat))
             if( cur_cost < best_cost )then
-                call out_img%copy_fast(filt_img)
+                call filt_img%copy_fast(cur_filt_img)
                 best_cost = cur_cost
                 best_ind  = cur_ind
             endif
         enddo
-        call filt_img%kill
-    end subroutine uniform_filter_2D
+        call cur_filt_img%kill
+    end function uniform_filter_2D
 
 end module simple_opt_filter
