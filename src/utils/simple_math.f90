@@ -432,6 +432,20 @@ contains
         res = (ang/360.)*(pi*diam)
     end function resang
 
+    pure function norm_corr( cc ) result( cc_norm )
+        real, intent(in) :: cc(3)
+        real :: eps, sqrt_denom, cc_norm
+        sqrt_denom = sqrt(cc(2) * cc(3))
+        eps = epsilon(cc(1))
+        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
+            cc_norm = 1.
+        elseif( sqrt_denom < eps )then
+            cc_norm = 0.
+        else
+            cc_norm = cc(1) / sqrt_denom
+        endif
+    end function norm_corr
+
      !>   checking for is_a_number
     pure elemental logical function is_a_number_1( number )
         real, intent(in) :: number  !< input variable for checking

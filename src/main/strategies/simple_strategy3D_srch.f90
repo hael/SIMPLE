@@ -45,6 +45,7 @@ type strategy3D_srch
     integer                  :: prev_ref      = 0         !< previous reference index
     integer                  :: prev_proj     = 0         !< previous projection direction index
     real                     :: athres        = 7.        !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
+    real                     :: cc_prev(3)    = 0.        !< previous cc array of (1) unnnormalized correlation (2)/(3) square sum terms
     real                     :: prev_corr     = 1.        !< previous best correlation
     real                     :: specscore     = 0.        !< spectral score
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
@@ -210,8 +211,10 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
+        self%cc_prev   = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
+        self%prev_corr = norm_corr(self%cc_prev)
         call self%o_prev %set('corr', self%prev_corr)
+        call self%o_prev %set('cc_unnorm', self%cc_prev(1))
     end subroutine prep4_cont_srch
 
     subroutine shift_srch_cart( self, o )
