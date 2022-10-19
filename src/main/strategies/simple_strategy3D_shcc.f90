@@ -40,7 +40,8 @@ contains
         real, parameter :: MINFRAC = 0.1
         integer   :: isample, irot
         type(ori) :: o, osym, obest
-        real      :: cc(3), euldist, dist_inpl, cc_best(3), frac, cc_inpl(3), e3
+        real      :: cc(3), euldist, dist_inpl, cc_best(3), frac, cc_inpl(3), e3, prev_corr, norm_cc(3)
+        logical   :: got_better
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -56,7 +57,8 @@ contains
             call o%set('x', 0.)
             call o%set('y', 0.)
             ! currently the best correlation is the previous one
-            cc_best = self%s%cc_prev
+            prev_corr = self%s%prev_corr
+            got_better = .false.
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)
@@ -82,8 +84,9 @@ contains
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! fraction of search space scanned
                 ! frac = real(isample) / real(self%s%nsample * self%s%nrots)
-                ! frac = real(isample) / real(self%s%nsample)
-                if( cc(1) > cc_best(1) )then
+                frac = real(isample) / real(self%s%nsample)
+                norm_cc = norm_corr(cc)
+                if( norm_cc(1) > prev_corr )then
                     ! call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
                     ! call o%set('dist',      euldist)
                     ! call o%set('dist_inpl', dist_inpl)
@@ -93,18 +96,21 @@ contains
                     ! call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     cc_best = cc
                     obest   = o
+                    got_better = .true.
                     ! cycle condition
-                    ! if( frac < MINFRAC ) cycle
-                    ! exit
+                    if( frac < MINFRAC ) cycle
+                    exit
                 endif
             end do
-            call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
-            call obest%set('dist',      euldist)
-            call obest%set('dist_inpl', dist_inpl)
-            call obest%set('corr',      norm_corr(cc_best))
-            call obest%set('cc_unnorm', cc_best(1))
-            call obest%set('frac',      100.0)
-            call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
+            if( got_better )then
+                call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
+                call obest%set('dist',      euldist)
+                call obest%set('dist_inpl', dist_inpl)
+                call obest%set('corr',      norm_corr(cc_best))
+                call obest%set('cc_unnorm', cc_best(1))
+                call obest%set('frac',      100.0)
+                call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
+            endif
             ! local refinement step
             ! do isample=1,self%s%nsample
             !     ! make a random rotation matrix neighboring the previous best within the assymetric unit
