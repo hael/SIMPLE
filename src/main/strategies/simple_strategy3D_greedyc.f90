@@ -36,10 +36,10 @@ contains
 
     subroutine srch_greedyc( self, ithr )
         class(strategy3D_greedyc), intent(inout) :: self
-        integer,                  intent(in)    :: ithr
+        integer,                   intent(in)    :: ithr
         integer   :: iproj, irot
         type(ori) :: o, osym, obest
-        real      :: cc(3), euldist, dist_inpl, euls(3), cc_best(3)
+        real      :: corr, euldist, dist_inpl, euls(3), corr_best
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -51,7 +51,7 @@ contains
             ! zero shifts because particle is shifted to its previous origin
             call o%set('x', 0.)
             call o%set('y', 0.)
-            cc_best = -huge(cc(1))
+            corr_best = -1.
             ! init counter
             self%s%nrefs_eval = 0
             do iproj=1,self%s%nprojs
@@ -60,10 +60,10 @@ contains
                     euls(3) = build_glob%inpl_rots(irot)
                     call o%set_euler(euls)
                     ! calculate Cartesian corr
-                    cc = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
-                    if( cc(1) > cc_best(1) )then
-                        cc_best = cc
-                        obest = o
+                    corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                    if( corr > corr_best )then
+                        corr_best = corr
+                        obest     = o
                     endif
                 end do
             end do
@@ -74,8 +74,7 @@ contains
             call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
             call obest%set('dist',      euldist)
             call obest%set('dist_inpl', dist_inpl)
-            call obest%set('corr',      norm_corr(cc))
-            call obest%set('cc_unnorm', cc(1))
+            call obest%set('corr',      corr_best)
             call obest%set('frac',      100.0)
             call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
         else

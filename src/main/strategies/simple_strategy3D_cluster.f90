@@ -52,9 +52,6 @@ contains
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(o)
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             self%s%prev_shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl)
-            ! specscore
-            self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
-            call build_glob%spproj_field%set(self%s%iptcl,'specscore',self%s%specscore)
             ! fork
             if( associated(self%spec%symmat) )then
                 call symsrch_cluster3D(self%s, self%spec)

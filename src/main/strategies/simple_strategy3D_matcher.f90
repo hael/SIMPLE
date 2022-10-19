@@ -236,6 +236,9 @@ contains
                 select case(trim(params_glob%refine))
                     case('snhc')
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('snhcc')
+                        ! snhcc translates to shc without regard to previous correlation value in the Cartesian formulation
+                        allocate(strategy3D_shcc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)

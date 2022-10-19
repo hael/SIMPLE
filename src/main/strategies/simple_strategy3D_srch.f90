@@ -25,36 +25,34 @@ type strategy3D_spec
 end type strategy3D_spec
 
 type strategy3D_srch
-    type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
-    type(cftcc_shsrch_grad)  :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
-    type(ori)                :: o_prev                    !< previous orientation, used in continuous search
-    integer                  :: iptcl         = 0         !< global particle index
-    integer                  :: ithr          = 0         !< thread index
-    integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                  :: nsample       = 0         !< # of continuous orientations to sample
-    integer                  :: nstates       = 0         !< # states
-    integer                  :: nprojs        = 0         !< # projections
-    integer                  :: nrots         = 0         !< # in-plane rotations
-    integer                  :: nsym          = 0         !< symmetry order
-    integer                  :: nnn           = 0         !< # nearest neighbors
-    integer                  :: nbetter       = 0         !< # better orientations identified
-    integer                  :: nrefs_eval    = 0         !< # references evaluated
-    integer                  :: prev_roind    = 0         !< previous in-plane rotation index
-    integer                  :: prev_state    = 0         !< previous state index
-    integer                  :: class         = 0         !< 2D class index
-    integer                  :: prev_ref      = 0         !< previous reference index
-    integer                  :: prev_proj     = 0         !< previous projection direction index
-    real                     :: athres        = 7.        !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
-    real                     :: cc_prev(3)    = 0.        !< previous cc array of (1) unnnormalized correlation (2)/(3) square sum terms
-    real                     :: prev_corr     = 1.        !< previous best correlation
-    real                     :: specscore     = 0.        !< spectral score
-    real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
-    logical                  :: l_neigh       = .false.   !< neighbourhood refinement flag
-    logical                  :: l_greedy      = .false.   !< greedy        refinement flag
-    logical                  :: l_cont        = .false.   !< continuous    refinement flag
-    logical                  :: l_ptclw       = .false.   !< whether to calculate particle weight
-    logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
-    logical                  :: exists        = .false.   !< 2 indicate existence
+    type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+    type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
+    type(ori)               :: o_prev                    !< previous orientation, used in continuous search
+    integer                 :: iptcl         = 0         !< global particle index
+    integer                 :: ithr          = 0         !< thread index
+    integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                 :: nsample       = 0         !< # of continuous orientations to sample
+    integer                 :: nstates       = 0         !< # states
+    integer                 :: nprojs        = 0         !< # projections
+    integer                 :: nrots         = 0         !< # in-plane rotations
+    integer                 :: nsym          = 0         !< symmetry order
+    integer                 :: nnn           = 0         !< # nearest neighbors
+    integer                 :: nbetter       = 0         !< # better orientations identified
+    integer                 :: nrefs_eval    = 0         !< # references evaluated
+    integer                 :: prev_roind    = 0         !< previous in-plane rotation index
+    integer                 :: prev_state    = 0         !< previous state index
+    integer                 :: class         = 0         !< 2D class index
+    integer                 :: prev_ref      = 0         !< previous reference index
+    integer                 :: prev_proj     = 0         !< previous projection direction index
+    real                    :: athres        = 7.        !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
+    real                    :: prev_corr     = 1.        !< previous best correlation
+    real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
+    logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
+    logical                 :: l_greedy      = .false.   !< greedy        refinement flag
+    logical                 :: l_ptclw       = .false.   !< whether to calculate particle weight
+    logical                 :: l_local       = .false.   !< whether to do local refinement in refine=shcc mode
+    logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
+    logical                 :: exists        = .false.   !< 2 indicate existence
   contains
     procedure          :: new
     procedure          :: prep4srch
@@ -140,7 +138,6 @@ contains
         self%doshift    = params_glob%l_doshift
         self%l_neigh    = str_has_substr(params_glob%refine, 'neigh')
         self%l_greedy   = str_has_substr(params_glob%refine, 'greedy')
-        self%l_cont     = str_has_substr(params_glob%refine, 'cont')
         self%l_ptclw    = trim(params_glob%ptclw).eq.'yes'
         lims(:,1)       = -params_glob%trs
         lims(:,2)       =  params_glob%trs
@@ -186,8 +183,6 @@ contains
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
-        ! calc specscore
-        self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
@@ -211,10 +206,17 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        self%cc_prev   = self%o_prev%get('cc_unnorm')
-        self%prev_corr = self%o_prev%get('corr')
-        call self%o_prev %set('corr', self%prev_corr)
-        call self%o_prev %set('cc_unnorm', self%cc_prev(1))
+        select case(trim(params_glob%refine))
+            case('snhcc')
+                self%prev_corr = -1.
+                ! orientations always replaced with the best in stochastic neighborhood
+                self%l_local = .false. ! no local continuous refinement
+            case DEFAULT
+                self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
+                ! "traditional" stochastic hill climbing, but in continuous space
+                self%l_local = .true. ! local continuous refinement is on
+        end select
+        call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
     subroutine shift_srch_cart( self, o )

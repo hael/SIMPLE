@@ -216,7 +216,7 @@ type :: parameters
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|cluster|clustersym){shc}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
@@ -1517,26 +1517,29 @@ contains
                 THROW_HARD('unsupported imgkind; new')
         end select
         ! refine flag dependent things
+        ! -- neigh defaults
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 5000
             if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
         self%l_refine_inpl = .false.
         if( trim(self%refine) .eq. 'inpl' ) self%l_refine_inpl = .true.
+        ! -- shift defaults
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc')
+                case('snhc','snhcc')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT
             end select
         endif
+        ! -- Cartesian refinement flag
         select case(trim(self%refine))
-            case('shcc','neighc','greedyc')
-                    self%l_cartesian = .true.
+            case('snhcc','shcc','neighc','greedyc')
+                self%l_cartesian = .true.
             case DEFAULT
-                    self%l_cartesian = .false.
+                self%l_cartesian = .false.
         end select
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'

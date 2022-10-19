@@ -2859,7 +2859,7 @@ contains
 
     !>  \brief spectrum generates the rotationally averaged spectrum of an image
     !>  keep serial
-    subroutine spectrum( self, which, spec, norm)
+    subroutine spectrum( self, which, spec, norm )
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real, allocatable, intent(inout) :: spec(:)
