@@ -18,7 +18,6 @@ use simple_strategy2D_alloc,    only: prep_strategy2d_batch, clean_strategy2d, p
 use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
-use simple_strategy2D_inpl,     only: strategy2D_inpl
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_opt_filter,          only: opt_2D_filter_sub
 use simple_masker,              only: automask2D
@@ -258,8 +257,6 @@ contains
                         if( trim(params_glob%tseries).eq.'yes' )then
                             if( l_np_cls_defined )then
                                 allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr)
-                            else if( params_glob%l_refine_inpl )then
-                                allocate(strategy2D_inpl    :: strategy2Dsrch(iptcl_batch)%ptr)
                             else
                                 allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr)
                             endif
@@ -267,11 +264,7 @@ contains
                             allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                         endif
                     else
-                        if( trim(params_glob%tseries).eq.'yes' .and. params_glob%l_refine_inpl )then
-                            allocate(strategy2D_inpl        :: strategy2Dsrch(iptcl_batch)%ptr)
-                        else
-                            allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
-                        endif
+                        allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
                     endif
                 endif
                 ! Search specification & object

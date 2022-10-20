@@ -17,51 +17,33 @@ type :: parameters
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
-    ! character(len=3)      :: anneal='yes'         !< use annealing or not
-    ! character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
-    character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
-    character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)      :: cure='no'
-    character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
     character(len=3)      :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
-    character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
-    character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
-    character(len=3)      :: doalign='yes'
-    character(len=3)      :: dodock='no'          !< perform atomic position registration (yes|no){no}
-    character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
-    character(len=3)      :: dorec='yes'
     character(len=3)      :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)      :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
-    character(len=3)      :: kmeans='yes'
-    character(len=3)      :: local='no'
-    character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
     character(len=3)      :: makemovie='no'
     character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
-    character(len=3)      :: mcpatch_threshold='yes' !< whether to use the threshold for motion correction patch solution(yes|no){yes}
-    character(len=3)      :: merge='no'
+    character(len=3)      :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no){no}
@@ -70,35 +52,23 @@ type :: parameters
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
-    character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
-    character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
-    character(len=3)      :: clsfrcs='no'
-    character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
-    character(len=3)      :: restart='no'
-    character(len=3)      :: rnd='no'             !< random(yes|no){no}
-    character(len=3)      :: roalgn='no'
-    character(len=3)      :: round='no'
+    character(len=3)      :: clsfrcs='no'
     character(len=3)      :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)      :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
-    character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: specstats='no'
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
-    character(len=3)      :: subtr_backgr='no'
     character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
-    character(len=3)      :: swap='no'
     character(len=3)      :: taper_edges='no'     !< self-explanatory
-    character(len=3)      :: test='no'
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
@@ -122,7 +92,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: dir_target=''        !< put output here
     character(len=LONGSTRLEN) :: dir_ptcls=''
     character(len=LONGSTRLEN) :: dir_box=''
-    character(len=LONGSTRLEN) :: doclist=''           !< list of oritabs for different states
     character(len=LONGSTRLEN) :: exec_dir='./'        !< auto-named execution directory
     character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
     character(len=LONGSTRLEN) :: fname=''             !< file name
@@ -137,7 +106,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
-    character(len=LONGSTRLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: outfile=''           !< output document
     character(len=LONGSTRLEN) :: outstk=''            !< output image stack
     character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
@@ -162,13 +130,9 @@ type :: parameters
     character(len=LONGSTRLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     character(len=LONGSTRLEN) :: stk_backgr=''        !< stack with image for background subtraction
     character(len=LONGSTRLEN) :: vol=''
-    character(len=LONGSTRLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
-    character(len=LONGSTRLEN) :: vollist=''           !< table (text file) of volume files(.txt)
     character(len=LONGSTRLEN) :: vols(MAXS)=''
     character(len=LONGSTRLEN) :: vols_even(MAXS)=''
     character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
-    character(len=LONGSTRLEN) :: voltab=''            !< table (text file) of volume files(.txt)
-    character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     character(len=LONGSTRLEN) :: xmldir=''
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
@@ -180,7 +144,6 @@ type :: parameters
     character(len=5)      :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
-    character(len=STDLEN) :: clustermode = 'ar'   !< feature used for clustering (ar|dist|ang|maxint){ar}
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
@@ -194,12 +157,8 @@ type :: parameters
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
-    character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
-    character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
-    character(len=STDLEN) :: keys=''
-    character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)      :: objfun='cc'          !< objective function(cc|euclid){cc}
@@ -212,7 +171,6 @@ type :: parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: ptclw='no'           !< use particle weights(yes|no){no}
-    character(len=STDLEN) :: rmsd_file=''         !< per-atom e/o rmsd:s
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN) :: real_filter=''
@@ -220,7 +178,6 @@ type :: parameters
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
-    character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tag=''               !< just a tag
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: vol_even=''          !< even reference volume
@@ -234,24 +191,18 @@ type :: parameters
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
-    integer :: avgsz=0
-    integer :: batchsz=0
-    integer :: balance=0           !< max pop for balancing restraint{0}
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-    integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: cn=8                !< fixed std coord number for atoms in nanos
     integer :: cn_max=12           !< max std coord number for atoms in nanos
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
-    integer :: corner=0            !< corner size(in pixels){0}
     integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
-    integer :: cube=0              !< side size(in pixels){0}
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of eer raw frames to fraction together
     integer :: eer_upsampling=1    !< eer up-sampling
@@ -259,32 +210,21 @@ type :: parameters
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
-    integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
-    integer :: iares=10            !< integer angular resolution{10}
-    integer :: ind=0
     integer :: iptcl=1
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
-    integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
-    integer :: maxp=0
-    integer :: maxpop=0
-    integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
-    integer :: navgs=1
-    integer :: nchunks=0          !< # computing units, can be < nparts{nparts}
+    integer :: nchunks=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
-    integer :: nboot=0
     integer :: ncls=500            !< # clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
-    integer :: ncomps=0
     integer :: ndiscrete=0         !< # discrete orientations
-    integer :: ndocs=0             !< # documents
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -309,30 +249,22 @@ type :: parameters
     integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
     integer :: numlen_tomo=3       !< length of number string tomo series index{3}
-    integer :: nvalid=0
-    integer :: nvars=30
-    integer :: nvox=0              !< # voxels{0}
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
     integer :: offset=10           !< pixels offset{10}
     integer :: optics_offset=0
     integer :: part=1
-    integer :: pcasz=0
     integer :: pid=0               !< process ID
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
-    integer :: recl_cgrid=-1
     integer :: reliongroups=0
-    integer :: spec=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
-    integer :: state2split=0       !< state group to split
-    integer :: stepsz=1            !< size of step{0}
+    integer :: stepsz=1            !< size of step{1}
     integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
     integer :: tofny=0
     integer :: top=1
     integer :: tos=1
-    integer :: update=1000
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=20       !< smoothing window extension{2D=20, 3D=8}
@@ -358,11 +290,7 @@ type :: parameters
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
-    real    :: deflim=4.
     real    :: defocus=2.          !< defocus(in microns){2.}
-    real    :: dens=0.
-    real    :: dfclose=1.
-    real    :: dffar=4.
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=5.0           !< maximum expected defocus(in microns)
     real    :: dfmin=0.3           !< minimum expected defocus(in microns)
@@ -376,7 +304,7 @@ type :: parameters
     real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0        !< exposure time(in s)
-    real    :: extr_init=EXTRINITHRESH !< initial extremal ratio (0-1)
+    real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
     real    :: focusmsk=0.         !< spherical msk for use with focused refinement (radius in pixels)
     real    :: focusmskdiam=0.     !< spherical msk for use with focused refinement (diameter in Angstroms)
@@ -399,16 +327,15 @@ type :: parameters
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
-    real    :: lp_lowres = 30.     !< optimization(search)-based low-pass limit lower bound
+    real    :: lp_lowres  = 30.    !< optimization(search)-based low-pass limit lower bound
     real    :: lp_stopres = -1.    !< optimization(search)-based stoping resolution
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
-    real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
-    real    :: lpthresh=30.
+    real    :: lpthres=30.
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
@@ -451,7 +378,6 @@ type :: parameters
     logical :: l_cartesian    = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
-    logical :: l_dev          = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_doshift      = .false.
     logical :: l_envfsc       = .false.
@@ -461,15 +387,12 @@ type :: parameters
     logical :: l_graphene     = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
-    logical :: l_locres       = .false.
     logical :: l_match_filt   = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
-    logical :: l_wglob        = .true.
     logical :: sp_required    = .false.
   contains
     procedure          :: new
@@ -513,9 +436,7 @@ contains
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('algorithm',      self%algorithm)
-        ! call check_carg('anneal',         self%anneal)
         call check_carg('angastunit',     self%angastunit)
-        ! call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
         call check_carg('automatic',      self%automatic)
@@ -526,29 +447,17 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
-        call check_carg('clustermode',    self%clustermode)
-        call check_carg('clustvalid',     self%clustvalid)
         call check_carg('cn_type',        self%cn_type)
         call check_carg('combine_eo',     self%combine_eo)
-        call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
-        call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
         call check_carg('ctfstats',       self%ctfstats)
-        call check_carg('cure',           self%cure)
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir_exec',       self%dir_exec)
-        call check_carg('discrete',       self%discrete)
-        call check_carg('diverse',        self%diverse)
-        call check_carg('doalign',        self%doalign)
         call check_carg('dockmode',       self%dockmode)
-        call check_carg('dodock',         self%dodock)
-        call check_carg('dorec',          self%dorec)
-        call check_carg('dev',            self%dev)
         call check_carg('dihedral',       self%dihedral)
-        call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
@@ -559,29 +468,20 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
-        call check_carg('for3D',          self%for3D)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
-        call check_carg('hfun',           self%hfun)
-        call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('keepvol',        self%keepvol)
-        call check_carg('keys',           self%keys)
-        call check_carg('kmeans',         self%kmeans)
-        call check_carg('label',          self%label)
-        call check_carg('local',          self%local)
-        call check_carg('locres',         self%locres)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('match_filt',     self%match_filt)
         call check_carg('mcpatch',        self%mcpatch)
-        call check_carg('mcpatch_threshold', self%mcpatch_threshold)
-        call check_carg('merge',          self%merge)
+        call check_carg('mcpatch_thres',  self%mcpatch_thres)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
         call check_carg('msktype',        self%msktype)
@@ -594,7 +494,6 @@ contains
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
-        call check_carg('order',          self%order)
         call check_carg('oritype',        self%oritype)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
@@ -613,30 +512,20 @@ contains
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
-        call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
-        call check_carg('restart',        self%restart)
-        call check_carg('rnd',            self%rnd)
-        call check_carg('roalgn',         self%roalgn)
         call check_carg('roavg',          self%roavg)
-        call check_carg('round',          self%round)
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
-        call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('speckind',       self%speckind)
-        call check_carg('specstats',      self%specstats)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
-        call check_carg('subtr_backgr',   self%subtr_backgr)
         call check_carg('symrnd',         self%symrnd)
-        call check_carg('swap',           self%swap)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
-        call check_carg('test',           self%test)
         call check_carg('tomo',           self%tomo)
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('tophat',         self%tophat)
@@ -653,7 +542,6 @@ contains
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
         call check_file('deftab',         self%deftab,       'T', 'O')
-        call check_file('doclist',        self%doclist,      'T')
         call check_file('ext',            self%ext,          notAllowed='T')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
@@ -665,7 +553,6 @@ contains
         call check_file('mskfile',        self%mskfile,      notAllowed='T')
         call check_file('oritab',         self%oritab,       'T', 'O')
         call check_file('oritab2',        self%oritab2,      'T', 'O')
-        call check_file('oritab3D',       self%oritab3D,     'T', 'O')
         call check_file('outfile',        self%outfile,      'T', 'O')
         call check_file('outstk',         self%outstk,       notAllowed='T')
         call check_file('outvol',         self%outvol,       notAllowed='T')
@@ -676,7 +563,6 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
-        call check_file('rmsd_file',      self%rmsd_file,    'B')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_model',     self%star_model,   'R')  ! R for relion, S taken by SPIDER
@@ -688,10 +574,6 @@ contains
         call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
         call check_file('vol_even',       self%vol_even,     notAllowed='T')
         call check_file('vol_odd',        self%vol_odd,      notAllowed='T')
-        call check_file('vol_filt',       self%vol_filt,     notAllowed='T')
-        call check_file('vollist',        self%vollist,      'T')
-        call check_file('voltab',         self%voltab,       'T')
-        call check_file('voltab2',        self%voltab2,      'T')
         ! Dir args
         call check_dir('dir',             self%dir)
         call check_dir('dir_box',         self%dir_box)
@@ -705,20 +587,15 @@ contains
         call check_dir('star_datadir',    self%star_datadir)
         ! Integer args
         call check_iarg('angstep',        self%angstep)
-        call check_iarg('avgsz',          self%avgsz)
-        call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('box_extract',    self%box_extract)
-        call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('cn',             self%cn)
         call check_iarg('cn_max',         self%cn_max)
         call check_iarg('cn_min',         self%cn_min)
         call check_iarg('cn_stop',        self%cn_stop)
-        call check_iarg('corner',         self%corner)
         call check_iarg('cs_thres',       self%cs_thres)
-        call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
         call check_iarg('eer_fraction',   self%eer_fraction)
         call check_iarg('eer_upsampling', self%eer_upsampling)
@@ -726,26 +603,17 @@ contains
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)
-        call check_iarg('fstep',          self%fstep)
         call check_iarg('grow',           self%grow)
-        call check_iarg('iares',          self%iares)
-        call check_iarg('ind',            self%ind)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
-        call check_iarg('jumpsz',         self%jumpsz)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
-        call check_iarg('maxp',           self%maxp)
-        call check_iarg('minp',           self%minp)
         call check_iarg('mrcmode',        self%mrcmode)
-        call check_iarg('navgs',          self%navgs)
-        call check_iarg('nboot',          self%nboot)
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
-        call check_iarg('ndocs',          self%ndocs)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
@@ -768,8 +636,6 @@ contains
         call check_iarg('nthr2D',         self%nthr2D)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('numlen_tomo',    self%numlen_tomo)
-        call check_iarg('nvars',          self%nvars)
-        call check_iarg('nvox',           self%nvox)
         call check_iarg('nxpatch',        self%nxpatch)
         call check_iarg('nypatch',        self%nypatch)
         call check_iarg('offset',         self%offset)
@@ -778,12 +644,10 @@ contains
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
-        call check_iarg('state2split',    self%state2split)
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('szsn',           self%szsn)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
-        call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)
@@ -808,11 +672,7 @@ contains
         call check_rarg('corr_thres',     self%corr_thres)
         call check_rarg('ctfreslim',      self%ctfreslim)
         call check_rarg('dcrit_rel',      self%dcrit_rel)
-        call check_rarg('deflim',         self%deflim)
         call check_rarg('defocus',        self%defocus)
-        call check_rarg('dfclose',        self%dfclose)
-        call check_rarg('dffar',          self%dffar)
-        call check_rarg('dens',           self%dens)
         call check_rarg('dferr',          self%dferr)
         call check_rarg('dfmax',          self%dfmax)
         call check_rarg('dfmin',          self%dfmin)
@@ -850,21 +710,17 @@ contains
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpstop2D',       self%lpstop2D)
-        call check_rarg('lpthresh',       self%lpthresh)
+        call check_rarg('lpthres',        self%lpthres)
         call check_rarg('max_dose',       self%max_dose)
-        call check_rarg('max_rad',        self%max_rad)
-        call check_rarg('min_rad',        self%min_rad)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('msk',            self%msk)
         call check_rarg('mskdiam',        self%mskdiam)
-        call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
         call check_rarg('ndev2D',         self%ndev2D)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
-        call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -873,8 +729,6 @@ contains
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
-        call check_rarg('thres_low',      self%thres_low)
-        call check_rarg('thres_up',       self%thres_up)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
         call check_rarg('motion_correctgtol', self%motion_correctgtol)
@@ -1014,17 +868,10 @@ contains
                 vol_defined(i) = .true.
             endif
         enddo
-        ! check inputted vols
-        if( cline%defined('vollist') )then
-            if( nlines(self%vollist)< MAXS )then
-                call read_vols
-            endif
-        else
-            if( any(vol_defined) )then
-                do i=1,size(vol_defined)
-                    if(vol_defined(i))call check_vol(self%vols(i))
-                end do
-            endif
+        if( any(vol_defined) )then
+            do i=1,size(vol_defined)
+                if(vol_defined(i))call check_vol(self%vols(i))
+            end do
         endif
         ! check inputted mask vols
         if( cline%defined('msklist') )then
@@ -1038,7 +885,7 @@ contains
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
         endif
-        ! no stack given,not vol given, get ldim from mskfile if present
+        ! no stack given, no vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
             self%box  = self%ldim(1)
@@ -1382,7 +1229,6 @@ contains
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
         self%lp         = max(self%fny,self%lp)          ! lowpass limit
-        self%lpmed      = self%lp                        ! median lp
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
@@ -1416,10 +1262,10 @@ contains
         endif
         ! interpolation function
         select case(trim(self%interpfun))
-        case('kb','linear')
-            ! supported
-        case DEFAULT
-            THROW_HARD('Unsupported interpolation function')
+            case('kb','linear')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported interpolation function')
         end select
         ! set remap_clusters flag
         self%l_remap_cls = .false.
@@ -1448,7 +1294,7 @@ contains
             endif
             self%l_dose_weight = .true.
         endif
-        ! objective function used in prime2D/3D
+        ! objective function used
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
@@ -1502,12 +1348,6 @@ contains
                 THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
             endif
         endif
-        ! local resolution for filtering or  not
-        self%l_locres = .false.
-        if( trim(self%locres) .eq. 'yes' ) self%l_locres = .true.
-        ! global dev (development) flag
-        self%l_dev = .false.
-        if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
         ! sanity check imgkind
         select case(trim(self%imgkind))
             case('movie','mic','ptcl','cavg','vol','vol_cavg')
@@ -1522,8 +1362,6 @@ contains
             if( .not. cline%defined('nspace')    ) self%nspace = 5000
             if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
-        self%l_refine_inpl = .false.
-        if( trim(self%refine) .eq. 'inpl' ) self%l_refine_inpl = .true.
         ! -- shift defaults
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
@@ -1549,9 +1387,9 @@ contains
             self%nypatch = 0
         endif
         select case(trim(self%mcconvention))
-        case('simple','unblur','motioncorr','relion','first','central')
-        case DEFAULT
-            THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
+            case('simple','unblur','motioncorr','relion','first','central')
+            case DEFAULT
+                THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
         end select
         !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
@@ -1608,29 +1446,6 @@ contains
                 endif
             endif
         end subroutine check_vol
-
-        subroutine read_vols
-            character(len=LONGSTRLEN)     :: filename, name
-            character(len=:), allocatable :: abs_name
-            integer                       :: nl, fnr, i, io_stat
-            filename = cline%get_carg('vollist')
-            if( filename(1:1).ne.PATH_SEPARATOR )then
-                if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
-            endif
-            nl = nlines(filename)
-            call fopen(fnr, file=filename, iostat=io_stat)
-            if(io_stat /= 0) call fileiochk("parameters ; read_vols error opening "//trim(filename), io_stat)
-            do i=1,nl
-                read(fnr,*, iostat=io_stat) name
-                if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
-                if( name .ne. '' )then
-                    abs_name = simple_abspath(name,'parameters :: read_vols', check_exists=.false.)
-                    self%vols(i) = trim(abs_name)
-                    deallocate(abs_name)
-                endif
-            end do
-            call fclose(fnr)
-        end subroutine read_vols
 
         subroutine read_masks
             character(len=LONGSTRLEN)     :: filename, name

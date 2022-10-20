@@ -219,7 +219,7 @@ type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_lowres
 type(simple_input_param) :: lplim_crit
-type(simple_input_param) :: lpthresh
+type(simple_input_param) :: lpthres
 type(simple_input_param) :: match_filt
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
@@ -1048,7 +1048,7 @@ contains
         call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
-        call set_param(lpthresh,       'lpthresh',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
+        call set_param(lpthres,       'lpthres',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1602,7 +1602,7 @@ contains
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2D_stream%set_input('srch_ctrls', 6, lpthresh)
+        call cluster2D_stream%set_input('srch_ctrls', 6, lpthres)
         call cluster2D_stream%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
@@ -1655,7 +1655,7 @@ contains
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_subsets%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2D_subsets%set_input('srch_ctrls', 6, lpthresh)
+        call cluster2D_subsets%set_input('srch_ctrls', 6, lpthres)
         call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
@@ -1794,7 +1794,7 @@ contains
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
         cluster_cavgs%filt_ctrls(2)%required = .true.
-        call cluster_cavgs%set_input('filt_ctrls', 3, lpthresh)
+        call cluster_cavgs%set_input('filt_ctrls', 3, lpthres)
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -3195,7 +3195,7 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 18, submenu="cluster 2D", advanced=.false.)
-        call preprocess_stream_dev%set_input('srch_ctrls',19, lpthresh)
+        call preprocess_stream_dev%set_input('srch_ctrls',19, lpthres)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 19, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")

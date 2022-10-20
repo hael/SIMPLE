@@ -325,7 +325,7 @@ contains
             if( chunks(ichunk)%has_converged() )then
                 call chunks(ichunk)%display_iter
                 ! rejection
-                call chunks(ichunk)%reject(params_glob%lpthresh, params_glob%ndev2D, box)
+                call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
                 ! updates list of chunks to import
                 if( allocated(converged_chunks) )then
                     converged_chunks = [converged_chunks(:), chunks(ichunk)]
@@ -726,7 +726,7 @@ contains
         allocate(cls_mask(ncls_glob), source=.true.)
         ! correlation & resolution
         ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
-        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthresh,cls_mask,ndev_here)
+        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,cls_mask,ndev_here)
         if( count(cls_mask) > 1 .and. count(cls_mask) < ncls_glob )then
             ncls_rejected = 0
             do iptcl=1,pool_proj%os_ptcl2D%get_noris()
@@ -837,15 +837,15 @@ contains
     !> updates current parameters with user input
     subroutine update_user_params
         type(oris) :: os
-        real       :: lpthresh, ndev
+        real       :: lpthres, ndev
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
-            if( os%isthere(1,'lpthresh') )then
-                lpthresh = os%get(1,'lpthresh')
-                if( abs(lpthresh-params_glob%lpthresh) > 0.001 )then
-                    params_glob%lpthresh = lpthresh
-                    write(logfhandle,'(A,F8.2)')'>>> REJECTION LPTHRESH UPDATED TO: ',params_glob%lpthresh
+            if( os%isthere(1,'lpthres') )then
+                lpthres = os%get(1,'lpthres')
+                if( abs(lpthres-params_glob%lpthres) > 0.001 )then
+                    params_glob%lpthres = lpthres
+                    write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
                 endif
             endif
             if( os%isthere(1,'ndev2D') )then
@@ -1399,7 +1399,7 @@ contains
         if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('lp')           ) call cline%set('lp',          GREEDY_TARGET_LP)
-        if( .not. cline%defined('lpthresh')     ) call cline%set('lpthresh',    30.0)
+        if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',    30.0)
         if( .not. cline%defined('ndev')         ) call cline%set('ndev',        1.5)
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl2D')
         if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'partial')

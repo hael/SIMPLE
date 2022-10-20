@@ -137,16 +137,11 @@ contains
         if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-            if( params_glob%l_refine_inpl )then
+            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
+                ! shift-only optimization
                 irot = self%best_rot
-                cxy  = self%grad_shsrch_obj%minimize_exhaustive(irot=irot, halfrot=HALFROT)
-            else
-                if( .not.self%grad_shsrch_obj%does_opt_angle() )then
-                    ! shift-only optimization
-                    irot = self%best_rot
-                endif
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
             endif
+            cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 self%best_corr  = cxy(1)
                 self%best_rot   = irot

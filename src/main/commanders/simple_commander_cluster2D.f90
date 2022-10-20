@@ -1256,7 +1256,7 @@ contains
         if( .not. DEBUG )then
             clspops = spproj%os_cls2D%get_all('pop')
             clsres  = spproj%os_cls2D%get_all('res')
-            where( clsres  >= params%lpthresh    ) states = 0.
+            where( clsres  >= params%lpthres     ) states = 0.
             where( clspops <  real(MINCLSPOPLIM) ) states = 0.
         endif
         ! find out how many selected class averages initially

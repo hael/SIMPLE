@@ -120,10 +120,6 @@ contains
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                     self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 endif
-                if( params_glob%l_refine_inpl )then
-                    converged = self%dist_inpl%avg < 0.02
-                    self%progress = progress_estimate_2D(real(params_glob%which_iter), 0.0, 0.0, 0.0, 0.0, self%dist_inpl%avg, 0.02) 
-                endif
                 if( converged )then
                     write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 else
@@ -216,8 +212,8 @@ contains
         if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
         if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
-        if( params_glob%l_refine_inpl )then
-            if( self%shincarg%avg < 0.001 .and. self%dist_inpl%avg < 0.5 )then
+        if( params_glob%nstates == 1 )then
+            if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -225,47 +221,37 @@ contains
                 converged = .false.
             endif
         else
-            if( params_glob%nstates == 1 )then
-                if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                    converged = .true.
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                    converged = .false.
-                endif
+            ! provides convergence stats for multiple states
+            ! by calculating mi_joint for individual states
+            allocate( state_mi_joint(params_glob%nstates), statepops(params_glob%nstates) )
+            state_mi_joint = 0.
+            statepops      = 0.
+            do iptcl=1,build_glob%spproj_field%get_noris()
+                istate = build_glob%spproj_field%get_state(iptcl)
+                if( istate==0 )cycle
+                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
+                statepops(istate)      = statepops(istate) + 1.
+            end do
+            ! normalise the overlap
+            forall( istate=1:params_glob%nstates, statepops(istate)>0. )&
+                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
+            ! the minumum overlap is in charge of convergence
+            min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
+            ! print the overlaps and pops for the different states
+            do istate=1,params_glob%nstates
+                write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
+                'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
+            end do
+            if( min_state_mi_joint > OVERLAP_STATE_JOINT .and.&
+                self%mi_state      > OVERLAP_STATE       .and.&
+                self%frac_srch%avg > fracsrch_lim        )then
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                converged = .true.
             else
-                ! provides convergence stats for multiple states
-                ! by calculating mi_joint for individual states
-                allocate( state_mi_joint(params_glob%nstates), statepops(params_glob%nstates) )
-                state_mi_joint = 0.
-                statepops      = 0.
-                do iptcl=1,build_glob%spproj_field%get_noris()
-                    istate = build_glob%spproj_field%get_state(iptcl)
-                    if( istate==0 )cycle
-                    state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
-                    statepops(istate)      = statepops(istate) + 1.
-                end do
-                ! normalise the overlap
-                forall( istate=1:params_glob%nstates, statepops(istate)>0. )&
-                   &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
-                ! the minumum overlap is in charge of convergence
-                min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
-                ! print the overlaps and pops for the different states
-                do istate=1,params_glob%nstates
-                    write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
-                    'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
-                end do
-                if( min_state_mi_joint > OVERLAP_STATE_JOINT .and.&
-                    self%mi_state      > OVERLAP_STATE       .and.&
-                    self%frac_srch%avg > fracsrch_lim        )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                    converged = .true.
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                    converged = .false.
-                endif
-                deallocate( state_mi_joint, statepops )
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                converged = .false.
             endif
+            deallocate( state_mi_joint, statepops )
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)

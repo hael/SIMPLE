@@ -165,11 +165,7 @@ contains
         self%class      = o_prev%get_class()                                ! 2D class index
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
-        if( params_glob%l_refine_inpl )then
-            self%prev_proj = self%class
-        else
-            self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-        endif
+        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
         ! init threaded search arrays

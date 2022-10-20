@@ -163,7 +163,7 @@ contains
                     effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
                 end select
                 call motion_correct_patched(bfac_here, effective_patch_fit_threshold, goodnessoffit)
-                if( trim(params_glob%mcpatch_threshold).eq.'no' )then
+                if( trim(params_glob%mcpatch_thres).eq.'no' )then
                     patch_success = .true. ! always accept patch solution
                     if( any(goodnessoffit >= effective_patch_fit_threshold) )then
                         THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
