@@ -692,17 +692,17 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    function uniform_filter_2D( noisy_img, ref_img, filt_img, low_res, high_res, nsearch ) result(best_ind)
+    function uniform_filter_2D( noisy_img, ref_img, filt_img, low_res, high_res, nsearch, smooth_ext ) result(best_ind)
         type(image),  intent(inout) :: filt_img, noisy_img
         type(image),  intent(in)    :: ref_img
-        integer,      intent(in)    :: nsearch
+        integer,      intent(in)    :: nsearch, smooth_ext
         real,         intent(in)    :: low_res, high_res
         integer,      parameter     :: BW_ORDER = 8
         real,         allocatable   :: cur_fil(:)
-        type(image)     :: cur_filt_img
-        type(image_ptr) :: cur_filt_ptr, ref_ptr
-        integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val
-        real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind
+        type(image)     :: cur_filt_img, weights_img
+        type(image_ptr) :: cur_filt_ptr, ref_ptr, weights_ptr
+        integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val, m, n
+        real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind, val
         ! initializing parameters
         ldim        = noisy_img%get_ldim()
         box         = ldim(1)
@@ -711,6 +711,17 @@ contains
         find_stop   = calc_fourier_index(high_res, box, smpd)
         find_start  = calc_fourier_index( low_res, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch - 1)
+        ! make weight image for diff convolution
+        call weights_img%new(ldim, smpd, .false.)
+        call weights_img%zero_and_unflag_ft()
+        do m = -smooth_ext, smooth_ext
+            do n = -smooth_ext, smooth_ext
+                val = -hyp(real(m), real(n))/(smooth_ext + 1) + 1.
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
+            enddo
+        enddo
+        call weights_img%fft()
+        call weights_img%get_mat_ptrs(weights_ptr)
         ! initializing images
         call cur_filt_img%new(ldim, smpd)
         call cur_filt_img%get_mat_ptrs(cur_filt_ptr)
@@ -730,15 +741,24 @@ contains
             ! applying the filter to a copy of current image
             call cur_filt_img%copy_fast(noisy_img)
             call cur_filt_img%apply_filter(cur_fil)
+            cur_filt_ptr%cmat = cur_filt_ptr%cmat * weights_ptr%cmat
             call cur_filt_img%ifft()
             ! compute the total cost over all pixels and do the optimization
-            cur_cost = abs(sum(cur_filt_ptr%rmat - ref_ptr%rmat))
+            cur_cost = sum(cur_filt_ptr%rmat - ref_ptr%rmat)
             if( cur_cost < best_cost )then
-                call filt_img%copy_fast(cur_filt_img)
                 best_cost = cur_cost
                 best_ind  = cur_ind
             endif
         enddo
+        ! generating the Butterworth filter at the best_ind
+        do freq_val = 1, size(cur_fil)
+            cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(best_ind))
+        enddo
+         ! applying the filter with the best_ind to the filt_img
+        call filt_img%copy_fast(noisy_img)
+        call filt_img%apply_filter(cur_fil)
+        call     filt_img%ifft
+        call    noisy_img%ifft
         call cur_filt_img%kill
     end function uniform_filter_2D
 

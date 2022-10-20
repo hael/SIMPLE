@@ -13,7 +13,7 @@ type(image)                   :: img_noisy, img_filt
 integer                       :: nptcls, iptcl
 real                          :: best_ind
 real,    parameter            :: LP_LOWRES_PHASE = 7.
-integer, parameter            :: NSEARCH = 100
+integer, parameter            :: NSEARCH = 100, SMOOTH_EXT = 8
 if( command_argument_count() < 6 )then
     write(logfhandle,'(a)') 'Usage: simple_test_uniform_filter_2D smpd=xx nthr=yy stk=stk.mrc mskdiam=zz lp=ll hp=hh'
     write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -34,11 +34,11 @@ p%ldim(3) = 1 ! because we operate on stacks
 !write(*, *) 'Filtering in progress...'
 call img_noisy%new(p%ldim, p%smpd)
 call img_filt %new(p%ldim, p%smpd)
-do iptcl = 1, p%nptcls
+do iptcl = 1, min(10, p%nptcls)
     !write(*, *) 'Particle # ', iptcl
     ! comparing the nonuniform result with the original data
     call img_noisy%read(p%stk, iptcl)
-    best_ind = uniform_filter_2D(img_noisy, img_noisy, img_filt, p%lp, p%hp, NSEARCH)
+    best_ind = uniform_filter_2D(img_noisy, img_noisy, img_filt, p%lp, p%hp, NSEARCH, SMOOTH_EXT)
     print *, calc_lowpass_lim(nint(best_ind), p%ldim(1), p%smpd)
     call img_filt%write('stk_img_filt.mrc', iptcl)
     ! spherical masking
