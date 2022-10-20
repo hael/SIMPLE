@@ -305,14 +305,6 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
             endif
-            if( params%specstats .eq. 'yes' )then
-                call build%spproj_field%stats('specscore', avgd, sdevd, vard, err )
-                call build%spproj_field%minmax('specscore', mind, maxd)
-                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SPECSCORE              :', avgd
-                write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF SPECSCORE:', sdevd
-                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SPECSCORE (WORST)      :', mind
-                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
-            endif
         endif
         call osubspace%kill
         call o_single%kill

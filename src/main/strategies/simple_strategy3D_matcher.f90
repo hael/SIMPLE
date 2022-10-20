@@ -586,7 +586,6 @@ contains
         type(kbinterpol) :: kbwin
         real    :: sdev_noise
         integer :: batchlims(2), iptcl, i, i_batch, ibatch
-        if( trim(params_glob%dorec) .eq. 'no' ) return
         select case(trim(params_glob%refine))
             case('eval')
                 ! no reconstruction

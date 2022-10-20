@@ -25,7 +25,7 @@ else
     read(resChar, *)res
 endif
 print *, 'Using a resolution of ', res
-!call cline%checkvar('lpthresh',    1)
+!call cline%checkvar('lpthres',    1)
 !call cline%check
 !call p%new(cline)
 

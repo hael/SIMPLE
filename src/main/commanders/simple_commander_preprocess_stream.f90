@@ -93,7 +93,7 @@ contains
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
         ! 2D classification
-        if( .not. cline%defined('lpthresh')    ) call cline%set('lpthresh',      30.0)
+        if( .not. cline%defined('lpthres')    ) call cline%set('lpthres',      30.0)
         if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)
         if( .not. cline%defined('wiener')      ) call cline%set('wiener',   'partial')
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',    'yes')

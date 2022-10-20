@@ -229,10 +229,10 @@ contains
             z         = robust_z_scores(x)
             extr_init = 2.*real(count(z<-1.)) / real(count(labels>0))
             extr_init = max(0.1,extr_init)
-            extr_init = min(extr_init,EXTRINITHRESH)
+            extr_init = min(extr_init,EXTRINITHRES)
             deallocate(x,z,corrs,labels)
         else
-            extr_init = EXTRINITHRESH
+            extr_init = EXTRINITHRES
         endif
         call cline_refine3D1%set('extr_init', extr_init)
         write(logfhandle,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
