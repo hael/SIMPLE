@@ -170,6 +170,7 @@ type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
+type(simple_program), target :: uniform_2D_filter
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -418,6 +419,7 @@ contains
         call new_tseries_track_particles
         call new_tseries_reconstruct3D
         call new_graphene_subtr
+        call new_uniform_2D_filter
         call new_update_project
         call new_vizoris
         call new_volops
@@ -521,6 +523,7 @@ contains
         call push2prg_ptr_array(tseries_track_particles)
         call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
+        call push2prg_ptr_array(uniform_2D_filter)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
@@ -734,6 +737,8 @@ contains
                 ptr2prg => tseries_reconstruct3D
             case('graphene_subtr')
                 ptr2prg => graphene_subtr
+            case('uniform_2D_filter')
+                ptr2prg => uniform_2D_filter
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -827,6 +832,7 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
+        write(logfhandle,'(A)') uniform_2D_filter%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -4635,6 +4641,33 @@ contains
         ! computer controls
         call graphene_subtr%set_input('comp_ctrls', 1, nthr)
     end subroutine new_graphene_subtr
+
+    subroutine new_uniform_2D_filter
+        ! PROGRAM SPECIFICATION
+        call uniform_2D_filter%new(&
+        &'uniform_2D_filter',&           ! name
+        &'Uniform 2D filter',&           ! descr_short
+        &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
+        &'simple_exec',&                 ! executable
+        &1, 1, 0, 0, 3, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call uniform_2D_filter%set_input('img_ios', 1, 'stk', 'file', 'Image stack', 'Image stack', 'img_stack.mrc file', .true., '')
+        ! parameter input/output
+        call uniform_2D_filter%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call uniform_2D_filter%set_input('filt_ctrls', 1, smooth_ext)
+        call uniform_2D_filter%set_input('filt_ctrls', 2, lp_lowres)
+        call uniform_2D_filter%set_input('filt_ctrls', 3, nsearch)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call uniform_2D_filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_uniform_2D_filter
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION
