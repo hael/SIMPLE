@@ -10,7 +10,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: opt_2D_filter_sub, opt_filter_2D, opt_filter_3D, butterworth_filter, uniform_filter_2D
+public :: opt_2D_filter_sub, opt_filter_2D, opt_filter_3D, butterworth_filter, uniform_filter_2D, uniform_2D_filter_sub
 private
 
 type optfilt2Dvars
@@ -692,14 +692,14 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    function uniform_filter_2D( noisy_img, ref_img, filt_img, low_res, high_res, nsearch, smooth_ext ) result(best_ind)
+    function uniform_filter_2D( noisy_img, ref_img, filt_img, weights_img, butterworth_fil, low_res, nsearch, smooth_ext ) result(best_ind)
         type(image),  intent(inout) :: filt_img, noisy_img
-        type(image),  intent(in)    :: ref_img
+        type(image),  intent(in)    :: ref_img, weights_img
         integer,      intent(in)    :: nsearch, smooth_ext
-        real,         intent(in)    :: low_res, high_res
+        real,         intent(in)    :: low_res
+        real,         intent(inout) :: butterworth_fil(:)
         integer,      parameter     :: BW_ORDER = 8
-        real,         allocatable   :: cur_fil(:)
-        type(image)     :: cur_filt_img, weights_img
+        type(image)     :: cur_filt_img
         type(image_ptr) :: cur_filt_ptr, ref_ptr, weights_ptr
         integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val, m, n
         real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind, val
@@ -708,39 +708,28 @@ contains
         box         = ldim(1)
         dim3        = ldim(3)
         smpd        = noisy_img%get_smpd()
-        find_stop   = calc_fourier_index(high_res, box, smpd)
-        find_start  = calc_fourier_index( low_res, box, smpd)
+        find_stop   = calc_fourier_index(smpd*2 , box, smpd)
+        find_start  = calc_fourier_index(low_res, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch - 1)
-        ! make weight image for diff convolution
-        call weights_img%new(ldim, smpd, .false.)
-        call weights_img%zero_and_unflag_ft()
-        do m = -smooth_ext, smooth_ext
-            do n = -smooth_ext, smooth_ext
-                val = -hyp(real(m), real(n))/(smooth_ext + 1) + 1.
-                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
-            enddo
-        enddo
-        call weights_img%fft()
+        ! getting weight images, supposedly fft'ed
         call weights_img%get_mat_ptrs(weights_ptr)
         ! initializing images
         call cur_filt_img%new(ldim, smpd)
         call cur_filt_img%get_mat_ptrs(cur_filt_ptr)
         call      ref_img%get_mat_ptrs(ref_ptr)
         call    noisy_img%fft
-        ! allocation
-        allocate(cur_fil(box), source=0.)
         ! optimizing over the cur_ind
         best_cost = huge(best_cost)
         best_ind  = find_start
         do iter_no = 1, nsearch
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             ! generating the Butterworth filter at this current Fourier index
-            do freq_val = 1, size(cur_fil)
-                cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
+            do freq_val = 1, size(butterworth_fil)
+                butterworth_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
             enddo
             ! applying the filter to a copy of current image
             call cur_filt_img%copy_fast(noisy_img)
-            call cur_filt_img%apply_filter(cur_fil)
+            call cur_filt_img%apply_filter(butterworth_fil)
             cur_filt_ptr%cmat = cur_filt_ptr%cmat * weights_ptr%cmat
             call cur_filt_img%ifft()
             ! compute the total cost over all pixels and do the optimization
@@ -751,15 +740,79 @@ contains
             endif
         enddo
         ! generating the Butterworth filter at the best_ind
-        do freq_val = 1, size(cur_fil)
-            cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(best_ind))
+        do freq_val = 1, size(butterworth_fil)
+            butterworth_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(best_ind))
         enddo
          ! applying the filter with the best_ind to the filt_img
         call filt_img%copy_fast(noisy_img)
-        call filt_img%apply_filter(cur_fil)
+        call filt_img%apply_filter(butterworth_fil)
         call     filt_img%ifft
         call    noisy_img%ifft
         call cur_filt_img%kill
     end function uniform_filter_2D
+
+    subroutine uniform_2D_filter_sub( stk )
+        class(image),        intent(inout) :: stk(:)
+        type(optfilt2Dvars), allocatable   :: optf2Dvars(:)
+        type(image)      :: weights_img
+        real             :: smpd, lpstart, val
+        integer          :: iptcl, box, ldim(3), ldim_pd(3), smooth_ext
+        integer          :: nptcls, m, n, best_ind
+        write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING'
+        ! init
+        ldim         = stk(1)%get_ldim()
+        ldim(3)      = 1 ! because we operate on stacks
+        smooth_ext   = params_glob%smooth_ext
+        ldim_pd      = ldim + 2 * smooth_ext
+        ldim_pd(3)   = 1 ! because we operate on stacks
+        box          = ldim_pd(1)
+        smpd         = params_glob%smpd
+        nptcls       = size(stk)
+        lpstart      = params_glob%lpstart
+        ! allocate
+        allocate(optf2Dvars(nptcls))
+        optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box, smpd)
+        ! fill up optf2Dvars struct, using 'even' to store stk images
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = 1, nptcls
+            call stk(iptcl)%pad_mirr(ldim_pd)
+            call optf2Dvars(iptcl)%even_filt%copy(stk(iptcl))
+            call optf2Dvars(iptcl)%diff_img_even    %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_opt_even%new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%even_copy_rmat%copy(stk(iptcl))
+            call optf2Dvars(iptcl)%even_copy_cmat%copy(stk(iptcl))
+            call optf2Dvars(iptcl)%even_copy_cmat%fft
+            optf2Dvars(iptcl)%have_mask = .false.
+            allocate(optf2Dvars(iptcl)%cur_fil(box), source=0.)
+        end do
+        !$omp end parallel do
+        ! make weight image for diff convolution
+        call weights_img%new(ldim_pd, smpd, .false.)
+        call weights_img%zero_and_unflag_ft()
+        do m = -params_glob%smooth_ext, params_glob%smooth_ext
+            do n = -params_glob%smooth_ext, params_glob%smooth_ext
+                val = -hyp(real(m), real(n))/(params_glob%smooth_ext + 1) + 1.
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
+            enddo
+        enddo
+        call weights_img%fft()
+        ! filter
+        !$omp parallel do default(shared) private(iptcl, best_ind) schedule(static) proc_bind(close)
+        do iptcl = 1, nptcls
+            best_ind = uniform_filter_2D(stk(iptcl), stk(iptcl), optf2Dvars(iptcl)%even_filt, weights_img, optf2Dvars(iptcl)%cur_fil,&
+                                        &real(optf2Dvars(iptcl)%lplim_hres), params_glob%nsearch, params_glob%smooth_ext)
+        enddo
+        !$omp end parallel do
+        ! destruct
+        call weights_img%kill
+        do iptcl = 1, nptcls
+            call optf2Dvars(iptcl)%even_copy_rmat%kill
+            call optf2Dvars(iptcl)%even_copy_cmat%kill
+            call optf2Dvars(iptcl)%even_filt%kill
+            call optf2Dvars(iptcl)%diff_img_even%kill
+            call optf2Dvars(iptcl)%diff_img_opt_even%kill
+            call stk(iptcl)%clip_inplace(ldim)
+        enddo
+    end subroutine uniform_2D_filter_sub
 
 end module simple_opt_filter
