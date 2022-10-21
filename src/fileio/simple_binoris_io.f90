@@ -1,11 +1,7 @@
 module simple_binoris_io
-use simple_defs
-use simple_strings
-use simple_fileio
-use simple_error
+include 'simple_lib.f08'
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
-use simple_syslib,     only: file_exists
 implicit none
 
 public :: binread_oritab, binread_ctfparams_state_eo, binread_nlines, binwrite_oritab

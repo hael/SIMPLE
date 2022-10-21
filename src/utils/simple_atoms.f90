@@ -3,8 +3,6 @@ module simple_atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_strings
-use simple_fileio
 implicit none
 
 public :: atoms

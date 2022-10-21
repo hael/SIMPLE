@@ -14,7 +14,6 @@ use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
 use simple_qsys_funs
 use simple_commander_cluster2D
-use simple_timer
 implicit none
 
 public :: cluster2D_commander_subsets

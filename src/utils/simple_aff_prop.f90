@@ -1,9 +1,6 @@
 ! clustering based on a similartity matrix using affinity propagation
 module simple_aff_prop
-use simple_defs
-use simple_math,  only: euclid
-use simple_rnd,   only: ran3
-use simple_stat,  only: analyze_smat
+include 'simple_lib.f08'
 implicit none
 
 public :: aff_prop, test_aff_prop

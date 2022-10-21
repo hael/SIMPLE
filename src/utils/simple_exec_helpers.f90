@@ -4,7 +4,6 @@ use simple_qsys_env,   only: qsys_env
 use simple_parameters, only: parameters, params_glob
 use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
-use simple_chash,      only: chash
 implicit none
 
 public :: script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir

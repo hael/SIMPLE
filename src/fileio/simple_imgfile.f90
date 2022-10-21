@@ -10,12 +10,7 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
-use simple_defs
-use simple_error
-use simple_math,    only: is_odd, is_even
-use simple_syslib,  only: is_open, file_exists, del_file
-use simple_fileio,  only: fname2format, fopen, fileiochk, fclose
-use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
+include 'simple_lib.f08'
 use gnufor2
 implicit none
 
