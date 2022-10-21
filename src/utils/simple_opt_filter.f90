@@ -686,23 +686,20 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    function uniform_filter_2D( noisy_img, ref_img, tmp_filt_img, weights_img, butterworth_fil, low_res, nsearch, smooth_ext ) result(best_ind)
+    function uniform_filter_2D( noisy_img, ref_img, tmp_filt_img, weights_img, butterworth_fil, find_start, find_stop, nsearch, smooth_ext ) result(best_ind)
         type(image),  intent(inout) :: tmp_filt_img, noisy_img, ref_img
         type(image),  intent(in)    :: weights_img
-        integer,      intent(in)    :: nsearch, smooth_ext
-        real,         intent(in)    :: low_res
+        integer,      intent(in)    :: nsearch, smooth_ext, find_start, find_stop
         real,         intent(inout) :: butterworth_fil(:)
         integer,      parameter     :: BW_ORDER = 8
         type(image_ptr) :: temp_filt_ptr, ref_ptr, weights_ptr
-        integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val, m, n
+        integer         :: ldim(3), box, dim3, iter_no, cur_ind, freq_val, m, n
         real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind, val
         ! initializing parameters
         ldim        = noisy_img%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
         smpd        = noisy_img%get_smpd()
-        find_stop   = calc_fourier_index(smpd*2 , box, smpd)
-        find_start  = calc_fourier_index(low_res, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch - 1)
         ! getting weight images, supposedly fft'ed
         call weights_img%get_mat_ptrs(weights_ptr)
@@ -728,7 +725,7 @@ contains
             temp_filt_ptr%cmat = temp_filt_ptr%cmat * weights_ptr%cmat
             call tmp_filt_img%ifft()
             ! compute the total cost over all pixels and do the optimization
-            cur_cost = sum(temp_filt_ptr%rmat)
+            cur_cost = sum(temp_filt_ptr%rmat(smooth_ext+1:box-smooth_ext, smooth_ext+1:box-smooth_ext,1)) ! within the unpad domain
             if( cur_cost < best_cost )then
                 best_cost = cur_cost
                 best_ind  = cur_ind
@@ -747,9 +744,9 @@ contains
         class(image),        intent(inout) :: stk(:), ref(:)
         type(optfilt2Dvars), allocatable   :: optf2Dvars(:)
         type(image)      :: weights_img
-        real             :: smpd, lpstart, val
+        real             :: smpd, val
         integer          :: iptcl, box, ldim(3), ldim_pd(3), smooth_ext
-        integer          :: nptcls, m, n, best_ind
+        integer          :: nptcls, m, n, best_ind, find_start, find_stop
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING'
         ! init
         ldim         = stk(1)%get_ldim()
@@ -760,28 +757,16 @@ contains
         box          = ldim_pd(1)
         smpd         = params_glob%smpd
         nptcls       = size(stk)
-        lpstart      = params_glob%lpstart
         ! allocate
         allocate(optf2Dvars(nptcls))
-        optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box, smpd)
+        find_stop  = calc_fourier_index(params_glob%lpstart,   ldim(1), smpd)
+        find_start = calc_fourier_index(params_glob%lp_lowres, ldim(1), smpd)
         ! fill up optf2Dvars struct, using 'even' to store stk images
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
             call stk(iptcl)%pad_mirr(ldim_pd)
             call ref(iptcl)%pad_mirr(ldim_pd)
             call optf2Dvars(iptcl)%even_filt%copy(stk(iptcl))
-            call optf2Dvars(iptcl)% odd_filt%copy(ref(iptcl))
-            call optf2Dvars(iptcl)%diff_img_even%new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_odd %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_opt_even%new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%diff_img_opt_odd %new(ldim_pd, smpd, .false.)
-            call optf2Dvars(iptcl)%even_copy_rmat%copy(stk(iptcl))
-            call optf2Dvars(iptcl)% odd_copy_rmat%copy(ref(iptcl))
-            call optf2Dvars(iptcl)%even_copy_cmat%copy(stk(iptcl))
-            call optf2Dvars(iptcl)% odd_copy_cmat%copy(ref(iptcl))
-            call optf2Dvars(iptcl)%even_copy_cmat%fft
-            call optf2Dvars(iptcl)% odd_copy_cmat%fft
-            optf2Dvars(iptcl)%have_mask = .false.
             allocate(optf2Dvars(iptcl)%cur_fil(box), source=0.)
         end do
         !$omp end parallel do
@@ -799,22 +784,14 @@ contains
         !$omp parallel do default(shared) private(iptcl, best_ind) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
             best_ind = uniform_filter_2D(stk(iptcl), ref(iptcl), optf2Dvars(iptcl)%even_filt, weights_img, optf2Dvars(iptcl)%cur_fil,&
-                                        &real(optf2Dvars(iptcl)%lplim_hres), params_glob%nsearch, params_glob%smooth_ext)
+                                        &find_start, find_stop, params_glob%nsearch, params_glob%smooth_ext)
+            !print *, 'iptcl = ', iptcl, '; cut-off res = ', calc_lowpass_lim(best_ind, ldim(1), smpd)
         enddo
         !$omp end parallel do
         ! destruct
         call weights_img%kill
         do iptcl = 1, nptcls
-            call optf2Dvars(iptcl)%even_copy_rmat%kill
-            call optf2Dvars(iptcl)% odd_copy_rmat%kill
-            call optf2Dvars(iptcl)%even_copy_cmat%kill
-            call optf2Dvars(iptcl)% odd_copy_cmat%kill
             call optf2Dvars(iptcl)%even_filt%kill
-            call optf2Dvars(iptcl)% odd_filt%kill
-            call optf2Dvars(iptcl)%diff_img_even%kill
-            call optf2Dvars(iptcl)%diff_img_odd %kill
-            call optf2Dvars(iptcl)%diff_img_opt_even%kill
-            call optf2Dvars(iptcl)%diff_img_opt_odd %kill
             call stk(iptcl)%clip_inplace(ldim)
             call ref(iptcl)%clip_inplace(ldim)
         enddo
