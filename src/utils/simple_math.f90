@@ -3,128 +3,35 @@ module simple_math
 use simple_defs
 use simple_error, only: simple_exception
 use simple_srch_sort_loc
+use simple_is_check_assert
 implicit none
 
-private :: ludcmp, lubksb
-
-interface is_a_number
-    module procedure is_a_number_1
-    module procedure is_a_number_2
-    module procedure is_a_number_3
-    module procedure is_a_number_4
-end interface
-
-interface is_zero
-    module procedure is_zero_0
-    module procedure is_zero_1
-    module procedure is_zero_2
-end interface is_zero
-
-interface is_gt_zero
-    module procedure is_gt_zero_0
-    module procedure is_gt_zero_1
-    module procedure is_gt_zero_2
-end interface is_gt_zero
-
-interface is_equal
-    module procedure is_equal_1
-    module procedure is_equal_2
-end interface is_equal
-
-interface check4nans3D
-    module procedure check4nans3D_1
-    module procedure check4nans3D_2
-end interface
-
-interface check4nans2D
-    module procedure check4nans2D_1
-    module procedure check4nans2D_2
-end interface
-
-interface check4nans
-    module procedure check4nans_1
-    module procedure check4nans_2
-end interface
-
-interface is_even
-    module procedure is_even_1
-    module procedure is_even_2
-end interface
-
-interface cosedge
-    module procedure cosedge_1
-    module procedure cosedge_2
-end interface
-
-interface cosedge_inner
-    module procedure cosedge_inner_1
-    module procedure cosedge_inner_2
-end interface
-
-interface hardedge
-    module procedure hardedge_1
-    module procedure hardedge_2
-    module procedure hardedge_3
-    module procedure hardedge_4
-end interface
-
-interface hardedge_inner
-    module procedure hardedge_inner_1
-    module procedure hardedge_inner_2
-    module procedure hardedge_inner_3
-    module procedure hardedge_inner_4
+interface csq_fast
+    module procedure csq_fast_1, csq_fast_2
 end interface
 
 interface nvoxfind
-    module procedure nvoxfind_1
-    module procedure nvoxfind_2
+    module procedure nvoxfind_1, nvoxfind_2
 end interface
 
 interface rad2deg
-    module procedure rad2deg_1
-    module procedure rad2deg_2
+    module procedure rad2deg_1, rad2deg_2
 end interface
 
 interface csq
-    module procedure csq_1
-    module procedure csq_2
+    module procedure csq_1, csq_2
 end interface
-
-interface csq_fast
-    module procedure csq_fast_1
-    module procedure csq_fast_2
-end interface
-
-interface sqwin_1d
-    module procedure sqwin_1d_1
-    module procedure sqwin_1d_2
-end interface
-
-interface sqwin_2d
-    module procedure sqwin_2d_1
-    module procedure sqwin_2d_2
-end interface
-
-interface sqwin_3d
-    module procedure sqwin_3d_1
-    module procedure sqwin_3d_2
-end interface
-
-logical, parameter,private :: warn=.false.
 
 interface norm_2
-    module procedure norm_2_sp
-    module procedure norm_2_dp
+    module procedure norm_2_sp, norm_2_dp
 end interface norm_2
 
 interface deg2rad
-    module procedure deg2rad_sp
-    module procedure deg2rad_dp
+    module procedure deg2rad_sp, deg2rad_dp
 end interface deg2rad
 
 interface myacos
-    module procedure myacos_sp
-    module procedure myacos_dp
+    module procedure myacos_sp, myacos_dp
 end interface myacos
 
 interface pythag
@@ -143,10 +50,6 @@ interface outerprod
     module procedure outerprod_r, outerprod_d
 end interface outerprod
 
-interface assert_eq
-    module procedure assert_eq2,assert_eq3,assert_eq4,assert_eqn
-end interface assert_eq
-
 interface svdfit
     module procedure svdfit_sp, svdfit_dp
 end interface svdfit
@@ -160,26 +63,19 @@ interface vabs
 end interface vabs
 
 interface vis_mat
-    module procedure vis_2Dreal_mat
-    module procedure vis_2Dinteger_mat
-    module procedure vis_3Dreal_mat
-    module procedure vis_3Dinteger_mat
+    module procedure vis_2Dreal_mat, vis_2Dinteger_mat, vis_3Dreal_mat, vis_3Dinteger_mat
 end interface vis_mat
 
 interface mode
-    module procedure mode_1
-    module procedure mode_2
+    module procedure mode_1, mode_2
 end interface mode
 
 interface otsu
-    module procedure otsu_1
-    module procedure otsu_2
-    module procedure otsu_3
+    module procedure otsu_1, otsu_2, otsu_3
 end interface otsu
 
 interface pixels_dist
-   module procedure pixels_dist_1
-   module procedure pixels_dist_2
+   module procedure pixels_dist_1, pixels_dist_2 
 end interface
 
 interface eigsrt
@@ -193,6 +89,9 @@ end interface jacobi
 interface matinv
     module procedure matinv_sp, matinv_dp
 end interface matinv
+
+private :: ludcmp, lubksb
+logical, parameter, private :: warn=.false.
 
 contains
 
@@ -273,101 +172,6 @@ contains
         deg = (rad/DPI)*180.d0
     end function rad2deg_2
 
-    !>   to check if val is even
-    elemental logical function is_even_1( val )
-        integer, intent(in) :: val  !< query val
-        is_even_1 = mod(val,2) == 0
-    end function is_even_1
-
-    !>   to check if all vals in array are even
-    pure function is_even_2( arr ) result( yep )
-        integer, intent(in) :: arr(:)     !< query vector
-        logical :: yep
-        logical :: test(size(arr))
-        integer :: i
-        test = .false.
-        do i=1,size(arr)
-            test(i) = is_even_1(arr(i))
-        end do
-        yep = all(test)
-    end function is_even_2
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans3D_1( arr )
-        real, intent(in)  :: arr(:,:,:)   !< query vector
-        real, allocatable :: arr1d(:)
-        arr1d = pack(arr, .true.)
-        call check4nans_1(arr1d)
-        deallocate(arr1d)
-    end subroutine check4nans3D_1
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans3D_2( arr )
-        complex, intent(in)  :: arr(:,:,:)    !< query vector
-        complex, allocatable :: arr1d(:)
-        arr1d = pack(arr, .true.)
-        call check4nans_2(arr1d)
-        deallocate(arr1d)
-    end subroutine check4nans3D_2
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans2D_1( arr )
-        real, intent(in)  :: arr(:,:)   !< query vector
-        real, allocatable :: arr1d(:)
-        arr1d = pack(arr, .true.)
-        call check4nans_1(arr1d)
-        deallocate(arr1d)
-    end subroutine check4nans2D_1
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans2D_2( arr )
-        complex, intent(in)  :: arr(:,:)   !< query vector
-        complex, allocatable :: arr1d(:)
-        arr1d = pack(arr, .true.)
-        call check4nans_2(arr1d)
-        deallocate(arr1d)
-    end subroutine check4nans2D_2
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans_1( arr )
-        real, intent(in) :: arr(:)   !< query vector
-        integer :: i, n_nans
-        n_nans = 0
-        do i=1,size(arr)
-            if( is_a_number(arr(i)) )then
-                ! alles gut
-            else
-                n_nans = n_nans+1
-            endif
-        end do
-        if( n_nans > 0 )then
-            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
-        endif
-    end subroutine check4nans_1
-
-    !>    is for checking the numerical soundness of an vector
-    subroutine check4nans_2( arr )
-        complex, intent(in) :: arr(:)   !< query vector
-        integer :: i, n_nans
-        n_nans = 0
-        do i=1,size(arr)
-            if( is_a_number_2(arr(i)) )then
-                ! alles gut
-            else
-                n_nans = n_nans+1
-            endif
-        end do
-        if( n_nans > 0 )then
-            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
-        endif
-    end subroutine check4nans_2
-
-    !>  returns true if the argument is odd
-    elemental logical function is_odd(i)
-        integer, intent(in) :: i    !< query value
-        is_odd = btest(i,0)
-    end function is_odd
-
     !>   for rounding to closest even
     elemental function round2even( val ) result( ev )
         real, intent(in) :: val            !< query value
@@ -423,107 +227,6 @@ contains
             cc_norm = cc(1) / sqrt_denom
         endif
     end function norm_corr
-
-     !>   checking for is_a_number
-    pure elemental logical function is_a_number_1( number )
-        real, intent(in) :: number  !< input variable for checking
-        is_a_number_1 = .true.
-        if( number > 0. )then
-        else if( number <= 0. )then
-        else
-            is_a_number_1 = .false.
-        endif
-    end function is_a_number_1
-
-    !>   validity check of complex number (so that it is not nan)
-    pure elemental logical function is_a_number_2( complex_number )
-        complex, intent(in) :: complex_number !< input variable for checking
-        is_a_number_2 = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
-    end function is_a_number_2
-
-     !>   checking for is_a_number
-    pure elemental logical function is_a_number_3( number )
-        real(dp), intent(in) :: number  !< input variable for checking
-        is_a_number_3 = .true.
-        if( number > 0. )then
-        else if( number <= 0. )then
-        else
-            is_a_number_3 = .false.
-        endif
-    end function is_a_number_3
-
-    !>   validity check of complex number (so that it is not nan)
-    pure elemental logical function is_a_number_4( complex_number )
-        complex(dp), intent(in) :: complex_number !< input variable for checking
-
-        is_a_number_4 = is_a_number_3(real(complex_number)) .and. is_a_number_3(aimag(complex_number))
-    end function is_a_number_4
-
-    !>   to check if val is zero
-    elemental logical function is_zero_0( val )
-        integer, intent(in) :: val  !< query val
-        is_zero_0 = abs(val) == 0
-    end function is_zero_0
-
-    !>   to check if val is zero
-    elemental logical function is_zero_1( val )
-        real, intent(in) :: val  !< query val
-        is_zero_1 = abs(val) < TINY
-    end function is_zero_1
-
-        !>   to check if val is zero
-    elemental logical function is_zero_2( val )
-        real(8), intent(in) :: val  !< query val
-        is_zero_2 = abs(val) < DTINY
-    end function is_zero_2
-
-    !>   to check if val is zero
-    elemental logical function is_gt_zero_0( val )
-        integer, intent(in) :: val  !< query val
-        is_gt_zero_0 = val > 0
-    end function
-
-    !>   to check if val is zero
-    elemental logical function is_gt_zero_1( val )
-        real, intent(in) :: val  !< query val
-        is_gt_zero_1 = val > TINY
-    end function is_gt_zero_1
-
-    !>   to check if val is zero
-    elemental logical function is_gt_zero_2( val )
-        real(8), intent(in) :: val  !< query val
-        is_gt_zero_2 = val > DTINY
-    end function is_gt_zero_2
-
-    !>   to check if val is zero
-    elemental logical function is_equal_1( val1 , val2)
-        real, intent(in) :: val1, val2  !< query val
-        is_equal_1 = abs(val1-val2) < TINY
-    end function
-
-    !>   to check if val is zero
-    elemental logical function is_equal_2( val1, val2 )
-        real(8), intent(in) :: val1, val2  !< query val
-        is_equal_2 = abs(val1-val2) < DTINY
-    end function is_equal_2
-
-    !>   to check if two integer vectors are equal
-    function vectors_are_equal(vec1, vec2) result(yes_no)
-        integer, intent(in) :: vec1(:)
-        integer, intent(in) :: vec2(:)
-        logical :: yes_no
-        integer :: n
-        yes_no = .false.
-        if(size(vec1) == size(vec2)) then
-            yes_no = .true. !initialize
-            do n = 1, size(vec1)
-                if(vec1(n) .ne. vec2(n)) then
-                     yes_no = .false.
-                     return
-                 endif
-            enddo
-        endif
-    end function vectors_are_equal
 
     !>   to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
@@ -720,71 +423,6 @@ contains
         b = c
         c = d
     end subroutine shft
-
-    !> one-dimensional symmetric hard window
-    pure subroutine sqwin_1d_1( x, winsz, lowerlim, upperlim )
-        real,    intent(in)  :: x                   !< input point
-        real,    intent(in)  :: winsz               !< window size
-        integer, intent(out) :: lowerlim, upperlim  !< window bounds
-        integer :: iwinsz
-        iwinsz   = ceiling(winsz - 0.5)
-        lowerlim = nint(x)
-        upperlim = lowerlim + iwinsz
-        lowerlim = lowerlim - iwinsz
-    end subroutine sqwin_1d_1
-
-    !> one-dimensional symmetric hard window with limits
-    pure subroutine sqwin_1d_2( x, winsz, lims, win )
-        real,    intent(in)  :: x       !< input point
-        real,    intent(in)  :: winsz   !< window size
-        integer, intent(in)  :: lims(2) !< bounds
-        integer, intent(out) :: win(2)  !< window
-        integer :: iwinsz
-        win(:) = nint(x)
-        iwinsz = ceiling(winsz - 0.5)
-        win(1) = max(lims(1), win(1) - iwinsz)
-        win(2) = min(lims(2), win(2) + iwinsz)
-    end subroutine sqwin_1d_2
-
-    !> two-dimensional symmetric hard window
-    pure subroutine sqwin_2d_1( x, y, winsz, win )
-        real,    intent(in)  :: x,y      !< input point
-        real,    intent(in)  :: winsz    !< window size
-        integer, intent(out) :: win(2,2) !< window
-        call sqwin_1d_1(x, winsz, win(1,1), win(1,2))
-        call sqwin_1d_1(y, winsz, win(2,1), win(2,2))
-    end subroutine sqwin_2d_1
-
-    !> two-dimensional symmetric hard window with limits
-    pure subroutine sqwin_2d_2( x, y, winsz, lims, win )
-        real,    intent(in)  :: x,y       !< input point
-        real,    intent(in)  :: winsz     !< window size
-        integer, intent(in)  :: lims(2,2) !< bounds
-        integer, intent(out) :: win(2,2)  !< window
-        call sqwin_1d_2(x,winsz,lims(1,:), win(1,:))
-        call sqwin_1d_2(y,winsz,lims(2,:), win(2,:))
-    end subroutine sqwin_2d_2
-
-    !> three-dimensional symmetric hard window
-    pure subroutine sqwin_3d_1( x, y, z, winsz, win )
-        real,    intent(in)  :: x,y,z    !< input point
-        real,    intent(in)  :: winsz    !< window size
-        integer, intent(out) :: win(3,2) !< window
-        call sqwin_1d_1(x, winsz, win(1,1), win(1,2))
-        call sqwin_1d_1(y, winsz, win(2,1), win(2,2))
-        call sqwin_1d_1(z, winsz, win(3,1), win(3,2))
-    end subroutine sqwin_3d_1
-
-    !> three-dimensional symmetric hard window with limits
-    pure subroutine sqwin_3d_2( x, y, z, winsz, lims, win )
-        real,    intent(in)  :: x,y,z     !< input point
-        real,    intent(in)  :: winsz     !< window size
-        integer, intent(in)  :: lims(3,2) !< bounds
-        integer, intent(out) :: win(3,2)  !< window
-        call sqwin_1d_2(x,winsz,[lims(1,1), lims(1,2)], win(1,:))
-        call sqwin_1d_2(y,winsz,[lims(2,1), lims(2,2)], win(2,:))
-        call sqwin_1d_2(z,winsz,[lims(3,1), lims(3,2)], win(3,:))
-    end subroutine sqwin_3d_2
 
     pure subroutine bounds_from_mask3D( l_mask, lb, ub )
         logical, intent(in)    :: l_mask(:,:,:)
@@ -988,161 +626,6 @@ contains
         w = w + 1
     end function nextPow2
 
-    ! edge functions
-
-    !>   two-dimensional hard edge
-    !! \f$r^2 < x^2+y^2\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param mskrad masking radius
-    !! \return w on or off
-    !!
-    pure function hardedge_1( x, y, mskrad ) result( w )
-        real,intent(in) :: x, y, mskrad
-        real :: w
-        w = 1.
-        if( x * x + y * y > mskrad * mskrad ) w = 0.
-    end function hardedge_1
-
-    !>   three-dimensional hard edge
-    !! \f$r^2 < x^2+y^2+z^2\f$.
-    !! \param x x position
-    !! \param y y position
-    !! \param mskrad masking radius
-    !! \return w on or off
-    !!
-    pure function hardedge_2( x, y, z, mskrad ) result( w )
-        real,intent(in) :: x, y, z, mskrad
-        real :: w
-        w = 1.
-        if( x * x + y * y + z * z > mskrad * mskrad ) w = 0.
-    end function hardedge_2
-
-   pure function hardedge_3( x, y, mskrad ) result( w )
-        integer,intent(in) :: x, y
-        real, intent(in)   :: mskrad
-        real :: w
-        w = 1.
-        if( real(x * x + y * y) > mskrad * mskrad ) w = 0.
-    end function hardedge_3
-    !!
-    pure function hardedge_4( x, y, z, mskrad ) result( w )
-        integer,intent(in) :: x, y, z
-        real, intent(in)   :: mskrad
-        real :: w
-        w = 1.
-        if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 0.
-    end function hardedge_4
-
-    !>   two-dimensional hard edge
-    !! \f$r < \sqrt{x^2+y^2}\f$.
-    !! \return w on or off
-    !!
-    pure function hardedge_inner_1( x, y, mskrad ) result( w )
-        real,intent(in) :: x, y, mskrad
-        real :: w
-        w = 0.
-        if( x * x + y * y > mskrad * mskrad ) w = 1.
-    end function hardedge_inner_1
-
-    pure function hardedge_inner_2( x, y, mskrad ) result( w )
-        integer,intent(in) :: x, y
-        real, intent(in) ::mskrad
-        real :: w
-        w = 0.
-        if( real(x * x + y * y) > mskrad * mskrad ) w = 1.
-    end function hardedge_inner_2
-
-    !>   three-dimensional hard edge
-    pure function hardedge_inner_3( x, y, z, mskrad ) result( w )
-        real,intent(in) :: x, y, z, mskrad
-        real :: w
-        w = 0.
-        if( x * x + y * y + z * z > mskrad * mskrad ) w = 1.
-    end function hardedge_inner_3
-
-    pure function hardedge_inner_4( x, y, z, mskrad ) result( w )
-        integer,intent(in) :: x, y,z
-        real, intent(in) ::mskrad
-        real :: w
-        w = 0.
-        if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 1.
-    end function hardedge_inner_4
-
-    !>   two-dimensional gaussian edge
-    !! \param x x position
-    !! \param y y position
-   pure function cosedge_1( x, y, box, mskrad ) result( w )
-       real, intent(in)    :: x, y     !< input points
-       integer, intent(in) :: box      !< window size
-       real, intent(in)    :: mskrad   !< mask radius
-        real                :: w, rad, width, maxrad
-        maxrad = real(box/2)
-        rad    = sqrt(x**2.+y**2.)
-        width  = 2.*(maxrad-mskrad)
-        w      = 1.
-        if( rad .ge. maxrad )then
-            w = 0.
-        else if( rad .ge. (maxrad-width) )then
-            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
-        endif
-    end function cosedge_1
-
-    !>   three-dimensional gaussian edge
-    !! \f$r = \cos{(1+{(\pi{r - (d+2m)/(d-2m)})})}\f$.
-    !! \param x x position
-    !! \param y y position
-    pure function cosedge_2( x, y, z, box, mskrad ) result( w )
-        real, intent(in)    :: x, y, z   !< input points
-        integer, intent(in) :: box       !< window size
-        real, intent(in)    :: mskrad    !< mask radius
-        real                :: w, rad, maxrad, width
-        maxrad = real(box/2)
-        rad    = sqrt(x**2.+y**2.+z**2.)
-        width  = 2.*(maxrad-mskrad)
-        w      = 1.
-        if( rad .ge. maxrad )then
-            w = 0.
-        else if( rad .ge. (maxrad-width) )then
-            w = (cos(((rad-(maxrad-width))/width)*pi)+1.)/2.
-        endif
-    end function cosedge_2
-
-    !> \brief  two-dimensional gaussian edge
-    !! \param x x position
-    !! \param y y position
-    pure function cosedge_inner_1( x, y, width, mskrad ) result( w )
-        real, intent(in) :: x, y, width  !< input points and width
-        real, intent(in) :: mskrad       !< mask radius
-        real             :: w, rad
-        rad = sqrt(x**2.+y**2.)
-        if( rad .lt. mskrad-width )then
-            w = 0.
-        else if( rad .gt. mskrad )then
-            w = 1.
-        else
-            w = (1.+cos(pi*(mskrad-rad)/width))/2.0
-        endif
-    end function cosedge_inner_1
-
-    !>   two-dimensional gaussian edge
-    !! \param x x position
-    !! \param y y position
-    !! \param z z position
-    pure function cosedge_inner_2( x, y, z, width, mskrad ) result( w )
-        real, intent(in) :: x, y, z, width !< inner mask radius
-        real, intent(in) :: mskrad !< mask radius
-        real             :: w, rad
-        rad = sqrt(x**2.+y**2.+z**2.)
-        if( rad .lt. mskrad-width )then
-            w = 0.
-        else if( rad .gt. mskrad )then
-            w = 1.
-        else
-            w = (1.+cos(pi*(mskrad-rad)/width))/2.0
-        endif
-    end function cosedge_inner_2
-
     ! FOURIER STUFF
 
     !>   is for working out the fourier dimension
@@ -1219,7 +702,7 @@ contains
         real    :: peakavg
         n = size(fsc)
         ! find FSC peaks
-        peakpos = peakfinder_2(fsc)
+        peakpos = peakfinder(fsc)
         ! filter out all peaks FSC < 0.5
         where(fsc < 0.5) peakpos = .false.
         ! calculate peak average
@@ -2711,58 +2194,6 @@ contains
         real(dp) :: vabs_dp
         vabs_dp=sqrt(dot_product(v,v))
     end function vabs_dp
-
-    function assert_eq2(n1,n2,string)
-        implicit none
-        character(len=*), intent(in) :: string
-        integer,          intent(in) :: n1,n2
-        integer :: assert_eq2
-        if (n1 == n2) then
-            assert_eq2=n1
-        else
-            write(logfhandle,*)'program terminated by assert_eq2: ',trim(string)
-            stop 'program terminated by simple_math :: assert_eq2'
-        end if
-    end function assert_eq2
-
-    function assert_eq3(n1,n2,n3,string)
-        implicit none
-        character(len=*), intent(in) :: string
-        integer,          intent(in) :: n1,n2,n3
-        integer :: assert_eq3
-        if (n1 == n2 .and. n2 == n3) then
-            assert_eq3=n1
-        else
-            write(logfhandle,*)'program terminated by assert_eq3: ',trim(string)
-            stop 'program terminated by simple_math :: assert_eq3'
-        end if
-    end function assert_eq3
-
-    function assert_eq4(n1,n2,n3,n4,string)
-        implicit none
-        character(len=*), intent(in) :: string
-        integer,          intent(in) :: n1,n2,n3,n4
-        integer :: assert_eq4
-        if (n1 == n2 .and. n2 == n3 .and. n3 == n4) then
-            assert_eq4=n1
-        else
-           write(logfhandle,*)'program terminated by assert_eq4: ',trim(string)
-           stop 'program terminated by assert_eq4'
-        end if
-    end function assert_eq4
-
-    function assert_eqn(nn,string)
-        implicit none
-        character(len=*),      intent(in) :: string
-        integer, dimension(:), intent(in) :: nn
-        integer :: assert_eqn
-        if (all(nn(2:) == nn(1))) then
-            assert_eqn=nn(1)
-        else
-            write(logfhandle,*)'program terminated by assert_eqn:', trim(string)
-            stop 'program terminated by assert_eqn'
-        end if
-    end function assert_eqn
 
     ! imported from numerical recipes
     ! SVD-based least-squares fit for linear univariate model

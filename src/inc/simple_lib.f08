@@ -15,7 +15,9 @@ use simple_nrtxtfile
 use simple_syslib
 ! src/utils
 use simple_chash
+use simple_edges_sqwins
 use simple_hash
+use simple_is_check_assert
 use simple_jiffys
 use simple_magic_boxes
 use simple_map_reduce
