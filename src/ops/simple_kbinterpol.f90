@@ -119,7 +119,7 @@ contains
     end function get_alpha
 
     pure integer function get_wdim( self )
-        use simple_math, only: sqwin_1d
+        use simple_edges_sqwins, only: sqwin_1d
         class(kbinterpol), intent(in) :: self
         integer :: win(2)
         call sqwin_1d(0., self%Whalf, win(1), win(2))

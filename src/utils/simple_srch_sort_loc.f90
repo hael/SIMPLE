@@ -4,26 +4,19 @@ use simple_error, only: simple_exception
 implicit none
 
 interface find
-    module procedure find_1
-    module procedure find_2
+    module procedure find_1, find_2
 end interface
 
 interface hpsort
-    module procedure hpsort_1
-    module procedure hpsort_2
-    module procedure hpsort_3
-    module procedure hpsort_4
-    module procedure hpsort_5
+    module procedure hpsort_1, hpsort_2, hpsort_3, hpsort_4, hpsort_5
 end interface
 
 interface locate
-   module procedure locate_1
-   module procedure locate_2
+   module procedure locate_1, locate_2
 end interface
 
 interface reverse
-    module procedure reverse_iarr
-    module procedure reverse_rarr
+    module procedure reverse_iarr, reverse_rarr
 end interface
 
 contains
@@ -64,7 +57,7 @@ contains
         endif
     end subroutine find_2
 
-    !>   rheapsort from numerical recipes (largest last)
+    ! heapsort from numerical recipes (largest last)
     subroutine hpsort_1( rarr, iarr )
         real,    intent(inout) :: rarr(:)
         integer, intent(inout) :: iarr(:)
@@ -113,7 +106,7 @@ contains
         end do
     end subroutine hpsort_1
 
-    !>   rheapsort from numerical recepies (largest last)
+    ! heapsort from numerical recepies (largest last)
     subroutine hpsort_2( iarr )
         integer, intent(inout) :: iarr(:)
         integer :: i, ir, j, l, ra, n
@@ -152,7 +145,7 @@ contains
         end do
     end subroutine hpsort_2
 
-    !>   rheapsort from numerical recepies (largest last)
+    ! heapsort from numerical recepies (largest last)
     subroutine hpsort_3( iarr, p1_lt_p2 )
         integer, intent(inout) :: iarr(:)
         interface
@@ -197,7 +190,7 @@ contains
         end do
     end subroutine hpsort_3
 
-    !>   rheapsort from numerical recepies (largest last)
+    ! heapsort from numerical recepies (largest last)
     subroutine hpsort_4( rarr )
         real, intent(inout) :: rarr(:)
         integer :: i, ir, j, l, n
@@ -237,7 +230,7 @@ contains
         end do
     end subroutine hpsort_4
 
-    !>   rheapsort from numerical recepies (largest last)
+    ! heapsort from numerical recepies (largest last)
     subroutine hpsort_5( rarr, rarr2 )
         real, intent(inout) :: rarr(:), rarr2(:)
         integer :: i, ir, j, l, n
@@ -443,7 +436,7 @@ contains
         enddo
     end function minnloc
 
-    function peakfinder_2( vals ) result( peakpos )
+    function peakfinder( vals ) result( peakpos )
         real,    intent(in)  :: vals(:)
         logical, allocatable :: peakpos(:)
         integer :: n, i
@@ -454,80 +447,7 @@ contains
             if( vals(i) >= vals(i-1) .and. vals(i) >= vals(i+1) ) peakpos(i) = .true.
         end do
         if( vals(n) > vals(n-1) ) peakpos(n) = .true.
-    end function peakfinder_2
-
-    subroutine peakfinder_inplace( vals, peakpos )
-        real,    intent(in)  :: vals(:)
-        logical, intent(out) :: peakpos(:)
-        integer :: n, i
-        n = size(vals)
-        peakpos = .false.
-        if( vals(1) > vals(2) )  peakpos(1) = .true.
-        do i=2,n-1
-            if( vals(i) >= vals(i-1) .and. vals(i) >= vals(i+1) ) peakpos(i) = .true.
-        end do
-        if( vals(n) > vals(n-1) ) peakpos(n) = .true.
-    end subroutine peakfinder_inplace
-    
-    ! from Numerical Recipes in Fortran 77.
-    real function quickselect(arr, k)
-        real,    intent(inout) :: arr(:)
-        integer, intent(in)    :: k
-        integer :: i,ir,j,l,mid,n
-        real    :: a,temp
-        n  = size(arr)
-        l  = 1
-        ir = n
-        do while (ir-l.gt.1)
-            mid = (l+ir)/2
-            temp = arr(mid)
-            arr(mid) = arr(l+1)
-            arr(l+1) = temp
-            if (arr(l).gt.arr(ir)) then
-                temp = arr(l)
-                arr(l) = arr(ir)
-                arr(ir) = temp
-            endif
-            if (arr(l+1).gt.arr(ir)) then
-                temp = arr(l+1)
-                arr(l+1) = arr(ir)
-                arr(ir) = temp
-            endif
-            if (arr(l).gt.arr(l+1)) then
-                temp = arr(l)
-                arr(l) = arr(l+1)
-                arr(l+1) = temp
-            endif
-            i = l+1
-            j = ir
-            a = arr(l+1)
-            do
-                i = i+1
-                if (arr(i).lt.a) cycle
-                j = j-1
-                do while (arr(j).gt.a)
-                    j=j-1
-                end do
-                if (j.lt.i) exit
-                temp = arr(i)
-                arr(i) = arr(j)
-                arr(j) = temp
-            end do
-            arr(l+1) = arr(j)
-            arr(j) = a
-            if (j.ge.k) ir = j-1
-            if (j.le.k) l = i
-        end do
-        if (ir-1.eq.1) then
-            if (arr(ir).lt.arr(l)) then
-                temp = arr(l)
-                arr(l) = arr(ir)
-                arr(ir) = temp
-            endif
-        endif
-        quickselect = arr(k)
-    end function quickselect
-
+    end function peakfinder
 
     !>   reverses an integer array
     subroutine reverse_iarr( iarr )
