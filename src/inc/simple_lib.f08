@@ -23,7 +23,7 @@ use simple_math
 use simple_ran_tabu
 use simple_rnd
 use simple_sauron
-use simple_srchsortloc
+use simple_srch_sort_loc
 use simple_strings
 use simple_stat
 use simple_timer_omp

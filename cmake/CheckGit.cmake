@@ -59,7 +59,7 @@ function(CheckGitSetup)
         BYPRODUCTS ${post_configure_file}
         )
 
-    add_library(git_version INTERFACE ${post_configure_file})
+    add_library(git_version INTERFACE)
     target_include_directories(git_version INTERFACE ${post_configure_dir})
     add_dependencies(git_version AlwaysCheckGit)
 

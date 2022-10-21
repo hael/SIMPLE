@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
+include(CheckGit)
 project(SIMPLE Fortran)
 
 set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
@@ -35,7 +36,8 @@ ProcessorCount(NUM_JOBS)
 
 set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-
+# retreive git version
+CheckGitSetup()
 # Define the main targets
 # Have the .mod files placed in the lib folder
 include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
