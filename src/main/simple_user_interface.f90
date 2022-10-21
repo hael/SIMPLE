@@ -4649,10 +4649,11 @@ contains
         &'Uniform 2D filter',&           ! descr_short
         &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                 ! executable
-        &1, 1, 0, 0, 3, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 3, 0, 1, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call uniform_2D_filter%set_input('img_ios', 1, 'stk', 'file', 'Image stack', 'Image stack', 'img_stack.mrc file', .true., '')
+        call uniform_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Image stack',     'Image stack',     'img_stk.mrc file', .true., '')
+        call uniform_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Reference stack', 'Reference stack', 'img_ref.mrc file', .true., '')
         ! parameter input/output
         call uniform_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs

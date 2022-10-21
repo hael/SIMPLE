@@ -431,10 +431,8 @@ contains
             call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
             call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
             call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
-            call optf2Dvars%diff_img_odd %copy_fast(optf2Dvars%odd_copy_rmat)
-            call optf2Dvars%diff_img_even%copy_fast(optf2Dvars%even_copy_rmat)
-            call optf2Dvars%diff_img_odd %sqeuclid_matrix(optf2Dvars%odd_filt,  optf2Dvars%diff_img_odd)
-            call optf2Dvars%diff_img_even%sqeuclid_matrix(optf2Dvars%even_filt, optf2Dvars%diff_img_even)
+            call optf2Dvars% odd_filt%sqeuclid_matrix(optf2Dvars%even_copy_rmat, optf2Dvars%diff_img_odd)
+            call optf2Dvars%even_filt%sqeuclid_matrix(optf2Dvars% odd_copy_rmat, optf2Dvars%diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             call batch_fft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
             pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
@@ -511,10 +509,8 @@ contains
             call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
             call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
             call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
-            call optf2Dvars%diff_img_odd %copy_fast(optf2Dvars%odd_copy_rmat)
-            call optf2Dvars%diff_img_even%copy_fast(optf2Dvars%even_copy_rmat)
-            call optf2Dvars%diff_img_odd %sqeuclid_matrix(optf2Dvars%odd_filt,  optf2Dvars%diff_img_odd)
-            call optf2Dvars%diff_img_even%sqeuclid_matrix(optf2Dvars%even_filt, optf2Dvars%diff_img_even)
+            call optf2Dvars% odd_filt%sqeuclid_matrix(optf2Dvars%even_copy_rmat, optf2Dvars%diff_img_odd)
+            call optf2Dvars%even_filt%sqeuclid_matrix(optf2Dvars% odd_copy_rmat, optf2Dvars%diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             call batch_fft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
             pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
@@ -646,10 +642,8 @@ contains
             call butterworth_filter( odd_filt, cur_ind, cur_fil, use_cache=.false.)
             call butterworth_filter(even_filt, cur_ind, cur_fil, use_cache=.true.)
             call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
-            call diff_img_odd% copy( odd_copy_rmat)
-            call diff_img_even%copy(even_copy_rmat)
-            call diff_img_odd% sqeuclid_matrix( odd_filt, diff_img_odd)
-            call diff_img_even%sqeuclid_matrix(even_filt, diff_img_even)
+            call  odd_filt%sqeuclid_matrix(even_copy_rmat, diff_img_odd)
+            call even_filt%sqeuclid_matrix( odd_copy_rmat, diff_img_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             call batch_fft_3D(diff_img_even, diff_img_odd, in, out, plan_fwd)
             !$omp parallel workshare
@@ -692,15 +686,14 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    function uniform_filter_2D( noisy_img, ref_img, filt_img, weights_img, butterworth_fil, low_res, nsearch, smooth_ext ) result(best_ind)
-        type(image),  intent(inout) :: filt_img, noisy_img
-        type(image),  intent(in)    :: ref_img, weights_img
+    function uniform_filter_2D( noisy_img, ref_img, tmp_filt_img, weights_img, butterworth_fil, low_res, nsearch, smooth_ext ) result(best_ind)
+        type(image),  intent(inout) :: tmp_filt_img, noisy_img, ref_img
+        type(image),  intent(in)    :: weights_img
         integer,      intent(in)    :: nsearch, smooth_ext
         real,         intent(in)    :: low_res
         real,         intent(inout) :: butterworth_fil(:)
         integer,      parameter     :: BW_ORDER = 8
-        type(image)     :: cur_filt_img
-        type(image_ptr) :: cur_filt_ptr, ref_ptr, weights_ptr
+        type(image_ptr) :: temp_filt_ptr, ref_ptr, weights_ptr
         integer         :: ldim(3), box, dim3, find_start, find_stop, iter_no, cur_ind, freq_val, m, n
         real            :: find_stepsz, smpd, best_cost, cur_cost, best_ind, val
         ! initializing parameters
@@ -714,8 +707,7 @@ contains
         ! getting weight images, supposedly fft'ed
         call weights_img%get_mat_ptrs(weights_ptr)
         ! initializing images
-        call cur_filt_img%new(ldim, smpd)
-        call cur_filt_img%get_mat_ptrs(cur_filt_ptr)
+        call tmp_filt_img%get_mat_ptrs(temp_filt_ptr)
         call      ref_img%get_mat_ptrs(ref_ptr)
         call    noisy_img%fft
         ! optimizing over the cur_ind
@@ -728,12 +720,15 @@ contains
                 butterworth_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
             enddo
             ! applying the filter to a copy of current image
-            call cur_filt_img%copy_fast(noisy_img)
-            call cur_filt_img%apply_filter(butterworth_fil)
-            cur_filt_ptr%cmat = cur_filt_ptr%cmat * weights_ptr%cmat
-            call cur_filt_img%ifft()
+            call tmp_filt_img%copy_fast(noisy_img)
+            call tmp_filt_img%apply_filter(butterworth_fil)
+            call tmp_filt_img%ifft()
+            temp_filt_ptr%rmat = (temp_filt_ptr%rmat -  ref_ptr%rmat)**2
+            call tmp_filt_img%fft()
+            temp_filt_ptr%cmat = temp_filt_ptr%cmat * weights_ptr%cmat
+            call tmp_filt_img%ifft()
             ! compute the total cost over all pixels and do the optimization
-            cur_cost = sum(cur_filt_ptr%rmat - ref_ptr%rmat)
+            cur_cost = sum(temp_filt_ptr%rmat)
             if( cur_cost < best_cost )then
                 best_cost = cur_cost
                 best_ind  = cur_ind
@@ -743,16 +738,13 @@ contains
         do freq_val = 1, size(butterworth_fil)
             butterworth_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(best_ind))
         enddo
-         ! applying the filter with the best_ind to the filt_img
-        call filt_img%copy_fast(noisy_img)
-        call filt_img%apply_filter(butterworth_fil)
-        call     filt_img%ifft
-        call    noisy_img%ifft
-        call cur_filt_img%kill
+         ! applying the filter with the best_ind to the noisy_img
+        call noisy_img%apply_filter(butterworth_fil)
+        call noisy_img%ifft
     end function uniform_filter_2D
 
-    subroutine uniform_2D_filter_sub( stk )
-        class(image),        intent(inout) :: stk(:)
+    subroutine uniform_2D_filter_sub( stk, ref ) ! put stk to even, and ref to odd in optf2Dvars
+        class(image),        intent(inout) :: stk(:), ref(:)
         type(optfilt2Dvars), allocatable   :: optf2Dvars(:)
         type(image)      :: weights_img
         real             :: smpd, lpstart, val
@@ -776,12 +768,19 @@ contains
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
             call stk(iptcl)%pad_mirr(ldim_pd)
+            call ref(iptcl)%pad_mirr(ldim_pd)
             call optf2Dvars(iptcl)%even_filt%copy(stk(iptcl))
-            call optf2Dvars(iptcl)%diff_img_even    %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)% odd_filt%copy(ref(iptcl))
+            call optf2Dvars(iptcl)%diff_img_even%new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_odd %new(ldim_pd, smpd, .false.)
             call optf2Dvars(iptcl)%diff_img_opt_even%new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_opt_odd %new(ldim_pd, smpd, .false.)
             call optf2Dvars(iptcl)%even_copy_rmat%copy(stk(iptcl))
+            call optf2Dvars(iptcl)% odd_copy_rmat%copy(ref(iptcl))
             call optf2Dvars(iptcl)%even_copy_cmat%copy(stk(iptcl))
+            call optf2Dvars(iptcl)% odd_copy_cmat%copy(ref(iptcl))
             call optf2Dvars(iptcl)%even_copy_cmat%fft
+            call optf2Dvars(iptcl)% odd_copy_cmat%fft
             optf2Dvars(iptcl)%have_mask = .false.
             allocate(optf2Dvars(iptcl)%cur_fil(box), source=0.)
         end do
@@ -799,7 +798,7 @@ contains
         ! filter
         !$omp parallel do default(shared) private(iptcl, best_ind) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
-            best_ind = uniform_filter_2D(stk(iptcl), stk(iptcl), optf2Dvars(iptcl)%even_filt, weights_img, optf2Dvars(iptcl)%cur_fil,&
+            best_ind = uniform_filter_2D(stk(iptcl), ref(iptcl), optf2Dvars(iptcl)%even_filt, weights_img, optf2Dvars(iptcl)%cur_fil,&
                                         &real(optf2Dvars(iptcl)%lplim_hres), params_glob%nsearch, params_glob%smooth_ext)
         enddo
         !$omp end parallel do
@@ -807,11 +806,17 @@ contains
         call weights_img%kill
         do iptcl = 1, nptcls
             call optf2Dvars(iptcl)%even_copy_rmat%kill
+            call optf2Dvars(iptcl)% odd_copy_rmat%kill
             call optf2Dvars(iptcl)%even_copy_cmat%kill
+            call optf2Dvars(iptcl)% odd_copy_cmat%kill
             call optf2Dvars(iptcl)%even_filt%kill
+            call optf2Dvars(iptcl)% odd_filt%kill
             call optf2Dvars(iptcl)%diff_img_even%kill
+            call optf2Dvars(iptcl)%diff_img_odd %kill
             call optf2Dvars(iptcl)%diff_img_opt_even%kill
+            call optf2Dvars(iptcl)%diff_img_opt_odd %kill
             call stk(iptcl)%clip_inplace(ldim)
+            call ref(iptcl)%clip_inplace(ldim)
         enddo
     end subroutine uniform_2D_filter_sub
 

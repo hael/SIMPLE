@@ -207,7 +207,7 @@ contains
         class(uniform_2D_filter_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: stk(:)
+        type(image),      allocatable :: stk(:), ref(:)
         type(parameters) :: params
         integer          :: iptcl
         ! init
@@ -217,18 +217,22 @@ contains
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'uniform_2D_filter_ext_'//int2str(params%smooth_ext)
         ! allocate
-        allocate(stk(params%nptcls))
+        allocate(stk(params%nptcls), ref(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call stk(iptcl)%new( params%ldim, params%smpd, .false.)
             call stk(iptcl)%read(params%stk,  iptcl)
+            call ref(iptcl)%new( params%ldim, params%smpd, .false.)
+            call ref(iptcl)%read(params%stk2, iptcl)
         enddo
         ! filter
-        call uniform_2D_filter_sub(stk)
+        call uniform_2D_filter_sub(stk, ref)
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call stk(iptcl)%write(trim(file_tag)//'_stk.mrc',  iptcl)
+            call ref(iptcl)%write(trim(file_tag)//'_ref.mrc',  iptcl)
             call stk(iptcl)%kill()
+            call ref(iptcl)%kill()
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_2D_FILTER NORMAL STOP ****')

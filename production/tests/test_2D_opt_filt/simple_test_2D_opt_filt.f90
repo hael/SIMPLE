@@ -84,12 +84,9 @@ do iptcl = 1, p%nptcls
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
     call even%stats('foreground', ave, sdev, maxv, minv)
     ! add noise in a small center region of the even
-    call noise%gauran(0., 5. * sdev)
-    call noise%mask(0.4 * p%msk, 'soft')
+    call noise%gauran(0., .2 * sdev)
+    call noise%mask(1.5 * p%msk, 'soft')
     call even%add(noise)
-    ! add background noise
-    call noise%gauran(0., 0.5 * sdev)
-    call noise%mask(1.2 * p%msk, 'soft')
     call even%add(noise)
     call even%write('stk_noisy.mrc', iptcl)
     call odd%write('stk_clean.mrc', iptcl)
@@ -143,7 +140,7 @@ do ext = 0, 20, 10
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read(p%stk2,  iptcl)
-        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -183,7 +180,7 @@ do ext = 0, 20, 10
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read('stk_clean.mrc',  iptcl)
-        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -229,7 +226,7 @@ do k = 1, size(FIL_ARR)
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read(p%stk2,  iptcl)
-        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -270,7 +267,7 @@ do k = 1, size(FIL_ARR)
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read('stk_clean.mrc',  iptcl)
-        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
