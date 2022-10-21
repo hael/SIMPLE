@@ -2,6 +2,7 @@
 module simple_math
 use simple_defs
 use simple_error, only: simple_exception
+use simple_srchsortloc
 implicit none
 
 private :: ludcmp, lubksb
@@ -49,8 +50,6 @@ interface is_even
     module procedure is_even_1
     module procedure is_even_2
 end interface
-
-
 
 interface cosedge
     module procedure cosedge_1
@@ -2410,7 +2409,7 @@ contains
         real(sp), dimension(:,:), intent(inout) :: a
         real(sp), dimension(:),   intent(out)   :: w
         real(sp), dimension(:,:), intent(out)   :: v
-        
+
         integer                        :: i,its,j,k,l,m,n,nm
         real(sp)                       :: anorm,c,f,g,h,s,scale,x,y,z
         real(sp), dimension(size(a,1)) :: tempm
