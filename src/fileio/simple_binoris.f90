@@ -1,14 +1,8 @@
 ! for manging orientation data using binary files
 module simple_binoris
+include 'simple_lib.f08'
 !$ use omp_lib
 use, intrinsic :: ISO_C_BINDING
-use simple_defs
-use simple_strings
-use simple_error
-use simple_syslib
-use simple_fileio
-use simple_defs_ori
-use simple_map_reduce, only: split_nobjs_even
 implicit none
 
 public :: binoris, binoris_seginfo

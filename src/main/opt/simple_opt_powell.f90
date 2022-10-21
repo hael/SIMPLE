@@ -4,7 +4,6 @@ module simple_opt_powell
 include 'simple_lib.f08'
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec, costfun
-
 implicit none
 
 public :: opt_powell

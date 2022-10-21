@@ -1,5 +1,4 @@
 ! continuous particle swarm optimisation
-
 module simple_opt_particle_swarm
 include 'simple_lib.f08'
 use simple_optimizer, only: optimizer

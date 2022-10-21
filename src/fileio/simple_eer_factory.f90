@@ -1,13 +1,10 @@
 module simple_eer_factory
+include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
-use simple_defs
-use simple_strings
-use simple_syslib
-use simple_fileio
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_image,      only: image
-use simple_map_reduce, only: split_nobjs_even
+use simple_image, only: image
+
 #ifdef USING_TIFF
 use simple_tifflib
 #endif
