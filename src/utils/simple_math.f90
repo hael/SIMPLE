@@ -2,7 +2,7 @@
 module simple_math
 use simple_defs
 use simple_error, only: simple_exception
-use simple_srchsortloc
+use simple_srch_sort_loc
 implicit none
 
 private :: ludcmp, lubksb
@@ -73,11 +73,6 @@ interface hardedge_inner
     module procedure hardedge_inner_2
     module procedure hardedge_inner_3
     module procedure hardedge_inner_4
-end interface
-
-interface reverse
-    module procedure reverse_iarr
-    module procedure reverse_rarr
 end interface
 
 interface nvoxfind
@@ -550,51 +545,6 @@ contains
             endif
         endif
     end subroutine put_last
-
-    !>   reverses an integer array
-    subroutine reverse_iarr( iarr )
-        integer, intent(inout) :: iarr(:) !< array for modification
-        integer                :: i, j, iswap, sz, en
-        sz = size(iarr,1)
-        if( sz < 2 )then
-            return
-        endif
-        if( mod(sz,2) == 0 )then
-            en = sz/2+1
-        else
-            en = (sz+1)/2+1
-        endif
-        j = 0
-        do i = sz,en,-1
-            j = j+1
-            iswap   = iarr(j)
-            iarr(j) = iarr(i)
-            iarr(i) = iswap
-        end do
-    end subroutine reverse_iarr
-
-    !>   reverses a real array
-    subroutine reverse_rarr( rarr )
-        real, intent(inout) :: rarr(:) !< array for modification
-        integer             :: i, j, sz, en
-        real                :: rswap
-        sz = size(rarr,1)
-        if( sz < 2 )then
-            return
-        endif
-        if( mod(sz,2) == 0 )then
-            en = sz/2+1
-        else
-            en = (sz+1)/2+1
-        endif
-        j = 0
-        do i = sz,en,-1
-            j = j+1
-            rswap   = rarr(j)
-            rarr(j) = rarr(i)
-            rarr(i) = rswap
-        end do
-    end subroutine reverse_rarr
 
     !>   implements the sortmeans algorithm
     subroutine sortmeans( dat, maxits, means, labels )

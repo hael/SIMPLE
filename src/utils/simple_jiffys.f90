@@ -59,7 +59,7 @@ contains
 
     subroutine simple_print_git_version( git_hash )
         character(len=*), intent(in) :: git_hash
-        write(logfhandle,'(A,A)') ">>> SIMPLE Version : ", git_hash
+        write(logfhandle,'(A,A)') "**** SIMPLE Git Commit: ", git_hash
     end subroutine simple_print_git_version
 
     !> \brief  is for pretty ending

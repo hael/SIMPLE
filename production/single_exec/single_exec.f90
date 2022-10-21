@@ -15,7 +15,7 @@ use simple_commander_oris
 use simple_commander_atoms
 implicit none
 #include "simple_local_flags.inc"
-! include 'git_version.inc'
+include 'git_version.inc'
 
 ! PROJECT MANAGEMENT PROGRAMS
 type(new_project_commander)                   :: xnew_project
@@ -62,9 +62,6 @@ real(timer_int_kind)                        :: rt_exec
 
 ! start timer
 t0 = tic()  
-
-! print git version
-! call simple_print_git_version(GIT_HASH)
 
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
@@ -158,6 +155,7 @@ select case(prg)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
+call simple_print_git_version(GIT_HASH)
 call update_job_descriptions_in_project( cline )
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
