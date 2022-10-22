@@ -1,8 +1,6 @@
 program simple_test_euler
 include 'simple_lib.f08'
-use simple_oris, only: oris
 use simple_sym,  only: sym
-use simple_ori,  only: ori
 implicit none
 type(oris) :: oris_obj
 type(sym)  :: pgrpsyms               !< symmetry elements object

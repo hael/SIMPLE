@@ -1,7 +1,5 @@
 program simple_test_order_corr
-use simple_oris, only: oris
-use simple_ori,  only: ori
-use simple_rnd,  only: ran3, seed_rnd
+include 'simple_lib.f08'
 implicit none
 type(oris) :: os
 type(ori)  :: o

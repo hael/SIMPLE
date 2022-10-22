@@ -2,8 +2,6 @@
 module simple_commander_oris
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_ori,            only: ori
-use simple_oris,           only: oris
 use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base

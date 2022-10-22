@@ -5,7 +5,6 @@ module simple_strategy2D_srch
 include 'simple_lib.f08'
 use simple_polarft_corrcalc,  only: pftcc_glob
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
-use simple_oris,              only: oris
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
 use simple_strategy2D_alloc   ! s2D singleton
@@ -151,7 +150,6 @@ contains
     end subroutine inpl_srch
 
     subroutine store_solution( self, nrefs )
-        use simple_ori,  only: ori
         class(strategy2D_srch), intent(in) :: self
         integer,      optional, intent(in) :: nrefs
         real :: dist, mat(2,2), u(2), x1(2), x2(2)

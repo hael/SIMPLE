@@ -2,8 +2,6 @@ module simple_starproject_utils
 include 'simple_lib.f08'
 !$ use omp_lib
 use simple_sp_project, only: sp_project
-use simple_oris, only: oris
-use simple_ori,  only: ori
 implicit none
 
 public :: LEN_LINE, LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
@@ -36,12 +34,12 @@ type star_flag
     logical                 :: imagesplit = .false.
     logical                 :: addstk     = .false.
 end type star_flag
-    
+
 type star_data
     type(star_flag), allocatable :: flags(:)
     integer                      :: flagscount = 0
     integer                      :: datastart  = 0
-    integer                      :: dataend    = 0 
+    integer                      :: dataend    = 0
 end type star_data
 
 type star_file
@@ -148,16 +146,16 @@ contains
         iend   = 1
         istart = 1
         do while (flagid <= size(splitline))
-            do while (line(istart:istart + 1) .eq. " ")         
-                istart = istart + 1           
-            end do          
+            do while (line(istart:istart + 1) .eq. " ")
+                istart = istart + 1
+            end do
             iend = index(line(istart + 1:), ' ') + istart
             splitline(flagid) = trim(adjustl(line(istart:iend)))
             istart = iend + 1
             flagid = flagid + 1
         end do
     end subroutine split_dataline
-    
+
     subroutine center_boxes(spproj, sporis)
         class(sp_project),        intent(inout) :: spproj
         class(oris),              intent(inout) :: sporis
@@ -174,7 +172,7 @@ contains
             end if
         end do
     end subroutine center_boxes
-    
+
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine h_clust(data_in, thresh,labels, centroids, populations)

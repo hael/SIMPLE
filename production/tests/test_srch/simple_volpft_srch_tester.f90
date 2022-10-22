@@ -2,7 +2,6 @@ module simple_volpft_srch_tester
 include 'simple_lib.f08'
 use simple_builder,    only: builder
 use simple_parameters, only: parameters
-use simple_ori,        only: ori
 use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_projector,  only: projector

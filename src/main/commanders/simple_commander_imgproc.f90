@@ -768,8 +768,6 @@ contains
     end subroutine exec_stack
 
     subroutine exec_stackops( self, cline )
-        use simple_oris, only: oris
-        use simple_ori,  only: ori
         use simple_stackops
         use simple_procimgstk
         class(stackops_commander), intent(inout) :: self

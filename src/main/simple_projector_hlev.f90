@@ -14,8 +14,6 @@ contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function reproject( vol, o, top ) result( imgs )
-        use simple_oris, only: oris
-        use simple_ori,  only: ori
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         integer, optional, intent(in)    :: top     !< stop index
@@ -84,7 +82,6 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, shvec ) result( rovol )
-        use simple_ori, only: ori
         class(image),   intent(inout) :: vol      !< volume to project
         class(ori),     intent(inout) :: o        !< orientation
         real, optional, intent(in)    :: shvec(3) !< 3D shift vector
@@ -114,7 +111,6 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     subroutine rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
-        use simple_ori, only: ori
         class(projector), intent(inout) :: vol_pad
         class(image),     intent(inout) :: rovol_pad, rovol
         class(ori),       intent(inout) :: o

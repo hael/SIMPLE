@@ -1,7 +1,5 @@
 program simple_test_simnano
 include 'simple_lib.f08'
-use simple_oris,       only: oris
-use simple_ori,        only: ori
 use simple_image,      only: image
 use simple_kbinterpol, only: kbinterpol
 use simple_projector,  only: projector

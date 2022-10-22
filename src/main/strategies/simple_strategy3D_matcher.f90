@@ -6,10 +6,8 @@ include 'simple_lib.f08'
 use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
 use simple_binoris_io
-use simple_oris,                    only: oris
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_kbinterpol,              only: kbinterpol
-use simple_ori,                     only: ori
 use simple_sym,                     only: sym
 use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline

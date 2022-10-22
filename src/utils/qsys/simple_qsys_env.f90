@@ -40,7 +40,6 @@ end type qsys_env
 contains
 
     subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name )
-        use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
         class(qsys_env),             intent(inout) :: self
         integer,                     intent(in)    :: nparts

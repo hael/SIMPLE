@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
@@ -166,9 +165,7 @@ contains
     end subroutine exec_print_project_info
 
     subroutine exec_print_project_vals( self, cline )
-        use simple_binoris,    only: binoris
         use simple_sp_project, only: oritype2segment
-        use simple_binoris,    only: binoris
         class(print_project_vals_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
@@ -432,8 +429,6 @@ contains
     end subroutine exec_import_boxes
 
     subroutine exec_import_particles( self, cline )
-        use simple_oris,      only: oris
-        use simple_nrtxtfile, only: nrtxtfile
         class(import_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=:),      allocatable :: phaseplate, ctfstr
@@ -762,13 +757,13 @@ contains
         ! sanity check
         n_lines = nlines(trim(params%infile))
         noris = spproj%get_n_insegment(params%oritype)
-        if( cline%defined('state') ) then 
+        if( cline%defined('state') ) then
             if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
                 write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
                 write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', noris
                 THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
                 return
-            endif   
+            endif
         else
             noris = spproj%get_n_insegment(params%oritype)
             if( noris /= n_lines )then
@@ -781,7 +776,7 @@ contains
         ! allocate states and then read the state-flags
         allocate(states(noris))
         call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
-        if( cline%defined('state') ) then 
+        if( cline%defined('state') ) then
             state = cline%get_rarg("state")
             call spproj%ptr2oritype(params%oritype, pos)
             do i=1,noris
@@ -790,7 +785,7 @@ contains
                 else
                     states(i) = 0
                 endif
-            end do      
+            end do
         else
             do i=1,n_lines
                 read(fnr,*) states(i)
@@ -961,7 +956,6 @@ contains
     end subroutine exec_scale_project_distr
 
     subroutine exec_prune_project_distr( self, cline )
-        use simple_oris,      only: oris
         class(prune_project_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
         type(parameters)              :: params
@@ -1128,10 +1122,9 @@ contains
     subroutine exec_prune_project( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_qsys_funs,  only: qsys_job_finished
-        use simple_ori,        only: ori
-        use simple_image,      only: image
-        use simple_cmdline,    only: cmdline
+        use simple_qsys_funs, only: qsys_job_finished
+        use simple_image,     only: image
+        use simple_cmdline,   only: cmdline
         class(prune_project_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params

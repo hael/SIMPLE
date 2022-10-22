@@ -26,7 +26,6 @@ end type cluster3D_refine_commander
 contains
 
     subroutine exec_cluster3D( self, cline )
-        use simple_oris,               only: oris
         use simple_sym,                only: sym
         use simple_cluster_seed,       only: gen_labelling
         use simple_commander_refine3D, only: refine3D_commander_distr
@@ -285,8 +284,6 @@ contains
     end subroutine exec_cluster3D
 
     subroutine exec_cluster3D_refine( self, cline )
-        use simple_oris,               only: oris
-        use simple_ori,                only: ori
         use simple_parameters,         only: params_glob
         use simple_commander_refine3D, only: refine3D_commander_distr
         class(cluster3D_refine_commander), intent(inout) :: self
@@ -564,7 +561,6 @@ contains
             end subroutine stash_state
 
             subroutine prep_eo_stks
-                use simple_ori, only: ori
                 type(ori)                     :: o, o_even, o_odd
                 character(len=:), allocatable :: eostk, ext
                 integer :: even_ind, odd_ind, state, icls

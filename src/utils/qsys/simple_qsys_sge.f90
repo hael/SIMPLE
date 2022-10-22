@@ -1,8 +1,7 @@
 ! batch-processing manager - SunGrid Engine
 module simple_qsys_sge
 use simple_qsys_base, only: qsys_base
-use simple_chash,     only: chash
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 public :: qsys_sge

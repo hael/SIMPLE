@@ -23,7 +23,6 @@ class(image), pointer :: vtarg => null() !< target volume (subjected to shift)
 contains
 
     subroutine vol_srch_init( vol_ref, vol_target, hp_in, lp_in, trs_in, nrestarts_in )
-        use simple_ori, only: ori
         class(image), target, intent(inout) :: vol_ref, vol_target
         real,                 intent(in)    :: hp_in, lp_in, trs_in
         integer, optional, intent(in)       :: nrestarts_in

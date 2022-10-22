@@ -7,7 +7,6 @@ use simple_parameters,     only: params_glob
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
-use simple_oris,           only: oris
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer

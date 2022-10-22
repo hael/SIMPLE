@@ -1,6 +1,5 @@
 module simple_binoris_io
 include 'simple_lib.f08'
-use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
 implicit none
 
@@ -47,7 +46,6 @@ contains
     end subroutine binread_ctfparams_state_eo
 
     function binread_nlines( fname ) result( nl )
-        use simple_binoris,    only: binoris
         use simple_parameters, only: params_glob
         character(len=*), intent(in) :: fname
         integer       :: nl

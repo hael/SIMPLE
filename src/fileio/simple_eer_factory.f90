@@ -4,7 +4,6 @@ use, intrinsic :: iso_c_binding
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_image, only: image
-
 #ifdef USING_TIFF
 use simple_tifflib
 #endif

@@ -6,8 +6,6 @@ use simple_cmdline,                        only: cmdline
 use simple_parameters,                     only: parameters, params_glob
 use simple_commander_base,                 only: commander_base
 use simple_image,                          only: image
-use simple_ori,                            only: ori
-use simple_oris,                           only: oris
 use simple_sp_project,                     only: sp_project
 use simple_qsys_env,                       only: qsys_env
 use simple_stack_io,                       only: stack_io
@@ -521,7 +519,7 @@ contains
                         beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
                         tiltx = str2real(getTextContent(beamtiltnodex))
                         tilty = str2real(getTextContent(beamtiltnodey))
-                        call destroy(xmldoc) 
+                        call destroy(xmldoc)
                     end if
                 end if
                 ext        = fname2ext(trim(movie_here))
@@ -553,7 +551,6 @@ contains
             !>  import previous run to the current project based on past single project files
             ! TO DOUBLE-CHECK
             subroutine import_prev_streams
-                use simple_ori, only: ori
                 type(sp_project) :: streamspproj
                 type(ori)        :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)

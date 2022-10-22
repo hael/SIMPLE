@@ -1,8 +1,6 @@
 program simple_test_sym
 include 'simple_lib.f08'
 use simple_sym,  only: sym, sym_tester
-use simple_oris, only: oris
-use simple_ori,  only: ori
 use simple_timer
 implicit none
 type(sym)                     :: se

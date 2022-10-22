@@ -5,7 +5,6 @@ use simple_binoris_io
 use simple_image,            only: image
 use simple_binimage,         only: binimage
 use simple_sp_project,       only: sp_project
-use simple_oris,             only: oris
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
 use simple_sym,              only: sym

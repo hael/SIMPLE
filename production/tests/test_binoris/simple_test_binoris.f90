@@ -1,8 +1,5 @@
 program simple_test_binoris
 include 'simple_lib.f08'
-use simple_oris,         only: oris
-use simple_map_reduce,   only: split_nobjs_even
-use simple_strings,      only: int2str
 implicit none
 type(oris)         :: a1, a2, os_peak1, os_peak2
 !type(binoris)      :: bos

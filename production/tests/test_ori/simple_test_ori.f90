@@ -1,10 +1,6 @@
 program simple_test_ori
 include 'simple_lib.f08'
-use simple_ori,  only: ori
-use simple_oris, only: oris
-use simple_binoris
 use simple_sp_project
-
 implicit none
 type(sp_project) :: spproj, spproj2
 type(oris)                :: os, os2

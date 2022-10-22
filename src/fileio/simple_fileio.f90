@@ -1,9 +1,8 @@
 module simple_fileio
 use simple_defs
-use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-use simple_error,   only: simple_exception, simple_error_check
-use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_abspath,&
-&exec_cmdline, del_file
+use simple_strings
+use simple_error
+use simple_syslib
 implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
@@ -885,7 +884,7 @@ contains
         integer                       :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
         logical                       :: checkexists_here
         checkexists_here = .true.
-        if( present(checkexists) ) checkexists_here = checkexists 
+        if( present(checkexists) ) checkexists_here = checkexists
         ! get absolute filename if necessary
         if( fname(1:1).eq.'/' )then
             ! was already absolute

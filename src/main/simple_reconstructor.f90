@@ -2,13 +2,10 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
-use simple_ori,           only: ori
-use simple_oris,          only: oris
-use simple_sym,           only: sym
-use simple_kbinterpol,    only: kbinterpol
-use simple_image,         only: image
-use simple_parameters,    only: params_glob
-use simple_fftw3
+use simple_sym,        only: sym
+use simple_kbinterpol, only: kbinterpol
+use simple_image,      only: image
+use simple_parameters, only: params_glob
 implicit none
 
 public :: reconstructor

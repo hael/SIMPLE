@@ -404,9 +404,7 @@ class(parameters), pointer :: params_glob => null()
 contains
 
     subroutine new( self, cline, silent )
-        use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
-        use simple_binoris,    only: binoris
         class(parameters), target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent

@@ -3,7 +3,6 @@ module simple_polarft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_fftw3
 use simple_parameters, only: params_glob
 implicit none
 

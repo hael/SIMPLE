@@ -1,25 +1,12 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple timer module using OpenMP functions
-!!
-!! \author
-!!     Michael Eager
-!! Original version: 2017-03-15
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
 module simple_timer_omp
-   use simple_defs
+use simple_defs
 !$   use omp_lib
-   implicit none
-   real(dp), save :: last_time_point_mp = REAL(0., dp) !< Starting timesamp
-   public :: tic_omp, tickrate_omp
-   public :: toc_omp, tdiff_omp, tocprint_omp
-   public :: now_omp, reset_timer_omp
-   public :: last_time_point_mp
+implicit none
+real(dp), save :: last_time_point_mp = REAL(0., dp) !< Starting timesamp
+public :: tic_omp, tickrate_omp
+public :: toc_omp, tdiff_omp, tocprint_omp
+public :: now_omp, reset_timer_omp
+public :: last_time_point_mp
 private
 #include "simple_local_flags.inc"
 
@@ -92,4 +79,5 @@ contains
       write (*, '(A,A,A,A,A,A,A)') 'Date: ', date(7:8), '-', date(5:6), '-', date(1:4), '\n'
       write (*, '(A,A,A,A,A,A,A)') 'Time: ', time(1:2), ':', time(3:4), ':', time(5:10), '\n'
    endsubroutine now_omp
+
 end module simple_timer_omp

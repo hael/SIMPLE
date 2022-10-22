@@ -1151,7 +1151,6 @@ contains
     end subroutine exec_cavgassemble
 
     subroutine exec_rank_cavgs( self, cline )
-        use simple_oris, only: oris
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)     :: params
@@ -1680,7 +1679,6 @@ contains
     subroutine check_2Dconv( cline, os )
         use simple_convergence, only: convergence
         use simple_parameters,  only: params_glob
-        use simple_oris,        only: oris
         class(cmdline), intent(inout) :: cline
         class(oris),    intent(inout) :: os
         type(parameters)  :: params

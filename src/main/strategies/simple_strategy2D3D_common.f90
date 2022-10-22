@@ -206,7 +206,6 @@ contains
     subroutine grid_ptcl( fpl, se, o )
         use simple_fplane, only: fplane
         use simple_sym,    only: sym
-        use simple_ori,    only: ori
         class(fplane),   intent(in) :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o

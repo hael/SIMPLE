@@ -1,8 +1,7 @@
 ! stack image processing routines for SPIDER/MRC files
 module simple_stackops
 include 'simple_lib.f08'
-use simple_image,   only: image
-use simple_oris,    only: oris
+use simple_image, only: image
 implicit none
 
 public :: make_pattern_stack, prep_imgfile4movie

@@ -2,8 +2,6 @@ module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
-use simple_oris,             only: oris
-use simple_ori,              only: ori
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none

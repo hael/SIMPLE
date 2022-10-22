@@ -1,11 +1,11 @@
 program simple_test_shiftsrch
+include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_cmdline,          only: cmdline
 use simple_builder,          only: builder
 use simple_image,            only: image
 use simple_parameters,       only: parameters
 use simple_polarizer,        only: polarizer
-use simple_defs
 implicit none
 type(cmdline)          :: cline
 type(builder)          :: b

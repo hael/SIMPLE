@@ -1,5 +1,5 @@
 program simple_test_tseries_neigh
-use simple_oris, only:oris
+include 'simple_lib.f08'
 implicit none
 
 type(oris) :: os

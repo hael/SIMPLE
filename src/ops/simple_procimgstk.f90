@@ -2,7 +2,6 @@
 module simple_procimgstk
 include 'simple_lib.f08'
 use simple_image,    only: image
-use simple_oris,     only: oris
 use simple_stack_io, only: stack_io
 use simple_tvfilter
 implicit none
@@ -604,7 +603,6 @@ contains
     end subroutine nlmean_imgfile
 
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
-        use simple_oris,  only: oris
         use simple_ctf,   only: ctf
         character(len=*), intent(in)    :: fname2process, fname
         class(oris),      intent(inout) :: o
@@ -695,7 +693,6 @@ contains
     end subroutine taper_edges_imgfile
 
    subroutine shift_imgfile( fname2shift, fname, o, smpd, mul )
-       use simple_oris, only: oris
        character(len=*),  intent(in)    :: fname2shift, fname
        class(oris),       intent(inout) :: o
        real,              intent(in)    :: smpd

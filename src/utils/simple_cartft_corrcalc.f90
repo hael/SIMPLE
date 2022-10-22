@@ -5,7 +5,6 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 use simple_projector,  only: projector
-use simple_ori,        only: ori
 implicit none
 
 public :: cartft_corrcalc, cartftcc_glob
