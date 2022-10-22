@@ -1,7 +1,6 @@
 ! window functions for Fourier interpolation
 module simple_winfuns
 use simple_defs
-
 implicit none
 
 public :: winfuns

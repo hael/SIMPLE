@@ -1,8 +1,5 @@
 module simple_sp_project
 include 'simple_lib.f08'
-use simple_ori,     only: ori
-use simple_oris,    only: oris
-use simple_binoris, only: binoris, binoris_seginfo
 implicit none
 
 public :: sp_project, oritype2segment
@@ -1870,7 +1867,7 @@ contains
                 nullify(pos)
         end select
     end function get_n_insegment
-    
+
     integer function get_n_insegment_state( self, oritype, state )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -1896,7 +1893,7 @@ contains
         enddo
         nullify(pos)
     end function get_n_insegment_state
-    
+
     integer function get_nptcls( self )
         class(sp_project), target, intent(inout) :: self
         integer :: i, nos
@@ -2674,7 +2671,6 @@ contains
     end subroutine map2ptcls_state
 
     subroutine replace_project( self, projfile_src, oritype )
-        use simple_ori, only: ori
         class(sp_project),     intent(inout) :: self
         character(len=*),      intent(in)    :: projfile_src
         character(len=STDLEN), intent(in)    :: oritype
@@ -2810,7 +2806,6 @@ contains
 
     ! projects are assumed read in
     subroutine merge_stream_projects( self, self2merge )
-        use simple_ori, only: ori
         class(sp_project), intent(inout) :: self, self2merge
         type(ctfparams)                  :: ctfvars, ctfvars2merge
         type(ori)                        :: o
@@ -2962,7 +2957,6 @@ contains
         contains
 
             subroutine movefile2folder(key, folder, o, err)
-                use simple_ori, only: ori
                 character(len=*), intent(in)    :: key, folder
                 class(ori),       intent(inout) :: o
                 logical,          intent(out)   :: err
@@ -3187,7 +3181,7 @@ contains
                     case('out')
                         call self%os_out%read(fname)
                     case('optics')
-                        call self%os_optics%read(fname)   
+                        call self%os_optics%read(fname)
                     case('projinfo')
                         call self%projinfo%read(fname)
                     case('jobproc')
@@ -3434,7 +3428,7 @@ contains
                             call self%os_optics%write(fname)
                         else
                             THROW_WARN('no optics-type oris available to write; write_segment2txt')
-                        endif  
+                        endif
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
@@ -3549,7 +3543,7 @@ contains
                     end do
                 else
                     write(logfhandle,*) 'No optics-type oris available to print; sp_project :: print_segment'
-                endif  
+                endif
             case('projinfo')
                 noris = self%projinfo%get_noris()
                 if( noris > 0 )then
@@ -3605,7 +3599,7 @@ contains
             case(OUT_SEG)
                 call self%bos%write_segment(isegment, self%os_out)
             case(OPTICS_SEG)
-                call self%bos%write_segment(isegment, self%os_optics)   
+                call self%bos%write_segment(isegment, self%os_optics)
             case(PROJINFO_SEG)
                 call self%bos%write_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
@@ -3681,7 +3675,7 @@ contains
             case('out')
                 oritype2segment = OUT_SEG
             case('optics')
-                oritype2segment = OPTICS_SEG  
+                oritype2segment = OPTICS_SEG
             case('projinfo')
                 oritype2segment = PROJINFO_SEG
             case('jobproc')
@@ -3712,7 +3706,7 @@ contains
             case(OUT_SEG)
                 oritype = 'out'
             case(OPTICS_SEG)
-                oritype = 'optics'   
+                oritype = 'optics'
             case(PROJINFO_SEG)
                 oritype = 'projinfo'
             case(JOBPROC_SEG)
@@ -3747,7 +3741,7 @@ contains
             case(OUT_SEG)
                 info = info//'crtitical project outputs: class averages, 3D volumes, FSC/FRC files etc.'
             case(OPTICS_SEG)
-                info = info//'optics group information.'   
+                info = info//'optics group information.'
             case(PROJINFO_SEG)
                 info = info//'information about the project, project name etc.'
             case(JOBPROC_SEG)

@@ -8,7 +8,6 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: reproject, rotvol
-use simple_ori,            only: ori
 use simple_masker,         only: masker
 use simple_projector,      only: projector
 use simple_volprep,        only: read_and_prep_vol
@@ -408,7 +407,6 @@ contains
 
     subroutine exec_dock_volpair( self, cline )
         use simple_vol_srch
-        use simple_oris, only: oris
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         real,  parameter :: SHSRCH_HWDTH  = 5.0
@@ -515,8 +513,6 @@ contains
     subroutine exec_symaxis_search( self, cline )
         use simple_volpft_symsrch
         use simple_sym,  only: sym
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
         class(symaxis_search_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)

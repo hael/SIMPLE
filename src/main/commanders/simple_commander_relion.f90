@@ -4,7 +4,6 @@ use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_relion,         only: relion_project
-use simple_oris,           only: oris
 use simple_parameters,     only: parameters, params_glob
 implicit none
 

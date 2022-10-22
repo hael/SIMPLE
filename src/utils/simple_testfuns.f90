@@ -1,4 +1,4 @@
-! provides 20 mathematical test functions for evaluating unconstrained optimization procedures. 
+! provides 20 mathematical test functions for evaluating unconstrained optimization procedures.
 ! 1-9 are generalized test functions (of arbitrary dimension) whereas functions 10-20 are
 ! two-dimensional test functions.
 !
@@ -7,7 +7,7 @@
 !! http://www.sfu.ca/~ssurjano/optimization.html
 !
 module simple_testfuns
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 !>  \brief  defines the test function interface
@@ -353,8 +353,8 @@ contains
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-10,10]
     function testfun3( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
-        integer, intent(in) :: d        
+        class(*), intent(inout) :: fun_self
+        integer, intent(in) :: d
         real, intent(in)    :: x(d)
         real                :: w(d)
         integer :: i
@@ -376,7 +376,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
     function testfun4( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -392,7 +392,7 @@ contains
     !!          search domain: [-500,500]
     !!          characteristics: highly complex, with many local minima
     function testfun5( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self                
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -409,7 +409,7 @@ contains
     !!          search domain: [-100,100]
     !!          characteristics: highly multimodal
     function testfun6( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self                
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -427,7 +427,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
     function testfun7( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -442,7 +442,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
     function testfun8( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -457,7 +457,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-1,1]
     function testfun9( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self                
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -472,7 +472,7 @@ contains
     !!          global minimum: f(1,1/2,1/3,...,1/d) = 0
     !!          search domain: [-d,d]
     function testfun10( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i, j
@@ -496,7 +496,7 @@ contains
     !!          search domain: [-d,d]
     !!          characteristics: wavy bowl
     function testfun11( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i, j
@@ -518,7 +518,7 @@ contains
     !!          search domain: [-5,5]
     !!          characteristics: wavy bowl
     function testfun12( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -535,7 +535,7 @@ contains
     !!          search domain: [-10.24,10.24]
     !!          characteristics: wavy bowl
     function testfun13( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i,j
@@ -555,7 +555,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5,10]
     function testfun14( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -576,7 +576,7 @@ contains
     !!          global minimum: f(x(1),...,x(d)) = 0 at x(i) = 2**(-(2**i-2)/(2**i))
     !!          search domain: [-10,10]
     function testfun15( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -592,7 +592,7 @@ contains
     !!          search domain: [-5,10]
     !!          can be restricted to: [-2.048,2.048]
     function testfun16( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -609,7 +609,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-100,100]
     function testfun17( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -642,7 +642,7 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
     function testfun18( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -665,7 +665,7 @@ contains
     !!          The presence of many flat plateus and steep ridges presents
     !!          difficulties for algorithms based on gradient information
     function testfun19( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -685,7 +685,7 @@ contains
     !!          global minimum: f(0,0) = -1
     !!          search domain: [-5.12,5.12]
     function testfun20( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, frac1, frac2
@@ -698,7 +698,7 @@ contains
     !!         global minimum: f(512,404.2319) = -959.6407
     !!         search domain: [-512,512]
     function testfun21( fun_self, x, d )result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -712,7 +712,7 @@ contains
     !!          global minimum: f(-8.05502,-9.66459) = -19.2085
     !!          search domain: [-10,10]
     function testfun22( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, fact1, fact2
@@ -725,7 +725,7 @@ contains
     !!          global minimum: f(1,1) = 0
     !!          search domain: [-10,10]
     function testfun23( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3
@@ -739,7 +739,7 @@ contains
     !!         global minimum: f(0,0) = 0
     !!         search domain: [-100,100]
     function testfun24( fun_self, x, d )result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -750,7 +750,7 @@ contains
     !!         global minimum: f(0,1.25313) = 0.292579
     !!         search domain: [-100,100]
     function testfun25( fun_self, x, d )result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -761,7 +761,7 @@ contains
     !!         global minimum: f(unknonw) = -186.7309
     !!         search domain: [-5.12,5.12]
     function testfun26( fun_self, x, d )result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real    :: r, sum1, sum2, ii
@@ -782,7 +782,7 @@ contains
     !!          global minimum: f(1,3) = 0
     !!          search domain: [-10,10]
     function testfun27( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -793,7 +793,7 @@ contains
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-10,-10]
     function testfun28( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -806,7 +806,7 @@ contains
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-5,-5]
     function testfun29( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -818,7 +818,7 @@ contains
     !!          global minimum: f(-0.0898,0.7126) = -1.0316
     !!          search domain: [-3,-3]
     function testfun30( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3
@@ -835,7 +835,7 @@ contains
     !!          search domain: [-4.5,4.5]
     !!          characteristics: plateued bowl
     function testfun31( fun_self, x, d ) result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -847,7 +847,7 @@ contains
     !!         search domain: [-2,2]
     !!         characteristics: plateued humps
     function testfun32( fun_self, x, d )result( r )
-        class(*), intent(inout) :: fun_self        
+        class(*), intent(inout) :: fun_self
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3, term4

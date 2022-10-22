@@ -2,8 +2,6 @@ program simple_test_units
 include 'simple_lib.f08'
 use simple_testfuns      ! use all in there
 use simple_ftiter,       only: test_ftiter
-use simple_ori,          only: test_ori
-use simple_oris,         only: test_oris
 use simple_image,        only: test_image
 use simple_args,         only: test_args
 use simple_online_var,   only: test_online_var
@@ -130,7 +128,6 @@ contains
     end subroutine
 
     subroutine test_euler_shift
-        use simple_ori, only: ori
         type(ori) :: o
         integer   :: i
         real      :: euls(3), euls_shifted(3)

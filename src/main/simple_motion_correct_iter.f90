@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_parameters,   only: params_glob
-use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
 use simple_motion_correct
 implicit none

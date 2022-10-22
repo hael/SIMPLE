@@ -14,7 +14,6 @@ private
 contains
 
     subroutine extract_peak_ori( s )
-        use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         type(ori) :: osym, o_prev, o_new
         integer   :: ref, inpl, state, neff_states, loc(1), nrefs_eval, nrefs_tot

@@ -37,7 +37,6 @@ contains
 
     !>  \brief search driver
     subroutine srch_cluster3D( self, ithr )
-        use simple_ori, only: ori
         class(strategy3D_cluster), intent(inout) :: self
         integer,                   intent(in)    :: ithr
         type(ori) :: o

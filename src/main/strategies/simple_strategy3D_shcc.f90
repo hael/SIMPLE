@@ -8,7 +8,6 @@ use simple_builder,         only: build_glob
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
 use simple_cartft_corrcalc, only: cartftcc_glob
-use simple_ori,             only: ori
 implicit none
 
 public :: strategy3D_shcc

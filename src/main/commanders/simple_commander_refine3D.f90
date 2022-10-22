@@ -4,8 +4,6 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
-use simple_ori,              only: ori
-use simple_oris,             only: oris
 use simple_parameters,       only: parameters
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env

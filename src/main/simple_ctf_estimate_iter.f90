@@ -21,7 +21,6 @@ end type ctf_estimate_iter
 contains
 
     subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
-        use simple_ori, only: ori
         class(ctf_estimate_iter), intent(inout) :: self
         class(ctfparams),         intent(inout) :: ctfvars
         character(len=*),         intent(in)    :: moviename_forctf

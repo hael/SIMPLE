@@ -114,29 +114,3 @@ endforeach()
     endif()
   endif()
 endforeach(TESTNAME)
-
-# Default CTest tests
-list(APPEND CTESTDIRS
-  simple_test_ansi_colors
-  simple_test_binoris
-  simple_test_corrs2weights
-  simple_test_extr_frac
-  simple_test_fileio
-  simple_test_inside_write
-  simple_test_imgfile
-  simple_test_list_files
-  simple_test_maxnloc
-  simple_test_multinomal
-  simple_test_order_corr
-  simple_test_phaseplate_correct_fsc
-  simple_test_simd
-  simple_test_sp_project
-  simple_test_sym
-  simple_test_units )
-
-foreach(CHECKUNIT ${CTESTDIRS})
-add_test(NAME ${CHECKUNIT}
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/Testing
-  COMMAND ../bin/${CHECKUNIT}  nthr=4 verbose=yes)
-add_dependencies( check ${CHECKUNIT} )
-endforeach()

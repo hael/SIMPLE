@@ -6,8 +6,6 @@ module simple_projector
 include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
-use simple_ori,        only: ori
-use simple_oris,       only: oris
 use simple_parameters, only: params_glob
 implicit none
 

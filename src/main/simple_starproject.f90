@@ -3,8 +3,6 @@ include 'simple_lib.f08'
 !$ use omp_lib
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
-use simple_oris,       only: oris
-use simple_ori,        only: ori
 use simple_parameters, only: params_glob
 use simple_starproject_utils
 use CPlot2D_wrapper_module
@@ -58,7 +56,7 @@ contains
 
     subroutine initialise( self )
         class(starproject),  intent(inout) :: self
-    
+
         ! assign optics flags
         if (.not. allocated(self%starfile%optics%flags)) allocate(self%starfile%optics%flags(0))
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnVoltage", splflag="kv")]
@@ -69,7 +67,7 @@ contains
       !  self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnMicrographPixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImagePixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImageSize", splflag="box", int=.true.)]
-    
+
         ! assign micrographs flags
         if (.not. allocated(self%starfile%micrographs%flags)) allocate(self%starfile%micrographs%flags(0))
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographMovieName", splflag="movie", string=.true.)]
@@ -92,7 +90,7 @@ contains
         if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
         self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnImageName", splflag="stk", string=.true., imagesplit=.true., splflag2="stkind")]
         self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
-    
+
         ! assign particles 2D flags
         if (.not. allocated(self%starfile%particles2D%flags)) allocate(self%starfile%particles2D%flags(0))
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
@@ -107,7 +105,7 @@ contains
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
-    
+
         ! assign particles 3D flags
         if (.not. allocated(self%starfile%particles3D%flags)) allocate(self%starfile%particles3D%flags(0))
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
@@ -124,13 +122,13 @@ contains
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
-    
+
         ! assign clusters2D flags
         if (.not. allocated(self%starfile%clusters2D%flags)) allocate(self%starfile%clusters2D%flags(0))
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnReferenceImage", splflag="stk", string=.true., imagesplit=.true., splflag2="class")]
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnEstimatedResolution", splflag="res")]
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop", int=.true.)]
-        
+
     end subroutine initialise
 
     ! import
@@ -165,12 +163,12 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        
+
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
             write(logfhandle,*)
-        endif 
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -214,7 +212,7 @@ contains
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls3D"
             write(logfhandle,*)
-        endif 
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -251,7 +249,7 @@ contains
         else
             call sporis%new(stardata%dataend - stardata%datastart, .false.)
         end if
-        call fopen(fhandle, file=trim(adjustl(self%starfile%filename)), status='old') 
+        call fopen(fhandle, file=trim(adjustl(self%starfile%filename)), status='old')
         do lineindex = 1,stardata%datastart - 1
             read(fhandle, '(A)', iostat=ios) line
         end do
@@ -260,22 +258,22 @@ contains
                 projindex = self%starfile%stkmap(lineindex, 2)
             else
                 projindex = lineindex
-            end if     
-            read(fhandle, '(A)', iostat=ios) line  
+            end if
+            read(fhandle, '(A)', iostat=ios) line
             call split_dataline(line, splitline)
-            do flagsindex = 1,size(stardata%flags)    
+            do flagsindex = 1,size(stardata%flags)
                 if(stardata%flags(flagsindex)%present) then
                     if(stardata%flags(flagsindex)%imagesplit) then
                         splitimage = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                         if(.not. stardata%flags(flagsindex)%splflag2 == "") then
                             entrystr = splitimage(1:index(splitimage, "@") - 1)
-                            read(entrystr,*) ival   
+                            read(entrystr,*) ival
                             call sporis%set(projindex, stardata%flags(flagsindex)%splflag2, real(ival))
                         end if
                         entrystr = splitimage(index(splitimage, "@") + 1:)
                     else
                         entrystr = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
-                    end if 
+                    end if
                     if(stardata%flags(flagsindex)%string) then
                         if(index(entrystr, "/") > 1) then ! handles leading slash of absolute paths
                             if(index(self%starfile%rootdir, "job") > 0) then ! relion
@@ -292,21 +290,21 @@ contains
                             call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
                         end if
                     elseif(stardata%flags(flagsindex)%int) then
-                        read(entrystr,*) ival   
+                        read(entrystr,*) ival
                         if(stardata%flags(flagsindex)%mult > 0) then
                             ival = ival * stardata%flags(flagsindex)%mult
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, real(ival))
                     else
-                        read(entrystr,*) rval   
+                        read(entrystr,*) rval
                         if(stardata%flags(flagsindex)%mult > 0) then
                             rval = rval * stardata%flags(flagsindex)%mult
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, rval)
                     end if
-                    
-                end if 
-            end do            
+
+                end if
+            end do
             if(present(spoptics)) then
                 ogid = sporis%get(lineindex, "ogid")
                 if(ogid > 0) then
@@ -315,7 +313,7 @@ contains
                     call sporis%get_ori(lineindex, spori)
                     call spori%append_ori(opticsori)
                     call sporis%set_ori(lineindex, spori)
-                end if 
+                end if
             end if
             if(isptcl) then
                 call sporis%set(projindex, "stkind", real(self%starfile%stkmap(lineindex, 1)))
@@ -396,7 +394,7 @@ contains
         flagsopen = .false.
         dataopen  = .false.
         lineindex = 1
-        call fopen(fhandle, file=trim(adjustl(self%starfile%filename)), status='old')  
+        call fopen(fhandle, file=trim(adjustl(self%starfile%filename)), status='old')
         do
             read(fhandle, '(A)', iostat=ios) line
             if(ios /= 0) exit
@@ -433,9 +431,9 @@ contains
                             self%starfile%stacks%flagscount = self%starfile%stacks%flagscount + 1
                         case ("model_classes")
                             call enable_rlnflag(flagname, self%starfile%clusters2D%flags, flagindex)
-                            self%starfile%clusters2D%flagscount = self%starfile%clusters2D%flagscount + 1 
+                            self%starfile%clusters2D%flagscount = self%starfile%clusters2D%flagscount + 1
                     end select
-                
+
                 else if(flagsopen .AND. index(line, "loop_") == 0) then
                     dataopen = .true.
                     flagsopen = .false.
@@ -447,8 +445,8 @@ contains
                         case ("particles")
                             self%starfile%particles2D%datastart = lineindex
                             self%starfile%particles3D%datastart = lineindex
-                            self%starfile%stacks%datastart      = lineindex 
-                        case ("model_classes")  
+                            self%starfile%stacks%datastart      = lineindex
+                        case ("model_classes")
                             self%starfile%clusters2D%datastart  = lineindex
                     end select
                 end if
@@ -711,14 +709,14 @@ contains
                 beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
                 self%tiltinfo(i)%tiltx = str2real(getTextContent(beamtiltnodex))
                 self%tiltinfo(i)%tilty = str2real(getTextContent(beamtiltnodey))
-                call destroy(xmldoc)   
+                call destroy(xmldoc)
             else
-                if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml does not exist. Ignoring'  
+                if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml does not exist. Ignoring'
             end if
         end do
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_xml_tiltinfo
-  
+
     subroutine cluster_tiltinfo(self, threshold)
         class(starproject), intent(inout) :: self
         real,               intent(in)    :: threshold
@@ -786,7 +784,7 @@ contains
             call self%sort_optics_maxpop(int(cline%get_rarg("maxpop")))
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups (after splitting on maxpop) ... "
-            call self%plot_opticsgroups("optics_groups_post_maxpop.eps") 
+            call self%plot_opticsgroups("optics_groups_post_maxpop.eps")
         else
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups ... "
@@ -835,11 +833,11 @@ contains
                 call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
-        
+
         if(size(self%tiltinfo) > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file ... "
-            
+
             call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, is_ptcl=.false.)
             do i = minval(self%tiltinfo%finaltiltgroupid), maxval(self%tiltinfo%finaltiltgroupid)
                 element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
@@ -856,7 +854,7 @@ contains
                 end if
             end do
         end if
-       
+
         deallocate(self%tiltinfo)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_optics
@@ -871,7 +869,7 @@ contains
             self%starfile%opticsmap(int(opticsoris%get(i, "ogid"))) = i
         end do
     end subroutine populate_opticsmap
-  
+
     subroutine plot_opticsgroups(self, fname_eps)
         class(starproject), intent(inout) :: self
         character(len=*),   intent(in)    :: fname_eps
@@ -885,11 +883,11 @@ contains
         call CPlot2D__SetDrawXAxisGridLines(plot2D, C_TRUE)
         call CPlot2D__SetDrawYAxisGridLines(plot2D, C_TRUE)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_TRUE)  
+        call CPlot2D__SetFlipY(plot2D, C_TRUE)
         title%str = 'Beamshift_X'//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         title%str = 'Beamshift_Y'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str) 
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
         do i=1, maxval(self%tiltinfo%finaltiltgroupid)
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_TRUE)
@@ -907,7 +905,7 @@ contains
         call CPlot2D__delete(plot2D)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_eps
     end subroutine plot_opticsgroups
-  
+
     subroutine sort_optics_maxpop(self, maxpop)
         class(starproject), intent(inout) :: self
         integer,            intent(in)    :: maxpop
@@ -928,7 +926,7 @@ contains
         end do
         deallocate(nextidpop)
     end subroutine sort_optics_maxpop
-    
+
     subroutine apply_optics_offset(self, offset)
         class(starproject), intent(inout) :: self
         integer,            intent(in)    :: offset
@@ -963,7 +961,7 @@ contains
             end if
             call sporis%set(i, "bsname", trim(adjustl(filename)))
             tiltind = findloc(self%tiltinfo%basename, filename, 1)
-            if(tiltind == 0) then    
+            if(tiltind == 0) then
                 tiltinfo%basename = filename
                 tiltinfo%smpd     = sporis%get(i, "smpd")
                 tiltinfo%kv       = sporis%get(i, "kv")
@@ -988,10 +986,10 @@ contains
             end if
         end do
     end subroutine get_image_basename
-    
+
     subroutine set_verbose(self)
         class(starproject), intent(inout) :: self
         VERBOSE_OUTPUT = .true.
     end subroutine set_verbose
-    
+
 end module simple_starproject

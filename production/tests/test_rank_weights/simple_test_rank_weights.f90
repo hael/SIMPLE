@@ -1,7 +1,6 @@
 program simple_test_rank_weights
 use gnufor2, only: plot
-use simple_stat
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 real    :: ranks(200), weights(200)
 integer :: i

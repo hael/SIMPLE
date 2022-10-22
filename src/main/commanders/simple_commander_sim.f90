@@ -5,7 +5,6 @@ use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_image,          only: image
-use simple_ori,            only: ori
 use simple_ctf,            only: ctf
 use simple_simulator,      only: simimg
 use simple_commander_base, only: commander_base
@@ -73,7 +72,6 @@ contains
     subroutine exec_simulate_particles( self, cline )
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
-        use simple_oris,       only: oris
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params

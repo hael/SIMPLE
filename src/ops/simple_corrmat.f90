@@ -3,7 +3,7 @@
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
+include 'simple_lib.f08'
 use simple_error,  only: simple_exception
 use simple_jiffys, only: progress
 use simple_image,  only: image

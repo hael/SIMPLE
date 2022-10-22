@@ -2,7 +2,6 @@ module simple_commander_atoms
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_image,          only: image
 use simple_binimage,       only: binimage

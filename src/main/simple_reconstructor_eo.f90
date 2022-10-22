@@ -1,8 +1,6 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 include 'simple_lib.f08'
-use simple_ori,           only: ori
-use simple_oris,          only: oris
 use simple_sym,           only: sym
 use simple_reconstructor, only: reconstructor
 use simple_masker,        only: masker

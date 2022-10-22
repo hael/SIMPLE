@@ -1,7 +1,6 @@
 ! for checking convergence
 module simple_convergence
 include 'simple_lib.f08'
-use simple_oris,       only: oris
 use simple_parameters, only: params_glob
 use simple_builder,    only: build_glob
 use simple_cmdline,    only: cmdline

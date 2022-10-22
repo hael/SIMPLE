@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: params_glob
-use simple_ori,        only: ori
 implicit none
 
 public :: pspec_thumb_iter

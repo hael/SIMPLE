@@ -1,6 +1,5 @@
 program simple_test_graphene_mask
-use simple_math_ft
-use simple_defs
+include 'simple_lib.f08'
 use simple_estimate_ssnr
 implicit none
 integer, parameter   :: box  = 160

@@ -157,7 +157,6 @@ contains
     end subroutine automask3D_otsu
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
-        use simple_oris,  only: oris
         use simple_atoms, only: atoms
         class(masker),              intent(inout) :: self
         type(atoms),                intent(inout) :: pdb
@@ -219,7 +218,6 @@ contains
 
     !>  \brief  volume mask projector
     subroutine env_rproject(self, e, img)
-        use simple_ori,    only: ori
         class(masker), intent(inout) :: self   !< projector instance
         class(ori),    intent(inout) :: e      !< Euler angle
         type(image),   intent(inout) :: img    !< resulting projection image

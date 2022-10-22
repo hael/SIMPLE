@@ -5,8 +5,6 @@ module simple_volpft_corrcalc
 include 'simple_lib.f08'
 use simple_projector, only: projector
 use simple_sym,       only: sym
-use simple_ori,       only: ori
-use simple_oris,      only: oris
 implicit none
 
 public :: volpft_corrcalc

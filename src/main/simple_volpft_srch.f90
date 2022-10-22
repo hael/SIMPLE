@@ -6,8 +6,6 @@ include 'simple_lib.f08'
 use simple_opt_spec,        only: opt_spec
 use simple_volpft_corrcalc, only: volpft_corrcalc
 use simple_optimizer,       only: optimizer
-use simple_oris,            only: oris
-use simple_ori,             only: ori, euler2m
 implicit none
 
 public :: volpft_srch_init, volpft_srch_set_shvec, volpft_srch_minimize, volpft_srch_refine, volpft_srch_kill
@@ -205,7 +203,6 @@ contains
     end function volpft_srch_refine
 
     function volpft_srch_costfun( fun_self, vec, D ) result( cost )
-        use simple_ori, only: ori
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)

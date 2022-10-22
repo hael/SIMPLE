@@ -1,229 +1,229 @@
 module simple_starfile_wrappers
-    use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_NULL_CHAR, C_char, C_double, C_float, C_bool, C_long, C_F_pointer
-    use simple_defs
-    implicit none
+include 'simple_lib.f08'
+use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_NULL_CHAR, C_char, C_double, C_float, C_bool, C_long, C_F_pointer
+implicit none
 
 #include "starfile/starfile_enum.inc"
 
-    type :: starfile_table_type
-        private
-        type(C_ptr), public :: object = C_NULL_ptr
-    end type starfile_table_type
+type :: starfile_table_type
+    private
+    type(C_ptr), public :: object = C_NULL_ptr
+end type starfile_table_type
 
-    interface
+interface
 
-        subroutine C_print_pointer(this) bind(C, name="print_pointer")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_print_pointer
+    subroutine C_print_pointer(this) bind(C, name="print_pointer")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_print_pointer
 
-        function C_starfile_table__new() result(this) bind(C,name="StarFileTable__new")
-            import
-            type(C_ptr) :: this
-        end function C_starfile_table__new
+    function C_starfile_table__new() result(this) bind(C,name="StarFileTable__new")
+        import
+        type(C_ptr) :: this
+    end function C_starfile_table__new
 
-        subroutine C_starfile_table__delete(this) bind(C,name="StarFileTable__delete")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_starfile_table__delete
+    subroutine C_starfile_table__delete(this) bind(C,name="StarFileTable__delete")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_starfile_table__delete
 
-        subroutine C_starfile_table__addObject(this) bind(C,name="StarFileTable__addObject")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_starfile_table__addObject
+    subroutine C_starfile_table__addObject(this) bind(C,name="StarFileTable__addObject")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_starfile_table__addObject
 
-        subroutine C_starfile_table__setIsList(this, is_list) bind(C,name="StarFileTable__setIsList")
-            import
-            type(C_ptr),                 value :: this
-            logical(C_bool), intent(in), value :: is_list
-        end subroutine C_starfile_table__setIsList
+    subroutine C_starfile_table__setIsList(this, is_list) bind(C,name="StarFileTable__setIsList")
+        import
+        type(C_ptr),                 value :: this
+        logical(C_bool), intent(in), value :: is_list
+    end subroutine C_starfile_table__setIsList
 
-        subroutine C_starfile_table__setValue_double(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_double")
-            import
-            type(C_ptr),                 value :: this
-            integer(C_int),  intent(in), value :: EMDL_id
-            real(C_double),  intent(in), value :: avalue
-            integer(C_long), intent(in), value :: object_id
-        end subroutine C_starfile_table__setValue_double
+    subroutine C_starfile_table__setValue_double(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_double")
+        import
+        type(C_ptr),                 value :: this
+        integer(C_int),  intent(in), value :: EMDL_id
+        real(C_double),  intent(in), value :: avalue
+        integer(C_long), intent(in), value :: object_id
+    end subroutine C_starfile_table__setValue_double
 
-        subroutine C_starfile_table__setValue_float(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_float")
-            import
-            type(C_ptr),                 value :: this
-            integer(C_int),  intent(in), value :: EMDL_id
-            real(C_float),   intent(in), value :: avalue
-            integer(C_long), intent(in), value :: object_id
-        end subroutine C_starfile_table__setValue_float
+    subroutine C_starfile_table__setValue_float(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_float")
+        import
+        type(C_ptr),                 value :: this
+        integer(C_int),  intent(in), value :: EMDL_id
+        real(C_float),   intent(in), value :: avalue
+        integer(C_long), intent(in), value :: object_id
+    end subroutine C_starfile_table__setValue_float
 
-        subroutine C_starfile_table__setValue_int(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_int")
-            import
-            type(C_ptr),                 value :: this
-            integer(C_int),  intent(in), value :: EMDL_id
-            integer(C_int),  intent(in), value :: avalue
-            integer(C_long), intent(in), value :: object_id
-        end subroutine C_starfile_table__setValue_int
+    subroutine C_starfile_table__setValue_int(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_int")
+        import
+        type(C_ptr),                 value :: this
+        integer(C_int),  intent(in), value :: EMDL_id
+        integer(C_int),  intent(in), value :: avalue
+        integer(C_long), intent(in), value :: object_id
+    end subroutine C_starfile_table__setValue_int
 
-        subroutine C_starfile_table__setValue_bool(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_bool")
-            import
-            type(C_ptr), value                 :: this
-            integer(C_int),  intent(in), value :: EMDL_id
-            logical(C_bool), intent(in), value :: avalue
-            integer(C_long), intent(in), value :: object_id
-        end subroutine C_starfile_table__setValue_bool
+    subroutine C_starfile_table__setValue_bool(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_bool")
+        import
+        type(C_ptr), value                 :: this
+        integer(C_int),  intent(in), value :: EMDL_id
+        logical(C_bool), intent(in), value :: avalue
+        integer(C_long), intent(in), value :: object_id
+    end subroutine C_starfile_table__setValue_bool
 
-        subroutine C_starfile_table__setValue_string(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_string")
-            import
-            type(C_ptr),                   value :: this
-            integer(C_int),    intent(in), value :: EMDL_id
-            character(C_char), intent(in)        :: avalue
-            integer(C_long),   intent(in), value :: object_id
-        end subroutine C_starfile_table__setValue_string
+    subroutine C_starfile_table__setValue_string(this, EMDL_id, avalue, object_id) bind(C,name="StarFileTable__setValue_string")
+        import
+        type(C_ptr),                   value :: this
+        integer(C_int),    intent(in), value :: EMDL_id
+        character(C_char), intent(in)        :: avalue
+        integer(C_long),   intent(in), value :: object_id
+    end subroutine C_starfile_table__setValue_string
 
-        function   C_starfile_table__getValue_double(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_double")
-            import
-            type(C_ptr),                   value :: this
-            integer(C_int),    intent(in), value :: EMDL_id
-            real(C_double),    intent(out)       :: avalue
-            integer(C_long),   intent(in), value :: object_id
-            logical(C_bool)                      :: aresult
-        end function C_starfile_table__getValue_double
+    function   C_starfile_table__getValue_double(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_double")
+        import
+        type(C_ptr),                   value :: this
+        integer(C_int),    intent(in), value :: EMDL_id
+        real(C_double),    intent(out)       :: avalue
+        integer(C_long),   intent(in), value :: object_id
+        logical(C_bool)                      :: aresult
+    end function C_starfile_table__getValue_double
 
-        function   C_starfile_table__getValue_float(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_float")
-            import
-            type(C_ptr),                   value :: this
-            integer(C_int),    intent(in), value :: EMDL_id
-            real(C_float),     intent(out)       :: avalue
-            integer(C_long),   intent(in), value :: object_id
-            logical(C_bool)                      :: aresult
-        end function C_starfile_table__getValue_float
+    function   C_starfile_table__getValue_float(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_float")
+        import
+        type(C_ptr),                   value :: this
+        integer(C_int),    intent(in), value :: EMDL_id
+        real(C_float),     intent(out)       :: avalue
+        integer(C_long),   intent(in), value :: object_id
+        logical(C_bool)                      :: aresult
+    end function C_starfile_table__getValue_float
 
-        function   C_starfile_table__getValue_int(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_int")
-            import
-            type(C_ptr),                   value :: this
-            integer(C_int),    intent(in), value :: EMDL_id
-            integer(C_int),    intent(out)       :: avalue
-            integer(C_long),   intent(in), value :: object_id
-            logical(C_bool)                      :: aresult
-        end function C_starfile_table__getValue_int
+    function   C_starfile_table__getValue_int(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_int")
+        import
+        type(C_ptr),                   value :: this
+        integer(C_int),    intent(in), value :: EMDL_id
+        integer(C_int),    intent(out)       :: avalue
+        integer(C_long),   intent(in), value :: object_id
+        logical(C_bool)                      :: aresult
+    end function C_starfile_table__getValue_int
 
-        function   C_starfile_table__getValue_bool(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_bool")
-            import
-            type(C_ptr),                   value :: this
-            integer(C_int),    intent(in), value :: EMDL_id
-            logical(C_bool),   intent(out)       :: avalue
-            integer(C_long),   intent(in), value :: object_id
-            logical(C_bool)                      :: aresult
-        end function C_starfile_table__getValue_bool
+    function   C_starfile_table__getValue_bool(this, EMDL_id, avalue, object_id) result(aresult) bind(C,name="StarFileTable__getValue_bool")
+        import
+        type(C_ptr),                   value :: this
+        integer(C_int),    intent(in), value :: EMDL_id
+        logical(C_bool),   intent(out)       :: avalue
+        integer(C_long),   intent(in), value :: object_id
+        logical(C_bool)                      :: aresult
+    end function C_starfile_table__getValue_bool
 
-        subroutine C_starfile_table__getValue_string(this, EMDL_id, str, object_id, alen, aresult) bind(C,name="StarFileTable__getValue_string")
-            import
-            type(C_ptr),                 value :: this
-            integer(C_int),  intent(in), value :: EMDL_id
-            type(C_ptr),     intent(out)       :: str
-            integer(C_long), intent(in), value :: object_id
-            integer(C_int),  intent(out)       :: alen
-            logical(C_bool), intent(out)       :: aresult
-        end subroutine C_starfile_table__getValue_string
+    subroutine C_starfile_table__getValue_string(this, EMDL_id, str, object_id, alen, aresult) bind(C,name="StarFileTable__getValue_string")
+        import
+        type(C_ptr),                 value :: this
+        integer(C_int),  intent(in), value :: EMDL_id
+        type(C_ptr),     intent(out)       :: str
+        integer(C_long), intent(in), value :: object_id
+        integer(C_int),  intent(out)       :: alen
+        logical(C_bool), intent(out)       :: aresult
+    end subroutine C_starfile_table__getValue_string
 
-        subroutine C_dealloc_str(c_str) bind(C,name="dealloc_str")
-            import
-            type(C_ptr), value :: c_str
-        end subroutine C_dealloc_str
+    subroutine C_dealloc_str(c_str) bind(C,name="dealloc_str")
+        import
+        type(C_ptr), value :: c_str
+    end subroutine C_dealloc_str
 
-        subroutine C_starfile_table__clear(this) bind(C,name="StarFileTable__clear")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_starfile_table__clear
+    subroutine C_starfile_table__clear(this) bind(C,name="StarFileTable__clear")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_starfile_table__clear
 
-        subroutine C_starfile_table__open_ofile(this, fname, mode) bind(C,name="StarFileTable__open_ofile")
-            import
-            type(C_ptr),       value             :: this
-            character(C_char),        intent(in) :: fname
-            integer(C_int),    value, intent(in) :: mode
-        end subroutine C_starfile_table__open_ofile
+    subroutine C_starfile_table__open_ofile(this, fname, mode) bind(C,name="StarFileTable__open_ofile")
+        import
+        type(C_ptr),       value             :: this
+        character(C_char),        intent(in) :: fname
+        integer(C_int),    value, intent(in) :: mode
+    end subroutine C_starfile_table__open_ofile
 
-        subroutine C_starfile_table__write_ofile(this) bind(C,name="StarFileTable__write_ofile")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_starfile_table__write_ofile
+    subroutine C_starfile_table__write_ofile(this) bind(C,name="StarFileTable__write_ofile")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_starfile_table__write_ofile
 
-        subroutine C_starfile_table__close_ofile(this) bind(C,name="StarFileTable__close_ofile")
-            import
-            type(C_ptr), value :: this
-        end subroutine C_starfile_table__close_ofile
+    subroutine C_starfile_table__close_ofile(this) bind(C,name="StarFileTable__close_ofile")
+        import
+        type(C_ptr), value :: this
+    end subroutine C_starfile_table__close_ofile
 
-        subroutine C_starfile_table__read(this, fname, name) bind(C,name="StarFileTable__read")
-            import
-            type(C_ptr),       value      :: this
-            character(C_char), intent(in) :: fname
-            character(C_char), intent(in) :: name
-        end subroutine C_starfile_table__read
+    subroutine C_starfile_table__read(this, fname, name) bind(C,name="StarFileTable__read")
+        import
+        type(C_ptr),       value      :: this
+        character(C_char), intent(in) :: fname
+        character(C_char), intent(in) :: name
+    end subroutine C_starfile_table__read
 
-        subroutine C_starfile_table__setname(this, aname) bind(C, name="StarFileTable__setName")
-            import
-            type(C_ptr), value :: this
-            character(C_char), intent(in) :: aname
-        end subroutine C_starfile_table__setname
+    subroutine C_starfile_table__setname(this, aname) bind(C, name="StarFileTable__setName")
+        import
+        type(C_ptr), value :: this
+        character(C_char), intent(in) :: aname
+    end subroutine C_starfile_table__setname
 
-        subroutine C_starfile_table__setcomment(this, acomment) bind(C, name="StarFileTable__setComment")
-            import
-            type(C_ptr), value :: this
-            character(C_char), intent(in) :: acomment
-        end subroutine C_starfile_table__setcomment
+    subroutine C_starfile_table__setcomment(this, acomment) bind(C, name="StarFileTable__setComment")
+        import
+        type(C_ptr), value :: this
+        character(C_char), intent(in) :: acomment
+    end subroutine C_starfile_table__setcomment
 
-        subroutine C_starfile_table__getcomment(this, str, alen) bind(C, name="StarFileTable__getComment")
-            import
-            type(C_ptr), value :: this
-            type(C_ptr),    intent(out) :: str
-            integer(C_int), intent(out) :: alen
-        end subroutine C_starfile_table__getcomment
+    subroutine C_starfile_table__getcomment(this, str, alen) bind(C, name="StarFileTable__getComment")
+        import
+        type(C_ptr), value :: this
+        type(C_ptr),    intent(out) :: str
+        integer(C_int), intent(out) :: alen
+    end subroutine C_starfile_table__getcomment
 
-        function C_starfile_table__hascomment(this) result(ares) bind(C, name="StarFileTable__hasComment")
-            import
-            type(C_ptr), value ::this
-            logical(C_bool) :: ares
-        end function C_starfile_table__hascomment
+    function C_starfile_table__hascomment(this) result(ares) bind(C, name="StarFileTable__hasComment")
+        import
+        type(C_ptr), value ::this
+        logical(C_bool) :: ares
+    end function C_starfile_table__hascomment
 
-        function C_starfile_table__hasLabel(this, EMDL_id) result(ares) bind(C, name="StarFileTable__hasLabel")
-            import
-            type(C_ptr),                value :: this
-            integer(C_int), intent(in), value :: EMDL_id
-            logical(C_bool) :: ares
-        end function C_starfile_table__haslabel
+    function C_starfile_table__hasLabel(this, EMDL_id) result(ares) bind(C, name="StarFileTable__hasLabel")
+        import
+        type(C_ptr),                value :: this
+        integer(C_int), intent(in), value :: EMDL_id
+        logical(C_bool) :: ares
+    end function C_starfile_table__haslabel
 
-        function C_starfile_table__firstobject(this) result(ares) bind(C, name="StarFileTable__firstObject")
-            import
-            type(C_ptr), value :: this
-            integer(C_long)    :: ares
-        end function C_starfile_table__firstobject
+    function C_starfile_table__firstobject(this) result(ares) bind(C, name="StarFileTable__firstObject")
+        import
+        type(C_ptr), value :: this
+        integer(C_long)    :: ares
+    end function C_starfile_table__firstobject
 
-        function C_starfile_table__numberofobjects(this) result(ares) bind(C, name="StarFileTable__numberOfObjects")
-            import
-            type(C_ptr), value :: this
-            integer(C_long)    :: ares
-        end function C_starfile_table__numberofobjects
+    function C_starfile_table__numberofobjects(this) result(ares) bind(C, name="StarFileTable__numberOfObjects")
+        import
+        type(C_ptr), value :: this
+        integer(C_long)    :: ares
+    end function C_starfile_table__numberofobjects
 
-        function C_starfile_table__nextobject(this) result(ares) bind(C, name="StarFileTable__nextObject")
-            import
-            type(C_ptr), value :: this
-            integer(C_long)    :: ares
-        end function C_starfile_table__nextobject
+    function C_starfile_table__nextobject(this) result(ares) bind(C, name="StarFileTable__nextObject")
+        import
+        type(C_ptr), value :: this
+        integer(C_long)    :: ares
+    end function C_starfile_table__nextobject
 
-        subroutine C_starfile_table__getnames_cnt(this, fname, count) bind(C, name="StarFileTable__getnames_cnt")
-            import
-            type(C_ptr), value            :: this
-            character(C_char), intent(in) :: fname
-            integer(C_int)                :: count
-        end subroutine C_starfile_table__getnames_cnt
+    subroutine C_starfile_table__getnames_cnt(this, fname, count) bind(C, name="StarFileTable__getnames_cnt")
+        import
+        type(C_ptr), value            :: this
+        character(C_char), intent(in) :: fname
+        integer(C_int)                :: count
+    end subroutine C_starfile_table__getnames_cnt
 
-        subroutine C_starfile_table__getnames_nr(this, nr, str, alen) bind(C, name="StarFileTable__getnames_nr")
-            import
-            type(C_ptr),    value       :: this
-            integer(C_int), value       :: nr
-            type(C_ptr),    intent(out) :: str
-            integer(C_int), intent(out) :: alen
-        end subroutine C_starfile_table__getnames_nr
+    subroutine C_starfile_table__getnames_nr(this, nr, str, alen) bind(C, name="StarFileTable__getnames_nr")
+        import
+        type(C_ptr),    value       :: this
+        integer(C_int), value       :: nr
+        type(C_ptr),    intent(out) :: str
+        integer(C_int), intent(out) :: alen
+    end subroutine C_starfile_table__getnames_nr
 
-    end interface
+end interface
 
 contains
 

@@ -6,7 +6,6 @@ program simple_test_eval_polarftcc
     use simple_parameters,          only: parameters
     use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
     use simple_strategy2D3D_common, only: set_bp_range
-    use simple_ori,                 only: ori
     implicit none
     type(parameters)         :: p
     type(polarft_corrcalc)   :: pftcc
@@ -33,7 +32,7 @@ program simple_test_eval_polarftcc
     call cline%check
     call b%init_params_and_build_strategy3D_tbox(cline,p)
     call set_bp_range(cline)
-    
+
     ang_err   = 16.
     shift_err = 8.
     call b%eulspace%get_ori(irnd_uni(p%nspace), o)
@@ -41,7 +40,7 @@ program simple_test_eval_polarftcc
     call o%print_ori
     print *,'Shift= 0.0 0.0'
     print *,'---------------------'
-    
+
     call pftcc%new(p%nptcls, [1, p%nptcls], .false.)
     call b%vol%read(p%vols(1))
     call b%vol%mask(p%msk,'soft')
@@ -51,7 +50,7 @@ program simple_test_eval_polarftcc
     call b%vol%fproject_polar(1, o, pftcc,       iseven=.true., mask=b%l_resmsk)
     call pftcc%cp_even_ref2ptcl(1,1)
     call pftcc%set_eo(1, .true. )
-        
+
     if( o%e3get() < 0.)then
         call o%e3set(o%e3get() - 29.5)
     else
@@ -64,7 +63,7 @@ program simple_test_eval_polarftcc
     call o%print_ori
     print *,'Shift= ',shvec
     print *,'---------------------'
-    
+
     call pftcc%shift_ptcl(1,shvec)
     call pftcc%memoize_ffts
 

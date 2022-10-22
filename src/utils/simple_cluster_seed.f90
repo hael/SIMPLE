@@ -1,7 +1,6 @@
 ! seeding methods for state labelling
 module simple_cluster_seed
 include 'simple_lib.f08'
-use simple_oris, only: oris
 implicit none
 
 public :: gen_labelling

@@ -1,12 +1,12 @@
 ! simulation of single-particle images
 module simple_simulator
+include 'simple_lib.f08'
 implicit none
 
 contains
 
     subroutine simimg( img, orientation, tfun, ctfflag, snr, bfac, apply_ctf )
         use simple_image, only: image
-        use simple_ori,   only: ori
         use simple_ctf,   only: ctf
         class(image),      intent(inout) :: img
         class(ori),        intent(inout) :: orientation

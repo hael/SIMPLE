@@ -1,6 +1,5 @@
 program simple_test_corrs2weights
-use simple_stat
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 real    :: corrs(12), weights(12)
 integer :: i

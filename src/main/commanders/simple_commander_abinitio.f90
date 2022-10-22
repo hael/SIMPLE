@@ -13,8 +13,6 @@ use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_dist
 use simple_commander_project,  only: scale_project_commander_distr
 use simple_commander_imgproc,  only: scale_commander
 use simple_procimgstk,         only: shift_imgfile
-use simple_oris,               only: oris
-use simple_ori,                only: ori
 use simple_image,              only: image
 use simple_sym,                only: sym
 use simple_builder,            only: builder
@@ -692,7 +690,6 @@ contains
             end subroutine rec
 
             subroutine prep_eo_stks_refine
-                use simple_ori, only: ori
                 type(ori) :: o, o_even, o_odd
                 integer   :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
@@ -737,7 +734,6 @@ contains
             end subroutine rescale_2Dfilter
 
             subroutine conv_eo( os )
-                use simple_ori, only: ori
                 class(oris), intent(inout) :: os
                 type(sym) :: se
                 type(ori) :: o_odd, o_even

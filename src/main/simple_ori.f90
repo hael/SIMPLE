@@ -1,6 +1,14 @@
 ! an orientation
 module simple_ori
-include 'simple_lib.f08'
+use simple_defs
+use simple_defs_ori
+use simple_hash
+use simple_chash
+use simple_rnd
+use simple_is_check_assert
+use simple_strings
+use simple_math
+use simple_stat
 implicit none
 
 public :: ori, test_ori, euler2m, m2euler
@@ -509,21 +517,21 @@ contains
         euls(2) = o_prev%e2get()
         euls(3) = o_prev%e3get()
         ran1 = ran3()
-        ran2 = ran3() 
+        ran2 = ran3()
         if( ran1 <= 0.5 )then
             euls(1) = euls(1) - ran2 * athres
         else
             euls(1) = euls(1) + ran2 * athres
         endif
         ran1 = ran3()
-        ran2 = ran3() 
+        ran2 = ran3()
         if( ran1 <= 0.5 )then
             euls(2) = euls(2) - ran2 * athres
         else
             euls(2) = euls(2) + ran2 * athres
         endif
         ran1 = ran3()
-        ran2 = ran3() 
+        ran2 = ran3()
         if( ran1 <= 0.5 )then
             euls(3) = euls(3) - ran2 * athres
         else
@@ -1069,7 +1077,7 @@ contains
         end do
         if(allocated(hkeys)) deallocate(hkeys)
     end function get_keys
-    
+
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self

@@ -7,7 +7,6 @@ include 'simple_lib.f08'
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
-use simple_fftw3
 use gnufor2
 implicit none
 private

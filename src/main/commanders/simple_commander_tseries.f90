@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
-use simple_oris,             only: oris
 use simple_parameters,       only: parameters, params_glob
 use simple_sp_project,       only: sp_project
 use simple_image,            only: image
@@ -264,7 +263,6 @@ contains
 
     subroutine exec_tseries_motion_correct( self, cline )
         use simple_motion_correct_iter, only: motion_correct_iter
-        use simple_ori,                 only: ori
         class(tseries_motion_correct_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: framenames(:)
@@ -353,7 +351,6 @@ contains
     subroutine exec_tseries_make_pickavg( self, cline )
         use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
-        use simple_ori,                 only: ori
         use simple_tvfilter,            only: tvfilter
         class(tseries_make_pickavg_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
@@ -920,7 +917,6 @@ contains
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_atoms, only: detect_atoms_commander
-        use simple_ori,             only: ori
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         class(parameters), pointer    :: params_ptr => null()

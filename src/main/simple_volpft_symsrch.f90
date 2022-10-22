@@ -5,8 +5,6 @@ include 'simple_lib.f08'
 use simple_opt_spec,        only: opt_spec
 use simple_volpft_corrcalc, only: volpft_corrcalc
 use simple_optimizer,       only: optimizer
-use simple_oris,            only: oris
-use simple_ori,             only: ori, euler2m
 use simple_sym,             only: sym
 implicit none
 

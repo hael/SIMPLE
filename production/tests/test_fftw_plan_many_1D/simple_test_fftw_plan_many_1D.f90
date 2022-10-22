@@ -1,8 +1,7 @@
 program simple_test_fftw_plan_many_1D
     include 'simple_lib.f08'
-    use simple_fftw3
     use simple_parameters, only: params_glob
-    
+
     implicit none
 
     integer, parameter        :: npoints = 1000, narrays = 100, niter = 100
@@ -142,7 +141,7 @@ program simple_test_fftw_plan_many_1D
         write(fnr,'(a,1x,f9.4)') 'current_tot    : ', rt_curr_fft + rt_curr_ifft
         write(fnr,'(a,1x,f9.4)') 'batch_tot      : ', rt_batch_fft + rt_batch_ifft
         write(fnr,'(a)') '*** RELATIVE TIMING (%) ***'
-        write(fnr,'(a,1x,f9.4)') 'batch_tot / current_tot    : ', (rt_batch_fft + rt_batch_ifft) / (rt_curr_fft + rt_curr_ifft) 
+        write(fnr,'(a,1x,f9.4)') 'batch_tot / current_tot    : ', (rt_batch_fft + rt_batch_ifft) / (rt_curr_fft + rt_curr_ifft)
         call fclose(fnr)
     endif
 

@@ -5,8 +5,6 @@ include "starfile/starfile_enum.inc"
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_oris,           only: oris
-use simple_ori,            only: ori
 use simple_sym,            only: sym
 use simple_projector_hlev, only: rotvol
 use simple_sp_project,     only: sp_project
@@ -205,7 +203,6 @@ contains
     !>  dsym_cylinder search intended for symmetry of order D
     subroutine exec_dsym_volinit( dsym_os, cylinder)
         use simple_parameters,   only: params_glob
-        use simple_oris,         only: oris
         use simple_image,        only: image
         use simple_sym,          only: sym
         use simple_segmentation, only: otsu_robust_fast

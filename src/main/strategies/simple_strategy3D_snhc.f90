@@ -64,7 +64,6 @@ contains
     end subroutine srch_snhc
 
     subroutine oris_assign_snhc( self )
-        use simple_ori, only: ori
         class(strategy3D_snhc), intent(inout) :: self
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist

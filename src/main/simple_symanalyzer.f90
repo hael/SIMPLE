@@ -5,7 +5,6 @@ use simple_image,          only: image
 use simple_projector,      only: projector
 use simple_projector_hlev, only: rotvol_slim, rotvol
 use simple_sym,            only: sym
-use simple_ori,            only: ori, m2euler
 implicit none
 
 public :: symmetrize_map, symmetry_tester, print_subgroups

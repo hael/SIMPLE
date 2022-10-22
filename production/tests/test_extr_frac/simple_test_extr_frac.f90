@@ -1,5 +1,5 @@
 program simple_test_extr_frac
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 integer, parameter :: NPTCLS=50000, MAXITS=40

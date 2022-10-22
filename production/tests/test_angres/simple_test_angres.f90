@@ -1,6 +1,5 @@
 program simple_test_angres
-use simple_oris, only: oris
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 integer    :: i

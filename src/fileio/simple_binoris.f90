@@ -1,8 +1,15 @@
 ! for manging orientation data using binary files
 module simple_binoris
-include 'simple_lib.f08'
 !$ use omp_lib
 use, intrinsic :: ISO_C_BINDING
+use simple_fileio
+use simple_map_reduce
+use simple_syslib
+use simple_strings
+use simple_ori
+use simple_oris
+use simple_defs
+use simple_defs_ori
 implicit none
 
 public :: binoris, binoris_seginfo
@@ -160,7 +167,6 @@ contains
     end subroutine write_header
 
     subroutine write_segment_inside_1( self, isegment, os, fromto )
-        use simple_oris, only: oris
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris), optional,      intent(inout) :: os ! indexed from 1 to nptcls
@@ -233,7 +239,6 @@ contains
     end subroutine write_segment_inside_1
 
     subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
-        use simple_oris, only: oris
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         type(str4arr),              intent(in)    :: os_strings(:)
@@ -358,7 +363,6 @@ contains
     end subroutine byte_manager4seg_inside_2
 
     subroutine write_segment_1( self, isegment, os, fromto )
-        use simple_oris,   only: oris
         class(binoris),          intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),             intent(in) :: os ! indexed from 1 to nptcls
@@ -430,7 +434,6 @@ contains
     end subroutine write_segment_2
 
     subroutine add_segment_1( self, isegment, os, fromto )
-        use simple_oris, only: oris
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(in)    :: os
@@ -498,7 +501,6 @@ contains
     end subroutine update_byte_ranges
 
     subroutine read_first_segment_record( self, isegment, o )
-        use simple_ori, only: ori
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(ori),                 intent(inout) :: o
@@ -520,7 +522,6 @@ contains
     end subroutine read_first_segment_record
 
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo, wthreads )
-        use simple_oris, only: oris
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(inout) :: os
@@ -634,7 +635,6 @@ contains
     end subroutine read_segment_2
 
     subroutine read_record( self, isegment, ibytes, str )
-        use simple_ori, only: ori
         class(binoris),                intent(inout) :: self
         integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(inout) :: ibytes

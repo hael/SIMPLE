@@ -7,8 +7,6 @@ use simple_cmdline,        only: cmdline
 use simple_parameters,     only: parameters, params_glob
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_ori,            only: ori
-use simple_oris,           only: oris
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_stack_io,       only: stack_io
@@ -543,7 +541,6 @@ contains
 
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
-                use simple_ori, only: ori
                 type(sp_project) :: streamspproj
                 type(ori)        :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
@@ -1003,7 +1000,6 @@ contains
     end subroutine exec_motion_correct_distr
 
     subroutine exec_motion_correct_tomo_distr( self, cline )
-        use simple_oris, only: oris
         class(motion_correct_tomo_commander_distr), intent(inout) :: self
         class(cmdline),                             intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: tomonames(:)
@@ -1601,8 +1597,6 @@ contains
     end subroutine exec_pick
 
     subroutine exec_extract_distr( self, cline )
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
         class(extract_commander_distr), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(parameters)                        :: params
@@ -1758,13 +1752,13 @@ contains
                         call spproj%os_ptcl3D%set_dfy(cnt,dfy)
                     endif
                     !optics group id
-                    if( spproj_part%os_ptcl2D%isthere(i,'ogid') )then 
+                    if( spproj_part%os_ptcl2D%isthere(i,'ogid') )then
                         ogid = spproj_part%os_ptcl2D%get(i, 'ogid')
                         call spproj%os_ptcl2D%set(cnt,'ogid',ogid)
                         call spproj%os_ptcl3D%set(cnt,'ogid',ogid)
                     endif
                     !group id
-                    if( spproj_part%os_ptcl2D%isthere(i,'gid') )then 
+                    if( spproj_part%os_ptcl2D%isthere(i,'gid') )then
                         gid = spproj_part%os_ptcl2D%get(i, 'gid')
                         call spproj%os_ptcl2D%set(cnt,'gid',gid)
                         call spproj%os_ptcl3D%set(cnt,'gid',gid)

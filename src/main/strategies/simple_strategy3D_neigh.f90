@@ -34,7 +34,6 @@ contains
     end subroutine new_neigh
 
     subroutine srch_neigh( self, ithr )
-        use simple_ori, only: ori
         class(strategy3D_neigh), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         type(ori) :: o

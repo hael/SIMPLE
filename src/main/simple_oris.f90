@@ -2,8 +2,20 @@
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
-use simple_ori, only: ori
+use simple_srch_sort_loc
+use simple_fileio
+use simple_stat
+use simple_ran_tabu
+use simple_rnd
+use simple_ori
+use simple_is_check_assert
+use simple_math
+use simple_math_ft
+use simple_fileio
+use simple_strings
+use simple_defs
+use simple_defs_ori
+use simple_syslib
 implicit none
 
 public :: oris, test_oris
@@ -1197,7 +1209,7 @@ contains
                     ilast = i
                     if( ilast - ifirst + 1 == nsamples ) exit
                 endif
-            end do      
+            end do
             ! update mask & counters
             mask = .false.
             do i = ifirst, ilast

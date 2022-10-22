@@ -4,7 +4,6 @@ use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_starproject,    only: starproject
-use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
 use simple_syslib,         only: simple_getcwd
@@ -41,7 +40,7 @@ contains
         type(sp_project)          :: spproj
         integer                   :: it
         logical                   :: iteration
-        character(len=3)          :: itchar    
+        character(len=3)          :: itchar
         character(len=LONGSTRLEN) :: cwd
         !show output. Defaults to false for streaming
         call starproj%set_verbose
@@ -117,7 +116,7 @@ contains
         call spproj%kill
         call simple_end('**** IMPORT_STARPROJECT NORMAL STOP ****')
     end subroutine exec_import_starproject
-	
+
     subroutine exec_export_starproject( self, cline )
         class(export_starproject_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
