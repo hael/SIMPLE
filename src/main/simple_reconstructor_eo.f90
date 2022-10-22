@@ -10,6 +10,7 @@ use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 use simple_euclid_sigma2, only: apply_euclid_regularization
+use simple_estimate_ssnr
 implicit none
 
 public :: reconstructor_eo

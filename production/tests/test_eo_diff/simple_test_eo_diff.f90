@@ -1,6 +1,7 @@
 program simple_test_eo_diff
 include 'simple_lib.f08'
 use simple_image, only: image
+use simple_estimate_ssnr
 implicit none
 #include "simple_local_flags.inc"
 character(len=*), parameter :: name_vol      = 'recvol_state01.mrc'

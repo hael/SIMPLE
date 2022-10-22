@@ -13,6 +13,7 @@ use simple_sp_project,     only: sp_project
 use simple_image,          only: image
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
+use simple_estimate_ssnr
 implicit none
 
 public :: masscen_commander

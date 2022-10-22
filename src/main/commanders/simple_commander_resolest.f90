@@ -9,6 +9,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_masker,         only: masker
+use simple_estimate_ssnr
 implicit none
 
 public :: fsc_commander
@@ -42,7 +43,6 @@ contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
-        use simple_estimate_ssnr, only: phase_rand_fsc, plot_fsc, plot_phrand_fsc
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(parameters)               :: params
