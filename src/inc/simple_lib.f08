@@ -22,6 +22,7 @@ use simple_jiffys
 use simple_magic_boxes
 use simple_map_reduce
 use simple_math
+use simple_math_ft
 use simple_ran_tabu
 use simple_rnd
 use simple_sauron

@@ -1,5 +1,6 @@
 module simple_class_frcs
 include 'simple_lib.f08'
+use simple_estimate_ssnr
 implicit none
 
 public :: class_frcs

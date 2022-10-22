@@ -8,6 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_stack_io,       only: stack_io
+use simple_estimate_ssnr
 implicit none
 
 public :: binarize_commander

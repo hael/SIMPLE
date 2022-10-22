@@ -2,11 +2,17 @@
 module simple_estimate_ssnr
 !$ use omp_lib
 !$ use omp_lib_kinds
-include 'simple_lib.f08'
+use simple_defs
+use simple_srch_sort_loc
+use simple_syslib
+use simple_math_ft
+use simple_strings
+use simple_fileio
 implicit none
 
-public :: fsc2ssnr, fsc2TVfilt, fsc2TVfilt_fast, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: plot_fsc, plot_phrand_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights, phase_rand_fsc
+public :: phaseplate_correct_fsc, get_resolution
 private
 #include "simple_local_flags.inc"
 
@@ -25,59 +31,6 @@ contains
             ssnr(k) = (2. * fsc) / (1. - fsc)
         end do
     end function fsc2ssnr
-
-    !> \brief  converts the FSC to TV-Filter SSNR/(SSNR + 1)
-    subroutine fsc2TVfilt( fsc, flims, TVfilt )
-        real,    intent(in)    :: fsc(:)            !< FSC correlations (depnds on k <=> resolution)
-        integer, intent(in)    :: flims(3,2)
-        real,    intent(inout) :: TVfilt(size(fsc)) !< TV-Filter derived from FSC
-        integer :: nfcomps(size(fsc)), nyq, h, k, l, sh
-        real :: nr, snr,  one_o_sqrt_nr
-        nyq     = size(fsc)
-        nfcomps = 0
-        do h = flims(1,1),flims(1,2)
-            do k = flims(2,1),flims(2,2)
-                do l = flims(3,1),flims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if (sh < 1 .or. sh > nyq) cycle
-                    nfcomps(sh) = nfcomps(sh) + 1
-                end do
-            end do
-        end do
-        do k = 1,nyq
-            nr = real(nfcomps(k))
-            one_o_sqrt_nr = 1./sqrt(nr)
-            if( fsc(k) > 1. )then ! round-off error
-                TVfilt(k) = 1.
-            else if( fsc(k) < one_o_sqrt_nr )then
-                TVfilt(k) = 0.
-            else
-                snr = sqrt(1./nr - (one_o_sqrt_nr - fsc(k))/(1. - fsc(k))) - one_o_sqrt_nr
-                TVfilt(k) = snr / (snr + 1.)
-            endif
-        enddo
-    end subroutine fsc2TVfilt
-
-    subroutine fsc2TVfilt_fast( fsc, nfcomps, TVfilt )
-        real,    intent(in)    :: fsc(:)            !< FSC correlations (depnds on k <=> resolution)
-        integer, intent(in)    :: nfcomps(size(fsc))
-        real,    intent(inout) :: TVfilt(size(fsc)) !< TV-Filter derived from FSC
-        integer :: nyq, h, k, l, sh
-        real :: nr, snr, one_o_sqrt_nr
-        nyq = size(fsc)
-        do k = 1,nyq
-            nr = real(nfcomps(k))
-            one_o_sqrt_nr = 1./sqrt(nr)
-            if( fsc(k) > 1. )then ! round-off error
-                TVfilt(k) = 1.
-            else if( fsc(k) < one_o_sqrt_nr )then
-                TVfilt(k) = 0.
-            else
-                snr = sqrt(1./nr - (one_o_sqrt_nr - fsc(k))/(1. - fsc(k))) - one_o_sqrt_nr
-                TVfilt(k) = snr / (snr + 1.)
-            endif
-        enddo
-    end subroutine fsc2TVfilt_fast
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
@@ -373,5 +326,71 @@ contains
         call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_phrand_fsc
+
+    !>   calculates the resolution values given corrs and res params
+    !! \param corrs Fourier shell correlations
+    !! \param res resolution value
+    subroutine get_resolution( corrs, res, fsc05, fsc0143 )
+        real, intent(in)  :: corrs(:), res(:) !<  corrs Fourier shell correlation
+        real, intent(out) :: fsc05, fsc0143   !<  fsc05 resolution at FSC=0.5,  fsc0143 resolution at FSC=0.143
+        integer           :: n, ires0143, ires05
+        n = size(corrs)
+        ires0143 = 1
+        do while( ires0143 <= n )
+            if( corrs(ires0143) >= 0.143 )then
+                ires0143 = ires0143 + 1
+                cycle
+            else
+                exit
+            endif
+        end do
+        ires0143 = ires0143 - 1
+        if( ires0143 == 0 )then
+            fsc0143 = 0.
+        else
+            fsc0143 = res(ires0143)
+        endif
+        ires05 = 1
+        do while( ires05 <= n )
+            if( corrs(ires05) >= 0.5 )then
+                ires05 = ires05+1
+                cycle
+            else
+                exit
+            endif
+        end do
+        ires05 = ires05 - 1
+        if( ires05 == 0 )then
+            fsc05 = 0.
+        else
+            fsc05 = res(ires05)
+        endif
+    end subroutine get_resolution
+
+    subroutine phaseplate_correct_fsc( fsc, find_plate )
+        real,    intent(inout) :: fsc(:)
+        integer, intent(out)   :: find_plate
+        logical, allocatable :: peakpos(:)
+        integer :: k, n
+        real    :: peakavg
+        n = size(fsc)
+        ! find FSC peaks
+        peakpos = peakfinder(fsc)
+        ! filter out all peaks FSC < 0.5
+        where(fsc < 0.5) peakpos = .false.
+        ! calculate peak average
+        peakavg = sum(fsc, mask=peakpos)/real(count(peakpos))
+        ! identify peak with highest frequency
+        do k=n,1,-1
+            if( peakpos(k) )then
+                find_plate = k
+                exit
+            endif
+        end do
+        ! replace with average FSC peak value up to last peak (find_plate)
+        do k=1,find_plate
+            fsc(k) = peakavg
+        end do
+    end subroutine phaseplate_correct_fsc
 
 end module simple_estimate_ssnr

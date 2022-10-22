@@ -1,13 +1,11 @@
 module simple_tseries_graphene_subtr
+include 'simple_lib.f08'
 use simple_parameters,       only: parameters, params_glob
 use simple_cmdline,          only: cmdline
 use simple_polarizer,        only: polarizer
 use simple_image,            only: image
 use simple_atoms,            only: atoms
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_math
-use simple_rnd
-use simple_defs
 implicit none
 
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr

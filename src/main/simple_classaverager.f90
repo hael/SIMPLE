@@ -6,6 +6,7 @@ use simple_parameters, only: params_glob
 use simple_ctf,        only: ctf
 use simple_image,      only: image, image_ptr
 use simple_stack_io,   only: stack_io
+use simple_estimate_ssnr
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&

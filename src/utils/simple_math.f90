@@ -6,20 +6,12 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-interface csq_fast
-    module procedure csq_fast_1, csq_fast_2
-end interface
-
 interface nvoxfind
     module procedure nvoxfind_1, nvoxfind_2
 end interface
 
 interface rad2deg
     module procedure rad2deg_1, rad2deg_2
-end interface
-
-interface csq
-    module procedure csq_1, csq_2
 end interface
 
 interface norm_2
@@ -75,7 +67,7 @@ interface otsu
 end interface otsu
 
 interface pixels_dist
-   module procedure pixels_dist_1, pixels_dist_2 
+   module procedure pixels_dist_1, pixels_dist_2
 end interface
 
 interface eigsrt
@@ -205,28 +197,6 @@ contains
             endif
         endif
     end function round2odd
-
-    !>   get the resolution in angstrom, given angle and diameter
-    !! \param ang,diam angular resolution (degrees) and diameter (\f$\si{\angstrom}\f$)
-    pure function resang( ang, diam ) result( res )
-        real, intent(in)  :: ang, diam
-        real :: res                      !< spatial resolution (\f$\si{\per\angstrom}\f$)
-        res = (ang/360.)*(pi*diam)
-    end function resang
-
-    pure function norm_corr( cc ) result( cc_norm )
-        real, intent(in) :: cc(3)
-        real :: eps, sqrt_denom, cc_norm
-        sqrt_denom = sqrt(cc(2) * cc(3))
-        eps = epsilon(cc(1))
-        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
-            cc_norm = 1.
-        elseif( sqrt_denom < eps )then
-            cc_norm = 0.
-        else
-            cc_norm = cc(1) / sqrt_denom
-        endif
-    end function norm_corr
 
     !>   to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
@@ -391,29 +361,6 @@ contains
         enddo
     end subroutine hac_1d
 
-    !>   one-dimensional cyclic index generation
-    !! \param lims limits
-    pure function cyci_1d( lims, i ) result( ind )
-        integer, intent(in) :: lims(2), i !< input var
-        integer :: ind, del
-        ind = i
-        if( ind > lims(2) )then
-            del = ind-lims(2)
-            ind = lims(1)+del-1
-        else if( ind < lims(1) )then
-            del = lims(1)-ind
-            ind = lims(2)-del+1
-        endif
-    end function cyci_1d
-
-    !>  as per cyci_1d, assumes lower limit equals 1
-    pure function cyci_1d_static( ulim, i ) result( ind )
-        integer, intent(in) :: ulim, i !< input vars upper limit and index
-        integer :: ind ! return index
-        ind = merge(ulim+i, i , i<1)
-        ind = merge(i-ulim,ind ,i>ulim)
-    end function cyci_1d_static
-
     !>   4 shifting variables
     subroutine shft(a,b,c,d)
         real, intent(out)   :: a   !< new pos 1
@@ -523,78 +470,6 @@ contains
                            &(z - center_coords(3))**2.0 / (2.0 * zsigma * zsigma)) )
     end function gaussian3D
 
-    ! COMPLEX STUFF
-
-    !>   is for calculating the phase angle of a Fourier component
-    !! \return phase phase angle only meaningful when cabs(comp) is well above the noise level
-    elemental function phase_angle( comp ) result( phase )
-        complex, intent(in) :: comp !< Fourier component
-        real :: nom, denom, phase
-        nom = aimag(comp)
-        denom = real(comp)
-        if( is_zero(denom) )then
-           if( is_zero(nom) )then
-                phase = 0.
-            else if( nom > 0. )then
-                phase = pi/2.
-            else
-                phase = -pi/2.
-            endif
-            return
-        endif
-        phase = atan(nom/denom)
-    end function phase_angle
-
-    ! faster unsafe complex magnitude, single precision
-    real(sp) elemental function csq_fast_1( comp )
-        complex(sp), intent(in) :: comp
-        csq_fast_1 = real(comp*conjg(comp))
-    end function csq_fast_1
-
-    ! faster unsafe complex magnitude, double precision
-    real(dp) elemental function csq_fast_2( comp )
-        complex(dp), intent(in) :: comp
-        csq_fast_2 = real(comp*conjg(comp),dp)
-    end function csq_fast_2
-
-    !>   is for complex squaring
-    elemental function csq_1( a ) result( sq )
-        complex(sp), intent(in) :: a !< complx component
-        real(sp) :: sq, x, y, frac
-        x = abs(real(a))
-        y = abs(aimag(a))
-        if( is_zero(x)) then
-            sq = y*y
-        else if( is_zero(y) ) then
-           sq = x*x
-        else if( x > y ) then
-            frac = y/x
-            sq = x*x*(1.+frac*frac)
-        else
-            frac = x/y
-            sq = y*y*(1.+frac*frac)
-        endif
-    end function csq_1
-
-    !>  is for double complex squaring
-    elemental function csq_2( a ) result( sq )
-        complex(dp), intent(in) :: a !< complx component
-        real(dp) :: sq, x, y, frac
-        x = abs(real(a))
-        y = abs(aimag(a))
-        if( is_zero(x)) then
-            sq = y*y
-        else if( is_zero(y) ) then
-            sq = x*x
-        else if( x > y ) then
-            frac = y/x
-            sq = x*x*(1.+frac*frac)
-        else
-            frac = x/y
-            sq = y*y*(1.+frac*frac)
-        endif
-    end function csq_2
-
     !>   is for calculating complex arg/abs/modulus, from numerical recipes
     elemental function mycabs( a ) result( myabs )
         complex, intent(in) :: a      !< complx component
@@ -625,191 +500,6 @@ contains
         w = IOR(w, ISHFT(w,-16))
         w = w + 1
     end function nextPow2
-
-    ! FOURIER STUFF
-
-    !>   is for working out the fourier dimension
-    pure function fdim( d ) result( fd )
-        integer, intent(in) :: d !< dimension
-        integer :: fd
-        if(is_even(d))then
-            fd = d/2+1
-        else
-            fd = (d-1)/2+1
-        endif
-    end function fdim
-
-    !>   calculates the resolution values given corrs and res params
-    !! \param corrs Fourier shell correlations
-    !! \param res resolution value
-    subroutine get_resolution( corrs, res, fsc05, fsc0143 )
-        real, intent(in)  :: corrs(:), res(:) !<  corrs Fourier shell correlation
-        real, intent(out) :: fsc05, fsc0143   !<  fsc05 resolution at FSC=0.5,  fsc0143 resolution at FSC=0.143
-        integer           :: n, ires0143, ires05
-        n = size(corrs)
-        ires0143 = 1
-        do while( ires0143 <= n )
-            if( corrs(ires0143) >= 0.143 )then
-                ires0143 = ires0143 + 1
-                cycle
-            else
-                exit
-            endif
-        end do
-        ires0143 = ires0143 - 1
-        if( ires0143 == 0 )then
-            fsc0143 = 0.
-        else
-            fsc0143 = res(ires0143)
-        endif
-        ires05 = 1
-        do while( ires05 <= n )
-            if( corrs(ires05) >= 0.5 )then
-                ires05 = ires05+1
-                cycle
-            else
-                exit
-            endif
-        end do
-        ires05 = ires05 - 1
-        if( ires05 == 0 )then
-            fsc05 = 0.
-        else
-            fsc05 = res(ires05)
-        endif
-    end subroutine get_resolution
-
-    pure subroutine get_find_at_crit( n, corrs, crit, find )
-        integer, intent(in)  :: n
-        real,    intent(in)  :: corrs(n), crit
-        integer, intent(out) :: find
-        find = 1
-        do while( find <= n )
-            if( corrs(find) >= crit )then
-                find = find + 1
-                cycle
-            else
-                exit
-            endif
-        end do
-    end subroutine get_find_at_crit
-
-    subroutine phaseplate_correct_fsc( fsc, find_plate )
-        real,    intent(inout) :: fsc(:)
-        integer, intent(out)   :: find_plate
-        logical, allocatable :: peakpos(:)
-        integer :: k, n
-        real    :: peakavg
-        n = size(fsc)
-        ! find FSC peaks
-        peakpos = peakfinder(fsc)
-        ! filter out all peaks FSC < 0.5
-        where(fsc < 0.5) peakpos = .false.
-        ! calculate peak average
-        peakavg = sum(fsc, mask=peakpos)/real(count(peakpos))
-        ! identify peak with highest frequency
-        do k=n,1,-1
-            if( peakpos(k) )then
-                find_plate = k
-                exit
-            endif
-        end do
-        ! replace with average FSC peak value up to last peak (find_plate)
-        do k=1,find_plate
-            fsc(k) = peakavg
-        end do
-    end subroutine phaseplate_correct_fsc
-
-    !>   returns the Fourier index of the resolution limit at corr
-    integer function get_lplim_at_corr( fsc, corr, incrreslim )
-        real,    intent(in)           :: fsc(:), corr
-        logical, intent(in), optional :: incrreslim
-        integer :: n, h
-        n = size(fsc)
-        if( n < 3 )then
-            call simple_exception('nonconforming size of fsc array; get_lplim_at_corr', __FILENAME__ , __LINE__)
-        endif
-        get_lplim_at_corr = n-1
-        if( present(incrreslim) )then
-            if( incrreslim )then
-                do h = n-1,3,-1
-                    if( fsc(h) > corr )then
-                        get_lplim_at_corr = h
-                        exit
-                    endif
-                enddo
-                get_lplim_at_corr = min(get_lplim_at_corr+10,n-1)
-            else
-                do h=3,n-1
-                    if( fsc(h) >= corr )then
-                        cycle
-                    else
-                        get_lplim_at_corr = h - 1
-                        exit
-                    endif
-                end do
-            endif
-        else
-            do h=3,n-1
-                if( fsc(h) >= corr )then
-                    cycle
-                else
-                    get_lplim_at_corr = h - 1
-                    exit
-                endif
-            end do
-        endif
-    end function get_lplim_at_corr
-
-    !>   returns the Fourier index of resolution
-    integer pure function calc_fourier_index( res, box, smpd )
-        real, intent(in)    :: res, smpd
-        integer, intent(in) :: box
-        calc_fourier_index = nint((real(box)*smpd)/res)
-    end function calc_fourier_index
-
-    !>   returns the Fourier index of res
-    real pure function calc_lowpass_lim( find, box, smpd )
-        integer, intent(in) :: find, box !< box size
-        real, intent(in)    :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
-        calc_lowpass_lim = real(box)*smpd/real(find)
-    end function calc_lowpass_lim
-
-    !>  \brief get array of resolution steps
-    function get_resarr( box, smpd ) result( res )
-        integer, intent(in) :: box
-        real,    intent(in) :: smpd
-        real, allocatable   :: res(:)
-        integer :: n, k
-        n = fdim(box) - 1
-        allocate( res(n) )
-        do k=1,n
-            res(k) = calc_lowpass_lim(k, box, smpd)
-        end do
-    end function get_resarr
-
-    !> \brief calculate logical mask filtering out the Graphene bands
-    function calc_graphene_mask( box, smpd ) result( mask )
-        integer, intent(in)  :: box
-        real,    intent(in)  :: smpd
-        real,    allocatable :: res(:), sqdiff_band1(:), sqdiff_band2(:)
-        logical, allocatable :: mask(:)
-        integer, parameter   :: NBANDS = 3
-        integer              :: loc(NBANDS), n, i
-        res = get_resarr( box, smpd )
-        n   = size(res)
-        allocate(sqdiff_band1(n), source=(res - GRAPHENE_BAND1)**2.0)
-        allocate(sqdiff_band2(n), source=(res - GRAPHENE_BAND2)**2.0)
-        allocate(mask(n), source=.true.)
-        loc = minnloc(sqdiff_band1, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-        loc = minnloc(sqdiff_band2, NBANDS)
-        do i=1,NBANDS
-            mask(loc(i)) = .false.
-        end do
-    end function calc_graphene_mask
 
     ! LINEAR ALGEBRA STUFF
 

@@ -1,5 +1,5 @@
 program simple_test_phaseplate_correct_fsc
-use simple_math
+use simple_estimate_ssnr
 implicit none
 real :: fsc(72)
 integer :: find_plate, k

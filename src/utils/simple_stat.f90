@@ -11,7 +11,7 @@ public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights, calc_stats, pearsn_serial
+public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr
 private
 #include "simple_local_flags.inc"
 
@@ -368,6 +368,20 @@ contains
             THROW_WARN('normalize_minmax, division with zero, no normalisation done')
         endif
     end subroutine normalize_minmax
+
+    pure function norm_corr( cc ) result( cc_norm )
+        real, intent(in) :: cc(3)
+        real :: eps, sqrt_denom, cc_norm
+        sqrt_denom = sqrt(cc(2) * cc(3))
+        eps = epsilon(cc(1))
+        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
+            cc_norm = 1.
+        elseif( sqrt_denom < eps )then
+            cc_norm = 0.
+        else
+            cc_norm = cc(1) / sqrt_denom
+        endif
+    end function norm_corr
 
     ! CORRELATION
 

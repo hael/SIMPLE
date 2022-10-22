@@ -1,7 +1,7 @@
 ! Fourier index iterator
 module simple_ftiter
-use simple_error, only: simple_exception
-use simple_math,  only: is_even, fdim
+use simple_error,   only: simple_exception
+use simple_math_ft, only: is_even, fdim
 use simple_defs
 implicit none
 
