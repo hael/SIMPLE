@@ -431,7 +431,6 @@ contains
     end subroutine exec_tseries_make_pickavg
 
     subroutine exec_tseries_track_particles_distr( self, cline )
-        use simple_nrtxtfile, only: nrtxtfile
         class(tseries_track_particles_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params

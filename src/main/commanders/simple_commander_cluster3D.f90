@@ -26,7 +26,6 @@ end type cluster3D_refine_commander
 contains
 
     subroutine exec_cluster3D( self, cline )
-        use simple_sym,                only: sym
         use simple_cluster_seed,       only: gen_labelling
         use simple_commander_refine3D, only: refine3D_commander_distr
         use simple_commander_rec,      only: reconstruct3D_commander_distr

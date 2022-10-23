@@ -14,12 +14,10 @@ use simple_commander_project,  only: scale_project_commander_distr
 use simple_commander_imgproc,  only: scale_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
-use simple_sym,                only: sym
 use simple_builder,            only: builder
 use simple_opt_filter,         only: opt_2D_filter_sub
 use simple_masker,             only: automask2D
 use simple_qsys_funs
-use simple_estimate_ssnr
 implicit none
 
 public :: initial_3Dmodel_commander

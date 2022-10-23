@@ -7,7 +7,6 @@ use simple_binimage,         only: binimage
 use simple_sp_project,       only: sp_project
 use simple_reconstructor,    only: reconstructor
 use simple_reconstructor_eo, only: reconstructor_eo
-use simple_sym,              only: sym
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker

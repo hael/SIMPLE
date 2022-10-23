@@ -111,7 +111,6 @@ contains
     !>  \brief  is for rotation the PPCA subspace onto an orthogonal basis
     !>  Only performed when data accessed from memory
     subroutine rotation( self )
-        ! use simple_math, only: jacobi,eigsrt,svdcmp
         class(ppca_serial), intent(inout) :: self
         real(dp) :: Tut(self%Q,self%N), evecs(self%Q,self%Q)
         integer  :: i,nrot
@@ -265,7 +264,6 @@ contains
 
     !>  \brief  EM algorithm
     subroutine em_opt( self, p, err )
-        use simple_math, only: matinv, is_a_number
         class(ppca_serial), intent(inout) :: self
         integer,     intent(out)   :: err
         real(dp),    intent(out)   :: p

@@ -2,7 +2,7 @@
 ! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
 ! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_strings
-use simple_defs   ! singleton
+use simple_defs
 use simple_error, only: simple_exception
 use, intrinsic :: iso_c_binding
 implicit none

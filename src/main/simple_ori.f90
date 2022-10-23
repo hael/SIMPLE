@@ -9,6 +9,7 @@ use simple_is_check_assert
 use simple_strings
 use simple_math
 use simple_stat
+use simple_nrtxtfile
 implicit none
 
 public :: ori, test_ori, euler2m, m2euler
@@ -609,7 +610,6 @@ contains
     end subroutine str2ori
 
     subroutine set_boxfile( self, boxfname, nptcls )
-        use simple_nrtxtfile, only: nrtxtfile
         class(ori),        intent(inout) :: self
         character(len=*),  intent(in)    :: boxfname
         integer, optional, intent(in)    :: nptcls
@@ -1455,6 +1455,23 @@ contains
             euls(1)=euls(1)+360.
         end do
     end function m2euler
+
+    !>  in-plane parameters to 3x3 transformation matrix
+    function make_transfmat( psi, tx, ty )result( R )
+        real,intent(in) :: psi,tx,ty
+        real            :: R(3,3),radpsi,cospsi,sinpsi
+        radpsi = deg2rad( psi )
+        cospsi = cos( radpsi )
+        sinpsi = sin( radpsi )
+        R      = 0.
+        R(1,1) = cospsi
+        R(2,2) = cospsi
+        R(1,2) = sinpsi
+        R(2,1) = -sinpsi
+        R(1,3) = tx
+        R(2,3) = ty
+        R(3,3) = 1.
+    end function make_transfmat
 
     !>  \brief  returns the rotation matrix for _ang_ degrees of rotation
     !! around x,y or z for _choice_ = _1_,_2_ or _3_

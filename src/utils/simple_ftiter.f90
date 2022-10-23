@@ -1,8 +1,6 @@
 ! Fourier index iterator
 module simple_ftiter
-use simple_error,   only: simple_exception
-use simple_math_ft, only: is_even, fdim
-use simple_defs
+include 'simple_lib.f08'
 implicit none
 
 public :: ftiter, test_ftiter

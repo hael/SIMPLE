@@ -1,6 +1,6 @@
 ! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
-use simple_defs         ! singleton
+use simple_defs
 use simple_timer
 implicit none
 

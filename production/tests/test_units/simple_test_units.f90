@@ -5,7 +5,6 @@ use simple_ftiter,       only: test_ftiter
 use simple_image,        only: test_image
 use simple_args,         only: test_args
 use simple_online_var,   only: test_online_var
-use simple_imghead,      only: test_imghead
 use simple_ftexp_shsrch, only: test_ftexp_shsrch
 use simple_aff_prop,     only: test_aff_prop
 implicit none

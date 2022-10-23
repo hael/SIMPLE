@@ -2,15 +2,16 @@
 module simple_kbinterpol
 use simple_defs
 use iso_c_binding
+use simple_edges_sqwins, only: sqwin_1d
 implicit none
 
 public :: kbinterpol
 private
 
 type :: kbinterpol
-   private
-   real :: alpha, beta, betasq, oneoW, piW, twooW, W, Whalf, threshInstr
- contains
+    private
+    real :: alpha, beta, betasq, oneoW, piW, twooW, W, Whalf, threshInstr
+  contains
     procedure :: new
     procedure :: get_winsz
     procedure :: get_alpha
@@ -30,55 +31,67 @@ interface kbinterpol
 end interface kbinterpol
 
 interface
+
     subroutine kbinterp_memo_set(Whalf_in, alpha_in, Nx_in) bind(c)
         use iso_c_binding
         real(c_double), value :: Whalf_in, alpha_in
         integer(c_int), value :: Nx_in
     end subroutine kbinterp_memo_set
+
     subroutine kbinterp_memo_memoize() bind(c)
     end subroutine kbinterp_memo_memoize
+
     subroutine kbinterp_memo_kill() bind(c)
     end subroutine kbinterp_memo_kill
+
     function apod_nointerp(x) result(r) bind(c)
         use iso_c_binding
         real(c_double), value :: x
         real(c_double)        :: r
     end function apod_nointerp
+
     function apod_lininterp(x) result(r) bind(c)
         use iso_c_binding
         real(c_double), value :: x
         real(c_double)        :: r
     end function apod_lininterp
+
     function dapod_nointerp(x) result(r) bind(c)
         use iso_c_binding
         real(c_double), value :: x
         real(c_double)        :: r
     end function dapod_nointerp
+
     function dapod_lininterp(x) result(r) bind(c)
         use iso_c_binding
         real(c_double), value :: x
         real(c_double)        :: r
     end function dapod_lininterp
+
     function apod_nointerp_sp(x) result(r) bind(c)
         use iso_c_binding
         real(c_float), value :: x
         real(c_float)        :: r
     end function apod_nointerp_sp
+
     function apod_lininterp_sp(x) result(r) bind(c)
         use iso_c_binding
         real(c_float), value :: x
         real(c_float)        :: r
     end function apod_lininterp_sp
+
     function dapod_nointerp_sp(x) result(r) bind(c)
         use iso_c_binding
         real(c_float), value :: x
         real(c_float)        :: r
     end function dapod_nointerp_sp
+
     function dapod_lininterp_sp(x) result(r) bind(c)
         use iso_c_binding
         real(c_float), value :: x
         real(c_float)        :: r
     end function dapod_lininterp_sp
+
 end interface
 
 contains
@@ -119,7 +132,6 @@ contains
     end function get_alpha
 
     pure integer function get_wdim( self )
-        use simple_edges_sqwins, only: sqwin_1d
         class(kbinterpol), intent(in) :: self
         integer :: win(2)
         call sqwin_1d(0., self%Whalf, win(1), win(2))

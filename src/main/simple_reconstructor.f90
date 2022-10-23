@@ -2,7 +2,6 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
-use simple_sym,        only: sym
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_parameters, only: params_glob
@@ -595,8 +594,7 @@ contains
         !$omp end parallel workshare
     end subroutine sum_reduce
 
-    subroutine add_invtausq2rho( self, fsc)
-        use simple_estimate_ssnr, only: fsc2optlp_sub
+    subroutine add_invtausq2rho( self, fsc )
         class(reconstructor),  intent(inout) :: self !< this instance
         real,     allocatable, intent(in)    :: fsc(:)
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)

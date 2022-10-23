@@ -2,12 +2,12 @@ module simple_motion_align_poly2
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_error
 use simple_image,           only: image, imstack_type
 use simple_ft_expanded_dp,  only: ft_expanded_dp
 use simple_parameters,      only: params_glob
 use simple_timer
 implicit none
+
 public :: motion_align_poly2
 private
 #include "simple_local_flags.inc"

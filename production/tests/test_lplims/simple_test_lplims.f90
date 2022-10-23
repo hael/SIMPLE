@@ -1,5 +1,5 @@
 program simple_test_lplims
-use simple_estimate_ssnr
+include 'simple_lib.f08'
 implicit none
 real :: mskdiam, lpstart,lpstop, lpcen
 mskdiam = 300.

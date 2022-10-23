@@ -1,6 +1,10 @@
 ! defines protein point-group symmetries
 module simple_sym
-include 'simple_lib.f08'
+! include 'simple_lib.f08'
+use simple_ori
+use simple_oris
+use simple_math
+use simple_rnd
 implicit none
 
 public :: sym, sym_tester

@@ -5,13 +5,11 @@ include "starfile/starfile_enum.inc"
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_sym,            only: sym
 use simple_projector_hlev, only: rotvol
 use simple_sp_project,     only: sp_project
 use simple_image,          only: image
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
-use simple_estimate_ssnr
 implicit none
 
 public :: masscen_commander
@@ -83,7 +81,7 @@ contains
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
-        use simple_estimate_ssnr, only: plot_fsc
+        use simple_fsc, only: plot_fsc
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)      :: params
@@ -123,7 +121,6 @@ contains
     end subroutine exec_print_magic_boxes
 
     subroutine exec_print_dose_weights( self, cline )
-        use simple_estimate_ssnr, only: calc_dose_weights
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)  :: params
@@ -174,7 +171,6 @@ contains
         contains
 
             subroutine read_nrs_dat( filename, arr, ndat )
-                use simple_nrtxtfile, only: nrtxtfile
                 character(len=*),  intent(in)  :: filename
                 real, allocatable, intent(out) :: arr(:)
                 integer,           intent(out) :: ndat
@@ -204,7 +200,6 @@ contains
     subroutine exec_dsym_volinit( dsym_os, cylinder)
         use simple_parameters,   only: params_glob
         use simple_image,        only: image
-        use simple_sym,          only: sym
         use simple_segmentation, only: otsu_robust_fast
         class(oris),   intent(inout) :: dsym_os
         class(image),  intent(inout) :: cylinder
@@ -344,7 +339,6 @@ contains
     subroutine exec_remoc( self, cline )
         use simple_starfile_wrappers
         use simple_projector
-        use simple_estimate_ssnr, only: fsc2optlp_sub
         class(remoc_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         class(str4arr),   allocatable :: mics(:),mics_from_ptcls(:), star_movies(:)

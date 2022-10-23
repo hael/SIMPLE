@@ -1,11 +1,11 @@
 ! batch-processing manager - Factory class
 module simple_qsys_factory
+include 'simple_lib.f08'
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_local, only: qsys_local
 use simple_qsys_slurm, only: qsys_slurm
 use simple_qsys_sge,   only: qsys_sge
 use simple_qsys_pbs,   only: qsys_pbs
-use simple_error
 implicit none
 
 public :: qsys_factory

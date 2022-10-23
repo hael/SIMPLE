@@ -346,8 +346,7 @@ contains
     end subroutine shellnorm_imgfile
 
     subroutine matchfilt_imgfile( fname2filt, fname, frcs_fname, smpd )
-        use simple_class_frcs,    only: class_frcs
-        use simple_estimate_ssnr, only: fsc2optlp_sub
+        use simple_class_frcs, only: class_frcs
         character(len=*), intent(in) :: fname2filt, fname, frcs_fname
         real,             intent(in) :: smpd
         type(stack_io)               :: stkio_r, stkio_w
