@@ -187,7 +187,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self   !< this object
         integer,                intent(in)    :: iptcl  !< particle index
         class(image),           intent(in)    :: img    !< particle image
-        integer :: ldim(3), phys(3), h, k
+        integer :: ldim(3), h, k
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
         if( .not. all(self%ldim .eq. ldim) )then
@@ -195,8 +195,7 @@ contains
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
-                phys = img%comp_addr_phys(h,k)
-                self%particles(h,k,iptcl) = img%get_cmat_at(phys(1),phys(2),1)
+                self%particles(h,k,iptcl) = img%get_fcomp2D(h,k)
             end do
         end do
     end subroutine set_ptcl
@@ -376,7 +375,7 @@ contains
         else
             shconst = PI / real((self%ldim(1)-1)/2.)
         endif
-        ! optimized shift caluclation following (shift2Dserial_1 in image class)
+        ! optimized shift calculation following (shift2Dserial_1 in image class)
         sh = real(shvec * shconst,dp)
         do h = self%lims(1,1),self%lims(1,2)
             arg     = real(h,dp) * sh(1)
