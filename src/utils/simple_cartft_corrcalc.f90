@@ -5,6 +5,7 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 use simple_projector,  only: projector
+use simple_ftiter,     only: ftiter
 implicit none
 
 public :: cartft_corrcalc, cartftcc_glob
@@ -71,8 +72,9 @@ contains
         logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
+        type(ftiter) :: ftit
         logical :: even_dims, test(2)
-        integer :: i, cnt, ithr
+        integer :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -135,10 +137,9 @@ contains
             endif
         endif
         ! Fourier index limits
-        self%lims(1,1) =  0
-        self%lims(1,2) =  params_glob%kfromto(2)
-        self%lims(2,1) = -params_glob%kfromto(2)
-        self%lims(2,2) =  params_glob%kfromto(2)
+        ftit = ftiter(self%ldim, params_glob%smpd)
+        lims = ftit%loop_lims(2)
+        self%lims = lims(1:2,:)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &         self%ref_heap(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
@@ -267,18 +268,26 @@ contains
 
     subroutine setup_resmsk_and_pxls_p_shell( self )
         class(cartft_corrcalc), intent(inout) :: self
-        integer :: h,k,sh
+        integer :: h,k,sh,sqlp,sqarg
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
         allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
         if( allocated(self%resmsk) ) deallocate(self%resmsk)
         allocate(self%resmsk(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)), source=.false.)
+        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                if( (h==0) .and. (k==0) ) cycle
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                self%resmsk(h,k) = .true.
+            end do
+        end do
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 if( (h==0) .and. (k>0) ) cycle
                 sh = nint(hyp(real(h),real(k)))
                 if( ( sh >= params_glob%kfromto(1)) .and. ( sh <= params_glob%kfromto(2)) ) then
                     self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
-                    self%resmsk(h,k)      = .true.
                 end if
             end do
         end do

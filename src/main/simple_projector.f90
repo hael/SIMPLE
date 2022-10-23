@@ -263,7 +263,7 @@ contains
                         cmat(h,k) = conjg(self%interp_fcomp(loc))
                     endif
                 else
-                    cmat(h,k) = cmplx(0.,0.)
+                    cmat(h,k) = CMPLX_ZERO
                 endif
             end do
         end do
