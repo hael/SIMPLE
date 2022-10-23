@@ -6,7 +6,6 @@ use simple_sp_project,     only: sp_project
 use simple_starproject,    only: starproject
 use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
-use simple_syslib,         only: simple_getcwd
 implicit none
 
 public :: import_starproject_commander

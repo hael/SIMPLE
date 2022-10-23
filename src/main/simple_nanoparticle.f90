@@ -609,7 +609,6 @@ contains
         ! It doesn't threshold the map. It just returns the ideal threshold.
         ! This is based on the implementation of 1D otsu
         subroutine otsu_nano(img, scaled_thresh)
-            use simple_math, only : otsu
             type(image),    intent(inout) :: img
             real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
             real, pointer     :: rmat(:,:,:)

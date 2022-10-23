@@ -2,12 +2,12 @@ module simple_motion_align_hybrid
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_error
 use simple_image,        only: image
 use simple_parameters,   only: params_glob
 use simple_ft_expanded,  only: ft_expanded
 use simple_ftexp_shsrch, only: ftexp_shsrch
 implicit none
+
 public :: motion_align_hybrid
 private
 #include "simple_local_flags.inc"

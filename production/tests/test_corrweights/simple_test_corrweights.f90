@@ -1,7 +1,6 @@
 program simple_test_corrweights
-use simple_fileio
+include 'simple_lib.f08'
 use gnufor2
-use simple_math
 implicit none
 integer, parameter :: NCORRS=38, NDISTR=5
 real               :: corrs(NCORRS), x(NCORRS), ws(NCORRS)

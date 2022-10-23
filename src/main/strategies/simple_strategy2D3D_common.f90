@@ -6,7 +6,6 @@ use simple_cmdline,    only: cmdline
 use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 use simple_stack_io,   only: stack_io
-use simple_estimate_ssnr
 implicit none
 
 public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -205,7 +204,6 @@ contains
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
         use simple_fplane, only: fplane
-        use simple_sym,    only: sym
         class(fplane),   intent(in) :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
@@ -462,7 +460,6 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol_1( pftcc, cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
@@ -550,7 +547,6 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol_2( cftcc, cline, s, do_center, xyz, iseven )
         use simple_cartft_corrcalc, only: cartft_corrcalc
-        use simple_estimate_ssnr,   only: fsc2optlp_sub
         use simple_projector,       only: projector
         class(cartft_corrcalc),  intent(inout) :: cftcc
         class(cmdline),          intent(inout) :: cline

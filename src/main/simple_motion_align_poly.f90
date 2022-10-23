@@ -2,13 +2,12 @@ module simple_motion_align_poly
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_error
 use simple_image,           only: image, image_ptr
 use simple_ft_expanded_dp,  only: ft_expanded_dp
 use simple_parameters,      only: params_glob
 use CPlot2D_wrapper_module
-use simple_timer
 implicit none
+
 public :: motion_align_poly
 private
 #include "simple_local_flags.inc"

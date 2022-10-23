@@ -318,7 +318,6 @@ contains
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
     subroutine otsu_img( img, thresh, mskrad, positive )
-        use simple_math, only: otsu
         class(image),      intent(inout) :: img
         real,    optional, intent(inout) :: thresh
         real,    optional, intent(in)    :: mskrad

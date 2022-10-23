@@ -4,7 +4,7 @@ use simple_defs
 use simple_strings, only: int2str, int2str_pad
 use simple_fileio,  only: fopen, fileiochk, fclose, file2rarr
 use simple_jiffys,  only: progress
-use simple_math,    only: hpsort
+use simple_srch_sort_loc
 implicit none
 private
 #include "simple_local_flags.inc"

@@ -1,6 +1,5 @@
 program simple_test_maxnloc
-use simple_math
-use simple_ran_tabu
+include 'simple_lib.f08'
 implicit none
 integer, parameter :: NNRS = 1000, NSEL = 10, NTST=100000
 real    :: arr(NNRS), arr_copy(NNRS)

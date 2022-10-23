@@ -1,53 +1,53 @@
 ! numerically find optimal weights for frames
 module simple_opt_image_weights
-    !$ use omp_lib
-    !$ use omp_lib_kinds
-    include 'simple_lib.f08'
-    use simple_error
-    use simple_image,        only: image
-    use simple_parameters,   only: params_glob
-    use simple_ft_expanded,  only: ft_expanded
-    use simple_ftexp_shsrch, only: ftexp_shsrch
-    use simple_opt_factory,  only: opt_factory
-    use simple_opt_spec,     only: opt_spec
-    implicit none
-    public :: opt_image_weights
-    private
+!$ use omp_lib
+!$ use omp_lib_kinds
+include 'simple_lib.f08'
+use simple_image,        only: image
+use simple_parameters,   only: params_glob
+use simple_ft_expanded,  only: ft_expanded
+use simple_ftexp_shsrch, only: ftexp_shsrch
+use simple_opt_factory,  only: opt_factory
+use simple_opt_spec,     only: opt_spec
+implicit none
+
+public :: opt_image_weights
+private
 #include "simple_local_flags.inc"
 
-    integer, parameter :: opt_weights_Nrestarts = 3
+integer, parameter :: opt_weights_Nrestarts = 3
 
-    type :: opt_image_weights
-        type(image),           pointer :: frames(:) => null()
-        type(ft_expanded), allocatable :: frames_ftexp(:)
-        type(ft_expanded)              :: R, Rhat                 !< references for *_Ref procedures
-        real,              allocatable :: weights(:)
-        real,              allocatable :: Dmat(:,:)
-        real                           :: hp=-1., lp=-1.
-        real                           :: bfactor = -1.
-        real                           :: smpd = 0.
-        real                           :: scale_factor = 1.
-        integer                        :: ldim(3)
-        integer                        :: nframes    = 0
-        integer                        :: Nrestarts  = opt_weights_Nrestarts
-        logical                        :: Dmat_based = .false.
-        logical                        :: existence  = .false.
-    contains
-        procedure                      :: new
-        procedure                      :: calc_opt_weights
-        procedure                      :: get_weights
-        procedure                      :: set_Nrestarts
-        procedure                      :: kill
-        procedure, private             :: create_ftexp_objs
-        procedure, private             :: dealloc_ftexp_objs
-        procedure, private             :: calc_Dmat                      !< calculate D-matrix (correlations between pairs of frames)
-        procedure, private             :: opt_image_weights_cost_Dmat    !< calculate cost using the D-matrix
-        procedure, private             :: opt_image_weights_gcost_Dmat   !< calculate gradient using the D-matrix
-        procedure, private             :: opt_image_weights_fdf_Dmat     !< calculate cost&gradient using the D-matrix
-        procedure, private             :: opt_image_weights_cost_Ref     !< calculate cost using reference (no D-matrix required)
-        procedure, private             :: opt_image_weights_gcost_Ref    !< calculate gradient using reference (no D-matrix required)
-        procedure, private             :: opt_image_weights_fdf_Ref      !< calculate cost&gradient using reference (no D-matrix required)
-    end type opt_image_weights
+type :: opt_image_weights
+    type(image),           pointer :: frames(:) => null()
+    type(ft_expanded), allocatable :: frames_ftexp(:)
+    type(ft_expanded)              :: R, Rhat                 !< references for *_Ref procedures
+    real,              allocatable :: weights(:)
+    real,              allocatable :: Dmat(:,:)
+    real                           :: hp=-1., lp=-1.
+    real                           :: bfactor = -1.
+    real                           :: smpd = 0.
+    real                           :: scale_factor = 1.
+    integer                        :: ldim(3)
+    integer                        :: nframes    = 0
+    integer                        :: Nrestarts  = opt_weights_Nrestarts
+    logical                        :: Dmat_based = .false.
+    logical                        :: existence  = .false.
+contains
+    procedure                      :: new
+    procedure                      :: calc_opt_weights
+    procedure                      :: get_weights
+    procedure                      :: set_Nrestarts
+    procedure                      :: kill
+    procedure, private             :: create_ftexp_objs
+    procedure, private             :: dealloc_ftexp_objs
+    procedure, private             :: calc_Dmat                      !< calculate D-matrix (correlations between pairs of frames)
+    procedure, private             :: opt_image_weights_cost_Dmat    !< calculate cost using the D-matrix
+    procedure, private             :: opt_image_weights_gcost_Dmat   !< calculate gradient using the D-matrix
+    procedure, private             :: opt_image_weights_fdf_Dmat     !< calculate cost&gradient using the D-matrix
+    procedure, private             :: opt_image_weights_cost_Ref     !< calculate cost using reference (no D-matrix required)
+    procedure, private             :: opt_image_weights_gcost_Ref    !< calculate gradient using reference (no D-matrix required)
+    procedure, private             :: opt_image_weights_fdf_Ref      !< calculate cost&gradient using reference (no D-matrix required)
+end type opt_image_weights
 
 contains
 

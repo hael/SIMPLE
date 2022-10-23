@@ -90,7 +90,7 @@ contains
 
     subroutine exec_refine3D_distr( self, cline )
         use simple_commander_rec, only: reconstruct3D_commander_distr
-        use simple_estimate_ssnr, only: plot_fsc
+        use simple_fsc,           only: plot_fsc
         class(refine3D_commander_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders

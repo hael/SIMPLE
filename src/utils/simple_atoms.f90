@@ -853,7 +853,6 @@ contains
     end subroutine convolve
 
     subroutine geometry_analysis_pdb(self, pdbfile, thresh)
-      use simple_math, only : plane_from_points
       class(atoms),     intent(inout) :: self
       character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
       real, optional,   intent(in)    :: thresh    ! for belonging

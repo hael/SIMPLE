@@ -6,7 +6,6 @@ use simple_parameters,         only: parameters
 use simple_commander_resolest, only: opt_2D_filter_commander
 use simple_commander_volops,   only: reproject_commander
 use simple_image,              only: image
-use simple_estimate_ssnr
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt, cline_projection

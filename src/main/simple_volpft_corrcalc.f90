@@ -4,7 +4,6 @@ module simple_volpft_corrcalc
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_projector, only: projector
-use simple_sym,       only: sym
 implicit none
 
 public :: volpft_corrcalc

@@ -1,6 +1,6 @@
 module simple_class_frcs
 include 'simple_lib.f08'
-use simple_estimate_ssnr
+use simple_fsc
 implicit none
 
 public :: class_frcs
@@ -269,7 +269,6 @@ contains
     end function estimate_lp_for_align
 
     subroutine downsample( self, newbox, self_out )
-        use simple_estimate_ssnr, only: subsample_optlp
         class(class_frcs), intent(in)  :: self
         integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out

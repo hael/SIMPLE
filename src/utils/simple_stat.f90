@@ -2,14 +2,15 @@
 module simple_stat
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs   ! singleton
+use simple_defs
 use simple_error, only: simple_exception
-use simple_math,  only: hpsort, median, median_nocopy, reverse
+use simple_srch_sort_loc
+use simple_is_check_assert
 implicit none
 
-public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
+public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax, stdev
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
-public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
+public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr
 private
@@ -44,8 +45,6 @@ end interface
 real, parameter :: NNET_CONST = exp(1.)-1.
 
 contains
-
-    ! MOMENTS/NORMALIZATION
 
     subroutine moment_1( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
@@ -234,157 +233,6 @@ contains
         endif
     end subroutine moment_4
 
-    !>  \brief  is for calculating variable statistics
-    subroutine calc_stats( arr, statvars, mask )
-        real,               intent(in)  :: arr(:)
-        type(stats_struct), intent(out) :: statvars
-        logical, optional,  intent(in)  :: mask(:)
-        real, allocatable :: tmparr(:)
-        real    :: var
-        logical :: err
-        if( present(mask) )then
-            call moment(arr, statvars%avg, statvars%sdev, var, err, mask)
-            tmparr        = pack(arr, mask=mask)
-            statvars%med  = median_nocopy(tmparr)
-            statvars%minv = minval(arr, mask)
-            statvars%maxv = maxval(arr, mask)
-            deallocate(tmparr)
-        else
-            call moment(arr, statvars%avg, statvars%sdev, var, err)
-            statvars%med  = median(arr)
-            statvars%minv = minval(arr)
-            statvars%maxv = maxval(arr)
-        endif
-    end subroutine calc_stats
-
-    subroutine normalize_1( arr, err )
-        real, intent(inout)  :: arr(:)
-        logical, intent(out) :: err
-        real :: ave, sdev, var
-        call moment_1( arr, ave, sdev, var, err )
-        if( err ) return
-        arr = (arr-ave)/sdev
-    end subroutine normalize_1
-
-    subroutine normalize_2( arr, err )
-        real,    intent(inout)  :: arr(:,:)
-        logical, intent(out) :: err
-        real :: ave, sdev, var
-        call moment_2( arr, ave, sdev, var, err )
-        if( err ) return
-        arr = (arr-ave)/sdev
-    end subroutine normalize_2
-
-    subroutine normalize_3( arr, err )
-        real, intent(inout)  :: arr(:,:,:)
-        logical, intent(out) :: err
-        real :: ave, sdev, var
-        call moment_3( arr, ave, sdev, var, err )
-        if( err ) return
-        arr = (arr-ave)/sdev
-    end subroutine normalize_3
-
-    subroutine normalize_4( arr, err, mask )
-        real, intent(inout)  :: arr(:)
-        logical, intent(out) :: err
-        logical, intent(in)  :: mask(:)
-        real :: ave, sdev, var
-        call moment_4( arr, ave, sdev, var, err, mask )
-        if( err ) return
-        where( mask ) arr = (arr-ave)/sdev
-    end subroutine normalize_4
-
-    subroutine normalize_sigm_1( arr )
-        real, intent(inout) :: arr(:)
-        real                :: smin, smax, delta
-        if( size(arr) == 1 )then
-            arr(1) = max(0., min(arr(1), 1.))
-            return
-        endif
-        ! find minmax
-        smin  = minval(arr)
-        smax  = maxval(arr)
-        delta = smax-smin
-        if( delta > TINY )then
-            ! create [0,1]-normalized vector
-            !$omp parallel workshare default(shared)
-            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-            !$omp end parallel workshare
-        else
-            THROW_WARN('normalize_sigm_1, division with zero, no normalisation done')
-        endif
-    end subroutine normalize_sigm_1
-
-    subroutine normalize_sigm_2( arr )
-        real, intent(inout) :: arr(:,:)
-        real                :: smin, smax, delta
-        ! find minmax
-        smin  = minval(arr)
-        smax  = maxval(arr)
-        delta = smax-smin
-        if( delta > TINY )then
-            ! create [0,1]-normalized vector
-            !$omp parallel workshare default(shared)
-            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-            !$omp end parallel workshare
-        else
-            THROW_WARN('normalize_sigm_2, division with zero, no normalisation done')
-        endif
-    end subroutine normalize_sigm_2
-
-    subroutine normalize_sigm_3( arr )
-        real, intent(inout) :: arr(:,:,:)
-        real                :: smin, smax, delta
-        ! find minmax
-        smin  = minval(arr)
-        smax  = maxval(arr)
-        delta = smax-smin
-        if( delta > TINY )then
-            ! create [0,1]-normalized vector
-            !$omp parallel workshare default(shared)
-            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-            !$omp end parallel workshare
-        else
-            THROW_WARN('normalize_sigm_3, division with zero, no normalisation done')
-        endif
-    end subroutine normalize_sigm_3
-
-    subroutine normalize_minmax( arr )
-        real, intent(inout) :: arr(:)
-        real                :: smin, smax, delta
-        if( size(arr) == 1 )then
-            arr(1) = max(0., min(arr(1), 1.))
-            return
-        endif
-         ! find minmax
-        smin  = minval(arr)
-        smax  = maxval(arr)
-        delta = smax - smin
-        if( delta > TINY )then
-            !$omp parallel workshare default(shared)
-            arr = (arr - smin)/delta
-            !$omp end parallel workshare
-        else
-            THROW_WARN('normalize_minmax, division with zero, no normalisation done')
-        endif
-    end subroutine normalize_minmax
-
-    pure function norm_corr( cc ) result( cc_norm )
-        real, intent(in) :: cc(3)
-        real :: eps, sqrt_denom, cc_norm
-        sqrt_denom = sqrt(cc(2) * cc(3))
-        eps = epsilon(cc(1))
-        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
-            cc_norm = 1.
-        elseif( sqrt_denom < eps )then
-            cc_norm = 0.
-        else
-            cc_norm = cc(1) / sqrt_denom
-        endif
-    end function norm_corr
-
-    ! CORRELATION
-
     function pearsn_1( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
@@ -512,6 +360,166 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
 
+    subroutine normalize_1( arr, err )
+        real, intent(inout)  :: arr(:)
+        logical, intent(out) :: err
+        real :: ave, sdev, var
+        call moment_1( arr, ave, sdev, var, err )
+        if( err ) return
+        arr = (arr-ave)/sdev
+    end subroutine normalize_1
+
+    subroutine normalize_2( arr, err )
+        real,    intent(inout)  :: arr(:,:)
+        logical, intent(out) :: err
+        real :: ave, sdev, var
+        call moment_2( arr, ave, sdev, var, err )
+        if( err ) return
+        arr = (arr-ave)/sdev
+    end subroutine normalize_2
+
+    subroutine normalize_3( arr, err )
+        real, intent(inout)  :: arr(:,:,:)
+        logical, intent(out) :: err
+        real :: ave, sdev, var
+        call moment_3( arr, ave, sdev, var, err )
+        if( err ) return
+        arr = (arr-ave)/sdev
+    end subroutine normalize_3
+
+    subroutine normalize_4( arr, err, mask )
+        real, intent(inout)  :: arr(:)
+        logical, intent(out) :: err
+        logical, intent(in)  :: mask(:)
+        real :: ave, sdev, var
+        call moment_4( arr, ave, sdev, var, err, mask )
+        if( err ) return
+        where( mask ) arr = (arr-ave)/sdev
+    end subroutine normalize_4
+
+    subroutine normalize_sigm_1( arr )
+        real, intent(inout) :: arr(:)
+        real                :: smin, smax, delta
+        if( size(arr) == 1 )then
+            arr(1) = max(0., min(arr(1), 1.))
+            return
+        endif
+        ! find minmax
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax-smin
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            THROW_WARN('normalize_sigm_1, division with zero, no normalisation done')
+        endif
+    end subroutine normalize_sigm_1
+
+    subroutine normalize_sigm_2( arr )
+        real, intent(inout) :: arr(:,:)
+        real                :: smin, smax, delta
+        ! find minmax
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax-smin
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            THROW_WARN('normalize_sigm_2, division with zero, no normalisation done')
+        endif
+    end subroutine normalize_sigm_2
+
+    subroutine normalize_sigm_3( arr )
+        real, intent(inout) :: arr(:,:,:)
+        real                :: smin, smax, delta
+        ! find minmax
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax-smin
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            THROW_WARN('normalize_sigm_3, division with zero, no normalisation done')
+        endif
+    end subroutine normalize_sigm_3
+
+    subroutine normalize_minmax( arr )
+        real, intent(inout) :: arr(:)
+        real                :: smin, smax, delta
+        if( size(arr) == 1 )then
+            arr(1) = max(0., min(arr(1), 1.))
+            return
+        endif
+         ! find minmax
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax - smin
+        if( delta > TINY )then
+            !$omp parallel workshare default(shared)
+            arr = (arr - smin)/delta
+            !$omp end parallel workshare
+        else
+            THROW_WARN('normalize_minmax, division with zero, no normalisation done')
+        endif
+    end subroutine normalize_minmax
+
+    function stdev (a)
+        real, intent(in) :: a(:)
+        real    :: stdev, avg, SumSQR, var, n
+        n= real(size(a))
+        if(n < 2) return
+        avg = sum(a)/n
+        SumSQR = sum(sqrt(a))/n
+        var = (SumSQR - avg*avg)/(n-1)
+        stdev = sqrt(var)
+    end function stdev
+
+    !>  \brief  is for calculating variable statistics
+    subroutine calc_stats( arr, statvars, mask )
+        real,               intent(in)  :: arr(:)
+        type(stats_struct), intent(out) :: statvars
+        logical, optional,  intent(in)  :: mask(:)
+        real, allocatable :: tmparr(:)
+        real    :: var
+        logical :: err
+        if( present(mask) )then
+            call moment(arr, statvars%avg, statvars%sdev, var, err, mask)
+            tmparr        = pack(arr, mask=mask)
+            statvars%med  = median_nocopy(tmparr)
+            statvars%minv = minval(arr, mask)
+            statvars%maxv = maxval(arr, mask)
+            deallocate(tmparr)
+        else
+            call moment(arr, statvars%avg, statvars%sdev, var, err)
+            statvars%med  = median(arr)
+            statvars%minv = minval(arr)
+            statvars%maxv = maxval(arr)
+        endif
+    end subroutine calc_stats
+
+    pure function norm_corr( cc ) result( cc_norm )
+        real, intent(in) :: cc(3)
+        real :: eps, sqrt_denom, cc_norm
+        sqrt_denom = sqrt(cc(2) * cc(3))
+        eps = epsilon(cc(1))
+        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
+            cc_norm = 1.
+        elseif( sqrt_denom < eps )then
+            cc_norm = 0.
+        else
+            cc_norm = cc(1) / sqrt_denom
+        endif
+    end function norm_corr
+
     function corrs2weights( corrs, crit, p, norm_sigm ) result( weights )
         real,                           intent(in) :: corrs(:) !< correlation input
         integer(kind=kind(ENUM_WCRIT)), intent(in) :: crit
@@ -573,8 +581,6 @@ contains
         real,    intent(in) :: tau  !< scale factor
         corr2distweight = 2.d0 * (1.d0-real(cc,dp)) * real(npix,dp) / real(tau,dp)
     end function corr2distweight
-
-    ! integer STUFF
 
     !>   Kolmogorov-Smirnov test to deduce equivalence or non-equivalence
     !>  between two distributions.
@@ -713,6 +719,52 @@ contains
     end subroutine dev_from_dmat
 
     ! ROBUST STATISTICS
+
+    !>   for calculating the median
+    function median( arr ) result( val )
+        real, intent(in)  :: arr(:)
+        real              :: copy(size(arr))
+        real    :: val, val1, val2
+        integer :: n, pos1, pos2
+        n = size(arr)
+        if( is_even(n) )then
+            pos1 = n/2
+            pos2 = pos1+1
+        else
+            pos1 = nint(real(n)/2.)
+            pos2 = pos1
+        endif
+        copy = arr
+        if( pos1 == pos2 )then
+            val  = selec(pos1,n,copy)
+        else
+            val1 = selec(pos1,n,copy)
+            val2 = selec(pos2,n,copy)
+            val  = (val1+val2)/2.
+        endif
+    end function median
+
+    !>   for calculating the median
+    function median_nocopy( arr ) result( val )
+        real, intent(inout) :: arr(:)
+        real    :: val, val1, val2
+        integer :: n, pos1, pos2
+        n = size(arr)
+        if( is_even(n) )then
+            pos1 = n/2
+            pos2 = pos1+1
+        else
+            pos1 = nint(real(n)/2.)
+            pos2 = pos1
+        endif
+        if( pos1 == pos2 )then
+            val  = selec(pos1,n,arr)
+        else
+            val1 = selec(pos1,n,arr)
+            val2 = selec(pos2,n,arr)
+            val  = (val1+val2)/2.
+        endif
+    end function median_nocopy
 
     ! median absolute deviation
     ! calculated as the median of absolute deviations of the data points

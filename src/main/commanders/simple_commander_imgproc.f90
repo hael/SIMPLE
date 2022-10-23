@@ -8,7 +8,6 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_stack_io,       only: stack_io
-use simple_estimate_ssnr
 implicit none
 
 public :: binarize_commander
@@ -361,8 +360,7 @@ contains
 
     subroutine exec_filter( self, cline )
         use simple_procimgstk
-        use simple_estimate_ssnr, only: fsc2optlp
-        use simple_tvfilter,      only: tvfilter
+        use simple_tvfilter, only: tvfilter
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params

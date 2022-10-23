@@ -1,7 +1,7 @@
 ! random number generation module
 
 module simple_rnd
-use simple_defs ! singleton
+use simple_defs
 use simple_math
 use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id

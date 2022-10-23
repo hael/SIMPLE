@@ -2,7 +2,6 @@ program simple_test_imgfile
 include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
-use simple_imghead
 implicit none
 #include "simple_local_flags.inc"
 integer       :: ldim(3), i, j, cnt

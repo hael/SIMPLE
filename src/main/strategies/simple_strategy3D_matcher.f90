@@ -8,7 +8,6 @@ use simple_timer
 use simple_binoris_io
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_kbinterpol,              only: kbinterpol
-use simple_sym,                     only: sym
 use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob

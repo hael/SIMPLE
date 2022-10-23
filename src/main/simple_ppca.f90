@@ -324,7 +324,6 @@ contains
     subroutine em_opt( self, p, err )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_math, only: matinv, is_a_number
         class(ppca), intent(inout) :: self
         integer,     intent(out)   :: err
         real(dp),    intent(out)   :: p

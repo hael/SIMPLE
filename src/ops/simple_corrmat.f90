@@ -4,9 +4,7 @@ module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_error,  only: simple_exception
-use simple_jiffys, only: progress
-use simple_image,  only: image
+use simple_image, only: image
 implicit none
 
 public :: calc_cartesian_corrmat

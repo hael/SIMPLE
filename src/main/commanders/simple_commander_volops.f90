@@ -12,7 +12,6 @@ use simple_masker,         only: masker
 use simple_projector,      only: projector
 use simple_volprep,        only: read_and_prep_vol
 use simple_volpft_srch
-use simple_estimate_ssnr
 implicit none
 
 public :: centervol_commander
@@ -512,7 +511,6 @@ contains
     !> for identification of the principal symmetry axis
     subroutine exec_symaxis_search( self, cline )
         use simple_volpft_symsrch
-        use simple_sym,  only: sym
         class(symaxis_search_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)

@@ -1,14 +1,13 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 include 'simple_lib.f08'
-use simple_sym,           only: sym
 use simple_reconstructor, only: reconstructor
 use simple_masker,        only: masker
 use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
 use simple_euclid_sigma2, only: apply_euclid_regularization
-use simple_estimate_ssnr
+use simple_fsc
 implicit none
 
 public :: reconstructor_eo

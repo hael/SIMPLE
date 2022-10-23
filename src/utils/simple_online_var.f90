@@ -1,6 +1,6 @@
 ! online moments estimation
 module simple_online_var
-use simple_defs ! singleton
+use simple_defs
 implicit none
 
 public :: online_var, test_online_var

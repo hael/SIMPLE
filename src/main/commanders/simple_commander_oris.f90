@@ -311,7 +311,6 @@ contains
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
-        use simple_nrtxtfile, only: nrtxtfile
         class(rotmats2oris_commander),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params

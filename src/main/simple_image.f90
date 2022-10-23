@@ -347,7 +347,6 @@ contains
     procedure          :: cure_outliers
     procedure          :: zero_below
     procedure          :: ellipse
-    procedure          :: hist_stretching
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -7279,31 +7278,6 @@ contains
             endif
           endif
     end subroutine ellipse
-
-    !This function performs standardization by selective histogram stretching.
-    !It consists of stretching only a selected part of the histogram that contains
-    !most of the pixels. It is developed as explained in Adiga's paper about
-    !particle picking (2003).
-    subroutine hist_stretching(self_in, self_out)
-        class(image), intent(inout) :: self_in
-        class(image), intent(inout) :: self_out
-        real :: m(1)
-        real :: stretch_lim(2)
-        integer :: npxls_at_mode
-        integer, parameter   :: N = 256        !N = 2*(nint(maxval(x)-minval(x))+1)
-        real,    parameter   :: LAMBDA = 255.  !expected max intensity value in the histogram-stretched image
-        real,    allocatable :: rmat(:,:,:), x(:)
-        real,    allocatable :: xhist(:)
-        integer, allocatable :: yhist(:)
-        call self_out%new(self_in%ldim, self_in%smpd)
-        call self_in%scale_pixels([0.,255.])   !to be consistent
-        rmat = self_in%get_rmat()
-        x = pack(rmat(:,:,:), .true.)
-        call create_hist_vector(x,N,xhist,yhist)
-        deallocate(x)
-        call find_stretch_minmax(xhist,yhist,m,npxls_at_mode,stretch_lim)
-        self_out%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = (LAMBDA-1)*(rmat-stretch_lim(1))/(stretch_lim(2)-stretch_lim(1))
-    end subroutine hist_stretching
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

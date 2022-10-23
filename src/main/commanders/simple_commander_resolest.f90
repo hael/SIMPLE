@@ -9,7 +9,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_masker,         only: masker
-use simple_estimate_ssnr
+use simple_fsc
 implicit none
 
 public :: fsc_commander

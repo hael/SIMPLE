@@ -10,7 +10,6 @@ use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
-use simple_estimate_ssnr,  only: fsc2optlp_sub
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress

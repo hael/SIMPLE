@@ -205,6 +205,25 @@ contains
         end do
     end function get_resarr
 
+    !>   is for calculating complex arg/abs/modulus, from numerical recipes
+    elemental function mycabs( a ) result( myabs )
+        complex, intent(in) :: a      !< complx component
+        real                :: myabs, x, y, frac
+        x = abs(real(a))
+        y = abs(aimag(a))
+        if( is_zero(x) ) then
+            myabs = y
+        else if( is_zero(y)  ) then
+           myabs = x
+        else if( x > y ) then
+            frac = y/x
+            myabs = x*sqrt(1.+frac*frac)
+        else
+            frac = x/y
+            myabs = y*sqrt(1.+frac*frac)
+        endif
+    end function mycabs
+
     !>   is for calculating the phase angle of a Fourier component
     !! \return phase phase angle only meaningful when cabs(comp) is well above the noise level
     elemental function phase_angle( comp ) result( phase )

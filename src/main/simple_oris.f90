@@ -2957,6 +2957,7 @@ contains
 
     !>  \brief  for calculating statistics of distances between two equally sized distributions
     subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
+        use simple_linalg, only: vector_angle_norm
         class(oris), intent(inout)  :: self1, self2
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         real, allocatable :: onormals1(:,:),onormals2(:,:)

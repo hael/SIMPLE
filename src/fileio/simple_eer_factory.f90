@@ -4,9 +4,6 @@ use, intrinsic :: iso_c_binding
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_image, only: image
-#ifdef USING_TIFF
-use simple_tifflib
-#endif
 implicit none
 
 public :: eer_decoder
@@ -286,8 +283,6 @@ contains
     end subroutine decode_frames
 
     subroutine prep_gainref( self, fname, gain )
-        use simple_math,    only: is_zero
-        use simple_imghead, only: find_ldim_nptcls
         class(eer_decoder), intent(in)    :: self
         character(len=*),   intent(in)    :: fname
         class(image),       intent(inout) :: gain

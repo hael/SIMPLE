@@ -2609,8 +2609,7 @@ contains
     end subroutine exec_pick_extract
 
     subroutine exec_make_pickrefs( self, cline )
-        use simple_sym,                 only: sym
-        use simple_projector_hlev,      only: reproject
+        use simple_projector_hlev, only: reproject
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
