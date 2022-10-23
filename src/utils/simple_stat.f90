@@ -506,17 +506,17 @@ contains
         endif
     end subroutine calc_stats
 
-    pure function norm_corr( cc ) result( cc_norm )
-        real, intent(in) :: cc(3)
+    elemental pure function norm_corr( xprod, sqprod1, sqprod2 ) result( cc_norm )
+        real, intent(in) :: xprod, sqprod1, sqprod2
         real :: eps, sqrt_denom, cc_norm
-        sqrt_denom = sqrt(cc(2) * cc(3))
-        eps = epsilon(cc(1))
-        if( cc(1) < eps .and. cc(2) < eps .and. cc(3) < eps )then
+        sqrt_denom = sqrt(sqprod1 * sqprod2)
+        eps = epsilon(xprod)
+        if( xprod < eps .and. sqprod1 < eps .and. sqprod2 < eps )then
             cc_norm = 1.
         elseif( sqrt_denom < eps )then
             cc_norm = 0.
         else
-            cc_norm = cc(1) / sqrt_denom
+            cc_norm = xprod / sqrt_denom
         endif
     end function norm_corr
 
