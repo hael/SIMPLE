@@ -244,89 +244,61 @@ contains
     end subroutine fproject_serial_1
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial_2( self, ospace, iref, fplane, find_lp )
-        class(projector),  intent(inout) :: self
-        class(oris),       intent(in)    :: ospace
-        integer,           intent(in)    :: iref
-        class(image),      intent(inout) :: fplane
-        integer, optional, intent(in)    :: find_lp
+    subroutine fproject_serial_2( self, e, lims, cmat, resmsk )
+        class(projector),              intent(inout) :: self
+        class(ori),                    intent(in)    :: e
+        integer,                       intent(in)    :: lims(2,2)
+        complex(kind=c_float_complex), intent(inout) :: cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real        :: loc(3), e_rotmat(3,3)
-        integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
-        complex(sp) :: comp
-        lims = self%loop_lims(2)
-        if( present(find_lp) )then
-            sqlp = find_lp * find_lp
-        else
-            sqlp = (maxval(lims(:,2)))**2
-        endif
-        ldim = fplane%get_ldim()
-        call fplane%zero_and_flag_ft()
-        e_rotmat = ospace%get_mat(iref)
+        integer     :: h, k
+        e_rotmat = e%get_mat()
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                sqarg = dot_product([h,k],[h,k])
-                if( sqarg > sqlp ) cycle
-                loc  = matmul(real([h,k,0]), e_rotmat)
-                comp = self%interp_fcomp(loc)
-                if (h > 0) then
-                    phys(1) = h + 1
-                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
-                    phys(3) = 1
-                    call fplane%set_cmat_at(phys, comp)
+                if( resmsk(h,k) )then
+                    loc = matmul(real([h,k,0]), e_rotmat)
+                    if( h > 0 )then
+                        cmat(h,k) = self%interp_fcomp(loc)
+                    else
+                        cmat(h,k) = conjg(self%interp_fcomp(loc))
+                    endif
                 else
-                    phys(1) = -h + 1
-                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
-                    phys(3) = 1
-                    call fplane%set_cmat_at(phys, conjg(comp))
+                    cmat(h,k) = cmplx(0.,0.)
                 endif
             end do
         end do
     end subroutine fproject_serial_2
 
-    function fproject_and_correlate_serial( self, e, img2cc, lims, ctfmat, find_lp ) result( corr )
-        class(projector),  intent(inout) :: self
-        class(ori),        intent(in)    :: e
-        class(image),      intent(inout) :: img2cc
-        integer,           intent(in)    :: lims(2,2)
-        real,              intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        integer,           intent(in)    :: find_lp
-        complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)
+    function fproject_and_correlate_serial( self, e, lims, cmat, ctfmat, resmsk ) result( corr )
+        class(projector),              intent(inout) :: self
+        class(ori),                    intent(in)    :: e
+        integer,                       intent(in)    :: lims(2,2)
+        complex(kind=c_float_complex), intent(inout) :: cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
-        integer :: h, k, sqarg, sqlp, phys(3), ldim(3)
-        complex :: comp1, comp2
-        sqlp     = find_lp * find_lp
-        ldim     = img2cc%get_ldim()
+        integer :: h, k
+        complex :: ref_comp
         e_rotmat = e%get_mat()
         cc(:)    = 0.
-        call img2cc%get_cmat_ptr(cmat_ptr)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                sqarg = dot_product([h,k],[h,k])
-                if( sqarg > sqlp ) cycle
-                loc   = matmul(real([h,k,0]), e_rotmat)
-                comp1 = self%interp_fcomp(loc)
-                if (h > 0) then
-                    phys(1) = h + 1
-                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
-                    phys(3) = 1
-                else
-                    phys(1) = -h + 1
-                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
-                    phys(3) = 1
-                    comp1 = conjg(comp1)
+                if( resmsk(h,k) )then
+                    loc = matmul(real([h,k,0]), e_rotmat)
+                    if( h > 0 )then
+                        ref_comp =       self%interp_fcomp(loc)  * ctfmat(h, k)
+                    else
+                        ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h, k)
+                    endif
+                    ! update cross product
+                    cc(1) = cc(1) + real(ref_comp * conjg(cmat(h,k)))
+                    ! update normalization terms
+                    cc(2) = cc(2) + real(ref_comp * conjg(ref_comp))
+                    cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
                 endif
-                ! multiply reference with CTF
-                comp1 = comp1 * ctfmat(h, k)
-                ! get particle Fourier component
-                comp2 = cmat_ptr(phys(1),phys(2),phys(3))
-                ! update cross product
-                cc(1) = cc(1) + real(comp1 * conjg(comp2))
-                ! update normalization terms
-                cc(2) = cc(2) + real(comp1 * conjg(comp1))
-                cc(3) = cc(3) + real(comp2 * conjg(comp2))
             end do
         end do
-        corr = norm_corr(cc)
+        corr = norm_corr(cc(1),cc(2),cc(3))
     end function fproject_and_correlate_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
