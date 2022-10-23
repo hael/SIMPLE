@@ -195,7 +195,7 @@ contains
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
-                self%particles(h,k,iptcl) = img%get_fcomp2D(h,k)
+                self%particles(h,k,self%pinds(iptcl)) = img%get_fcomp2D(h,k)
             end do
         end do
     end subroutine set_ptcl
