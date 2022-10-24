@@ -53,8 +53,8 @@ contains
 
     !> \brief  is for pretty elapsed time printing
     subroutine simple_print_timer( elapsed )
-        real(timer_int_kind),  intent(in) :: elapsed
-        write(logfhandle,'(A,F9.2,A)') ">>> Execution time: ", elapsed, " seconds"
+        real(timer_int_kind), intent(in) :: elapsed
+        write(logfhandle,'(A,F9.2,A)') "**** Execution time : ", elapsed, " seconds"
     end subroutine simple_print_timer
 
     subroutine simple_print_git_version( git_hash )
