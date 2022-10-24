@@ -1374,6 +1374,9 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
+                self%kfromto(1)  = 1
+                ! because therew are less interpolation errors 
+                ! and more components at low resolution in the Cartesian formulation
             case DEFAULT
                 self%l_cartesian = .false.
         end select

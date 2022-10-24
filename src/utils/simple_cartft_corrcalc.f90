@@ -105,7 +105,7 @@ contains
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
         ! allocate optimal low-pass filter
-        allocate(self%optlp(1:params_glob%kfromto(2)), source=0.)
+        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -203,7 +203,7 @@ contains
 
     subroutine set_optlp( self, optlp )
         class(cartft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: optlp(1:params_glob%kfromto(2))
+        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kfromto(2))
         self%optlp(:) = optlp(:)
         self%l_filt_set = .true.
     end subroutine set_optlp
@@ -270,7 +270,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: h,k,sh,sqlp,sqarg
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
-        allocate(self%pxls_p_shell(1:params_glob%kfromto(2)), source=0.)
+        allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
         if( allocated(self%resmsk) ) deallocate(self%resmsk)
         allocate(self%resmsk(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)), source=.false.)
         sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
