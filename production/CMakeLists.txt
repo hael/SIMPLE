@@ -55,6 +55,7 @@ endif()
  list(REMOVE_ITEM TESTDIRS "tests/test_mpimp_benchmark")
 if(NOT USE_NLOPT)
   list(REMOVE_ITEM TESTDIRS "tests/test_nlopt")
+  list(REMOVE_ITEM TESTDIRS "tests/test_nlopt_lp_spectrum")
 endif()
 
 if(USE_MPI AND USE_OPENMP)
