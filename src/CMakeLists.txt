@@ -6,6 +6,12 @@ add_custom_target(simple_args
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/main
   USES_TERMINAL
   )
+add_custom_target(simple_git
+  COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl"
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/main
+  USES_TERMINAL
+)
 file(GLOB DEFS_src   "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]"   PARENT_SCOPE)
 file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
 list(APPEND FILEIO_src
@@ -50,7 +56,7 @@ add_custom_target(simple_modules
     add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
   endif()
 
-add_dependencies(${SIMPLELIB} simple_args simple_modules)
+add_dependencies(${SIMPLELIB} simple_args simple_git simple_modules)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
   LINKER_LANGUAGE Fortran
@@ -73,4 +79,3 @@ install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
 # Make sure the compiler can find include files for our SIMPLE library
 # when other libraries or executables link to it
 target_include_directories (${SIMPLELIB} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
