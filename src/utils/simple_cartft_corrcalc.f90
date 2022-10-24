@@ -138,10 +138,10 @@ contains
                 end do
             endif
         endif
-        ! Fourier index limits
-        ftit = ftiter(self%ldim, params_glob%smpd)
-        lims = ftit%loop_lims(2)
-        self%lims = lims(1:2,:)
+        self%lims(1,1) =  0
+        self%lims(1,2) =  params_glob%kfromto(2)
+        self%lims(2,1) = -params_glob%kfromto(2)
+        self%lims(2,2) =  params_glob%kfromto(2)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &         self%ref_heap(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
