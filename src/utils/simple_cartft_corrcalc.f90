@@ -280,15 +280,8 @@ contains
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 self%resmsk(h,k) = .true.
-            end do
-        end do
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                if( (h==0) .and. (k>0) ) cycle
                 sh = nint(hyp(real(h),real(k)))
-                if( ( sh >= params_glob%kfromto(1)) .and. ( sh <= params_glob%kfromto(2)) ) then
-                    self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
-                end if
+                self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
             end do
         end do
     end subroutine setup_resmsk_and_pxls_p_shell
@@ -402,11 +395,7 @@ contains
                 hphys   = h + 1
                 sh_comp = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                if( h > 0 )then
-                    ref_comp =       self%ref_heap(h,k,ithr)  * self%ctfmats(h,k,i)
-                else
-                    ref_comp = conjg(self%ref_heap(h,k,ithr)) * self%ctfmats(h,k,i)
-                endif
+                ref_comp = self%ref_heap(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i) * sh_comp
                 ! update cross product
