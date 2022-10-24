@@ -1,16 +1,18 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
 include 'simple_lib.f08'
-use simple_image,      only: image
-use simple_cmdline,    only: cmdline
-use simple_builder,    only: build_glob
-use simple_parameters, only: params_glob
-use simple_stack_io,   only: stack_io
+use simple_image,            only: image
+use simple_cmdline,          only: cmdline
+use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
+use simple_stack_io,         only: stack_io
+use simple_polarft_corrcalc, only: pftcc_glob
+use simple_cartft_corrcalc,  only: cftcc_glob
 implicit none
 
 public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch
+&preprefvol_polar, preprefvol_cart, prep2Dref, preprecvols, killrecvols, prepimgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -18,11 +20,6 @@ interface read_imgbatch
     module procedure read_imgbatch_1
     module procedure read_imgbatch_2
 end interface read_imgbatch
-
-interface preprefvol
-    module procedure preprefvol_1
-    module procedure preprefvol_2
-end interface preprefvol
 
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
@@ -222,12 +219,11 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img_in, img_out )
+    subroutine prepimg4align( iptcl, img )
         use simple_polarizer,     only: polarizer
         use simple_ctf,           only: ctf
         integer,          intent(in)    :: iptcl
-        class(image),     intent(inout) :: img_in
-        class(polarizer), intent(inout) :: img_out
+        class(polarizer), intent(inout) :: img
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise
@@ -236,51 +232,47 @@ contains
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
-        call img_in%noise_norm(build_glob%lmsk, sdev_noise)
+        call img%noise_norm(build_glob%lmsk, sdev_noise)
         ! move to Fourier space
-        call img_in%fft()
+        call img%fft()
         ! Shift image to rotational origin & phase-flipping
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img%shift2Dserial([-x,-y])
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! all good
             case(CTFFLAG_YES) ! phase flip
                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img_in, 'flip', ctfparms)
+                call tfun%apply_serial(img, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
         ! back to real-space
-        call img_in%ifft()
-        ! clip image if needed
-        call img_in%clip(img_out)
+        call img%ifft()
         ! soft-edged mask
         if( params_glob%l_focusmsk )then
-            call img_out%mask(params_glob%focusmsk, 'soft')
+            call img%mask(params_glob%focusmsk, 'soft')
         else
             if( params_glob%l_needs_sigma )then
-                call img_out%mask(params_glob%msk, 'softavg')
+                call img%mask(params_glob%msk, 'softavg')
             else
-                call img_out%mask(params_glob%msk, 'soft')
+                call img%mask(params_glob%msk, 'soft')
             endif
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call img_out%div_by_instrfun
+        if( params_glob%gridding.eq.'yes' ) call img%div_by_instrfun
         ! return in Fourier space
-        call img_out%fft()
+        call img%fft()
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_polarizer,        only: polarizer
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        class(image),            intent(inout) :: img_in
-        class(polarizer),        intent(inout) :: img_out
-        integer,                 intent(in)    :: icls
-        logical, optional,       intent(in)    :: center
-        real,    optional,       intent(in)    :: xyz_in(3)
-        real,    optional,       intent(out)   :: xyz_out(3)
+        class(image),      intent(inout) :: img_in
+        class(polarizer),  intent(inout) :: img_out
+        integer,           intent(in)    :: icls
+        logical, optional, intent(in)    :: center
+        real,    optional, intent(in)    :: xyz_in(3)
+        real,    optional, intent(out)   :: xyz_out(3)
         integer :: filtsz
         real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real    :: xyz(3), sharg
@@ -313,7 +305,7 @@ contains
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(filtsz, frc, filter)
             if( params_glob%l_match_filt )then
-                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 call img_in%apply_filter_serial(filter)
@@ -386,10 +378,20 @@ contains
         endif
         if( doprep )then
             allocate(build_glob%imgbatch(batchsz))
-            do ibatch=1,batchsz
-                call build_glob%imgbatch(ibatch)%new([params_glob%box,params_glob%box,1], &
-                    params_glob%smpd, wthreads=.false.)
-            end do
+            if( params_glob%l_cartesian )then
+                !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
+                do ibatch = 1,batchsz
+                    call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                end do
+                !$omp end parallel do
+            else
+                !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
+                do ibatch = 1,batchsz
+                    call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                    call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
+                end do
+                !$omp end parallel do
+            endif
         endif
     end subroutine prepimgbatch
 
@@ -458,10 +460,9 @@ contains
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol_1( pftcc, cline, s, do_center, xyz, iseven )
+    subroutine preprefvol_polar( cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_projector,        only: projector
-        class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
@@ -492,7 +493,7 @@ contains
                         if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                         call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                         call fsc2optlp_sub(filtsz, frc, filter)
-                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                        call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     enddo
                 endif
             else
@@ -502,7 +503,7 @@ contains
                     filter = 1.
                 endif
                 do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                 enddo
             endif
         else
@@ -542,13 +543,11 @@ contains
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-    end subroutine preprefvol_1
+    end subroutine preprefvol_polar
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol_2( cftcc, cline, s, do_center, xyz, iseven )
-        use simple_cartft_corrcalc, only: cartft_corrcalc
-        use simple_projector,       only: projector
-        class(cartft_corrcalc),  intent(inout) :: cftcc
+    subroutine preprefvol_cart( cline, s, do_center, xyz, iseven )
+        use simple_projector, only: projector
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
@@ -579,7 +578,7 @@ contains
                 else
                     filter = 1.
                 endif
-                call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                call cftcc_glob%set_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             endif
         else
             if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
@@ -618,7 +617,7 @@ contains
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-    end subroutine preprefvol_2
+    end subroutine preprefvol_cart
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker,        only: masker

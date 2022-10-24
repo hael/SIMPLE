@@ -298,7 +298,6 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !           using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        use simple_kbinterpol, only: kbinterpol
         logical, intent(in)           :: do_frac_update
         integer, parameter            :: READBUFFSZ = 1024
         complex, parameter            :: zero = cmplx(0.,0.)

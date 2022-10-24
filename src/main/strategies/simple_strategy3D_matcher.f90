@@ -7,7 +7,6 @@ use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
 use simple_binoris_io
 use simple_qsys_funs,               only: qsys_job_finished
-use simple_kbinterpol,              only: kbinterpol
 use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
@@ -39,7 +38,6 @@ logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(cartft_corrcalc),  target :: cftcc
-type(polarizer),   allocatable :: match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 type(sym)                      :: c1_symop
@@ -168,30 +166,16 @@ contains
         if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
+        ! cannot kill build_glob%vol_odd when we support cftcc refinement (Cartesian)
         call build_glob%vol2%kill
-        ! call build_glob%vol_odd%kill ! cannot kill when we support cftcc refinement (Cartesian)
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
-        allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
+        allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
+        if( .not. params_glob%l_cartesian ) call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
-        if( params_glob%l_cartesian )then
-            !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
-            do imatch=1,batchsz_max
-                call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
-            end do
-            !$omp end parallel do
-        else
-            call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
-            !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
-            do imatch=1,batchsz_max
-                call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
-                call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
-            end do
-            !$omp end parallel do
-        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
@@ -318,20 +302,12 @@ contains
         call clean_strategy3D ! deallocate s3D singleton
         if( params_glob%l_cartesian )then
             call cftcc%kill
-            do ibatch=1,batchsz_max
-                call match_imgs(ibatch)%kill
-            end do
         else
             call pftcc%kill
-            do ibatch=1,batchsz_max
-                call match_imgs(ibatch)%kill_polarizer
-                call match_imgs(ibatch)%kill
-            end do
         endif
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
         call orientation%kill
-        deallocate(match_imgs)
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)
 
@@ -430,7 +406,7 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
             ! PREPARE ODD REFERENCES
-            call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
+            call preprefvol_polar(cline, s, do_center, xyz, .false.)
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
@@ -440,7 +416,7 @@ contains
             end do
             !$omp end parallel do
             ! PREPARE EVEN REFERENCES
-            call preprefvol(pftcc,  cline, s, do_center, xyz, .true.)
+            call preprefvol_polar(cline, s, do_center, xyz, .true.)
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
@@ -467,9 +443,9 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
             ! odd refvol
-            call preprefvol(cftcc, cline, s, do_center, xyz, .false.)
+            call preprefvol_cart(cline, s, do_center, xyz, .false.)
             ! even refvol
-            call preprefvol(cftcc, cline, s, do_center, xyz, .true.)
+            call preprefvol_cart(cline, s, do_center, xyz, .true.)
         end do
     end subroutine prepcftcc4align
 
@@ -486,10 +462,9 @@ contains
         do iptcl_batch = 1,nptcls_here
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call match_imgs(iptcl_batch)%zero_and_unflag_ft
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), match_imgs(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
             ! transfer to polar coordinates
-            call match_imgs(iptcl_batch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%imgbatch(iptcl_batch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -511,9 +486,8 @@ contains
         do iptcl_batch = 1,nptcls_here
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call match_imgs(iptcl_batch)%zero_and_unflag_ft
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), match_imgs(iptcl_batch))
-            call cftcc%set_ptcl(iptcl, match_imgs(iptcl_batch))
+            call prepimg4align(iptcl,  build_glob%imgbatch(iptcl_batch))
+            call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
             ! e/o flag
             call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do

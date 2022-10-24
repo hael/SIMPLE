@@ -40,7 +40,6 @@ contains
     !> \brief  initialises the image polarizer
     subroutine init_polarizer( self, pftcc, alpha )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_kbinterpol,       only: kbinterpol
         use simple_gridding,         only: gen_instrfun_img
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled

@@ -3,7 +3,7 @@ module simple_strategy3D_srch
 include 'simple_lib.f08'
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
-use simple_cartft_corrcalc,    only: cartftcc_glob
+use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
@@ -198,7 +198,7 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
         endif
         ! prep corr
-        self%prev_corr = cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
+        self%prev_corr = cftcc_glob%project_and_correlate(self%iptcl, self%o_prev)
         call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 

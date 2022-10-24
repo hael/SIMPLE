@@ -5396,7 +5396,6 @@ contains
 
     !>  \brief generates instrument function divided image
     subroutine div_w_instrfun( self, interpfun, alpha, padded_dim )
-        use simple_kbinterpol, only: kbinterpol
         class(image),           intent(inout) :: self
         character(len =*),      intent(in)    :: interpfun
         real,         optional, intent(in)    :: alpha

@@ -34,7 +34,7 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
-    type(image),            allocatable :: imgbatch(:)            !< batch of images
+    type(polarizer),        allocatable :: imgbatch(:)            !< batch of images
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks

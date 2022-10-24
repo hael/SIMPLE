@@ -1,7 +1,6 @@
 program simple_test_simnano
 include 'simple_lib.f08'
 use simple_image,      only: image
-use simple_kbinterpol, only: kbinterpol
 use simple_projector,  only: projector
 use simple_ctf,        only: ctf
 use simple_simulator,  only: simimg

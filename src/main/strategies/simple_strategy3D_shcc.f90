@@ -7,7 +7,7 @@ use simple_parameters,      only: params_glob
 use simple_builder,         only: build_glob
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
-use simple_cartft_corrcalc, only: cartftcc_glob
+use simple_cartft_corrcalc, only: cftcc_glob
 implicit none
 
 public :: strategy3D_shcc
@@ -64,7 +64,7 @@ contains
                 ! do irot = 1,self%s%nrots
                 !     call o%e3set(build_glob%inpl_rots(irot))
                 !     ! calculate Cartesian corr
-                !     corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                !     corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
                 !     if( corr > corr_inpl )then
                 !         corr_inpl = corr
                 !         e3 = build_glob%inpl_rots(irot)
@@ -72,7 +72,7 @@ contains
                 ! end do
                 ! call o%e3set(e3)
 
-                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
                 if( corr > corr_best )then
                     corr_best  = corr
                     obest      = o
@@ -93,7 +93,7 @@ contains
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
                 ! calculate Cartesian corr
-                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
                 if( corr > corr_best )then
                     corr_best  = corr
                     obest      = o
