@@ -104,7 +104,6 @@ call make_user_interface
 call make_private_user_interface
 ! this parses all key=value pairs on the command line
 call cline%parse_private
-
 call print_slurm_env
 
 select case(prg)

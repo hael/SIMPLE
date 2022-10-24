@@ -368,5 +368,5 @@ endif
 call simple_print_git_version('a568fb1')
 ! end timer and print
 rt_exec = toc(t0)
-! call simple_print_timer(rt_exec)
+call simple_print_timer(rt_exec)
 end program simple_exec
