@@ -85,6 +85,7 @@ contains
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.8)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)

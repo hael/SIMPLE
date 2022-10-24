@@ -694,7 +694,6 @@ contains
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
             if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
-            params%l_automsk   = .false.
             params%startit     = startit
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
