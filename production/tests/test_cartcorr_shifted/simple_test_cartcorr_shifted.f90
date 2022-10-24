@@ -72,7 +72,7 @@ contains
             x = x + shstep
         end do
         do i = 1,cnt
-            corr = cftcc%corr_shifted(iptcl, srch_space(cnt,:))
+            corr = cftcc%corr_shifted(iptcl, srch_space(i,:))
             print *, srch_space(i,1), srch_space(i,2), corr
         end do
     end subroutine srch_shifts
