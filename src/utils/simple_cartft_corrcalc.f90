@@ -8,7 +8,7 @@ use simple_projector,  only: projector
 use simple_ftiter,     only: ftiter
 implicit none
 
-public :: cartft_corrcalc, cartftcc_glob
+public :: cartft_corrcalc, cftcc_glob
 private
 #include "simple_local_flags.inc"
 
@@ -22,7 +22,7 @@ type :: cartft_corrcalc
     integer                                    :: lims(2,2)  = 0         !< resolution mask limits
     integer,                       allocatable :: pinds(:)               !< index array (to reduce memory when frac_update < 1)
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
-    real(sp),                      allocatable :: ctfmats(:,:,:)         !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
     real(sp),                      allocatable :: optlp(:)               !< references optimal filter
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: ref_heap(:,:,:)        !< reference Fourier components (h,k,ithr)
@@ -59,7 +59,7 @@ type :: cartft_corrcalc
 end type cartft_corrcalc
 
 ! CLASS PARAMETERS/VARIABLES
-class(cartft_corrcalc), pointer :: cartftcc_glob => null()
+class(cartft_corrcalc), pointer :: cftcc_glob => null()
 
 contains
 
@@ -95,7 +95,7 @@ contains
         endif
         ! set constants
         self%filtsz = fdim(params_glob%box) - 1
-        self%l_match_filt = l_match_filt !< do shellnorm and filtering here (needs to be local because in 3D we do it on the reference volumes)
+        self%l_match_filt = l_match_filt                         !< do shellnorm and filtering here
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
@@ -105,7 +105,7 @@ contains
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
         ! allocate optimal low-pass filter
-        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
+        allocate(self%optlp(1:params_glob%kfromto(2)), source=0.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -153,7 +153,7 @@ contains
         ! flag existence
         self%existence = .true.
         ! set pointer to global instance
-        cartftcc_glob => self
+        cftcc_glob => self
     end subroutine new
 
     ! SETTERS
@@ -203,7 +203,7 @@ contains
 
     subroutine set_optlp( self, optlp )
         class(cartft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        real,                   intent(in)    :: optlp(1:params_glob%kfromto(2))
         self%optlp(:) = optlp(:)
         self%l_filt_set = .true.
     end subroutine set_optlp
@@ -270,7 +270,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: h,k,sh,sqlp,sqarg
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
-        allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
+        allocate(self%pxls_p_shell(1:params_glob%kfromto(2)), source=0.)
         if( allocated(self%resmsk) ) deallocate(self%resmsk)
         allocate(self%resmsk(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)), source=.false.)
         sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)

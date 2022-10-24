@@ -2,7 +2,6 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
-use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 implicit none

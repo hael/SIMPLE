@@ -5,7 +5,6 @@ module simple_gridding
 include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_projector,  only: projector
-use simple_kbinterpol, only: kbinterpol
 implicit none
 
 public :: mul_w_instr, gen_instrfun_img

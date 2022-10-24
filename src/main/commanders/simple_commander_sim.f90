@@ -70,7 +70,6 @@ contains
     end subroutine exec_simulate_noise
 
     subroutine exec_simulate_particles( self, cline )
-        use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline

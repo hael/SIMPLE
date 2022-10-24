@@ -7,7 +7,7 @@ use simple_parameters,      only: params_glob
 use simple_builder,         only: build_glob
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_srch, strategy3D_spec
-use simple_cartft_corrcalc, only: cartftcc_glob
+use simple_cartft_corrcalc, only: cftcc_glob
 implicit none
 
 public :: strategy3D_neighc
@@ -59,7 +59,7 @@ contains
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
                 ! calculate Cartesian corr
-                corr = cartftcc_glob%project_and_correlate(self%s%iptcl, o)
+                corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
                 if( corr > corr_best )then
                     corr_best  = corr
                     obest      = o

@@ -175,7 +175,6 @@ contains
 
     !>  \brief  return the window functions used by reconstructor_eo
     function get_kbwin( self ) result( wf )
-        use simple_kbinterpol,    only: kbinterpol
         class(reconstructor_eo), intent(inout) :: self
         type(kbinterpol) :: wf
         wf = self%even%get_kbwin()

@@ -153,7 +153,7 @@ select case(prg)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
-call simple_print_git_version('68d3312')
+call simple_print_git_version('a568fb1')
 call update_job_descriptions_in_project( cline )
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then
