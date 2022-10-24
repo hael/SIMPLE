@@ -36,9 +36,11 @@ type :: cartft_corrcalc
     contains
     ! CONSTRUCTOR
     procedure          :: new
+    procedure          :: new_dev
     ! SETTERS
     procedure          :: reallocate_ptcls
     procedure          :: set_ptcl
+    procedure          :: set_ref
     procedure          :: set_optlp
     procedure          :: set_eo
     ! GETTERS
@@ -73,8 +75,8 @@ contains
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         type(ftiter) :: ftit
-        logical :: even_dims, test(2)
-        integer :: i, cnt, ithr, lims(3,2)
+        logical      :: even_dims, test(2)
+        integer      :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -105,7 +107,7 @@ contains
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
         ! allocate optimal low-pass filter
-        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=0.)
+        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -156,6 +158,61 @@ contains
         cftcc_glob => self
     end subroutine new
 
+    subroutine new_dev( self, pfromto )
+        class(cartft_corrcalc), target, intent(inout) :: self
+        integer,                        intent(in)    :: pfromto(2)
+        type(ftiter) :: ftit
+        logical      :: even_dims, test(2)
+        integer      :: i, cnt, ithr, lims(3,2)
+        ! kill possibly pre-existing object
+        call self%kill
+        ! set particle index range
+        self%pfromto = pfromto
+        ! error check
+        if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
+            write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
+            THROW_HARD ('nptcls (# of particles) must be > 0; new')
+        endif
+        self%ldim = [params_glob%box,params_glob%box,1] !< logical dimensions of original cartesian image
+        test      = .false.
+        test(1)   = is_even(self%ldim(1))
+        test(2)   = is_even(self%ldim(2))
+        even_dims = all(test)
+        if( .not. even_dims )then
+            write(logfhandle,*) 'self%ldim: ', self%ldim
+            THROW_HARD ('only even logical dims supported; new')
+        endif
+        ! set constants
+        self%filtsz       = fdim(params_glob%box) - 1
+        self%l_match_filt = .false.
+        self%nptcls       = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
+        ! allocate optimal low-pass filter
+        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=1.)
+        ! index translation table
+        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
+        self%pinds = (/(i,i=1,self%nptcls)/)
+        ! eo assignment
+        allocate( self%iseven(1:self%nptcls), source=.true. )
+        ! Fourier index limits
+        ftit = ftiter(self%ldim, params_glob%smpd)
+        lims = ftit%loop_lims(2)
+        self%lims = lims(1:2,:)
+        ! allocate the rest
+        allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
+        &         self%ref_heap(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
+        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        ! set CTF flag
+        self%with_ctf = .false.
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = .false.
+        ! setup resolution mask pxls_p_shell
+        call self%setup_resmsk_and_pxls_p_shell
+        ! flag existence
+        self%existence = .true.
+        ! set pointer to global instance
+        cftcc_glob => self
+    end subroutine new_dev
+
     ! SETTERS
 
     subroutine reallocate_ptcls( self, nptcls, pinds )
@@ -200,6 +257,25 @@ contains
             end do
         end do
     end subroutine set_ptcl
+
+    subroutine set_ref( self, img )
+        class(cartft_corrcalc), intent(inout) :: self   !< this object
+        class(image),           intent(in)    :: img    !< particle image
+        integer :: ldim(3), h, k, ithr
+        if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
+        ldim = img%get_ldim()
+        if( .not. all(self%ldim .eq. ldim) )then
+            THROW_HARD('inconsistent image dimensions, input vs class internal')
+        endif
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                self%ref_heap(h,k,1) = img%get_fcomp2D(h,k)
+            end do
+        end do
+        do ithr = 2,nthr_glob
+            self%ref_heap(:,:,ithr) = self%ref_heap(:,:,1)
+        end do
+    end subroutine set_ref
 
     subroutine set_optlp( self, optlp )
         class(cartft_corrcalc), intent(inout) :: self
@@ -356,11 +432,10 @@ contains
         corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk)
     end function project_and_correlate
 
-    function corr_shifted( self, iptcl, o, shvec ) result( corr )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iptcl
-        class(ori),             intent(in)    :: o
-        real,                   intent(in)    :: shvec(2)
+    function corr_shifted( self, iptcl, shvec ) result( corr )
+        class(cartft_corrcalc), intent(inout)  :: self
+        integer,                intent(in)     :: iptcl
+        real,                   intent(in)     :: shvec(2)
         complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
         integer  :: i, h, k, hphys, kphys, ithr
         complex  :: ref_comp, ptcl_comp, sh_comp
