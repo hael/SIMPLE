@@ -164,6 +164,10 @@ contains
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
+        ! because therew are less interpolation errors  and more components at low resolution 
+        ! in the Cartesian formulation we set the high-pass Fourier index to 1
+        if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
+        ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
 
@@ -195,6 +199,10 @@ contains
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
+        ! because therew are less interpolation errors  and more components at low resolution 
+        ! in the Cartesian formulation we set the high-pass Fourier index to 1
+        if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
+        ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
 
