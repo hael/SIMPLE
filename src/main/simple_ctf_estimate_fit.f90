@@ -16,7 +16,7 @@ private
 #include "simple_local_flags.inc"
 
 real,                  parameter :: TOL   = 1.e-5
-integer,               parameter :: IARES = 10, NSTEPS = 200, POLYDIM = 10
+integer,               parameter :: IARES = 10, NSTEPS = 200, NBINS=5, POLYDIM = 10
 logical,               parameter :: DEBUG_HERE = .false.
 logical,               parameter :: BENCH      = .false.
 
@@ -61,7 +61,7 @@ type ctf_estimate_fit
     logical                   :: l_nano       = .false.
     logical                   :: exists       = .false.
     integer(timer_int_kind)   :: t, t_tot
-    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_1D, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch
+    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch
 contains
     ! constructor
     procedure          :: new
@@ -78,7 +78,7 @@ contains
     procedure          :: fit
     procedure, private :: mic2spec
     procedure, private :: ft2img
-    procedure, private :: grid_srch
+    procedure, private :: srch
     procedure, private :: refine
     procedure          :: fit_patches
     procedure, private :: norm_pspec
@@ -414,16 +414,13 @@ contains
         if( BENCH ) self%t = tic()
         ! generate & normalize 1D spectrum
         call self%gen_roavspec1d
-        ! 1D grid search with rotational average
-        call self%grid_srch
-        if( BENCH ) self%rt_1D = toc(self%t)
         if( BENCH ) self%t = tic()
         ! normalize 2D spectrum with respect to resolution range
         call self%norm_pspec(self%pspec)
         if( BENCH ) self%rt_2Dprep = toc(self%t)
-        ! 3/4D refinement of grid solution
+        ! 1D grid search with rotational average + 3/4D refinement
         if( BENCH ) self%t = tic()
-        call self%refine
+        call self%srch
         if( BENCH ) self%rt_2D = toc(self%t)
         ! calculate CTF stats
         if( BENCH ) self%t = tic()
@@ -496,7 +493,6 @@ contains
             print *,'TIMING '
             print *,'gen_tiles: ', self%rt_gen_tiles
             print *,'mic2spec:  ', self%rt_mic2spec
-            print *,'1D:        ', self%rt_1D
             print *,'2Dprep:    ', self%rt_2Dprep
             print *,'2D:        ', self%rt_2D
             print *,'stats:     ', self%rt_stats
@@ -764,11 +760,12 @@ contains
     end subroutine write_diagnostic
 
     ! 1D brute force over rotational average
-    subroutine grid_srch( self )
+    subroutine srch( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost1D) :: ctfcosts(NSTEPS)
-        real                      :: dfs(NSTEPS), costs(NSTEPS), df_best
-        integer                   :: i, loc
+        type(ctfparams)           :: ctf_parms(NBINS)
+        real                      :: dfs(NSTEPS), costs(NSTEPS),cc_fine(NBINS), df_best
+        integer                   :: i, loc, start, end, step, cnt
         ! no astigmatism
         self%parms%phshift = 0.
         if( self%parms%l_phaseplate ) self%parms%phshift = PIO2
@@ -781,51 +778,64 @@ contains
             call ctfcosts(i)%kill
         enddo
         !$omp end parallel do
-        loc     = minloc(costs,dim=1)
-        df_best = dfs(loc)
-        self%cc_fit        = -costs(loc)
-        self%parms%dfx     = df_best
-        self%parms%dfy     = df_best
-        self%parms%angast  = 0.
-        self%parms%phshift = 0.
-        if( self%parms%l_phaseplate )self%parms%phshift = PIO2
-    end subroutine grid_srch
+        ! 3/4D search over bins
+        step = ceiling(real(NSTEPS)/real(NBINS))
+        cnt = 0
+        do i = 1,NSTEPS,step
+            cnt = cnt+1
+            start = i
+            end   = min(start+step-1,NSTEPS)
+            loc   = start+minloc(costs(start:end),dim=1)-1
+            df_best = dfs(loc)
+            self%parms%dfx     = df_best
+            self%parms%dfy     = df_best
+            self%parms%angast  = 0.
+            self%parms%phshift = 0.
+            if( self%parms%l_phaseplate )self%parms%phshift = PIO2
+            call self%refine
+            cc_fine(cnt)   = self%cc_fit
+            ctf_parms(cnt) = self%parms
+        enddo
+        loc = maxloc(cc_fine,dim=1)
+        self%parms  = ctf_parms(loc)
+        self%cc_fit = cc_fine(loc)
+    end subroutine srch
 
     ! 2D search over whole spectrum
     subroutine refine( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real :: limits(4,2), half_range
+        real :: limits(2,4), half_range
         ! re-init limits for local search
         half_range  = 2.*max(self%astigtol, self%df_step)
         limits      = 0.
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
-        limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
-        limits(1,2) = min(self%df_lims(2),self%parms%dfx + half_range)
+        limits(1,2) = max(self%df_lims(1),self%parms%dfy - half_range)
+        limits(2,1) = min(self%df_lims(2),self%parms%dfx + half_range)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
-        limits(3,:) = [0., 180.] ! degrees
-        limits(4,:) = [0.,3.142] ! radians
+        limits(:,3) = [0., 180.] ! degrees
+        limits(:,4) = [0.,3.142] ! radians
         ! good solution
         if( self%parms%l_phaseplate )then
             call self%cost2D%init(self%pspec,self%parms,self%inds_msk,4,limits,       self%astigtol, TOL)
         else
-            call self%cost2D%init(self%pspec,self%parms,self%inds_msk,3,limits(1:3,:),self%astigtol, TOL)
+            call self%cost2D%init(self%pspec,self%parms,self%inds_msk,3,limits(:,1:3),self%astigtol, TOL)
         endif
         call self%cost2D%minimize(self%parms, self%cc_fit)
         call self%cost2D%kill
         call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
         ! refined solution
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
-        limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
-        limits(1,2) = min(self%df_lims(2),self%parms%dfx + half_range)
+        limits(1,2) = max(self%df_lims(1),self%parms%dfy - half_range)
+        limits(2,1) = min(self%df_lims(2),self%parms%dfx + half_range)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
-        limits(3,1) = self%parms%angast - 30.       ! degrees
-        limits(3,2) = self%parms%angast + 30.
-        limits(4,1) = self%parms%phshift - PI/6.    ! radians
-        limits(4,2) = self%parms%phshift + PI/6
+        limits(1,3) = self%parms%angast - 30.       ! degrees
+        limits(2,3) = self%parms%angast + 30.
+        limits(1,4) = self%parms%phshift - PI/6.    ! radians
+        limits(2,4) = self%parms%phshift + PI/6
         if( self%parms%l_phaseplate )then
             call self%costcont%init(self%pspec, self%parms, self%inds_msk, 4, limits, self%astigtol)
         else
-            call self%costcont%init(self%pspec, self%parms, self%inds_msk, 3, limits(1:3,:), self%astigtol)
+            call self%costcont%init(self%pspec, self%parms, self%inds_msk, 3, limits(:,1:3), self%astigtol)
         endif
         call self%costcont%minimize(self%parms, self%cc_fit)
         call self%costcont%kill

@@ -101,7 +101,7 @@ contains
         class(ctfparams), target, intent(inout) :: parms
         integer,          target, intent(inout) :: inds(:,:)
         integer,                  intent(in)    :: ndim
-        real,                     intent(in)    :: limits(ndim,2)
+        real,                     intent(in)    :: limits(2,ndim)
         real,                     intent(in)    :: astigtol, tol
         call self%kill2D
         self%pspec => pspec
@@ -113,7 +113,7 @@ contains
         self%ndim  = ndim
         self%astigtol = astigtol
         self%tfun = ctf(self%parms%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
-        call self%ospec%specify('de',self%ndim,limits=limits, maxits=400, ftol=tol)
+        call self%ospec%specify('de',self%ndim,limits=transpose(limits), maxits=400, ftol=tol)
         call self%ospec%set_costfun(cost2D_wrapper)
     end subroutine init2D
 
@@ -124,7 +124,7 @@ contains
         class(ctfparams), target, intent(inout) :: parms
         integer,          target, intent(inout) :: inds(:,:)
         integer,                  intent(in)    :: ndim
-        real,                     intent(in)    :: limits(ndim,2)
+        real,                     intent(in)    :: limits(2,ndim)
         real,                     intent(in)    :: astigtol
         type(opt_factory) :: opt_fact
         real(dp)          :: amp_contr, phaseq
@@ -153,7 +153,7 @@ contains
         self%phshift          = 0.d0
         if( self%parms%l_phaseplate ) self%phshift = real(self%parms%phshift,dp)
         ! optimizer
-        optlims = limits
+        optlims = transpose(limits)
         if( self%ndim >= 3 ) optlims(3,:) = deg2rad(optlims(3,:)) ! astigmatism in radians
         call self%ospec%specify('lbfgsb', self%ndim, ftol=1e-1, gtol=1e-3,&
             &limits=optlims, max_step=0.01, maxits=100)
