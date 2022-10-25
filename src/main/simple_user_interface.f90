@@ -225,7 +225,7 @@ type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mcpatch
-type(simple_input_param) :: mcpatch_threshold
+type(simple_input_param) :: mcpatch_thres
 type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
@@ -1001,7 +1001,7 @@ contains
         call set_param(gainref,        'gainref',      'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(mcpatch_threshold,'mcpatch_threshold','binary','Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(mcpatch_thres,'mcpatch_thres','binary','Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
         call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
@@ -2703,7 +2703,7 @@ contains
         call motion_correct%set_input('srch_ctrls', 6, nypatch)
         call motion_correct%set_input('srch_ctrls', 7, mcconvention)
         call motion_correct%set_input('srch_ctrls', 8, algorithm)
-        call motion_correct%set_input('srch_ctrls', 9, mcpatch_threshold)
+        call motion_correct%set_input('srch_ctrls', 9, mcpatch_thres)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2995,7 +2995,7 @@ contains
         call preprocess%set_input('srch_ctrls',12, nypatch)
         call preprocess%set_input('srch_ctrls',13, mcconvention)
         call preprocess%set_input('srch_ctrls',14, algorithm)
-        call preprocess%set_input('srch_ctrls',15, mcpatch_threshold)
+        call preprocess%set_input('srch_ctrls',15, mcpatch_thres)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3069,7 +3069,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls',11, nypatch)
         call preprocess_stream%set_input('srch_ctrls',12, mcconvention)
         call preprocess_stream%set_input('srch_ctrls',13, algorithm)
-        call preprocess_stream%set_input('srch_ctrls',14, mcpatch_threshold)
+        call preprocess_stream%set_input('srch_ctrls',14, mcpatch_thres)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3199,7 +3199,7 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 19, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_threshold)
+        call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_thres)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 21, submenu="motion correction")
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
