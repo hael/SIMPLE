@@ -5,7 +5,6 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 use simple_projector,  only: projector
-use simple_ftiter,     only: ftiter
 implicit none
 
 public :: cartft_corrcalc, cftcc_glob
@@ -25,7 +24,7 @@ type :: cartft_corrcalc
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
     real(sp),                      allocatable :: optlp(:)               !< references optimal filter
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
-    complex(kind=c_float_complex), allocatable :: ref_heap(:,:,:)        !< reference Fourier components (h,k,ithr)
+    complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
     logical,                       allocatable :: iseven(:)              !< e/o assignment for gold-standard FSC
     logical                                    :: l_clsfrcs    = .false. !< CLS2D/3DRefs flag
@@ -34,11 +33,13 @@ type :: cartft_corrcalc
     logical                                    :: with_ctf     = .false. !< CTF flag
     logical                                    :: existence    = .false. !< to indicate existence
     contains
-    ! CONSTRUCTOR
+    ! CONSTRUCTORS
     procedure          :: new
     procedure          :: new_dev
-    ! SETTERS
+    ! ON-THE-FLY REALLOCATION
     procedure          :: reallocate_ptcls
+    procedure          :: expand_refs
+    ! SETTERS
     procedure          :: set_ptcl
     procedure          :: set_ref
     procedure          :: set_optlp
@@ -50,10 +51,11 @@ type :: cartft_corrcalc
     procedure          :: get_nptcls
     procedure          :: assign_pinds
     ! MEMOIZERS
-    procedure          :: prep4shift_srch
     procedure, private :: setup_resmsk_and_pxls_p_shell
-    ! CALCULATORS
     procedure          :: create_absctfmats
+    procedure          :: prep4shift_srch
+    procedure          :: prep4parallel_shift_srch
+    ! CALCULATORS
     procedure          :: project_and_correlate
     procedure          :: corr_shifted
     ! DESTRUCTOR
@@ -65,7 +67,7 @@ class(cartft_corrcalc), pointer :: cftcc_glob => null()
 
 contains
 
-    ! CONSTRUCTOR
+    ! CONSTRUCTORS
 
     subroutine new( self, vol_even, vol_odd, pfromto, l_match_filt, ptcl_mask, eoarr )
         class(cartft_corrcalc), target, intent(inout) :: self
@@ -74,9 +76,8 @@ contains
         logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
-        type(ftiter) :: ftit
-        logical      :: even_dims, test(2)
-        integer      :: i, cnt, ithr, lims(3,2)
+        logical :: even_dims, test(2)
+        integer :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -138,13 +139,14 @@ contains
                 end do
             endif
         endif
+        ! Fourier index limits
         self%lims(1,1) =  0
         self%lims(1,2) =  params_glob%kfromto(2)
         self%lims(2,1) = -params_glob%kfromto(2)
         self%lims(2,2) =  params_glob%kfromto(2)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
-        &         self%ref_heap(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
+        &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -161,7 +163,6 @@ contains
     subroutine new_dev( self, pfromto )
         class(cartft_corrcalc), target, intent(inout) :: self
         integer,                        intent(in)    :: pfromto(2)
-        type(ftiter) :: ftit
         logical      :: even_dims, test(2)
         integer      :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
@@ -194,12 +195,13 @@ contains
         ! eo assignment
         allocate( self%iseven(1:self%nptcls), source=.true. )
         ! Fourier index limits
-        ftit = ftiter(self%ldim, params_glob%smpd)
-        lims = ftit%loop_lims(2)
-        self%lims = lims(1:2,:)
+        self%lims(1,1) =  0
+        self%lims(1,2) =  params_glob%kfromto(2)
+        self%lims(2,1) = -params_glob%kfromto(2)
+        self%lims(2,2) =  params_glob%kfromto(2)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
-        &         self%ref_heap(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
+        &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
@@ -213,7 +215,7 @@ contains
         cftcc_glob => self
     end subroutine new_dev
 
-    ! SETTERS
+    ! ON-THE-FLY REALLOCATION
 
     subroutine reallocate_ptcls( self, nptcls, pinds )
         class(cartft_corrcalc), intent(inout) :: self
@@ -240,6 +242,21 @@ contains
             self%pinds( iptcl ) = i
         enddo
     end subroutine reallocate_ptcls
+
+    ! expand references such that we have one per particle (for efficient parallel shift search)
+    subroutine expand_refs( self )
+        class(cartft_corrcalc), intent(inout) :: self
+        if( allocated(self%references) )then
+            if( self%nptcls == size(self%references, dim=3) )then
+                return
+            else
+                deallocate(self%references)
+            endif
+        endif
+        allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+    end subroutine expand_refs
+
+    ! SETTERS
 
     subroutine set_ptcl( self, iptcl, img )
         class(cartft_corrcalc), intent(inout) :: self   !< this object
@@ -269,11 +286,11 @@ contains
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
-                self%ref_heap(h,k,1) = img%get_fcomp2D(h,k)
+                self%references(h,k,1) = img%get_fcomp2D(h,k)
             end do
         end do
         do ithr = 2,nthr_glob
-            self%ref_heap(:,:,ithr) = self%ref_heap(:,:,1)
+            self%references(:,:,ithr) = self%references(:,:,1)
         end do
     end subroutine set_ref
 
@@ -317,30 +334,11 @@ contains
 
     subroutine assign_pinds( self, pinds )
         class(cartft_corrcalc), intent(inout) :: self
-        integer, allocatable,    intent(out)   :: pinds(:)
+        integer, allocatable,    intent(out)  :: pinds(:)
         pinds = self%pinds
     end subroutine assign_pinds
 
-    ! MODIFIERS
-
-    subroutine prep4shift_srch( self, iptcl, o )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iptcl
-        class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr => null()
-        integer :: ithr
-        logical :: iseven
-        iseven = self%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! put reference projection in the heap
-        call vol_ptr%fproject_serial(o, self%lims, self%ref_heap(:,:,ithr), self%resmsk)
-    end subroutine prep4shift_srch
+    ! MEMOIZERS
 
     subroutine setup_resmsk_and_pxls_p_shell( self )
         class(cartft_corrcalc), intent(inout) :: self
@@ -361,8 +359,6 @@ contains
             end do
         end do
     end subroutine setup_resmsk_and_pxls_p_shell
-
-    ! CALCULATORS
 
     subroutine create_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
@@ -413,6 +409,47 @@ contains
         end do
         !$omp end parallel do
     end subroutine create_absctfmats
+
+    subroutine prep4shift_srch( self, iptcl, o )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        type(projector), pointer :: vol_ptr => null()
+        integer :: ithr
+        logical :: iseven
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+    end subroutine prep4shift_srch
+
+    subroutine prep4parallel_shift_srch( self, iptcl, os )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(oris),            intent(in)    :: os
+        type(projector), pointer :: vol_ptr => null()
+        logical :: iseven
+        integer :: i
+        i      = self%pinds(iptcl)
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! expand references such that we have one per particle (for efficient parallel shift search)
+        call self%expand_refs
+        ! make one reference projection per particle
+        call vol_ptr%fproject4cartftcc(os, self%lims, self%nptcls, self%references(:,:,:), self%resmsk(:,:))
+    end subroutine prep4parallel_shift_srch
+
+    ! CALCULATORS
 
     function project_and_correlate( self, iptcl, o ) result( corr )
         class(cartft_corrcalc), intent(inout) :: self
@@ -470,7 +507,7 @@ contains
                 hphys   = h + 1
                 sh_comp = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp = self%ref_heap(h,k,ithr) * self%ctfmats(h,k,i)
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i) * sh_comp
                 ! update cross product
@@ -498,7 +535,7 @@ contains
             if( allocated(self%optlp)        ) deallocate(self%optlp)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
             if( allocated(self%particles)    ) deallocate(self%particles)
-            if( allocated(self%ref_heap)     ) deallocate(self%ref_heap)
+            if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
             self%l_filt_set = .false.
             self%existence  = .false.
