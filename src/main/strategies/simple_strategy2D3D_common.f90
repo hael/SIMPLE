@@ -309,14 +309,18 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-        if( any(frc > 0.143) )then
-            call fsc2optlp_sub(filtsz, frc, filter)
-            if( params_glob%l_match_filt )then
-                call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-            else
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                call img_in%apply_filter_serial(filter)
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            ! no filtering
+        else
+            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(filtsz, frc, filter)
+                if( params_glob%l_match_filt )then
+                    call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                else
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
+                endif
             endif
         endif
         ! ensure we are in real-space
@@ -324,7 +328,11 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        call img_out%mask(params_glob%msk, 'soft')
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
+        else
+            call img_out%mask(params_glob%msk, 'soft')
+        endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call img_out%div_by_instrfun
         ! move to Fourier space
@@ -386,20 +394,12 @@ contains
         endif
         if( doprep )then
             allocate(build_glob%imgbatch(batchsz))
-            if( params_glob%l_cartesian )then
-                !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-                do ibatch = 1,batchsz
-                    call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                end do
-                !$omp end parallel do
-            else
-                !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-                do ibatch = 1,batchsz
-                    call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                    call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
-                end do
-                !$omp end parallel do
-            endif
+            !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
+            do ibatch = 1,batchsz
+                call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                if( build_glob%img_match%polarizer_initialized() ) call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
+            end do
+            !$omp end parallel do
         endif
     end subroutine prepimgbatch
 

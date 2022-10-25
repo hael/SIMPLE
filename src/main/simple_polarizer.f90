@@ -25,11 +25,13 @@ type, extends(image) :: polarizer
     integer               :: wdim = 0              !< dimension of K-B window
     integer               :: wlen = 0              !< dimension squared of K-B window
     integer               :: pdim(3) = 0           !< Polar-FT matrix dimensions
+    logical               :: polarizer_exists = .false.
   contains
     procedure :: init_polarizer
     procedure :: copy_polarizer
     procedure :: div_by_instrfun
     procedure :: polarize
+    procedure :: polarizer_initialized
     procedure :: kill_polarizer
 end type polarizer
 
@@ -125,11 +127,13 @@ contains
             !$omp end parallel do
         endif
         deallocate(w)
+        self%polarizer_exists = .true.
     end subroutine init_polarizer
 
     subroutine copy_polarizer(self, self_in)
         class(polarizer), intent(inout) :: self    !< projector instance
         class(polarizer), intent(inout) :: self_in
+        if( .not.self_in%polarizer_exists ) THROW_HARD('Polarizer instance has not bee initialized!')
         call self%kill_polarizer
         self%pdim = self_in%pdim
         self%wdim = self_in%wdim
@@ -186,6 +190,11 @@ contains
         endif
     end subroutine polarize
 
+    logical function polarizer_initialized( self )
+        class(polarizer), intent(in) :: self
+        polarizer_initialized = self%polarizer_exists
+    end function polarizer_initialized
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor of impolarizer
@@ -197,6 +206,7 @@ contains
         if( allocated(self%pft)            ) deallocate(self%pft)
         if( allocated(self%comps)          ) deallocate(self%comps)
         call self%instrfun_img%kill
+        self%polarizer_exists = .false.
     end subroutine kill_polarizer
 
 end module simple_polarizer
