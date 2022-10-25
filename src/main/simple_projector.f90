@@ -38,6 +38,7 @@ type, extends(image) :: projector
     procedure          :: is_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
+    procedure          :: fproject4cartftcc
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
@@ -182,8 +183,8 @@ contains
         e_rotmat = e%get_mat()
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(h,k,sqarg,loc,phys,comp) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
@@ -204,6 +205,35 @@ contains
         !$omp end parallel do
     end subroutine fproject
 
+    ! used in prep4parallel_shift_srch in simple_cartft_corrcalc
+    subroutine fproject4cartftcc( self, os, lims, nptcls, cmats, resmsk )
+        class(projector),              intent(inout) :: self
+        class(oris),                   intent(in)    :: os
+        integer,                       intent(in)    :: lims(2,2), nptcls
+        complex(kind=c_float_complex), intent(inout) :: cmats( lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
+        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real    :: loc(3), e_rotmat(3,3)
+        integer :: h, k, iptcl
+        !$omp parallel do collapse(3) schedule(static) default(shared)&
+        !$omp private(h,k,iptcl,e_rotmat,loc) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do iptcl = 1,nptcls
+                    if( resmsk(h,k) )then
+                        e_rotmat = os%get_mat(iptcl)
+                        loc      = matmul(real([h,k,0]), e_rotmat)
+                        if( h > 0 )then
+                            cmats(h,k,iptcl) = self%interp_fcomp(loc)
+                        else
+                            cmats(h,k,iptcl) = conjg(self%interp_fcomp(loc))
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine fproject4cartftcc
+
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
     subroutine fproject_serial_1( self, e, fplane, find_lp )
         class(projector),  intent(inout) :: self
@@ -222,8 +252,8 @@ contains
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
@@ -253,8 +283,8 @@ contains
         real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k
         e_rotmat = e%get_mat()
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
+        do h =  lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     if( h > 0 )then
@@ -351,8 +381,8 @@ contains
         real    :: vec(3), loc(3), e_rotmat(3,3)
         pdim = pftcc%get_pdim()
         e_rotmat = e%get_mat()
-        do irot=1,pdim(1)
-            do k=pdim(2),pdim(3)
+        do irot = 1,pdim(1)
+            do k = pdim(2),pdim(3)
                 if( mask(k) )then
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
