@@ -204,29 +204,50 @@ contains
 
     subroutine exec_uniform_2D_filter( self, cline )
         use simple_opt_filter, only: uniform_2D_filter_sub
+        use simple_masker,     only: automask2D
+        use simple_image,      only: image_ptr 
+        use simple_default_clines
         class(uniform_2D_filter_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: odd(:), even(:)
+        type(image),      allocatable :: odd(:), even(:), mask(:)
+        real,             allocatable :: diams(:)
         type(parameters) :: params
+        type(image_ptr)  :: pmask
         integer          :: iptcl
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call set_automask2D_defaults(cline)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'uniform_2D_filter_ext_'//int2str(params%smooth_ext)
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls))
+        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new( params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk,  iptcl)
             call even(iptcl)%new( params%ldim, params%smpd, .false.)
             call even(iptcl)%read(params%stk2, iptcl)
+            call mask(iptcl)%copy(odd(iptcl))
+            call mask(iptcl)%add(even(iptcl))
+            call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        call uniform_2D_filter_sub(odd, even)
+        if( params%l_automsk )then
+            call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
+            do iptcl = 1, params%nptcls
+                call mask(iptcl)%get_mat_ptrs(pmask)
+                where(pmask%rmat > 0) pmask%rmat = 1.
+            enddo
+        else
+            do iptcl = 1, params%nptcls
+                call mask(iptcl)%get_mat_ptrs(pmask)
+                pmask%rmat = 1;
+            enddo
+        endif
+        call uniform_2D_filter_sub(even, odd, mask)
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
@@ -234,6 +255,7 @@ contains
             call odd( iptcl)%kill()
             call even(iptcl)%kill()
         end do
+        if( allocated(diams) ) deallocate(diams)
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_2D_FILTER NORMAL STOP ****')
     end subroutine exec_uniform_2D_filter
