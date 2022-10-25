@@ -86,11 +86,11 @@ type(pspec_int_rank_commander)          :: xpspec_int_rank
 type(split_commander)                   :: xsplit
 
 ! OTHER DECLARATIONS
-character(len=STDLEN) :: xarg, prg
-type(cmdline)         :: cline
-integer               :: cmdstat, cmdlen, pos
-integer(timer_int_kind)                     :: t0
-real(timer_int_kind)                        :: rt_exec
+character(len=STDLEN)   :: xarg, prg
+type(cmdline)           :: cline
+integer                 :: cmdstat, cmdlen, pos
+integer(timer_int_kind) :: t0
+real(timer_int_kind)    :: rt_exec
 
 ! start timer
 t0 = tic()
