@@ -720,14 +720,14 @@ contains
             call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
             call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
             call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
-            pdiff_odd %rmat = rmat_odd_filt  - rmat_even
-            pdiff_even%rmat = rmat_even_filt - rmat_odd
+            pdiff_odd %rmat = (rmat_odd_filt  - rmat_even)**2
+            pdiff_even%rmat = (rmat_even_filt - rmat_odd)**2
             call batch_fft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
             pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
             pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
             call batch_ifft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
-            cur_cost_odd  = abs(sum(pdiff_odd %rmat(ext+1:box-ext, ext+1:box-ext,1))) ! within the unpadded domain
-            cur_cost_even = abs(sum(pdiff_even%rmat(ext+1:box-ext, ext+1:box-ext,1))) ! within the unpadded domain
+            cur_cost_odd  = sum(pdiff_odd %rmat(ext+1:box-ext, ext+1:box-ext,1)) ! within the unpadded domain
+            cur_cost_even = sum(pdiff_even%rmat(ext+1:box-ext, ext+1:box-ext,1)) ! within the unpadded domain
             if( cur_cost_odd < best_cost_odd )then
                 best_cost_odd           = cur_cost_odd
                 optf2Dvars%best_ind_odd = cur_ind
