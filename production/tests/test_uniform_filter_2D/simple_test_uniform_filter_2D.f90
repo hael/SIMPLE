@@ -7,7 +7,7 @@ program simple_test_uniform_filter_2D
     use simple_image,              only: image
     use simple_opt_filter,         only: uniform_filter_2D
     implicit none
-    type(parameters)                  :: p
+    type(parameters)                  :: p, p_opt
     type(cmdline)                     :: cline, cline_opt
     type(image)                       :: img_clean, img_noisy, noise_img
     type(uniform_2D_filter_commander) :: opt_commander
@@ -32,8 +32,6 @@ program simple_test_uniform_filter_2D
     ! setting the opt_2D filter cline
     cline_opt = cline
     call cline_opt%delete('stk')
-    call cline_opt%set('stk',        'stk_img_noisy.mrc')
-    call cline_opt%set('stk2',       'stk_img_clean.mrc')
     call cline_opt%set('frcs',       'temp.bin')
     call cline_opt%set('smooth_ext', 8.)
     call cline_opt%set('prg',        'uniform_2D_filter')
@@ -52,20 +50,19 @@ program simple_test_uniform_filter_2D
         ! comparing the nonuniform result with the original data
         do noise_i = 1, noise_n
             call cline_opt%set('mkdir', 'yes')
-            call p%new(cline_opt)
-            call cline_opt%delete('mkdir')
-            call cline_opt%set('mkdir', 'no')
-            call cline_opt%delete('stk')
-            call cline_opt%set('stk', "stk_img_noisy_"//int2str(noise_i)//".mrc")
-            call img_clean%write('stk_img_clean.mrc', iptcl)
+            call p_opt%new(cline_opt)
             noise_lvl = NOISE_MIN + (noise_i - 1)*NOISE_DEL
-            print *, 'noise level = ', noise_lvl
             ! adding noise
             call noise_img%gauran(0., noise_lvl * sdev)
             call noise_img%mask(1.5 * p%msk, 'soft')
-            call img_noisy%copy_fast(img_clean)
+            call img_noisy%copy(img_clean)
             call img_noisy%add(noise_img)
             call img_noisy%write("stk_img_noisy_"//int2str(noise_i)//".mrc", iptcl)
+            call cline_opt%delete('mkdir')
+            call cline_opt%set('mkdir', 'no')
+            call cline_opt%delete('stk')
+            call cline_opt%set('stk',  "stk_img_noisy_"//int2str(noise_i)//".mrc")
+            call cline_opt%set('stk2', '../stk_img_clean.mrc')
             ! filtering by calling the commander
             call opt_commander%execute(cline_opt)
             ! spherical masking

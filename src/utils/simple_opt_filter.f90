@@ -864,6 +864,7 @@ contains
             !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
             do iptcl = 1, nptcls
                 call uniform_filter_2D(odd(iptcl), even(iptcl), weights_img, optf2Dvars(iptcl))
+                !print *, 'best resolution cut_off = ', calc_lowpass_lim(optf2Dvars(iptcl)%best_ind_even, ldim_pd(1), smpd)
             enddo
             !$omp end parallel do
         endif
