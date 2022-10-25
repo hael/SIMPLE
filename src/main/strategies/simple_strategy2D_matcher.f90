@@ -21,6 +21,7 @@ use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_opt_filter,          only: opt_2D_filter_sub
 use simple_masker,              only: automask2D
+use simple_euclid_sigma2,       only: euclid_sigma2
 use simple_classaverager
 use simple_progress
 implicit none
@@ -30,6 +31,8 @@ private
 #include "simple_local_flags.inc"
 
 type(polarft_corrcalc)       :: pftcc
+type(euclid_sigma2)          :: eucl_sigma
+logical,         allocatable :: ptcl_mask(:)
 integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
@@ -45,10 +48,10 @@ contains
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
         integer,                   allocatable :: pinds(:), batches(:,:)
-        logical,                   allocatable :: ptcl_mask(:)
         real,                      allocatable :: states(:)
         type(convergence) :: conv
         type(cmdline)     :: cline_opt_filt
+        type(ori)         :: orientation
         real    :: frac_srch_space, snhc_sz, frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
@@ -200,6 +203,7 @@ contains
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
+        if( .not. params_glob%l_cartesian ) call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
@@ -266,6 +270,12 @@ contains
                 strategy2Dspecs(iptcl_batch)%stoch_bound = snhc_sz
                 call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspecs(iptcl_batch))
                 call strategy2Dsrch(iptcl_batch)%ptr%srch
+                ! calculate sigma2 for ML-based refinement
+                if ( params_glob%l_needs_sigma ) then
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
+                end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo ! Particles threaded loop
@@ -279,6 +289,9 @@ contains
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
         deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_mask)
+
+        ! WRITE SIGMAS FOR ML-BASED REFINEMENT
+        if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
@@ -329,6 +342,7 @@ contains
             deallocate(states)
         endif
         call cavger_kill
+        call eucl_sigma%kill
         call pftcc%kill ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
@@ -387,8 +401,9 @@ contains
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftcc4align( which_iter )
         use simple_strategy2D3D_common, only: prep2dref
-        integer,          intent(in) :: which_iter
-        type(polarizer), allocatable :: match_imgs(:)
+        integer,           intent(in) :: which_iter
+        type(polarizer),  allocatable :: match_imgs(:)
+        character(len=:), allocatable :: fname
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
         logical   :: do_center, has_been_searched
@@ -399,6 +414,12 @@ contains
         else
             call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%l_match_filt)
         endif
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+        end if
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))
