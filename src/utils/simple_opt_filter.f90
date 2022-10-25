@@ -685,13 +685,13 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    subroutine uniform_filter_2D( odd, even, weights_img, optf2Dvars)
-        class(image),        intent(inout) :: odd, even, weights_img
+    subroutine uniform_filter_2D( odd, even, weights_img, mask, optf2Dvars)
+        class(image),        intent(inout) :: odd, even, weights_img, mask
         type(optfilt2Dvars), intent(inout) :: optf2Dvars
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         integer         :: box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cur_ind
         real            :: find_stepsz, val, best_cost_odd, best_cost_even, cur_cost_odd, cur_cost_even
-        type(image_ptr) :: pdiff_odd, pdiff_even, pweights
+        type(image_ptr) :: pdiff_odd, pdiff_even, pweights, pmask
         ! init
         ldim        = odd%get_ldim()
         box         = ldim(1)
@@ -702,6 +702,7 @@ contains
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, params_glob%smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         call weights_img%get_mat_ptrs(pweights)
+        call mask%get_mat_ptrs(pmask)
         call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
         call optf2Dvars%diff_img_even%get_mat_ptrs(pdiff_even)
         call odd%get_rmat_ptr(rmat_odd)
@@ -726,8 +727,8 @@ contains
             pdiff_odd %cmat  = pdiff_odd %cmat * pweights%cmat
             pdiff_even%cmat  = pdiff_even%cmat * pweights%cmat
             call batch_ifft_2D(optf2Dvars%diff_img_odd, optf2Dvars%diff_img_even, optf2Dvars)
-            cur_cost_odd  = sum(pdiff_odd %rmat(ext+1:box-ext, ext+1:box-ext,1)) ! within the unpadded domain
-            cur_cost_even = sum(pdiff_even%rmat(ext+1:box-ext, ext+1:box-ext,1)) ! within the unpadded domain
+            cur_cost_odd  = sum(pdiff_odd %rmat * pmask%rmat) ! within the unpadded domain
+            cur_cost_even = sum(pdiff_even%rmat * pmask%rmat) ! within the unpadded domain
             if( cur_cost_odd < best_cost_odd )then
                 best_cost_odd           = cur_cost_odd
                 optf2Dvars%best_ind_odd = cur_ind
@@ -746,7 +747,7 @@ contains
     subroutine uniform_2D_filter_sub( even, odd, mask )
         use simple_class_frcs, only: class_frcs
         class(image),           intent(inout) :: even(:), odd(:)
-        class(image), optional, intent(inout) :: mask(:)
+        class(image),           intent(inout) :: mask(:)
         character(len=:),       allocatable   :: frcs_fname
         type(optfilt2Dvars),    allocatable   :: optf2Dvars(:)
         real,                   allocatable   :: frc(:)
@@ -756,7 +757,7 @@ contains
         real             :: smpd, lpstart, lp, val
         integer          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
         integer          :: nptcls, hpind_fsc, find, c_shape(3), m, n
-        logical          :: lpstart_fallback, l_phaseplate, have_mask
+        logical          :: lpstart_fallback, l_phaseplate
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING'
         ! init
         ldim         = even(1)%get_ldim()
@@ -772,7 +773,6 @@ contains
         lpstart      = params_glob%lpstart
         hpind_fsc    = params_glob%hpind_fsc
         l_phaseplate = params_glob%l_phaseplate
-        have_mask    = present(mask)
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
@@ -820,13 +820,7 @@ contains
             call optf2Dvars(iptcl)%even_copy_rmat%copy(even(iptcl))
             call optf2Dvars(iptcl)%even_copy_cmat%copy(even(iptcl))
             call optf2Dvars(iptcl)%even_copy_cmat%fft
-            optf2Dvars(iptcl)%have_mask = .false.
-            if( have_mask )then
-                if( mask(iptcl)%nforeground() > 0 )then
-                    optf2Dvars(iptcl)%have_mask = .true.
-                    call mask(iptcl)%pad_inplace(ldim_pd)
-                endif
-            endif
+            call mask(iptcl)%pad_inplace(ldim_pd)
         end do
         !$omp end parallel do
         ! fill up fft vars
@@ -857,17 +851,13 @@ contains
             enddo
         enddo
         call weights_img%fft()
-        ! filter
-        if( have_mask )then
-            ! TODO
-        else
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = 1, nptcls
-                call uniform_filter_2D(odd(iptcl), even(iptcl), weights_img, optf2Dvars(iptcl))
-                !print *, 'best resolution cut_off = ', calc_lowpass_lim(optf2Dvars(iptcl)%best_ind_even, ldim_pd(1), smpd)
-            enddo
-            !$omp end parallel do
-        endif
+        ! filter        
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = 1, nptcls
+            call uniform_filter_2D(odd(iptcl), even(iptcl), weights_img, mask(iptcl), optf2Dvars(iptcl))
+            !print *, 'best resolution cut_off = ', calc_lowpass_lim(optf2Dvars(iptcl)%best_ind_even, ldim_pd(1), smpd)
+        enddo
+        !$omp end parallel do
         ! destruct
         call weights_img%kill
         do iptcl = 1, nptcls
@@ -886,11 +876,7 @@ contains
             call fftwf_free(optf2Dvars(iptcl)%fft_ptr)
             call fftwf_destroy_plan(optf2Dvars(iptcl)%plan_fwd)
             call fftwf_destroy_plan(optf2Dvars(iptcl)%plan_bwd)
-            if( have_mask )then
-                if( optf2Dvars(iptcl)%have_mask )then
-                    call mask(iptcl)%clip_inplace(ldim)
-                endif
-            endif
+            call mask(iptcl)%clip_inplace(ldim)
         enddo
     end subroutine uniform_2D_filter_sub
 
