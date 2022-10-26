@@ -79,7 +79,7 @@ contains
         real(dp)                :: cost
         select type(self)
             class is (cftcc_shsrch_grad)
-                !cost = - cftcc_glob%calc_corr(self%particle, real(vec))
+                cost = - cftcc_glob%corr_shifted(self%particle, real(vec))
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -95,7 +95,7 @@ contains
         grad = 0.
         select type(self)
             class is (cftcc_shsrch_grad)
-                !cost = - cftcc_glob%calc_corr(self%particle, real(vec), corrs_grad)
+                cost = - cftcc_glob%corr_shifted(self%particle, real(vec), corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -112,7 +112,7 @@ contains
         grad = 0.
         select type(self)
             class is (cftcc_shsrch_grad)
-                !f    = - cftcc_glob%calc_corr(self%particle, real(vec), corrs_grad)
+                f    = - cftcc_glob%corr_shifted(self%particle, real(vec), corrs_grad)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
@@ -157,7 +157,7 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                !cost = -cftcc_glob%calc_corr(self%particle, real([x,y]))
+                cost = -cftcc_glob%corr_shifted(self%particle, real([x,y]))
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]

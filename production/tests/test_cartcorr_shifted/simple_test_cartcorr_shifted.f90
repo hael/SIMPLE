@@ -1,18 +1,20 @@
 program simple_test_cartcorr_shifted
 include 'simple_lib.f08'
-use simple_cartft_corrcalc, only: cartft_corrcalc
-use simple_builder,         only: builder
-use simple_image,           only: image
-use simple_parameters,      only: parameters
-use simple_cmdline,         only: cmdline
+use simple_cartft_corrcalc,   only: cartft_corrcalc
+use simple_builder,           only: builder
+use simple_image,             only: image
+use simple_parameters,        only: parameters
+use simple_cmdline,           only: cmdline
+use simple_cftcc_shsrch_grad, only: cftcc_shsrch_grad
 implicit none
 type(cmdline)           :: cline
 type(builder)           :: b
 type(parameters)        :: p
 type(cartft_corrcalc)   :: cftcc
+type(cftcc_shsrch_grad) :: cftcc_shsrch
 real, parameter         :: SHMAG=5.0
 integer                 :: i
-real                    :: grad(2)
+real                    :: grad(2), cxy(3), lims(2,2)
 integer(timer_int_kind) :: t_tot
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted stk=<particles.ext>'
@@ -51,6 +53,21 @@ do i = 1,1
     call srch_shifts_ad(0.5, i)
 end do
 print *, 'corr_shifted_ad timing = ', toc(t_tot)
+! lbfgsb shift search
+lims(1,1) = -6.
+lims(1,2) =  6.
+lims(2,1) = -6.
+lims(2,2) =  6.
+call cftcc_shsrch%new(lims)
+do i = 1,1
+    call b%img%read(p%stk, i)
+    call b%img%fft
+    call b%img%shift2Dserial([-0.5,-0.5]) 
+    call cftcc%set_ref(b%img)
+    call cftcc_shsrch%set_pind(i)
+    cxy = cftcc_shsrch%minimize()
+    print *, 'minimized shift = ', cxy(2:), '; minimized cost = ', cxy(1)
+end do
 
 contains
 
