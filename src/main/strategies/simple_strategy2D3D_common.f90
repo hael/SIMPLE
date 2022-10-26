@@ -437,7 +437,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: opt_filter_3D
+        use simple_opt_filter, only: nonuni_filt3D
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
@@ -456,7 +456,7 @@ contains
                 call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
-            call opt_filter_3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
             ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft

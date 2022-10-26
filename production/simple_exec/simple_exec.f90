@@ -95,8 +95,8 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(automask2D_commander)                  :: xautomask2D
 type(fsc_commander)                         :: xfsc
-type(opt_2D_filter_commander)               :: xopt_2D_filter
-type(opt_3D_filter_commander)               :: xopt_3D_filter
+type(nununiform_filter2D_commander)         :: xnununiform_filter2D
+type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -107,7 +107,7 @@ type(normalize_commander)                   :: xnormalize
 type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
-type(uniform_2D_filter_commander)           :: xuniform_2D_filter
+type(uniform_filter2D_commander)            :: xuniform_filter2D
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander)                   :: xmake_oris
@@ -285,10 +285,10 @@ select case(trim(prg))
         call xautomask2D%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    case( 'opt_2D_filter' )
-        call xopt_2D_filter%execute(cline)
-    case( 'opt_3D_filter' )
-        call xopt_3D_filter%execute(cline)
+    case( 'nununiform_filter2D' )
+        call xnununiform_filter2D%execute(cline)
+    case( 'nununiform_filter3D' )
+        call xnununiform_filter3D%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -309,8 +309,8 @@ select case(trim(prg))
         call xstack%execute(cline)
     case( 'stackops' )
         call xstackops%execute(cline)
-    case( 'uniform_2D_filter' )
-        call xuniform_2D_filter%execute(cline)
+    case( 'uniform_filter2D' )
+        call xuniform_filter2D%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )
@@ -365,7 +365,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('83f3ea4')
+call simple_print_git_version('6eaf62c')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

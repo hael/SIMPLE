@@ -15,7 +15,7 @@ use simple_commander_imgproc,  only: scale_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
-use simple_opt_filter,         only: opt_2D_filter_sub
+use simple_opt_filter,         only: nonuni_filt2D_sub
 use simple_masker,             only: automask2D
 use simple_qsys_funs
 implicit none
@@ -190,9 +190,9 @@ contains
             ! nonuniform filtering
             if( params%l_automsk )then
                 call automask2D(masks, params%ngrow, WINSZ_AUTOMSK, params%edge, diams)
-                call opt_2D_filter_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
+                call nonuni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
             else
-                call opt_2D_filter_sub(cavgs_eo(:,2), cavgs_eo(:,1))
+                call nonuni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1))
             endif
             ! write even filtered cavgs
             stk_even = 'cavgs_nonuniform_even.mrc'

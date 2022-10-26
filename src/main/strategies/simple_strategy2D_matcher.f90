@@ -19,7 +19,7 @@ use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_eval,     only: strategy2D_eval
-use simple_opt_filter,          only: opt_2D_filter_sub
+use simple_opt_filter,          only: uni_filt2D_sub
 use simple_masker,              only: automask2D
 use simple_euclid_sigma2,       only: euclid_sigma2
 use simple_classaverager
@@ -166,23 +166,35 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-        if( params_glob%l_nonuniform )then
-            if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
-                do icls = 1,params_glob%ncls
-                    call build_glob%env_masks(icls)%copy(cavgs_even(icls))
-                    call build_glob%env_masks(icls)%add(cavgs_odd(icls))
-                    call build_glob%env_masks(icls)%mul(0.5)
-                enddo
-                call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
-                call opt_2D_filter_sub(cavgs_even, cavgs_odd, build_glob%env_masks)
-            else if( which_iter > OPTFILT2D_ITERLIM )then
-                call opt_2D_filter_sub(cavgs_even, cavgs_odd)
-            endif
+        if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
+            do icls = 1,params_glob%ncls
+                call build_glob%env_masks(icls)%copy(cavgs_even(icls))
+                call build_glob%env_masks(icls)%add(cavgs_odd(icls))
+                call build_glob%env_masks(icls)%mul(0.5)
+            enddo
+            call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
+            call uni_filt2D_sub(cavgs_even, cavgs_odd, build_glob%env_masks, build_glob%cutoff_finds_eo)
             if( params_glob%part.eq.1 )then
                 do icls = 1,params_glob%ncls
                     call cavgs_even(icls)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', icls)
                 enddo
             endif
+            ! read back the unfiltered class averages
+            if( file_exists(params_glob%refs_even) )then
+                call cavger_read(params_glob%refs_even, 'even')
+            else
+                call cavger_read(params_glob%refs, 'even')
+            endif
+            if( file_exists(params_glob%refs_odd) )then
+                call cavger_read(params_glob%refs_odd, 'odd')
+            else
+                call cavger_read(params_glob%refs, 'odd')
+            endif
+            ! apply the envelope masks
+            do icls = 1,params_glob%ncls
+                call cavgs_even(icls)%mul(build_glob%env_masks(icls))
+                call cavgs_odd(icls)%mul(build_glob%env_masks(icls))
+            enddo
         endif
 
         ! SET FOURIER INDEX RANGE

@@ -3,14 +3,14 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
-use simple_commander_resolest, only: opt_2D_filter_commander
+use simple_commander_resolest, only: nununiform_filter2D_commander
 use simple_commander_volops,   only: reproject_commander
 use simple_image,              only: image
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt, cline_projection
 type(image)                   :: even, odd, noise, res_map
-type(opt_2D_filter_commander) :: xopt_2D_filter
+type(nununiform_filter2D_commander) :: xnununiform_filter2D
 type(reproject_commander)     :: xreproject
 integer                       :: k, nyq, nptcls, smooth_ext, rc, iptcl, ext
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
@@ -132,14 +132,14 @@ do ext = 0, 20, 10
     call cline_opt_filt%set('mkdir'     , 'no')
     call cline_opt_filt%set('smooth_ext', real(smooth_ext))
     call p%new(cline_opt_filt)
-    call xopt_2D_filter%execute(cline_opt_filt)
+    call xnununiform_filter2D%execute(cline_opt_filt)
     call even%new(p%ldim, p%smpd)
     call odd%new(p%ldim, p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read(p%stk2,  iptcl)
-        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_filter2D_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -172,14 +172,14 @@ do ext = 0, 20, 10
     call cline_opt_filt%set('mkdir'     , 'no')
     call cline_opt_filt%set('smooth_ext', real(smooth_ext))
     call p%new(cline_opt_filt)
-    call xopt_2D_filter%execute(cline_opt_filt)
+    call xnununiform_filter2D%execute(cline_opt_filt)
     call even%new(p%ldim, p%smpd)
     call odd%new(p%ldim, p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read('stk_clean.mrc',  iptcl)
-        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_filter2D_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -218,14 +218,14 @@ do k = 1, size(FIL_ARR)
     call cline_opt_filt%set('mkdir'     , 'no')
     call cline_opt_filt%set('smooth_ext', real(smooth_ext))
     call p%new(cline_opt_filt)
-    call xopt_2D_filter%execute(cline_opt_filt)
+    call xnununiform_filter2D%execute(cline_opt_filt)
     call even%new(p%ldim, p%smpd)
     call odd%new(p%ldim, p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read(p%stk2,  iptcl)
-        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_filter2D_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')
@@ -259,14 +259,14 @@ do k = 1, size(FIL_ARR)
     call cline_opt_filt%set('mkdir'     , 'no')
     call cline_opt_filt%set('smooth_ext', real(smooth_ext))
     call p%new(cline_opt_filt)
-    call xopt_2D_filter%execute(cline_opt_filt)
+    call xnununiform_filter2D%execute(cline_opt_filt)
     call even%new(p%ldim, p%smpd)
     call odd%new(p%ldim, p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
         call even%read('stk_clean.mrc',  iptcl)
-        call odd%read('nonuniform_2D_filter_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        call odd%read('nonuniform_filter2D_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
         call odd%mask( p%msk, 'soft')

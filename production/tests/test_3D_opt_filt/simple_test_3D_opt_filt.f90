@@ -3,13 +3,13 @@ include 'simple_lib.f08'
 use simple_cmdline,            only: cmdline
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
-use simple_commander_resolest, only: opt_3D_filter_commander
+use simple_commander_resolest, only: nununiform_filter3D_commander
 use simple_image,              only: image
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt
 type(image)                   :: even, odd, even_copy, odd_copy, noise, res_map
-type(opt_3D_filter_commander) :: xopt_3D_filter
+type(nununiform_filter3D_commander) :: xnununiform_filter3D
 integer                       :: nyq, ifoo, smooth_ext, rc
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)
@@ -125,12 +125,12 @@ call cline_opt_filt%set('filter'    , trim(filter))
 call cline_opt_filt%set('mkdir'     , 'no')
 call cline_opt_filt%set('smooth_ext', real(smooth_ext))
 call p%new(cline_opt_filt)
-call xopt_3D_filter%execute(cline_opt_filt)
+call xnununiform_filter3D%execute(cline_opt_filt)
 ! comparing the nonuniform result with the original data
 call even%new(p%ldim, p%smpd)
 call odd%new( p%ldim, p%smpd)
 call even%copy(even_copy)
-call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc')
+call odd%read('nonuniform_nununiform_filter3D_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc')
 ! spherical masking
 call even%mask(p%msk, 'soft')
 call odd%mask( p%msk, 'soft')
@@ -162,12 +162,12 @@ call cline_opt_filt%set('filter'    , trim(filter))
 call cline_opt_filt%set('mkdir'     , 'no')
 call cline_opt_filt%set('smooth_ext', real(smooth_ext))
 call p%new(cline_opt_filt)
-call xopt_3D_filter%execute(cline_opt_filt)
+call xnununiform_filter3D%execute(cline_opt_filt)
 ! comparing the nonuniform result with the original data
 call even%new(p%ldim, p%smpd)
 call odd%new( p%ldim, p%smpd)
 call even%copy(even_copy)
-call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc')
+call odd%read('nonuniform_nununiform_filter3D_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc')
 ! spherical masking
 call even%mask(p%msk, 'soft')
 call odd%mask( p%msk, 'soft')

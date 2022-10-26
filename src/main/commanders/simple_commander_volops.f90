@@ -96,7 +96,7 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
-        use simple_opt_filter, only: opt_filter_3D
+        use simple_opt_filter, only: nonuni_filt3D
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
@@ -209,7 +209,7 @@ contains
             sphere = 1.0
             call sphere%mask(params%msk, 'soft', backgr=0.0)
             call sphere%one_at_edge
-            call opt_filter_3D(vol_odd, vol_even, sphere)
+            call nonuni_filt3D(vol_odd, vol_even, sphere)
             call sphere%kill
             ! merge volumes
             call vol_odd%add(vol_even)

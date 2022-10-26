@@ -122,8 +122,8 @@ type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
-type(simple_program), target :: opt_2D_filter
-type(simple_program), target :: opt_3D_filter
+type(simple_program), target :: nununiform_filter2D
+type(simple_program), target :: nununiform_filter3D
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -170,7 +170,7 @@ type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
-type(simple_program), target :: uniform_2D_filter
+type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -371,8 +371,8 @@ contains
         call new_motion_correct
         call new_motion_correct_tomo
         call new_new_project
-        call new_opt_2D_filter
-        call new_opt_3D_filter
+        call new_nununiform_filter2D
+        call new_nununiform_filter3D
         call new_normalize
         call new_orisops
         call new_oristats
@@ -419,7 +419,7 @@ contains
         call new_tseries_track_particles
         call new_tseries_reconstruct3D
         call new_graphene_subtr
-        call new_uniform_2D_filter
+        call new_uniform_filter2D
         call new_update_project
         call new_vizoris
         call new_volops
@@ -476,8 +476,8 @@ contains
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(opt_2D_filter)
-        call push2prg_ptr_array(opt_3D_filter)
+        call push2prg_ptr_array(nununiform_filter2D)
+        call push2prg_ptr_array(nununiform_filter3D)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -523,7 +523,7 @@ contains
         call push2prg_ptr_array(tseries_track_particles)
         call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
-        call push2prg_ptr_array(uniform_2D_filter)
+        call push2prg_ptr_array(uniform_filter2D)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
@@ -641,10 +641,10 @@ contains
                 ptr2prg => motion_correct_tomo
             case('new_project')
                 ptr2prg => new_project
-            case('opt_2D_filter')
-                ptr2prg => opt_2D_filter
-            case('opt_3D_filter')
-                ptr2prg => opt_3D_filter
+            case('nununiform_filter2D')
+                ptr2prg => nununiform_filter2D
+            case('nununiform_filter3D')
+                ptr2prg => nununiform_filter3D
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -737,8 +737,8 @@ contains
                 ptr2prg => tseries_reconstruct3D
             case('graphene_subtr')
                 ptr2prg => graphene_subtr
-            case('uniform_2D_filter')
-                ptr2prg => uniform_2D_filter
+            case('uniform_filter2D')
+                ptr2prg => uniform_filter2D
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -796,8 +796,8 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') opt_2D_filter%name
-        write(logfhandle,'(A)') opt_3D_filter%name
+        write(logfhandle,'(A)') nununiform_filter2D%name
+        write(logfhandle,'(A)') nununiform_filter3D%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -832,7 +832,7 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') uniform_2D_filter%name
+        write(logfhandle,'(A)') uniform_filter2D%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -2765,67 +2765,67 @@ contains
         call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
     end subroutine new_motion_correct_tomo
 
-    subroutine new_opt_2D_filter
+    subroutine new_nununiform_filter2D
         ! PROGRAM SPECIFICATION
-        call opt_2D_filter%new(&
-        &'opt_2D_filter',&                                                  ! name
+        call nununiform_filter2D%new(&
+        &'nununiform_filter2D',&                                                  ! name
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
         &3, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
-        call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call opt_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
+        call nununiform_filter2D%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call nununiform_filter2D%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        call nununiform_filter2D%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
         ! parameter input/output
-        call opt_2D_filter%set_input('parm_ios', 1, smpd)
+        call nununiform_filter2D%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_2D_filter%set_input('filt_ctrls', 1, smooth_ext)
-        call opt_2D_filter%set_input('filt_ctrls', 2, lp_lowres)
-        call opt_2D_filter%set_input('filt_ctrls', 3, nsearch)
+        call nununiform_filter2D%set_input('filt_ctrls', 1, smooth_ext)
+        call nununiform_filter2D%set_input('filt_ctrls', 2, lp_lowres)
+        call nununiform_filter2D%set_input('filt_ctrls', 3, nsearch)
         frcs%required = .true.
-        call opt_2D_filter%set_input('filt_ctrls', 4, frcs)
+        call nununiform_filter2D%set_input('filt_ctrls', 4, frcs)
         ! mask controls
         ! <empty>
         ! computer controls
-        call opt_2D_filter%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_opt_2D_filter
+        call nununiform_filter2D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_nununiform_filter2D
 
-    subroutine new_opt_3D_filter
+    subroutine new_nununiform_filter3D
         ! PROGRAM SPECIFICATION
-        call opt_3D_filter%new(&
-        &'opt_3D_filter',&                                      ! name
+        call nununiform_filter3D%new(&
+        &'nununiform_filter3D',&                                      ! name
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
         &2, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call opt_3D_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call nununiform_filter3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call nununiform_filter3D%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
-        call opt_3D_filter%set_input('parm_ios', 1, smpd)
+        call nununiform_filter3D%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_3D_filter%set_input('filt_ctrls', 1, smooth_ext)
-        call opt_3D_filter%set_input('filt_ctrls', 2, lp_lowres)
-        call opt_3D_filter%set_input('filt_ctrls', 3, nsearch)
-        call opt_3D_filter%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call opt_3D_filter%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call nununiform_filter3D%set_input('filt_ctrls', 1, smooth_ext)
+        call nununiform_filter3D%set_input('filt_ctrls', 2, lp_lowres)
+        call nununiform_filter3D%set_input('filt_ctrls', 3, nsearch)
+        call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
-        call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
-        call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
+        call nununiform_filter3D%set_input('mask_ctrls', 1, mskdiam)
+        call nununiform_filter3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call opt_3D_filter%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_opt_3D_filter
+        call nununiform_filter3D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_nununiform_filter3D
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
@@ -4642,36 +4642,36 @@ contains
         call graphene_subtr%set_input('comp_ctrls', 1, nthr)
     end subroutine new_graphene_subtr
 
-    subroutine new_uniform_2D_filter
+    subroutine new_uniform_filter2D
         ! PROGRAM SPECIFICATION
-        call uniform_2D_filter%new(&
-        &'uniform_2D_filter',&           ! name
+        call uniform_filter2D%new(&
+        &'uniform_filter2D',&           ! name
         &'Uniform 2D filter',&           ! descr_short
         &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                 ! executable
         &3, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call uniform_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
-        call uniform_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call uniform_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
+        call uniform_filter2D%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call uniform_filter2D%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        call uniform_filter2D%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
         ! parameter input/output
-        call uniform_2D_filter%set_input('parm_ios', 1, smpd)
+        call uniform_filter2D%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_2D_filter%set_input('filt_ctrls', 1, smooth_ext)
-        call uniform_2D_filter%set_input('filt_ctrls', 2, lp_lowres)
-        call uniform_2D_filter%set_input('filt_ctrls', 3, nsearch)
+        call uniform_filter2D%set_input('filt_ctrls', 1, smooth_ext)
+        call uniform_filter2D%set_input('filt_ctrls', 2, lp_lowres)
+        call uniform_filter2D%set_input('filt_ctrls', 3, nsearch)
         frcs%required = .true.
-        call uniform_2D_filter%set_input('filt_ctrls', 4, frcs)
+        call uniform_filter2D%set_input('filt_ctrls', 4, frcs)
         ! mask controls
         ! <empty>
         ! computer controls
-        call uniform_2D_filter%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_uniform_2D_filter
+        call uniform_filter2D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_uniform_filter2D
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION
