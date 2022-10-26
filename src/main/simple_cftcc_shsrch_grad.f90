@@ -26,16 +26,16 @@ type :: cftcc_shsrch_grad
     real                      :: max_shift    = 0.      !< maximal shift
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
 contains
-    procedure :: new         => grad_carshsrch_new
-    procedure :: set_pind    => grad_carshsrch_set_pind
-    procedure :: minimize    => grad_carshsrch_minimize
-    procedure :: kill        => grad_carshsrch_kill
-    procedure :: coarse_search
+    procedure :: new         => c_grad_shsrch_new
+    procedure :: set_pind    => c_grad_shsrch_set_pind
+    procedure :: minimize    => c_grad_shsrch_minimize
+    procedure :: kill        => c_grad_shsrch_kill
+    procedure :: c_coarse_search
 end type cftcc_shsrch_grad
 
 contains
 
-    subroutine grad_carshsrch_new( self, lims, lims_init, shbarrier, maxits, coarse_init )
+    subroutine c_grad_shsrch_new( self, lims, lims_init, shbarrier, maxits, coarse_init )
         use simple_opt_factory, only: opt_factory
         class(cftcc_shsrch_grad),   intent(inout) :: self           !< instance
         real,                       intent(in)    :: lims(:,:)      !< limits for barrier constraint
@@ -60,19 +60,19 @@ contains
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)
         ! set costfun pointers
-        self%ospec%costfun_8    => grad_carshsrch_costfun
-        self%ospec%gcostfun_8   => grad_carshsrch_gcostfun
-        self%ospec%fdfcostfun_8 => grad_carshsrch_fdfcostfun
-    end subroutine grad_carshsrch_new
+        self%ospec%costfun_8    => c_grad_shsrch_costfun
+        self%ospec%gcostfun_8   => c_grad_shsrch_gcostfun
+        self%ospec%fdfcostfun_8 => c_grad_shsrch_fdfcostfun
+    end subroutine c_grad_shsrch_new
 
     !> set indicies for shift search
-    subroutine grad_carshsrch_set_pind( self, ptcl )
+    subroutine c_grad_shsrch_set_pind( self, ptcl )
         class(cftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(in)    :: ptcl
         self%particle  = ptcl
-    end subroutine grad_carshsrch_set_pind
+    end subroutine c_grad_shsrch_set_pind
 
-    function grad_carshsrch_costfun( self, vec, D ) result( cost )
+    function c_grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real(dp), intent(in)    :: vec(D)
@@ -83,9 +83,9 @@ contains
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
-    end function grad_carshsrch_costfun
+    end function c_grad_shsrch_costfun
 
-    subroutine grad_carshsrch_gcostfun( self, vec, grad, D )
+    subroutine c_grad_shsrch_gcostfun( self, vec, grad, D )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
@@ -100,9 +100,9 @@ contains
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
         end select
-    end subroutine grad_carshsrch_gcostfun
+    end subroutine c_grad_shsrch_gcostfun
 
-    subroutine grad_carshsrch_fdfcostfun( self, vec, f, grad, D )
+    subroutine c_grad_shsrch_fdfcostfun( self, vec, f, grad, D )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
@@ -117,10 +117,10 @@ contains
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
         end select
-    end subroutine grad_carshsrch_fdfcostfun
+    end subroutine c_grad_shsrch_fdfcostfun
 
     !> minimisation routine
-    function grad_carshsrch_minimize( self ) result( cxy )
+    function c_grad_shsrch_minimize( self ) result( cxy )
         class(cftcc_shsrch_grad), intent(inout) :: self
         real     :: cxy(3), lowest_cost
         real(dp) :: init_xy(2), coarse_cost
@@ -133,7 +133,7 @@ contains
             self%ospec%x   = real(init_xy)
         endif
         if( self%coarse_init )then
-            call self%coarse_search(coarse_cost, init_xy)
+            call self%c_coarse_search(coarse_cost, init_xy)
             self%ospec%x_8      = init_xy
             self%ospec%x        = real(init_xy)
         end if
@@ -141,9 +141,9 @@ contains
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
         cxy(1)  = - real(lowest_cost)  ! correlation
         cxy(2:) =   self%ospec%x       ! shift
-    end function grad_carshsrch_minimize
+    end function c_grad_shsrch_minimize
 
-    subroutine coarse_search(self, lowest_cost, init_xy)
+    subroutine c_coarse_search(self, lowest_cost, init_xy)
         class(cftcc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
         real(dp) :: x, y, cost, stepx, stepy
@@ -164,15 +164,15 @@ contains
                 end if
             enddo
         enddo
-    end subroutine coarse_search
+    end subroutine c_coarse_search
 
-    subroutine grad_carshsrch_kill( self )
+    subroutine c_grad_shsrch_kill( self )
         class(cftcc_shsrch_grad), intent(inout) :: self
         if( associated(self%nlopt) )then
             call self%ospec%kill
             call self%nlopt%kill
             nullify(self%nlopt)
         end if
-    end subroutine grad_carshsrch_kill
+    end subroutine c_grad_shsrch_kill
 
 end module simple_cftcc_shsrch_grad
