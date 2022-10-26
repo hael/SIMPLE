@@ -544,7 +544,7 @@ contains
         real,                   intent(in)     :: shvec(2)
         complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
         integer  :: i, h, k, ithr
-        complex  :: ref_comp(self%lims(1,1):self%lims(1,2), self%lims(2,1):self%lims(2,2))
+        complex  :: ref_comp, sh_comp, ptcl_comp
         real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
         real(sp) :: cc(3), corr, shconst
         logical  :: iseven
@@ -565,19 +565,23 @@ contains
             hcos(h) = dcos(arg)
             hsin(h) = dsin(arg)
         enddo
-        ref_comp = self%references(:,:,ithr) * self%ctfmats(:,:,i)
-        cc(:)    = 0.
-        cc(2)    = sum(real(ref_comp              * conjg(ref_comp)),              self%resmsk)
-        cc(3)    = sum(real(self%particles(:,:,i) * conjg(self%particles(:,:,i))), self%resmsk)
+        cc(:) = 0.
         do k = self%lims(2,1),self%lims(2,2)
             arg = real(k,dp) * sh(2)
             ck  = dcos(arg)
             sk  = dsin(arg)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                ! shifting particle and updating the cc
-                cc(1) = cc(1) + real(ref_comp(h,k) * conjg(self%particles(h,k,i) * cmplx(ck * hcos(h) - sk * hsin(h),&
-                                                                                        &ck * hsin(h) + sk * hcos(h),sp)))
+                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                ! retrieve reference component
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+                ! shift the particle Fourier component
+                ptcl_comp = self%particles(h,k,i)
+                ! update cross product
+                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                ! update normalization terms
+                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
             end do
         end do
         corr = norm_corr(cc(1),cc(2),cc(3))
