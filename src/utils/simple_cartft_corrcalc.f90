@@ -585,6 +585,8 @@ contains
                     grad(2)     = grad(2) + real(ref_ptcl_sh)*k
                 end do
             end do
+            grad(1) = norm_corr(grad(1),cc(2),cc(3))
+            grad(2) = norm_corr(grad(2),cc(2),cc(3))
         else
             do k = self%lims(2,1),self%lims(2,2)
                 arg = real(k,dp) * sh(2)
@@ -604,8 +606,6 @@ contains
                     cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
                 end do
             end do
-            grad(1) = norm_corr(grad(1),cc(2),cc(3))
-            grad(2) = norm_corr(grad(2),cc(2),cc(3))
         endif
         corr = norm_corr(cc(1),cc(2),cc(3))
     end function corr_shifted
