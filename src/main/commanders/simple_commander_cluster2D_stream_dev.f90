@@ -125,10 +125,17 @@ contains
             call find_ldim_nptcls(refs,ldim,ifoo)
             orig_box  = ldim(1)
         endif
-        orig_smpd = params_glob%smpd / params_glob%scale
+        ! pixel size after motion correction
+        if( cline%defined('eer_upsampling') )then
+            orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
+        else
+            orig_smpd = params_glob%smpd
+        endif
+        orig_smpd = orig_smpd / params_glob%scale
         call debug_print('cluster2D_stream orig_box: '//int2str(orig_box))
         call debug_print('cluster2D_stream orig_smpd: '//real2str(orig_smpd))
         call debug_print('cluster2D_stream mskdiam: '//real2str(mskdiam))
+        ! bookkeeping & directory structure
         numlen         = len(int2str(params_glob%nparts_pool))
         refs_glob      = 'start_cavgs'//params_glob%ext
         pool_available = .true.
