@@ -444,8 +444,8 @@ contains
         if( BENCH )self%t = tic()
         if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
-        limits(1,2) = min(self%df_lims(2),self%parms%dfx+1.)
-        limits(2,1) = max(self%df_lims(1),self%parms%dfy-1.)
+        limits(1,2) = max(self%df_lims(1),self%parms%dfy-1.)
+        limits(2,1) = min(self%df_lims(2),self%parms%dfx+1.)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy+1.)
         !$omp parallel do collapse(2) default(shared) private(pi,pj,cc,sumw,i,j,w,dist) &
         !$omp schedule(static) proc_bind(close)
