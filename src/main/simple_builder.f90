@@ -39,6 +39,7 @@ type :: builder
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
     real,                   allocatable :: diams(:)               !< class average diameters
+    integer,                allocatable :: cutoff_finds_eo(:,:)   !< BW cut-off frequencies for even/odd class averages 
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
@@ -362,7 +363,8 @@ contains
                 end do
                 deallocate(self%env_masks)
             endif
-            if( allocated(self%diams) ) deallocate(self%diams)
+            if( allocated(self%diams)           ) deallocate(self%diams)
+            if( allocated(self%cutoff_finds_eo) ) deallocate(self%cutoff_finds_eo)
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox

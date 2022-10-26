@@ -181,7 +181,6 @@ integer, parameter :: FAST2D_MINSZ         = 25000     !< Minimum # of particles
 integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per class to sample for fast subset 2D classification
 integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
 integer, parameter :: AMSK2D_ITERLIM       = 1         !< envelope masking from iteration 1 and onwards
-integer, parameter :: OPTFILT2D_ITERLIM    = 1         !< nonuniform filtering from iteration 1 and onwards
 
 ! weighting scheme
 real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights

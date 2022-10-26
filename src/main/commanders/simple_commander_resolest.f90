@@ -13,9 +13,9 @@ use simple_fsc
 implicit none
 
 public :: fsc_commander
-public :: opt_3D_filter_commander
-public :: opt_2D_filter_commander
-public :: uniform_2D_filter_commander
+public :: nununiform_filter3D_commander
+public :: nununiform_filter2D_commander
+public :: uniform_filter2D_commander
 private
 #include "simple_local_flags.inc"
 
@@ -24,20 +24,20 @@ type, extends(commander_base) :: fsc_commander
     procedure :: execute      => exec_fsc
 end type fsc_commander
 
-type, extends(commander_base) :: opt_2D_filter_commander
+type, extends(commander_base) :: nununiform_filter2D_commander
   contains
-    procedure :: execute      => exec_opt_2D_filter
-end type opt_2D_filter_commander
+    procedure :: execute      => exec_nununiform_filter2D
+end type nununiform_filter2D_commander
 
-type, extends(commander_base) :: uniform_2D_filter_commander
+type, extends(commander_base) :: uniform_filter2D_commander
   contains
-    procedure :: execute      => exec_uniform_2D_filter
-end type uniform_2D_filter_commander
+    procedure :: execute      => exec_uniform_filter2D
+end type uniform_filter2D_commander
 
-type, extends(commander_base) :: opt_3D_filter_commander
+type, extends(commander_base) :: nununiform_filter3D_commander
   contains
-    procedure :: execute      => exec_opt_3D_filter
-end type opt_3D_filter_commander
+    procedure :: execute      => exec_nununiform_filter3D
+end type nununiform_filter3D_commander
 
 contains
 
@@ -96,9 +96,9 @@ contains
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
 
-    subroutine exec_opt_3D_filter(self, cline)
-        use simple_opt_filter, only: opt_filter_3D
-        class(opt_3D_filter_commander), intent(inout) :: self
+    subroutine exec_nununiform_filter3D(self, cline)
+        use simple_opt_filter, only: nonuni_filt3D
+        class(nununiform_filter3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol
@@ -128,7 +128,7 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
-        call opt_filter_3D(odd, even, mskvol)
+        call nonuni_filt3D(odd, even, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
             call even%mul(mskvol)
@@ -147,14 +147,14 @@ contains
         call even%kill
         call mskvol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
-    end subroutine exec_opt_3D_filter
+        call simple_end('**** SIMPLE_nununiform_filter3D NORMAL STOP ****')
+    end subroutine exec_nununiform_filter3D
 
-    subroutine exec_opt_2D_filter( self, cline )
-        use simple_opt_filter, only: opt_2D_filter_sub
+    subroutine exec_nununiform_filter2D( self, cline )
+        use simple_opt_filter, only: nonuni_filt2D_sub
         use simple_masker,     only: automask2D
         use simple_default_clines
-        class(opt_2D_filter_commander), intent(inout) :: self
+        class(nununiform_filter2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: even(:), odd(:), mask(:)
@@ -167,7 +167,7 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'nonuniform_2D_filter_ext_'//int2str(params%smooth_ext)
+        file_tag = 'nonuniform_filter2D_ext_'//int2str(params%smooth_ext)
         ! allocate
         allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
@@ -183,9 +183,9 @@ contains
         ! filter
         if( params%l_automsk )then
             call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
-            call opt_2D_filter_sub(even, odd, mask)
+            call nonuni_filt2D_sub(even, odd, mask)
         else
-            call opt_2D_filter_sub(even, odd)
+            call nonuni_filt2D_sub(even, odd)
         endif
         ! write output and destruct
         do iptcl = 1, params%nptcls
@@ -199,15 +199,15 @@ contains
         end do
         if( allocated(diams) ) deallocate(diams)
         ! end gracefully
-        call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
-    end subroutine exec_opt_2D_filter
+        call simple_end('**** SIMPLE_nununiform_filter2D NORMAL STOP ****')
+    end subroutine exec_nununiform_filter2D
 
-    subroutine exec_uniform_2D_filter( self, cline )
-        use simple_opt_filter, only: uniform_2D_filter_sub
+    subroutine exec_uniform_filter2D( self, cline )
+        use simple_opt_filter, only: uni_filt2D_sub
         use simple_masker,     only: automask2D
         use simple_image,      only: image_ptr 
         use simple_default_clines
-        class(uniform_2D_filter_commander), intent(inout) :: self
+        class(uniform_filter2D_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: odd(:), even(:), mask(:)
@@ -221,7 +221,7 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'uniform_2D_filter_ext_'//int2str(params%smooth_ext)
+        file_tag = 'uniform_filter2D_ext_'//int2str(params%smooth_ext)
         ! allocate
         allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
@@ -247,7 +247,7 @@ contains
                 pmask%rmat = 1;
             enddo
         endif
-        call uniform_2D_filter_sub(even, odd, mask)
+        call uni_filt2D_sub(even, odd, mask)
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
@@ -257,7 +257,7 @@ contains
         end do
         if( allocated(diams) ) deallocate(diams)
         ! end gracefully
-        call simple_end('**** SIMPLE_UNIFORM_2D_FILTER NORMAL STOP ****')
-    end subroutine exec_uniform_2D_filter
+        call simple_end('**** SIMPLE_uniform_filter2D NORMAL STOP ****')
+    end subroutine exec_uniform_filter2D
 
 end module simple_commander_resolest

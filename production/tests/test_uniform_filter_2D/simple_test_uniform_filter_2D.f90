@@ -1,23 +1,23 @@
-program simple_test_uniform_filter_2D
+program simple_test_uni_filt2D
     include 'simple_lib.f08'
     use simple_cmdline,            only: cmdline
     use simple_builder,            only: builder
     use simple_parameters,         only: parameters
-    use simple_commander_resolest, only: uniform_2D_filter_commander
+    use simple_commander_resolest, only: uniform_filter2D_commander
     use simple_image,              only: image
-    use simple_opt_filter,         only: uniform_filter_2D
+    use simple_opt_filter,         only: uni_filt2D
     implicit none
     type(parameters)                  :: p, p_opt
     type(cmdline)                     :: cline, cline_opt
     type(image)                       :: img_clean, img_noisy, noise_img
-    type(uniform_2D_filter_commander) :: opt_commander
+    type(uniform_filter2D_commander) :: opt_commander
     integer                           :: nptcls, iptcl, noise_n, noise_i
     real                              :: ave, sdev, maxv, minv, noise_lvl
     real,    parameter                :: LP_LOWRES_PHASE = 7., NOISE_MIN = .3, NOISE_MAX = 1., NOISE_DEL = 0.1
     integer, parameter                :: NSEARCH = 100, SMOOTH_EXT = 8
     character(len=LONGSTRLEN)         :: cwd=''
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'Usage: simple_test_uniform_filter_2D smpd=xx nthr=yy stk=stk.mrc'
+        write(logfhandle,'(a)') 'Usage: simple_test_uni_filt2D smpd=xx nthr=yy stk=stk.mrc'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
         stop
     else
@@ -34,7 +34,7 @@ program simple_test_uniform_filter_2D
     call cline_opt%delete('stk')
     call cline_opt%set('frcs',       'temp.bin')
     call cline_opt%set('smooth_ext', 8.)
-    call cline_opt%set('prg',        'uniform_2D_filter')
+    call cline_opt%set('prg',        'uniform_filter2D')
     call cline_opt%set('mkdir',      'yes')
     p%ldim(3) = 1 ! because we operate on stacks
     call img_noisy%new(p%ldim, p%smpd)
@@ -75,4 +75,4 @@ program simple_test_uniform_filter_2D
     call img_noisy%kill()
     call img_clean%kill()
     call noise_img%kill()
-    end program simple_test_uniform_filter_2D
+    end program simple_test_uni_filt2D
