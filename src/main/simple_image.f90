@@ -256,7 +256,6 @@ contains
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: corr
-    ! procedure          :: corr_grad_ad
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
@@ -4518,76 +4517,6 @@ contains
             THROW_HARD('images to be correlated need to have same dimensions; corr')
         endif
     end function corr
-
-    ! function corr_grad_ad( self_ref, self_ptcl, sumsq_ptcl, resmsk, shvec, objfun, grad) result( cc )
-    !     use ADLib_NumParameters_m
-    !     use ADdnSVM_m
-    !     class(image), target, intent(inout) :: self_ref
-    !     class(image),         intent(in)    :: self_ptcl
-    !     integer,              intent(in)    :: objfun
-    !     real,                 intent(in)    :: sumsq_ptcl
-    !     logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
-    !     real,                 intent(in)    :: shvec(2)
-    !     real, optional,       intent(inout) :: grad(2)
-    !     real                                :: cc, eps, d0(2), sumsq_ref, denom
-    !     real(kind=Rkind)                    :: ref_re, ref_im
-    !     integer                             :: lims(3,2), h, k, hphys,kphys
-    !     type(dnS_t)                         :: shvec_ad(2), numer_ad, arg, arg_k, A, B, cos_arg, sin_arg, ptl_re, ptl_im
-    !     shvec_ad(1)   = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
-    !     shvec_ad(2)   = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
-    !     shvec_ad(1)   = shvec_ad(1)*real(self_ref%shconst(1), kind=Rkind)
-    !     shvec_ad(2)   = shvec_ad(2)*real(self_ref%shconst(2), kind=Rkind)
-    !     numer_ad      = ZERO
-    !     lims          = self_ref%fit%loop_lims(2)
-    !     sumsq_ref     = self_ref%calc_sumsq(resmsk)
-    !     denom         = 1.
-    !     select case(objfun)
-    !         case(OBJFUN_CC)
-    !             do k=lims(2,1),lims(2,2)
-    !                 kphys = k + 1 + merge(self_ref%ldim(2),0,k<0)
-    !                 arg_k = k*shvec_ad(2)
-    !                 do h=lims(1,1),lims(1,2)
-    !                     hphys   = h + 1
-    !                     if( resmsk(hphys, kphys, 1) )then
-    !                         arg       = h*shvec_ad(1) + arg_k
-    !                         cos_arg   = cos(arg)
-    !                         sin_arg   = sin(arg)
-    !                         ref_re    = real(realpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ref_im    = real(imagpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ptl_re    = real(realpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ptl_im    = real(imagpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         A         = cos_arg*ref_re - sin_arg*ref_im
-    !                         B         = cos_arg*ref_im + sin_arg*ref_re
-    !                         numer_ad  = numer_ad  + A*ptl_re + B*ptl_im
-    !                     endif
-    !                 end do
-    !             end do
-    !             denom = sqrt(sumsq_ref * sumsq_ptcl)
-    !         case(OBJFUN_EUCLID)
-    !             do k=lims(2,1),lims(2,2)
-    !                 kphys = k + 1 + merge(self_ref%ldim(2),0,k<0)
-    !                 arg_k = k*shvec_ad(2)
-    !                 do h=lims(1,1),lims(1,2)
-    !                     hphys   = h + 1
-    !                     if( resmsk(hphys, kphys, 1) )then
-    !                         arg       = h*shvec_ad(1) + arg_k
-    !                         cos_arg   = cos(arg)
-    !                         sin_arg   = sin(arg)
-    !                         ref_re    = real(realpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ref_im    = real(imagpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ptl_re    = real(realpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         ptl_im    = real(imagpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
-    !                         A         = cos_arg*ref_re - sin_arg*ref_im
-    !                         B         = cos_arg*ref_im + sin_arg*ref_re
-    !                         numer_ad  = numer_ad - (A - ptl_re)**2 - (B - ptl_im)**2
-    !                     endif
-    !                 end do
-    !             end do
-    !     end select
-    !     if( present(grad) ) grad = get_d1(numer_ad)/denom
-    !     d0 = get_d0(numer_ad)/denom
-    !     cc = d0(1)
-    ! end function corr_grad_ad
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl

@@ -12,6 +12,7 @@ type(parameters)      :: p
 type(cartft_corrcalc) :: cftcc
 real, parameter       :: SHMAG=5.0
 integer               :: i
+real                  :: grad(2)
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted stk=<particles.ext>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
@@ -72,7 +73,8 @@ contains
             x = x + shstep
         end do
         do i = 1,cnt
-            corr = cftcc%corr_shifted(iptcl, srch_space(i,:))
+            corr = cftcc%corr_shifted_grad(iptcl, srch_space(i,:), grad)
+            ! corr = cftcc%corr_shifted(iptcl, srch_space(i,:))
             print *, srch_space(i,1), srch_space(i,2), corr
         end do
     end subroutine srch_shifts
