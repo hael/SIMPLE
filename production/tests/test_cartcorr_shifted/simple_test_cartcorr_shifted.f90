@@ -85,7 +85,7 @@ contains
         end do
         do i = 1,cnt
             corr = cftcc%corr_shifted_ad(iptcl, srch_space(i,:), grad)
-            print *, srch_space(i,1), srch_space(i,2), corr
+            print *, srch_space(i,1), srch_space(i,2), corr, grad(1), grad(2)
         end do
     end subroutine srch_shifts_ad
 
@@ -119,8 +119,8 @@ contains
             x = x + shstep
         end do
         do i = 1,cnt
-            corr = cftcc%corr_shifted(iptcl, srch_space(i,:))
-            print *, srch_space(i,1), srch_space(i,2), corr
+            corr = cftcc%corr_shifted(iptcl, srch_space(i,:), grad)
+            print *, srch_space(i,1), srch_space(i,2), corr, grad(1), grad(2)
         end do
     end subroutine srch_shifts
 
