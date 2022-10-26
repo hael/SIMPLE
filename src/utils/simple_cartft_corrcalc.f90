@@ -58,7 +58,7 @@ type :: cartft_corrcalc
     ! CALCULATORS
     procedure          :: project_and_correlate
     procedure          :: corr_shifted
-    procedure          :: corr_shifted_grad
+    procedure          :: corr_shifted_ad
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -470,7 +470,7 @@ contains
         corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk)
     end function project_and_correlate
 
-    function corr_shifted_grad( self, iptcl, shvec, grad ) result( corr )
+    function corr_shifted_ad( self, iptcl, shvec, grad ) result( corr )
         use ADLib_NumParameters_m
         use ADdnSVM_m
         class(cartft_corrcalc), intent(inout)  :: self
@@ -479,12 +479,11 @@ contains
         real,                   intent(inout)  :: grad(2)
         complex(kind=c_float_complex), pointer :: cmat_ref(:,:,:), cmat_ptcl(:,:,:)
         integer          :: i, h, k, ithr
-        complex          :: ref_comp(self%lims(1,1):self%lims(1,2), self%lims(2,1):self%lims(2,2))
+        complex          :: ref_ptcl, ref_comp, ptcl_comp
         real(sp)         :: cc(3), corr, d0(2)
         logical          :: iseven
-        type(dnS_t)      :: sh(2), arg, sh_re, sh_im, A, B, numer_ad, ptl_re, ptl_im, ck, sk,&
-                           &hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2))
-        real(kind=Rkind) :: shconst, ref_re, ref_im
+        type(dnS_t)      :: sh(2), arg, arg_k, numer_ad, arg_h(self%lims(1,1):self%lims(1,2))
+        real(kind=Rkind) :: shconst
         ! physical particle index
         i = self%pinds(iptcl)
         ! get thread index
@@ -495,39 +494,32 @@ contains
         else
             shconst = PI / real((self%ldim(1)-1)/2.)
         endif
-        sh(1) = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
-        sh(2) = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
-        sh(1) = sh(1)*shconst
-        sh(2) = sh(2)*shconst
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h, kind=Rkind) * sh(1)
-            hcos(h) = cos(arg)
-            hsin(h) = sin(arg)
-        enddo
-        ref_comp = self%references(:,:,ithr) * self%ctfmats(:,:,i)
+        sh(1)    = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
+        sh(2)    = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
+        sh(1)    = sh(1)*shconst
+        sh(2)    = sh(2)*shconst
         cc(:)    = 0.
-        cc(2)    = sum(real(ref_comp              * conjg(ref_comp)),              self%resmsk)
-        cc(3)    = sum(real(self%particles(:,:,i) * conjg(self%particles(:,:,i))), self%resmsk)
         numer_ad = ZERO
+        do h = self%lims(1,1),self%lims(1,2)
+            arg_h(h) = real(h, kind=Rkind) * sh(1)
+        enddo
         do k = self%lims(2,1),self%lims(2,2)
-            arg   = real(k, kind=Rkind) * sh(2)
-            ck    = cos(arg)
-            sk    = sin(arg)
+            arg_k = real(k, kind=Rkind) * sh(2)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                sh_re   = ck * hcos(h) - sk * hsin(h)
-                sh_im   = ck * hsin(h) + sk * hcos(h)
+                ! shift component
+                arg       = arg_k + arg_h(h)
                 ! retrieve reference component
-                ref_re   = real(realpart(ref_comp(h,k)), kind=Rkind)
-                ref_im   = real(imagpart(ref_comp(h,k)), kind=Rkind)
+                ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
-                ptl_re   = real(realpart(self%particles(h,k,i)), kind=Rkind)
-                ptl_im   = real(imagpart(self%particles(h,k,i)), kind=Rkind)
-                A        = ptl_re*sh_re - ptl_im*sh_im
-                B        = ptl_re*sh_im + ptl_im*sh_re
+                ptcl_comp = self%particles(h,k,i)
+                ref_ptcl  = ref_comp*conjg(ptcl_comp)
                 ! update cross product
-                numer_ad = numer_ad + ref_re*A + ref_im*B
+                numer_ad  = numer_ad + cos(arg)*real(realpart(ref_ptcl), kind=Rkind) &
+                                    &+ sin(arg)*real(imagpart(ref_ptcl), kind=Rkind)
+                ! update normalization terms
+                cc(2)     = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
             end do
         end do
         d0      = get_d0(numer_ad)
@@ -536,7 +528,7 @@ contains
         corr    = norm_corr(  cc(1),cc(2),cc(3))
         grad(1) = norm_corr(grad(1),cc(2),cc(3))
         grad(2) = norm_corr(grad(2),cc(2),cc(3))
-    end function corr_shifted_grad
+    end function corr_shifted_ad
 
     function corr_shifted( self, iptcl, shvec ) result( corr )
         class(cartft_corrcalc), intent(inout)  :: self
