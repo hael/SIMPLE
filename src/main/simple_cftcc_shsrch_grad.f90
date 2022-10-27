@@ -122,23 +122,27 @@ contains
     end subroutine c_grad_shsrch_fdfcostfun
 
     !> minimisation routine
-    function c_grad_shsrch_minimize( self ) result( cxy )
+    function c_grad_shsrch_minimize( self, shvec ) result( cxy )
         class(cftcc_shsrch_grad), intent(inout) :: self
+        real, optional,           intent(in)    :: shvec(2)
         real     :: cxy(3), lowest_cost
         real(dp) :: init_xy(2), coarse_cost
         self%ospec%x      = [0.,0.]
         self%ospec%x_8    = [0.d0,0.d0]
-        if( perform_rndstart )then
+        if( present(shvec) )then
+            self%ospec%x_8 = shvec
+            self%ospec%x   = real(shvec)
+        else
             init_xy(1)     = 2.*(ran3()-0.5) * init_range
             init_xy(2)     = 2.*(ran3()-0.5) * init_range
             self%ospec%x_8 = init_xy
             self%ospec%x   = real(init_xy)
+            if( self%coarse_init )then
+                call self%c_coarse_search(coarse_cost, init_xy)
+                self%ospec%x_8 = init_xy
+                self%ospec%x   = real(init_xy)
+            end if
         endif
-        if( self%coarse_init )then
-            call self%c_coarse_search(coarse_cost, init_xy)
-            self%ospec%x_8 = init_xy
-            self%ospec%x   = real(init_xy)
-        end if
         ! shift search
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
         cxy(1)  = - real(lowest_cost)  ! correlation

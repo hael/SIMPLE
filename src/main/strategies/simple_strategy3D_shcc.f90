@@ -59,20 +59,6 @@ contains
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)
-
-                ! greedy optimization over in-plane angle
-                ! corr_inpl = -1.
-                ! do irot = 1,self%s%nrots
-                !     call o%e3set(build_glob%inpl_rots(irot))
-                !     ! calculate Cartesian corr
-                !     corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
-                !     if( corr > corr_inpl )then
-                !         corr_inpl = corr
-                !         e3 = build_glob%inpl_rots(irot)
-                !     endif
-                ! end do
-                ! call o%e3set(e3)
-
                 corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
                 if( corr > corr_best )then
                     corr_best  = corr
@@ -110,16 +96,16 @@ contains
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             endif
             if( self%s%doshift ) then
-                ! Cartesian shift search
+                ! Cartesian shift search using L-BFGS-B with analytical derivatives
                 call cftcc_glob%prep4shift_srch(self%s%iptcl, obest)
-                cxy        = self%s%shift_srch_cart()
+                cxy = self%s%shift_srch_cart()
                 shvec      = 0.
                 shvec_incr = 0.
                 if( cxy(1) >= corr_best )then
                     shvec      = self%s%prev_shvec
-                    ! since particle image is shifted in the Cartesian formulatrion and we appy 
+                    ! since particle image is shifted in the Cartesian formulation and we apply 
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
-                    shvec_incr = -cxy(2:3) 
+                    shvec_incr = - cxy(2:3) 
                     shvec      = shvec + shvec_incr
                 end if
                 where( abs(shvec) < 1e-6 ) shvec = 0.
