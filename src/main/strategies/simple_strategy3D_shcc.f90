@@ -39,6 +39,7 @@ contains
         integer   :: isample, irot
         type(ori) :: o, osym, obest
         real      :: corr, euldist, dist_inpl, corr_best, frac, corr_inpl, e3
+        real      :: cxy(3), shvec(2), shvec_incr(2)
         logical   :: got_better
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
@@ -108,10 +109,23 @@ contains
                 call obest%set('frac',      100.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             endif
-
-
-            !!!!!!!!!!!!!!!!!!! CARTESIAN SHIFT SRCH TO BE IMPLEMENTED
-
+            if( self%s%doshift ) then
+                ! Cartesian shift search
+                call cftcc_glob%prep4shift_srch(self%s%iptcl, obest)
+                cxy        = self%s%shift_srch_cart()
+                shvec      = 0.
+                shvec_incr = 0.
+                if( cxy(1) >= corr_best )then
+                    shvec      = self%s%prev_shvec
+                    ! since particle image is shifted in the Cartesian formulatrion and we appy 
+                    ! with negative sign in rec3D the sign of the increment found needs to be negative
+                    shvec_incr = -cxy(2:3) 
+                    shvec      = shvec + shvec_incr
+                end if
+                where( abs(shvec) < 1e-6 ) shvec = 0.
+                call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
+                call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
+            endif
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

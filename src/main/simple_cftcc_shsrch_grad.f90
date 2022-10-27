@@ -19,10 +19,8 @@ type :: cftcc_shsrch_grad
     type(opt_spec)            :: ospec                  !< optimizer specification object
     class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
     integer                   :: particle     = 0       !< particle index
-    integer                   :: nrots        = 0       !< # rotations
     integer                   :: maxits       = 100     !< max # iterations
     logical                   :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     real                      :: max_shift    = 0.      !< maximal shift
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
 contains
@@ -77,9 +75,11 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
+        real(sp)                :: cost_sp
         select type(self)
             class is (cftcc_shsrch_grad)
-                cost = - cftcc_glob%corr_shifted(self%particle, real(vec))
+                call cftcc_glob%corr_shifted(self%particle, real(vec), cost_sp)
+                cost = real(-cost_sp,kind=dp)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -95,7 +95,8 @@ contains
         grad = 0.
         select type(self)
             class is (cftcc_shsrch_grad)
-                cost = - cftcc_glob%corr_shifted(self%particle, real(vec), corrs_grad)
+                call cftcc_glob%corr_shifted(self%particle, real(vec), cost, corrs_grad)
+                cost = - cost
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -107,12 +108,13 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: f, grad(D)
-        real(sp)                :: corrs_grad(2)
+        real(sp)                :: corrs_grad(2), f_sp
         f    = 0.
         grad = 0.
         select type(self)
             class is (cftcc_shsrch_grad)
-                f    = - cftcc_glob%corr_shifted(self%particle, real(vec), corrs_grad)
+                call cftcc_glob%corr_shifted(self%particle, real(vec), f_sp, corrs_grad)
+                f    = real(-f_sp,kind=dp)
                 grad = - corrs_grad
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
@@ -134,8 +136,8 @@ contains
         endif
         if( self%coarse_init )then
             call self%c_coarse_search(coarse_cost, init_xy)
-            self%ospec%x_8      = init_xy
-            self%ospec%x        = real(init_xy)
+            self%ospec%x_8 = init_xy
+            self%ospec%x   = real(init_xy)
         end if
         ! shift search
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
@@ -147,6 +149,7 @@ contains
         class(cftcc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: lowest_cost, init_xy(2)
         real(dp) :: x, y, cost, stepx, stepy
+        real(sp) :: cost_sp
         integer  :: ix, iy
         lowest_cost = huge(lowest_cost)
         init_xy     = 0.d0
@@ -157,8 +160,9 @@ contains
             x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
-                cost = -cftcc_glob%corr_shifted(self%particle, real([x,y]))
-                if (cost < lowest_cost) then
+                call cftcc_glob%corr_shifted(self%particle, real([x,y]), cost_sp)
+                cost = real(-cost_sp,kind=dp)
+                if( cost < lowest_cost )then
                     lowest_cost = cost
                     init_xy     = [x,y]
                 end if
