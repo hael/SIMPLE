@@ -17,7 +17,8 @@ private
 #include "simple_local_flags.inc"
 
 interface read_imgbatch
-    module procedure read_imgbatch_1, read_imgbatch_2
+    module procedure read_imgbatch_1
+    module procedure read_imgbatch_2
 end interface read_imgbatch
 
 real, parameter :: SHTHRESH  = 0.001
@@ -163,7 +164,7 @@ contains
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
-        ! because therew are less interpolation errors  and more components at low resolution
+        ! because therew are less interpolation errors  and more components at low resolution 
         ! in the Cartesian formulation we set the high-pass Fourier index to 1
         if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
@@ -198,7 +199,7 @@ contains
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
-        ! because therew are less interpolation errors  and more components at low resolution
+        ! because therew are less interpolation errors  and more components at low resolution 
         ! in the Cartesian formulation we set the high-pass Fourier index to 1
         if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
@@ -272,12 +273,11 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img, icls, iseven, center, xyz_in, xyz_out )
-        use simple_polarizer,  only: polarizer
-        use simple_opt_filter, only: butterworth_filter
-        class(polarizer),  intent(inout) :: img
+    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
+        use simple_polarizer, only: polarizer
+        class(image),      intent(inout) :: img_in
+        class(polarizer),  intent(inout) :: img_out
         integer,           intent(in)    :: icls
-        logical,           intent(in)    :: iseven
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
@@ -294,16 +294,16 @@ contains
                 sharg = arg(xyz_in)
                 if( sharg > CENTHRESH )then
                     ! apply shift and do NOT update the corresponding class parameters
-                    call img%fft()
-                    call img%shift2Dserial(xyz_in(1:2))
+                    call img_in%fft()
+                    call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk)
+                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
-                    call img%fft()
-                    call img%shift2Dserial(xyz(1:2))
+                    call img_in%fft()
+                    call img_in%shift2Dserial(xyz(1:2))
                     call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
@@ -314,35 +314,29 @@ contains
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                if( allocated(build_glob%cutoff_finds_eo) )then
-                    if( iseven )then
-                        call butterworth_filter(build_glob%cutoff_finds_eo(icls,2), filter)
-                    else
-                        call butterworth_filter(build_glob%cutoff_finds_eo(icls,1), filter)
-                    endif
-                else
-                    call fsc2optlp_sub(filtsz, frc, filter)
-                endif
+                call fsc2optlp_sub(filtsz, frc, filter)
                 if( params_glob%l_match_filt )then
                     call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                 else
-                    call img%fft() ! needs to be here in case the shift was never applied (above)
-                    call img%apply_filter_serial(filter)
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
                 endif
             endif
         endif
         ! ensure we are in real-space
-        call img%ifft()
+        call img_in%ifft()
+        ! clip image if needed
+        call img_in%clip(img_out)
         ! apply mask
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            call img%mask(params_glob%msk, 'soft', backgr=0.0)
+            call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
         else
-            call img%mask(params_glob%msk, 'soft')
+            call img_out%mask(params_glob%msk, 'soft')
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call img%div_by_instrfun
+        if( params_glob%gridding.eq.'yes' ) call img_out%div_by_instrfun
         ! move to Fourier space
-        call img%fft()
+        call img_out%fft()
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
