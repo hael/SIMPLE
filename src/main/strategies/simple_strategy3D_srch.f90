@@ -202,15 +202,12 @@ contains
         call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
-    subroutine shift_srch_cart( self, o )
+    function shift_srch_cart( self ) result( cxy )
         class(strategy3D_srch), intent(inout) :: self
-        type(ori),              intent(inout) :: o
         real :: cxy(3)
         call self%cart_shsrch_obj%set_pind( self%iptcl )
         cxy = self%cart_shsrch_obj%minimize()
-        call o%set('x', cxy(2))
-        call o%set('y', cxy(3))
-    end subroutine shift_srch_cart
+    end function shift_srch_cart
 
     subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self

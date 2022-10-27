@@ -154,7 +154,7 @@ contains
             x = x + shstep
         end do
         do i = 1,cnt
-            corr = cftcc%corr_shifted(iptcl, srch_space(i,:), grad)
+            call cftcc%corr_shifted(iptcl, srch_space(i,:), corr, grad)
             print *, srch_space(i,1), srch_space(i,2), corr, grad(1), grad(2)
         end do
     end subroutine srch_shifts

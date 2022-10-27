@@ -240,7 +240,8 @@ type :: parameters
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
-    integer :: nsample=1           !< # continuous orientations to sample during stochastic search
+    integer :: nsample=0           !< # continuous 3D rotational orientations to sample during stochastic search
+    integer :: nsample_trs=0       !< # continuous translations (2D origin shifts) to sample during stochastic search
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
@@ -621,6 +622,7 @@ contains
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nsample',        self%nsample)
+        call check_iarg('nsample_trs',    self%nsample_trs)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)

@@ -57,7 +57,9 @@ type :: cartft_corrcalc
     procedure          :: prep4parallel_shift_srch
     ! CALCULATORS
     procedure          :: project_and_correlate
-    procedure          :: corr_shifted
+    procedure, private :: corr_shifted_1
+    procedure, private :: corr_shifted_2
+    generic            :: corr_shifted => corr_shifted_1, corr_shifted_2       
     procedure          :: corr_shifted_ad
     ! DESTRUCTOR
     procedure          :: kill
@@ -470,6 +472,115 @@ contains
         corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk)
     end function project_and_correlate
 
+    subroutine corr_shifted_1( self, iptcl, shvec, corr )
+        class(cartft_corrcalc), intent(inout)  :: self
+        integer,                intent(in)     :: iptcl
+        real,                   intent(in)     :: shvec(2)
+        real,                   intent(inout)  :: corr
+        integer  :: i, h, k, ithr
+        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
+        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2))
+        real(dp) :: hsin(self%lims(1,1):self%lims(1,2)), ck, sk
+        real(sp) :: cc(3), shconst
+        logical  :: iseven
+        ! physical particle index
+        i = self%pinds(iptcl)
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        ! optimized shift calculation following (shift2Dserial_1 in image class)
+        sh = real(shvec * shconst,dp)
+        do h = self%lims(1,1),self%lims(1,2)
+            arg     = real(h,dp) * sh(1)
+            hcos(h) = dcos(arg)
+            hsin(h) = dsin(arg)
+        enddo
+        cc(:) = 0.
+        do k = self%lims(2,1),self%lims(2,2)
+            arg = real(k,dp) * sh(2)
+            ck  = dcos(arg)
+            sk  = dsin(arg)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                ! retrieve reference component
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+                ! shift the particle Fourier component
+                ptcl_comp = self%particles(h,k,i)
+                ! update cross product
+                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                ! update normalization terms
+                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+            end do
+        end do
+        corr = norm_corr(cc(1),cc(2),cc(3))
+    end subroutine corr_shifted_1
+
+    subroutine corr_shifted_2( self, iptcl, shvec, corr, grad )
+        class(cartft_corrcalc), intent(inout)  :: self
+        integer,                intent(in)     :: iptcl
+        real,                   intent(in)     :: shvec(2)
+        real,                   intent(inout)  :: corr
+        real,                   intent(inout)  :: grad(2)
+        integer  :: i, h, k, ithr
+        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
+        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
+        real(sp) :: cc(3), shconst
+        logical  :: iseven
+        ! physical particle index
+        i = self%pinds(iptcl)
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        ! optimized shift calculation following (shift2Dserial_1 in image class)
+        sh = real(shvec * shconst,dp)
+        do h = self%lims(1,1),self%lims(1,2)
+            arg     = real(h,dp) * sh(1)
+            hcos(h) = dcos(arg)
+            hsin(h) = dsin(arg)
+        enddo
+        cc(:)   = 0.
+        grad(:) = 0.
+        do k = self%lims(2,1),self%lims(2,2)
+            arg = real(k,dp) * sh(2)
+            ck  = dcos(arg)
+            sk  = dsin(arg)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                ! retrieve reference component
+                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+                ! shift the particle Fourier component
+                ptcl_comp   = self%particles(h,k,i)
+                ! update cross product
+                ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
+                cc(1)       = cc(1) + realpart(ref_ptcl_sh)
+                ! update normalization terms
+                cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                ! updating the gradient
+                ref_ptcl_sh = imagpart(ref_ptcl_sh)*shconst
+                grad(1)     = grad(1) + real(ref_ptcl_sh)*h
+                grad(2)     = grad(2) + real(ref_ptcl_sh)*k
+            end do
+        end do
+        grad(1) = norm_corr(grad(1),cc(2), cc(3))
+        grad(2) = norm_corr(grad(2),cc(2), cc(3))
+        corr    = norm_corr(cc(1),  cc(2), cc(3))
+    end subroutine corr_shifted_2
+
+    ! auto differentiation gives substandard performance to anaytical gradients
     function corr_shifted_ad( self, iptcl, shvec, grad ) result( corr )
         use ADLib_NumParameters_m
         use ADdnSVM_m
@@ -528,87 +639,6 @@ contains
         grad(1) = norm_corr(grad(1),cc(2),cc(3))
         grad(2) = norm_corr(grad(2),cc(2),cc(3))
     end function corr_shifted_ad
-
-    function corr_shifted( self, iptcl, shvec, grad ) result( corr )
-        class(cartft_corrcalc), intent(inout)  :: self
-        integer,                intent(in)     :: iptcl
-        real,                   intent(in)     :: shvec(2)
-        real,         optional, intent(inout)  :: grad(2)
-        integer  :: i, h, k, ithr
-        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
-        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-        real(sp) :: cc(3), corr, shconst
-        logical  :: iseven, present_grad
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        ! if grad is present
-        present_grad = .false.
-        if( present(grad) ) present_grad = .true.
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        sh = real(shvec * shconst,dp)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h,dp) * sh(1)
-            hcos(h) = dcos(arg)
-            hsin(h) = dsin(arg)
-        enddo
-        cc(:) = 0.
-        if( present_grad )then
-            grad(:) = 0.
-            do k = self%lims(2,1),self%lims(2,2)
-                arg = real(k,dp) * sh(2)
-                ck  = dcos(arg)
-                sk  = dsin(arg)
-                do h = self%lims(1,1),self%lims(1,2)
-                    if( .not. self%resmsk(h,k) ) cycle
-                    sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                    ! retrieve reference component
-                    ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                    ! shift the particle Fourier component
-                    ptcl_comp   = self%particles(h,k,i)
-                    ! update cross product
-                    ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
-                    cc(1)       = cc(1) + realpart(ref_ptcl_sh)
-                    ! update normalization terms
-                    cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
-                    cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                    ! updating the gradient
-                    ref_ptcl_sh = imagpart(ref_ptcl_sh)*shconst
-                    grad(1)     = grad(1) + real(ref_ptcl_sh)*h
-                    grad(2)     = grad(2) + real(ref_ptcl_sh)*k
-                end do
-            end do
-            grad(1) = norm_corr(grad(1),cc(2),cc(3))
-            grad(2) = norm_corr(grad(2),cc(2),cc(3))
-        else
-            do k = self%lims(2,1),self%lims(2,2)
-                arg = real(k,dp) * sh(2)
-                ck  = dcos(arg)
-                sk  = dsin(arg)
-                do h = self%lims(1,1),self%lims(1,2)
-                    if( .not. self%resmsk(h,k) ) cycle
-                    sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                    ! retrieve reference component
-                    ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                    ! shift the particle Fourier component
-                    ptcl_comp = self%particles(h,k,i)
-                    ! update cross product
-                    cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
-                    ! update normalization terms
-                    cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                    cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                end do
-            end do
-        endif
-        corr = norm_corr(cc(1),cc(2),cc(3))
-    end function corr_shifted
 
     ! DESTRUCTOR
 
