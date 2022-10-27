@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub
+public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D
 private
 
 interface butterworth_filter
@@ -557,14 +557,14 @@ contains
         call even_filt_lowres%kill
     end subroutine nonuni_filt2D_masked
 
-    ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version
+    ! 3D optimization(search)-based nonuniform filter, paralellized version
     subroutine nonuni_filt3D(odd, even, mskimg)
         class(image),           intent(inout) :: odd, even
         class(image), optional, intent(inout) :: mskimg
         type(image)                   ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
                                         &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
         integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
-        integer                       :: filtsz, best_ind, cutoff_find, lb(3), ub(3), smooth_ext
+        integer                       :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
         real                          :: rad, find_stepsz, val, smpd
         type(image_ptr)               :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
         type(c_ptr)                   :: plan_fwd, plan_bwd
@@ -588,6 +588,7 @@ contains
         if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        if( find_start >= find_stop ) THROW_HARD('nonuni_filt3D: starting Fourier index is larger than ending Fourier index!')
         allocate(in(ldim(1),ldim(2),ldim(3),2), out(ldim(1),ldim(2),ldim(3),2))
         !$omp critical
         call fftwf_plan_with_nthreads(nthr_glob)
@@ -635,7 +636,6 @@ contains
         enddo
         call weights_img%fft()
         ! searching for the best fourier index from here and generating the optimized filter
-        best_ind            = find_start
         pdiff_opt_odd%rmat  = huge(val)
         pdiff_opt_even%rmat = huge(val)
         call  odd%get_rmat_ptr(rmat_odd)
@@ -693,6 +693,182 @@ contains
         call fftwf_destroy_plan(plan_fwd)
         call fftwf_destroy_plan(plan_bwd)
     end subroutine nonuni_filt3D
+
+    ! 3D optimization(search)-based uniform filter, paralellized version
+    subroutine uni_filt3D(odd, even, mskimg, cutoff_finds_eo)
+        class(image),                   intent(inout) :: odd, even
+        class(image),         optional, intent(inout) :: mskimg
+        integer,              optional, intent(inout) :: cutoff_finds_eo(2)
+        real(   kind=c_float),          pointer       ::  in(:,:,:,:)
+        complex(kind=c_float_complex),  pointer       :: out(:,:,:,:)
+        integer,                        parameter     :: CHUNKSZ = 20, N_IMGS = 2
+        real,                           allocatable   :: fsc(:), cur_fil(:)
+        character(len=:),               allocatable   :: fsc_fname
+        type(image)     ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
+                           &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
+        type(image_ptr) :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights, pmask
+        type(c_ptr)     :: plan_fwd, plan_bwd
+        integer         :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
+        integer         :: filtsz, lb(3), ub(3), smooth_ext
+        integer         :: cutoff_find, best_ind_even, best_ind_odd
+        real            :: rad, find_stepsz, val, smpd, cur_cost_odd, cur_cost_even
+        real            :: best_cost_odd, best_cost_even
+        logical         :: present_cuofindeo, present_mskimg
+        ldim              = odd%get_ldim()
+        filtsz            = odd%get_filtsz()
+        smooth_ext        = params_glob%smooth_ext
+        box               = ldim(1)
+        fsc_fname         = trim(params_glob%fsc)
+        smpd              = params_glob%smpd
+        present_cuofindeo = present(cutoff_finds_eo)
+        present_mskimg    = present(mskimg)
+        ! retrieve FSC and calculate optimal filter
+        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
+        fsc         = file2rarr(fsc_fname)
+        ! calculate Fourier index limits for search
+        find_stop   = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
+        if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
+        find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
+        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        if( find_start >= find_stop ) THROW_HARD('uni_filt3D: starting Fourier index is larger than ending Fourier index!')
+        allocate(in(ldim(1),ldim(2),ldim(3),2), out(ldim(1),ldim(2),ldim(3),2))
+        !$omp critical
+        call fftwf_plan_with_nthreads(nthr_glob)
+        plan_fwd = fftwf_plan_many_dft_r2c(3, ldim, N_IMGS, in , ldim, 1, product(ldim), out, ldim, 1, product(ldim), FFTW_ESTIMATE)
+        plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim), FFTW_ESTIMATE)
+        call fftwf_plan_with_nthreads(1)
+        !$omp end critical
+        call       weights_img%new(ldim, smpd)
+        call      diff_img_odd%new(ldim, smpd)
+        call     diff_img_even%new(ldim, smpd)
+        call  diff_img_opt_odd%new(ldim, smpd)
+        call diff_img_opt_even%new(ldim, smpd)
+        call       weights_img%get_mat_ptrs(pweights)
+        call      diff_img_odd%get_mat_ptrs(pdiff_odd)
+        call     diff_img_even%get_mat_ptrs(pdiff_even)
+        call  diff_img_opt_odd%get_mat_ptrs(pdiff_opt_odd)
+        call diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
+        call  odd_copy_rmat%copy(odd)
+        call even_copy_rmat%copy(even)
+        call  odd_copy_cmat%copy(odd)
+        call even_copy_cmat%copy(even)
+        call       odd_filt%copy(odd)
+        call      even_filt%copy(even)
+        call batch_fft_3D(even_copy_cmat, odd_copy_cmat, in, out, plan_fwd)
+        allocate(cur_fil(box), source=0.)
+        if( present_mskimg )then
+            call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
+            call mskimg%get_mat_ptrs(pmask)
+        else
+            lb = (/ 1, 1, 1/)
+            ub = (/ box, box, box /)
+        endif
+        do k = 1, 3
+            if( lb(k) < smooth_ext + 1 )   lb(k) = smooth_ext+1
+            if( ub(k) > box - smooth_ext ) ub(k) = box - smooth_ext
+        enddo
+        call weights_img%zero_and_unflag_ft()
+        do k = -smooth_ext, smooth_ext
+            do l = -smooth_ext, smooth_ext
+                do m = -smooth_ext, smooth_ext
+                    rad = hyp(real(k), real(l), real(m))
+                    val = -rad/(smooth_ext + 1) + 1.
+                    if( val > 0 ) call weights_img%set_rmat_at(box/2+k+1, box/2+l+1, box/2+m+1, val)
+                enddo
+            enddo
+        enddo
+        call weights_img%fft()
+        ! searching for the best fourier index from here and generating the optimized filter
+        best_ind_odd        = find_start
+        best_ind_even       = find_start
+        pdiff_opt_odd%rmat  = huge(val)
+        pdiff_opt_even%rmat = huge(val)
+        best_cost_even      = huge(best_cost_even)
+        best_cost_odd       = huge(best_cost_odd)
+        if( present_mskimg )then
+            do iter_no = 1, params_glob%nsearch
+                cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
+                ! filtering odd/even
+                call  odd_filt%copy_fast( odd_copy_cmat)
+                call even_filt%copy_fast(even_copy_cmat)
+                call butterworth_filter( odd_filt, cutoff_find, cur_fil)
+                call butterworth_filter(even_filt, cutoff_find, cur_fil)
+                call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
+                call  odd_filt%sqeuclid_matrix(even_copy_rmat, diff_img_odd)
+                call even_filt%sqeuclid_matrix( odd_copy_rmat, diff_img_even)
+                call batch_fft_3D(diff_img_even, diff_img_odd, in, out, plan_fwd)
+                !$omp parallel workshare
+                pdiff_odd% cmat = pdiff_odd %cmat * pweights%cmat
+                pdiff_even%cmat = pdiff_even%cmat * pweights%cmat
+                !$omp end parallel workshare
+                call batch_ifft_3D(diff_img_even, diff_img_odd, in, out, plan_bwd)
+                !$omp parallel workshare
+                cur_cost_odd  = sum(pdiff_odd %rmat * pmask%rmat)
+                cur_cost_even = sum(pdiff_even%rmat * pmask%rmat)
+                !$omp end parallel workshare
+                if( cur_cost_odd < best_cost_odd )then
+                    best_cost_odd = cur_cost_odd
+                    best_ind_odd  = cutoff_find
+                endif
+                if( cur_cost_even < best_cost_even )then
+                    best_cost_even = cur_cost_even
+                    best_ind_even  = cutoff_find
+                endif
+            enddo
+        else
+            do iter_no = 1, params_glob%nsearch
+                cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
+                ! filtering odd/even
+                call  odd_filt%copy_fast( odd_copy_cmat)
+                call even_filt%copy_fast(even_copy_cmat)
+                call butterworth_filter( odd_filt, cutoff_find, cur_fil)
+                call butterworth_filter(even_filt, cutoff_find, cur_fil)
+                call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
+                call  odd_filt%sqeuclid_matrix(even_copy_rmat, diff_img_odd)
+                call even_filt%sqeuclid_matrix( odd_copy_rmat, diff_img_even)
+                call batch_fft_3D(diff_img_even, diff_img_odd, in, out, plan_fwd)
+                !$omp parallel workshare
+                pdiff_odd% cmat = pdiff_odd %cmat * pweights%cmat
+                pdiff_even%cmat = pdiff_even%cmat * pweights%cmat
+                !$omp end parallel workshare
+                call batch_ifft_3D(diff_img_even, diff_img_odd, in, out, plan_bwd)
+                !$omp parallel workshare
+                cur_cost_odd  = sum(pdiff_odd %rmat(lb(1):ub(1), lb(2):ub(2), lb(3):ub(3)))
+                cur_cost_even = sum(pdiff_even%rmat(lb(1):ub(1), lb(2):ub(2), lb(3):ub(3)))
+                !$omp end parallel workshare
+                if( cur_cost_odd < best_cost_odd )then
+                    best_cost_odd = cur_cost_odd
+                    best_ind_odd  = cutoff_find
+                endif
+                if( cur_cost_even < best_cost_even )then
+                    best_cost_even = cur_cost_even
+                    best_ind_even  = cutoff_find
+                endif
+            enddo
+        endif
+        call batch_fft_3D(odd, even, in, out, plan_fwd)
+        call butterworth_filter(odd,  best_ind_odd,  cur_fil)
+        call butterworth_filter(even, best_ind_even, cur_fil)
+        call batch_ifft_3D(odd, even, in, out, plan_bwd)
+        if( present_cuofindeo )then
+            cutoff_finds_eo(1) = best_ind_odd
+            cutoff_finds_eo(2) = best_ind_even
+        endif
+        deallocate(cur_fil)
+        call odd_copy_rmat%kill
+        call odd_copy_cmat%kill
+        call even_copy_rmat%kill
+        call even_copy_cmat%kill
+        call odd_filt%kill
+        call even_filt%kill
+        call weights_img%kill
+        call diff_img_odd%kill
+        call diff_img_even%kill
+        call diff_img_opt_odd%kill
+        call diff_img_opt_even%kill
+        call fftwf_destroy_plan(plan_fwd)
+        call fftwf_destroy_plan(plan_bwd)
+    end subroutine uni_filt3D
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index

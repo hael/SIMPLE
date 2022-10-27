@@ -171,6 +171,7 @@ type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
+type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -420,6 +421,7 @@ contains
         call new_tseries_reconstruct3D
         call new_graphene_subtr
         call new_uniform_filter2D
+        call new_uniform_filter3D
         call new_update_project
         call new_vizoris
         call new_volops
@@ -524,6 +526,7 @@ contains
         call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(uniform_filter2D)
+        call push2prg_ptr_array(uniform_filter3D)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
@@ -739,6 +742,8 @@ contains
                 ptr2prg => graphene_subtr
             case('uniform_filter2D')
                 ptr2prg => uniform_filter2D
+            case('uniform_filter3D')
+                ptr2prg => uniform_filter3D
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -833,6 +838,7 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') uniform_filter2D%name
+        write(logfhandle,'(A)') uniform_filter3D%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -2826,6 +2832,37 @@ contains
         ! computer controls
         call nununiform_filter3D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_nununiform_filter3D
+
+    subroutine new_uniform_filter3D
+        ! PROGRAM SPECIFICATION
+        call uniform_filter3D%new(&
+        &'uniform_filter3D',&                                   ! name
+        &'Uniform Butterworth 3D filter',&                      ! descr_short
+        &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
+        &'simple_exec',&                                        ! executable
+        &2, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call uniform_filter3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call uniform_filter3D%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call uniform_filter3D%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call uniform_filter3D%set_input('filt_ctrls', 1, smooth_ext)
+        call uniform_filter3D%set_input('filt_ctrls', 2, lp_lowres)
+        call uniform_filter3D%set_input('filt_ctrls', 3, nsearch)
+        call uniform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        call uniform_filter3D%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        ! mask controls
+        call uniform_filter3D%set_input('mask_ctrls', 1, mskdiam)
+        call uniform_filter3D%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call uniform_filter3D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_uniform_filter3D
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
