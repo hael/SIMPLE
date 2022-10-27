@@ -17,8 +17,7 @@ private
 #include "simple_local_flags.inc"
 
 interface read_imgbatch
-    module procedure read_imgbatch_1
-    module procedure read_imgbatch_2
+    module procedure read_imgbatch_1, read_imgbatch_2
 end interface read_imgbatch
 
 real, parameter :: SHTHRESH  = 0.001
@@ -273,10 +272,12 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img, icls, center, xyz_in, xyz_out )
-        use simple_polarizer,        only: polarizer
+    subroutine prep2Dref( img, icls, iseven, center, xyz_in, xyz_out )
+        use simple_polarizer,  only: polarizer
+        use simple_opt_filter, only: butterworth_filter
         class(polarizer),  intent(inout) :: img
         integer,           intent(in)    :: icls
+        logical,           intent(in)    :: iseven
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
@@ -313,7 +314,15 @@ contains
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter)
+                if( allocated(build_glob%cutoff_finds_eo) )then
+                    if( iseven )then
+                        call butterworth_filter(build_glob%cutoff_finds_eo(icls,2), filter)
+                    else
+                        call butterworth_filter(build_glob%cutoff_finds_eo(icls,1), filter)
+                    endif
+                else
+                    call fsc2optlp_sub(filtsz, frc, filter)
+                endif
                 if( params_glob%l_match_filt )then
                     call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                 else
