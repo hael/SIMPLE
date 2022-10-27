@@ -454,14 +454,14 @@ contains
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(cavgs_merged(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(cavgs_merged(icls), icls, .false., center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(cavgs_even(icls), icls, .true., center=do_center, xyz_in=xyz)
                         call cavgs_even(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_odd(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(cavgs_odd(icls), icls, .false., center=do_center, xyz_in=xyz)
                         call cavgs_odd(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
@@ -469,7 +469,7 @@ contains
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(cavgs_merged(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(cavgs_merged(icls), icls, .false., center=do_center, xyz_in=xyz)
                     call cavgs_merged(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
