@@ -19,8 +19,6 @@ use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_eval,     only: strategy2D_eval
-use simple_opt_filter,          only: uni_filt2D_sub
-use simple_masker,              only: automask2D
 use simple_euclid_sigma2,       only: euclid_sigma2
 use simple_classaverager
 use simple_progress
@@ -50,7 +48,6 @@ contains
         integer,                   allocatable :: pinds(:), batches(:,:)
         real,                      allocatable :: states(:)
         type(convergence) :: conv
-        type(cmdline)     :: cline_opt_filt
         type(ori)         :: orientation
         real    :: frac_srch_space, snhc_sz, frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
@@ -165,36 +162,6 @@ contains
             call cavger_read(params_glob%refs_odd, 'odd')
         else
             call cavger_read(params_glob%refs, 'odd')
-        endif
-        if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
-            do icls = 1,params_glob%ncls
-                call build_glob%env_masks(icls)%copy(cavgs_even(icls))
-                call build_glob%env_masks(icls)%add(cavgs_odd(icls))
-                call build_glob%env_masks(icls)%mul(0.5)
-            enddo
-            call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
-            call uni_filt2D_sub(cavgs_even, cavgs_odd, build_glob%env_masks, build_glob%cutoff_finds_eo)
-            if( params_glob%part.eq.1 )then
-                do icls = 1,params_glob%ncls
-                    call cavgs_even(icls)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', icls)
-                enddo
-            endif
-            ! read back the unfiltered class averages
-            if( file_exists(params_glob%refs_even) )then
-                call cavger_read(params_glob%refs_even, 'even')
-            else
-                call cavger_read(params_glob%refs, 'even')
-            endif
-            if( file_exists(params_glob%refs_odd) )then
-                call cavger_read(params_glob%refs_odd, 'odd')
-            else
-                call cavger_read(params_glob%refs, 'odd')
-            endif
-            ! apply the envelope masks
-            do icls = 1,params_glob%ncls
-                call cavgs_even(icls)%mul(build_glob%env_masks(icls))
-                call cavgs_odd(icls)%mul(build_glob%env_masks(icls))
-            enddo
         endif
 
         ! SET FOURIER INDEX RANGE
@@ -414,6 +381,7 @@ contains
     subroutine preppftcc4align( which_iter )
         use simple_strategy2D3D_common, only: prep2dref
         integer,           intent(in) :: which_iter
+        type(polarizer),  allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
@@ -433,6 +401,7 @@ contains
         end if
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
+        allocate(match_imgs(params_glob%ncls))
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -447,35 +416,38 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                call cavgs_even(icls)%copy_polarizer(build_glob%img_match)
-                call cavgs_odd(icls)%copy_polarizer(build_glob%img_match)
-                call cavgs_merged(icls)%copy_polarizer(build_glob%img_match)
+                call match_imgs(icls)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                call match_imgs(icls)%copy_polarizer(build_glob%img_match)
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(cavgs_merged(icls), icls, .false., center=do_center, xyz_out=xyz)
+                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), icls, .true., center=do_center, xyz_in=xyz)
-                        call cavgs_even(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_odd(icls), icls, .false., center=do_center, xyz_in=xyz)
-                        call cavgs_odd(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
+                        call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call cavgs_merged(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(cavgs_merged(icls), icls, .false., center=do_center, xyz_in=xyz)
-                    call cavgs_merged(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
+                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
+                call match_imgs(icls)%kill_polarizer
+                call match_imgs(icls)%kill
             endif
         end do
         !$omp end parallel do
+        ! CLEANUP
+        deallocate(match_imgs)
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher

@@ -6,7 +6,6 @@ use simple_parameters, only: params_glob
 use simple_ctf,        only: ctf
 use simple_image,      only: image, image_ptr
 use simple_stack_io,   only: stack_io
-use simple_polarizer,  only: polarizer
 use simple_fsc
 implicit none
 
@@ -40,11 +39,11 @@ integer                        :: ldim(3)    = [0,0,0]     !< logical dimension 
 integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
 real                           :: smpd       = 0.          !< sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
-type(polarizer),   allocatable :: cavgs_even(:)            !< class averages
-type(polarizer),   allocatable :: cavgs_odd(:)             !< -"-
+type(image),       allocatable :: cavgs_even(:)            !< class averages
+type(image),       allocatable :: cavgs_odd(:)             !< -"-
 type(image),       allocatable :: cavgs_even_wfilt(:)      !< class averages wiener filtered
 type(image),       allocatable :: cavgs_odd_wfilt(:)       !< -"-
-type(polarizer),   allocatable :: cavgs_merged(:)          !< -"-
+type(image),       allocatable :: cavgs_merged(:)          !< -"-
 type(image),       allocatable :: cavgs_merged_wfilt(:)    !< -"-
 type(image),       allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
 type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
@@ -663,34 +662,20 @@ contains
 
     !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname, which_iter )
-        use simple_masker, only: automask2D
         character(len=*), intent(in) :: fname
         integer,          intent(in) :: which_iter
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:), mask_imgs(:)
-        real,        allocatable     :: frc(:), diams(:)
+        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
+        real,        allocatable     :: frc(:)
         integer :: icls, find, find_plate
-        logical :: l_automsk
-        allocate(even_imgs(ncls), odd_imgs(ncls), mask_imgs(ncls), frc(filtsz), diams(ncls))
+        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
-            call mask_imgs(icls)%copy(cavgs_even(icls))
-            call mask_imgs(icls)%add(cavgs_odd(icls))
-            call mask_imgs(icls)%mul(0.5)
         end do
-        l_automsk = params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM
-        if( l_automsk )then
-            call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
-        endif
         !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
-            if( l_automsk )then
-                call even_imgs(icls)%mul(mask_imgs(icls))
-                call odd_imgs(icls)%mul(mask_imgs(icls))
-            else
-                call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-            endif
+            call even_imgs(icls)%mask(params_glob%msk, 'soft')
+            call odd_imgs(icls)%mask(params_glob%msk, 'soft')
             call even_imgs(icls)%fft()
             call odd_imgs(icls)%fft()
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -727,7 +712,7 @@ contains
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
         end do
-        deallocate(even_imgs, odd_imgs, frc, diams)
+        deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     ! I/O
@@ -1132,11 +1117,8 @@ contains
         if( exists )then
             do icls=1,ncls
                 call cavgs_even(icls)%kill
-                call cavgs_even(icls)%kill_polarizer
                 call cavgs_odd(icls)%kill
-                call cavgs_odd(icls)%kill_polarizer
                 call cavgs_merged(icls)%kill
-                call cavgs_merged(icls)%kill_polarizer
                 call ctfsqsums_even(icls)%kill
                 call ctfsqsums_odd(icls)%kill
                 call ctfsqsums_merged(icls)%kill
