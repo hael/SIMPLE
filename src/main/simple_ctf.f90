@@ -243,7 +243,7 @@ contains
                 one = (-B + sqrt(determinant)) / (2.0 * A)
                 two = (-B - sqrt(determinant)) / (2.0 * A)
                 if( one > 0. .and. two > 0. )then
-                    SpaFreqSqAtNthZero = one
+                    SpaFreqSqAtNthZero = min(one,two)
                 else if( one > 0. )then
                     SpaFreqSqAtNthZero = one
                 else if( two > 0. )then
