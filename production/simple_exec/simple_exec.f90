@@ -108,6 +108,7 @@ type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
 type(uniform_filter2D_commander)            :: xuniform_filter2D
+type(uniform_filter3D_commander)            :: xuniform_filter3D
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander)                   :: xmake_oris
@@ -311,6 +312,8 @@ select case(trim(prg))
         call xstackops%execute(cline)
     case( 'uniform_filter2D' )
         call xuniform_filter2D%execute(cline)
+    case( 'uniform_filter3D' )
+        call xuniform_filter3D%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )
