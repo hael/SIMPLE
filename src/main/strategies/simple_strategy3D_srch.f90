@@ -28,7 +28,8 @@ type strategy3D_srch
     integer                 :: iptcl         = 0         !< global particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                 :: nsample       = 0         !< # of continuous orientations to sample
+    integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample
+    integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample
     integer                 :: nstates       = 0         !< # states
     integer                 :: nprojs        = 0         !< # projections
     integer                 :: nrots         = 0         !< # in-plane rotations
@@ -122,23 +123,24 @@ contains
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%iptcl      = spec%iptcl
-        self%nstates    = params_glob%nstates
-        self%nprojs     = params_glob%nspace
-        self%nrefs      = self%nprojs*self%nstates
-        self%nsample    = params_glob%nsample
-        self%athres     = params_glob%athres
-        self%nbetter    = 0
-        self%nrefs_eval = 0
-        self%nsym       = build_glob%pgrpsyms%get_nsym()
-        self%doshift    = params_glob%l_doshift
-        self%l_neigh    = str_has_substr(params_glob%refine, 'neigh')
-        self%l_greedy   = str_has_substr(params_glob%refine, 'greedy')
-        self%l_ptclw    = trim(params_glob%ptclw).eq.'yes'
-        lims(:,1)       = -params_glob%trs
-        lims(:,2)       =  params_glob%trs
-        lims_init(:,1)  = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+        self%iptcl       = spec%iptcl
+        self%nstates     = params_glob%nstates
+        self%nprojs      = params_glob%nspace
+        self%nrefs       = self%nprojs*self%nstates
+        self%nsample     = params_glob%nsample
+        self%nsample_trs = params_glob%nsample_trs
+        self%athres      = params_glob%athres
+        self%nbetter     = 0
+        self%nrefs_eval  = 0
+        self%nsym        = build_glob%pgrpsyms%get_nsym()
+        self%doshift     = params_glob%l_doshift
+        self%l_neigh     = str_has_substr(params_glob%refine, 'neigh')
+        self%l_greedy    = str_has_substr(params_glob%refine, 'greedy')
+        self%l_ptclw     = trim(params_glob%ptclw).eq.'yes'
+        lims(:,1)        = -params_glob%trs
+        lims(:,2)        =  params_glob%trs
+        lims_init(:,1)   = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)   =  SHC_INPL_TRSHWDTH
         call self%o_prev%new(.true.)
         ! create in-plane search object
         if( params_glob%l_cartesian )then
@@ -202,11 +204,12 @@ contains
         call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
-    function shift_srch_cart( self ) result( cxy )
+    function shift_srch_cart( self, shvec ) result( cxy )
         class(strategy3D_srch), intent(inout) :: self
+        real, optional,         intent(in)    :: shvec(2)
         real :: cxy(3)
         call self%cart_shsrch_obj%set_pind( self%iptcl )
-        cxy = self%cart_shsrch_obj%minimize()
+        cxy = self%cart_shsrch_obj%minimize(shvec)
     end function shift_srch_cart
 
     subroutine inpl_srch_1( self )

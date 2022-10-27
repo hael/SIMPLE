@@ -57,6 +57,7 @@ type :: cartft_corrcalc
     procedure          :: prep4parallel_shift_srch
     ! CALCULATORS
     procedure          :: project_and_correlate
+    procedure          :: project_and_srch_shifts
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
     generic            :: corr_shifted => corr_shifted_1, corr_shifted_2       
@@ -471,6 +472,41 @@ contains
         endif
         corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk)
     end function project_and_correlate
+
+    subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        integer,                intent(in)    :: nsample
+        real,                   intent(in)    :: trs
+        real,                   intent(inout) :: shvec(2), corr_best
+        type(projector), pointer :: vol_ptr => null()
+        logical :: iseven
+        integer :: ithr, isample
+        real    :: sigma, xshift, yshift, xavg, yavg, corr
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        sigma = trs / 2. ! 2 sigma (soft) criterion
+        call self%corr_shifted(iptcl, shvec, corr_best)
+        do isample = 1,nsample
+            xshift = gasdev(shvec(1), sigma)
+            yshift = gasdev(shvec(2), sigma)
+            call self%corr_shifted(iptcl, [xshift,yshift], corr)
+            if( corr > corr_best )then
+                corr_best = corr
+                shvec(1)  = xshift
+                shvec(2)  = yshift
+            endif
+        end do
+    end subroutine project_and_srch_shifts
 
     subroutine corr_shifted_1( self, iptcl, shvec, corr )
         class(cartft_corrcalc), intent(inout)  :: self
