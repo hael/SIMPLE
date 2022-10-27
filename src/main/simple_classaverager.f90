@@ -6,6 +6,7 @@ use simple_parameters, only: params_glob
 use simple_ctf,        only: ctf
 use simple_image,      only: image, image_ptr
 use simple_stack_io,   only: stack_io
+use simple_polarizer,  only: polarizer
 use simple_fsc
 implicit none
 
@@ -39,11 +40,11 @@ integer                        :: ldim(3)    = [0,0,0]     !< logical dimension 
 integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
 real                           :: smpd       = 0.          !< sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
-type(image),       allocatable :: cavgs_even(:)            !< class averages
-type(image),       allocatable :: cavgs_odd(:)             !< -"-
+type(polarizer),   allocatable :: cavgs_even(:)            !< class averages
+type(polarizer),   allocatable :: cavgs_odd(:)             !< -"-
 type(image),       allocatable :: cavgs_even_wfilt(:)      !< class averages wiener filtered
 type(image),       allocatable :: cavgs_odd_wfilt(:)       !< -"-
-type(image),       allocatable :: cavgs_merged(:)          !< -"-
+type(polarizer),   allocatable :: cavgs_merged(:)          !< -"-
 type(image),       allocatable :: cavgs_merged_wfilt(:)    !< -"-
 type(image),       allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
 type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
@@ -1131,8 +1132,11 @@ contains
         if( exists )then
             do icls=1,ncls
                 call cavgs_even(icls)%kill
+                call cavgs_even(icls)%kill_polarizer
                 call cavgs_odd(icls)%kill
+                call cavgs_odd(icls)%kill_polarizer
                 call cavgs_merged(icls)%kill
+                call cavgs_merged(icls)%kill_polarizer
                 call ctfsqsums_even(icls)%kill
                 call ctfsqsums_odd(icls)%kill
                 call ctfsqsums_merged(icls)%kill

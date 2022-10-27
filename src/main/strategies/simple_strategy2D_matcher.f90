@@ -414,7 +414,6 @@ contains
     subroutine preppftcc4align( which_iter )
         use simple_strategy2D3D_common, only: prep2dref
         integer,           intent(in) :: which_iter
-        type(polarizer),  allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
@@ -434,7 +433,6 @@ contains
         end if
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
-        allocate(match_imgs(params_glob%ncls))
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -449,38 +447,35 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                call match_imgs(icls)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                call match_imgs(icls)%copy_polarizer(build_glob%img_match)
+                call cavgs_even(icls)%copy_polarizer(build_glob%img_match)
+                call cavgs_odd(icls)%copy_polarizer(build_glob%img_match)
+                call cavgs_merged(icls)%copy_polarizer(build_glob%img_match)
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(cavgs_merged(icls), icls, center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call prep2Dref(cavgs_even(icls), icls, center=do_center, xyz_in=xyz)
+                        call cavgs_even(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
+                        call prep2Dref(cavgs_odd(icls), icls, center=do_center, xyz_in=xyz)
+                        call cavgs_odd(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call cavgs_merged(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
+                    call prep2Dref(cavgs_merged(icls), icls, center=do_center, xyz_in=xyz)
+                    call cavgs_merged(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
-                call match_imgs(icls)%kill_polarizer
-                call match_imgs(icls)%kill
             endif
         end do
         !$omp end parallel do
-        ! CLEANUP
-        deallocate(match_imgs)
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher
