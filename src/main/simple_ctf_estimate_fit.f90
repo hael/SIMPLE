@@ -85,7 +85,7 @@ contains
     procedure, private :: gen_roavspec1d
     procedure, private :: subtr_backgr
     ! scoring, display & output
-    procedure          :: plot_parms
+    procedure          :: plot_ctf
     procedure          :: write_doc
     procedure          :: write_star
     procedure, private :: calc_ctfres
@@ -982,18 +982,18 @@ contains
         call pspec%get_rmat_ptr(ppspec)
         hp_rad = real(self%box)*smpd_fit/self%hp
         lp_rad = real(self%box)*smpd_fit/self%lp
+        ! re-re-normalization
+        call pspec%zero_edgeavg
         if( DEBUG_HERE )then
             call pspec%write('pspec_resampled.mrc')
             print *,'smpd fit ',smpd_fit
             print *,'hp_rad   ', hp_rad
             print *,'lp_rad   ', lp_rad
         endif
-        ! re-re-normalization
-        call pspec%zero_edgeavg
         tfun = ctf(smpd_fit, self%parms%kV, self%parms%Cs, self%parms%fraca)
         call tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
-        start = sqrt(tfun%SpaFreqSqAtNthZero(3, phshift, 0.))
-        end   = sqrt(tfun%SpaFreqSqAtNthZero(4, phshift, 0.))
+        start = sqrt(tfun%SpaFreqSqAtNthZero(3, phshift, deg2rad(self%parms%angast)))
+        end   = sqrt(tfun%SpaFreqSqAtNthZero(4, phshift, deg2rad(self%parms%angast)))
         start_rad = start*real(self%box)
         end_rad   = end  *real(self%box)
         if(  start_rad < hp_rad .or. start_rad > lp_rad .or.&
@@ -1023,7 +1023,7 @@ contains
             if( DEBUG_HERE ) call pspec%write('pspec_prepped.mrc')
         endif
         ! builds 1D/2D profiles
-        nshells = nint(sqrt(real(self%box*self%box/2))) ! shell of furthest pixel
+        nshells = self%box/2
         allocate(spec1d(0:nshells),spec1d_fit(0:nshells),frc(0:nshells),frc_sig(0:nshells),&
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
@@ -1050,8 +1050,6 @@ contains
         call rank_spec
         ! FRC
         call calc_frc
-        ! skip aliasing identification
-        ! abracadabra
         sh = max(1, ctfres_shell())
         self%ctfres = max(2*smpd_fit,min(pspec%get_lp(sh), self%hp))
         if( DEBUG_HERE ) print *,'self%ctfres ',self%ctfres
@@ -1070,7 +1068,7 @@ contains
                 n_abovehigh  = 0
                 n_abovesig   = 0
                 ctfres_shell = -1
-                hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1, phshift, 0.)))
+                hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box))
                 do h = hstart,nshells
                     whereitsat = ((n_abovelow>3)  .and. (frc(h)<low_threshold))&
                             &.or.((n_abovehigh>3) .and. (frc(h)<significance_threshold))
@@ -1087,19 +1085,11 @@ contains
             end function ctfres_shell
 
             subroutine calc_frc
-                real    :: spafreqs(1:nshells)
                 integer :: winhalfwidth(0:nshells)
                 real    :: spec_avg,spec_sdev,fit_avg,fit_sdev,product
                 integer :: nh,h,sh,sh_prev,lefth,righth,min_winhalfwidth,hp_ind
                 winhalfwidth = 0
-                do sh = 1,nshells
-                    spafreqs(sh) = real(sh)*smpd_fit
-                enddo
-                hp_ind = 0
-                do sh = 1,nshells
-                    hp_ind = sh
-                    if( spafreqs(sh) >= self%hp )exit
-                enddo
+                hp_ind       = ceiling(hp_rad)
                 ! FRC window sizes
                 min_winhalfwidth = nint(real(nshells)/40.)
                 sh_prev = 0
@@ -1380,95 +1370,63 @@ contains
 
     end subroutine pix2polyvals
 
-    subroutine plot_parms( self, fname )
+    subroutine plot_ctf( self, fname, n, ctf_th, ctf_fit, frc, smpd )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
-        real, parameter       :: SCALE = 10.
+        integer,                 intent(in)    :: n
+        real,                    intent(in)    :: ctf_th(n), ctf_fit(n), frc(n), smpd
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: center
-        type(CDataPoint_type) :: p1
-        character(len=STDLEN) :: titlestr
-        real                  :: msz,cx,cy,df,dfmin,dfmax,col,dfx,dfy,angast
-        integer               :: pi,pj
-        dfmin  =  huge(dfmin)
-        dfmax  = -huge(dfmax)
-        do pi = 1, self%npatches(1)
-            do pj = 1, self%npatches(2)
-                df    = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
-                dfmin = min(dfmin,df)
-                dfmax = max(dfmax,df)
-            enddo
-        enddo
+        type(CDataSet_type)   :: dataset1, dataset2, dataset3
+        type(CDataPoint_type) :: point
+        real                  :: vals(n),f,g,a
+        integer               :: i
+        a    = 2. * sum(ctf_fit(nint(real(n)*0.3):)) / (0.7*real(n))
+        vals = ctf_fit / a
+        where( vals > 1.5 ) vals = 1.5
         call CPlot2D__new(plot2D, fname)
-        call CPlot2D__SetDrawXAxisGridLines(plot2D, C_FALSE)
-        call CPlot2D__SetDrawYAxisGridLines(plot2D, C_FALSE)
-        call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
-        call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
+        call CPlot2D__SetXAxisSize(plot2D, 400._c_double)
+        call CPlot2D__SetYAxisSize(plot2D, 300._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_TRUE)
-        do pi = 1,self%npatches(1)
-            do pj = 1,self%npatches(2)
-                ! center
-                cx = real(self%centers(pi,pj,1))
-                cy = real(self%centers(pi,pj,2))
-                ! interpolated
-                call self%pix2polyvals(cx,cy,dfx,dfy)
-                df = (dfx+dfy)/2.
-                msz = SCALE * df
-                if( is_equal(dfmax,dfmin) )then
-                    col = 0.
-                else
-                    col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
-                endif
-                call CDataSet__new(center)
-                call CDataSet__SetDrawMarker(center, C_TRUE)
-                call CDataSet__SetMarkerSize(center, real(msz,c_double))
-                call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx+200., c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(center, p1)
-                call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, center)
-                call CDataSet__delete(center)
-                ! calc
-                df = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
-                msz = SCALE * df
-                if( is_equal(dfmax,dfmin) )then
-                    col = 0.
-                else
-                    col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
-                endif
-                call CDataSet__new(center)
-                call CDataSet__SetDrawMarker(center, C_TRUE)
-                call CDataSet__SetMarkerSize(center, real(msz, c_double))
-                call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(center, p1)
-                call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, center)
-                call CDataSet__delete(center)
-                ! astigmatism
-                angast = deg2rad(self%parms_patch(pi,pj)%angast)
-                call CDataSet__new(center)
-                call CDataSet__SetDrawMarker(center, C_FALSE)
-                call CDataSet__SetMarkerSize(center,3.0_c_double)
-                call CDataSet__SetDatasetColor(center,0.0_c_double,0.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(center, p1)
-                call CDataPoint__delete(p1)
-                call CDataPoint__new2(real(cx+80.*cos(angast),c_double), real(cy+80.*sin(angast),c_double),p1)
-                call CDataSet__AddDataPoint(center, p1)
-                call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, center)
-                call CDataSet__delete(center)
-            end do
+        ! call CPlot2D__SetFlipY(plot2D, C_TRUE)
+        ! plot
+        call CDataSet__new(dataSet1)
+        call CDataSet__new(dataSet2)
+        call CDataSet__new(dataSet3)
+        call CDataSet__SetDrawMarker(dataSet1, C_FALSE)
+        call CDataSet__SetDrawMarker(dataSet2, C_FALSE)
+        call CDataSet__SetDrawMarker(dataSet3, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet1, 0.0_c_double, 0.0_c_double, 1.0_c_double)
+        call CDataSet__SetDatasetColor(dataSet2, 1.0_c_double, 0.0_c_double, 0.0_c_double)
+        call CDataSet__SetDatasetColor(dataSet3, 0.0_c_double, 1.0_c_double, 0.0_c_double)
+        do i = 1, n
+            if( i == 1 )then
+                g = 0.0
+            else
+                f = smpd * real(self%box) / real(i-1)
+                g = 1.0/f
+            endif
+            call CDataPoint__new2( real(g, c_double), real(frc(i), c_double), point)
+            call CDataSet__AddDataPoint(dataSet1, point)
+            call CDataPoint__delete(point)
+            call CDataPoint__new2( real(g, c_double), real(ctf_th(i), c_double), point)
+            call CDataSet__AddDataPoint(dataSet2, point)
+            call CDataPoint__delete(point)
+            call CDataPoint__new2( real(g, c_double), real(vals(i), c_double), point)
+            call CDataSet__AddDataPoint(dataSet3, point)
+            call CDataPoint__delete(point)
         end do
-        write(titlestr,'(A,F6.3,A,F6.3,A)')'Defocus range: ',dfmin,' - ',dfmax,' (in microns, green to yellow)'
-        title%str = trim(titlestr)//C_NULL_CHAR
+        call CPlot2D__AddDataSet(plot2D, dataset1)
+        call CPlot2D__AddDataSet(plot2D, dataset2)
+        call CPlot2D__AddDataSet(plot2D, dataset3)
+        call CDataSet__delete(dataset1)
+        call CDataSet__delete(dataset2)
+        call CDataSet__delete(dataset3)
+        title%str = 'Spectral Resolution (1/Ang)'//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, fname)
+        call CPlot2D__OutputPostScriptPlot(plot2D, fname//c_null_char)
         call CPlot2D__delete(plot2D)
-    end subroutine plot_parms
+    end subroutine plot_ctf
 
     subroutine write_doc( self, moviename, fname )
         class(ctf_estimate_fit), intent(inout) :: self
