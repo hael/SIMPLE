@@ -1382,6 +1382,18 @@ contains
             case DEFAULT
                 self%l_cartesian = .false.
         end select
+        if( self%l_cartesian )then
+            select case(trim(self%refine))
+                case('shcc')
+                    if( .not. cline%defined('nsample')     ) self%nsample     = 2000
+                case('neighc')
+                    if( .not. cline%defined('nsample')     ) self%nsample     = 200
+                    if( .not. cline%defined('nsample_trs') ) self%nsample_trs = 50
+                case('greedyc')
+                    if( .not. cline%defined('nspace')      ) self%nspace      = 500
+                    if( .not. cline%defined('athres')      ) self%athres      = 10.
+            end select
+        endif
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'

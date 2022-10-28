@@ -36,6 +36,8 @@ type strategy3D_srch
     integer                 :: nsym          = 0         !< symmetry order
     integer                 :: nnn           = 0         !< # nearest neighbors
     integer                 :: nbetter       = 0         !< # better orientations identified
+    integer                 :: nevals        = 0         !< number of cost function evaluations (L-BFGS-B)
+    integer                 :: ngevals       = 0         !< number of gradient evaluations
     integer                 :: nrefs_eval    = 0         !< # references evaluated
     integer                 :: prev_roind    = 0         !< previous in-plane rotation index
     integer                 :: prev_state    = 0         !< previous state index
@@ -208,8 +210,11 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         real, optional,         intent(in)    :: shvec(2)
         real :: cxy(3)
+        integer :: nevals(2)
         call self%cart_shsrch_obj%set_pind( self%iptcl )
-        cxy = self%cart_shsrch_obj%minimize(shvec)
+        cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
+        self%nevals  = nevals(1)
+        self%ngevals = nevals(2) 
     end function shift_srch_cart
 
     subroutine inpl_srch_1( self )

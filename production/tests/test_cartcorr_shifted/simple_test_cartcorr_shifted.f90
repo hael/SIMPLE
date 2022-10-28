@@ -14,7 +14,7 @@ type(cartft_corrcalc)   :: cftcc
 type(cftcc_shsrch_grad) :: cftcc_shsrch
 type(image)             :: noise_img
 real, parameter         :: SHMAG=5.0
-integer                 :: i, noise_n, noise_i
+integer                 :: i, noise_n, noise_i, nevals(2)
 real                    :: grad(2), cxy(3), lims(2,2)
 integer(timer_int_kind) :: t_tot
 real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1
@@ -82,7 +82,7 @@ do noise_i = 1, noise_n
         call b%img%shift2Dserial(correct_sh) 
         call cftcc%set_ref(b%img)
         call cftcc_shsrch%set_pind(i)
-        cxy = cftcc_shsrch%minimize()
+        cxy = cftcc_shsrch%minimize(nevals)
         print *, 'iptcl = ', i, ': minimized shift = ', cxy(2:), '; corr = ', cxy(1), '; correct shift = ', correct_sh
     enddo
 enddo

@@ -494,7 +494,7 @@ contains
         ithr = omp_get_thread_num() + 1
         ! put reference projection in the heap
         call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
-        sigma = trs / 2. ! 2 sigma (soft) criterion
+        sigma = trs / 2. ! 2 sigma (soft) criterion, fixed for now
         call self%corr_shifted(iptcl, shvec, corr_best)
         do isample = 1,nsample
             xshift = gasdev(shvec(1), sigma)

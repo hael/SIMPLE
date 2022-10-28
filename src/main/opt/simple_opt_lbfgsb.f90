@@ -13,10 +13,8 @@ logical  :: PRINT_NEVALS = .false.
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
 real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
 real(dp), parameter :: big=1.0d+10
-!real(dp), parameter :: ftol_lbfgsb=1.0d-3,gtol_lbfgsb=0.9d0,
 real(dp), parameter :: xtol_lbfgsb=0.1d0
 real(dp), parameter :: two=2.0d0,three=3.0d0
-!real(dp), parameter :: factr  = 1.0d+7, pgtol  = 1.0d-5
 
 type, extends(optimizer) :: opt_lbfgsb
     private
