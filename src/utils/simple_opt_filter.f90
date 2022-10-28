@@ -580,11 +580,15 @@ contains
         box          = ldim(1)
         fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
-        ! retrieve FSC and calculate optimal filter
-        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
-        fsc         = file2rarr(fsc_fname)
         ! calculate Fourier index limits for search
-        find_stop   = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
+        if( .not.file_exists(fsc_fname) ) then
+            THROW_WARN('FSC file: '//fsc_fname//' not found, falling back on lpstart: '//real2str(params_glob%lpstart))
+            find_stop = calc_fourier_index(params_glob%lpstart, box, smpd)
+        else
+            ! retrieve FSC and calculate optimal filter
+            fsc       = file2rarr(fsc_fname)
+            find_stop = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
+        endif
         if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
@@ -705,8 +709,8 @@ contains
         real,                           allocatable   :: fsc(:), cur_fil(:)
         character(len=:),               allocatable   :: fsc_fname
         type(image)     ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
-                           &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
-        type(image_ptr) :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights, pmask
+                           &diff_img_odd, diff_img_even, odd_filt, even_filt
+        type(image_ptr) :: pdiff_odd, pdiff_even, pweights, pmask
         type(c_ptr)     :: plan_fwd, plan_bwd
         integer         :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
         integer         :: filtsz, lb(3), ub(3), smooth_ext
@@ -722,11 +726,15 @@ contains
         smpd              = params_glob%smpd
         present_cuofindeo = present(cutoff_finds_eo)
         present_mskimg    = present(mskimg)
-        ! retrieve FSC and calculate optimal filter
-        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
-        fsc         = file2rarr(fsc_fname)
         ! calculate Fourier index limits for search
-        find_stop   = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
+        if( .not.file_exists(fsc_fname) ) then
+            THROW_WARN('FSC file: '//fsc_fname//' not found, falling back on lpstart: '//real2str(params_glob%lpstart))
+            find_stop = calc_fourier_index(params_glob%lpstart, box, smpd)
+        else
+            ! retrieve FSC and calculate optimal filter
+            fsc       = file2rarr(fsc_fname)
+            find_stop = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
+        endif
         if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
@@ -738,16 +746,12 @@ contains
         plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim), FFTW_ESTIMATE)
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
-        call       weights_img%new(ldim, smpd)
-        call      diff_img_odd%new(ldim, smpd)
-        call     diff_img_even%new(ldim, smpd)
-        call  diff_img_opt_odd%new(ldim, smpd)
-        call diff_img_opt_even%new(ldim, smpd)
-        call       weights_img%get_mat_ptrs(pweights)
-        call      diff_img_odd%get_mat_ptrs(pdiff_odd)
-        call     diff_img_even%get_mat_ptrs(pdiff_even)
-        call  diff_img_opt_odd%get_mat_ptrs(pdiff_opt_odd)
-        call diff_img_opt_even%get_mat_ptrs(pdiff_opt_even)
+        call    weights_img%new(ldim, smpd)
+        call   diff_img_odd%new(ldim, smpd)
+        call  diff_img_even%new(ldim, smpd)
+        call    weights_img%get_mat_ptrs(pweights)
+        call   diff_img_odd%get_mat_ptrs(pdiff_odd)
+        call  diff_img_even%get_mat_ptrs(pdiff_even)
         call  odd_copy_rmat%copy(odd)
         call even_copy_rmat%copy(even)
         call  odd_copy_cmat%copy(odd)
@@ -779,12 +783,10 @@ contains
         enddo
         call weights_img%fft()
         ! searching for the best fourier index from here and generating the optimized filter
-        best_ind_odd        = find_start
-        best_ind_even       = find_start
-        pdiff_opt_odd%rmat  = huge(val)
-        pdiff_opt_even%rmat = huge(val)
-        best_cost_even      = huge(best_cost_even)
-        best_cost_odd       = huge(best_cost_odd)
+        best_ind_odd   = find_start
+        best_ind_even  = find_start
+        best_cost_even = huge(best_cost_even)
+        best_cost_odd  = huge(best_cost_odd)
         if( present_mskimg )then
             do iter_no = 1, params_glob%nsearch
                 cutoff_find = nint(find_start + (iter_no - 1)*find_stepsz)
@@ -850,6 +852,7 @@ contains
         call butterworth_filter(odd,  best_ind_odd,  cur_fil)
         call butterworth_filter(even, best_ind_even, cur_fil)
         call batch_ifft_3D(odd, even, in, out, plan_bwd)
+        print *, 'best resolution cut_off = ', calc_lowpass_lim(best_ind_odd, box, smpd)
         if( present_cuofindeo )then
             cutoff_finds_eo(1) = best_ind_odd
             cutoff_finds_eo(2) = best_ind_even
@@ -864,8 +867,6 @@ contains
         call weights_img%kill
         call diff_img_odd%kill
         call diff_img_even%kill
-        call diff_img_opt_odd%kill
-        call diff_img_opt_even%kill
         call fftwf_destroy_plan(plan_fwd)
         call fftwf_destroy_plan(plan_bwd)
     end subroutine uni_filt3D
