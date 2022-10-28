@@ -11,7 +11,7 @@ use simple_parameters,          only: params_glob
 use simple_polarizer,           only: polarizer
 use simple_qsys_funs,           only: qsys_job_finished
 use simple_convergence,         only: convergence
-use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch
+use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,     only: strategy2D_spec
 use simple_strategy2D_alloc,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
@@ -182,7 +182,6 @@ contains
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
-        if( .not. params_glob%l_cartesian ) call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
@@ -322,7 +321,9 @@ contains
         endif
         call cavger_kill
         call eucl_sigma%kill
-        call pftcc%kill ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
+        ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
+        call pftcc%kill
+        call killimgbatch
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH_GLOB )then

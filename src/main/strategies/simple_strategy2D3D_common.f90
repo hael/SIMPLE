@@ -10,9 +10,10 @@ use simple_polarft_corrcalc, only: pftcc_glob
 use simple_cartft_corrcalc,  only: cftcc_glob
 implicit none
 
-public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
+public :: set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol_polar, preprefvol_cart, prep2Dref, preprecvols, killrecvols, prepimgbatch
+&preprefvol_polar, preprefvol_cart, prep2Dref, preprecvols, killrecvols
+public :: prepimgbatch, read_imgbatch, killimgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -26,6 +27,43 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 type(stack_io)  :: stkio_r
 
 contains
+
+    !>  \brief  prepares a batch of image
+    subroutine prepimgbatch( batchsz )
+        integer,        intent(in)    :: batchsz
+        integer :: currsz, ibatch
+        logical :: doprep
+        if( .not. allocated(build_glob%imgbatch) )then
+            doprep = .true.
+        else
+            currsz = size(build_glob%imgbatch)
+            if( batchsz > currsz )then
+                call killimgbatch
+                doprep = .true.
+            else
+                doprep = .false.
+            endif
+        endif
+        if( doprep )then
+            allocate(build_glob%imgbatch(batchsz))
+            !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
+            do ibatch = 1,batchsz
+                call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                if( build_glob%img_match%polarizer_initialized() ) call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
+            end do
+            !$omp end parallel do
+        endif
+    end subroutine prepimgbatch
+
+    subroutine killimgbatch
+        integer :: ibatch
+        if( allocated(build_glob%imgbatch) )then
+            do ibatch=1,size(build_glob%imgbatch)
+                call build_glob%imgbatch(ibatch)%kill
+            end do
+            deallocate(build_glob%imgbatch)
+        endif
+    end subroutine killimgbatch
 
     subroutine read_imgbatch_1( fromptop, ptcl_mask )
         integer,           intent(in) :: fromptop(2)
@@ -373,36 +411,6 @@ contains
         end do
     end subroutine killrecvols
 
-    !>  \brief  prepares a batch of image
-    subroutine prepimgbatch( batchsz )
-        integer,        intent(in)    :: batchsz
-        integer :: currsz, ibatch
-        logical :: doprep
-        if( .not. allocated(build_glob%imgbatch) )then
-            doprep = .true.
-        else
-            currsz = size(build_glob%imgbatch)
-            if( batchsz > currsz )then
-                do ibatch=1,currsz
-                    call build_glob%imgbatch(ibatch)%kill
-                end do
-                deallocate(build_glob%imgbatch)
-                doprep = .true.
-            else
-                doprep = .false.
-            endif
-        endif
-        if( doprep )then
-            allocate(build_glob%imgbatch(batchsz))
-            !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
-            do ibatch = 1,batchsz
-                call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                if( build_glob%img_match%polarizer_initialized() ) call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
-            end do
-            !$omp end parallel do
-        endif
-    end subroutine prepimgbatch
-
     !>  \brief  determines the reference volume shift and map shifts back to particles
     !>          reference volume shifting is performed in shift_and_mask_refvol
     subroutine calcrefvolshift_and_mapshifts2ptcls(cline, s, volfname, do_center, xyz )
@@ -563,7 +571,7 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        real    :: filter(build_glob%img%get_filtsz())
         integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
