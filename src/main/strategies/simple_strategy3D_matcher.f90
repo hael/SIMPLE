@@ -330,6 +330,7 @@ contains
         if( L_BENCH_GLOB ) t_rec = tic()
         call calc_3Drec( cline, which_iter )
         call eucl_sigma%kill
+        call killimgbatch
         if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
