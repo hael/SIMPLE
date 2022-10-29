@@ -22,14 +22,13 @@ type :: cartft_corrcalc
     integer,                       allocatable :: pinds(:)               !< index array (to reduce memory when frac_update < 1)
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
-    real(sp),                      allocatable :: optlp(:)               !< references optimal filter
+    real(sp),                      allocatable :: ref_filt_w(:,:)        !< reference filter weights
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
     logical,                       allocatable :: iseven(:)              !< e/o assignment for gold-standard FSC
     logical                                    :: l_clsfrcs    = .false. !< CLS2D/3DRefs flag
     logical                                    :: l_match_filt = .false. !< matched filter flag
-    logical                                    :: l_filt_set   = .false. !< to indicate whether filter is set
     logical                                    :: with_ctf     = .false. !< CTF flag
     logical                                    :: existence    = .false. !< to indicate existence
     contains
@@ -42,7 +41,7 @@ type :: cartft_corrcalc
     ! SETTERS
     procedure          :: set_ptcl
     procedure          :: set_ref
-    procedure          :: set_optlp
+    procedure          :: set_ref_optlp
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
@@ -60,7 +59,7 @@ type :: cartft_corrcalc
     procedure          :: project_and_srch_shifts
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
-    generic            :: corr_shifted => corr_shifted_1, corr_shifted_2       
+    generic            :: corr_shifted => corr_shifted_1, corr_shifted_2
     procedure          :: corr_shifted_ad
     ! DESTRUCTOR
     procedure          :: kill
@@ -111,8 +110,6 @@ contains
         ! set pointers to projectors
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
-        ! allocate optimal low-pass filter
-        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -151,6 +148,8 @@ contains
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
+        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)),&
+        &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -191,8 +190,6 @@ contains
         self%filtsz       = fdim(params_glob%box) - 1
         self%l_match_filt = .false.
         self%nptcls       = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
-        ! allocate optimal low-pass filter
-        allocate(self%optlp(params_glob%kfromto(1):params_glob%kfromto(2)), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         self%pinds = (/(i,i=1,self%nptcls)/)
@@ -206,7 +203,8 @@ contains
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)),&
+        &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
         ! 2Dclass/3Drefs mapping on/off
@@ -298,12 +296,22 @@ contains
         end do
     end subroutine set_ref
 
-    subroutine set_optlp( self, optlp )
+    subroutine set_ref_optlp( self, ref_optlp )
         class(cartft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kfromto(2))
-        self%optlp(:) = optlp(:)
-        self%l_filt_set = .true.
-    end subroutine set_optlp
+        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer :: h,k,sh,sqlp,sqarg
+        self%ref_filt_w(:,:) = 0.
+        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                if( (h==0) .and. (k==0) ) cycle
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                sh = nint(hyp(real(h),real(k)))
+                self%ref_filt_w(h,k) = ref_optlp(sh)
+            end do
+        end do
+    end subroutine set_ref_optlp
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
@@ -470,7 +478,8 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk)
+        corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i),&
+        &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:))
     end function project_and_correlate
 
     subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best )
@@ -545,7 +554,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i)
                 ! update cross product
@@ -596,7 +605,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k)
                 ! shift the particle Fourier component
                 ptcl_comp   = self%particles(h,k,i)
                 ! update cross product
@@ -688,12 +697,11 @@ contains
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
-            if( allocated(self%optlp)        ) deallocate(self%optlp)
+            if( allocated(self%ref_filt_w)   ) deallocate(self%ref_filt_w)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
-            self%l_filt_set = .false.
             self%existence  = .false.
         endif
     end subroutine kill
