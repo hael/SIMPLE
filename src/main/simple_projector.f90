@@ -235,27 +235,19 @@ contains
     end subroutine fproject4cartftcc
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial_1( self, e, fplane, find_lp )
+    subroutine fproject_serial_1( self, e, fplane )
         class(projector),  intent(inout) :: self
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: fplane
-        integer, optional, intent(in)    :: find_lp
         real        :: loc(3), e_rotmat(3,3)
-        integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
+        integer     :: h, k, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
         lims = self%loop_lims(2)
-        if( present(find_lp) )then
-            sqlp = find_lp * find_lp
-        else
-            sqlp = (maxval(lims(:,2)))**2
-        endif
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
-                sqarg = dot_product([h,k],[h,k])
-                if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
