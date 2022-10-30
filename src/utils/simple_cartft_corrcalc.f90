@@ -58,6 +58,7 @@ type :: cartft_corrcalc
     ! CALCULATORS
     procedure          :: project_and_correlate
     procedure          :: project_and_srch_shifts
+    procedure          :: project_and_shift
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
     generic            :: corr_shifted => corr_shifted_1, corr_shifted_2
@@ -506,7 +507,7 @@ contains
         integer,                intent(in)    :: nsample
         real,                   intent(in)    :: trs
         real,                   intent(inout) :: shvec(2), corr_best
-        type(projector), pointer :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr => null()
         logical :: iseven
         integer :: ithr, isample
         real    :: sigma, xshift, yshift, xavg, yavg, corr
@@ -533,6 +534,28 @@ contains
             endif
         end do
     end subroutine project_and_srch_shifts
+
+    subroutine project_and_shift( self, iptcl, o, shvec, corr )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        real,                   intent(in)    :: shvec(2)
+        real,                   intent(inout) :: corr
+        type(projector),        pointer       :: vol_ptr => null()
+        logical :: iseven
+        integer :: ithr
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        call self%corr_shifted(iptcl, shvec, corr)
+    end subroutine project_and_shift
 
     subroutine corr_shifted_1( self, iptcl, shvec, corr )
         class(cartft_corrcalc), intent(inout)  :: self
