@@ -23,6 +23,7 @@ type :: cartft_corrcalc
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
     real(sp),                      allocatable :: ref_filt_w(:,:)        !< reference filter weights
+    real(sp),                      allocatable :: powspec(:)             !< average e/o power spectrum
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
@@ -79,6 +80,7 @@ contains
         logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
+        real(sp), allocatable :: powspec(:)
         logical :: even_dims, test(2)
         integer :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
@@ -100,7 +102,7 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%filtsz = fdim(params_glob%box) - 1
+        self%filtsz       = fdim(params_glob%box) - 1
         self%l_match_filt = l_match_filt                         !< do shellnorm and filtering here
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
@@ -110,8 +112,15 @@ contains
         ! set pointers to projectors
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
-        ! index translation table
-        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
+        ! power spectrum and index translation table
+        allocate( powspec(self%filtsz), self%powspec(self%filtsz), self%pinds(self%pfromto(1):self%pfromto(2)) )
+        powspec      = 0.
+        self%powspec = 0.
+        self%pinds   = 0
+        call self%vol_even%spectrum('power', powspec)
+        call self%vol_odd%spectrum( 'power', self%powspec)
+        self%powspec = (self%powspec + powspec) / 2.
+        deallocate(powspec)
         if( present(ptcl_mask) )then
             cnt = 0
             do i=self%pfromto(1),self%pfromto(2)
@@ -308,7 +317,15 @@ contains
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 sh = nint(hyp(real(h),real(k)))
-                self%ref_filt_w(h,k) = ref_optlp(sh)
+                if( self%l_match_filt )then
+                    if( self%powspec(sh) > 1.e-12 )then
+                        self%ref_filt_w(h,k) = ref_optlp(sh) / sqrt(self%powspec(sh))
+                    else
+                        self%ref_filt_w(h,k) = ref_optlp(sh)
+                    endif
+                else
+                    self%ref_filt_w(h,k) = ref_optlp(sh)
+                endif
             end do
         end do
     end subroutine set_ref_optlp
@@ -698,6 +715,7 @@ contains
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
             if( allocated(self%ref_filt_w)   ) deallocate(self%ref_filt_w)
+            if( allocated(self%powspec)      ) deallocate(self%powspec)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
