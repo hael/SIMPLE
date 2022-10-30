@@ -313,7 +313,6 @@ contains
     procedure          :: gauimg2D
     procedure          :: gauimg3D
     procedure          :: subtr_backgr
-    procedure          :: subtr_backgr_dev
     procedure          :: resmsk
     procedure          :: frc_pspec
     procedure          :: mask
@@ -6042,42 +6041,6 @@ contains
         self%rmat = self%rmat - tmp%rmat
         call tmp%kill()
     end subroutine subtr_backgr
-
-    !> \brief subtracts the background of an image by subtracting a low-pass filtered
-    !!        version of itself, square dimensions assumed
-    subroutine subtr_backgr_dev( self, lp )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lp
-        real          :: backgr(self%ldim(1),self%ldim(2)), lp_rad, lp_radsq, radsq
-        integer       :: conv_box,hconv_box,cenbox, i,j,l,r,d,u,ni,nj,rjsq
-        lp_rad   = real(self%ldim(1))*self%smpd/lp
-        lp_radsq = floor(lp_rad*lp_rad)
-        conv_box = nint(lp_rad*sqrt(2.))
-        if(is_even(conv_box)) conv_box = conv_box + 1
-        hconv_box = (conv_box-1)/2
-        cenbox    = self%ldim(1)/2+1 ! is the pixel address of central spot
-        !$omp parallel do default(shared) private(i,j,ni,nj,l,r,u,d,radsq,rjsq)&
-        !$omp schedule(static) proc_bind(close)
-        do j=1,self%ldim(2)
-            d    = max(1,j-hconv_box)
-            u    = min(self%ldim(2),j+hconv_box)
-            nj   = u-d+1
-            rjsq = (j-cenbox)**2
-            do i=1,self%ldim(1)
-                radsq = (i-cenbox)**2+rjsq
-                if( radsq <= lp_radsq )then
-                    backgr(i,j) = self%rmat(i,j,1)
-                else
-                    l  = max(1,i-hconv_box)
-                    r  = min(self%ldim(1),i+hconv_box)
-                    ni = r-l+1
-                    backgr(i,j) = sum(self%rmat(l:r,d:u,1)) / real(ni*nj)
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        self%rmat(1:self%ldim(1),1:self%ldim(2),1) = self%rmat(1:self%ldim(1),1:self%ldim(2),1) - backgr(:,:)
-    end subroutine subtr_backgr_dev
 
     !> \brief generates a real-space resolution mask for matching power-spectra
     subroutine resmsk( self, hplim, lplim )
