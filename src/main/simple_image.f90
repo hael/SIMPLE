@@ -9,8 +9,9 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 use gnufor2
 implicit none
-private
+
 public :: image, image_ptr, test_image, imstack_type
+private
 #include "simple_local_flags.inc"
 
 type image_ptr
@@ -4218,8 +4219,8 @@ contains
             end do
             ci = ci+1.
         end do
-        call ovar%finalize
-        mv = ovar%get_mean_var()
+        mv(1) = ovar%get_mean()
+        mv(2) = ovar%get_var()
         sdev = 0.
         if( mv(2) > 0. ) sdev = sqrt(mv(2))
         if( didft ) call self%fft()

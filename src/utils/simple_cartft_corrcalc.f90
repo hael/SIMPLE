@@ -654,10 +654,10 @@ contains
                 ! update normalization terms
                 cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
                 cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                ! updating the gradient
-                ref_ptcl_sh = imagpart(ref_ptcl_sh)*shconst
-                grad(1)     = grad(1) + real(ref_ptcl_sh)*h
-                grad(2)     = grad(2) + real(ref_ptcl_sh)*k
+                ! update the gradient
+                ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
+                grad(1)     = grad(1) + real(ref_ptcl_sh) * h
+                grad(2)     = grad(2) + real(ref_ptcl_sh) * k
             end do
         end do
         grad(1) = norm_corr(grad(1),cc(2), cc(3))
