@@ -1,11 +1,11 @@
 ! provides global distribution of constants and derived constants
 module simple_parameters
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
 use simple_atoms,          only: atoms
-!$ use omp_lib
-!$ use omp_lib_kinds
 implicit none
 
 public :: parameters, params_glob
@@ -1377,7 +1377,7 @@ contains
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
                 self%kfromto(1)  = 1
-                ! because therew are less interpolation errors 
+                ! because therew are less interpolation errors
                 ! and more components at low resolution in the Cartesian formulation
             case DEFAULT
                 self%l_cartesian = .false.
