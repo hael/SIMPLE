@@ -213,13 +213,29 @@ contains
         eval_df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
     end function eval_df
 
-    !>  \brief  Eq 11 of Rohou & Grigorieff (2015)
+    !>  \brief  Edited Eq 11 of Rohou & Grigorieff (2015)
     integer function nextrema( self, spaFreqSq, ang, phshift )
         class(ctf), intent(in) :: self
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians) )
         real,       intent(in) :: phshift     !< aditional phase shift (radians), for phase plate
-        nextrema = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5))
+        real :: nextrema_before_chi_extremum, chi_extremem_spafreqsq, df, rn
+        ! spatial frequency of the phase aberration extremum
+        if( self%cs < 0.0001 )then
+            chi_extremem_spafreqsq = 9999.9999;
+        else
+            df = self%eval_df(ang)
+            chi_extremem_spafreqsq = df / (self%wl * self%wl * self%cs)
+        endif
+        ! extrema
+        if( spaFreqSq <= chi_extremem_spafreqsq )then
+            rn = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5))
+        else
+            nextrema_before_chi_extremum = floor( 1. / PI * (self%evalPhSh(chi_extremem_spafreqsq, ang, phshift)+self%amp_contr_const) + 0.5)
+            rn = floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5)
+            rn = nextrema_before_chi_extremum + abs(rn-nextrema_before_chi_extremum)
+        endif
+        nextrema = nint(abs(rn))
     end function nextrema
 
     !>  \brief  returns spatial frequency at some zero

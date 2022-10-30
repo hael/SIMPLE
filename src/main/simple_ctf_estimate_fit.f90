@@ -15,10 +15,11 @@ public :: ctf_estimate_fit
 private
 #include "simple_local_flags.inc"
 
-real,                  parameter :: TOL   = 1.e-5
-integer,               parameter :: IARES = 10, NSTEPS = 200, NBINS=5, POLYDIM = 10
-logical,               parameter :: DEBUG_HERE = .false.
-logical,               parameter :: BENCH      = .false.
+real,    parameter :: TOL   = 1.e-5
+integer, parameter :: NSTEPS = 200, NBINS=6, POLYDIM = 10
+logical, parameter :: DEBUG_HERE = .false.
+logical, parameter :: BENCH      = .false.
+integer            :: glob_count = 0 ! debug only
 
 type ctf_estimate_fit
     private
@@ -939,7 +940,7 @@ contains
         end do
     end subroutine ft2img
 
-    ! as per CTFFIND4.1.9
+    ! as per CTFFIND4.1.x
     subroutine calc_ctfres( self )
         class(ctf_estimate_fit), intent(inout) :: self
         real,    parameter   :: target_smpd     = 1.40       ! Angs
@@ -947,55 +948,54 @@ contains
         integer, parameter   :: cross_halfwidth = 10         ! pixels
         real,    pointer     :: ppspec(:,:,:)
         type(ctf)            :: tfun
-        type(image)          :: padded_pspec, pspec
-        real,    allocatable :: spec1d(:),spec1d_fit(:),spec1d_rank(:),ctf1d(:),nextrema1d(:),frc(:),frc_sig(:)
+        type(image)          :: pspec_clip, pspec
+        real,    allocatable :: spec1d(:),spec1d_fit(:),spec1d_rank(:),ctf1d(:),nextrema1d(:),frc(:)
         integer, allocatable :: nvals1d(:)
-        real    :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_fit, hp_rad, lp_rad
-        real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq
-        integer :: ish,sh,n,nshells,tmp_box,cenbox
-        cenbox  = self%box/2+1
+        real    :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_sc, hp_rad, lp_rad
+        real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq, scale
+        integer :: ish,sh,n,nshells,cenbox,box_sc
         phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
         pspec   = self%pspec4ctfres
-        ! resampling, it is assumed the central spot has already been dealt with
-        if( self%smpd < target_smpd )then
-            ! downsampling
-            tmp_box  = round2even(real(self%box) / self%smpd * target_smpd)
-            smpd_fit = self%smpd * real(tmp_box) / real(self%box)
-            if( tmp_box /= self%box )then
-                call pspec%zero_edgeavg
-                call pspec%fft
-                call padded_pspec%new([tmp_box,tmp_box,1],smpd_fit)
-                call padded_pspec%zero_and_flag_ft
-                call pspec%pad(padded_pspec)
-                call padded_pspec%ifft
-                call pspec%zero_and_unflag_ft
-                call padded_pspec%clip(pspec)
-                call padded_pspec%kill
-            else
-                ! done
-            endif
-        else
-            ! upsampling
-            smpd_fit = self%smpd
-        endif
-        call pspec%set_smpd(smpd_fit)
         call pspec%get_rmat_ptr(ppspec)
-        hp_rad = real(self%box)*smpd_fit/self%hp
-        lp_rad = real(self%box)*smpd_fit/self%lp
-        ! re-re-normalization
-        call pspec%zero_edgeavg
+        ! resampling, it is assumed the central spot has already been dealt with
+        scale   = 1.0
+        box_sc  = self%box
+        smpd_sc = self%smpd
+        if( self%smpd < target_smpd )then
+            scale  = self%smpd / target_smpd
+            box_sc = round2even(scale * real(self%box))
+            if( box_sc < self%box )then
+                ! upsample
+                scale   = real(box_sc) / real(self%box)
+                smpd_sc = self%smpd / scale
+                call pspec_clip%new([box_sc,box_sc,1],self%smpd)
+                call pspec%clip(pspec_clip)
+                call pspec_clip%zero_edgeavg
+                call pspec_clip%fft
+                call pspec_clip%pad(pspec)
+                call pspec%ifft
+                call pspec_clip%kill
+            else
+                scale  = 1.0
+                box_sc = self%box
+            endif
+        endif
+        cenbox   = self%box/2+1
+        call pspec%set_smpd(smpd_sc)
+        hp_rad = real(self%box)/scale * self%smpd/self%hp 
+        lp_rad = real(self%box)/scale * self%smpd/self%lp
         if( DEBUG_HERE )then
             call pspec%write('pspec_resampled.mrc')
-            print *,'smpd fit ',smpd_fit
             print *,'hp_rad   ', hp_rad
             print *,'lp_rad   ', lp_rad
         endif
-        tfun = ctf(smpd_fit, self%parms%kV, self%parms%Cs, self%parms%fraca)
+        tfun = ctf(self%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
         call tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
-        start = sqrt(tfun%SpaFreqSqAtNthZero(3, phshift, deg2rad(self%parms%angast)))
-        end   = sqrt(tfun%SpaFreqSqAtNthZero(4, phshift, deg2rad(self%parms%angast)))
-        start_rad = start*real(self%box)
-        end_rad   = end  *real(self%box)
+        ! Spectrum normalization
+        start     = sqrt(tfun%SpaFreqSqAtNthZero(3, phshift, deg2rad(self%parms%angast)))
+        end       = sqrt(tfun%SpaFreqSqAtNthZero(4, phshift, deg2rad(self%parms%angast)))
+        start_rad = start*real(self%box)/scale
+        end_rad   = end  *real(self%box)/scale
         if(  start_rad < hp_rad .or. start_rad > lp_rad .or.&
             &end_rad   < hp_rad .or. end_rad   < lp_rad )then
             end_rad   = lp_rad
@@ -1008,14 +1008,11 @@ contains
             print *,'end_rad   ',end_rad
         endif
         if( end_rad-start_rad > 2. )then
-            call calc_pspec_stats(start_rad,end_rad, ave,sdev)
+            call calc_pspec_stats(start_rad,end_rad, ave, sdev)
             call mask_central_disc(hp_rad, ave)
-            ! un-necessary as we do not have a central cross issue
-            ! where( ppspec(cenbox,:,1) > ave ) ppspec(cenbox,:,1) = ave
-            ! where( ppspec(:,cenbox,1) > ave ) ppspec(:,cenbox,1) = ave
             where( ppspec > ave+4.*sdev ) ppspec = ave+4.*sdev
             where( ppspec < ave-4.*sdev ) ppspec = ave-4.*sdev
-            call calc_pspec_stats(start_rad,end_rad, ave,sdev)
+            call calc_pspec_stats(start_rad,end_rad, ave, sdev)
             call pspec%subtr(ave)
             if( sdev < TINY )sdev = 1.
             call pspec%mul(1./sdev)
@@ -1024,7 +1021,7 @@ contains
         endif
         ! builds 1D/2D profiles
         nshells = self%box/2
-        allocate(spec1d(0:nshells),spec1d_fit(0:nshells),frc(0:nshells),frc_sig(0:nshells),&
+        allocate(spec1d(0:nshells),spec1d_fit(0:nshells),frc(0:nshells),&
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
         ! midway astigmatism & ensuring it has not been zeroed by central cross dampening
@@ -1036,7 +1033,7 @@ contains
         if( DEBUG_HERE ) print *,'mid_angast_rad ', mid_angast_rad
         ! theoretical 1D spectrum & number of extrema
         do sh = 0,nshells
-            spaFreq        = real(sh) / real(self%box)
+            spaFreq        = scale * real(sh) / real(self%box)
             spaFreqSq      = spaFreq*spaFreq
             ctf1d(sh)      = -tfun%eval(spaFreqSq, mid_angast_rad, add_phshift=phshift)
             nextrema1d(sh) = real(tfun%nextrema(spaFreqSq, mid_angast_rad, phshift))
@@ -1048,31 +1045,40 @@ contains
         spec1d_rank = spec1d
         ! 1D spectrum ranking
         call rank_spec
+        if( DEBUG_HERE )then
+            glob_count = glob_count + 1
+            call self%plot_ctf(int2str(glob_count)//'_ctf_rank.eps', nshells, abs(ctf1d), spec1d, spec1d_rank, smpd_sc)
+        endif
         ! FRC
         call calc_frc
         sh = max(1, ctfres_shell())
-        self%ctfres = max(2*smpd_fit,min(pspec%get_lp(sh), self%hp))
-        if( DEBUG_HERE ) print *,'self%ctfres ',self%ctfres
+        self%ctfres = max(2.0*smpd_sc,min(smpd_sc*real(self%box)/real(sh), self%hp))
+        if( DEBUG_HERE )then
+            print *,'self%ctfres ',glob_count, self%ctfres
+            call self%plot_ctf(int2str(glob_count)//'_ctf.eps', nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)
+        endif
         self%pspec4ctfres = pspec
         ! cleanup
         call pspec%kill
         contains
 
             integer function ctfres_shell()
-                real, parameter :: low_threshold  = 0.1
-                real, parameter :: high_threshold = 0.66
+                real, parameter :: low_threshold          = 0.1
+                real, parameter :: high_threshold         = 0.66
                 real, parameter :: significance_threshold = 0.5
                 integer :: h, n_abovelow, n_abovehigh, n_abovesig, hstart
-                logical :: whereitsat
+                logical :: found
+                found        = .false.
                 n_abovelow   = 0
                 n_abovehigh  = 0
                 n_abovesig   = 0
                 ctfres_shell = -1
-                hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box))
+                ! hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box)) ! ctffind 4.1.9
+                hstart = nint(0.1 * sqrt(2.)* real(nshells)) ! ctffind 4.1.14
                 do h = hstart,nshells
-                    whereitsat = ((n_abovelow>3)  .and. (frc(h)<low_threshold))&
+                    found = ((n_abovelow>3)  .and. (frc(h)<low_threshold))&
                             &.or.((n_abovehigh>3) .and. (frc(h)<significance_threshold))
-                    if( whereitsat )then
+                    if( found )then
                         ctfres_shell = h
                         exit
                     endif
@@ -1080,7 +1086,11 @@ contains
                     if( frc(h) > significance_threshold ) n_abovesig  = n_abovesig+1
                     if( frc(h) > high_threshold )         n_abovehigh = n_abovehigh+1
                 enddo
+                ! signal all the way
+                if( n_abovesig == nshells-hstart+1 ) ctfres_shell = nshells
+                ! no signal
                 if( n_abovesig == 0 ) ctfres_shell = 1
+                ! bounds
                 ctfres_shell = max(0,min(ctfres_shell,nshells))
             end function ctfres_shell
 
@@ -1104,7 +1114,7 @@ contains
                     endif
                 enddo
                 winhalfwidth(0) = winhalfwidth(1)
-                winhalfwidth(sh_prev:nshells) = winhalfwidth(sh_prev-1) ! check for sh_prev here
+                winhalfwidth(sh_prev:nshells) = winhalfwidth(sh_prev-1)
                 ! FRC
                 frc(:) = 1.
                 do h = hp_ind,nshells
@@ -1135,64 +1145,69 @@ contains
                     else
                         frc(h) = 0.
                     endif
-                    frc_sig(h) = 2./real(nh)
                 enddo
             end subroutine
 
             subroutine rank_spec
-                real    :: vec(0:nshells), rankvec(0:nshells), rmin, rmax, areal
-                integer :: inds(0:nshells), sh, sh_prev, h, sh_zero, ind
+                real    :: vec(0:nshells), rankvec(0:nshells), rmin, rmax, areal,  n_extr_diff
+                integer :: inds(0:nshells), sh, sh_prev, h, sh_zero, ind, firstsh
                 vec     = 0.
                 rankvec = 0.
                 inds    = 0
                 sh_prev = 0
                 sh      = 0
+                firstsh = nshells
                 do h=1,nshells
-                    if( nextrema1d(h)-nextrema1d(h-1) >= 0.9) then
-                        sh = h-1 ! extremum at h-1
-                        if( sh_prev > 0 )then
-                            if( nextrema1d(h) < 7. )then
-                                ! identify zero
-                                sh_zero = sh_prev + nint(real(sh-sh_prev)/2.)
-                                do ish = sh_prev,sh-1
-                                    if( (spec1d_fit(ish)<spec1d_fit(ish-1)) .and. (spec1d_fit(ish)<spec1d_fit(ish+1)) ) sh_zero = ish
-                                enddo
-                                ! downslope ranking
-                                n   = sh_zero-sh_prev+1
-                                vec = -huge(areal)
-                                inds = 0
-                                inds(sh_prev:sh_zero) = (/(ish,ish=sh_prev,sh_zero)/)
-                                vec(sh_prev:sh_zero)  = spec1d_rank(sh_prev:sh_zero)
-                                rankvec(nshells-n+1:nshells) = sin(PIO2*(/(real(ish)/real(n-1),ish=0,n-1)/))
-                                call hpsort(vec,inds)
-                                do ind = nshells,nshells-n+1,-1
-                                    ish = inds(ind)
-                                    spec1d_rank(ish) = rankvec(ind)
-                                enddo
-                                ! upslope ranking
-                                n    = sh-sh_zero
-                                vec  = -huge(areal)
-                                inds = 0
-                                inds(sh_zero+1:sh-1) = (/(ish,ish=sh_zero+1,sh-1)/)
-                                vec(sh_zero+1:sh-1)  = spec1d_rank(sh_zero+1:sh-1)
-                                rankvec(nshells-n+1:nshells) = sin(PIO2*(/(real(ish)/real(n),ish=0,n-1)/))
-                                call hpsort(vec,inds)
-                                do ind = nshells,nshells-n+1,-1
-                                    ish = inds(ind)
-                                    spec1d_rank(ish) = rankvec(ind)
-                                enddo
-                            else
-                                rmin = minval(spec1d_rank(sh_prev:sh-1))
-                                rmax = maxval(spec1d_rank(sh_prev:sh-1))
-                                spec1d_rank(sh_prev:sh-1) = spec1d_rank(sh_prev:sh-1) - rmin
-                                if( rmax-rmin > 1.e-4 )then
-                                    spec1d_rank(sh_prev:sh-1) = spec1d_rank(sh_prev:sh-1) / (rmax-rmin)
-                                endif
+                    n_extr_diff = nextrema1d(h)-nextrema1d(h-1)
+                    if( (n_extr_diff < 0.9) .or. (n_extr_diff > 1.9) ) cycle
+                    sh = h-1 ! extremum at h-1
+                    if( sh_prev > 0 )then
+                        if( nextrema1d(h) < 7. )then
+                            ! identify zero
+                            sh_zero = sh_prev + nint(real(sh-sh_prev)/2.)
+                            do ish = sh_prev,sh-1
+                                if( (spec1d_fit(ish)<spec1d_fit(ish-1)) .and. (spec1d_fit(ish)<spec1d_fit(ish+1)) ) sh_zero = ish
+                            enddo
+                            ! downslope ranking
+                            n   = sh_zero-sh_prev+1
+                            vec = -huge(areal)
+                            inds = 0
+                            inds(sh_prev:sh_zero) = (/(ish,ish=sh_prev,sh_zero)/)
+                            vec(sh_prev:sh_zero)  = spec1d_rank(sh_prev:sh_zero)
+                            rankvec(nshells-n+1:nshells) = sin(PIO2*(/(real(ish)/real(n-1),ish=0,n-1)/))
+                            call hpsort(vec,inds)
+                            do ind = nshells,nshells-n+1,-1
+                                ish              = inds(ind)
+                                spec1d_rank(ish) = rankvec(ind)
+                                firstsh          = min(firstsh,ish)
+                            enddo
+                            ! upslope ranking
+                            n    = sh-sh_zero-1
+                            vec  = -huge(areal)
+                            inds = 0
+                            inds(sh_zero+1:sh-1) = (/(ish,ish=sh_zero+1,sh-1)/)
+                            vec(sh_zero+1:sh-1)  = spec1d_rank(sh_zero+1:sh-1)
+                            rankvec(nshells-n+1:nshells) = sin(PIO2*(/(real(ish)/real(n),ish=0,n-1)/))
+                            call hpsort(vec,inds)
+                            do ind = nshells,nshells-n+1,-1
+                                ish              = inds(ind)
+                                spec1d_rank(ish) = rankvec(ind)
+                                firstsh          = min(firstsh,ish)
+                            enddo
+                        else
+                            rmin = minval(spec1d_rank(sh_prev:sh-1))
+                            rmax = maxval(spec1d_rank(sh_prev:sh-1))
+                            spec1d_rank(sh_prev:sh-1) = spec1d_rank(sh_prev:sh-1) - rmin
+                            if( rmax-rmin > 1.e-4 )then
+                                spec1d_rank(sh_prev:sh-1) = spec1d_rank(sh_prev:sh-1) / (rmax-rmin)
                             endif
+                            firstsh = min(firstsh,sh_prev)
+                            firstsh = min(firstsh,sh-1)
                         endif
-                        sh_prev = sh
                     endif
+                    sh_prev = sh
                 enddo
+                if( firstsh >= 0 ) spec1d_rank(:firstsh) = 1.0
             end subroutine rank_spec
 
             integer function get_shell(ctf2d, extremum2d)
@@ -1229,27 +1244,26 @@ contains
 
             ! for making a CTF & calculate #of astigmatism extrema
             subroutine gen_profiles
-                real          :: ang, spaFreqSq, hinv, kinv, inv_box, ctf, nextr
-                integer       :: h,k,i,j,sh
+                real          :: sc_correction, ang, spaFreqSq, ctf, nextr, h,k
+                integer       :: i,j,sh
                 nvals1d = 0
                 spec1d  = 0.
-                inv_box = 1./real(self%box)
-                !$omp parallel do collapse(2) default(shared) private(ctf,nextr,h,hinv,k,kinv,i,j,spaFreqSq,ang,sh) &
+                sc_correction = scale**2
+                !$omp parallel do collapse(2) default(shared) private(ctf,nextr,h,k,i,j,spaFreqSq,ang,sh) &
                 !$omp schedule(static) proc_bind(close) reduction(+:spec1d,nvals1d)
                 do j=1,self%box
                     do i=1,self%box
                         h         = pix2logical(i)
                         k         = pix2logical(j)
                         ang       = atan2(real(k),real(h))
-                        hinv      = real(h) * inv_box
-                        kinv      = real(k) * inv_box
-                        spaFreqSq = hinv*hinv + kinv*kinv
+                        spaFreqSq = sc_correction *(h*h + k*k) / real(self%box*self%box)
                         ! # of extrema
                         nextr = real(tfun%nextrema(spaFreqSq, ang, phshift))
-                        ! # CTF
+                        ! CTF
                         ctf  = -tfun%eval(spaFreqSq, ang, phshift)
-                        ! # 1D
+                        ! 1D rotational average
                         sh = get_shell(ctf, nextr)
+                        if( sh > nshells ) cycle
                         nvals1d(sh) = nvals1d(sh)+ 1
                         spec1d(sh)  = spec1d(sh) + ppspec(i,j,1)
                     enddo
@@ -1262,7 +1276,7 @@ contains
                 real, intent(in) :: radius, val
                 real    :: shsq, radiussq
                 integer :: i,j,h,k
-                radiussq = radius*radius
+                radiussq = real(ceiling(radius)**2)
                 do j = 1,self%box
                     k = pix2logical(j)
                     do i = 1,self%box
@@ -1273,9 +1287,9 @@ contains
                 enddo
             end subroutine mask_central_disc
 
-            subroutine calc_pspec_stats( minsh, maxsh, ave, sdev )
+            subroutine calc_pspec_stats( minsh, maxsh, ave, sdev)
                 real, intent(in)  :: minsh, maxsh
-                real, intent(out) :: ave,sdev
+                real, intent(out) :: ave, sdev
                 real    :: hsq,shsq,v,sumsq,sum,minshsq,maxshsq,cross_halfwidthsq,ksq
                 integer :: i,j,h,k,n
                 minshsq = minsh*minsh
@@ -1379,16 +1393,12 @@ contains
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: dataset1, dataset2, dataset3
         type(CDataPoint_type) :: point
-        real                  :: vals(n),f,g,a
+        real                  :: f,g
         integer               :: i
-        a    = 2. * sum(ctf_fit(nint(real(n)*0.3):)) / (0.7*real(n))
-        vals = ctf_fit / a
-        where( vals > 1.5 ) vals = 1.5
         call CPlot2D__new(plot2D, fname)
-        call CPlot2D__SetXAxisSize(plot2D, 400._c_double)
-        call CPlot2D__SetYAxisSize(plot2D, 300._c_double)
+        call CPlot2D__SetXAxisSize(plot2D, 320._c_double)
+        call CPlot2D__SetYAxisSize(plot2D, 240._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        ! call CPlot2D__SetFlipY(plot2D, C_TRUE)
         ! plot
         call CDataSet__new(dataSet1)
         call CDataSet__new(dataSet2)
@@ -1412,7 +1422,7 @@ contains
             call CDataPoint__new2( real(g, c_double), real(ctf_th(i), c_double), point)
             call CDataSet__AddDataPoint(dataSet2, point)
             call CDataPoint__delete(point)
-            call CDataPoint__new2( real(g, c_double), real(vals(i), c_double), point)
+            call CDataPoint__new2( real(g, c_double), real(ctf_fit(i), c_double), point)
             call CDataSet__AddDataPoint(dataSet3, point)
             call CDataPoint__delete(point)
         end do
@@ -1424,7 +1434,7 @@ contains
         call CDataSet__delete(dataset3)
         title%str = 'Spectral Resolution (1/Ang)'//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, fname//c_null_char)
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname)//c_null_char)
         call CPlot2D__delete(plot2D)
     end subroutine plot_ctf
 
