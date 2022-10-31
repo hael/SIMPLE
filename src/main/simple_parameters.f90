@@ -240,7 +240,8 @@ type :: parameters
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
-    integer :: nsample=0           !< # continuous 3D rotational orientations to sample during stochastic search
+    integer :: nsample=0           !< # continuous 3D rotational orientations to sample during stochastic (shcc)   search
+    integer :: nsample_neigh=0     !< # continuous 3D rotational orientations to sample during stochastic (neighc) search
     integer :: nsample_trs=0       !< # continuous translations (2D origin shifts) to sample during stochastic search
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
@@ -622,6 +623,7 @@ contains
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nsample',        self%nsample)
+        call check_iarg('nsample_neigh',  self%nsample_neigh)
         call check_iarg('nsample_trs',    self%nsample_trs)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nstates',        self%nstates)
@@ -1274,11 +1276,7 @@ contains
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
         if( .not. cline%defined('noris') ) self%noris = self%nptcls
-        self%l_doshift = .true.
-        if( self%trs < 0.5 )then
-            self%trs = 0.00001
-            self%l_doshift = .false.
-        endif
+        
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd
@@ -1363,7 +1361,6 @@ contains
             if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
         ! -- shift defaults
-        self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
                 case('snhc')
@@ -1371,6 +1368,12 @@ contains
                 case DEFAULT
                     self%trs = MINSHIFT
             end select
+        endif
+        self%trs       = abs(self%trs)
+        self%l_doshift = .true.
+        if( self%trs < 0.1 )then
+            self%trs       = 0.
+            self%l_doshift = .false.
         endif
         ! -- Cartesian refinement flag
         select case(trim(self%refine))
@@ -1385,13 +1388,13 @@ contains
         if( self%l_cartesian )then
             select case(trim(self%refine))
                 case('shcc')
-                    if( .not. cline%defined('nsample')     ) self%nsample     = 2000
+                    if( .not. cline%defined('nsample')       ) self%nsample       = 2000
                 case('neighc')
-                    if( .not. cline%defined('nsample')     ) self%nsample     = 200
-                    if( .not. cline%defined('nsample_trs') ) self%nsample_trs = 50
+                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
+                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
                 case('greedyc')
-                    if( .not. cline%defined('nspace')      ) self%nspace      = 500
-                    if( .not. cline%defined('athres')      ) self%athres      = 10.
+                    if( .not. cline%defined('nspace')        ) self%nspace        = 500
+                    if( .not. cline%defined('athres')        ) self%athres        = 10.
             end select
         endif
         ! motion correction

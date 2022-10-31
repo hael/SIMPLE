@@ -37,9 +37,13 @@ enum, bind(c)
     enumerator :: I_GID       = 33
     enumerator :: I_OGID      = 34
     enumerator :: I_PIND      = 35
+    ! added Oct 31 2022
+    enumerator :: I_NEVALS    = 36
+    enumerator :: I_NGEVALS   = 37
+    enumerator :: I_BETTER    = 38
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 35
+integer, parameter :: N_PTCL_ORIPARAMS = 38
 
 contains
 
@@ -116,7 +120,14 @@ contains
             case('ogid')
                 get_oriparam_ind = I_OGID
             case('pind')
-                get_oriparam_ind = I_PIND    
+                get_oriparam_ind = I_PIND
+             ! added Oct 31 2022
+            case('nevals')
+                get_oriparam_ind = I_NEVALS
+            case('ngevals')
+                get_oriparam_ind = I_NGEVALS
+            case('better')
+                get_oriparam_ind = I_BETTER  
         end select
     end function get_oriparam_ind
 
@@ -193,7 +204,14 @@ contains
             case(I_OGID)
                 flag ='ogid'
             case(I_PIND)
-                flag ='pind'   
+                flag ='pind'
+             ! added Oct 31 2022
+            case(I_NEVALS)
+                flag ='nevals' 
+            case(I_NGEVALS)
+                flag ='ngevals' 
+            case(I_BETTER)
+                flag ='better'  
         end select
     end function get_oriparam_flag
 

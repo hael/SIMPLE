@@ -73,6 +73,7 @@ contains
             class is (cftcc_shsrch_grad)
                 call cftcc_glob%corr_shifted(self%particle, real(vec), cost_sp)
                 cost = real(-cost_sp,kind=dp)
+                self%ospec%nevals = self%ospec%nevals + 1
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -91,6 +92,8 @@ contains
                 call cftcc_glob%corr_shifted(self%particle, real(vec), cost, corrs_grad)
                 cost = - cost
                 grad = - corrs_grad
+                self%ospec%nevals  = self%ospec%nevals  + 1
+                self%ospec%ngevals = self%ospec%ngevals + 1
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
         end select
@@ -109,6 +112,8 @@ contains
                 call cftcc_glob%corr_shifted(self%particle, real(vec), f_sp, corrs_grad)
                 f    = real(-f_sp,kind=dp)
                 grad = - corrs_grad
+                self%ospec%nevals  = self%ospec%nevals  + 1
+                self%ospec%ngevals = self%ospec%ngevals + 1
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
         end select
@@ -121,8 +126,10 @@ contains
         real, optional,           intent(in)    :: shvec(2)
         real     :: cxy(3), lowest_cost
         real(dp) :: init_xy(2)
-        self%ospec%x   = [0.,0.]
-        self%ospec%x_8 = [0.d0,0.d0]
+        self%ospec%x       = [0.,0.]
+        self%ospec%x_8     = [0.d0,0.d0]
+        self%ospec%nevals  = 0
+        self%ospec%ngevals = 0
         if( present(shvec) )then
             self%ospec%x_8 = shvec
             self%ospec%x   = real(shvec)

@@ -2221,22 +2221,29 @@ contains
     end subroutine stats_1
 
     !>  \brief  is for calculating variable statistics
-    subroutine stats_2( self, which, statvars, mask )
+    subroutine stats_2( self, which, statvars, mask, nozero )
         class(oris),        intent(inout) :: self
         character(len=*),   intent(in)    :: which
         type(stats_struct), intent(out)   :: statvars
         logical, optional,  intent(in)    :: mask(self%n)
+        logical, optional,  intent(in)    :: nozero
         real, allocatable :: vals(:), states(:)
-        logical :: err, mmask(self%n)
+        logical :: err, mmask(self%n), nnozero
         real    :: var
         if( present(mask) )then
             mmask = mask
         else
             mmask = .true.
         endif
+        if( present(nozero) )then
+            nnozero = nozero
+        else
+            nnozero = .false.
+        endif
         states = self%get_all('state')
-        mmask  = mmask .and. states > 0.5
+        mmask  = mmask .and. states > 0.5   
         vals   = self%get_all(which)
+        if( nnozero ) mmask = mmask .and. vals(:) > TINY
         call moment(vals, statvars%avg, statvars%sdev, var, err, mmask)
         statvars%minv = minval(vals, mask=mmask)
         statvars%maxv = maxval(vals, mask=mmask)

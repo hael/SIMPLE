@@ -36,7 +36,7 @@ contains
     subroutine srch_neighc( self, ithr )
         class(strategy3D_neighc), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        integer   :: isample
+        integer   :: isample, nevals(2) 
         type(ori) :: o, osym, obest
         real      :: corr, euldist, dist_inpl, corr_best
         real      :: cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
@@ -48,16 +48,14 @@ contains
             ! prep
             call self%s%prep4_cont_srch
             ! transfer critical per-particle params
-            o     = self%s%o_prev
-            obest = self%s%o_prev
+            o          = self%s%o_prev
+            obest      = self%s%o_prev
             ! zero shifts because particle is shifted to its previous origin
-            call o%set('x', 0.)
-            call o%set('y', 0.)
             shvec_best = 0.
             ! currently the best correlation is the previous one
             corr_best  = self%s%prev_corr
             got_better = .false.
-            do isample=1,self%s%nsample
+            do isample=1,self%s%nsample_neigh
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
                 if( self%s%nsample_trs > 0 )then
@@ -85,6 +83,7 @@ contains
                 call obest%set('dist',      euldist)
                 call obest%set('dist_inpl', dist_inpl)
                 call obest%set('corr',      corr_best)
+                call obest%set('better',      1.0)
                 call obest%set('frac',      100.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
                 if( self%s%nsample_trs > 0 )then ! we did stochastic shift search
@@ -96,8 +95,10 @@ contains
                     call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
                     call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
                 endif
+            else
+                call build_glob%spproj_field%set(self%s%iptcl, 'better', 0.)
             endif
-            if( self%s%doshift ) then
+            if( self%s%doshift .and. got_better ) then
                 ! Cartesian shift search using L-BFGS-B with analytical derivatives
                 call cftcc_glob%prep4shift_srch(self%s%iptcl, obest)
                 l_within_lims = .true.
@@ -107,9 +108,15 @@ contains
                     if( any(shvec_best >   params_glob%trs) ) l_within_lims = .false.
                 endif
                 if( self%s%nsample_trs > 0 .and. l_within_lims )then ! refine the stochastic solution
-                    cxy = self%s%shift_srch_cart(shvec_best)
+                    cxy = self%s%shift_srch_cart(nevals, shvec_best)
+                    ! report # cost function and gradient evaluations
+                    call build_glob%spproj_field%set(self%s%iptcl, 'nevals',  real(nevals(1)))
+                    call build_glob%spproj_field%set(self%s%iptcl, 'ngevals', real(nevals(2)))
                 else if( self%s%nsample_trs == 0 )then ! shifts were not searched before
-                    cxy = self%s%shift_srch_cart()
+                    cxy = self%s%shift_srch_cart(nevals)
+                    ! report # cost function and gradient evaluations
+                    call build_glob%spproj_field%set(self%s%iptcl, 'nevals',  real(nevals(1)))
+                    call build_glob%spproj_field%set(self%s%iptcl, 'ngevals', real(nevals(2)))
                 else
                     ! wait with L-BFGS-B refinement until the particle is within the bounds
                     return

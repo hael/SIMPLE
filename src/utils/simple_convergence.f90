@@ -19,6 +19,9 @@ type convergence
     type(stats_struct) :: specscore !< spectral score stats
     type(stats_struct) :: shincarg  !< shift increment
     type(stats_struct) :: pw        !< particle weight stats
+    type(stats_struct) :: nevals    !< # cost function evaluations
+    type(stats_struct) :: ngevals   !< # gradient evaluations
+    type(stats_struct) :: better    !< improvement statistics
     type(oris)         :: ostats    !< centralize stats for writing
     real :: mi_class = 0.           !< class parameter distribution overlap
     real :: mi_proj  = 0.           !< projection parameter distribution overlap
@@ -27,6 +30,7 @@ type convergence
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
+    procedure :: check_conv3Dc
     procedure :: check_conv_cluster
     procedure :: get
 end type convergence
@@ -269,6 +273,64 @@ contains
         deallocate(mask, updatecnts, pws)
         call self%ostats%kill
     end function check_conv3D
+
+    function check_conv3Dc( self, cline, msk ) result( converged )
+        class(convergence), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
+        real,               intent(in)    :: msk
+        real,    allocatable :: updatecnts(:), pws(:)
+        logical, allocatable :: mask(:)
+        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
+        logical :: converged
+        integer :: iptcl
+        601 format(A,1X,F12.3)
+        604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
+        updatecnts = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / size(updatecnts)
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        pws = build_glob%spproj_field%get_all('w')
+        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
+        call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
+        call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
+        call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
+        call build_glob%spproj_field%stats('shincarg',  self%shincarg,  mask=mask)
+        call build_glob%spproj_field%stats('nevals',    self%nevals,    mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('ngevals',   self%ngevals,   mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('better',    self%better,   mask=mask)
+        write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:',&
+        &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:',&
+        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:',&
+        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
+        write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:',&
+        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
+        &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> # COST FUN EVALS         AVG/SDEV/MIN/MAX:',&
+        &self%nevals%avg, self%nevals%sdev, self%nevals%minv, self%nevals%maxv
+        write(logfhandle,604) '>>> # GRADIENT EVALS         AVG/SDEV/MIN/MAX:',&
+        &self%ngevals%avg, self%ngevals%sdev, self%ngevals%minv, self%ngevals%maxv
+        write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:',&
+        &100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
+        ! determine convergence
+        converged = .false.
+        ! stats
+        call self%ostats%new(1, is_ptcl=.false.)
+        call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
+        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
+        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
+        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
+        call self%ostats%set(1,'CORRELATION',self%corr%avg)
+        call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
+        call self%ostats%write(STATS_FILE)
+        ! destruct
+        deallocate(mask, updatecnts, pws)
+        call self%ostats%kill
+    end function check_conv3Dc
 
     function check_conv_cluster( self, cline ) result( converged )
         class(convergence), intent(inout) :: self
