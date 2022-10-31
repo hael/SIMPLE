@@ -311,11 +311,12 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
-        use simple_polarizer, only: polarizer
+    subroutine prep2Dref( img_in, img_out, icls, iseven, center, xyz_in, xyz_out )
+        use simple_polarizer,  only: polarizer
         class(image),      intent(inout) :: img_in
         class(polarizer),  intent(inout) :: img_out
         integer,           intent(in)    :: icls
+        logical,           intent(in)    :: iseven
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
@@ -352,7 +353,7 @@ contains
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter)
+                 call fsc2optlp_sub(filtsz, frc, filter)
                 if( params_glob%l_match_filt )then
                     if( params_glob%l_cartesian )then
                         call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
