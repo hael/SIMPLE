@@ -26,7 +26,7 @@ option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
 OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
 option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
-option(USE_NLOPT "Use NLOpt" OFF)
+option(USE_NLOPT "Use NLOpt" ON)
 
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
