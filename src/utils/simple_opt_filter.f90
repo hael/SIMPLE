@@ -22,6 +22,7 @@ type optfilt2Dvars
     type(c_ptr) :: fft_ptr, plan_fwd, plan_bwd
     ! others
     real, allocatable :: cur_fil(:)
+    type(image)       :: even_backgr, odd_backgr
     type(image)       :: odd_copy_rmat, even_copy_rmat
     type(image)       :: odd_copy_cmat, even_copy_cmat
     type(image)       :: odd_filt, even_filt, diff_img_odd, diff_img_even, diff_img_opt_odd, diff_img_opt_even
@@ -873,7 +874,7 @@ contains
 
     ! searching for the best index of the cost function |sum(filter(img) - img)|
     ! also return the filtered img at this best index
-    subroutine uni_filt2D( odd, even, weights_img, mask, optf2Dvars)
+    subroutine uni_filt2D( odd, even, weights_img, mask, optf2Dvars )
         class(image),        intent(inout) :: odd, even, weights_img, mask
         type(optfilt2Dvars), intent(inout) :: optf2Dvars
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
@@ -929,14 +930,13 @@ contains
         call batch_fft_2D(odd, even, optf2Dvars)
         call butterworth_filter(odd,  optf2Dvars%best_ind_odd,  optf2Dvars%cur_fil)
         call butterworth_filter(even, optf2Dvars%best_ind_even, optf2Dvars%cur_fil)
-        call batch_ifft_2D(odd, even, optf2Dvars)        
+        call batch_ifft_2D(odd, even, optf2Dvars)
     end subroutine uni_filt2D
 
-    subroutine uni_filt2D_sub( even, odd, mask, cutoff_finds_eo )
+    subroutine uni_filt2D_sub( even, odd, mask )
         use simple_class_frcs, only: class_frcs
-        class(image),                   intent(inout) :: even(:), odd(:)
-        class(image),                   intent(inout) :: mask(:)
-        integer, allocatable, optional, intent(inout) :: cutoff_finds_eo(:,:)
+        class(image),        intent(inout) :: even(:), odd(:)
+        class(image),        intent(inout) :: mask(:)
         character(len=:),    allocatable   :: frcs_fname
         type(optfilt2Dvars), allocatable   :: optf2Dvars(:)
         real,                allocatable   :: frc(:)
@@ -946,7 +946,7 @@ contains
         real             :: smpd, lpstart, lp, val
         integer          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
         integer          :: nptcls, hpind_fsc, find, c_shape(3), m, n
-        logical          :: lpstart_fallback, l_phaseplate, present_cuofindeo
+        logical          :: lpstart_fallback, l_phaseplate
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING'
         ! init
         ldim              = even(1)%get_ldim()
@@ -962,7 +962,6 @@ contains
         lpstart           = params_glob%lpstart
         hpind_fsc         = params_glob%hpind_fsc
         l_phaseplate      = params_glob%l_phaseplate
-        present_cuofindeo = present(cutoff_finds_eo)
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
@@ -979,12 +978,7 @@ contains
         endif
         filtsz = clsfrcs%get_filtsz()
         ! allocate
-        if( present_cuofindeo )then
-            if( allocated(cutoff_finds_eo) ) deallocate(cutoff_finds_eo)
-            allocate(optf2Dvars(nptcls), frc(filtsz), cutoff_finds_eo(nptcls,2))
-        else
-            allocate(optf2Dvars(nptcls), frc(filtsz))
-        endif
+        allocate(optf2Dvars(nptcls), frc(filtsz))
         frc = 0.
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
@@ -1003,6 +997,8 @@ contains
         do iptcl = 1, nptcls
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd(iptcl)%pad_mirr(ldim_pd)
+            call optf2Dvars(iptcl)%even_backgr%copy(even(iptcl))
+            call optf2Dvars(iptcl)%odd_backgr%copy(odd(iptcl))
             call optf2Dvars(iptcl)%even_filt%copy(even(iptcl))
             call optf2Dvars(iptcl)%odd_filt %copy( odd(iptcl))
             call optf2Dvars(iptcl)%diff_img_odd    %new(ldim_pd, smpd, .false.)
@@ -1047,24 +1043,20 @@ contains
         enddo
         call weights_img%fft()
         ! filter
-        if( present_cuofindeo )then 
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = 1, nptcls
-                call uni_filt2D(odd(iptcl), even(iptcl), weights_img, mask(iptcl), optf2Dvars(iptcl))
-                cutoff_finds_eo(iptcl,1) = optf2Dvars(iptcl)%best_ind_odd
-                cutoff_finds_eo(iptcl,2) = optf2Dvars(iptcl)%best_ind_even
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = 1, nptcls
-                call uni_filt2D(odd(iptcl), even(iptcl), weights_img, mask(iptcl), optf2Dvars(iptcl))
-            enddo
-            !$omp end parallel do
-        endif
-        ! destruct
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = 1, nptcls
+            call uni_filt2D(odd(iptcl), even(iptcl), weights_img, mask(iptcl), optf2Dvars(iptcl))
+            call mask(iptcl)%bin_inv
+            call uni_filt2D(optf2Dvars(iptcl)%odd_backgr, optf2Dvars(iptcl)%even_backgr, weights_img, mask(iptcl), optf2Dvars(iptcl))
+            call mask(iptcl)%bin_inv
+            call odd(iptcl)%combine_fgbg_filt(optf2Dvars(iptcl)%odd_backgr, mask(iptcl))
+            call even(iptcl)%combine_fgbg_filt(optf2Dvars(iptcl)%even_backgr, mask(iptcl))
+        enddo
+        !$omp end parallel do
         call weights_img%kill
         do iptcl = 1, nptcls
+            call optf2Dvars(iptcl)%even_backgr%kill
+            call optf2Dvars(iptcl)%odd_backgr%kill
             call optf2Dvars(iptcl)%odd_copy_rmat%kill
             call optf2Dvars(iptcl)%even_copy_rmat%kill
             call optf2Dvars(iptcl)%odd_copy_cmat%kill

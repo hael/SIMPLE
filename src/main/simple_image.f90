@@ -283,6 +283,7 @@ contains
     procedure, private :: gen_argtransf_comp
     ! MODIFIERS
     procedure          :: lp_background
+    procedure          :: combine_fgbg_filt
     procedure          :: insert
     procedure          :: insert_lowres
     procedure          :: insert_lowres_serial
@@ -5043,6 +5044,12 @@ contains
         call weights%kill
         call self_filt%kill
     end subroutine lp_background
+
+    subroutine combine_fgbg_filt( self_fg, self_bg, mask )
+        class(image), intent(inout) :: self_fg
+        class(image), intent(in)    :: self_bg, mask
+        self_fg%rmat = mask%rmat * self_fg%rmat + (1. - mask%rmat) * self_bg%rmat
+    end subroutine combine_fgbg_filt
 
     !> \brief insert  inserts a box*box particle image into a micrograph
     !! \param self_in input image

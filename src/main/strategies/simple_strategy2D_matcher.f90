@@ -20,6 +20,8 @@ use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_euclid_sigma2,       only: euclid_sigma2
+use simple_masker,              only: automask2D
+use simple_opt_filter,          only: uni_filt2D_sub
 use simple_classaverager
 use simple_progress
 implicit none
@@ -162,6 +164,20 @@ contains
             call cavger_read(params_glob%refs_odd, 'odd')
         else
             call cavger_read(params_glob%refs, 'odd')
+        endif
+        if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
+            do icls = 1,params_glob%ncls
+                call build_glob%env_masks(icls)%copy(cavgs_even(icls))
+                call build_glob%env_masks(icls)%add(cavgs_odd(icls))
+                call build_glob%env_masks(icls)%mul(0.5)
+            enddo
+            call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
+            call uni_filt2D_sub(cavgs_even, cavgs_odd, build_glob%env_masks)
+            if( params_glob%part.eq.1 )then
+                do icls = 1,params_glob%ncls
+                    call cavgs_even(icls)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', icls)
+                enddo
+            endif
         endif
 
         ! SET FOURIER INDEX RANGE
@@ -423,14 +439,14 @@ contains
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
@@ -438,7 +454,7 @@ contains
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
