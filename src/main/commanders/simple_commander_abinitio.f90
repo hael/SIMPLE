@@ -15,7 +15,7 @@ use simple_commander_imgproc,  only: scale_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
-use simple_opt_filter,         only: nonuni_filt2D_sub
+use simple_opt_filter,         only: uni_filt2D_sub
 use simple_masker,             only: automask2D
 use simple_qsys_funs
 implicit none
@@ -36,9 +36,9 @@ contains
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
-        real,                  parameter :: SCALEFAC2_TARGET = 0.5, AMSKLP3D = 15.
+        real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT = 30.
-        integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40, WINSZ_AUTOMSK = 5
+        integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
         character(len=STDLEN), parameter :: ORIG_work_projfile   = 'initial_3Dmodel_tmpproj.simple'
         character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
@@ -83,17 +83,14 @@ contains
         real                  :: scale_factor1, scale_factor2, lp3(3)
         integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3)
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'yes')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
-        if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.8)
-        if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
-        if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
-        if( .not. cline%defined('ngrow')     ) call cline%set('ngrow',        3.)
-        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      20.)
-        if( .not. cline%defined('edge')      ) call cline%set('edge',         6.)
-        ! call set_automask2D_defaults(cline)
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('automsk')    ) call cline%set('automsk',   'yes')
+        if( .not. cline%defined('amsklp')     ) call cline%set('amsklp',      15.)
+        if( .not. cline%defined('envfsc')     ) call cline%set('envfsc',     'no')
+        if( .not. cline%defined('autoscale')  ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('ptclw')      ) call cline%set('ptclw',      'no')
+        if( .not. cline%defined('overlap')    ) call cline%set('overlap',     0.8)
+        if( .not. cline%defined('fracsrch')   ) call cline%set('fracsrch',    0.9)
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -164,71 +161,64 @@ contains
             ! update params
             params%frcs = trim(frcs_fname)
         endif
-        if( params%l_nonuniform )then
-            ! retrieve even/odd stack names
-            stk_even = add2fbody(stk, ext, '_even')
-            stk_odd  = add2fbody(stk, ext, '_odd')
-            if( .not. file_exists(trim(stk_even)) ) THROW_HARD('Even stack '//trim(stk_even)//' does not exist!')
-            if( .not. file_exists(trim(stk_odd))  ) THROW_HARD('Odd stack '//trim(stk_even)//' does not exist!')
-            ! read even/odd class averages into array
-            allocate( cavgs_eo(ncavgs,2), masks(ncavgs) )
-            call find_ldim_nptcls(stk_even, ldim, ifoo)
-            ldim(3) = 1 ! class averages
-            call stkio_r%open(stk_odd,   orig_smpd, 'read', bufsz=500)
-            call stkio_r2%open(stk_even, orig_smpd, 'read', bufsz=500)
-            do icls = 1, ncavgs
-                call cavgs_eo(icls,1)%new(ldim, orig_smpd)
-                call cavgs_eo(icls,2)%new(ldim, orig_smpd)
-                call stkio_r%read(icls, cavgs_eo(icls,1))
-                call stkio_r2%read(icls, cavgs_eo(icls,2))
-                call masks(icls)%copy(cavgs_eo(icls,1))
-                call masks(icls)%add(cavgs_eo(icls,2))
-                call masks(icls)%mul(0.5)
-            end do
-            call stkio_r%close
-            call stkio_r2%close
-            ! nonuniform filtering
-            if( params%l_automsk )then
-                call automask2D(masks, params%ngrow, WINSZ_AUTOMSK, params%edge, diams)
-                call nonuni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
-            else
-                call nonuni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1))
-            endif
-            ! write even filtered cavgs
-            stk_even = 'cavgs_nonuniform_even.mrc'
-            call stkio_w%open(stk_even, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-            do icls = 1, ncavgs
-                call stkio_w%write(icls, cavgs_eo(icls,2))
-            end do
-            call stkio_w%close
-            ! write odd filtered cavgs
-            stk_odd = 'cavgs_nonuniform_odd.mrc'
-            call stkio_w%open(stk_odd, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-            do icls = 1, ncavgs
-                call stkio_w%write(icls, cavgs_eo(icls,1))
-            end do
-            call stkio_w%close
-            ! write merged filtered cavgs
-            stk = 'cavgs_nonuniform.mrc'
-            call stkio_w%open(stk, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-            do icls = 1, ncavgs
-                call cavgs_eo(icls,1)%add(cavgs_eo(icls,2))
-                call cavgs_eo(icls,1)%mul(0.5)
-                call stkio_w%write(icls, cavgs_eo(icls,1))
-            end do
-            call stkio_w%close
-            do icls = 1, ncavgs
-                call cavgs_eo(icls,1)%kill
-                call cavgs_eo(icls,2)%kill
-                call masks(icls)%kill
-            end do
-            deallocate(cavgs_eo, masks)
-        else
+        ! if( params%l_automsk )then
+        !     ! retrieve even/odd stack names
+        !     stk_even = add2fbody(stk, ext, '_even')
+        !     stk_odd  = add2fbody(stk, ext, '_odd')
+        !     if( .not. file_exists(trim(stk_even)) ) THROW_HARD('Even stack '//trim(stk_even)//' does not exist!')
+        !     if( .not. file_exists(trim(stk_odd))  ) THROW_HARD('Odd stack '//trim(stk_even)//' does not exist!')
+        !     ! read even/odd class averages into array
+        !     allocate( cavgs_eo(ncavgs,2), masks(ncavgs) )
+        !     call find_ldim_nptcls(stk_even, ldim, ifoo)
+        !     ldim(3) = 1 ! class averages
+        !     call stkio_r%open(stk_odd,   orig_smpd, 'read', bufsz=500)
+        !     call stkio_r2%open(stk_even, orig_smpd, 'read', bufsz=500)
+        !     do icls = 1, ncavgs
+        !         call cavgs_eo(icls,1)%new(ldim, orig_smpd)
+        !         call cavgs_eo(icls,2)%new(ldim, orig_smpd)
+        !         call stkio_r%read(icls, cavgs_eo(icls,1))
+        !         call stkio_r2%read(icls, cavgs_eo(icls,2))
+        !         call masks(icls)%copy(cavgs_eo(icls,1))
+        !         call masks(icls)%add(cavgs_eo(icls,2))
+        !         call masks(icls)%mul(0.5)
+        !     end do
+        !     call stkio_r%close
+        !     call stkio_r2%close
+        !     call automask2D(masks, params%ngrow, WINSZ_AUTOMSK, params%edge, diams)
+        !     call uni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
+        !     ! write even filtered cavgs
+        !     stk_even = 'cavgs_filt_even.mrc'
+        !     call stkio_w%open(stk_even, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+        !     do icls = 1, ncavgs
+        !         call stkio_w%write(icls, cavgs_eo(icls,2))
+        !     end do
+        !     call stkio_w%close
+        !     ! write odd filtered cavgs
+        !     stk_odd = 'cavgs_filt_odd.mrc'
+        !     call stkio_w%open(stk_odd, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+        !     do icls = 1, ncavgs
+        !         call stkio_w%write(icls, cavgs_eo(icls,1))
+        !     end do
+        !     call stkio_w%close
+        !     ! write merged filtered cavgs
+        !     stk = 'cavgs_filt.mrc'
+        !     call stkio_w%open(stk, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+        !     do icls = 1, ncavgs
+        !         call cavgs_eo(icls,1)%add(cavgs_eo(icls,2))
+        !         call cavgs_eo(icls,1)%mul(0.5)
+        !         call stkio_w%write(icls, cavgs_eo(icls,1))
+        !     end do
+        !     call stkio_w%close
+        !     do icls = 1, ncavgs
+        !         call cavgs_eo(icls,1)%kill
+        !         call cavgs_eo(icls,2)%kill
+        !         call masks(icls)%kill
+        !     end do
+        !     deallocate(cavgs_eo, masks)
+        ! else
             stk_even = add2fbody(trim(stk), trim(ext), '_even')
             stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
-        endif
-        params%amsklp = AMSKLP3D
-        call cline%set('amsklp', AMSKLP3D)
+        ! endif
         ctfvars%smpd = orig_smpd
         params%smpd  = orig_smpd
         orig_stk     = stk
@@ -381,7 +371,7 @@ contains
         call cline_refine3D_refine%set('nonuniform', 'no') ! done in 2D
         if( params%l_automsk )then
             call cline_refine3D_refine%set('automsk', trim(params%automsk))
-            call cline_refine3D_refine%set('amsklp', AMSKLP3D)
+            call cline_refine3D_refine%set('amsklp', params%amsklp)
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')

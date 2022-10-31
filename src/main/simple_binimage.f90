@@ -437,8 +437,8 @@ contains
         allocate(msk(size(pos, dim =2)), source=.true.)
         ! Calculate maximim radius
         radius = pixels_dist(center_of_mass,real(pos),'max',msk)
-        ! Return diameter
-        diam = 2.*radius
+        ! Return diameter in A
+        diam = 2. * radius * self%bsmpd
         deallocate(msk, pos, imat_cc)
     end subroutine diameter_cc
 

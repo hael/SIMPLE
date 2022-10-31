@@ -240,14 +240,17 @@ contains
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: fplane
         real        :: loc(3), e_rotmat(3,3)
-        integer     :: h, k, lims(3,2), phys(3), ldim(3)
+        integer     :: h, k, lims(3,2), phys(3), ldim(3), sqlp, sqarg
         complex(sp) :: comp
         lims = self%loop_lims(2)
+        sqlp = (maxval(lims(:,2)))**2
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
