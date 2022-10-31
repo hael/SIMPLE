@@ -554,7 +554,7 @@ if(USE_NLOPT)
     BUILD_COMMAND   make
     INSTALL_COMMAND make install
   )
-  set(EXTRA_LIBS ${EXTRA_LIBS} -I${NLOPT_INSTALL_DIR}/include -L${NLOPT_INSTALL_DIR}/lib -lnlopt -lm )
+  set(EXTRA_LIBS ${EXTRA_LIBS} -I${NLOPT_INSTALL_DIR}/include -L${NLOPT_INSTALL_DIR}/lib -L${NLOPT_INSTALL_DIR}/lib64 -lnlopt -lm )
 endif()
 
 #############################################
