@@ -543,7 +543,18 @@ endif()
 # NLOpt library
 #############################################
 if(USE_NLOPT)
-  set(EXTRA_LIBS ${EXTRA_LIBS} -I/usr/local/include -L/usr/local/lib -lnlopt -lm )
+  include(ExternalProject)
+  set(NLOPT_VERSION 2.7.1)
+  set(NLOPT_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/nlopt_install)
+  set(NLOPT_INSTALL_DIR    ${NLOPT_INSTALL_PREFIX}/${CMAKE_INSTALL_PREFIX})
+  ExternalProject_Add(nlopt_src
+    DOWNLOAD_COMMAND wget https://github.com/stevengj/nlopt/archive/v${NLOPT_VERSION}.tar.gz
+    PATCH_COMMAND   tar -xzf ../v${NLOPT_VERSION}.tar.gz && rm -rf ../nlopt_src-build/nlopt-${NLOPT_VERSION} && mv nlopt-${NLOPT_VERSION} ../nlopt_src-build/
+    CMAKE_COMMAND   cmake -DCMAKE_INSTALL_PREFIX=${NLOPT_INSTALL_DIR} nlopt-${NLOPT_VERSION}/
+    BUILD_COMMAND   make
+    INSTALL_COMMAND make install
+  )
+  set(EXTRA_LIBS ${EXTRA_LIBS} -I${NLOPT_INSTALL_DIR}/include -L${NLOPT_INSTALL_DIR}/lib -lnlopt -lm )
 endif()
 
 #############################################
