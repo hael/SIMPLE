@@ -36,7 +36,7 @@ contains
     subroutine srch_shcc( self, ithr )
         class(strategy3D_shcc), intent(inout) :: self
         integer,                 intent(in)   :: ithr
-        integer   :: isample, irot
+        integer   :: isample, nevals(2)
         type(ori) :: o, osym, obest
         real      :: corr, euldist, dist_inpl, corr_best, frac, corr_inpl, e3
         real      :: cxy(3), shvec(2), shvec_incr(2)
@@ -48,11 +48,8 @@ contains
             ! prep
             call self%s%prep4_cont_srch
             ! transfer critical per-particle params
-            o = self%s%o_prev
+            o     = self%s%o_prev
             obest = self%s%o_prev
-            ! zero shifts because particle is shifted to its previous origin
-            call o%set('x', 0.)
-            call o%set('y', 0.)
             ! currently the best correlation is the previous one
             corr_best  = self%s%prev_corr
             got_better = .false.
@@ -72,33 +69,18 @@ contains
                 call obest%set('dist_inpl', dist_inpl)
                 call obest%set('corr',      corr_best)
                 call obest%set('frac',      100.0)
+                call obest%set('better',      1.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
+            else
+                call build_glob%spproj_field%set(self%s%iptcl, 'better', 0.)
             endif
-            ! local refinement step
-            got_better = .false.
-            do isample=1,self%s%nsample
-                ! make a random rotation matrix neighboring the previous best within the assymetric unit
-                call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
-                ! calculate Cartesian corr
-                corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
-                if( corr > corr_best )then
-                    corr_best  = corr
-                    obest      = o
-                    got_better = .true.
-                endif
-            end do
-            if( got_better )then
-                call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
-                call obest%set('dist',      euldist)
-                call obest%set('dist_inpl', dist_inpl)
-                call obest%set('corr',      corr_best)
-                call obest%set('frac',      100.0)
-                call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
-            endif
-            if( self%s%doshift ) then
+            if( self%s%doshift .and. got_better ) then
                 ! Cartesian shift search using L-BFGS-B with analytical derivatives
                 call cftcc_glob%prep4shift_srch(self%s%iptcl, obest)
-                cxy = self%s%shift_srch_cart()
+                cxy = self%s%shift_srch_cart(nevals)
+                ! report # cost function and gradient evaluations
+                call build_glob%spproj_field%set(self%s%iptcl, 'nevals',  real(nevals(1)))
+                call build_glob%spproj_field%set(self%s%iptcl, 'ngevals', real(nevals(2)))
                 shvec      = 0.
                 shvec_incr = 0.
                 if( cxy(1) >= corr_best )then

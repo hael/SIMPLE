@@ -17,8 +17,8 @@ contains
     procedure :: new
     procedure :: update
     procedure :: get_gauss_params
-    ! procedure :: get_eul_sdev
-    ! procedure :: get_xy_sdev
+    procedure :: get_avg_eul_sdev
+    procedure :: get_avg_xy_sdev
     procedure :: write
     procedure :: read
     procedure :: kill
@@ -78,12 +78,39 @@ contains
         sdevs(3) = self%gaumod(3,iptcl)%get_var()
         sdevs(4) = self%gaumod(4,iptcl)%get_var()
         sdevs(5) = self%gaumod(5,iptcl)%get_var()
-        where(sdevs > 1.e-12 )
+        where(sdevs(:) > 1.e-12 )
             sdevs(:) = sqrt(sdevs(:))
         elsewhere
             sdevs(:) = 0.
         end where
     end subroutine get_gauss_params
+
+    function get_avg_eul_sdev( self, iptcl ) result( sdev )
+        class(e1e2e3xy_gauss), intent(inout) :: self
+        integer,               intent(in)    :: iptcl
+        real :: sdev
+        sdev =        self%gaumod(1,iptcl)%get_var()
+        sdev = sdev + self%gaumod(2,iptcl)%get_var()
+        sdev = sdev + self%gaumod(3,iptcl)%get_var()
+        if( sdev > 1e-12 )then
+            sdev = sqrt(sdev)
+        else
+            sdev = 0.
+        endif
+    end function get_avg_eul_sdev
+
+    function get_avg_xy_sdev( self, iptcl ) result( sdev )
+        class(e1e2e3xy_gauss), intent(inout) :: self
+        integer,               intent(in)    :: iptcl
+        real :: sdev
+        sdev =        self%gaumod(4,iptcl)%get_var()
+        sdev = sdev + self%gaumod(5,iptcl)%get_var()
+        if( sdev > 1e-12 )then
+            sdev = sqrt(sdev)
+        else
+            sdev = 0.
+        endif
+    end function get_avg_xy_sdev
 
     subroutine write( self, fname )
         class(e1e2e3xy_gauss), intent(inout) :: self

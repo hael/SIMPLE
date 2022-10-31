@@ -28,16 +28,15 @@ type strategy3D_srch
     integer                 :: iptcl         = 0         !< global particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample
-    integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample
+    integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample uniformly
+    integer                 :: nsample_neigh = 0         !< # of continuous 3D rotational orientations to sample Gaussian
+    integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample Gaussian
     integer                 :: nstates       = 0         !< # states
     integer                 :: nprojs        = 0         !< # projections
     integer                 :: nrots         = 0         !< # in-plane rotations
     integer                 :: nsym          = 0         !< symmetry order
     integer                 :: nnn           = 0         !< # nearest neighbors
     integer                 :: nbetter       = 0         !< # better orientations identified
-    integer                 :: nevals        = 0         !< number of cost function evaluations (L-BFGS-B)
-    integer                 :: ngevals       = 0         !< number of gradient evaluations
     integer                 :: nrefs_eval    = 0         !< # references evaluated
     integer                 :: prev_roind    = 0         !< previous in-plane rotation index
     integer                 :: prev_state    = 0         !< previous state index
@@ -125,24 +124,25 @@ contains
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%iptcl       = spec%iptcl
-        self%nstates     = params_glob%nstates
-        self%nprojs      = params_glob%nspace
-        self%nrefs       = self%nprojs*self%nstates
-        self%nsample     = params_glob%nsample
-        self%nsample_trs = params_glob%nsample_trs
-        self%athres      = params_glob%athres
-        self%nbetter     = 0
-        self%nrefs_eval  = 0
-        self%nsym        = build_glob%pgrpsyms%get_nsym()
-        self%doshift     = params_glob%l_doshift
-        self%l_neigh     = str_has_substr(params_glob%refine, 'neigh')
-        self%l_greedy    = str_has_substr(params_glob%refine, 'greedy')
-        self%l_ptclw     = trim(params_glob%ptclw).eq.'yes'
-        lims(:,1)        = -params_glob%trs
-        lims(:,2)        =  params_glob%trs
-        lims_init(:,1)   = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)   =  SHC_INPL_TRSHWDTH
+        self%iptcl         = spec%iptcl
+        self%nstates       = params_glob%nstates
+        self%nprojs        = params_glob%nspace
+        self%nrefs         = self%nprojs*self%nstates
+        self%nsample       = params_glob%nsample
+        self%nsample_neigh = params_glob%nsample_neigh
+        self%nsample_trs   = params_glob%nsample_trs
+        self%athres        = params_glob%athres
+        self%nbetter       = 0
+        self%nrefs_eval    = 0
+        self%nsym          = build_glob%pgrpsyms%get_nsym()
+        self%doshift       = params_glob%l_doshift
+        self%l_neigh       = str_has_substr(params_glob%refine, 'neigh')
+        self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
+        self%l_ptclw       = trim(params_glob%ptclw).eq.'yes'
+        lims(:,1)          = -params_glob%trs
+        lims(:,2)          =  params_glob%trs
+        lims_init(:,1)     = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)     =  SHC_INPL_TRSHWDTH
         call self%o_prev%new(.true.)
         ! create in-plane search object
         if( params_glob%l_cartesian )then
@@ -166,9 +166,9 @@ contains
         self%class      = o_prev%get_class()                                ! 2D class index
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
-        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)     ! previous projection direction
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
-        self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
+        self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj    ! previous reference
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order
@@ -206,15 +206,13 @@ contains
         call self%o_prev%set('corr', self%prev_corr)
     end subroutine prep4_cont_srch
 
-    function shift_srch_cart( self, shvec ) result( cxy )
+    function shift_srch_cart( self, nevals, shvec ) result( cxy )
         class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(inout) :: nevals(2)
         real, optional,         intent(in)    :: shvec(2)
         real :: cxy(3)
-        integer :: nevals(2)
         call self%cart_shsrch_obj%set_pind( self%iptcl )
         cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
-        self%nevals  = nevals(1)
-        self%ngevals = nevals(2) 
     end function shift_srch_cart
 
     subroutine inpl_srch_1( self )

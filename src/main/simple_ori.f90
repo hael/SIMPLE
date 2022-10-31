@@ -54,7 +54,6 @@ type :: ori
     procedure, private :: rnd_euler_2
     procedure, private :: rnd_euler_3
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3
-    procedure          :: rnd_euler_gasdev
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
@@ -547,26 +546,6 @@ contains
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
     end subroutine rnd_euler_3
-
-    subroutine rnd_euler_gasdev( self, o_prev, sigmas, eullims )
-        class(ori),     intent(inout) :: self         !< instance
-        class(ori),     intent(in)    :: o_prev       !< template ori
-        real,           intent(in)    :: sigmas(3)    !< Euler angle standard deviations in degrees
-        real,           intent(inout) :: eullims(3,2) !< Euler angle limits
-        real :: euls(3), euls_trial(3)
-        euls(1)       = o_prev%e1get()
-        euls(2)       = o_prev%e2get()
-        euls(3)       = o_prev%e3get()
-        euls_trial(1) = gasdev(euls(1), sigmas(1), eullims(1,:))
-        euls_trial(2) = gasdev(euls(2), sigmas(2), eullims(2,:))
-        euls_trial(3) = gasdev(euls(3), sigmas(3), eullims(3,:))
-        euls(1)       = max(eullims(1,1), euls_trial(1)) ! in case bounded gasdev maxed out
-        euls(2)       = max(eullims(2,1), euls_trial(2)) ! -"-
-        euls(3)       = max(eullims(3,1), euls_trial(3)) ! -"-
-        euls(1)       = min(eullims(1,2), euls_trial(1)) ! -"-
-        euls(2)       = min(eullims(2,2), euls_trial(2)) ! -"-
-        euls(3)       = min(eullims(3,2), euls_trial(3)) ! -"-
-    end subroutine rnd_euler_gasdev
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )

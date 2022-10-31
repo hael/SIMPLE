@@ -801,12 +801,18 @@ contains
             if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(params%refine,'cluster') )then
                 converged = conv%check_conv_cluster(cline)
             else
-                converged = conv%check_conv3D(cline, params%msk)
+                if( params%l_cartesian )then
+                    converged = conv%check_conv3Dc(cline, params%msk)
+                else
+                    converged = conv%check_conv3D(cline, params%msk)
+                endif
             endif
         else
             select case(params%refine)
-            case('cluster','clustersym')
+                case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
+                case('shcc','neighc','greedyc')
+                    converged = conv%check_conv3Dc(cline, params%msk)
                 case DEFAULT
                     converged = conv%check_conv3D(cline, params%msk)
             end select

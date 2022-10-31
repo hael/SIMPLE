@@ -50,7 +50,6 @@ type sym
     procedure, private :: rnd_euler_1
     procedure, private :: rnd_euler_2
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
-    procedure          :: rnd_euler_gasdev
     ! calculators
     procedure          :: sym_dists
     procedure          :: nearest_sym_neighbors
@@ -711,16 +710,6 @@ contains
         class(ori),     intent(inout) :: osym
         call osym%rnd_euler(o_prev, athres, self%eullims)
     end subroutine rnd_euler_2
-
-    subroutine rnd_euler_gasdev( self, o_prev, athres, osym )
-        class(sym),     intent(inout) :: self
-        class(ori),     intent(in)    :: o_prev
-        real,           intent(in)    :: athres
-        class(ori),     intent(inout) :: osym
-        real :: sigmas(3)
-        sigmas(:) = athres / 2. ! 2 sigma (soft) criterion, fixed for now
-        call osym%rnd_euler_gasdev(o_prev, sigmas, self%eullims)
-    end subroutine rnd_euler_gasdev
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )

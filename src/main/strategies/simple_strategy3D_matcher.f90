@@ -335,7 +335,13 @@ contains
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
-        if( .not. params_glob%l_distr_exec ) converged = conv%check_conv3D(cline, params_glob%msk)
+        if( .not. params_glob%l_distr_exec )then
+            if( params_glob%l_cartesian )then
+                converged = conv%check_conv3Dc(cline, params_glob%msk)
+            else
+                converged = conv%check_conv3D(cline, params_glob%msk)
+            endif
+        endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
             doprint = .true.
