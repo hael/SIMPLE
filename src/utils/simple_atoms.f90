@@ -13,6 +13,7 @@ character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A
 character(len=78), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"  ! custom 3.3
 character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"           ! custom 3.3
 character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I1,A4,3X,3F8.3,2F6.2,10x,A2)"    ! custom 3.3
+character(len=78), parameter :: pdbfmt_anisou   = "(A6, I5,1X,A4,A1,A3,1X,A1,I4,A1,1X,6I7,5X,A2)"
 
 !>  \brief type for dealing with atomic structures
 type :: atoms
@@ -65,6 +66,7 @@ type :: atoms
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
+    procedure          :: writepdb_aniso
     ! CALCULATORS
     procedure          :: guess_element
     procedure, private :: guess_an_element
@@ -430,10 +432,40 @@ contains
                         self%occupancy(i), self%beta(i), self%element(i)
                 endif
             endif
-
         enddo
         call fclose(funit)
     end subroutine writepdb
+
+    ! Write a pdb file with ANISOU format for the input anisotropic B Factor matrices aniso.
+    subroutine writepdb_aniso( self, fbody, aniso)
+        class(atoms),     intent(in) :: self
+        character(len=*), intent(in) :: fbody
+        real,             intent(in) :: aniso(3, 3, self%n) ! Each matrix is 3x3 real symmetric
+        character(len=LONGSTRLEN) :: fname
+        integer          :: i, funit, io_stat, aniso_out(3, 3)
+        fname = trim(adjustl(fbody)) // '.pdb'
+        if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
+        call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
+        do i = 1, self%n
+            if(self%het(i))then
+                write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
+                    self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                    self%occupancy(i), self%beta(i),' '
+            else
+                write(funit,pdbfmt)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
+                    self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                    self%occupancy(i), self%beta(i), self%element(i)
+            endif
+            ! ANISOU Format has each matrix component multipled by 10**4 and written as an intenger
+            aniso_out = nint(aniso(:,:,i)*10**4)
+            write(funit, pdbfmt_anisou)'ANISOU', self%num(i),self%name(i),self%altloc(i),&
+                self%resname(i),self%chain(i), self%resnum(i), self%icode(i), aniso_out(1,1),&
+                aniso_out(2,2), aniso_out(3,3), aniso_out(1,2), aniso_out(1,3), aniso_out(2,3),&
+                self%element(i)
+        enddo
+        call fclose(funit)
+    end subroutine writepdb_aniso
 
     ! CALCULATORS
 

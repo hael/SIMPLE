@@ -35,11 +35,12 @@ character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//&
 &'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//&
-&'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+&'EXZ_STRAIN'//CSV_DELIM//'DOA'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DOA'//&
+&CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -50,6 +51,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -61,6 +63,7 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -77,6 +80,8 @@ type :: atom_stats
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
+    real    :: aniso(3,3)        = 0. ! Ansisotropic displacement parameter matrix
+    real    :: doa               = 0. ! Degree of anisotropy                                        DOA
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
@@ -111,6 +116,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: radial_strain_stats
+    type(stats_struct)    :: doa_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
     real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
@@ -123,6 +129,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: doa_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
@@ -166,6 +173,7 @@ type :: nanoparticle
     procedure, private :: write_centers_1
     procedure, private :: write_centers_2
     generic            :: write_centers => write_centers_1, write_centers_2
+    procedure          :: write_centers_aniso
     procedure          :: write_individual_atoms
     procedure          :: write_csv_files
     procedure, private :: write_atominfo
@@ -1073,19 +1081,21 @@ contains
     end subroutine discard_lowly_coordinated
 
     ! calc stats
-
+    ! -----NEED TO OUTPUT DOA IN CN STATS AND ATOMIC STATS----
     subroutine fillin_atominfo( self, a0 )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        type(image)          :: simatms
+        type(image)          :: simatms, img_scaled, fit
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
-        real,    pointer     :: rmat_raw(:,:,:)
+        real,    pointer     :: rmat_raw(:,:,:), rmat_scaled(:, :, :)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:)
-        real    :: tmp_diam, a(3)
-        integer :: i, j, k, cc, cn, n, funit, ios
+        logical, parameter   :: test_fit = .true.
+        real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
+        integer :: i, j, k, cc, cn, n, funit, ios, scale_fac = 4, adp_tossed
+        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
@@ -1120,6 +1130,23 @@ contains
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%img_raw%get_rmat_ptr(rmat_raw)
         call self%img_cc%get_imat(imat_cc)
+
+        ! Create scaled image for anisotropic displacement calculations
+        call img_scaled%new(scale_fac*self%img_raw%get_ldim(), 1.0/scale_fac*self%img_raw%get_smpd())
+        call img_scaled%fft()
+        call self%img_raw%fft()
+        call self%img_raw%pad(img_scaled)
+        call img_scaled%ifft()
+        call self%img_raw%ifft()
+        write(logfhandle, '(A)') "SCALED VOLUME"
+        call img_scaled%get_rmat_ptr(rmat_scaled)
+        ! For testing
+        call img_scaled%write(fn_scaled) 
+        fit = image(ldim=scale_fac*self%ldim, smpd=self%smpd/scale_fac)
+        call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
+        write(funit, '(i8)') self%n_cc
+
+        adp_tossed = 0
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
             ! index of the connected component
@@ -1140,6 +1167,16 @@ contains
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
+
+            ! calculate anisotropic displacement parameters.  
+            ! Ignore CCs with fewer pixels than independent covariance parameters (6)
+            if (self%atominfo(cc)%size > 6) then
+                call calc_anisotropic_disp_mask(cc)
+            else
+                self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
+                adp_tossed = adp_tossed + 1
+            end if
+
             ! set strain values
             self%atominfo(cc)%exx_strain    = strain_array(cc,1)
             self%atominfo(cc)%eyy_strain    = strain_array(cc,2)
@@ -1152,6 +1189,11 @@ contains
             mask    = .false.
             cc_mask = .true.
         end do
+        write(logfhandle,*) "ADP Tossed: ", adp_tossed
+        ! Write test image of adp and report FSC based resolution
+        call fit%write(fn_fit)
+
+        call fclose(funit)
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
@@ -1163,6 +1205,7 @@ contains
         call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
+        call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > 6 )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1173,8 +1216,11 @@ contains
         call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
         call self%write_centers('max_int_in_bfac_field',    'max_int')
         call self%write_centers('cn_std_in_bfac_field',     'cn_std')
+        call self%write_centers('doa_in_bfac_field',        'doa')
+        call self%write_centers_aniso('aniso_bfac_field', scale_fac)
         ! destruct
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
+        call fit%kill
         call simatms%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
@@ -1188,10 +1234,11 @@ contains
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
                 integer :: cc, n, n_size, n_diam
-                logical :: cn_mask(self%n_cc), size_mask(self%n_cc)
+                logical :: cn_mask(self%n_cc), size_mask(self%n_cc), doa_mask(self%n_cc)
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
+                doa_mask = self%atominfo(:)%size > 6 .and. cn_mask
                 n         = count(cn_mask)
                 if( n == 0 ) return
                 ! -- # atoms
@@ -1205,6 +1252,7 @@ contains
                 call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%doa,           self%doa_stats_cns(cn),           mask=doa_mask  )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
             end subroutine calc_cn_stats
 
@@ -1238,6 +1286,136 @@ contains
                 call atoms_obj%kill
             end subroutine write_cn_atoms
 
+            ! For a given cc, calculates the anisotropic displacement parameters, 
+            ! which are the 3 variance parameters along the principle axes of the
+            ! connected component when fit with a 3D join Gaussian where the intensity of a voxel is its probability.  
+            ! Ratios of the anisotropic displacement parameters should reveal how the atom moves in different directions.  
+            ! ----CURRENT IMPLEMENTATION IS NOT VALIDATED----
+            subroutine calc_anisotropic_disp_mask(cc)
+                integer, intent(in)     :: cc
+                real        :: sum_int, mu(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
+                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3)
+                integer     :: i, j, k, n, x, y, z, ijk(3), ilo, ihi, jlo, jhi, klo, khi, count, errflg, nrot
+                
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire unscaled and scaled images for each connected component.
+                ! The first iteration is over the unscaled image, so here ilo, ihi, etc should be in unscaled coordinates
+                ijk = nint(self%atominfo(cc)%center(:))
+                maxrad  = (self%theoretical_radius * 1.5) / self%smpd
+                ilo = max(ijk(1) - ceiling(maxrad), 1)
+                ihi = min(ijk(1) + ceiling(maxrad), self%ldim(1))
+                jlo = max(ijk(2) - ceiling(maxrad), 1)
+                jhi = min(ijk(2) + ceiling(maxrad), self%ldim(2))
+                klo = max(ijk(3) - ceiling(maxrad), 1)
+                khi = min(ijk(3) + ceiling(maxrad), self%ldim(3))
+                
+                ! First iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
+                ! equal to the voxel intensity divided by the total scaled connected component intensity.
+                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
+                count = 0
+                sum_int = 0
+                mu = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (mask(i, j, k)) then
+                                count = count + scale_fac
+                                do n=0, scale_fac-1
+                                    x = scale_fac*i - n
+                                    y = scale_fac*j - n
+                                    z = scale_fac*k - n
+                                    if (rmat_scaled(x, y, z) > 0) then
+                                        sum_int = sum_int + rmat_scaled(x, y, z)
+                                        mu(1) = mu(1) + x * rmat_scaled(x, y, z)
+                                        mu(2) = mu(2) + y * rmat_scaled(x, y, z)
+                                        mu(3) = mu(3) + z * rmat_scaled(x, y, z)
+                                    end if
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                mu = mu / sum_int  ! Normalization
+
+                ! Second iteration: Calculate the 3x3 covariance matrix sigma
+                sigma = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (mask(i, j, k)) then
+                                do n=0, scale_fac-1
+                                    x = scale_fac*i - n
+                                    y = scale_fac*j - n
+                                    z = scale_fac*k - n
+                                    ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
+                                    if (rmat_scaled(x, y, z) > 0) then
+                                        prob = rmat_scaled(x, y, z) / sum_int
+                                        ! Diagonal terms are variance
+                                        sigma(1, 1) = sigma(1, 1) + prob * (x - mu(1)) ** 2
+                                        sigma(2, 2) = sigma(2, 2) + prob * (y - mu(2)) ** 2
+                                        sigma(3, 3) = sigma(3, 3) + prob * (z - mu(3)) ** 2
+                                        ! Off diagonal terms are covariance. The matrix is symmetric.
+                                        sigma(1, 2) = sigma(1, 2) + prob * (x - mu(1)) * (y - mu(2))
+                                        sigma(1, 3) = sigma(1, 3) + prob  * (x - mu(1)) * (z - mu(3))
+                                        sigma(2, 3) = sigma(2, 3) + prob * (y - mu(2)) * (z - mu(3))
+                                    end if
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fill in redundant entries
+                sigma(2, 1) = sigma(1, 2)
+                sigma(3, 1) = sigma(1, 3)
+                sigma(3, 2) = sigma(2, 3)
+
+                ! Degree of anisotropy is w1/w3 where w1 and w3 are the lengths of 
+                ! the minor and major ellipsoid axes, respectively.
+                sigma_copy = sigma
+                call jacobi(sigma_copy, 3, 3, eigenvals, eigenvecs, nrot)
+                call eigsrt(eigenvals, eigenvecs, 3, 3)
+                self%atominfo(cc)%doa = eigenvals(3)/eigenvals(1)
+                self%atominfo(cc)%aniso = sigma
+
+                ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
+                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :), sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
+
+                ! Third iteration (for testing): sample the fit at each piqxel
+                if (test_fit) then
+                    A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
+                    call matinv(sigma, sigma_inv, 3, errflg)
+                    do k=klo, khi
+                        do j=jlo, jhi
+                            do i=ilo, ihi
+                                if (mask(i, j, k)) then
+                                    do n=0, scale_fac-1
+                                        x = scale_fac*i - n
+                                        y = scale_fac*j - n
+                                        z = scale_fac*k - n
+                                        displ(1, 1) = x - mu(1)
+                                        displ(2, 1) = y - mu(2)
+                                        displ(3, 1) = z - mu(3)
+                                        displ_T = transpose(displ)
+                                        beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
+                                        prob = A * exp(beta(1, 1))
+                                        call fit%set_rmat_at(x, y, z, prob)
+                                    end do
+                                end if
+                            end do
+                        end do
+                    end do
+                end if
+            end subroutine calc_anisotropic_disp_mask
+
+            ! Returns the determinant det of a real 3x3 matrix a.
+            pure function det3by3(a) result(det)
+                real, intent(in)    :: a(3, 3)
+                real                :: det
+                det = a(1, 1) * (a(2, 2)*a(3, 3) - a(2, 3)*a(3, 2))
+                det = det - a(1, 2) * (a(2, 1)*a(3, 3) - a(2, 3)*a(3, 1))
+                det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
+            end function det3by3
+            
     end subroutine fillin_atominfo
 
     ! calc the avg of the centers coords
@@ -1403,6 +1581,24 @@ contains
      call centers_pdb%writepdb(fname)
   end subroutine write_centers_2
 
+  subroutine write_centers_aniso( self, fname, scale_fac)
+    class(nanoparticle), intent(inout) :: self
+    character(len=*),    intent(in)    :: fname
+    integer,          intent(in)       :: scale_fac
+    type(atoms) :: centers_pdb
+    real        :: aniso(3, 3, self%n_cc)
+    integer     :: cc
+    call centers_pdb%new(self%n_cc, dummy=.true.)
+    do cc=1,self%n_cc
+        call centers_pdb%set_name(cc,self%atom_name)
+        call centers_pdb%set_element(cc,self%element)
+        call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+        call centers_pdb%set_resnum(cc,cc)
+        aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:)*(self%smpd/scale_fac)**2 ! Covert scaled pixels^2 to Angstrom^2
+    enddo
+    call centers_pdb%writepdb_aniso(fname, aniso)
+    end subroutine write_centers_aniso
+
     subroutine write_individual_atoms( self )
         class(nanoparticle), intent(inout) :: self
         type(binimage)       :: img_atom
@@ -1479,6 +1675,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
+        write(funit,601,advance='no') self%atominfo(cc)%doa,                    CSV_DELIM ! VALID_CORR
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -1539,6 +1736,10 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- degree of anisotropy
+        write(funit,601,advance='no') self%doa_stats%avg,            CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%doa_stats%med,            CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%doa_stats%sdev,           CSV_DELIM ! SDEV_DOA
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1585,6 +1786,10 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- degree of anisotropy
+        write(funit,601,advance='no') self%doa_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%doa_stats_cns(cn)%med,            CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%doa_stats_cns(cn)%sdev,           CSV_DELIM! SDEV_DOA
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN
