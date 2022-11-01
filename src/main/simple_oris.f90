@@ -182,6 +182,7 @@ type :: oris
     procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
+    procedure          :: sig3weights
     procedure          :: find_best_classes
     procedure          :: find_closest_proj
     procedure          :: discretize
@@ -2626,6 +2627,32 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_soft_weights2D
+
+    subroutine sig3weights( self )
+        class(oris), intent(inout) :: self
+        real,    allocatable :: states(:), corrs(:), updatecnts(:)
+        logical, allocatable :: mask(:)
+        integer :: i
+        real    :: corr_t
+        states     = self%get_all('state')
+        corrs      = self%get_all('corr')
+        if( any(corrs > TINY) )then
+            corr_t     = robust_sigma_thres(corrs, -3.0)
+            updatecnts = self%get_all('updatecnt')
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
+            do i=1,self%n
+                if( corrs(i) > corr_t )then
+                    call self%o(i)%set('w', 1.)
+                else
+                    call self%o(i)%set('w', 0.)
+                endif
+            end do
+            deallocate(updatecnts)
+        else
+            call self%set_all2single('w', 1.)
+        endif
+        deallocate(states, corrs, updatecnts)
+    end subroutine sig3weights
 
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL

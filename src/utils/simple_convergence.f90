@@ -16,7 +16,6 @@ type convergence
     type(stats_struct) :: dist      !< angular distance stats
     type(stats_struct) :: dist_inpl !< in-plane angular distance stats
     type(stats_struct) :: frac_srch !< fraction of search space scanned stats
-    type(stats_struct) :: specscore !< spectral score stats
     type(stats_struct) :: shincarg  !< shift increment
     type(stats_struct) :: pw        !< particle weight stats
     type(stats_struct) :: nevals    !< # cost function evaluations
@@ -43,17 +42,19 @@ contains
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:)
+        real,    allocatable :: updatecnts(:), states(:), corrs(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, overlap_lim, fracsrch_lim
+        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t
         logical :: converged, chk4conv
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        updatecnts    = os%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / size(updatecnts)
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        states        = build_glob%spproj_field%get_all('state')
+        corrs         = build_glob%spproj_field%get_all('corr')
+        corr_t        = robust_sigma_thres(corrs, -3.0)
+        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         call os%stats('corr',      self%corr,      mask=mask)
-        call os%stats('specscore', self%specscore, mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
@@ -61,18 +62,13 @@ contains
         self%mi_class  = os%get_avg('mi_class',    mask=mask)
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
-        write(logfhandle,604) '>>> IN-PLANE DIST (DEG)    AVG/SDEV/MIN/MAX:',&
-        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
-        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
-        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        write(logfhandle,604) '>>> SPECSCORE              AVG/SDEV/MIN/MAX:',&
-        &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
-        write(logfhandle,604) '>>> WEIGHTS                AVG/SDEV/MIN/MAX:',&
-        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:',&
-        &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST (DEG)    AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,601) '>>> % PARTICLES   CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> CORRELATION                   THRESHOLD:', corr_t
+        write(logfhandle,604) '>>> WEIGHTS                AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -146,8 +142,9 @@ contains
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
-        call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
         call self%ostats%write(STATS_FILE)
+        ! destruct
+        deallocate(mask, updatecnts, states, corrs)
         call self%ostats%kill
     end function check_conv2D
 
@@ -169,7 +166,6 @@ contains
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
-        call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
         call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
         call build_glob%spproj_field%stats('frac',      self%frac_srch, mask=mask)
@@ -193,8 +189,6 @@ contains
         &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        write(logfhandle,604) '>>> SPECSCORE                AVG/SDEV/MIN/MAX:',&
-        &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
         &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         ! dynamic shift search range update
@@ -267,7 +261,6 @@ contains
         call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
-        call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
