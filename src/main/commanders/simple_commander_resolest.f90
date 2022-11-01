@@ -170,7 +170,7 @@ contains
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
-        file_tag = 'uniform_3D_filter_ext_'//int2str(params%smooth_ext)
+        file_tag = 'uniform_3D_filter'
         have_mask_file = .false.
         if( params%l_filemsk )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
@@ -281,7 +281,7 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'uniform_filter2D_ext_'//int2str(params%smooth_ext)
+        file_tag = 'uniform_filter2D'
         ! allocate
         allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
@@ -299,7 +299,6 @@ contains
             call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
             do iptcl = 1, params%nptcls
                 call mask(iptcl)%get_mat_ptrs(pmask)
-                where(pmask%rmat > 0) pmask%rmat = 1.
             enddo
         else
             do iptcl = 1, params%nptcls
