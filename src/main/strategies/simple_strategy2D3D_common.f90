@@ -129,7 +129,6 @@ contains
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         if( params_glob%l_lpset )then
             ! set Fourier index range
-            ! params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
             if( cline%defined('lpstop') )then
                 params_glob%kfromto(2) = min(params_glob%kfromto(2),&
@@ -197,14 +196,9 @@ contains
                 params_glob%kfromto(2) = min(params_glob%kfromto(2), &
                     calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
-            ! set high-pass Fourier index limit
-            ! params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
-        ! because therew are less interpolation errors  and more components at low resolution
-        ! in the Cartesian formulation we set the high-pass Fourier index to 1
-        ! if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
@@ -215,8 +209,6 @@ contains
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
         integer :: lpstart_find
-        ! High-pass index
-        ! params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
@@ -237,9 +229,6 @@ contains
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
-        ! because therew are less interpolation errors  and more components at low resolution
-        ! in the Cartesian formulation we set the high-pass Fourier index to 1
-        ! if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D

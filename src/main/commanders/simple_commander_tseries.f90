@@ -622,6 +622,7 @@ contains
         call cline%set('refine',          'greedy')
         call cline%set('tseries',            'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('hp')             ) call cline%set('hp',               3.)
         if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
         if( .not. cline%defined('ncls')           ) call cline%set('ncls',            20.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
@@ -726,6 +727,7 @@ contains
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
+        if( .not. cline%defined('hp')             ) call cline%set('hp',             3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',             1.0)
         if( .not. cline%defined('winsz')          ) call cline%set('winsz',           3.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
@@ -902,6 +904,7 @@ contains
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
+        if( .not. cline%defined('hp')            ) call cline%set('hp',              3.0)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
         if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
@@ -909,7 +912,6 @@ contains
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('ran_noise_ph')  ) call cline%set('ran_noise_ph',   'no')
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
@@ -956,7 +958,6 @@ contains
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
-        if( .not. cline%defined('ran_noise_ph')   ) call cline%set('ran_noise_ph',  'no')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
