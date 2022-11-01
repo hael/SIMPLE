@@ -306,7 +306,6 @@ contains
             call pftcc%kill
         endif
         call build_glob%vol%kill
-        call build_glob%vol_odd%kill
         call orientation%kill
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)

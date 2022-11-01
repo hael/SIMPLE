@@ -38,8 +38,8 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP_DEFAULT = 30.
-        integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40
-        integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
+        integer,               parameter :: MAXITS_SNHC=25, MAXITS_INIT=15, MAXITS_REFINE=20
+        integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000
         character(len=STDLEN), parameter :: ORIG_work_projfile   = 'initial_3Dmodel_tmpproj.simple'
         character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
         character(len=STDLEN), parameter :: REC_PPROC_FBODY      = trim(REC_FBODY)//trim(PPROC_SUFFIX)
@@ -71,7 +71,7 @@ contains
         character(len=2)      :: str_state
         type(qsys_env)        :: qenv
         type(parameters)      :: params
-        type(ctfparams)       :: ctfvars ! ctf=yes by default
+        type(ctfparams)       :: ctfvars
         type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
         type(ori)             :: o_tmp
@@ -83,14 +83,14 @@ contains
         real                  :: scale_factor1, scale_factor2, lp3(3)
         integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3)
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('automsk')    ) call cline%set('automsk',   'yes')
-        if( .not. cline%defined('amsklp')     ) call cline%set('amsklp',      15.)
-        if( .not. cline%defined('envfsc')     ) call cline%set('envfsc',     'no')
-        if( .not. cline%defined('autoscale')  ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('ptclw')      ) call cline%set('ptclw',      'no')
-        if( .not. cline%defined('overlap')    ) call cline%set('overlap',     0.8)
-        if( .not. cline%defined('fracsrch')   ) call cline%set('fracsrch',    0.9)
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'yes')
+        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
+        if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
+        if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.9)
+        if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -314,16 +314,16 @@ contains
         call cline_refine3D_snhc%set('nspace',     real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',     real(MAXITS_SNHC))
         call cline_refine3D_snhc%set('match_filt', 'no')
-        call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
-        call cline_refine3D_snhc%set('silence_fsc','yes') ! no FSC plot printing in snhc phase
-        call cline_refine3D_snhc%set('lp_iters',    0.)   ! low-pass limited resolution, no e/o
-        call cline_refine3D_snhc%delete('frac')           ! no rejections in first phase
+        call cline_refine3D_snhc%set('ptclw',      'no')               ! no soft particle weights in first phase
+        call cline_refine3D_snhc%set('silence_fsc','yes')              ! no FSC plot printing in snhc phase
+        call cline_refine3D_snhc%set('lp_iters',    real(MAXITS_SNHC)) ! low-pass limited resolution, no e/o
+        call cline_refine3D_snhc%delete('frac')                        ! no rejections in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(work_projfile))
         call cline_refine3D_init%set('box',      real(box))
         call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('lp',       lplims(1))
-        call cline_refine3D_init%set('lp_iters', 0.)   ! low-pass limited resolution, no e/o
+        call cline_refine3D_init%set('lp_iters', real(MAXITS_INIT))   ! low-pass limited resolution, no e/o
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
@@ -350,25 +350,23 @@ contains
             call cline_symsrch%set('oritype',  'ptcl3D')
         endif
         ! (4) REFINE3D REFINE STEP
-        call cline_refine3D_refine%set('prg',      'refine3D')
-        call cline_refine3D_refine%set('pgrp',     trim(pgrp_refine))
-        call cline_refine3D_refine%set('maxits',   real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine',   'shc')
-        call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
+        call cline_refine3D_refine%set('prg',    'refine3D')
+        call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
+        call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
+        call cline_refine3D_refine%set('refine',    'neighc')
+        call cline_refine3D_refine%set('athres',         15.)
+        call cline_refine3D_refine%set('nsample_neigh', 500.)
+        call cline_refine3D_refine%set('nsample_trs',    50.)
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))
-            call cline_refine3D_refine%set('lp_iters', 0.)   ! low-pass limited resolution, no e/o
+            call cline_refine3D_refine%set('lp_iters', real(MAXITS_REFINE)) ! low-pass limited resolution, no e/o
         else
             call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('lp_iters', 0.)   ! no lp, e/o only
+            call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
             call cline_refine3D_refine%set('match_filt', 'yes')
         endif
-        if( .not. cline_refine3D_refine%defined('nspace') )then
-            call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
-        endif
-        call cline_refine3D_refine%set('nonuniform', 'no') ! done in 2D
         if( params%l_automsk )then
             call cline_refine3D_refine%set('automsk', trim(params%automsk))
             call cline_refine3D_refine%set('amsklp', params%amsklp)
@@ -380,7 +378,7 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_work_projfile)
         call cline_postprocess%set('mkdir',      'no')
-        call cline_postprocess%set('bfac',       0.)
+        call cline_postprocess%delete('bfac')
         if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
         else
@@ -389,11 +387,11 @@ contains
         if( params%l_automsk )then
             call cline_postprocess%set('automsk', trim(params%automsk))
         endif
-        call cline_reproject%set('prg',     'reproject')
-        call cline_reproject%set('pgrp',    trim(pgrp_refine))
-        call cline_reproject%set('outstk',  'reprojs'//ext)
-        call cline_reproject%set('smpd',    params%smpd)
-        call cline_reproject%set('box',     real(orig_box))
+        call cline_reproject%set('prg',    'reproject')
+        call cline_reproject%set('pgrp',   trim(pgrp_refine))
+        call cline_reproject%set('outstk', 'reprojs'//ext)
+        call cline_reproject%set('smpd',   params%smpd)
+        call cline_reproject%set('box',    real(orig_box))
         ! execute commanders
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'

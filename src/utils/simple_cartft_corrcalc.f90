@@ -22,7 +22,7 @@ type :: cartft_corrcalc
     integer,                       allocatable :: pinds(:)               !< index array (to reduce memory when frac_update < 1)
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
-    real(sp),                      allocatable :: ref_filt_w(:,:)        !< reference filter weights
+    real(sp),                      allocatable :: ref_filt_w(:,:,:)      !< reference filter weights
     real(sp),                      allocatable :: powspec(:)             !< average e/o power spectrum
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
@@ -42,7 +42,9 @@ type :: cartft_corrcalc
     ! SETTERS
     procedure          :: set_ptcl
     procedure          :: set_ref
-    procedure          :: set_ref_optlp
+    procedure, private :: set_ref_optlp_1
+    procedure, private :: set_ref_optlp_2
+    generic            :: set_ref_optlp => set_ref_optlp_1, set_ref_optlp_2
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
@@ -81,9 +83,9 @@ contains
         logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
-        real(sp), allocatable :: powspec(:)
-        logical :: even_dims, test(2)
-        integer :: i, cnt, ithr, lims(3,2)
+        real(sp) :: powspec(vol_even%get_filtsz())
+        logical  :: even_dims, test(2)
+        integer  :: i, cnt, ithr, lims(3,2)
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -110,18 +112,17 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
+        ! allocate power spectrum and index translation table
+        allocate( self%powspec(self%filtsz), self%pinds(self%pfromto(1):self%pfromto(2)) )
+        self%powspec = 0.
+        self%pinds   = 0
+        call vol_even%power_spectrum(powspec)
+        call vol_odd%power_spectrum(self%powspec)
+        self%powspec = (self%powspec + powspec) / 2.
         ! set pointers to projectors
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
-        ! power spectrum and index translation table
-        allocate( powspec(self%filtsz), self%powspec(self%filtsz), self%pinds(self%pfromto(1):self%pfromto(2)) )
-        powspec      = 0.
-        self%powspec = 0.
-        self%pinds   = 0
-        call self%vol_even%spectrum('power', powspec)
-        call self%vol_odd%spectrum( 'power', self%powspec)
-        self%powspec = (self%powspec + powspec) / 2.
-        deallocate(powspec)
+        ! generate particle indices
         if( present(ptcl_mask) )then
             cnt = 0
             do i=self%pfromto(1),self%pfromto(2)
@@ -155,16 +156,21 @@ contains
         self%lims(1,2) =  params_glob%kfromto(2)
         self%lims(2,1) = -params_glob%kfromto(2)
         self%lims(2,2) =  params_glob%kfromto(2)
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
+        if( self%l_clsfrcs )then
+            allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=cmplx(0.,0.))
+            allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        else    
+            allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
+            allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),           source=1.)
+        endif
         ! allocate the rest
-        allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
-        &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)),&
-        &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
-        ! 2Dclass/3Drefs mapping on/off
-        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
         ! setup resolution mask pxls_p_shell
         call self%setup_resmsk_and_pxls_p_shell
         ! flag existence
@@ -213,7 +219,7 @@ contains
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)),&
+        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),&
         &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
@@ -306,11 +312,11 @@ contains
         end do
     end subroutine set_ref
 
-    subroutine set_ref_optlp( self, ref_optlp )
+    subroutine set_ref_optlp_1( self, ref_optlp )
         class(cartft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
         integer :: h,k,sh,sqlp,sqarg
-        self%ref_filt_w(:,:) = 0.
+        self%ref_filt_w(:,:,1) = 0.
         sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
@@ -320,16 +326,43 @@ contains
                 sh = nint(hyp(real(h),real(k)))
                 if( self%l_match_filt )then
                     if( self%powspec(sh) > 1.e-12 )then
-                        self%ref_filt_w(h,k) = ref_optlp(sh) / sqrt(self%powspec(sh))
+                        self%ref_filt_w(h,k,1) = ref_optlp(sh) / sqrt(self%powspec(sh))
                     else
-                        self%ref_filt_w(h,k) = ref_optlp(sh)
+                        self%ref_filt_w(h,k,1) = ref_optlp(sh)
                     endif
                 else
-                    self%ref_filt_w(h,k) = ref_optlp(sh)
+                    self%ref_filt_w(h,k,1) = ref_optlp(sh)
                 endif
             end do
         end do
-    end subroutine set_ref_optlp
+    end subroutine set_ref_optlp_1
+
+    subroutine set_ref_optlp_2( self, iref, ref_optlp )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref
+        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer :: h,k,sh,sqlp,sqarg
+        if( iref < 1 .or. iref > self%nptcls ) THROW_HARD('iref '//int2str(iref)//' is out of bounds')
+        self%ref_filt_w(:,:,iref) = 0.
+        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                if( (h==0) .and. (k==0) ) cycle
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                sh = nint(hyp(real(h),real(k)))
+                if( self%l_match_filt )then
+                    if( self%powspec(sh) > 1.e-12 )then
+                        self%ref_filt_w(h,k,iref) = ref_optlp(sh) / sqrt(self%powspec(sh))
+                    else
+                        self%ref_filt_w(h,k,iref) = ref_optlp(sh)
+                    endif
+                else
+                    self%ref_filt_w(h,k,iref) = ref_optlp(sh)
+                endif
+            end do
+        end do
+    end subroutine set_ref_optlp_2
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
@@ -496,8 +529,13 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i),&
-        &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:))
+        if( self%l_clsfrcs )then
+            corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i),&
+            &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,i))
+        else
+            corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i),&
+            &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,1))
+        endif
     end function project_and_correlate
 
     subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best )
@@ -558,10 +596,10 @@ contains
     end subroutine project_and_shift
 
     subroutine corr_shifted_1( self, iptcl, shvec, corr )
-        class(cartft_corrcalc), intent(inout)  :: self
-        integer,                intent(in)     :: iptcl
-        real,                   intent(in)     :: shvec(2)
-        real,                   intent(inout)  :: corr
+        class(cartft_corrcalc), target, intent(inout)  :: self
+        integer,                        intent(in)     :: iptcl
+        real,                           intent(in)     :: shvec(2)
+        real,                           intent(inout)  :: corr
         integer  :: i, h, k, ithr
         complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
         real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2))
@@ -586,33 +624,54 @@ contains
             hsin(h) = dsin(arg)
         enddo
         cc(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i)
-                ! update cross product
-                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
-                ! update normalization terms
-                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+        if( self%l_clsfrcs )then
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,i)
+                    ! shift the particle Fourier component
+                    ptcl_comp = self%particles(h,k,i)
+                    ! update cross product
+                    cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                    ! update normalization terms
+                    cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                end do
             end do
-        end do
+        else
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                    ! shift the particle Fourier component
+                    ptcl_comp = self%particles(h,k,i)
+                    ! update cross product
+                    cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                    ! update normalization terms
+                    cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                end do
+            end do
+        endif
         corr = norm_corr(cc(1),cc(2),cc(3))
     end subroutine corr_shifted_1
 
     subroutine corr_shifted_2( self, iptcl, shvec, corr, grad )
-        class(cartft_corrcalc), intent(inout)  :: self
-        integer,                intent(in)     :: iptcl
-        real,                   intent(in)     :: shvec(2)
-        real,                   intent(inout)  :: corr
-        real,                   intent(inout)  :: grad(2)
+        class(cartft_corrcalc), target, intent(inout)  :: self
+        integer,                        intent(in)     :: iptcl
+        real,                           intent(in)     :: shvec(2)
+        real,                           intent(inout)  :: corr
+        real,                           intent(inout)  :: grad(2)
         integer  :: i, h, k, ithr
         complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
         real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
@@ -637,29 +696,55 @@ contains
         enddo
         cc(:)   = 0.
         grad(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k)
-                ! shift the particle Fourier component
-                ptcl_comp   = self%particles(h,k,i)
-                ! update cross product
-                ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
-                cc(1)       = cc(1) + realpart(ref_ptcl_sh)
-                ! update normalization terms
-                cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                ! update the gradient
-                ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
-                grad(1)     = grad(1) + real(ref_ptcl_sh) * h
-                grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+        if( self%l_clsfrcs )then
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,i)
+                    ! shift the particle Fourier component
+                    ptcl_comp   = self%particles(h,k,i)
+                    ! update cross product
+                    ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
+                    cc(1)       = cc(1) + realpart(ref_ptcl_sh)
+                    ! update normalization terms
+                    cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                    ! update the gradient
+                    ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
+                    grad(1)     = grad(1) + real(ref_ptcl_sh) * h
+                    grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+                end do
             end do
-        end do
+        else
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                    ! shift the particle Fourier component
+                    ptcl_comp   = self%particles(h,k,i)
+                    ! update cross product
+                    ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
+                    cc(1)       = cc(1) + realpart(ref_ptcl_sh)
+                    ! update normalization terms
+                    cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                    ! update the gradient
+                    ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
+                    grad(1)     = grad(1) + real(ref_ptcl_sh) * h
+                    grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+                end do
+            end do
+        endif
         grad(1) = norm_corr(grad(1),cc(2), cc(3))
         grad(2) = norm_corr(grad(2),cc(2), cc(3))
         corr    = norm_corr(cc(1),  cc(2), cc(3))
@@ -731,7 +816,6 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: i, ithr
         if( self%existence )then
-            self%ldim     = 0
             self%vol_even => null()
             self%vol_odd  => null()
             if( allocated(self%pinds)        ) deallocate(self%pinds)
@@ -739,10 +823,10 @@ contains
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
             if( allocated(self%ref_filt_w)   ) deallocate(self%ref_filt_w)
             if( allocated(self%powspec)      ) deallocate(self%powspec)
-            if( allocated(self%iseven)       ) deallocate(self%iseven)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
+            if( allocated(self%iseven)       ) deallocate(self%iseven)
             self%existence  = .false.
         endif
     end subroutine kill

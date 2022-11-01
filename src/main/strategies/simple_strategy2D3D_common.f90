@@ -129,7 +129,7 @@ contains
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         if( params_glob%l_lpset )then
             ! set Fourier index range
-            params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
+            ! params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
             if( cline%defined('lpstop') )then
                 params_glob%kfromto(2) = min(params_glob%kfromto(2),&
@@ -198,13 +198,13 @@ contains
                     calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
             ! set high-pass Fourier index limit
-            params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
+            ! params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             ! re-set the low-pass limit
             params_glob%lp = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
         ! because therew are less interpolation errors  and more components at low resolution
         ! in the Cartesian formulation we set the high-pass Fourier index to 1
-        if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
+        ! if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
@@ -216,7 +216,7 @@ contains
         real    :: lplim
         integer :: lpstart_find
         ! High-pass index
-        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        ! params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
@@ -239,7 +239,7 @@ contains
         endif
         ! because therew are less interpolation errors  and more components at low resolution
         ! in the Cartesian formulation we set the high-pass Fourier index to 1
-        if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
+        ! if( params_glob%l_cartesian ) params_glob%kfromto(1) = 1
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
@@ -353,10 +353,10 @@ contains
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                 call fsc2optlp_sub(filtsz, frc, filter)
+                call fsc2optlp_sub(filtsz, frc, filter)
                 if( params_glob%l_match_filt )then
                     if( params_glob%l_cartesian )then
-                        call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                        call cftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     else
                         call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     endif
@@ -514,11 +514,7 @@ contains
                         if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                         call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                         call fsc2optlp_sub(filtsz, frc, filter)
-                        if( params_glob%l_cartesian )then
-                            call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                        else
-                            call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                        endif
+                        call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     enddo
                 endif
             else
@@ -528,11 +524,7 @@ contains
                     filter = 1.
                 endif
                 do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    if( params_glob%l_cartesian )then
-                        call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    else
-                        call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    endif
+                    call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                 enddo
             endif
         else
@@ -584,8 +576,8 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz())
-        integer :: filtsz
+        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        integer :: iref, iproj, filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -598,9 +590,18 @@ contains
         ! Volume filtering
         filtsz = build_glob%img%get_filtsz()
         if( params_glob%l_match_filt )then
-            ! stores filters in pftcc
+            ! stores filters in cftcc
             if( params_glob%clsfrcs.eq.'yes')then
-                THROW_HARD('clsfrcs eq yes not suported in Cartesian refinement')
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
+                        call cftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    enddo
+                endif
             else
                 if( any(build_glob%fsc(s,:) > 0.143) )then
                     call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
