@@ -25,6 +25,7 @@ use simple_commander_relion
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_resolest
+use simple_commander_euclid
 implicit none
 #include "simple_local_flags.inc"
 
@@ -368,7 +369,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('dab3020')
+call simple_print_git_version('20dcefc')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
