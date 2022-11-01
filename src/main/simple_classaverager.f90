@@ -1,11 +1,12 @@
 module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
-use simple_builder,    only: build_glob
-use simple_parameters, only: params_glob
-use simple_ctf,        only: ctf
-use simple_image,      only: image, image_ptr
-use simple_stack_io,   only: stack_io
+use simple_builder,       only: build_glob
+use simple_parameters,    only: params_glob
+use simple_ctf,           only: ctf
+use simple_image,         only: image, image_ptr
+use simple_stack_io,      only: stack_io
+use simple_euclid_sigma2, only: eucl_sigma2_glob, apply_euclid_regularization
 use simple_fsc
 implicit none
 
@@ -24,7 +25,7 @@ type ptcl_record
     real      :: phshift   = 0.0   !< additional phase shift from the Volta
     real      :: e3                !< in-plane rotations
     real      :: shift(2)          !< rotational origin shift
-    integer   :: pind       = 0    !< particle index in stack
+    integer   :: pind       = 0    !< particle index
     integer   :: eo         = -1   !< even is 0, odd is 1, default is -1
     integer   :: class             !< class assignment
     integer   :: ind_in_stk = 0    !< index in stack
@@ -55,6 +56,7 @@ integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
 logical                        :: l_stream      = .false.  !< flag for cluster2D_stream
 logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
+logical                        :: l_ml_reg      = .false.
 logical                        :: exists        = .false.  !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
@@ -95,6 +97,8 @@ contains
         ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3)    = 1
         filtsz        = build_glob%img%get_filtsz()
+        ! ML-regularization
+        ! l_ml_reg      = apply_euclid_regularization()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -311,7 +315,7 @@ contains
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq
         integer :: batch_iprecs(READBUFFSZ)
-        integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
+        integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2), sigma2_kfromto(2)
         integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
@@ -338,6 +342,10 @@ contains
         enddo
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
+        if( l_ml_reg )then
+            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+        end if
         ! Objects allocations
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
         !$omp parallel default(shared) proc_bind(close) private(i)
@@ -412,6 +420,23 @@ contains
                         call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
                     endif
+                    ! ML-regularization
+                    if( l_ml_reg )then
+                        do h=logi_lims(1,1),logi_lims(1,2)
+                            do k=logi_lims(2,1),logi_lims(2,2)
+                                sh = nint(hyp(real(h),real(k)))
+                                if( sh > sigma2_kfromto(2) )cycle
+                                phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                                if( sh >= sigma2_kfromto(1) )then
+                                    call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
+                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind)
+                                else
+                                    call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
+                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind)
+                                endif
+                            enddo
+                        enddo
+                    endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
@@ -438,7 +463,7 @@ contains
                             kw     = (1.-dist(1))*dist(2)
                             fcompl = fcompl + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
                             tval   = tval   + kw * tvals(phys(1),phys(2),i)
-                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
+                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
                             ! ll, upper left corner
                             phys    = cgrid_imgs(i)%comp_addr_phys(ll,m)
                             kw      = dist(1)*(1.-dist(2))
@@ -449,7 +474,7 @@ contains
                             kw      = dist(1)*dist(2)
                             fcompll = fcompll + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
                             tval    = tval    + kw * tvals(phys(1),phys(2),i)
-                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
+                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
                             ! update with interpolated values
                             phys = cgrid_imgs(i)%comp_addr_phys(h,k)
                             cmats(phys(1),phys(2),i) = fcompl + fcompll

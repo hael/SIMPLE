@@ -1090,7 +1090,7 @@ contains
     end subroutine print_mat
 
     subroutine print_ori( self )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in) :: self
         character(len=KEYLEN) :: flag
         integer :: i
         if( self%is_ptcl )then

@@ -1,15 +1,16 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D
 include 'simple_lib.f08'
-use simple_builder,        only: builder, build_glob
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters, params_glob
-use simple_sp_project,     only: sp_project
-use simple_qsys_env,       only: qsys_env
-use simple_image,          only: image
-use simple_stack_io,       only: stack_io
-use simple_starproject,    only: starproject
+use simple_builder,          only: builder, build_glob
+use simple_cmdline,          only: cmdline
+use simple_commander_base,   only: commander_base
+use simple_parameters,       only: parameters, params_glob
+use simple_sp_project,       only: sp_project
+use simple_qsys_env,         only: qsys_env
+use simple_image,            only: image
+use simple_stack_io,         only: stack_io
+use simple_starproject,      only: starproject
+use simple_commander_euclid, only: calc_pspec_commander_distr
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
@@ -116,7 +117,6 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(starproject):: starproj
         integer :: ncls_here
         logical :: l_shmem
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
@@ -252,6 +252,7 @@ contains
         else
             l_shmem = .true.
         endif
+        ! parse parameters
         call params%new(cline)
         orig_projfile = params%projfile
         if( .not. cline%defined('maxits') )then
@@ -750,10 +751,12 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(make_cavgs_commander_distr) :: xmake_cavgs
+        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
+        type(cmdline) :: cline_calc_group_sigmas, cline_calc_pspec_distr
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         character(len=STDLEN)     :: benchfname
@@ -762,10 +765,10 @@ contains
         type(builder)             :: build
         type(qsys_env)            :: qenv
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs
-        integer                   :: iter, cnt, iptcl, ptclind, fnr
+        integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space, lpstart, lpstop, lpcen
-        logical :: l_stream
+        logical                   :: l_stream, l_switch2euclid
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         l_stream = .false.
@@ -773,6 +776,14 @@ contains
             l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
+        ! objfun=euclid logics, part 1
+        l_switch2euclid  = .false.
+        if( cline%defined('objfun') )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' )then
+                l_switch2euclid = .true.
+                call cline%set('objfun','cc')
+            endif
+        endif
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
@@ -789,12 +800,16 @@ contains
         ! splitting
         call build%spproj%split_stk(params%nparts)
         ! prepare command lines from prototype master
-        cline_check_2Dconv = cline
-        cline_cavgassemble = cline
-        cline_make_cavgs   = cline ! ncls is transferred here
+        cline_check_2Dconv      = cline
+        cline_cavgassemble      = cline
+        cline_make_cavgs        = cline ! ncls is transferred here
+        cline_calc_group_sigmas = cline
+        cline_calc_pspec_distr  = cline
         ! initialise static command line parameters and static job description parameters
-        call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_make_cavgs%set('prg',   'make_cavgs')
+        call cline_cavgassemble%set(     'prg', 'cavgassemble')
+        call cline_make_cavgs%set(       'prg', 'make_cavgs')
+        call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas' )! required for local call
+        call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )       ! required for distributed call
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -858,6 +873,18 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
+        ! objfun=euclid logics, part 2
+        iter_switch2euclid = -1
+        if( l_switch2euclid )then
+            iter_switch2euclid = params%startit
+            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+            call cline%set('needs_sigma','yes')
+            call cline_cavgassemble%set('needs_sigma','yes')
+            ! GENERATE INITIAL NOISE POWER ESTIMATES
+            call build%spproj_field%set_all2single('w', 1.0)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+        endif
         ! initialise progress monitor
         if(.not. l_stream) call progressfile_init()
         ! main loop
@@ -868,19 +895,25 @@ contains
                 t_tot  = t_init
             endif
             iter = iter + 1
-            params_glob%which_iter = iter
-            call cline%set('which_iter', real(iter))
+            params%which_iter = iter
+            call cline%set(     'which_iter', trim(int2str(params%which_iter)))
+            call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
             str_iter = int2str_pad(iter,3)
             write(logfhandle,'(A)')   '>>>'
-            write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
+            ! Initial noise estimates
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
+                call cline_calc_group_sigmas%set('which_iter',real(params%which_iter))
+                call qenv%exec_simple_prg_in_queue(cline_calc_group_sigmas, 'CALC_GROUP_SIGMAS_FINISHED')
+            endif
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
             call cline%set('extr_iter', real(params%extr_iter))
             ! updates
             call job_descr%set('refs', trim(refs))
-            call job_descr%set('startit', int2str(iter))
+            call job_descr%set('startit', trim(int2str(iter)))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
             call job_descr%set('frcs', trim(FRCS_FILE))
             ! schedule
@@ -924,6 +957,29 @@ contains
                 if( cline_check_2Dconv%get_carg('converged').eq.'yes' )call cline%set('converged','yes')
                 exit
             endif
+            ! objfun=euclid, part 3: actual switch
+            if( l_switch2euclid .and. (iter==iter_switch2euclid) )then
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+                call cline%set('objfun',    'euclid')
+                call cline%set('match_filt','no')
+                if(.not.l_griddingset )then
+                    call cline%set('gridding',     'yes')
+                    call job_descr%set('gridding', 'yes')
+                endif
+                ! call cline%delete('lp') ????????
+                call job_descr%set('objfun',    'euclid')
+                call job_descr%set('match_filt','no')
+                ! call job_descr%delete('lp') ???????????
+                call cline_cavgassemble%set('objfun','euclid')
+                if( l_ptclw )then
+                    call cline%set('ptclw',    'yes')
+                    call job_descr%set('ptclw','yes')
+                endif
+                params%objfun    = 'euclid'
+                params%cc_objfun = OBJFUN_EUCLID
+                l_switch2euclid  = .false.
+            endif
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
                 benchfname = 'CLUSTER2D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
@@ -961,6 +1017,7 @@ contains
 
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
+        use simple_euclid_sigma2,      only: euclid_sigma2
         use simple_classaverager
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

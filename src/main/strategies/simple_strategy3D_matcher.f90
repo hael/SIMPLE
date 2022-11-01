@@ -272,7 +272,7 @@ contains
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     if( orientation%isstatezero() ) cycle
-                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
+                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation, 'proj')
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -376,11 +376,11 @@ contains
     subroutine preppftcc4align( cline, batchsz_max )
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
+        character(len=:), allocatable :: fname
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs
         logical   :: do_center
-        character(len=:), allocatable :: fname
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%l_match_filt)
