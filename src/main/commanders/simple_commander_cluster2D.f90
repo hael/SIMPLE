@@ -768,7 +768,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space, lpstart, lpstop, lpcen
-        logical                   :: l_stream, l_switch2euclid
+        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         l_stream = .false.
@@ -777,10 +777,12 @@ contains
         endif
         call cline%set('stream','no') ! for parameters determination
         ! objfun=euclid logics, part 1
+        l_griddingset    = cline%defined('gridding')
         l_switch2euclid  = .false.
         if( cline%defined('objfun') )then
             if( trim(cline%get_carg('objfun')).eq.'euclid' )then
                 l_switch2euclid = .true.
+                l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
                 call cline%set('objfun','cc')
             endif
         endif
