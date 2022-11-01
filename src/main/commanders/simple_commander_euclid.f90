@@ -126,10 +126,6 @@ contains
         nptcls_part = params%top-params%fromp+1
         nyq         = build%img%get_nyq()
         batchsz_max = 10 * nthr_glob
-
-
-        print *,nptcls_part,nyq,batchsz_max
-
         allocate(mask(batchsz_max),source=.false.)
         allocate(pspecs(nyq,nptcls_part),source=0.)
         call prepimgbatch(batchsz_max)

@@ -215,7 +215,7 @@ contains
         use simple_masker,     only: automask2D
         use simple_default_clines
         class(nununiform_filter2D_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: even(:), odd(:), mask(:)
         real,             allocatable :: diams(:)
@@ -268,7 +268,7 @@ contains
         use simple_image,      only: image_ptr 
         use simple_default_clines
         class(uniform_filter2D_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: odd(:), even(:), mask(:)
         real,             allocatable :: diams(:)
