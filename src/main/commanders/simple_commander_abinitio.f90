@@ -378,7 +378,7 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_work_projfile)
         call cline_postprocess%set('mkdir',      'no')
-        call cline_postprocess%delete('bfac')
+        call cline_postprocess%delete('bfac') ! sharpen final map
         if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
         else
