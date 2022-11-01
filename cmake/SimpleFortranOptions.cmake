@@ -550,8 +550,13 @@ if(USE_NLOPT)
     DOWNLOAD_COMMAND wget https://github.com/stevengj/nlopt/archive/v${NLOPT_VERSION}.tar.gz
     PATCH_COMMAND   tar -xzf ../v${NLOPT_VERSION}.tar.gz && rm -rf ../nlopt_src-build/nlopt-${NLOPT_VERSION} && mv nlopt-${NLOPT_VERSION} ../nlopt_src-build/
     CMAKE_COMMAND   cmake -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=${NLOPT_INSTALL_DIR} nlopt-${NLOPT_VERSION}/
-    BUILD_COMMAND   make
-    INSTALL_COMMAND make install
+    BUILD_COMMAND   make -s
+    INSTALL_COMMAND make -s install
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_INSTALL ON
+    LOG_BUILD ON
+    LOG_OUTPUT_ON_FAILURE ON
   )
   set(EXTRA_LIBS ${EXTRA_LIBS} -I${NLOPT_INSTALL_DIR}/include -L${NLOPT_INSTALL_DIR}/lib -lnlopt -lm )
 endif()
