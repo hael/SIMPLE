@@ -1500,7 +1500,6 @@ contains
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',       'mic')
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',             2.)
         if( .not. cline%defined('thres')     ) call cline%set('thres',           24.)
-        if( .not. cline%defined('picker')    ) call cline%set('picker', 'old_school')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
