@@ -155,16 +155,17 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        updatecnts = build_glob%spproj_field%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / size(updatecnts)
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        states        = build_glob%spproj_field%get_all('state')
+        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
@@ -270,7 +271,7 @@ contains
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, pws)
+        deallocate(mask, updatecnts, pws, states)
         call self%ostats%kill
     end function check_conv3D
 
@@ -278,16 +279,17 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), pws(:)
+        real,    allocatable :: updatecnts(:), pws(:), states(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
         logical :: converged
         integer :: iptcl
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        updatecnts = build_glob%spproj_field%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / size(updatecnts)
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        states        = build_glob%spproj_field%get_all('state')
+        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
@@ -297,7 +299,7 @@ contains
         call build_glob%spproj_field%stats('shincarg',  self%shincarg,  mask=mask)
         call build_glob%spproj_field%stats('nevals',    self%nevals,    mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('ngevals',   self%ngevals,   mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('better',    self%better,   mask=mask)
+        call build_glob%spproj_field%stats('better',    self%better,    mask=mask)
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:',&
         &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
@@ -318,6 +320,9 @@ contains
         &100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
         ! determine convergence
         converged = .false.
+        if( self%better%avg * 100. < 5. )then ! less than 5 % improved solutions
+            converged = .true.
+        endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)

@@ -218,6 +218,7 @@ contains
     procedure          :: guinier_bfac
     procedure          :: guinier
     procedure          :: spectrum
+    procedure          :: power_spectrum
     procedure          :: shellnorm
     procedure          :: shellnorm_and_apply_filter
     procedure          :: shellnorm_and_apply_filter_serial
@@ -3001,6 +3002,31 @@ contains
         endif
         if( didft ) call self%ifft()
     end subroutine spectrum
+
+    subroutine power_spectrum( self, spec )
+        class(image), intent(in)    :: self
+        real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
+        real    :: counts(fdim(self%ldim(1)) - 1)
+        integer :: filtsz, h, k, l, sh, lims(3,2), phys(3)
+        filtsz = fdim(self%ldim(1)) - 1
+        spec   = 0.
+        counts = 0.
+        lims   = self%fit%loop_lims(2)       
+        do l=lims(3,1),lims(3,2)
+            do k=lims(2,1),lims(2,2)
+                do h=lims(1,1),lims(1,2)
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > filtsz ) cycle
+                    spec(sh) = spec(sh) + csq_fast(self%cmat(phys(1),phys(2),phys(3)))
+                    counts(sh) = counts(sh) + 1.
+                end do
+            end do
+        end do
+        where(counts > 0.)
+            spec = spec/counts
+        end where
+    end subroutine power_spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
     subroutine shellnorm( self, return_ft )
