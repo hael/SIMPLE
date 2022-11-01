@@ -15,6 +15,7 @@ use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_cluster2D
 use simple_commander_refine3D
+use simple_commander_euclid
 use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops

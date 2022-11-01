@@ -222,7 +222,7 @@ contains
             if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH_GLOB ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt)&
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt,orientation)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
@@ -268,7 +268,7 @@ contains
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     if( orientation%isstatezero() ) cycle
-                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
+                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation, 'class')
                 end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill

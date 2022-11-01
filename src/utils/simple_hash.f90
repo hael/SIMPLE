@@ -346,7 +346,7 @@ contains
 
     !>  \brief  prints the hash
     subroutine print( self )
-        class(hash), intent(inout) :: self
+        class(hash), intent(in) :: self
         integer :: i
         if( self%hash_index > 0 )then
             do i=1,self%hash_index-1,1
