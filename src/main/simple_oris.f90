@@ -2781,11 +2781,14 @@ contains
         end do
     end subroutine nearest_proj_neighbors_4
 
-    subroutine detect_peaks( self, corrs, peaks )
+    subroutine detect_peaks( self, corrs, peaks, angdist )
         class(oris), intent(in)    :: self
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
-        integer :: i, nnmat(self%n,4) ! 4 because "self" is included
+        real,        intent(inout) :: angdist
+        real, allocatable :: corrs_packed(:)
+        integer :: i, j, cnt, nnmat(self%n,4) ! 4 because "self" is included
+        real    :: corr_t
         ! dentify the three nearest projection neighbors
         call self%nearest_proj_neighbors_1(4, nnmat)
         do i = 1,self%n
@@ -2798,6 +2801,22 @@ contains
                &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
                &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
         end do
+        ! good/bad binning with Otsu's algorithm
+        corrs_packed = pack(corrs, mask=peaks)
+        call otsu(corrs_packed, corr_t)
+        where( corrs <= corr_t ) peaks = .false.
+        ! calculate average angular distance between peaks
+        angdist = 0.
+        cnt     = 0
+        do i = 1,self%n
+            if( .not. peaks(i) ) cycle
+            do j = 1,self%n
+                if( .not. peaks(j) .or. i == j ) cycle
+                angdist = angdist + rad2deg(self%o(i).euldist.self%o(j))
+                cnt = cnt + 1
+            end do
+        end do
+        angdist = angdist / real(cnt)
     end subroutine detect_peaks
 
     subroutine min_euldist( self, o_in, mindist )
