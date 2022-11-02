@@ -41,9 +41,11 @@ enum, bind(c)
     enumerator :: I_NEVALS    = 36
     enumerator :: I_NGEVALS   = 37
     enumerator :: I_BETTER    = 38
+    ! added Nov 2 2022
+    enumerator :: I_NPEAKS    = 39
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 38
+integer, parameter :: N_PTCL_ORIPARAMS = 39
 
 contains
 
@@ -116,7 +118,7 @@ contains
             case('ypos')
                 get_oriparam_ind = I_YPOS
             case('gid')
-                get_oriparam_ind = I_GID  
+                get_oriparam_ind = I_GID
             case('ogid')
                 get_oriparam_ind = I_OGID
             case('pind')
@@ -127,7 +129,10 @@ contains
             case('ngevals')
                 get_oriparam_ind = I_NGEVALS
             case('better')
-                get_oriparam_ind = I_BETTER  
+                get_oriparam_ind = I_BETTER
+            ! added Nov 2 2022
+            case('npeaks')
+                get_oriparam_ind = I_NPEAKS
         end select
     end function get_oriparam_ind
 
@@ -207,11 +212,14 @@ contains
                 flag ='pind'
              ! added Oct 31 2022
             case(I_NEVALS)
-                flag ='nevals' 
+                flag ='nevals'
             case(I_NGEVALS)
-                flag ='ngevals' 
+                flag ='ngevals'
             case(I_BETTER)
-                flag ='better'  
+                flag ='better'
+            ! added Nov 2 2022
+            case(I_NPEAKS)
+                flag = 'npeaks'
         end select
     end function get_oriparam_flag
 
@@ -220,60 +228,11 @@ contains
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
         logical :: is_zero
-        is_zero = .false.
-        select case(ind)
-            case(I_CLASS)
-                is_zero = abs(val) < TINY
-            case(I_CORR)
-                is_zero = abs(val) < TINY
-            case(I_DFX)
-                is_zero = abs(val) < TINY
-            case(I_DFY)
-                is_zero = abs(val) < TINY
-            case(I_EO)
-                is_zero = abs(val) < TINY
-            case(I_FRAC)
-                is_zero = abs(val) < TINY
-            case(I_INDSTK)
-                is_zero = abs(val) < TINY
-            case(I_INPL)
-                is_zero = abs(val) < TINY
-            case(I_LP)
-                is_zero = abs(val) < TINY
-            case(I_PHSHIFT)
-                is_zero = abs(val) < TINY
-            case(I_PROJ)
-                is_zero = abs(val) < TINY
-            case(I_SHINCARG)
-                is_zero = abs(val) < TINY
-            case(I_SPECSCORE)
-                is_zero = abs(val) < TINY
-            case(I_STKIND)
-                is_zero = abs(val) < TINY
-            case(I_UPDATECNT)
-                is_zero = abs(val) < TINY
-            case(I_W)
-                is_zero = abs(val) < TINY
-            case(I_X)
-                is_zero = abs(val) < TINY
-            case(I_XINCR)
-                is_zero = abs(val) < TINY
-            case(I_XPOS)
-                is_zero = abs(val) < TINY
-            case(I_Y)
-                is_zero = abs(val) < TINY
-            case(I_YINCR)
-                is_zero = abs(val) < TINY
-            case(I_YPOS)
-                is_zero = abs(val) < TINY
-            case(I_GID)
-                is_zero = abs(val) < TINY
-            case(I_OGID)
-                is_zero = abs(val) < TINY
-            case(I_PIND)
-                is_zero = abs(val) < TINY 
-        end select
-        oriparam_isthere = .not. is_zero
+        if( ind > N_PTCL_ORIPARAMS .or. ind < 1 )then
+            oriparam_isthere = .false.
+        else
+            oriparam_isthere = .not. abs(val) < TINY
+        endif
     end function oriparam_isthere
 
 end module simple_defs_ori
