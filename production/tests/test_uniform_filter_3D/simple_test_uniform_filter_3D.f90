@@ -31,10 +31,9 @@ program simple_test_uni_filt3D
     ! setting the opt_2D filter cline
     cline_opt = cline
     call cline_opt%delete('vol')
-    call cline_opt%set('frc',       'temp.bin')
-    call cline_opt%set('smooth_ext', 8.)
-    call cline_opt%set('prg',       'uniform_filter3D')
-    call cline_opt%set('mkdir',     'yes')
+    call cline_opt%set('frc',   'temp.bin')
+    call cline_opt%set('prg',   'uniform_filter3D')
+    call cline_opt%set('mkdir', 'yes')
     call vol_noisy%new(p%ldim, p%smpd)
     call vol_clean%new(p%ldim, p%smpd)
     call noise_vol%new(p%ldim, p%smpd)
