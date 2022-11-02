@@ -57,7 +57,7 @@ contains
                 endif
             end do
             ! detect peaks
-            call build_glob%spproj_field%detect_peaks(corrs, peaks)
+            call self%s%eulspace%detect_peaks(corrs, peaks)
             call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(count(peaks)))
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
