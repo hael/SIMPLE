@@ -1016,28 +1016,28 @@ contains
         frcsfname  = get_fbody(FRCS_FILE, BIN_EXT, separator=.false.)
         call pool_proj%projinfo%set(1,'projname', projfname)
         projfile   = trim(projfname)//trim(METADATA_EXT)
+        call pool_proj%projinfo%set(1,'projfile', projfile)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-        if( snapshot )then
+        if( snapshot .and. do_autoscale )then
             cavgsfname = trim(SNAPSHOT_DIR)//trim(cavgsfname)
             frcsfname  = trim(SNAPSHOT_DIR)//trim(frcsfname)
-        endif
-        call pool_proj%projinfo%set(1,'projfile', projfile)
-        ! removing previous snapshot
-        if( (trim(prev_snapshot_cavgs) /= '') .and. snapshot)then
-            call del_file(prev_snapshot_frcs)
-            call del_file(prev_snapshot_cavgs)
-            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
-            call del_file(src)
-            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
-            call del_file(src)
-            if( l_wfilt )then
-                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX))
+            if( (trim(prev_snapshot_cavgs) /= '') )then
+                ! removing previous snapshot
+                call del_file(prev_snapshot_frcs)
+                call del_file(prev_snapshot_cavgs)
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
                 call del_file(src)
-                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_even')
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
                 call del_file(src)
-                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_odd')
-                call del_file(src)
+                if( l_wfilt )then
+                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX))
+                    call del_file(src)
+                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_even')
+                    call del_file(src)
+                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_odd')
+                    call del_file(src)
+                endif
             endif
         endif
         write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
