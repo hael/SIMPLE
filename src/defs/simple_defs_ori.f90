@@ -2,50 +2,51 @@ module simple_defs_ori
 implicit none
 
 enum, bind(c)
-    enumerator :: I_ANGAST    = 1
-    enumerator :: I_CLASS     = 2
-    enumerator :: I_CORR      = 3
-    enumerator :: I_DFX       = 4
-    enumerator :: I_DFY       = 5
-    enumerator :: I_DIST      = 6
-    enumerator :: I_DIST_INPL = 7
-    enumerator :: I_E1        = 8
-    enumerator :: I_E2        = 9
-    enumerator :: I_E3        = 10
-    enumerator :: I_EO        = 11
-    enumerator :: I_FRAC      = 12
-    enumerator :: I_INDSTK    = 13
-    enumerator :: I_INPL      = 14
-    enumerator :: I_LP        = 15
-    enumerator :: I_MI_CLASS  = 16
-    enumerator :: I_MI_PROJ   = 17
-    enumerator :: I_MI_STATE  = 18
-    enumerator :: I_PHSHIFT   = 19
-    enumerator :: I_PROJ      = 20
-    enumerator :: I_SHINCARG  = 21
-    enumerator :: I_SPECSCORE = 22
-    enumerator :: I_STATE     = 23
-    enumerator :: I_STKIND    = 24
-    enumerator :: I_UPDATECNT = 25
-    enumerator :: I_W         = 26
-    enumerator :: I_X         = 27
-    enumerator :: I_XINCR     = 28
-    enumerator :: I_XPOS      = 29
-    enumerator :: I_Y         = 30
-    enumerator :: I_YINCR     = 31
-    enumerator :: I_YPOS      = 32
-    enumerator :: I_GID       = 33
-    enumerator :: I_OGID      = 34
-    enumerator :: I_PIND      = 35
+    enumerator :: I_ANGAST     = 1
+    enumerator :: I_CLASS      = 2
+    enumerator :: I_CORR       = 3
+    enumerator :: I_DFX        = 4
+    enumerator :: I_DFY        = 5
+    enumerator :: I_DIST       = 6
+    enumerator :: I_DIST_INPL  = 7
+    enumerator :: I_E1         = 8
+    enumerator :: I_E2         = 9
+    enumerator :: I_E3         = 10
+    enumerator :: I_EO         = 11
+    enumerator :: I_FRAC       = 12
+    enumerator :: I_INDSTK     = 13
+    enumerator :: I_INPL       = 14
+    enumerator :: I_LP         = 15
+    enumerator :: I_MI_CLASS   = 16
+    enumerator :: I_MI_PROJ    = 17
+    enumerator :: I_MI_STATE   = 18
+    enumerator :: I_PHSHIFT    = 19
+    enumerator :: I_PROJ       = 20
+    enumerator :: I_SHINCARG   = 21
+    enumerator :: I_SPECSCORE  = 22
+    enumerator :: I_STATE      = 23
+    enumerator :: I_STKIND     = 24
+    enumerator :: I_UPDATECNT  = 25
+    enumerator :: I_W          = 26
+    enumerator :: I_X          = 27
+    enumerator :: I_XINCR      = 28
+    enumerator :: I_XPOS       = 29
+    enumerator :: I_Y          = 30
+    enumerator :: I_YINCR      = 31
+    enumerator :: I_YPOS       = 32
+    enumerator :: I_GID        = 33
+    enumerator :: I_OGID       = 34
+    enumerator :: I_PIND       = 35
     ! added Oct 31 2022
-    enumerator :: I_NEVALS    = 36
-    enumerator :: I_NGEVALS   = 37
-    enumerator :: I_BETTER    = 38
+    enumerator :: I_NEVALS     = 36
+    enumerator :: I_NGEVALS    = 37
+    enumerator :: I_BETTER     = 38
     ! added Nov 2 2022
-    enumerator :: I_NPEAKS    = 39
+    enumerator :: I_NPEAKS     = 39
+    enumerator :: I_DIST_PEAKS = 40
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 39
+integer, parameter :: N_PTCL_ORIPARAMS = 40
 
 contains
 
@@ -133,6 +134,8 @@ contains
             ! added Nov 2 2022
             case('npeaks')
                 get_oriparam_ind = I_NPEAKS
+            case('dist_peaks')
+                get_oriparam_ind = I_DIST_PEAKS
         end select
     end function get_oriparam_ind
 
@@ -220,6 +223,8 @@ contains
             ! added Nov 2 2022
             case(I_NPEAKS)
                 flag = 'npeaks'
+            case(I_DIST_PEAKS)
+                flag = 'dist_peaks'
         end select
     end function get_oriparam_flag
 

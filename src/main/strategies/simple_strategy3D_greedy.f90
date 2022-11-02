@@ -38,7 +38,7 @@ contains
         class(strategy3D_greedy), intent(inout) :: self
         integer,                  intent(in)    :: ithr
         integer :: iref, isample, loc(1)
-        real    :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs)
+        real    :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
         logical :: peaks(self%s%nrefs)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -57,8 +57,9 @@ contains
                 endif
             end do
             ! detect peaks
-            call self%s%eulspace%detect_peaks(corrs, peaks)
+            call self%s%eulspace%detect_peaks(corrs, peaks, angdist)
             call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(count(peaks)))
+            call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! take care of the in-planes
