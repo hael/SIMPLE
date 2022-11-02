@@ -21,6 +21,7 @@ type convergence
     type(stats_struct) :: nevals    !< # cost function evaluations
     type(stats_struct) :: ngevals   !< # gradient evaluations
     type(stats_struct) :: better    !< improvement statistics
+    type(stats_struct) :: npeaks    !< peak statistics
     type(oris)         :: ostats    !< centralize stats for writing
     real :: mi_class = 0.           !< class parameter distribution overlap
     real :: mi_proj  = 0.           !< projection parameter distribution overlap
@@ -171,6 +172,7 @@ contains
         call build_glob%spproj_field%stats('frac',      self%frac_srch, mask=mask)
         call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
         call build_glob%spproj_field%stats('shincarg',  self%shincarg,  mask=mask)
+        call build_glob%spproj_field%stats('npeaks',    self%npeaks,    mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
@@ -191,6 +193,8 @@ contains
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
         &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:',&
+        &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
