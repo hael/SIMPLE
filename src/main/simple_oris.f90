@@ -2703,7 +2703,7 @@ contains
             do j=1,self%n
                 inds(j) = j
                 if( i == j )then
-                    dists(j) = 0.
+                    dists(j) = -0.001  ! to get self on top of the sorted list
                 else
                     dists(j) = self%o(j).euldist.o
                 endif
