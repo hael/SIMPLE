@@ -167,16 +167,16 @@ contains
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
-        call build_glob%spproj_field%stats('corr',       self%corr,      mask=mask)
-        call build_glob%spproj_field%stats('dist',       self%dist,      mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl, mask=mask)
-        call build_glob%spproj_field%stats('dist_peaks', self%dist_inpl, mask=mask)
-        call build_glob%spproj_field%stats('frac',       self%frac_srch, mask=mask)
-        call build_glob%spproj_field%stats('w',          self%pw,        mask=mask)
-        call build_glob%spproj_field%stats('shincarg',   self%shincarg,  mask=mask)
-        call build_glob%spproj_field%stats('npeaks',     self%npeaks,    mask=mask)
-        self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
-        self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)
+        call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
+        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask)
+        call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
+        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
+        call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
+        call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
+        self%mi_proj  = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
+        self%mi_state = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
@@ -199,7 +199,6 @@ contains
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
         &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
-
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
