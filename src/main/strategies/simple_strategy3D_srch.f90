@@ -25,6 +25,7 @@ type strategy3D_srch
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
+    type(oris)              :: eulspace                  !< copy of build_glob%eulspace, needed for peak detection
     integer                 :: iptcl         = 0         !< global particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
@@ -144,6 +145,7 @@ contains
         lims_init(:,1)     = -SHC_INPL_TRSHWDTH
         lims_init(:,2)     =  SHC_INPL_TRSHWDTH
         call self%o_prev%new(.true.)
+        call self%eulspace%copy(build_glob%eulspace, is_ptcl=.false.)
         ! create in-plane search object
         if( params_glob%l_cartesian )then
             self%nrots = params_glob%nrots
@@ -272,6 +274,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
         call self%o_prev%kill
+        call self%eulspace%kill
     end subroutine kill
 
 end module simple_strategy3D_srch
