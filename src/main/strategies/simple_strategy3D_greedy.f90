@@ -37,9 +37,10 @@ contains
     subroutine srch_greedy( self, ithr )
         class(strategy3D_greedy), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        integer :: iref, isample, loc(1)
-        real    :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
-        logical :: peaks(self%s%nrefs)
+        type(ori) :: osym, oi, oj
+        integer   :: iref, isample, loc(1), cnt, npeaks, i, j
+        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist, euldist, dist_inpl
+        logical   :: peaks(self%s%nrefs)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -62,8 +63,27 @@ contains
             ! prepare orientation
             call self%oris_assign()
             ! detect peaks
-            call self%s%eulspace%detect_peaks(corrs, peaks, angdist)
-            call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(count(peaks)))
+            call self%s%eulspace%detect_peaks(corrs, peaks)
+            npeaks = count(peaks)
+            call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(npeaks))
+            angdist = 0.
+            if( npeaks > 0 )then
+                ! calculate average angular distance between peaks
+                angdist = 0.
+                cnt     = 0
+                do i = 1,self%s%nrefs
+                    if( .not. peaks(i) ) cycle
+                    call self%s%eulspace%get_ori(i, oi)
+                    do j = 1,self%s%nrefs
+                        if( .not. peaks(j) .or. i == j ) cycle
+                        call self%s%eulspace%get_ori(j, oj)
+                        call build_glob%pgrpsyms%sym_dists(oi, oj, osym, euldist, dist_inpl)
+                        angdist = angdist + euldist
+                        cnt = cnt + 1
+                    end do
+                end do
+                if( cnt > 0 ) angdist = angdist / real(cnt)
+            endif
             call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

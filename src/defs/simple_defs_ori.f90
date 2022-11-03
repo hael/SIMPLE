@@ -58,6 +58,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
+integer, parameter :: N_NON_EMPTY      = 40
 
 contains
 
@@ -236,6 +237,8 @@ contains
                 flag = 'npeaks'
             case(I_DIST_PEAKS)
                 flag = 'dist_peaks'
+            case DEFAULT
+                flag = 'empty'
         end select
     end function get_oriparam_flag
 
@@ -243,7 +246,9 @@ contains
         integer, intent(in) :: ind
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
-        oriparam_isthere = .not. (abs(val) < TINY) 
+        oriparam_isthere = .false.
+        if( ind < 1 .or. ind > N_NON_EMPTY ) return
+        oriparam_isthere = abs(val) > TINY 
     end function oriparam_isthere
 
 end module simple_defs_ori

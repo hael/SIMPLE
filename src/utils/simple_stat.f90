@@ -8,7 +8,7 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax, stdev
+public :: moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, stdev
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
@@ -232,6 +232,51 @@ contains
             sdev = 0.
         endif
     end subroutine moment_4
+
+    subroutine moment_serial( data, ave, sdev, var, err, mask )
+        real,    intent(out) :: ave, sdev, var
+        logical, intent(out) :: err
+        real,    intent(in)  :: data(:)
+        logical, intent(in)  :: mask(:)
+        integer  :: n, i, sz
+        real     :: nr, dev, abs_var
+        real(dp) :: ep_dp, var_dp
+        err  = .false.
+        sz   = size(data)
+        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
+        n    = count(mask)
+        nr   = real(n)
+        ave  = 0.
+        sdev = 0.
+        var  = 0.
+        if( n < 2 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
+        endif
+        ! calc average
+        ave = sum(real(data,dp), mask=mask)/real(n,dp)
+        ! calc sum of devs and sum of devs squared
+        ep_dp  = 0._dp
+        var_dp = 0._dp
+        do i=1,sz
+            if( mask(i) )then
+                dev = data(i) - ave
+                ep_dp  = ep_dp + real(dev,dp)
+                var_dp = var_dp + real(dev*dev,dp)
+            endif
+        end do
+        var = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
+        sdev = 0.
+        if( var > 0. ) sdev = sqrt(var)
+        if( abs(var) < TINY )then
+            if( var < 0. )then
+                err  = .true.
+                ave  = 0.
+            endif
+            var  = 0.
+            sdev = 0.
+        endif
+    end subroutine moment_serial
 
     function pearsn_1( x, y ) result( r )
         real, intent(in) :: x(:),y(:)

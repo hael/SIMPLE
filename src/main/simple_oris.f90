@@ -170,7 +170,8 @@ type :: oris
     generic            :: median => median_1
     procedure, private :: stats_1
     procedure, private :: stats_2
-    generic            :: stats => stats_1, stats_2
+    procedure, private :: stats_3
+    generic            :: stats => stats_1, stats_2, stats_3
     procedure          :: minmax
     procedure          :: spiral_1
     procedure          :: spiral_2
@@ -2252,6 +2253,49 @@ contains
         deallocate(states, vals)
     end subroutine stats_2
 
+    !>  \brief  is for calculating variable statistics
+    subroutine stats_3( self, which, statvars, mask, nozero )
+        class(oris),           intent(inout) :: self
+        character(len=KEYLEN), intent(in)    :: which(:)
+        type(stats_struct),    intent(inout) :: statvars(:)
+        logical,               intent(in)    :: mask(self%n)
+        logical, optional,     intent(in)    :: nozero(:)
+        real,    allocatable :: vals(:,:), absvals(:,:)
+        logical, allocatable :: nnozero(:)
+        logical :: err
+        real    :: var
+        integer :: i, j, nvars
+        nvars = size(which)
+        if( present(nozero) )then
+            if( nvars /= size(statvars) .or. nvars /= size(nozero) ) THROW_HARD('Nonconforming array sizes')
+            allocate(nnozero(nvars), source=nozero)
+        else
+            if( nvars /= size(statvars) )                            THROW_HARD('Nonconforming array sizes')
+            allocate(nnozero(nvars), source=.false.)
+        endif
+        allocate(vals(nvars,self%n), absvals(nvars,self%n), source=0.)
+        !$omp parallel do default(shared) proc_bind(close) private(i,j) collapse(2)
+        do i = 1,nvars
+            do j = 1,self%n
+                vals(i,j) = self%o(j)%get(trim(which(i)))
+            end do
+        enddo
+        !$omp end parallel do
+        absvals = abs(vals)
+        do i = 1,nvars
+            if( nnozero(i) )then
+                call moment_serial(vals(i,:), statvars(i)%avg, statvars(i)%sdev, var, err, mask=mask .and. absvals(i,:) > TINY)
+                statvars%minv = minval(vals(i,:), mask=mask .and. absvals(i,:) > TINY)
+                statvars%maxv = maxval(vals(i,:), mask=mask .and. absvals(i,:) > TINY)
+            else
+                call moment_serial(vals(i,:), statvars(i)%avg, statvars(i)%sdev, var, err, mask=mask)
+                statvars%minv = minval(vals(i,:), mask=mask)
+                statvars%maxv = maxval(vals(i,:), mask=mask)
+            endif
+        end do
+        deallocate(vals, absvals)
+    end subroutine stats_3
+
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
         class(oris),      intent(inout) :: self
@@ -2780,42 +2824,32 @@ contains
         end do
     end subroutine nearest_proj_neighbors_4
 
-    subroutine detect_peaks( self, corrs, peaks, angdist )
+    subroutine detect_peaks( self, corrs, peaks )
         class(oris), intent(inout) :: self
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
-        real,        intent(inout) :: angdist
         real, allocatable :: corrs_packed(:)
-        integer :: i, j, cnt, nnmat(self%n,4) ! 4 because "self" is included
+        integer :: i, j, nnmat(self%n,4) ! 4 because "self" is included
         real    :: corr_t
         ! dentify the three nearest projection neighbors
         call self%nearest_proj_neighbors_1(4, nnmat)
         do i = 1,self%n
             if( i /= nnmat(i,1) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
         end do
-        ! search for peaks
-        peaks(:) = .false.
-        do i = 1,self%n
-            if( corrs(nnmat(i,1)) > corrs(nnmat(i,2)) .and.&
-               &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
-               &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
-        end do
         ! good/bad binning with Otsu's algorithm
         corrs_packed = pack(corrs, mask=peaks)
         call otsu(corrs_packed, corr_t)
-        where( corrs <= corr_t ) peaks = .false.
-        ! calculate average angular distance between peaks
-        angdist = 0.
-        cnt     = 0
+        deallocate(corrs_packed)
+        ! search for peaks
+        peaks(:) = .false.
         do i = 1,self%n
-            if( .not. peaks(i) ) cycle
-            do j = 1,self%n
-                if( .not. peaks(j) .or. i == j ) cycle
-                angdist = angdist + rad2deg(self%o(i).euldist.self%o(j))
-                cnt = cnt + 1
-            end do
+            if( corrs(nnmat(i,1)) > corr_t )then
+                if( corrs(nnmat(i,1)) > corrs(nnmat(i,2)) .and.&
+                &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
+                &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
+            endif
         end do
-        angdist = angdist / real(cnt)
+        
     end subroutine detect_peaks
 
     subroutine min_euldist( self, o_in, mindist )
