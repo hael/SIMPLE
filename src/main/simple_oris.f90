@@ -191,7 +191,6 @@ type :: oris
     procedure, private :: nearest_proj_neighbors_3
     procedure, private :: nearest_proj_neighbors_4
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3, nearest_proj_neighbors_4
-
     procedure          :: detect_peaks
     procedure          :: min_euldist
     procedure          :: find_angres
@@ -319,7 +318,7 @@ contains
     end function get_noris
 
     subroutine get_ori( self, i, o )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(inout) :: o
         if( self%n == 0 ) THROW_HARD('oris object does not exist; get_ori')
@@ -332,8 +331,8 @@ contains
 
     pure function get( self, i, key ) result( val )
         class(oris),      intent(in) :: self
-        integer,          intent(in) :: i
-        character(len=*), intent(in) :: key
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
         real :: val
         val = self%o(i)%get(key)
     end function get
@@ -2244,7 +2243,7 @@ contains
             nnozero = .false.
         endif
         states = self%get_all('state')
-        mmask  = mmask .and. states > 0.5
+        mmask  = mmask .and. states > 0.5   
         vals   = self%get_all(which)
         if( nnozero ) mmask = mmask .and. vals(:) > TINY
         call moment(vals, statvars%avg, statvars%sdev, var, err, mmask)
@@ -2691,10 +2690,10 @@ contains
 
     !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
     subroutine nearest_proj_neighbors_1( self, k, nnmat )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         integer,     intent(in)    :: k
         integer,     intent(inout) :: nnmat(self%n,k)
-        real      :: dists(self%n)
+        real      :: dists(self%n), x
         integer   :: inds(self%n), i, j
         type(ori) :: o
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
@@ -2703,7 +2702,7 @@ contains
             do j=1,self%n
                 inds(j) = j
                 if( i == j )then
-                    dists(j) = -0.001  ! to get self on top of the sorted list
+                    dists(j) = -huge(x)
                 else
                     dists(j) = self%o(j).euldist.o
                 endif
@@ -2719,7 +2718,7 @@ contains
     !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
     !!          self is search space with finer angular resolution
     subroutine nearest_proj_neighbors_2( self, o_in, k, lnns )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o_in
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
@@ -2740,7 +2739,7 @@ contains
 
     !>  \brief  to identify the nearest projection neighbors based on euldist threshold
     subroutine nearest_proj_neighbors_3( self, o, euldist_thres, lnns )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o
         real,        intent(in)    :: euldist_thres ! in degrees
         logical,     intent(inout) :: lnns(self%n)
@@ -2760,7 +2759,7 @@ contains
 
     !>  \brief  to identify the nearest projection neighbors based on nearest neigh matrix and euldist threshold
     subroutine nearest_proj_neighbors_4( self, os_cls, icls, nnn, nnmat, euldist_thres, lnns )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         class(oris), intent(in)    :: os_cls
         integer,     intent(in)    :: icls, nnn, nnmat(os_cls%n,nnn)
         real,        intent(in)    :: euldist_thres ! in degrees
@@ -2782,7 +2781,7 @@ contains
     end subroutine nearest_proj_neighbors_4
 
     subroutine detect_peaks( self, corrs, peaks, angdist )
-        class(oris), intent(in)    :: self
+        class(oris), intent(inout) :: self
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real,        intent(inout) :: angdist
