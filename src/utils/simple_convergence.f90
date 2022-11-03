@@ -12,22 +12,20 @@ private
 
 type convergence
     private
-    type(stats_struct) :: corr       !< correlation stats
-    type(stats_struct) :: dist       !< angular distance stats
-    type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
-    type(stats_struct) :: dist_peaks !< average angular distance between peaks
-    type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
-    type(stats_struct) :: shincarg   !< shift increment
-    type(stats_struct) :: pw         !< particle weight stats
-    type(stats_struct) :: nevals     !< # cost function evaluations
-    type(stats_struct) :: ngevals    !< # gradient evaluations
-    type(stats_struct) :: better     !< improvement statistics
-    type(stats_struct) :: npeaks     !< peak statistics
-    type(oris)         :: ostats     !< centralize stats for writing
-    real :: mi_class = 0.            !< class parameter distribution overlap
-    real :: mi_proj  = 0.            !< projection parameter distribution overlap
-    real :: mi_state = 0.            !< state parameter distribution overlap
-    real :: progress = 0.            !< progress estimation
+    type(stats_struct) :: corr      !< correlation stats
+    type(stats_struct) :: dist      !< angular distance stats
+    type(stats_struct) :: dist_inpl !< in-plane angular distance stats
+    type(stats_struct) :: frac_srch !< fraction of search space scanned stats
+    type(stats_struct) :: shincarg  !< shift increment
+    type(stats_struct) :: pw        !< particle weight stats
+    type(stats_struct) :: nevals    !< # cost function evaluations
+    type(stats_struct) :: ngevals   !< # gradient evaluations
+    type(stats_struct) :: better    !< improvement statistics
+    type(oris)         :: ostats    !< centralize stats for writing
+    real :: mi_class = 0.           !< class parameter distribution overlap
+    real :: mi_proj  = 0.           !< projection parameter distribution overlap
+    real :: mi_state = 0.           !< state parameter distribution overlap
+    real :: progress = 0.           !< progress estimation
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -167,16 +165,14 @@ contains
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
-        call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)
-        call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
-        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask)
-        call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
-        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
-        call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
-        call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
-        self%mi_proj  = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
-        self%mi_state = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
+        call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
+        call build_glob%spproj_field%stats('frac',      self%frac_srch, mask=mask)
+        call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
+        call build_glob%spproj_field%stats('shincarg',  self%shincarg,  mask=mask)
+        self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
+        self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
@@ -186,10 +182,6 @@ contains
         &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:',&
         &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:',&
-        &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
-        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:',&
         &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw

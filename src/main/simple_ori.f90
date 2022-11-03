@@ -202,8 +202,10 @@ contains
         if( self_out%is_ptcl.neqv.self_in%is_ptcl )then
             if( self_in%is_ptcl )then
                 do i=1,N_PTCL_ORIPARAMS
-                    key = get_oriparam_flag(i)
-                    call self_out%set(trim(key), self_in%pparms(i))
+                    if( oriparam_isthere(i, self_in%pparms(i)) )then
+                        key = get_oriparam_flag(i)
+                        call self_out%set(trim(key), self_in%pparms(i))
+                    endif
                 end do
             else ! self_out is ptcl, self_in is not
                 sz   = self_in%htab%size_of()

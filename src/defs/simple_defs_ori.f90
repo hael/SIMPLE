@@ -2,51 +2,48 @@ module simple_defs_ori
 implicit none
 
 enum, bind(c)
-    enumerator :: I_ANGAST     = 1
-    enumerator :: I_CLASS      = 2
-    enumerator :: I_CORR       = 3
-    enumerator :: I_DFX        = 4
-    enumerator :: I_DFY        = 5
-    enumerator :: I_DIST       = 6
-    enumerator :: I_DIST_INPL  = 7
-    enumerator :: I_E1         = 8
-    enumerator :: I_E2         = 9
-    enumerator :: I_E3         = 10
-    enumerator :: I_EO         = 11
-    enumerator :: I_FRAC       = 12
-    enumerator :: I_INDSTK     = 13
-    enumerator :: I_INPL       = 14
-    enumerator :: I_LP         = 15
-    enumerator :: I_MI_CLASS   = 16
-    enumerator :: I_MI_PROJ    = 17
-    enumerator :: I_MI_STATE   = 18
-    enumerator :: I_PHSHIFT    = 19
-    enumerator :: I_PROJ       = 20
-    enumerator :: I_SHINCARG   = 21
-    enumerator :: I_SPECSCORE  = 22
-    enumerator :: I_STATE      = 23
-    enumerator :: I_STKIND     = 24
-    enumerator :: I_UPDATECNT  = 25
-    enumerator :: I_W          = 26
-    enumerator :: I_X          = 27
-    enumerator :: I_XINCR      = 28
-    enumerator :: I_XPOS       = 29
-    enumerator :: I_Y          = 30
-    enumerator :: I_YINCR      = 31
-    enumerator :: I_YPOS       = 32
-    enumerator :: I_GID        = 33
-    enumerator :: I_OGID       = 34
-    enumerator :: I_PIND       = 35
+    enumerator :: I_ANGAST    = 1
+    enumerator :: I_CLASS     = 2
+    enumerator :: I_CORR      = 3
+    enumerator :: I_DFX       = 4
+    enumerator :: I_DFY       = 5
+    enumerator :: I_DIST      = 6
+    enumerator :: I_DIST_INPL = 7
+    enumerator :: I_E1        = 8
+    enumerator :: I_E2        = 9
+    enumerator :: I_E3        = 10
+    enumerator :: I_EO        = 11
+    enumerator :: I_FRAC      = 12
+    enumerator :: I_INDSTK    = 13
+    enumerator :: I_INPL      = 14
+    enumerator :: I_LP        = 15
+    enumerator :: I_MI_CLASS  = 16
+    enumerator :: I_MI_PROJ   = 17
+    enumerator :: I_MI_STATE  = 18
+    enumerator :: I_PHSHIFT   = 19
+    enumerator :: I_PROJ      = 20
+    enumerator :: I_SHINCARG  = 21
+    enumerator :: I_SPECSCORE = 22
+    enumerator :: I_STATE     = 23
+    enumerator :: I_STKIND    = 24
+    enumerator :: I_UPDATECNT = 25
+    enumerator :: I_W         = 26
+    enumerator :: I_X         = 27
+    enumerator :: I_XINCR     = 28
+    enumerator :: I_XPOS      = 29
+    enumerator :: I_Y         = 30
+    enumerator :: I_YINCR     = 31
+    enumerator :: I_YPOS      = 32
+    enumerator :: I_GID       = 33
+    enumerator :: I_OGID      = 34
+    enumerator :: I_PIND      = 35
     ! added Oct 31 2022
-    enumerator :: I_NEVALS     = 36
-    enumerator :: I_NGEVALS    = 37
-    enumerator :: I_BETTER     = 38
-    ! added Nov 2 2022
-    enumerator :: I_NPEAKS     = 39
-    enumerator :: I_DIST_PEAKS = 40
+    enumerator :: I_NEVALS    = 36
+    enumerator :: I_NGEVALS   = 37
+    enumerator :: I_BETTER    = 38
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 40
+integer, parameter :: N_PTCL_ORIPARAMS = 38
 
 contains
 
@@ -119,7 +116,7 @@ contains
             case('ypos')
                 get_oriparam_ind = I_YPOS
             case('gid')
-                get_oriparam_ind = I_GID
+                get_oriparam_ind = I_GID  
             case('ogid')
                 get_oriparam_ind = I_OGID
             case('pind')
@@ -130,12 +127,7 @@ contains
             case('ngevals')
                 get_oriparam_ind = I_NGEVALS
             case('better')
-                get_oriparam_ind = I_BETTER
-            ! added Nov 2 2022
-            case('npeaks')
-                get_oriparam_ind = I_NPEAKS
-            case('dist_peaks')
-                get_oriparam_ind = I_DIST_PEAKS
+                get_oriparam_ind = I_BETTER  
         end select
     end function get_oriparam_ind
 
@@ -215,16 +207,11 @@ contains
                 flag ='pind'
              ! added Oct 31 2022
             case(I_NEVALS)
-                flag ='nevals'
+                flag ='nevals' 
             case(I_NGEVALS)
-                flag ='ngevals'
+                flag ='ngevals' 
             case(I_BETTER)
-                flag ='better'
-            ! added Nov 2 2022
-            case(I_NPEAKS)
-                flag = 'npeaks'
-            case(I_DIST_PEAKS)
-                flag = 'dist_peaks'
+                flag ='better'  
         end select
     end function get_oriparam_flag
 
@@ -232,12 +219,61 @@ contains
         integer, intent(in) :: ind
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
-        logical :: is_zero
-        if( ind > N_PTCL_ORIPARAMS .or. ind < 1 )then
-            oriparam_isthere = .false.
-        else
-            oriparam_isthere = .not. abs(val) < TINY
-        endif
+        ! logical :: is_zero
+        ! is_zero = .false.
+        ! select case(ind)
+        !     case(I_CLASS)
+        !         is_zero = abs(val) < TINY
+        !     case(I_CORR)
+        !         is_zero = abs(val) < TINY
+        !     case(I_DFX)
+        !         is_zero = abs(val) < TINY
+        !     case(I_DFY)
+        !         is_zero = abs(val) < TINY
+        !     case(I_EO)
+        !         is_zero = abs(val) < TINY
+        !     case(I_FRAC)
+        !         is_zero = abs(val) < TINY
+        !     case(I_INDSTK)
+        !         is_zero = abs(val) < TINY
+        !     case(I_INPL)
+        !         is_zero = abs(val) < TINY
+        !     case(I_LP)
+        !         is_zero = abs(val) < TINY
+        !     case(I_PHSHIFT)
+        !         is_zero = abs(val) < TINY
+        !     case(I_PROJ)
+        !         is_zero = abs(val) < TINY
+        !     case(I_SHINCARG)
+        !         is_zero = abs(val) < TINY
+        !     case(I_SPECSCORE)
+        !         is_zero = abs(val) < TINY
+        !     case(I_STKIND)
+        !         is_zero = abs(val) < TINY
+        !     case(I_UPDATECNT)
+        !         is_zero = abs(val) < TINY
+        !     case(I_W)
+        !         is_zero = abs(val) < TINY
+        !     case(I_X)
+        !         is_zero = abs(val) < TINY
+        !     case(I_XINCR)
+        !         is_zero = abs(val) < TINY
+        !     case(I_XPOS)
+        !         is_zero = abs(val) < TINY
+        !     case(I_Y)
+        !         is_zero = abs(val) < TINY
+        !     case(I_YINCR)
+        !         is_zero = abs(val) < TINY
+        !     case(I_YPOS)
+        !         is_zero = abs(val) < TINY
+        !     case(I_GID)
+        !         is_zero = abs(val) < TINY
+        !     case(I_OGID)
+        !         is_zero = abs(val) < TINY
+        !     case(I_PIND)
+        !         is_zero = abs(val) < TINY 
+        ! end select
+        oriparam_isthere = .not. (abs(val) < TINY) 
     end function oriparam_isthere
 
 end module simple_defs_ori

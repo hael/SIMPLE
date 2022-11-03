@@ -29,17 +29,16 @@ contains
 
     subroutine new_greedy( self, spec )
         class(strategy3D_greedy), intent(inout) :: self
-        class(strategy3D_spec),   intent(inout) :: spec
+        class(strategy3D_spec),         intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
     end subroutine new_greedy
 
     subroutine srch_greedy( self, ithr )
         class(strategy3D_greedy), intent(inout) :: self
-        integer,                  intent(in)    :: ithr
+        integer,                        intent(in)    :: ithr
         integer :: iref, isample, loc(1)
-        real    :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
-        logical :: peaks(self%s%nrefs)
+        real    :: inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -53,13 +52,8 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                    corrs(iref) = inpl_corrs(loc(1))
                 endif
             end do
-            ! detect peaks
-            call self%s%eulspace%detect_peaks(corrs, peaks, angdist)
-            call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(count(peaks)))
-            call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! take care of the in-planes
