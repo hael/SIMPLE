@@ -29,16 +29,17 @@ contains
 
     subroutine new_greedy( self, spec )
         class(strategy3D_greedy), intent(inout) :: self
-        class(strategy3D_spec),         intent(inout) :: spec
+        class(strategy3D_spec),   intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
     end subroutine new_greedy
 
     subroutine srch_greedy( self, ithr )
         class(strategy3D_greedy), intent(inout) :: self
-        integer,                        intent(in)    :: ithr
+        integer,                  intent(in)    :: ithr
         integer :: iref, isample, loc(1)
-        real    :: inpl_corrs(self%s%nrots)
+        real    :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
+        logical :: peaks(self%s%nrefs)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -60,6 +61,10 @@ contains
             call self%s%inpl_srch
             ! prepare orientation
             call self%oris_assign()
+            ! detect peaks
+            call self%s%eulspace%detect_peaks(corrs, peaks, angdist)
+            call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(count(peaks)))
+            call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

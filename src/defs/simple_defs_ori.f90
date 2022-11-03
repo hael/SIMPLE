@@ -41,9 +41,12 @@ enum, bind(c)
     enumerator :: I_NEVALS    = 36
     enumerator :: I_NGEVALS   = 37
     enumerator :: I_BETTER    = 38
+    ! added Nov 2 2022
+    enumerator :: I_NPEAKS     = 39
+    enumerator :: I_DIST_PEAKS = 40
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 38
+integer, parameter :: N_PTCL_ORIPARAMS = 40
 
 contains
 
@@ -127,7 +130,12 @@ contains
             case('ngevals')
                 get_oriparam_ind = I_NGEVALS
             case('better')
-                get_oriparam_ind = I_BETTER  
+                get_oriparam_ind = I_BETTER
+            ! added Nov 2 2022
+            case('npeaks')
+                get_oriparam_ind = I_NPEAKS
+            case('dist_peaks')
+                get_oriparam_ind = I_DIST_PEAKS
         end select
     end function get_oriparam_ind
 
@@ -211,7 +219,12 @@ contains
             case(I_NGEVALS)
                 flag ='ngevals' 
             case(I_BETTER)
-                flag ='better'  
+                flag ='better'
+            ! added Nov 2 2022
+            case(I_NPEAKS)
+                flag = 'npeaks'
+            case(I_DIST_PEAKS)
+                flag = 'dist_peaks'
         end select
     end function get_oriparam_flag
 
@@ -219,60 +232,6 @@ contains
         integer, intent(in) :: ind
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
-        ! logical :: is_zero
-        ! is_zero = .false.
-        ! select case(ind)
-        !     case(I_CLASS)
-        !         is_zero = abs(val) < TINY
-        !     case(I_CORR)
-        !         is_zero = abs(val) < TINY
-        !     case(I_DFX)
-        !         is_zero = abs(val) < TINY
-        !     case(I_DFY)
-        !         is_zero = abs(val) < TINY
-        !     case(I_EO)
-        !         is_zero = abs(val) < TINY
-        !     case(I_FRAC)
-        !         is_zero = abs(val) < TINY
-        !     case(I_INDSTK)
-        !         is_zero = abs(val) < TINY
-        !     case(I_INPL)
-        !         is_zero = abs(val) < TINY
-        !     case(I_LP)
-        !         is_zero = abs(val) < TINY
-        !     case(I_PHSHIFT)
-        !         is_zero = abs(val) < TINY
-        !     case(I_PROJ)
-        !         is_zero = abs(val) < TINY
-        !     case(I_SHINCARG)
-        !         is_zero = abs(val) < TINY
-        !     case(I_SPECSCORE)
-        !         is_zero = abs(val) < TINY
-        !     case(I_STKIND)
-        !         is_zero = abs(val) < TINY
-        !     case(I_UPDATECNT)
-        !         is_zero = abs(val) < TINY
-        !     case(I_W)
-        !         is_zero = abs(val) < TINY
-        !     case(I_X)
-        !         is_zero = abs(val) < TINY
-        !     case(I_XINCR)
-        !         is_zero = abs(val) < TINY
-        !     case(I_XPOS)
-        !         is_zero = abs(val) < TINY
-        !     case(I_Y)
-        !         is_zero = abs(val) < TINY
-        !     case(I_YINCR)
-        !         is_zero = abs(val) < TINY
-        !     case(I_YPOS)
-        !         is_zero = abs(val) < TINY
-        !     case(I_GID)
-        !         is_zero = abs(val) < TINY
-        !     case(I_OGID)
-        !         is_zero = abs(val) < TINY
-        !     case(I_PIND)
-        !         is_zero = abs(val) < TINY 
-        ! end select
         oriparam_isthere = .not. (abs(val) < TINY) 
     end function oriparam_isthere
 
