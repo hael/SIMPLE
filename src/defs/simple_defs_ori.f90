@@ -44,9 +44,20 @@ enum, bind(c)
     ! added Nov 2 2022
     enumerator :: I_NPEAKS     = 39
     enumerator :: I_DIST_PEAKS = 40
+    ! added Noiv3 2022
+    enumerator :: I_EMPTY1     = 41
+    enumerator :: I_EMPTY2     = 42
+    enumerator :: I_EMPTY3     = 43
+    enumerator :: I_EMPTY4     = 44
+    enumerator :: I_EMPTY5     = 45
+    enumerator :: I_EMPTY6     = 46
+    enumerator :: I_EMPTY7     = 47
+    enumerator :: I_EMPTY8     = 48
+    enumerator :: I_EMPTY9     = 49
+    enumerator :: I_EMPTY10    = 50
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 40
+integer, parameter :: N_PTCL_ORIPARAMS = 50
 
 contains
 
