@@ -158,11 +158,9 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-<<<<<<< HEAD
-call simple_print_git_version('ebebd94')
-=======
-call simple_print_git_version('6faa822')
->>>>>>> Forgot to add these two files to previous commit
+
+call simple_print_git_version('c6e0555')
+
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
