@@ -18,6 +18,7 @@ real,             parameter :: CORR_THRES_SIGMA    = -2.0    ! sigma for valid_c
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
+integer,          parameter :: NPARAMS_ADP         = 6       ! min # voxels for ADP calc. = # params in cov.
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
@@ -1085,7 +1086,7 @@ contains
     subroutine fillin_atominfo( self, a0 )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        type(image)          :: simatms, img_scaled, fit
+        type(image)          :: simatms, img_scaled, fit, fit_descaled
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat_raw(:,:,:), rmat_scaled(:, :, :)
@@ -1095,7 +1096,7 @@ contains
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
         integer :: i, j, k, cc, cn, n, funit, ios, scale_fac = 4, adp_tossed
-        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc"
+        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", fn_fit_descaled="fit_descaled.mrc"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
@@ -1138,11 +1139,14 @@ contains
         call self%img_raw%pad(img_scaled)
         call img_scaled%ifft()
         call self%img_raw%ifft()
-        write(logfhandle, '(A)') "SCALED VOLUME"
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY", scale_fac
         call img_scaled%get_rmat_ptr(rmat_scaled)
         ! For testing
         call img_scaled%write(fn_scaled) 
-        fit = image(ldim=scale_fac*self%ldim, smpd=self%smpd/scale_fac)
+        !fit = image(ldim=scale_fac*self%ldim, smpd=self%smpd/scale_fac)
+        !fit_descaled = image(ldim=self%ldim, smpd=self%smpd)
+        call fit%copy(img_scaled)
+        call fit_descaled%copy(self%img_raw)
         call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
         write(funit, '(i8)') self%n_cc
 
@@ -1170,7 +1174,7 @@ contains
 
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
-            if (self%atominfo(cc)%size > 6) then
+            if (self%atominfo(cc)%size > NPARAMS_ADP) then
                 call calc_anisotropic_disp_mask(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
@@ -1190,8 +1194,10 @@ contains
             cc_mask = .true.
         end do
         write(logfhandle,*) "ADP Tossed: ", adp_tossed
+        write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         ! Write test image of adp and report FSC based resolution
         call fit%write(fn_fit)
+        call fit_descaled%write(fn_fit_descaled)
 
         call fclose(funit)
         ! CALCULATE GLOBAL NP PARAMETERS
@@ -1205,7 +1211,7 @@ contains
         call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
-        call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > 6 )
+        call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1238,7 +1244,7 @@ contains
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
-                doa_mask = self%atominfo(:)%size > 6 .and. cn_mask
+                doa_mask = self%atominfo(:)%size > NPARAMS_ADP .and. cn_mask
                 n         = count(cn_mask)
                 if( n == 0 ) return
                 ! -- # atoms
@@ -1368,6 +1374,8 @@ contains
                 sigma(2, 1) = sigma(1, 2)
                 sigma(3, 1) = sigma(1, 3)
                 sigma(3, 2) = sigma(2, 3)
+                sigma = sigma * self%atominfo(cc)%size * scale_fac / &
+                    &(self%atominfo(cc)%size * scale_fac - 1) ! Apply Bessel's correction bc this is sample covariance
 
                 ! Degree of anisotropy is w1/w3 where w1 and w3 are the lengths of 
                 ! the minor and major ellipsoid axes, respectively.
@@ -1378,9 +1386,10 @@ contains
                 self%atominfo(cc)%aniso = sigma
 
                 ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
-                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :), sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
+                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :),&
+                        &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
 
-                ! Third iteration (for testing): sample the fit at each piqxel
+                ! Third iteration (for testing): sample the fit at each voxel
                 if (test_fit) then
                     A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
                     call matinv(sigma, sigma_inv, 3, errflg)
@@ -1398,8 +1407,35 @@ contains
                                         displ_T = transpose(displ)
                                         beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
                                         prob = A * exp(beta(1, 1))
-                                        call fit%set_rmat_at(x, y, z, prob)
+                                        call fit%set_rmat_at(x, y, z, prob*sum_int)
                                     end do
+                                end if
+                            end do
+                        end do
+                    end do
+                end if
+                
+                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
+                displ = 0.
+                displ_T = 0.
+                beta = 0.
+                sigma_inv = 0.
+                sigma = sigma / scale_fac**2
+                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
+                if (test_fit) then
+                    A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
+                    call matinv(sigma, sigma_inv, 3, errflg)
+                    do k=klo, khi
+                        do j=jlo, jhi
+                            do i=ilo, ihi
+                                if (mask(i, j, k)) then
+                                    displ(1, 1) = i - mu(1)
+                                    displ(2, 1) = j - mu(2)
+                                    displ(3, 1) = k - mu(3)
+                                    displ_T = transpose(displ)
+                                    beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
+                                    prob = A * exp(beta(1, 1))
+                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int)
                                 end if
                             end do
                         end do
@@ -1415,7 +1451,7 @@ contains
                 det = det - a(1, 2) * (a(2, 1)*a(3, 3) - a(2, 3)*a(3, 1))
                 det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
             end function det3by3
-            
+
     end subroutine fillin_atominfo
 
     ! calc the avg of the centers coords
