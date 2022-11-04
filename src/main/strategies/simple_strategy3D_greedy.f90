@@ -84,6 +84,8 @@ contains
                     end do
                 end do
                 if( cnt > 0 ) angdist = angdist / real(cnt)
+            endif
+            if( npeaks > 1 )then
                 ! caluclate correlation stats for peak and non-peak distributions
                 call moment_serial(corrs, cc_peak_avg,    sdev, var, err,      peaks)
                 call moment_serial(corrs, cc_nonpeak_avg, sdev, var, err, .not.peaks)

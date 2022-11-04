@@ -44,9 +44,10 @@ enum, bind(c)
     ! added Nov 2 2022
     enumerator :: I_NPEAKS     = 39
     enumerator :: I_DIST_PEAKS = 40
-    ! added Noiv3 2022
-    enumerator :: I_EMPTY1     = 41
-    enumerator :: I_EMPTY2     = 42
+    ! added Nov3 2022
+    enumerator :: I_CC_PEAK    = 41
+    enumerator :: I_CC_NONPEAK = 42
+    ! empties
     enumerator :: I_EMPTY3     = 43
     enumerator :: I_EMPTY4     = 44
     enumerator :: I_EMPTY5     = 45
@@ -58,7 +59,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 40
+integer, parameter :: N_NON_EMPTY      = 42
 
 contains
 
@@ -131,7 +132,7 @@ contains
             case('ypos')
                 get_oriparam_ind = I_YPOS
             case('gid')
-                get_oriparam_ind = I_GID  
+                get_oriparam_ind = I_GID
             case('ogid')
                 get_oriparam_ind = I_OGID
             case('pind')
@@ -148,6 +149,11 @@ contains
                 get_oriparam_ind = I_NPEAKS
             case('dist_peaks')
                 get_oriparam_ind = I_DIST_PEAKS
+            ! added Nov3 2022
+            case('cc_peak')
+                get_oriparam_ind = I_CC_PEAK
+            case('cc_nonpeak')
+                get_oriparam_ind = I_CC_NONPEAK
         end select
     end function get_oriparam_ind
 
@@ -227,9 +233,9 @@ contains
                 flag ='pind'
              ! added Oct 31 2022
             case(I_NEVALS)
-                flag ='nevals' 
+                flag ='nevals'
             case(I_NGEVALS)
-                flag ='ngevals' 
+                flag ='ngevals'
             case(I_BETTER)
                 flag ='better'
             ! added Nov 2 2022
@@ -237,6 +243,11 @@ contains
                 flag = 'npeaks'
             case(I_DIST_PEAKS)
                 flag = 'dist_peaks'
+            ! added Nov3 2022
+            case(I_CC_PEAK)
+                flag = 'cc_peak'
+            case(I_CC_NONPEAK)
+                flag = 'cc_nonpeak'
             case DEFAULT
                 flag = 'empty'
         end select
@@ -248,7 +259,7 @@ contains
         real, parameter :: TINY = 1e-10
         oriparam_isthere = .false.
         if( ind < 1 .or. ind > N_NON_EMPTY ) return
-        oriparam_isthere = abs(val) > TINY 
+        oriparam_isthere = abs(val) > TINY
     end function oriparam_isthere
 
 end module simple_defs_ori
