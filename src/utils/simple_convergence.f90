@@ -201,7 +201,7 @@ contains
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
-        write(logfhandle,601) '>>> CORRELATION                    THRESHOLD:', corr_t
+        write(logfhandle,601) '>>> CORRELATION                     THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
         ! dynamic shift search range update
