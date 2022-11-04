@@ -312,23 +312,37 @@ contains
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
-        call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
-        call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
-        call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
-        call build_glob%spproj_field%stats('shincarg',  self%shincarg,  mask=mask)
-        call build_glob%spproj_field%stats('nevals',    self%nevals,    mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('ngevals',   self%ngevals,   mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('better',    self%better,    mask=mask)
+        call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)
+        call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
+        if( self%npeaks%avg > 1e-6 )then
+        call build_glob%spproj_field%stats('cc_peak',    self%cc_peak,    mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('cc_nonpeak', self%cc_nonpeak, mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask, nozero=.true.)
+        endif
+        call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
+        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
+        call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
+        call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('ngevals',    self%ngevals,    mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('better',     self%better,     mask=mask)
         ! particle updates
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        if( self%npeaks%avg > 1e-6 )then
+        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
+        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:', self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
+        endif
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:', 100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        if( self%npeaks%avg > 1e-6 )then
+        write(logfhandle,604) '>>> CORRELATION, PEAK        AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
+        write(logfhandle,604) '>>> CORRELATION, NONPEAK     AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
+        endif
         write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                     THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv

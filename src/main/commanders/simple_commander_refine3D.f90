@@ -782,7 +782,7 @@ contains
             select case(params%refine)
                 case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
-                case('shcc','neighc','greedyc')
+                case('shcc','neighc','greedyc','hybrid')
                     converged = conv%check_conv3Dc(cline, params%msk)
                 case DEFAULT
                     converged = conv%check_conv3D(cline, params%msk)
