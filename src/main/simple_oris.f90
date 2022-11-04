@@ -2790,27 +2790,21 @@ contains
         do i = 1,self%n
             if( i /= nnmat(i,1) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
         end do
+        ! search for peaks
         peaks(:) = .false.
-        ! good/bad binning with Otsu's algorithm
-        corrs_packed = pack(corrs, mask=corrs > 0.)
-        call otsu(corrs_packed, corr_t)
-        deallocate(corrs_packed)
-        where( corrs > corr_t )
-            peaks = .true.
-        elsewhere
-            peaks = .false.
-        end where
+        do i = 1,self%n
+            if( corrs(nnmat(i,1)) > corr_t )then
+                if( corrs(nnmat(i,1)) > corrs(nnmat(i,2)) .and.&
+                &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
+                &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
+            endif
+        end do
         if( count(peaks) > 0 )then
-            ! peak detection
-            do i = 1,self%n
-                if( peaks(i) )then
-                    if( corrs(nnmat(i,1)) > corr_t )then
-                        if( corrs(nnmat(i,1)) > corrs(nnmat(i,2)) .and.&
-                        &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
-                        &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
-                    endif
-                endif
-            end do
+            ! good/bad binning with Otsu's algorithm
+            corrs_packed = pack(corrs, mask=peaks .and. corrs > 0.)
+            call otsu(corrs_packed, corr_t)
+            deallocate(corrs_packed)
+            where( corrs <= corr_t ) peaks = .false.
         endif
     end subroutine detect_peaks
 
