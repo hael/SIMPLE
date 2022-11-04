@@ -69,6 +69,9 @@ contains
             call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(npeaks))
             angdist = 0.
             if( npeaks > 0 )then
+                ! report average correlation for peak and non-peak distributions
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    sum(corrs, mask=     peaks) / real(npeaks))
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', sum(corrs, mask=.not.peaks) / real(npeaks))
                 ! calculate average angular distance between peaks
                 angdist = 0.
                 cnt     = 0
@@ -84,16 +87,6 @@ contains
                     end do
                 end do
                 if( cnt > 0 ) angdist = angdist / real(cnt)
-            endif
-            if( npeaks > 1 )then
-                ! caluclate correlation stats for peak and non-peak distributions
-                call moment_serial(corrs, cc_peak_avg,    sdev, var, err,      peaks)
-                call moment_serial(corrs, cc_nonpeak_avg, sdev, var, err, .not.peaks)
-                call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    cc_peak_avg)
-                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', cc_nonpeak_avg)
-            else
-                call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    0.)
-                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', 0.)
             endif
             call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
         else
