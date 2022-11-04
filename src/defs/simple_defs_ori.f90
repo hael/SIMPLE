@@ -257,9 +257,53 @@ contains
         integer, intent(in) :: ind
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
+        logical :: is_zero
         oriparam_isthere = .false.
         if( ind < 1 .or. ind > N_NON_EMPTY ) return
-        oriparam_isthere = abs(val) > TINY
+        select case(ind)
+            ! these variables cannot be zero if defined
+            case(I_CLASS)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CORR)
+                oriparam_isthere = abs(val) > TINY
+            case(I_DFX)
+                oriparam_isthere = abs(val) > TINY
+            case(I_DFY)
+                oriparam_isthere = abs(val) > TINY
+            case(I_FRAC)
+                oriparam_isthere = abs(val) > TINY
+            case(I_INDSTK)
+                oriparam_isthere = abs(val) > TINY
+            case(I_INPL)
+                oriparam_isthere = abs(val) > TINY
+            case(I_LP)
+                oriparam_isthere = abs(val) > TINY
+            case(I_PROJ)
+                oriparam_isthere = abs(val) > TINY
+            case(I_SPECSCORE)
+                oriparam_isthere = abs(val) > TINY
+            case(I_STKIND)
+                oriparam_isthere = abs(val) > TINY
+            case(I_XPOS)
+                oriparam_isthere = abs(val) > TINY
+            case(I_YPOS)
+                oriparam_isthere = abs(val) > TINY
+            case(I_GID)
+                oriparam_isthere = abs(val) > TINY
+            case(I_OGID)
+                oriparam_isthere = abs(val) > TINY
+            case(I_PIND)
+                oriparam_isthere = abs(val) > TINY
+            case(I_DIST_PEAKS)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CC_PEAK)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CC_NONPEAK)
+                oriparam_isthere = abs(val) > TINY
+            case DEFAULT
+                ! default case is defined 
+                oriparam_isthere = .true.
+        end select
     end function oriparam_isthere
 
 end module simple_defs_ori
