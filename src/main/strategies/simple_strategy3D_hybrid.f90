@@ -38,8 +38,9 @@ contains
     subroutine srch_hybrid( self, ithr )
         class(strategy3D_hybrid), intent(inout) :: self
         integer,                  intent(in)    :: ithr
+        integer, allocatable :: peak_inds(:)
         type(ori) :: osym, oi, oj, o, obest
-        integer   :: iref, ipeak, isample, loc(1), cnt, npeaks, i, j, nevals(2)
+        integer   :: iref, ipeak, isample, loc(1), cnt, npeaks, i, j, nevals(2), inds(self%s%nrefs)
         real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
         real      :: euldist, dist_inpl, sdev, var, cc_peak_avg, cc_nonpeak_avg
         real      :: corr, corr_best, cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
@@ -53,6 +54,8 @@ contains
             ! search
             corrs = -1.
             do iref= 1,self%s%nrefs
+                ! store the reference index 
+                inds(iref) = iref
                 ! identify the top scoring in-plane angle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 loc = maxloc(inpl_corrs)
@@ -101,9 +104,11 @@ contains
             got_better = .false.
             ! point loc to the best discrete orientation
             loc        = maxloc(corrs)
+            ! extract the peak indices
+            if( npeaks > 1 ) peak_inds  = pack(inds, mask=peaks) 
             do isample=1,self%s%nsample_neigh
                 if( npeaks > 1 )then
-                    ipeak = irnd_uni(npeaks)
+                    ipeak = peak_inds(irnd_uni(npeaks))
                 else
                     ipeak = loc(1)
                 endif
@@ -130,6 +135,7 @@ contains
                     endif
                 endif
             end do
+            if( allocated(peak_inds) ) deallocate(peak_inds)
             if( got_better )then
                 call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
                 call obest%set('dist',      euldist)
