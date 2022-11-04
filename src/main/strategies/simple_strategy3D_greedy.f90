@@ -73,7 +73,7 @@ contains
             if( npeaks > 0 )then
                 ! report average correlation for peak and non-peak distributions
                 call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    sum(corrs, mask=     peaks) / real(npeaks))
-                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', sum(corrs, mask=.not.peaks) / real(npeaks))
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', sum(corrs, mask=.not.peaks) / real(count(.not.peaks)))
                 ! calculate average angular distance between peaks
                 angdist = 0.
                 cnt     = 0
