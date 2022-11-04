@@ -1380,7 +1380,7 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
-                if( .not. cline%defined('match_filt') self%l_match_filt = .false. 
+                if( .not. cline%defined('match_filt') ) self%l_match_filt = .false. 
             case DEFAULT
                 self%l_cartesian = .false.
         end select
