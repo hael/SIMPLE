@@ -270,6 +270,8 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_DFY)
                 oriparam_isthere = abs(val) > TINY
+            case(I_EO)
+                oriparam_isthere = abs(val) > TINY
             case(I_FRAC)
                 oriparam_isthere = abs(val) > TINY
             case(I_INDSTK)
