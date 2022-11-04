@@ -48,6 +48,7 @@ contains
             ! prep
             call self%s%prep4srch
             ! search
+            corrs = -1.
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
@@ -55,6 +56,7 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                    corrs(iref) = inpl_corrs(loc(1))
                 endif
             end do
             ! in greedy mode, we evaluate all refs
