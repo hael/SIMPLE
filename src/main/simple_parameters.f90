@@ -215,6 +215,7 @@ type :: parameters
     integer :: iptcl=1
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
+    integer :: kfromto_discrete(2)
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
@@ -328,6 +329,7 @@ type :: parameters
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
+    real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_lowres  = 30.    !< optimization(search)-based low-pass limit lower bound
     real    :: lp_stopres = -1.    !< optimization(search)-based stoping resolution
@@ -387,6 +389,7 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
+    logical :: l_hybrid       = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_match_filt   = .true.
@@ -705,6 +708,7 @@ contains
         call check_rarg('lp2D',           self%lp2D)
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
+        call check_rarg('lp_discrete',    self%lp_discrete)
         call check_rarg('lp_lowres',      self%lp_lowres)
         call check_rarg('lp_stopres',     self%lp_stopres)
         call check_rarg('lp_pick',        self%lp_pick)
@@ -1230,8 +1234,10 @@ contains
         ! set newbox if scale is defined
         self%kfromto(1) = 1
         if( cline%defined('hp') ) self%kfromto(1) = max(1,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
-        self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
-        self%lp         = max(self%fny,self%lp)          ! lowpass limit
+        self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
+        self%lp                  = max(self%fny,self%lp)            ! lowpass limit
+        self%kfromto_discrete(1) = self%kfromto(1)
+        self%kfromto_discrete(2) = int(self%dstep/self%lp_discrete) ! low-pass Fourier index set according to lp_discrete
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
@@ -1380,9 +1386,19 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
-                if( .not. cline%defined('match_filt') ) self%l_match_filt = .false. 
+                self%l_hybrid    = .false.
+                if( .not. cline%defined('match_filt') ) self%l_match_filt = .false.
+            case('hybrid')
+                self%l_cartesian = .true.
+                self%l_hybrid    = .true.
+                if( .not. cline%defined('match_filt')    ) self%l_match_filt  = .false.
+                if( .not. cline%defined('nspace')        ) self%nspace        = 500
+                if( .not. cline%defined('athres')        ) self%athres        = 10.
+                if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
+                if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 0
             case DEFAULT
                 self%l_cartesian = .false.
+                self%l_hybrid    = .false.
         end select
         if( self%l_cartesian )then
             select case(trim(self%refine))

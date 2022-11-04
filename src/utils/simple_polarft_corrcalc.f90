@@ -886,7 +886,8 @@ contains
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=0.)
+        allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
+        if(.not. self%with_ctf ) return
         inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
