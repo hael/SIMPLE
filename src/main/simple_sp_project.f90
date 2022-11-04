@@ -2122,20 +2122,20 @@ contains
         endif
         l_noctf = .false.
         select case(trim(ctfflag))
-        case(NIL)
-            THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
-        case('no')
-            ctfvars%ctfflag = CTFFLAG_NO
-            l_noctf = .true.
-        case('yes')
-            ctfvars%ctfflag = CTFFLAG_YES
-        case('mul')
-            THROW_HARD('ctf=mul depreciated; sget_ctfparams')
-        case('flip')
-            ctfvars%ctfflag = CTFFLAG_FLIP
-        case DEFAULT
-            write(logfhandle,*) 'stkind/iptcl: ', stkind, iptcl
-            THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
+            case(NIL)
+                THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
+            case('no')
+                ctfvars%ctfflag = CTFFLAG_NO
+                l_noctf = .true.
+            case('yes')
+                ctfvars%ctfflag = CTFFLAG_YES
+            case('mul')
+                THROW_HARD('ctf=mul depreciated; get_ctfparams')
+            case('flip')
+                ctfvars%ctfflag = CTFFLAG_FLIP
+            case DEFAULT
+                write(logfhandle,*) 'stkind/iptcl: ', stkind, iptcl
+                THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
         end select
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
@@ -2182,6 +2182,9 @@ contains
             ctfvars%angast = ptcl_field%get(iptcl, 'angast')
         else
             if( dfy_was_there )then
+                print *, 'iptcl: ', iptcl
+                print *, 'oritype in get_ctfparams ', trim(oritype)
+                call ptcl_field%print_(iptcl)
                 THROW_HARD('astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field; get_ctfparams')
             else
                 ctfvars%angast = 0.
