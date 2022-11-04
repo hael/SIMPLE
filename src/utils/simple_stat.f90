@@ -202,7 +202,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2')
+            THROW_HARD('ERROR: n must be at least 2')
             return
         endif
         ! calc average
