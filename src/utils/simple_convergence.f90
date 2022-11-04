@@ -44,33 +44,39 @@ contains
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), states(:), corrs(:)
+        real,    allocatable :: updatecnts(:), states(:), corrs(:), pws(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t
+        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t, percen_nonzero_pw
         logical :: converged, chk4conv
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        states        = build_glob%spproj_field%get_all('state')
-        corrs         = build_glob%spproj_field%get_all('corr')
-        corr_t        = robust_sigma_thres(corrs, -3.0)
-        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        states            = build_glob%spproj_field%get_all('state')
+        corrs             = build_glob%spproj_field%get_all('corr')
+        corr_t            = robust_sigma_thres(corrs, -3.0)
+        updatecnts        = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
+        pws               = build_glob%spproj_field%get_all('w')
+        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call os%stats('corr',      self%corr,      mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
         call os%stats('w',         self%pw,        mask=mask)
         self%mi_class  = os%get_avg('mi_class',    mask=mask)
+        ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
-        write(logfhandle,604) '>>> IN-PLANE DIST (DEG)    AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        ! dists and % search space
+        write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,601) '>>> % PARTICLES   CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                   THRESHOLD:', corr_t
-        write(logfhandle,604) '>>> WEIGHTS                AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT         ', percen_nonzero_pw
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -146,7 +152,7 @@ contains
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, states, corrs)
+        deallocate(mask, updatecnts, states, corrs, pws)
         call self%ostats%kill
     end function check_conv2D
 
@@ -154,14 +160,16 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), corrs(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
+        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
+        corrs         = build_glob%spproj_field%get_all('corr')
+        corr_t        = robust_sigma_thres(corrs, -3.0)
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
@@ -177,28 +185,25 @@ contains
         call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
         endif
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
-        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
-        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:',&
-        &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
-        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:',&
-        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        ! dists and % search space
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
+        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:', self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        ! correlation & particle weights
+        write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> CORRELATION                    THRESHOLD:', corr_t
+        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:',&
-        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:',&
-        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
-        &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
@@ -272,7 +277,7 @@ contains
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, pws, states)
+        deallocate(mask, updatecnts, pws, states, corrs)
         call self%ostats%kill
     end function check_conv3D
 
@@ -280,14 +285,16 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), pws(:), states(:)
+        real,    allocatable :: updatecnts(:), pws(:), states(:), corrs(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
+        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t
         logical :: converged
         integer :: iptcl
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
+        corrs         = build_glob%spproj_field%get_all('corr')
+        corr_t        = robust_sigma_thres(corrs, -3.0)
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
@@ -301,24 +308,23 @@ contains
         call build_glob%spproj_field%stats('nevals',    self%nevals,    mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('ngevals',   self%ngevals,   mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('better',    self%better,    mask=mask)
+        ! particle updates
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
-        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
-        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:',&
-        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:',&
-        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        ! dists and % search space
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
+        write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:', 100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
+        ! correlation & particle weights
+        write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> CORRELATION                    THRESHOLD:', corr_t
+        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
-        write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:',&
-        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:',&
-        &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
-        write(logfhandle,604) '>>> # COST FUN EVALS         AVG/SDEV/MIN/MAX:',&
-        &self%nevals%avg, self%nevals%sdev, self%nevals%minv, self%nevals%maxv
-        write(logfhandle,604) '>>> # GRADIENT EVALS         AVG/SDEV/MIN/MAX:',&
-        &self%ngevals%avg, self%ngevals%sdev, self%ngevals%minv, self%ngevals%maxv
-        write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:',&
-        &100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
+        ! cost and gradient evals
+        write(logfhandle,604) '>>> # COST FUN EVALS         AVG/SDEV/MIN/MAX:', self%nevals%avg, self%nevals%sdev, self%nevals%minv, self%nevals%maxv
+        write(logfhandle,604) '>>> # GRADIENT EVALS         AVG/SDEV/MIN/MAX:', self%ngevals%avg, self%ngevals%sdev, self%ngevals%minv, self%ngevals%maxv
+
         ! determine convergence
         converged = .false.
         if( self%better%avg * 100. < 5. )then ! less than 5 % improved solutions
@@ -334,7 +340,7 @@ contains
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, pws)
+        deallocate(mask, updatecnts, pws, corrs)
         call self%ostats%kill
     end function check_conv3Dc
 
@@ -344,43 +350,46 @@ contains
         integer, allocatable :: statepops(:)
         logical :: converged
         integer :: istate
-        601 format(A,1X,F8.3)
-        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        call build_glob%spproj_field%stats('frac', self%frac_srch)
-        self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        write(logfhandle,601) '>>> STATE OVERLAP:                          ', self%mi_state
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
-        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        ! provides convergence stats for multiple states
-        ! by calculating mi_joint for individual states
-        call build_glob%spproj_field%get_pops(statepops,'state')
-        call build_glob%spproj_field%stats('corr', self%corr)
-        write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
-        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        ! print the overlaps and pops for the different states
-        do istate=1,params_glob%nstates
-            write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
-        end do
-        if( self%mi_state > OVERLAP_STATE_HET .and.&
-            self%frac_srch%avg > FRACSRCHSPACE_HET     )then
-            write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-            converged = .true.
-        else
-            write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-            converged = .false.
-        endif
-        ! stats
-        call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
-        call self%ostats%set(1,'CORRELATION',         self%corr%avg)
-        do istate=1,params_glob%nstates
-            call self%ostats%set(1,'STATE_POPULATION_'//int2str(istate), real(statepops(istate)))
-        enddo
-        call self%ostats%write(STATS_FILE)
-        ! cleanup
-        call self%ostats%kill
-        deallocate( statepops )
+
+        converged = .false.
+
+        ! 601 format(A,1X,F8.3)
+        ! 604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        ! call build_glob%spproj_field%stats('frac', self%frac_srch)
+        ! self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
+        ! write(logfhandle,601) '>>> STATE OVERLAP:                          ', self%mi_state
+        ! write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
+        ! &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        ! ! provides convergence stats for multiple states
+        ! ! by calculating mi_joint for individual states
+        ! call build_glob%spproj_field%get_pops(statepops,'state')
+        ! call build_glob%spproj_field%stats('corr', self%corr)
+        ! write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
+        ! &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        ! ! print the overlaps and pops for the different states
+        ! do istate=1,params_glob%nstates
+        !     write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
+        ! end do
+        ! if( self%mi_state > OVERLAP_STATE_HET .and.&
+        !     self%frac_srch%avg > FRACSRCHSPACE_HET     )then
+        !     write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+        !     converged = .true.
+        ! else
+        !     write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+        !     converged = .false.
+        ! endif
+        ! ! stats
+        ! call self%ostats%new(1, is_ptcl=.false.)
+        ! call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
+        ! call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
+        ! call self%ostats%set(1,'CORRELATION',         self%corr%avg)
+        ! do istate=1,params_glob%nstates
+        !     call self%ostats%set(1,'STATE_POPULATION_'//int2str(istate), real(statepops(istate)))
+        ! enddo
+        ! call self%ostats%write(STATS_FILE)
+        ! ! cleanup
+        ! call self%ostats%kill
+        ! deallocate( statepops )
     end function check_conv_cluster
 
     real function get( self, which )
