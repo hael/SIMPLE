@@ -1380,8 +1380,7 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
-                ! because therew are less interpolation errors
-                ! and more components at low resolution in the Cartesian formulation
+                if( .not. cline%defined('match_filt') self%l_match_filt = .false. 
             case DEFAULT
                 self%l_cartesian = .false.
         end select
