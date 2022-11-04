@@ -2790,7 +2790,6 @@ contains
         do i = 1,self%n
             if( i /= nnmat(i,1) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
         end do
-
         ! search for peaks
         peaks(:) = .false.
         do i = 1,self%n
@@ -2800,11 +2799,13 @@ contains
                 &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
             endif
         end do
-        ! good/bad binning with Otsu's algorithm
-        corrs_packed = pack(corrs, mask=peaks)
-        call otsu(corrs_packed, corr_t)
-        deallocate(corrs_packed)
-        where( corrs <= corr_t ) peaks = .false.
+        if( count(peaks) > 0 )then
+            ! good/bad binning with Otsu's algorithm
+            corrs_packed = pack(corrs, mask=peaks)
+            call otsu(corrs_packed, corr_t)
+            deallocate(corrs_packed)
+            where( corrs <= corr_t ) peaks = .false.
+        endif
     end subroutine detect_peaks
 
     subroutine min_euldist( self, o_in, mindist )

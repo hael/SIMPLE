@@ -39,8 +39,9 @@ contains
         integer,                  intent(in)    :: ithr
         type(ori) :: osym, oi, oj
         integer   :: iref, isample, loc(1), cnt, npeaks, i, j
-        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist, euldist, dist_inpl
-        logical   :: peaks(self%s%nrefs)
+        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
+        real      :: euldist, dist_inpl, sdev, var, cc_peak_avg, cc_nonpeak_avg
+        logical   :: peaks(self%s%nrefs), err
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -83,6 +84,14 @@ contains
                     end do
                 end do
                 if( cnt > 0 ) angdist = angdist / real(cnt)
+                ! caluclate correlation stats for peak and non-peak distributions
+                call moment_serial(corrs, cc_peak_avg,    sdev, var, err,      peaks)
+                call moment_serial(corrs, cc_nonpeak_avg, sdev, var, err, .not.peaks)
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    cc_peak_avg)
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', cc_nonpeak_avg)
+            else
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    0.)
+                call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', 0.)
             endif
             call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
         else

@@ -23,6 +23,8 @@ type convergence
     type(stats_struct) :: ngevals    !< # gradient evaluations
     type(stats_struct) :: better     !< improvement statistics
     type(stats_struct) :: npeaks     !< peak statistics
+    type(stats_struct) :: cc_peak    !< cc peak statistics
+    type(stats_struct) :: cc_nonpeak !< cc non-peak statistics
     type(oris)         :: ostats     !< centralize stats for writing
     real :: mi_class = 0.            !< class parameter distribution overlap
     real :: mi_proj  = 0.            !< projection parameter distribution overlap
@@ -176,9 +178,11 @@ contains
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)
+        call build_glob%spproj_field%stats('cc_peak',    self%cc_peak,    mask=mask, nozero=.true.)
+        call build_glob%spproj_field%stats('cc_nonpeak', self%cc_nonpeak, mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
         call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
-        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask)
+        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
@@ -200,6 +204,8 @@ contains
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,604) '>>> CORRELATION, PEAK        AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
+        write(logfhandle,604) '>>> CORRELATION, NONPEAK     AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
         write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                     THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
