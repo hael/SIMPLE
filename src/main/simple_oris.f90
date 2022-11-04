@@ -170,8 +170,7 @@ type :: oris
     generic            :: median => median_1
     procedure, private :: stats_1
     procedure, private :: stats_2
-    procedure, private :: stats_3
-    generic            :: stats => stats_1, stats_2, stats_3
+    generic            :: stats => stats_1, stats_2
     procedure          :: minmax
     procedure          :: spiral_1
     procedure          :: spiral_2
@@ -2228,73 +2227,28 @@ contains
         class(oris),        intent(inout) :: self
         character(len=*),   intent(in)    :: which
         type(stats_struct), intent(out)   :: statvars
-        logical, optional,  intent(in)    :: mask(self%n)
+        logical,            intent(in)    :: mask(self%n)
         logical, optional,  intent(in)    :: nozero
-        real, allocatable :: vals(:), states(:)
-        logical :: err, mmask(self%n), nnozero
+        real, allocatable :: vals(:)
+        logical :: err, nnozero
         real    :: var
-        if( present(mask) )then
-            mmask = mask
-        else
-            mmask = .true.
-        endif
         if( present(nozero) )then
             nnozero = nozero
         else
             nnozero = .false.
         endif
-        states = self%get_all('state')
-        mmask  = mmask .and. states > 0.5   
-        vals   = self%get_all(which)
-        if( nnozero ) mmask = mmask .and. vals(:) > TINY
-        call moment(vals, statvars%avg, statvars%sdev, var, err, mmask)
-        statvars%minv = minval(vals, mask=mmask)
-        statvars%maxv = maxval(vals, mask=mmask)
-        deallocate(states, vals)
-    end subroutine stats_2
-
-    !>  \brief  is for calculating variable statistics
-    subroutine stats_3( self, which, statvars, mask, nozero )
-        class(oris),           intent(inout) :: self
-        character(len=KEYLEN), intent(in)    :: which(:)
-        type(stats_struct),    intent(inout) :: statvars(:)
-        logical,               intent(in)    :: mask(self%n)
-        logical, optional,     intent(in)    :: nozero(:)
-        real,    allocatable :: vals(:,:), absvals(:,:)
-        logical, allocatable :: nnozero(:)
-        logical :: err
-        real    :: var
-        integer :: i, j, nvars
-        nvars = size(which)
-        if( present(nozero) )then
-            if( nvars /= size(statvars) .or. nvars /= size(nozero) ) THROW_HARD('Nonconforming array sizes')
-            allocate(nnozero(nvars), source=nozero)
+        vals = self%get_all(which)
+        if( nnozero )then
+            call moment(vals, statvars%avg, statvars%sdev, var, err, mask .and. vals(:) > TINY)
+            statvars%minv = minval(vals, mask=mask .and. vals(:) > TINY)
+            statvars%maxv = maxval(vals, mask=mask .and. vals(:) > TINY)
         else
-            if( nvars /= size(statvars) )                            THROW_HARD('Nonconforming array sizes')
-            allocate(nnozero(nvars), source=.false.)
+            call moment(vals, statvars%avg, statvars%sdev, var, err, mask)
+            statvars%minv = minval(vals, mask=mask)
+            statvars%maxv = maxval(vals, mask=mask)
         endif
-        allocate(vals(nvars,self%n), absvals(nvars,self%n), source=0.)
-        !$omp parallel do default(shared) proc_bind(close) private(i,j) collapse(2)
-        do i = 1,nvars
-            do j = 1,self%n
-                vals(i,j) = self%o(j)%get(trim(which(i)))
-            end do
-        enddo
-        !$omp end parallel do
-        absvals = abs(vals)
-        do i = 1,nvars
-            if( nnozero(i) )then
-                call moment_serial(vals(i,:), statvars(i)%avg, statvars(i)%sdev, var, err, mask=mask .and. absvals(i,:) > TINY)
-                statvars%minv = minval(vals(i,:), mask=mask .and. absvals(i,:) > TINY)
-                statvars%maxv = maxval(vals(i,:), mask=mask .and. absvals(i,:) > TINY)
-            else
-                call moment_serial(vals(i,:), statvars(i)%avg, statvars(i)%sdev, var, err, mask=mask)
-                statvars%minv = minval(vals(i,:), mask=mask)
-                statvars%maxv = maxval(vals(i,:), mask=mask)
-            endif
-        end do
-        deallocate(vals, absvals)
-    end subroutine stats_3
+        deallocate(vals)
+    end subroutine stats_2
 
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
@@ -2849,7 +2803,7 @@ contains
                 &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
             endif
         end do
-        
+
     end subroutine detect_peaks
 
     subroutine min_euldist( self, o_in, mindist )
