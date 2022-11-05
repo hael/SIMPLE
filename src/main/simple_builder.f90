@@ -41,8 +41,10 @@ type :: builder
     real,                   allocatable :: diams(:)               !< class average diameters
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
+    type(ori)             , allocatable :: reg_oris(:)            !< regularized oris
     ! STRATEGY3D TOOLBOX
-    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
+    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for regularized eo-reconstruction ()
+    type(reconstructor_eo), allocatable :: eorefs(:)              !< array of volumes for reference eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
@@ -368,9 +370,18 @@ contains
     subroutine build_strategy3D_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
-        real :: rot
+        real    :: rot
+        integer :: i
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates))
+        ! allocating regularized oris and references
+        if( params%l_align_reg )then
+            allocate(self%eorefs(params%nstates))
+            allocate(self%reg_oris(params%nptcls))
+            do i = 1, params%nptcls
+                call self%reg_oris(i)%new(.true.)
+            enddo
+        endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         rot = 0.
         params%nrots = 0
@@ -400,6 +411,19 @@ contains
                     call self%eorecvols(i)%kill
                 end do
                 deallocate(self%eorecvols)
+            endif
+            if( allocated(self%eorefs) )then
+                do i=1,size(self%eorefs)
+                    call self%eorefs(i)%kill
+                end do
+                deallocate(self%eorefs)
+            endif
+            ! allocating regularized oris
+            if( allocated(self%reg_oris) )then
+                do i = 1,size(self%reg_oris)
+                    call self%reg_oris(i)%kill
+                enddo
+                deallocate(self%reg_oris)
             endif
             if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%strategy3D_tbox_exists = .false.

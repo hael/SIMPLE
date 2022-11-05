@@ -17,6 +17,7 @@ type :: parameters
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)      :: align_reg='no'       !< using regularized reference
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
@@ -133,6 +134,9 @@ type :: parameters
     character(len=LONGSTRLEN) :: vols(MAXS)=''
     character(len=LONGSTRLEN) :: vols_even(MAXS)=''
     character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
+    character(len=LONGSTRLEN) :: vols_ref(MAXS)=''
+    character(len=LONGSTRLEN) :: vols_even_ref(MAXS)=''
+    character(len=LONGSTRLEN) :: vols_odd_ref(MAXS)=''
     character(len=LONGSTRLEN) :: xmldir=''
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
@@ -396,6 +400,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_align_reg    = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
@@ -439,6 +444,7 @@ contains
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('algorithm',      self%algorithm)
+        call check_carg('align_reg',      self%align_reg)
         call check_carg('angastunit',     self%angastunit)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
@@ -1029,6 +1035,9 @@ contains
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
         endif
+        ! set align_reg
+        self%l_align_reg = .false.
+        if( trim(self%align_reg) .eq. 'yes' ) self%l_align_reg = .true.
         ! set vols_even and vols_odd
         def_vol1 = cline%defined('vol1')
         def_even = cline%defined('vol_even')
@@ -1053,6 +1062,11 @@ contains
                 self%vols_even(1) = trim(self%vol_even)
                 self%vols_odd(1)  = trim(self%vol_odd)
                 self%vols(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
+                if( self%l_align_reg )then
+                    self%vols_even_ref(1) = trim(self%vol_even)
+                    self%vols_odd_ref(1)  = trim(self%vol_odd)
+                    self%vols_ref(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
+                endif
             else
                 if( def_vol1 )then
                     do istate=1,self%nstates
@@ -1063,6 +1077,12 @@ contains
                             if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
                         endif
                     end do
+                    if( self%l_align_reg )then
+                        do istate=1,self%nstates
+                            self%vols_even_ref(istate) = add2fbody(self%vols_ref(istate), self%ext, '_even_ref')
+                            self%vols_odd_ref(istate)  = add2fbody(self%vols_ref(istate), self%ext, '_odd_ref' )
+                        end do
+                    endif
                 else
                     THROW_HARD('both vol_even and vol_odd need to be part of the command line')
                 endif

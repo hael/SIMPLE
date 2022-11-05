@@ -235,8 +235,8 @@ contains
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
-        use simple_fplane, only: fplane
-        class(fplane),   intent(in) :: fpl
+        use simple_fplane,      only   : fplane
+        class(fplane),   intent(in)    :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
         real      :: pw
@@ -250,6 +250,7 @@ contains
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY ) call build_glob%eorecvols(s)%grid_plane(se, o, fpl, eo, pwght=pw)
+        if( pw > TINY .and. params_glob%l_align_reg ) call build_glob%eorefs(s)%grid_plane(se, o, fpl, eo, pwght=pw)
     end subroutine grid_ptcl
 
     !>  \brief  prepares one particle image for alignment
@@ -392,6 +393,17 @@ contains
                     call build_glob%eorecvols(istate)%apply_weight(1.0 - &
                         params_glob%update_frac)
                 endif
+                if( params_glob%l_align_reg )then
+                    call build_glob%eorefs(istate)%new( build_glob%spproj)
+                    call build_glob%eorefs(istate)%reset_all
+                    if( params_glob%l_frac_update )then
+                        call build_glob%eorefs(istate)%read_eos(trim(VOL_FBODY)//&
+                            int2str_pad(istate,2)//'_ref_part'//part_str)
+                        call build_glob%eorefs(istate)%expand_exp
+                        call build_glob%eorefs(istate)%apply_weight(1.0 - &
+                            params_glob%update_frac)
+                    endif
+                endif
             endif
         end do
         deallocate(pops,resarr)
@@ -400,6 +412,11 @@ contains
     !>  \brief  destructs all volumes for reconstruction
     subroutine killrecvols
         integer :: istate
+        if( params_glob%l_align_reg )then
+            do istate = 1, params_glob%nstates
+                call build_glob%eorefs(istate)%kill
+            end do
+        endif
         do istate = 1, params_glob%nstates
             call build_glob%eorecvols(istate)%kill
         end do
@@ -663,10 +680,53 @@ contains
                 cycle
             endif
             call build_glob%eorecvols(s)%compress_exp
+            if( params_glob%l_align_reg ) call build_glob%eorefs(s)%compress_exp
             if( params_glob%l_distr_exec )then
                 call build_glob%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//&
                     int2str_pad(params_glob%part,params_glob%numlen))
+                if( params_glob%l_align_reg ) call build_glob%eorefs(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//&
+                                                    int2str_pad(params_glob%part,params_glob%numlen)//'_ref')
             else
+                if( params_glob%l_align_reg )then
+                    if( trim(params_glob%refine) .eq. 'snhc' )then
+                        params_glob%vols_ref(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext//'_ref'
+                    else
+                        params_glob%vols_ref(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext//'_ref'
+                    endif
+                    if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
+                        call build_glob%eorefs(s)%set_automsk(.true.)
+                    endif
+                    params_glob%vols_even_ref(s) = add2fbody(params_glob%vols_ref(s), params_glob%ext, '_even')
+                    params_glob%vols_odd_ref(s)  = add2fbody(params_glob%vols_ref(s), params_glob%ext, '_odd')
+                    if( apply_euclid_regularization() )then
+                        call build_glob%eorefs(s)%sampl_dens_correct_eos(s, params_glob%vols_even_ref(s), &
+                            &params_glob%vols_odd_ref(s), find4eoavg)
+                        call build_glob%eorefs(s)%get_res(res05s(s), res0143s(s))
+                        call build_glob%eorefs(s)%sum_eos
+                    else
+                        call build_glob%eorefs(s)%sum_eos
+                        call build_glob%eorefs(s)%sampl_dens_correct_eos(s, params_glob%vols_even_ref(s), &
+                            &params_glob%vols_odd_ref(s), find4eoavg)
+                        call build_glob%eorefs(s)%get_res(res05s(s), res0143s(s))
+                    endif
+                    call build_glob%eorefs(s)%sampl_dens_correct_sum(build_glob%vol)
+                    call build_glob%vol%write(params_glob%vols_ref(s), del_if_exists=.true.)
+                    call simple_copy_file(trim(params_glob%vols_ref(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext//'_ref')
+                    ! need to put the sum back at lowres for the eo pairs
+                    call build_glob%vol%fft()
+                    call build_glob%vol2%zero_and_unflag_ft
+                    call build_glob%vol2%read(params_glob%vols_even_ref(s))
+                    call build_glob%vol2%fft()
+                    call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
+                    call build_glob%vol2%ifft()
+                    call build_glob%vol2%write(params_glob%vols_even_ref(s), del_if_exists=.true.)
+                    call build_glob%vol2%zero_and_unflag_ft
+                    call build_glob%vol2%read(params_glob%vols_odd_ref(s))
+                    call build_glob%vol2%fft()
+                    call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
+                    call build_glob%vol2%ifft()
+                    call build_glob%vol2%write(params_glob%vols_odd_ref(s), del_if_exists=.true.)
+                endif
                 if( trim(params_glob%refine) .eq. 'snhc' )then
                     params_glob%vols(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext
                 else
