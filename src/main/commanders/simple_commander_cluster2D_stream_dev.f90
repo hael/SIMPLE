@@ -849,15 +849,23 @@ contains
             if( os%isthere(1,'lpthres') )then
                 lpthres = os%get(1,'lpthres')
                 if( abs(lpthres-params_glob%lpthres) > 0.001 )then
-                    params_glob%lpthres = lpthres
-                    write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                    if( lpthres < 3.0*smpd )then
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres TOO LOW: ',lpthres
+                    else
+                        params_glob%lpthres = lpthres
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION lpthres UPDATED TO: ',params_glob%lpthres
+                    endif
                 endif
             endif
             if( os%isthere(1,'ndev2D') )then
                 ndev = os%get(1,'ndev2D')
                 if( abs(ndev-params_glob%ndev2D) > 0.001 )then
-                    params_glob%ndev2D = ndev
-                    write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D   UPDATED TO: ',params_glob%ndev2D
+                    if( ndev < 0.1 )then
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D TOO LOW: ',ndev
+                    else
+                        params_glob%ndev2D = ndev
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D   UPDATED TO: ',params_glob%ndev2D
+                    endif
                 endif
             endif
             call del_file(USER_PARAMS)
