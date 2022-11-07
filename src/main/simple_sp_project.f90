@@ -3112,6 +3112,7 @@ contains
                 call os_ptcl3D%set(ptcl_glob,'indstk',real(indstk))
             enddo
             ! update stack
+            call os_stk%transfer_ori(stk_cnt, self%os_stk, istk)
             call os_stk%set(istk, 'fromp', real(fromp_glob))
             call os_stk%set(istk, 'top',   real(top_glob))
             call os_stk%set(istk, 'nptcls',real(ptcl_cnt))
