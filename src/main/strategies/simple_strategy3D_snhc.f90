@@ -68,40 +68,49 @@ contains
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
         integer    :: ref, roind, loc(1)
-        ! stash prev ori
-        call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
-        ! orientation parameters
-        loc = maxloc(s3D%proj_space_corrs(self%s%ithr,:))
-        ref = loc(1)
-        if( ref < 1 .or. ref > self%s%nrefs )then
-            THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
-        endif
-        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(3,ref,self%s%ithr))
-        ! transfer to spproj_field
-        corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref))
-        call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
-        call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)
-        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(:,ref,self%s%ithr))
-        call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
-        ! angular distances
-        call build_glob%spproj_field%get_ori(self%s%iptcl, o2)
-        call build_glob%pgrpsyms%sym_dists( o1, o2, osym, euldist, dist_inpl)
-        ! fraction search space
-        frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
-        ! set the overlaps
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   0.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
-        if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
-            call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
+        if( self%ref_only )then
+            ! stash prev ori
+            call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
+            ! orientation parameters
+            call o1%set_euler(s3D%proj_space_euls(:,ref,self%s%ithr))
+            call o1%set_shift([0., 0.])
+            ! put the ori into reg_oris in builder
+            build_glob%reg_oris(self%s%iptcl) = o1
         else
-            call build_glob%spproj_field%set(self%s%iptcl, 'dist', euldist)
+            ! stash prev ori
+            call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
+            ! orientation parameters
+            loc = maxloc(s3D%proj_space_corrs(self%s%ithr,:))
+            ref = loc(1)
+            if( ref < 1 .or. ref > self%s%nrefs )then
+                THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
+            endif
+            ! transfer to spproj_field
+            corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref))
+            call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
+            call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
+            call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)
+            call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(:,ref,self%s%ithr))
+            call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
+            ! angular distances
+            call build_glob%spproj_field%get_ori(self%s%iptcl, o2)
+            call build_glob%pgrpsyms%sym_dists( o1, o2, osym, euldist, dist_inpl)
+            ! fraction search space
+            frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
+            ! set the overlaps
+            call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   0.)
+            call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
+            if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
+                call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
+            else
+                call build_glob%spproj_field%set(self%s%iptcl, 'dist', euldist)
+            endif
+            call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+            call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
+            call osym%kill
+            call o1%kill
+            call o2%kill
         endif
-        call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
-        call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
-        call osym%kill
-        call o1%kill
-        call o2%kill
     end subroutine oris_assign_snhc
 
     subroutine kill_snhc( self )

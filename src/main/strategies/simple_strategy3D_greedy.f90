@@ -98,7 +98,7 @@ contains
 
     subroutine oris_assign_greedy( self )
         class(strategy3D_greedy), intent(inout) :: self
-        call extract_peak_ori(self%s, self%spec)
+        call extract_peak_ori(self%s)
     end subroutine oris_assign_greedy
 
     subroutine kill_greedy( self )

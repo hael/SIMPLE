@@ -1,7 +1,7 @@
 module simple_strategy3D_utils
 include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! singleton class s3D
-use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
+use simple_strategy3D_srch,  only: strategy3D_srch
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
@@ -13,15 +13,14 @@ private
 
 contains
 
-    subroutine extract_peak_ori( s, spec )
+    subroutine extract_peak_ori( s )
         class(strategy3D_srch), intent(inout) :: s
-        class(strategy3D_spec), intent(in)    :: spec
         type(ori) :: osym, o_prev, o_new
         integer   :: ref, inpl, state, neff_states, loc(1), nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac, pw
         logical   :: l_multistates
         ! don't update the particle when ref_only mode is on (used in the regularization step)
-        if( spec%ref_only )then
+        if( s%ref_only )then
             ! retrieving the ori and shift
             call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
             ! reference (proj)
