@@ -100,6 +100,7 @@ contains
     procedure          :: merge_stream_projects
     procedure          :: report_state2stk
     procedure          :: set_boxcoords
+    procedure          :: prune_particles
     ! I/O
     ! printers
     procedure          :: print_info
@@ -3041,6 +3042,96 @@ contains
         call self%os_ptcl2D%set(iptcl,'ypos',real(coords(2)))
     end subroutine set_boxcoords
 
+    ! Removes in place mics, stacks and particles with state=0
+    ! new images are not generated & the indstk field is updated
+    subroutine prune_particles( self )
+        class(sp_project), target, intent(inout) :: self
+        type(oris)                :: os_ptcl2d, os_ptcl3d, os_stk, os_mic
+        logical,      allocatable :: stks_mask(:), ptcls_mask(:)
+        integer,      allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
+        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
+        integer                   :: nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
+        integer                   :: stkind, ptcl_glob, nptcls_eff, indstk
+        nstks_tot  = self%get_nstks()
+        if( nstks_tot == 0 ) THROW_HARD('No particles to operate on!')
+        ! particles reverse indexing
+        nptcls_tot = self%os_ptcl2D%get_noris()
+        allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot))
+        nptcls_eff = 0
+        stkinds    = 0
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl) reduction(+:nptcls_eff)
+        do iptcl = 1,nptcls_tot
+            ptcls_mask(iptcl) = self%os_ptcl2D%get_state(iptcl) > 0
+            if( ptcls_mask(iptcl) )then
+                stkinds(iptcl) = nint(self%os_ptcl2D%get(iptcl,'stkind'))
+                nptcls_eff     = nptcls_eff+1
+            endif
+        enddo
+        !$omp end parallel do
+        ! stacks
+        allocate(stks_mask(nstks_tot))
+        do istk = 1,nstks_tot
+            stks_mask(istk) = self%os_stk%get_state(istk) > 0
+            if( count(stkinds==istk) == 0 ) stks_mask(istk) = .false.
+        enddo
+        nstks = count(stks_mask)
+        call os_stk%new(nstks, is_ptcl=.false.)
+        ! mics
+        nmics_tot = self%os_mic%get_noris()
+        if( nmics_tot > 0 )then
+            call self%get_mic2stk_inds(mic2stk_inds, stk2mic_inds)
+            call os_mic%new(nstks, is_ptcl=.false.)
+        endif
+        ! removing deselected particles
+        call os_ptcl2d%new(nptcls_eff, is_ptcl=.true.)
+        call os_ptcl3d%new(nptcls_eff, is_ptcl=.true.)
+        stkind     = 0
+        stk_cnt    = 0
+        top_glob   = 0
+        ptcl_glob  = 0
+        do istk = 1,nstks_tot
+            if( .not.stks_mask(istk) ) cycle
+            stk_cnt = stk_cnt + 1
+            stkind  = stkind  + 1
+            fromp      = nint(self%os_stk%get(istk,'fromp'))
+            top        = nint(self%os_stk%get(istk,'top'))
+            fromp_glob = top_glob+1
+            ptcl_cnt   = 0
+            do iptcl = fromp,top
+                if( .not.ptcls_mask(iptcl) )cycle
+                ptcl_glob = ptcl_glob + 1
+                top_glob  = top_glob+1
+                ptcl_cnt  = ptcl_cnt+1
+                indstk    = iptcl-fromp+1
+                ! update orientations
+                call os_ptcl2D%transfer_ori(ptcl_glob, self%os_ptcl2D, iptcl)
+                call os_ptcl3D%transfer_ori(ptcl_glob, self%os_ptcl3D, iptcl)
+                call os_ptcl2D%set(ptcl_glob,'stkind',real(stkind))
+                call os_ptcl3D%set(ptcl_glob,'stkind',real(stkind))
+                call os_ptcl2D%set(ptcl_glob,'indstk',real(indstk))
+                call os_ptcl3D%set(ptcl_glob,'indstk',real(indstk))
+            enddo
+            ! update stack
+            call os_stk%set(istk, 'fromp', real(fromp_glob))
+            call os_stk%set(istk, 'top',   real(top_glob))
+            call os_stk%set(istk, 'nptcls',real(ptcl_cnt))
+            ! update micrograph
+            if( nmics_tot > 0 ) then
+                call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
+                call os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
+            endif
+        enddo
+        self%os_stk    = os_stk
+        self%os_mic    = os_mic
+        self%os_ptcl2d = os_ptcl2D
+        self%os_ptcl3d = os_ptcl3D
+        call os_stk%kill
+        call os_mic%kill
+        call os_ptcl2d%kill
+        call os_ptcl3d%kill
+    end subroutine prune_particles
+
+
     ! printers
 
     subroutine print_info( self, fname )
@@ -3242,7 +3333,6 @@ contains
                 call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader
-
 
     subroutine read_segments_info( self, fname, seginds, seginfos )
         class(sp_project),                  intent(inout) :: self
