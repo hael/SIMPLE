@@ -1078,10 +1078,16 @@ contains
                         endif
                     end do
                     if( self%l_align_reg )then
-                        do istate=1,self%nstates
-                            self%vols_even_ref(istate) = add2fbody(self%vols_ref(istate), self%ext, '_even_ref')
-                            self%vols_odd_ref(istate)  = add2fbody(self%vols_ref(istate), self%ext, '_odd_ref' )
-                        end do
+                        self%vols_ref = self%vols
+                        if( self%which_iter > 1 )then
+                            do istate=1,self%nstates
+                                self%vols_even_ref(istate) = add2fbody(self%vols_ref(istate), self%ext, '_ref_even')
+                                self%vols_odd_ref(istate)  = add2fbody(self%vols_ref(istate), self%ext, '_ref_odd' )
+                            end do
+                        else
+                            self%vols_even_ref = self%vols_even
+                            self%vols_odd_ref  = self%vols_odd
+                        endif
                     endif
                 else
                     THROW_HARD('both vol_even and vol_odd need to be part of the command line')
