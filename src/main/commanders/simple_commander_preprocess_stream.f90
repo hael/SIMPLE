@@ -288,11 +288,11 @@ contains
             endif
             ! 2D classification section
             if( l_cluster2D )then
-                ! call update_user_params
+                call update_user_params
                 call update_chunks
                 call update_pool_status
                 call update_pool
-                ! call update_user_params
+                call update_user_params
                 call reject_from_pool
                 ! call reject_from_pool_user
                 call write_project_stream2D(.true.)
