@@ -970,8 +970,8 @@ contains
         call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
-        call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.3}', 'in microns{0.3}', .false., 0.3)
-        call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
+        call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.2}', 'in microns{0.2}', .false., DFMIN_DEFAULT)
+        call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., DFMAX_DEFAULT)
         call set_param(astigtol,      'astigtol',      'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns{0.05}',  .false., 0.05)
         call set_param(mw,            'mw',            'num',    'Molecular weight','Molecular weight in kDa', 'in kDa', .false., 0.)
         call set_param(mirr,          'mirr',          'multi',  'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
@@ -3200,7 +3200,6 @@ contains
         preprocess_stream_dev%srch_ctrls(14)%required = .false.
         call preprocess_stream_dev%set_input('srch_ctrls',15, nptcls_per_cls)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 15, submenu="cluster 2D", advanced=.false.)
-        preprocess_stream_dev%srch_ctrls(15)%required = .true.
         preprocess_stream_dev%srch_ctrls(15)%rval_default = 300.
         call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling for 2D classification', 'Automatic down-scaling of images &
         &for accelerated convergence rate. (yes|no){yes}', '(yes|no){yes}', .false., 'yes')

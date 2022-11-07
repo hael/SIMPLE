@@ -299,8 +299,8 @@ type :: parameters
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: defocus=2.          !< defocus(in microns){2.}
     real    :: dferr=1.            !< defocus error(in microns){1.0}
-    real    :: dfmax=5.0           !< maximum expected defocus(in microns)
-    real    :: dfmin=0.3           !< minimum expected defocus(in microns)
+    real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)
+    real    :: dfmin=DFMIN_DEFAULT !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
     real    :: dose_rate=1.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
