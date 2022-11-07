@@ -6,6 +6,7 @@ public :: strategy3D
 private
 
 type, abstract :: strategy3D
+    logical :: ref_only = .false.   !< in regularization: updating the reference oris (stored in builder%reg_oris), not the particle oris
   contains
     procedure(generic_new),         deferred :: new
     procedure(generic_srch),        deferred :: srch

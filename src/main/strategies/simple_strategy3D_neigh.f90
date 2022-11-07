@@ -81,7 +81,7 @@ contains
 
     subroutine oris_assign_neigh( self )
         class(strategy3D_neigh), intent(inout) :: self
-        call extract_peak_ori(self%s, self%spec)
+        call extract_peak_ori(self%s)
     end subroutine oris_assign_neigh
 
     subroutine kill_neigh( self )

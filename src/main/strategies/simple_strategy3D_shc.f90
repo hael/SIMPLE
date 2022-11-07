@@ -72,7 +72,7 @@ contains
 
     subroutine oris_assign_shc( self )
         class(strategy3D_shc), intent(inout) :: self
-        call extract_peak_ori(self%s, self%spec)
+        call extract_peak_ori(self%s)
     end subroutine oris_assign_shc
 
     subroutine kill_shc( self )
