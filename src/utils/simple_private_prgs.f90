@@ -268,7 +268,7 @@ contains
         call cmd_dict%push('dffar',         'far from focus limit for state flag(in microns){4}')
         call cmd_dict%push('dferr',         'defocus error(in microns){1.0}')
         call cmd_dict%push('dfmax',         'maximum expected defocus(in microns){5.0}')
-        call cmd_dict%push('dfmin',         'minimum expected defocus(in microns){0.3}')
+        call cmd_dict%push('dfmin',         'minimum expected defocus(in microns){0.2}')
         call cmd_dict%push('dfunit',        'defocus unit (A|microns){microns}')
         call cmd_dict%push('dir',           'directory')
         call cmd_dict%push('dir_movies',    'grab .mrc/.mrcs files from here')

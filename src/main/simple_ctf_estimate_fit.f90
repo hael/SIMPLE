@@ -42,7 +42,7 @@ type ctf_estimate_fit
     real(dp)                  :: polyx(POLYDIM), polyy(POLYDIM)
     integer, allocatable      :: centers(:,:,:)
     real                      :: smpd         = 0.
-    real                      :: df_lims(2)   = [0.3,5.0]! defocus range
+    real                      :: df_lims(2)   = [DFMIN_DEFAULT, DFMAX_DEFAULT]! defocus range
     real                      :: df_step      = 0.05     ! defocus step for grid search
     real                      :: astigtol     = 0.05     ! tolerated astigmatism
     real                      :: hp           = 0.       ! high-pass limit
@@ -1020,7 +1020,7 @@ contains
             if( DEBUG_HERE ) call pspec%write('pspec_prepped.mrc')
         endif
         ! builds 1D/2D profiles
-        nshells = self%box/2
+        nshells = floor(sqrt(2.)*real(self%box/2))
         allocate(spec1d(0:nshells),spec1d_fit(0:nshells),frc(0:nshells),&
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
@@ -1054,7 +1054,7 @@ contains
         sh = max(1, ctfres_shell())
         self%ctfres = max(2.0*smpd_sc,min(smpd_sc*real(self%box)/real(sh), self%hp))
         if( DEBUG_HERE )then
-            print *,'self%ctfres ',glob_count, self%ctfres
+            print *,'self%ctfres ',glob_count, self%ctfres, sh
             call self%plot_ctf(int2str(glob_count)//'_ctf.eps', nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)
         endif
         self%pspec4ctfres = pspec
@@ -1073,11 +1073,12 @@ contains
                 n_abovehigh  = 0
                 n_abovesig   = 0
                 ctfres_shell = -1
-                ! hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box)) ! ctffind 4.1.9
-                hstart = nint(0.1 * sqrt(2.)* real(nshells)) ! ctffind 4.1.14
+                ! hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box)/scale) ! ctffind 4.1.9
+                hstart = nint(0.1 * real(nshells)) ! ctffind 4.1.14
                 do h = hstart,nshells
                     found = ((n_abovelow>3)  .and. (frc(h)<low_threshold))&
-                            &.or.((n_abovehigh>3) .and. (frc(h)<significance_threshold))
+                            &.or.((n_abovesig>3) .and. (frc(h)<significance_threshold))&
+                            &.or.(count(frc(h-4:h) < significance_threshold) > 3) ! custom & more stringent
                     if( found )then
                         ctfres_shell = h
                         exit
@@ -1101,14 +1102,14 @@ contains
                 winhalfwidth = 0
                 hp_ind       = ceiling(hp_rad)
                 ! FRC window sizes
-                min_winhalfwidth = nint(real(nshells)/40.)
+                min_winhalfwidth = nint(real(nshells)/40.0/sqrt(2.))
                 sh_prev = 0
                 do sh = 1,nshells
                     if( .not.is_equal(nextrema1d(sh),nextrema1d(sh-1)) )then
                         do ish = sh_prev,sh-1
-                            winhalfwidth(ish) = nint((1.+0.1*real(nextrema1d(sh))) * real((sh-sh_prev+1)))
+                            winhalfwidth(ish) = nint((1.+0.1*real(nextrema1d(sh)))) * (sh-sh_prev+1)
                             winhalfwidth(ish) = max(winhalfwidth(ish), min_winhalfwidth)
-                            winhalfwidth(ish) = min(winhalfwidth(ish), nint(real(nshells)/2.)-1)
+                            winhalfwidth(ish) = min(winhalfwidth(ish), nint(real(nshells)/2)-1)
                         enddo
                         sh_prev = sh
                     endif
@@ -1132,7 +1133,7 @@ contains
                         righth = nshells
                         lefth  = righth - 2*winhalfwidth(h)-1
                     endif
-                    nh        = 2*winhalfwidth(h)+1
+                    nh        = righth-lefth+1
                     spec_avg  = sum(spec1d_rank(lefth:righth))/ real(nh)
                     fit_avg   = sum(spec1d_fit(lefth:righth)) / real(nh)
                     product   = dot_product(spec1d_rank(lefth:righth)-spec_avg, spec1d_fit(lefth:righth)-fit_avg) / real(nh)

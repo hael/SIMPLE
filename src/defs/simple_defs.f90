@@ -165,6 +165,10 @@ real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which 
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
 real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
 
+! preprocessing constants
+real, parameter    :: DFMAX_DEFAULT        = 5.0       !< Default maximum bound for defocus search (microns)
+real, parameter    :: DFMIN_DEFAULT        = 0.2       !< Default minimum bound for defocus search (microns)
+
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)

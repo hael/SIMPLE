@@ -78,8 +78,8 @@ contains
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
-        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            0.3)
-        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            5.0)
+        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
