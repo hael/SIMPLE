@@ -19,6 +19,7 @@ type strategy3D_spec
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
+    logical :: ref_only = .false.   !< in regularization: updating the reference oris (stored in builder%reg_oris), not the particle oris
 end type strategy3D_spec
 
 type strategy3D_srch
