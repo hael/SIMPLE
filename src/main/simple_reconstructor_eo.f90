@@ -28,6 +28,7 @@ type :: reconstructor_eo
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
     logical             :: exists     = .false.
+    logical             :: align_reg  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -91,6 +92,7 @@ contains
         self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
+        self%align_reg  = params_glob%l_align_reg
         self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
         ! create composites
         if( self%automsk )then
@@ -230,8 +232,13 @@ contains
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: even_vol, even_rho
         logical                                :: here(2)
-        even_vol = trim(adjustl(fbody))//'_even'//self%ext
-        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
+        if( self%align_reg )then
+            even_vol = trim(adjustl(fbody))//'_ref_even'//self%ext
+            even_rho = 'rho_'//trim(adjustl(fbody))//'_ref_even'//self%ext
+        else
+            even_vol = trim(adjustl(fbody))//'_even'//self%ext
+            even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
+        endif
         here(1)= file_exists(even_vol)
         here(2)= file_exists(even_rho)
         if( all(here) )then
@@ -248,8 +255,13 @@ contains
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: odd_vol, odd_rho
         logical                                :: here(2)
-        odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
-        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        if( self%align_reg )then
+            odd_vol = trim(adjustl(fbody))//'_ref_odd'//self%ext
+            odd_rho = 'rho_'//trim(adjustl(fbody))//'_ref_odd'//self%ext
+        else
+            odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
+            odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        endif
         here(1)= file_exists(odd_vol)
         here(2)= file_exists(odd_rho)
         if( all(here) )then

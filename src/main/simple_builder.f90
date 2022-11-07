@@ -40,7 +40,8 @@ type :: builder
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
     real,                   allocatable :: diams(:)               !< class average diameters
     ! RECONSTRUCTION TOOLBOX
-    type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
+    type(reconstructor_eo)              :: eorecvol               !< object for regularized eo reconstruction
+    type(reconstructor_eo)              :: eoref                  !< object for reference eo reconstruction
     type(ori)             , allocatable :: reg_oris(:)            !< regularized oris
     ! STRATEGY3D TOOLBOX
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for regularized eo-reconstruction ()
@@ -54,6 +55,7 @@ type :: builder
     logical, private                    :: cluster_tbox_exists    = .false.
     logical, private                    :: rec_tbox_exists        = .false.
     logical, private                    :: eo_rec_tbox_exists     = .false.
+    logical, private                    :: eo_ref_tbox_exists     = .false.
     logical, private                    :: strategy3D_tbox_exists = .false.
     logical, private                    :: strategy2D_tbox_exists = .false.
     logical, private                    :: extremal3D_tbox_exists = .false.
@@ -70,6 +72,7 @@ type :: builder
     procedure                           :: kill_general_tbox
     procedure                           :: build_rec_eo_tbox
     procedure, private                  :: kill_rec_eo_tbox
+    procedure, private                  :: kill_ref_eo_tbox
     procedure                           :: build_strategy3D_tbox
     procedure, private                  :: kill_strategy3D_tbox
     procedure, private                  :: build_strategy2D_tbox
@@ -321,9 +324,14 @@ contains
         class(parameters),      intent(inout) :: params
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
+        if( params%l_align_reg )then
+            call self%kill_ref_eo_tbox
+            call self%eoref%new(self%spproj)
+        endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
+        self%eo_ref_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
 
@@ -334,6 +342,14 @@ contains
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_eo_tbox
+
+    subroutine kill_ref_eo_tbox( self )
+        class(builder), intent(inout) :: self
+        if( self%eo_ref_tbox_exists )then
+            call self%eoref%kill
+            self%eo_ref_tbox_exists = .false.
+        endif
+    end subroutine kill_ref_eo_tbox
 
     subroutine build_strategy2D_tbox( self, params )
         class(builder), target, intent(inout) :: self
