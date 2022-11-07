@@ -74,7 +74,7 @@ contains
 
     subroutine oris_assign_greedy_neigh( self )
         class(strategy3D_greedy_neigh), intent(inout) :: self
-        call extract_peak_ori(self%s)
+        call extract_peak_ori(self%s, self%spec)
     end subroutine oris_assign_greedy_neigh
 
     subroutine kill_greedy_neigh( self )

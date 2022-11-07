@@ -689,9 +689,9 @@ contains
             else
                 if( params_glob%l_align_reg )then
                     if( trim(params_glob%refine) .eq. 'snhc' )then
-                        params_glob%vols_ref(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext//'_ref'
+                        params_glob%vols_ref(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//'_ref'//params_glob%ext
                     else
-                        params_glob%vols_ref(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext//'_ref'
+                        params_glob%vols_ref(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//'_ref'//params_glob%ext
                     endif
                     if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                         call build_glob%eorefs(s)%set_automsk(.true.)
