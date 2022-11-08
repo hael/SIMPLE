@@ -134,7 +134,7 @@ contains
         nptcls_out = count(selected_peak_positions)
         call mic_saved%kill
         ! bring back coordinates to original sampling
-        peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
+        peak_positions_refined = nint(PICKER_SHRINK_REFINE)*transpose(peak_positions_refined)
         call write_boxfile
         ! returns absolute path
         call make_relativepath(CWD_GLOB, boxname, boxname_out)
@@ -232,7 +232,7 @@ contains
         write(logfhandle,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
         allocate( peak_stats(nmax_sel,NSTAT) )
         ! bring back coordinates to refinement sampling
-        allocate( peak_positions_refined(nmax,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
+        allocate( peak_positions_refined(2,nmax), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         cnt = 0
         do ipeak=1,nmax
@@ -241,7 +241,7 @@ contains
                 ! best match in crude first scan
                 ref = refmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
                 ! refinement range
-                call srch_range(peak_positions_refined(ipeak,:))
+                call srch_range(peak_positions_refined(:,ipeak))
                 ! extract image, correlate, find peak
                 corr = -1
                 do xind=xrange(1),xrange(2)
@@ -249,7 +249,7 @@ contains
                         call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target, outside)
                         target_corr = refs_refine(ref)%real_corr_prenorm(ptcl_target, sxx_refine(ref))
                         if( target_corr > corr )then
-                            peak_positions_refined(ipeak,:) = [xind,yind]
+                            peak_positions_refined(:,ipeak) = [xind,yind]
                             corr = target_corr
                         endif
                     end do
@@ -281,7 +281,7 @@ contains
         do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
-                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
+                call mic_shrunken_refine%window_slim(peak_positions_refined(:,ipeak),&
                     &ldim_refs_refine(1), ptcl_target, outside)
                 call ptcl_target%spectrum('power', spec)
                 peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))
@@ -329,8 +329,8 @@ contains
         call fileiochk('picker; write_boxfile ', iostat)
         do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
-                write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
-                peak_positions_refined(ipeak,2), orig_box, orig_box, -3
+                write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(1,ipeak),&
+                peak_positions_refined(2,ipeak), orig_box, orig_box, -3
             endif
         end do
         call fclose(funit)
