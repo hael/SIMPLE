@@ -277,12 +277,13 @@ contains
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
                 call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                 ! on regularization mode, run the same refine3D strategy to update the reference, not the particles
                 if( params_glob%l_align_reg )then
                     strategy3Dsrch(iptcl_batch)%ptr%ref_only = .true.
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                    strategy3Dsrch(iptcl_batch)%ptr%ref_only = .false.
                 endif
+                call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
