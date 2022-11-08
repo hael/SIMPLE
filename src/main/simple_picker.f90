@@ -134,7 +134,7 @@ contains
         nptcls_out = count(selected_peak_positions)
         call mic_saved%kill
         ! bring back coordinates to original sampling
-        peak_positions_refined = nint(PICKER_SHRINK_REFINE)*transpose(peak_positions_refined)
+        peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
         ! returns absolute path
         call make_relativepath(CWD_GLOB, boxname, boxname_out)
@@ -232,7 +232,7 @@ contains
         write(logfhandle,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
         allocate( peak_stats(nmax_sel,NSTAT) )
         ! bring back coordinates to refinement sampling
-        allocate( peak_positions_refined(2,nmax), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
+        allocate( peak_positions_refined(2,nmax), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*transpose(peak_positions))
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         cnt = 0
         do ipeak=1,nmax
