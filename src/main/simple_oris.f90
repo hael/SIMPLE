@@ -318,7 +318,7 @@ contains
     end function get_noris
 
     subroutine get_ori( self, i, o )
-        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: self
         integer,     intent(in)    :: i
         type(ori),   intent(inout) :: o
         if( self%n == 0 ) THROW_HARD('oris object does not exist; get_ori')
@@ -2688,29 +2688,26 @@ contains
 
     !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
     subroutine nearest_proj_neighbors_1( self, k, nnmat )
-        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
-        integer,     intent(inout) :: nnmat(self%n,k)
+        integer,     intent(inout) :: nnmat(k,self%n)
         real      :: dists(self%n), x
         integer   :: inds(self%n), i, j
-        type(ori) :: o
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
         do i=1,self%n
-            call self%get_ori(i, o)
             do j=1,self%n
                 inds(j) = j
                 if( i == j )then
                     dists(j) = -huge(x)
                 else
-                    dists(j) = self%o(j).euldist.o
+                    dists(j) = self%o(j).euldist.self%o(i)
                 endif
             end do
             call hpsort(dists, inds)
             do j=1,k
-                nnmat(i,j) = inds(j)
+                nnmat(j,i) = inds(j)
             end do
         end do
-        call o%kill
     end subroutine nearest_proj_neighbors_1
 
     !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
@@ -2778,25 +2775,26 @@ contains
         end do
     end subroutine nearest_proj_neighbors_4
 
-    subroutine detect_peaks( self, corrs, peaks )
-        class(oris), intent(inout) :: self
+    subroutine detect_peaks( self, nnmat, corrs, peaks )
+        class(oris), intent(in)    :: self
+        integer,     intent(in)    :: nnmat(4,self%n) ! 3NN, 4 because "self" is included
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real, allocatable :: corrs_packed(:)
-        integer :: i, j, nnmat(self%n,4) ! 4 because "self" is included
+        integer :: i, j
         real    :: corr_t
-        ! dentify the three nearest projection neighbors
-        call self%nearest_proj_neighbors_1(4, nnmat)
+        corr_t = 0.0
         do i = 1,self%n
-            if( i /= nnmat(i,1) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
+            if( i /= nnmat(1,i) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
         end do
         ! search for peaks
-        peaks(:) = .false.
         do i = 1,self%n
-            if( corrs(nnmat(i,1)) > corr_t )then
-                if( corrs(nnmat(i,1)) > corrs(nnmat(i,2)) .and.&
-                &corrs(nnmat(i,1)) > corrs(nnmat(i,3)) .and.&
-                &corrs(nnmat(i,1)) > corrs(nnmat(i,4)) ) peaks(i) = .true.
+            if( corrs(nnmat(1,i)) > corr_t )then
+                peaks(i) = ( corrs(nnmat(1,i)) > corrs(nnmat(2,i)) .and.&
+                &corrs(nnmat(1,i)) > corrs(nnmat(3,i)) .and.&
+                &corrs(nnmat(1,i)) > corrs(nnmat(4,i)) )
+            else
+                peaks(i) = .false.
             endif
         end do
         if( count(peaks) > 0 )then

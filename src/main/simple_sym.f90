@@ -39,7 +39,8 @@ type sym
     ! setters
     procedure, private :: set_subgrps
     ! modifiers
-    procedure          :: apply
+    procedure, private :: apply_1, apply_2
+    generic            :: apply => apply_1, apply_2
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
     procedure          :: nearest_proj_neighbors
@@ -51,7 +52,8 @@ type sym
     procedure, private :: rnd_euler_2
     generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
     ! calculators
-    procedure          :: sym_dists
+    procedure, private :: sym_dists_1, sym_dists_2
+    generic            :: sym_dists => sym_dists_1, sym_dists_2
     procedure          :: nearest_sym_neighbors
     ! utils
     procedure, private :: build_eullims
@@ -277,19 +279,30 @@ contains
     end function get_all_subgrps_descr
 
     !>  \brief  is a symmetry adaptor
-    subroutine apply( self, e_in, symop, e_sym )
-        class(sym), intent(inout) :: self
+    subroutine apply_1( self, e_in, symop, e_sym )
+        class(sym), intent(in)    :: self
         class(ori), intent(in)    :: e_in  !< orientation object
         integer,    intent(in)    :: symop !< index of sym operation
         type(ori),  intent(inout) :: e_sym
         type(ori)                 :: e_symop, e_tmp
-        e_sym   = e_in ! transfer of parameters
+        e_sym = e_in ! transfer of parameters
         call self%e_sym%get_ori(symop, e_symop)
         call e_symop%compose(e_in, e_tmp)
         call e_sym%set_euler(e_tmp%get_euler())
         call e_symop%kill
         call e_tmp%kill
-    end subroutine apply
+    end subroutine apply_1
+
+    !>  \brief  is a symmetry adaptor, operates on euler triplet
+    subroutine apply_2( self, euls_in, symop, euls_sym )
+        class(sym), intent(in)    :: self
+        real,       intent(in)    :: euls_in(3)
+        integer,    intent(in)    :: symop !< index of sym operation
+        real,       intent(inout) :: euls_sym(3)
+        real :: euls_symop(3)
+        euls_symop = self%e_sym%get_euler(symop)
+        call euler_compose(euls_symop, euls_in, euls_sym)
+    end subroutine apply_2
 
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in, symop )
@@ -341,7 +354,7 @@ contains
 
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
-    subroutine sym_dists( self, oref, oasym, osym, euldist, inplrotdist )
+    subroutine sym_dists_1( self, oref, oasym, osym, euldist, inplrotdist )
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref        !< is the untouched reference
         class(ori), intent(in)    :: oasym       !< is the orientation determined within assymetric unit
@@ -353,10 +366,10 @@ contains
         integer   :: isym
         euldist     = oasym.euldist.oref
         inplrotdist = oasym.inplrotdist.oref
+        osym        = oasym
         if( self%n == 1 )then
             ! C1: nothing to do
         else
-            osym = oasym
             do isym=2,self%n
                 call self%apply(oasym, isym, o)
                 dist = o.euldist.oref
@@ -370,7 +383,37 @@ contains
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
         call o%kill
-    end subroutine sym_dists
+    end subroutine sym_dists_1
+
+        !>  \brief  determines euler distance and corresponding symmetrized
+    !>          orientation between two orientations
+    subroutine sym_dists_2( self, euls_ref, euls_asym, euls_sym, euldist, inplrotdist )
+        class(sym), intent(in)    :: self
+        real,       intent(in)    :: euls_ref(3), euls_asym(3)
+        real,       intent(inout) :: euls_sym(3)
+        real,       intent(out)   :: euldist     !< Euler distance
+        real,       intent(out)   :: inplrotdist !< in-plane rotational distance
+        real    :: euls(3), dist
+        integer :: isym
+        euldist     = euler_dist(euls_asym, euls_ref)
+        inplrotdist = euler_inplrotdist(euls_asym, euls_ref)
+        euls_sym    = euls_asym
+        if( self%n == 1 )then
+            ! C1: nothing to do
+        else
+            do isym=2,self%n
+                call self%apply(euls_asym, isym, euls)
+                dist = euler_dist(euls, euls_ref)
+                if( dist < euldist )then
+                    euldist = dist
+                    euls_sym  = euls
+                endif
+            enddo
+            inplrotdist = euler_inplrotdist(euls_sym, euls_ref)
+        endif
+        euldist     = rad2deg( euldist )
+        inplrotdist = rad2deg( inplrotdist )
+    end subroutine sym_dists_2
 
     !>  \brief  is a getter
     subroutine get_symori( self, symop, e_sym )

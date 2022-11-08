@@ -66,7 +66,7 @@ contains
             ! prepare orientation
             call self%oris_assign()
             ! detect peaks
-            call self%s%eulspace%detect_peaks(corrs, peaks)
+            call self%s%eulspace%detect_peaks(s3D%proj_space_nnmat, corrs, peaks)
             npeaks = count(peaks)
             call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(npeaks))
             angdist = 0.

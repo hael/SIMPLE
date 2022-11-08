@@ -40,7 +40,7 @@ contains
         integer,                  intent(in)    :: ithr
         integer, allocatable :: peak_inds(:)
         type(ori) :: osym, oi, oj, o, obest
-        integer   :: iref, ipeak, isample, loc(1), cnt, npeaks, i, j, nevals(2), inds(self%s%nrefs)
+        integer   :: iref, ipeak, isample, loc, cnt, npeaks, i, j, nevals(2), inds(self%s%nrefs)
         real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
         real      :: euldist, dist_inpl, sdev, var, cc_peak_avg, cc_nonpeak_avg
         real      :: corr, corr_best, cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
@@ -58,14 +58,14 @@ contains
                 inds(iref) = iref
                 ! identify the top scoring in-plane angle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                loc = maxloc(inpl_corrs)
+                loc = maxloc(inpl_corrs,dim=1)
                 ! store for peak detection
-                corrs(iref) = inpl_corrs(loc(1))
+                corrs(iref) = inpl_corrs(loc)
                 ! store for continuous refinement
-                call self%s%eulspace%e3set(iref, 360. - pftcc_glob%get_rot(loc(1)))
+                call self%s%eulspace%e3set(iref, 360. - pftcc_glob%get_rot(loc))
             end do
             ! detect peaks
-            call self%s%eulspace%detect_peaks(corrs, peaks)
+            call self%s%eulspace%detect_peaks(s3D%proj_space_nnmat, corrs, peaks)
             npeaks = count(peaks)
             call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(npeaks))
             angdist = 0.
@@ -103,14 +103,14 @@ contains
             corr_best  = self%s%prev_corr
             got_better = .false.
             ! point loc to the best discrete orientation
-            loc        = maxloc(corrs)
+            loc        = maxloc(corrs,dim=1)
             ! extract the peak indices
             if( npeaks > 1 ) peak_inds  = pack(inds, mask=peaks) 
             do isample=1,self%s%nsample_neigh
                 if( npeaks > 1 )then
                     ipeak = peak_inds(irnd_uni(npeaks))
                 else
-                    ipeak = loc(1)
+                    ipeak = loc
                 endif
                 ! make a random rotation matrix neighboring ipeak within the assymetric unit
                 call obest%set_euler(self%s%eulspace%get_euler(ipeak))

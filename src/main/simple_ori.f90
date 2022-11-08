@@ -12,7 +12,7 @@ use simple_stat
 use simple_nrtxtfile
 implicit none
 
-public :: ori, test_ori, euler2m, m2euler
+public :: ori, test_ori, euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose
 private
 #include "simple_local_flags.inc"
 
@@ -1592,6 +1592,48 @@ contains
         rmat(3,2) = vz * sy
         rmat(3,3) = 1. - z
     end subroutine rnd_romat
+
+    !>  \brief  calculates the distance (in radians) btw two Euler triplets
+    pure real function euler_dist( euls1, euls2 )
+        real, intent(in) :: euls1(3), euls2(3)
+        real             :: normal1(3), normal2(3)
+        normal1 = euler_normal(euls1)
+        normal2 = euler_normal(euls2)
+        euler_dist = myacos(dot_product(normal1, normal2))
+    end function euler_dist
+
+    !>  \brief  calculates the normal vector of a Euler triplet
+    pure function euler_normal( euls ) result( normal )
+        real, intent(in) :: euls(3)
+        real             :: normal(3), rmat(3,3)
+        rmat   = euler2m(euls)
+        normal = matmul(zvec, rmat)
+    end function euler_normal
+
+    !>  \brief  calculates the in-plane distance of a euler triplet (so just psi) in radians
+    pure real function euler_inplrotdist( euls1, euls2 )
+        real, intent(in) :: euls1(3), euls2(3)
+        real, parameter  :: u(2) = [0.0, 1.0]
+        real             :: mat(2,2), x1(2), x2(2)
+        call rotmat2d(euls1(3), mat)
+        x1   = matmul(u,mat)
+        call rotmat2d(euls2(3), mat)
+        x2   = matmul(u,mat)
+        euler_inplrotdist = myacos(dot_product(x1,x2))
+    end function euler_inplrotdist
+
+    !>  \brief  is for composing Euler triplets
+    pure subroutine euler_compose( euls1, euls2, euls_out )
+        real, intent(in)    :: euls1(3), euls2(3)
+        real, intent(inout) :: euls_out(3)
+        real                :: rmat(3,3), rmat1(3,3), rmat2(3,3)
+        rmat1 = euler2m(euls1)
+        rmat2 = euler2m(euls2)
+        ! the composed rotation matrix is constructed
+        rmat = matmul(rmat2,rmat1)  ! multiplication of two rotation matrices commute (n>2 not)
+        ! convert to euler
+        euls_out = m2euler(rmat)
+    end subroutine euler_compose
 
     ! UNIT TEST
 
