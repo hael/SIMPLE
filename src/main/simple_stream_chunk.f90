@@ -94,8 +94,9 @@ contains
         class(stream_chunk),       intent(inout) :: self
         character(len=LONGSTRLEN), intent(in)    :: fnames(:)
         integer,                   intent(in)    :: nptcls, ind_glob
-        type(sp_project)     :: spproj
-        logical, allocatable :: spproj_mask(:)
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: stack_name
+        logical, allocatable          :: spproj_mask(:)
         integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in, inmics, instks
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         n_in = size(fnames)
@@ -126,7 +127,15 @@ contains
             inptcls = nint(spproj%os_mic%get(1,'nptcls'))
             call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
             call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
-            self%orig_stks(iiproj) = simple_abspath(trim(spproj%get_stkname(1)))
+            ! update to stored stack file name because we are in the root folder
+            stack_name = trim(spproj%get_stkname(1))
+            if( .not.file_exists(stack_name) )then
+                ! for cluster2D_stream, 4 is for '../'
+                self%orig_stks(iiproj) = simple_abspath(trim(stack_name(4:)))
+            else
+                ! for cluster2d_subsets
+                self%orig_stks(iiproj) = simple_abspath(trim(stack_name))
+            endif
             call self%spproj%os_stk%set(iiproj, 'stk', self%orig_stks(iiproj))
             do iptcl = 1,inptcls
                 cnt = cnt + 1

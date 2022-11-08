@@ -458,12 +458,7 @@ contains
                         call streamspproj%read_segment('mic', abs_fname)
                         if( l_pick )then
                             nptcls = nint(streamspproj%os_mic%get(1,'nptcls'))
-                            if( nptcls > 0 )then
-                                nptcls_here = nptcls_here + nptcls
-                                call streamspproj%read_segment('stk', abs_fname)
-                                call update_path(streamspproj%os_stk, 1, 'stk')
-                                call streamspproj%write_segment_inside('stk', abs_fname)
-                            endif
+                            if( nptcls > 0 ) nptcls_here = nptcls_here + nptcls
                         endif
                         call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
                         call streamspproj%kill
@@ -549,18 +544,22 @@ contains
             end subroutine create_individual_project
 
             !>  import previous run to the current project based on past single project files
-            ! TO DOUBLE-CHECK
             subroutine import_prev_streams
                 type(sp_project) :: streamspproj
                 type(ori)        :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
-                character(len=:), allocatable :: mic, mov
+                character(len=:), allocatable :: mic, mov, dir
                 logical,          allocatable :: spproj_mask(:)
                 integer :: iproj,nprojs,icnt,nptcls
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 err = .false.
-                call simple_list_files_regexp(params%dir_prev,'^'//trim(PREPROCESS_PREFIX)//'.*\.simple$',sp_files)
+                dir = filepath(params%dir_prev, 'spprojs/')
+                call simple_list_files_regexp(dir,'^'//trim(PREPROCESS_PREFIX)//'.*\.simple$',sp_files)
+                if( .not.allocated(sp_files) )then
+                    write(logfhandle,'(A)') '>>> Could not find previously processed movies'
+                    return
+                endif
                 nprojs = size(sp_files)
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
@@ -587,23 +586,23 @@ contains
                     call streamspproj%read_segment('mic',sp_files(iproj))
                     call streamspproj%os_mic%get_ori(1, o)
                     ! import mic segment
-                    call movefile2folder('intg',        output_dir_motion_correct, o, err)
-                    call movefile2folder('forctf',      output_dir_motion_correct, o, err)
-                    call movefile2folder('thumb',       output_dir_motion_correct, o, err)
-                    call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
-                    call movefile2folder('mceps',       output_dir_motion_correct, o, err)
-                    call movefile2folder('ctfjpg',      output_dir_ctf_estimate,   o, err)
-                    call movefile2folder('ctfdoc',      output_dir_ctf_estimate,   o, err)
+                    call movefile2folder('intg',        dir, output_dir_motion_correct, o, err)
+                    call movefile2folder('forctf',      dir, output_dir_motion_correct, o, err)
+                    call movefile2folder('thumb',       dir, output_dir_motion_correct, o, err)
+                    call movefile2folder('mc_starfile', dir, output_dir_motion_correct, o, err)
+                    call movefile2folder('mceps',       dir, output_dir_motion_correct, o, err)
+                    call movefile2folder('ctfjpg',      dir, output_dir_ctf_estimate,   o, err)
+                    call movefile2folder('ctfdoc',      dir, output_dir_ctf_estimate,   o, err)
                     if( l_pick )then
                         ! import mic & updates stk segment
-                        call movefile2folder('boxfile', output_dir_picker, o, err)
+                        call movefile2folder('boxfile', dir, output_dir_picker, o, err)
                         nptcls = nptcls + nint(o%get('nptcls'))
                         call streamspproj%os_mic%set_ori(1, o)
                         if( .not.err )then
                             call streamspproj%read_segment('stk', sp_files(iproj))
                             if( streamspproj%os_stk%get_noris() == 1 )then
                                 call streamspproj%os_stk%get_ori(1, o_stk)
-                                call movefile2folder('stk', output_dir_extract, o_stk, err)
+                                call movefile2folder('stk', dir, output_dir_extract, o_stk, err)
                                 call streamspproj%os_stk%set_ori(1, o_stk)
                                 call streamspproj%read_segment('ptcl2D', sp_files(iproj))
                                 call streamspproj%read_segment('ptcl3D', sp_files(iproj))
@@ -619,7 +618,7 @@ contains
                     call movie_buff%add2history(mov)
                     call movie_buff%add2history(mic)
                     ! write updated individual project file
-                    call streamspproj%write(basename(sp_files(iproj)))
+                    call streamspproj%write(trim(dir_preprocess)//basename(sp_files(iproj)))
                     ! count
                     icnt = icnt + 1
                 enddo
@@ -631,7 +630,6 @@ contains
                         if(spproj_mask(iproj))then
                             icnt = icnt+1
                             call completed_jobs_clines(icnt)%set('projfile',basename(sp_files(iproj)))
-                            call completed_jobs_clines(icnt)%printline
                         endif
                     enddo
                     call update_projects_list(completed_fnames, n_imported)
@@ -643,8 +641,8 @@ contains
                 write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', icnt
             end subroutine import_prev_streams
 
-            subroutine movefile2folder(key, folder, o, err)
-                character(len=*), intent(in)    :: key, folder
+            subroutine movefile2folder(key, input_dir, folder, o, err)
+                character(len=*), intent(in)    :: key, input_dir, folder
                 class(ori),       intent(inout) :: o
                 logical,          intent(out)   :: err
                 character(len=:), allocatable :: src
@@ -656,6 +654,7 @@ contains
                     return
                 endif
                 call o%getter(key,src)
+                src = filepath(input_dir, src)
                 if( .not.file_exists(src) )then
                     err = .true.
                     return
@@ -666,8 +665,9 @@ contains
                     THROW_WARN('Ignoring '//trim(src))
                     return
                 endif
-                iostat = rename(src,reldest)
-                call make_relativepath(CWD_GLOB,dest,reldest)
+                iostat = rename(src,dest)
+                ! files will be used/imported from the spprojs folder
+                call make_relativepath(trim(CWD_GLOB)//'/spprojs/',dest,reldest)
                 call o%set(key,reldest)
             end subroutine movefile2folder
 
@@ -685,7 +685,6 @@ contains
         call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
         if( ptcl_check )then
             if( nmics /= 1 .or. nptcls < 1 )then
-                ! something went wrong, skipping this one
                 THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
                 nptcls = 0
             else
@@ -696,7 +695,6 @@ contains
             endif
         else
             if( nmics /= 1 )then
-                ! something went wrong, skipping this one
                 THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
             else
                 call spproj_here%read_segment('mic',fname)

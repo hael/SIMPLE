@@ -483,7 +483,7 @@ contains
                     call update_path(pool_proj%os_mic, imic, 'ctfjpg')
                     call update_path(pool_proj%os_mic, imic, 'boxfile')
                 endif
-                ! stacks & update path so they are relative to root folder
+                ! so stacks are relative to root folder
                 call pool_proj%os_stk%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_stk, iproj)
                 nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
                 call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
