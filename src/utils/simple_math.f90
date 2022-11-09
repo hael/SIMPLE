@@ -931,7 +931,7 @@ contains
         real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
         type(nlopt_opt)     :: opt
         integer  :: N, stat, initial_ind, i, j
-        real(wp) :: x(9), lowest_cost
+        real(wp) :: x(9), lowest_cost, lims(9, 2)
         real     :: initial_best, total
         N       = size(mats, 3)
         mat_avg =  sum(mats, 3)/N
@@ -952,7 +952,19 @@ contains
             endif
         enddo
         ! optimization
+        lims(1:3,1) = -1
+        lims(1:3,2) = +1
+        lims(4:5,1) = -2
+        lims(4:5,2) = +2
+        lims(  6,1) = -1
+        lims(  6,2) = +1
+        lims(7:8,1) = -2
+        lims(7:8,2) = +2
+        lims(  9,1) = -1
+        lims(  9,2) = +1
         call create(opt, algorithm_from_string('LN_BOBYQA'), 9)
+        call opt%set_lower_bounds(lims(:,1))
+        call opt%set_upper_bounds(lims(:,2))
         associate(f => nlopt_func(nloptf_myfunc))
             call opt%set_min_objective(f)
             call opt%set_ftol_rel(TOL)
