@@ -977,13 +977,18 @@ contains
     ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
     function rot_angle( mat1, mat2 ) result(angle)
         real, intent(in) :: mat1(3,3), mat2(3,3)
-        real :: angle, mat_diff(3, 3)
+        real :: angle, mat_diff(3, 3), arg_tr
         if( all( abs(mat1 - mat2) < epsilon(angle) ) )then
             angle = 0.
             return
         endif
         mat_diff = matmul(mat1, transpose(mat2))
-        angle    = acos( (trace(mat_diff) - 1.)/2. )
+        arg_tr   = (trace(mat_diff) - 1.)/2.
+        if( arg_tr < -1 .or. arg_tr > 1)then
+            angle = huge(arg_tr)
+        else
+            angle = acos(arg_tr)
+        endif
     end function rot_angle
 
 end module simple_math
