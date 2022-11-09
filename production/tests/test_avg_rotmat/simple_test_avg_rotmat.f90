@@ -47,14 +47,13 @@ do i = 1, N
     total = total + rot_angle(mat_avg, rot_mats(:,:,i))
     print *, 'diff angle between "average" mat and mat ', int2str(i), ' is:', rot_angle(mat_avg, rot_mats(:,:,i))
 enddo
-print *, 'total difference between "average" mat and others is: ', total
+print *, 'total difference between "average" mat and others is: ', total/N
 print *, '-------'
 do i = 1, N
     total = 0.
     do j = 1, N
         total = total + rot_angle(rot_mats(:,:,i), rot_mats(:,:,j))
-        !print *, 'diff angle between mat ', int2str(i),' and mat ', int2str(j), ' is:', rot_angle(rot_mats(:,:,i), rot_mats(:,:,j))
     enddo
-    print *, 'total difference between mat ', int2str(i),' and others is: ', total
+    print *, 'total difference between mat ', int2str(i),' and others is: ', total/(N-1.) ! distance of one against itself does not count
 enddo
 end program simple_test_avg_rotmat
