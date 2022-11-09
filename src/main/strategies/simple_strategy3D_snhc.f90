@@ -75,7 +75,7 @@ contains
             call o1%set_euler(s3D%proj_space_euls(:,ref,self%s%ithr))
             call o1%set_shift([0., 0.])
             ! put the ori into reg_oris in builder
-            build_glob%reg_oris(self%s%iptcl) = o1
+            call build_glob%reg_oris%set_ori(self%s%iptcl, o1)
         else
             ! stash prev ori
             call build_glob%spproj_field%get_ori(self%s%iptcl, o1)

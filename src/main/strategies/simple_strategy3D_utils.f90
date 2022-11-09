@@ -40,7 +40,7 @@ contains
             where( abs(shvec) < 1e-6 ) shvec = 0.
             call o_prev%set_shift(shvec)
             ! put the ori into reg_oris in builder
-            build_glob%reg_oris(s%iptcl) = o_prev
+            call build_glob%reg_oris%set_ori(s%iptcl, o_prev)
             call o_prev%kill
         else
             ! stash previous ori
