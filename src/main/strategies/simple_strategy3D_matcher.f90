@@ -470,8 +470,13 @@ contains
         ! must be done here since params_glob%kfromto is dynamically set
         call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max], params_glob%l_match_filt)
         do s = 1,params_glob%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
+            if( params_glob%l_align_reg )then
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols_ref(s), do_center, xyz)
+                call read_and_filter_refvols(cline, params_glob%vols_even_ref(s), params_glob%vols_odd_ref(s))
+            else
+                call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+                call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
+            endif
             ! odd refvol
             call preprefvol_cart(cline, s, do_center, xyz, .false.)
             ! even refvol
@@ -618,19 +623,35 @@ contains
                     end do
                     !$omp end parallel do
                     ! gridding
-                    do i=batchlims(1),batchlims(2)
-                        iptcl       = pinds(i)
-                        ibatch      = i - batchlims(1) + 1
-                        call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        if( orientation%isstatezero() ) cycle
-                        select case(trim(params_glob%refine))
-                            case('clustersym')
-                                ! always C1 reconstruction
-                                call grid_ptcl(fpls(ibatch), c1_symop, orientation)
-                            case DEFAULT
-                                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                        end select
-                    end do
+                    if( params_glob%l_align_reg )then
+                        do i=batchlims(1),batchlims(2)
+                            iptcl       = pinds(i)
+                            ibatch      = i - batchlims(1) + 1
+                            call build_glob%reg_oris%get_ori(iptcl, orientation) ! when in reg mode, the orientation is taken from reg_oris in build
+                            if( orientation%isstatezero() ) cycle
+                            select case(trim(params_glob%refine))
+                                case('clustersym')
+                                    ! always C1 reconstruction
+                                    call grid_ptcl(fpls(ibatch), c1_symop, orientation)
+                                case DEFAULT
+                                    call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
+                            end select
+                        end do
+                    else
+                        do i=batchlims(1),batchlims(2)
+                            iptcl       = pinds(i)
+                            ibatch      = i - batchlims(1) + 1
+                            call build_glob%spproj_field%get_ori(iptcl, orientation)
+                            if( orientation%isstatezero() ) cycle
+                            select case(trim(params_glob%refine))
+                                case('clustersym')
+                                    ! always C1 reconstruction
+                                    call grid_ptcl(fpls(ibatch), c1_symop, orientation)
+                                case DEFAULT
+                                    call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
+                            end select
+                        end do
+                    endif
                 end do
                 ! normalise structure factors
                 call norm_struct_facts( cline, which_iter)

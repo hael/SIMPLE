@@ -42,7 +42,7 @@ type :: builder
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for regularized eo reconstruction
     type(reconstructor_eo)              :: eoref                  !< object for reference eo reconstruction
-    type(ori)             , allocatable :: reg_oris(:)            !< regularized oris
+    type(oris)            , allocatable :: reg_oris               !< regularized oris
     ! STRATEGY3D TOOLBOX
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for regularized eo-reconstruction ()
     type(reconstructor_eo), allocatable :: eorefs(:)              !< array of volumes for reference eo-reconstruction
@@ -393,10 +393,8 @@ contains
         ! allocating regularized oris and references
         if( params%l_align_reg )then
             allocate(self%eorefs(params%nstates))
-            allocate(self%reg_oris(params%nptcls))
-            do i = 1, params%nptcls
-                call self%reg_oris(i)%new(.true.)
-            enddo
+            allocate(self%reg_oris)
+            call self%reg_oris%new(params%nptcls, .true.)
         endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         rot = 0.
@@ -435,12 +433,7 @@ contains
                 deallocate(self%eorefs)
             endif
             ! allocating regularized oris
-            if( allocated(self%reg_oris) )then
-                do i = 1,size(self%reg_oris)
-                    call self%reg_oris(i)%kill
-                enddo
-                deallocate(self%reg_oris)
-            endif
+            if( allocated(self%reg_oris ) ) deallocate(self%reg_oris)
             if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%strategy3D_tbox_exists = .false.
         endif
