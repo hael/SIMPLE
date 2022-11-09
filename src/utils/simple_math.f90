@@ -920,4 +920,73 @@ contains
 
     end subroutine SavitzkyGolay_filter
 
+    ! finding the "average" rotation matrix using the optimization approach
+    subroutine avg_rotmat( mats, mat_avg, weights)
+        use nlopt_wrap, only: nlopt_opt, nlopt_func, create, destroy
+        use nlopt_enum, only: algorithm_from_string
+        real, intent(in)    :: mats(:,:,:)
+        real, intent(inout) :: mat_avg(3,3)
+        real, intent(in)    :: weights(:)
+        integer,  parameter :: wp  = kind(0.0d0)
+        real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
+        type(nlopt_opt)     :: opt
+        integer  :: N, stat, initial_ind, i, j
+        real(wp) :: x(9), lowest_cost
+        real     :: initial_best, total
+        N       = size(mats, 3)
+        mat_avg =  sum(mats, 3)/N
+        ! initial value of mat_avg
+        total = 0.
+        do i = 1, N
+            total = total + rot_angle(mat_avg, mats(:,:,i))
+        enddo
+        initial_best = total
+        do i = 1, N
+            total = 0.
+            do j = 1, N
+                total = total + rot_angle(mats(:,:,i), mats(:,:,j))
+            enddo
+            if( total < initial_best )then
+                initial_best = total
+                mat_avg      = mats(:,:,i)
+            endif
+        enddo
+        ! optimization
+        call create(opt, algorithm_from_string('LN_BOBYQA'), 9)
+        associate(f => nlopt_func(nloptf_myfunc))
+            call opt%set_min_objective(f)
+            call opt%set_ftol_rel(TOL)
+            x = [mat_avg]
+            call opt%optimize(x, lowest_cost, stat)
+        end associate
+        mat_avg = reshape(x, (/3, 3/))
+        call destroy(opt)
+    contains
+        function nloptf_myfunc(x_in, gradient, func_data) result(f)
+            real(wp), intent(in)              :: x_in(:)
+            real(wp), intent(inout), optional :: gradient(:)
+            class(*), intent(in),    optional :: func_data
+            real(wp) :: f
+            integer  :: i
+            real     :: x_mat(3,3)
+            x_mat = real(reshape(x_in, (/3, 3/)))
+            f     = 0.
+            do i = 1, N
+                f = f + weights(i)*rot_angle(x_mat, mats(:,:,i))
+            enddo
+        end function nloptf_myfunc
+    end subroutine avg_rotmat
+
+    ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
+    function rot_angle( mat1, mat2 ) result(angle)
+        real, intent(in) :: mat1(3,3), mat2(3,3)
+        real :: angle, mat_diff(3, 3)
+        if( all( abs(mat1 - mat2) < epsilon(angle) ) )then
+            angle = 0.
+            return
+        endif
+        mat_diff = matmul(mat1, transpose(mat2))
+        angle    = acos( (trace(mat_diff) - 1.)/2. )
+    end function rot_angle
+
 end module simple_math
