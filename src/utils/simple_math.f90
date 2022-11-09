@@ -935,23 +935,7 @@ contains
         real     :: initial_best, total
         N       = size(mats, 3)
         mat_avg =  sum(mats, 3)/N
-        ! initial value of mat_avg
-        total = 0.
-        do i = 1, N
-            total = total + rot_angle(mat_avg, mats(:,:,i))
-        enddo
-        initial_best = total
-        do i = 1, N
-            total = 0.
-            do j = 1, N
-                total = total + rot_angle(mats(:,:,i), mats(:,:,j))
-            enddo
-            if( total < initial_best )then
-                initial_best = total
-                mat_avg      = mats(:,:,i)
-            endif
-        enddo
-        ! optimization
+        ! bounds
         lims(1:3,1) = -1
         lims(1:3,2) = +1
         lims(4:5,1) = -2
@@ -965,6 +949,7 @@ contains
         call create(opt, algorithm_from_string('LN_BOBYQA'), 9)
         call opt%set_lower_bounds(lims(:,1))
         call opt%set_upper_bounds(lims(:,2))
+        ! optimization
         associate(f => nlopt_func(nloptf_myfunc))
             call opt%set_min_objective(f)
             call opt%set_ftol_rel(TOL)
