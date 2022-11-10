@@ -84,6 +84,7 @@ type :: atom_stats
     real    :: aniso(3,3)        = 0. ! Ansisotropic displacement parameter matrix
     real    :: doa               = 0. ! Degree of anisotropy                                        DOA
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
+    
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -1095,7 +1096,7 @@ contains
         logical, allocatable :: cc_mask(:)
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
-        integer :: i, j, k, cc, cn, n, funit, ios, scale_fac = 4, adp_tossed
+        integer :: i, j, k, cc, cn, n, funit, ios, scale_fac = 2, adp_tossed
         character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", fn_fit_descaled="fit_descaled.mrc"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
@@ -1139,14 +1140,14 @@ contains
         call self%img_raw%pad(img_scaled)
         call img_scaled%ifft()
         call self%img_raw%ifft()
-        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY", scale_fac
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY", scale_fac**3
         call img_scaled%get_rmat_ptr(rmat_scaled)
         ! For testing
         call img_scaled%write(fn_scaled) 
         !fit = image(ldim=scale_fac*self%ldim, smpd=self%smpd/scale_fac)
         !fit_descaled = image(ldim=self%ldim, smpd=self%smpd)
-        call fit%copy(img_scaled)
-        call fit_descaled%copy(self%img_raw)
+        call fit%new(scale_fac*self%img_raw%get_ldim(), 1.0/scale_fac*self%img_raw%get_smpd())
+        call fit_descaled%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
         write(funit, '(i8)') self%n_cc
 
@@ -1175,7 +1176,7 @@ contains
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_anisotropic_disp_mask(cc)
+                call calc_anisotropic_disp_sphere(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
                 adp_tossed = adp_tossed + 1
@@ -1292,6 +1293,164 @@ contains
                 call atoms_obj%kill
             end subroutine write_cn_atoms
 
+            subroutine calc_anisotropic_disp_sphere(cc)
+                integer, intent(in)     :: cc
+                real        :: sum_int, mu(3), icenter(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
+                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3), fit_rad, prob_tot, prob_sum_sq
+                integer     :: i, j, k, n, x, y, z, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, errflg, nrot
+                
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
+                icenter = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
+                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
+                ilo = max(nint(icenter(1) - maxrad), 1)
+                ihi = min(nint(icenter(1) + maxrad), self%ldim(1)*scale_fac)
+                jlo = max(nint(icenter(2) - maxrad), 1)
+                jhi = min(nint(icenter(2) + maxrad), self%ldim(2)*scale_fac)
+                klo = max(nint(icenter(3) - maxrad), 1)
+                khi = min(nint(icenter(3) + maxrad), self%ldim(3)*scale_fac)
+
+                !print *, cc, self%atominfo(cc)%size, self%atominfo(cc)%diam / self%smpd
+                !print *, cc, "Scaled  ", ihi-ilo, jhi-jlo, khi-klo
+                fit_rad = self%atominfo(cc)%diam / 2 / (self%smpd / scale_fac)
+                
+                ! First iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
+                ! equal to the voxel intensity divided by the total scaled connected component intensity.
+                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
+                count0 = 0
+                count = 0
+                sum_int = 0
+                mu = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                if (rmat_scaled(i, j, k) > 0) then
+                                    count = count + 1
+                                    sum_int = sum_int + rmat_scaled(i, j, k)
+                                    mu(1) = mu(1) + i * rmat_scaled(i, j, k)
+                                    mu(2) = mu(2) + j * rmat_scaled(i, j, k)
+                                    mu(3) = mu(3) + k * rmat_scaled(i, j, k)
+                                else
+                                    count0 = count0 + 1
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                mu = mu / sum_int  ! Normalization
+
+                ! Second iteration: Calculate the 3x3 covariance matrix sigma
+                prob_sum_sq = 0
+                sigma = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
+                                if (rmat_scaled(i, j, k) > 0) then
+                                    prob = rmat_scaled(i, j, k) / sum_int
+                                    prob_sum_sq = prob_sum_sq + prob**2
+                                    ! Diagonal terms are variance
+                                    sigma(1, 1) = sigma(1, 1) + prob * (i - mu(1)) ** 2
+                                    sigma(2, 2) = sigma(2, 2) + prob * (j - mu(2)) ** 2
+                                    sigma(3, 3) = sigma(3, 3) + prob * (k - mu(3)) ** 2
+                                    ! Off diagonal terms are covariance. The matrix is symmetric.
+                                    sigma(1, 2) = sigma(1, 2) + prob * (i - mu(1)) * (j - mu(2))
+                                    sigma(1, 3) = sigma(1, 3) + prob  * (i - mu(1)) * (k - mu(3))
+                                    sigma(2, 3) = sigma(2, 3) + prob * (j - mu(2)) * (k - mu(3))
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fill in redundant entries
+                sigma(2, 1) = sigma(1, 2)
+                sigma(3, 1) = sigma(1, 3)
+                sigma(3, 2) = sigma(2, 3)
+                sigma = sigma / (1 - prob_sum_sq) ! For unbiased estimator
+
+                ! Degree of anisotropy is w1/w3 where w1 and w3 are the lengths of 
+                ! the minor and major ellipsoid axes, respectively.
+                sigma_copy = sigma
+                call jacobi(sigma_copy, 3, 3, eigenvals, eigenvecs, nrot)
+                call eigsrt(eigenvals, eigenvecs, 3, 3)
+                self%atominfo(cc)%doa = eigenvals(3)/eigenvals(1)
+                self%atominfo(cc)%aniso = sigma
+
+                ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
+                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :),&
+                        &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
+
+                ! Third iteration (for testing): sample the scaled fit at each voxel in scaled space
+                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
+                call matinv(sigma, sigma_inv, 3, errflg)
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                displ(1, 1) = i - mu(1)
+                                displ(2, 1) = j - mu(2)
+                                displ(3, 1) = k - mu(3)
+                                displ_T = transpose(displ)
+                                beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
+                                prob = A * exp(beta(1, 1))
+                                if (prob > 0) then
+                                    count_fit = count_fit + 1
+                                    call fit%set_rmat_at(i, j, k, prob*sum_int)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                
+                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
+                prob_tot = 0.
+                count_fit = 0.
+                icenter = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 3) / self%smpd
+                ilo = max(nint(icenter(1) - maxrad), 1)
+                ihi = min(nint(icenter(1) + maxrad), self%ldim(1))
+                jlo = max(nint(icenter(2) - maxrad), 1)
+                jhi = min(nint(icenter(2) + maxrad), self%ldim(2))
+                klo = max(nint(icenter(3) - maxrad), 1)
+                khi = min(nint(icenter(3) + maxrad), self%ldim(3))
+                fit_rad = fit_rad / scale_fac
+                displ = 0.
+                displ_T = 0.
+                beta = 0.
+                sigma_inv = 0.
+                sigma = sigma / scale_fac**2
+                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
+
+                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
+                call matinv(sigma, sigma_inv, 3, errflg)
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                displ(1, 1) = i - mu(1)
+                                displ(2, 1) = j - mu(2)
+                                displ(3, 1) = k - mu(3)
+                                displ_T = transpose(displ)
+                                beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
+                                prob = A * exp(beta(1, 1))
+                                if (prob > 0) then
+                                    count_fit = count_fit + 1
+                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int)
+                                    if (cc == 20) then
+                                        print *, prob, prob*sum_int
+                                    end if
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+
+                print *, cc, fit_rad, count0, count+count0, count_fit, (1-prob_sum_sq)
+            end subroutine calc_anisotropic_disp_sphere
+
             ! For a given cc, calculates the anisotropic displacement parameters, 
             ! which are the 3 variance parameters along the principle axes of the
             ! connected component when fit with a 3D join Gaussian where the intensity of a voxel is its probability.  
@@ -1301,7 +1460,7 @@ contains
                 integer, intent(in)     :: cc
                 real        :: sum_int, mu(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
                                         &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3)
-                integer     :: i, j, k, n, x, y, z, ijk(3), ilo, ihi, jlo, jhi, klo, khi, count, errflg, nrot
+                integer     :: i, j, k, x, y, z, n, m, l, ijk(3), ilo, ihi, jlo, jhi, klo, khi, count, errflg, nrot
                 
                 ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
                 ! by avoiding having to iterate over the entire unscaled and scaled images for each connected component.
@@ -1328,14 +1487,18 @@ contains
                                 count = count + scale_fac
                                 do n=0, scale_fac-1
                                     x = scale_fac*i - n
-                                    y = scale_fac*j - n
-                                    z = scale_fac*k - n
-                                    if (rmat_scaled(x, y, z) > 0) then
-                                        sum_int = sum_int + rmat_scaled(x, y, z)
-                                        mu(1) = mu(1) + x * rmat_scaled(x, y, z)
-                                        mu(2) = mu(2) + y * rmat_scaled(x, y, z)
-                                        mu(3) = mu(3) + z * rmat_scaled(x, y, z)
-                                    end if
+                                    do m=0, scale_fac-1
+                                        y = scale_fac*j - m
+                                        do l=0, scale_fac-1
+                                            z = scale_fac*k - l
+                                            if (rmat_scaled(x, y, z) > 0) then
+                                                sum_int = sum_int + rmat_scaled(x, y, z)
+                                                mu(1) = mu(1) + x * rmat_scaled(x, y, z)
+                                                mu(2) = mu(2) + y * rmat_scaled(x, y, z)
+                                                mu(3) = mu(3) + z * rmat_scaled(x, y, z)
+                                            end if
+                                        end do
+                                    end do
                                 end do
                             end if
                         end do
@@ -1351,20 +1514,24 @@ contains
                             if (mask(i, j, k)) then
                                 do n=0, scale_fac-1
                                     x = scale_fac*i - n
-                                    y = scale_fac*j - n
-                                    z = scale_fac*k - n
-                                    ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                    if (rmat_scaled(x, y, z) > 0) then
-                                        prob = rmat_scaled(x, y, z) / sum_int
-                                        ! Diagonal terms are variance
-                                        sigma(1, 1) = sigma(1, 1) + prob * (x - mu(1)) ** 2
-                                        sigma(2, 2) = sigma(2, 2) + prob * (y - mu(2)) ** 2
-                                        sigma(3, 3) = sigma(3, 3) + prob * (z - mu(3)) ** 2
-                                        ! Off diagonal terms are covariance. The matrix is symmetric.
-                                        sigma(1, 2) = sigma(1, 2) + prob * (x - mu(1)) * (y - mu(2))
-                                        sigma(1, 3) = sigma(1, 3) + prob  * (x - mu(1)) * (z - mu(3))
-                                        sigma(2, 3) = sigma(2, 3) + prob * (y - mu(2)) * (z - mu(3))
-                                    end if
+                                    do m=0, scale_fac-1
+                                        y = scale_fac*j - n
+                                        do l=0, scale_fac-1
+                                            z = scale_fac*k - n
+                                            ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
+                                            if (rmat_scaled(x, y, z) > 0) then
+                                                prob = rmat_scaled(x, y, z) / sum_int
+                                                ! Diagonal terms are variance
+                                                sigma(1, 1) = sigma(1, 1) + prob * (x - mu(1)) ** 2
+                                                sigma(2, 2) = sigma(2, 2) + prob * (y - mu(2)) ** 2
+                                                sigma(3, 3) = sigma(3, 3) + prob * (z - mu(3)) ** 2
+                                                ! Off diagonal terms are covariance. The matrix is symmetric.
+                                                sigma(1, 2) = sigma(1, 2) + prob * (x - mu(1)) * (y - mu(2))
+                                                sigma(1, 3) = sigma(1, 3) + prob  * (x - mu(1)) * (z - mu(3))
+                                                sigma(2, 3) = sigma(2, 3) + prob * (y - mu(2)) * (z - mu(3))
+                                            end if
+                                        end do
+                                    end do
                                 end do
                             end if
                         end do
@@ -1390,30 +1557,32 @@ contains
                         &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
 
                 ! Third iteration (for testing): sample the fit at each voxel
-                if (test_fit) then
-                    A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
-                    call matinv(sigma, sigma_inv, 3, errflg)
-                    do k=klo, khi
-                        do j=jlo, jhi
-                            do i=ilo, ihi
-                                if (mask(i, j, k)) then
-                                    do n=0, scale_fac-1
-                                        x = scale_fac*i - n
+                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
+                call matinv(sigma, sigma_inv, 3, errflg)
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (mask(i, j, k)) then
+                                do n=0, scale_fac-1
+                                    x = scale_fac*i - n
+                                    do m=0, scale_fac-1
                                         y = scale_fac*j - n
-                                        z = scale_fac*k - n
-                                        displ(1, 1) = x - mu(1)
-                                        displ(2, 1) = y - mu(2)
-                                        displ(3, 1) = z - mu(3)
-                                        displ_T = transpose(displ)
-                                        beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
-                                        prob = A * exp(beta(1, 1))
-                                        call fit%set_rmat_at(x, y, z, prob*sum_int)
+                                        do l=0, scale_fac-1
+                                            z = scale_fac*k - n
+                                            displ(1, 1) = x - mu(1)
+                                            displ(2, 1) = y - mu(2)
+                                            displ(3, 1) = z - mu(3)
+                                            displ_T = transpose(displ)
+                                            beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
+                                            prob = A * exp(beta(1, 1))
+                                            call fit%set_rmat_at(x, y, z, prob*sum_int)
+                                        end do
                                     end do
-                                end if
-                            end do
+                                end do
+                            end if
                         end do
                     end do
-                end if
+                end do
                 
                 ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
                 displ = 0.
