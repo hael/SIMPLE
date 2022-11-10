@@ -38,7 +38,7 @@ contains
         integer,                 intent(in)   :: ithr
         integer   :: isample, nevals(2)
         type(ori) :: o, osym, obest
-        real      :: corr, euldist, dist_inpl, corr_best, frac, corr_inpl, e3
+        real      :: corr, euldist, dist_inpl, corr_best, corr_inpl, e3
         real      :: cxy(3), shvec(2), shvec_incr(2)
         logical   :: got_better
         ! continuous sochastic search
@@ -48,27 +48,33 @@ contains
             ! prep
             call self%s%prep4_cont_srch
             ! transfer critical per-particle params
-            o     = self%s%o_prev
-            obest = self%s%o_prev
+            o          = self%s%o_prev
+            obest      = self%s%o_prev
             ! currently the best correlation is the previous one
             corr_best  = self%s%prev_corr
             got_better = .false.
+            ! init cnt
+            self%s%nrefs_eval = 0
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)
                 corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
+                ! keep track of how many references we are evaluating
+                self%s%nrefs_eval = self%s%nrefs_eval + 1
                 if( corr > corr_best )then
                     corr_best  = corr
                     obest      = o
                     got_better = .true.
+                    exit
                 endif
             end do
+            ! in first-improvement mode we set the fraction of search space scanned
+            call build_glob%spproj_field%set(self%s%iptcl, 'frac', 100. * (real(self%s%nrefs_eval) / real(self%s%nsample)))
             if( got_better )then
                 call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
                 call obest%set('dist',      euldist)
                 call obest%set('dist_inpl', dist_inpl)
                 call obest%set('corr',      corr_best)
-                call obest%set('frac',      100.0)
                 call obest%set('better',      1.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
             else
@@ -85,9 +91,9 @@ contains
                 shvec_incr = 0.
                 if( cxy(1) >= corr_best )then
                     shvec      = self%s%prev_shvec
-                    ! since particle image is shifted in the Cartesian formulation and we apply 
+                    ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
-                    shvec_incr = - cxy(2:3) 
+                    shvec_incr = - cxy(2:3)
                     shvec      = shvec + shvec_incr
                 end if
                 where( abs(shvec) < 1e-6 ) shvec = 0.
