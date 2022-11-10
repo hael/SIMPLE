@@ -84,7 +84,7 @@ contains
         integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3)
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'yes')
+        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'no')
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
         if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
