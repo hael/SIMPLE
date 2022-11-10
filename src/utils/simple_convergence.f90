@@ -54,7 +54,6 @@ contains
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         states            = build_glob%spproj_field%get_all('state')
         corrs             = build_glob%spproj_field%get_all('corr')
-        corr_t            = robust_sigma_thres(corrs, -3.0)
         updatecnts        = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
@@ -65,7 +64,8 @@ contains
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
         call os%stats('w',         self%pw,        mask=mask)
-        self%mi_class  = os%get_avg('mi_class',    mask=mask)
+        self%mi_class = os%get_avg('mi_class',    mask=mask)
+        corr_t        = self%corr%avg - 2. * self%corr%sdev
         ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
@@ -75,7 +75,7 @@ contains
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        write(logfhandle,601) '>>> % PARTICLES   CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> % PARTICLES   CC > CC_AVG - 2 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                   THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT         ', percen_nonzero_pw
@@ -171,7 +171,7 @@ contains
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
         corrs         = build_glob%spproj_field%get_all('corr')
-        corr_t        = robust_sigma_thres(corrs, -3.0)
+
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
@@ -185,12 +185,13 @@ contains
         call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask, nozero=.true.)
         endif
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask) 
+        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        corr_t         = self%corr%avg - 2. * self%corr%sdev
         ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
@@ -212,7 +213,7 @@ contains
         write(logfhandle,604) '>>> CORRELATION, PEAK        AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
         write(logfhandle,604) '>>> CORRELATION, NONPEAK     AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
         endif
-        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 2 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                     THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
@@ -306,7 +307,6 @@ contains
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
         corrs         = build_glob%spproj_field%get_all('corr')
-        corr_t        = robust_sigma_thres(corrs, -3.0)
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
@@ -327,6 +327,7 @@ contains
         call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('ngevals',    self%ngevals,    mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('better',     self%better,     mask=mask)
+        corr_t = self%corr%avg - 2. * self%corr%sdev
         ! particle updates
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
         ! dists and % search space
@@ -345,7 +346,7 @@ contains
         write(logfhandle,604) '>>> CORRELATION, PEAK        AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
         write(logfhandle,604) '>>> CORRELATION, NONPEAK     AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
         endif
-        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 3 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
+        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 2 * CC_SDEV:', 100. * real(count(corrs > corr_t .and. mask)) / real(count(mask))
         write(logfhandle,601) '>>> CORRELATION                     THRESHOLD:', corr_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
