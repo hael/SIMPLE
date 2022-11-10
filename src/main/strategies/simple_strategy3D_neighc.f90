@@ -94,7 +94,6 @@ contains
                 call obest%set('dist_inpl', dist_inpl)
                 call obest%set('corr',      corr_best)
                 call obest%set('better',      1.0)
-                call obest%set('frac',      100.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
                 if( self%s%nsample_trs > 0 )then ! we did stochastic shift search
                     ! since particle image is shifted in the Cartesian formulation and we apply
