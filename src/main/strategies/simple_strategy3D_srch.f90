@@ -148,12 +148,7 @@ contains
         call self%o_prev%new(.true.)
         call self%eulspace%copy(build_glob%eulspace, is_ptcl=.false.)
         ! create in-plane search objects
-        if( params_glob%l_hybrid )then
-            self%nrots = pftcc_glob%get_nrots()
-            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-                &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
-            call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
-        elseif( params_glob%l_cartesian )then
+        if( params_glob%l_cartesian )then
             self%nrots = params_glob%nrots
             call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
         else

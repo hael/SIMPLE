@@ -393,7 +393,6 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
-    logical :: l_hybrid       = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_match_filt   = .true.
@@ -1309,7 +1308,7 @@ contains
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
         if( .not. cline%defined('noris') ) self%noris = self%nptcls
-        
+
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd
@@ -1412,25 +1411,16 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
-                self%l_hybrid    = .false.
                 if( .not. cline%defined('match_filt') ) self%l_match_filt = .false.
-            case('hybrid')
-                self%l_cartesian = .true.
-                self%l_hybrid    = .true.
-                if( .not. cline%defined('match_filt')    ) self%l_match_filt  = .false.
-                if( .not. cline%defined('nspace')        ) self%nspace        = 500
-                if( .not. cline%defined('athres')        ) self%athres        = 10.
-                if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
-                if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 0
             case DEFAULT
                 self%l_cartesian = .false.
-                self%l_hybrid    = .false.
         end select
         if( self%l_cartesian )then
             select case(trim(self%refine))
                 case('shcc')
                     if( .not. cline%defined('nsample')       ) self%nsample       = 2000
                 case('neighc')
+                    if( .not. cline%defined('nsample')       ) self%nsample       = 2000
                     if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
                     if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
                 case('greedyc')
