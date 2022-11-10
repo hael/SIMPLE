@@ -228,7 +228,11 @@ contains
                             endif
                         endif
                     case('shcc')
-                        allocate(strategy3D_shcc                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( .not. has_been_searched )then
+                            allocate(strategy3D_greedyc          :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     case('neigh')
                         if( ran3() < GLOB_FREQ )then
                             allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -240,7 +244,11 @@ contains
                             endif
                         endif
                     case('neighc')
-                        allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GLOB_FREQ )then
+                            allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy3D_neighc           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
