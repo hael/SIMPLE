@@ -36,7 +36,7 @@ contains
     subroutine srch_neighc( self, ithr )
         class(strategy3D_neighc), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        integer   :: isample, nevals(2) 
+        integer   :: isample, nevals(2)
         type(ori) :: o, osym, obest
         real      :: corr, euldist, dist_inpl, corr_best
         real      :: cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
@@ -71,7 +71,7 @@ contains
                         shvec_best = shvec
                         obest      = o
                         got_better = .true.
-                        if( corr > 0. ) exit
+                        exit
                     endif
                 else
                     ! calculate Cartesian corr
@@ -82,7 +82,7 @@ contains
                         corr_best  = corr
                         obest      = o
                         got_better = .true.
-                        if( corr > 0. ) exit
+                        exit
                     endif
                 endif
             end do
@@ -97,7 +97,7 @@ contains
                 call obest%set('frac',      100.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
                 if( self%s%nsample_trs > 0 )then ! we did stochastic shift search
-                    ! since particle image is shifted in the Cartesian formulation and we apply 
+                    ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
                     shvec_incr = - shvec_best
                     shvec      =   self%s%prev_shvec + shvec_incr
@@ -114,7 +114,7 @@ contains
                 l_within_lims = .true.
                 if( self%s%nsample_trs > 0 )then ! we have a prior shift vector
                     ! check that it is within the limits
-                    if( any(shvec_best < - params_glob%trs) ) l_within_lims = .false. 
+                    if( any(shvec_best < - params_glob%trs) ) l_within_lims = .false.
                     if( any(shvec_best >   params_glob%trs) ) l_within_lims = .false.
                 endif
                 if( self%s%nsample_trs > 0 .and. l_within_lims )then ! refine the stochastic solution
@@ -135,9 +135,9 @@ contains
                 shvec_incr = 0.
                 if( cxy(1) >= corr_best )then
                     shvec      = self%s%prev_shvec
-                    ! since particle image is shifted in the Cartesian formulation and we apply 
+                    ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
-                    shvec_incr = - cxy(2:3) 
+                    shvec_incr = - cxy(2:3)
                     shvec      = shvec + shvec_incr
                 end if
                 where( abs(shvec) < 1e-6 ) shvec = 0.
