@@ -23,7 +23,6 @@ use simple_strategy3D_greedyc,      only: strategy3D_greedyc
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
-use simple_strategy3D_hybrid,       only: strategy3D_hybrid
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,             only: convergence
@@ -64,10 +63,10 @@ contains
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
-        type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
-        real,                      allocatable :: resarr(:)
-        integer,                   allocatable :: batches(:,:)
-        character(len=:),          allocatable :: maps_dir, iter_dir
+        type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
+        real,                  allocatable :: resarr(:)
+        integer,               allocatable :: batches(:,:)
+        character(len=:),      allocatable :: maps_dir, iter_dir
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
@@ -158,10 +157,7 @@ contains
             t_prep_pftcc = tic()
         endif
 
-        if( params_glob%l_hybrid )then
-            call preppftcc4align(cline, batchsz_max)
-            call prepcftcc4align(cline, batchsz_max)
-        elseif( params_glob%l_cartesian )then
+        if( params_glob%l_cartesian )then
             call prepcftcc4align(cline, batchsz_max)
         else
             call preppftcc4align(cline, batchsz_max)
@@ -201,12 +197,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            if( params_glob%l_hybrid )then
-                call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-                call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
-            elseif( params_glob%l_cartesian )then
+            if( params_glob%l_cartesian )then
                 call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
                 call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             else
@@ -250,8 +241,6 @@ contains
                         endif
                     case('neighc')
                         allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('hybrid')
-                        allocate(strategy3D_hybrid               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
@@ -317,10 +306,7 @@ contains
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        if( params_glob%l_hybrid )then
-            call pftcc%kill
-            call cftcc%kill
-        elseif( params_glob%l_cartesian )then
+        if( params_glob%l_cartesian )then
             call cftcc%kill
         else
             call pftcc%kill
@@ -402,11 +388,7 @@ contains
         logical   :: do_center
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
-        if( params_glob%l_hybrid )then
-            call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto_discrete, params_glob%l_match_filt)
-        else
-            call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto, params_glob%l_match_filt)
-        endif
+        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto, params_glob%l_match_filt)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
