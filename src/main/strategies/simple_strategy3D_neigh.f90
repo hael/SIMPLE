@@ -28,14 +28,14 @@ contains
 
     subroutine new_neigh( self, spec )
         class(strategy3D_neigh), intent(inout) :: self
-        class(strategy3D_spec),        intent(inout) :: spec
+        class(strategy3D_spec),  intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
     end subroutine new_neigh
 
     subroutine srch_neigh( self, ithr )
         class(strategy3D_neigh), intent(inout) :: self
-        integer,                       intent(in)    :: ithr
+        integer,                 intent(in)    :: ithr
         type(ori) :: o
         integer   :: iref, isample, iproj, minnrefs, loc(1)
         real      :: inpl_corrs(self%s%nrots)
