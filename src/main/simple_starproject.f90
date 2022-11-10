@@ -141,7 +141,7 @@ contains
         integer :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
-            write(logfhandle,*) char(9), 'importing3 ' // filename // " to mics"
+            write(logfhandle,*) char(9), 'importing ' // filename // " to mics"
             write(logfhandle,*) ''
         endif
         if(.not. self%starfile%initialised) call self%initialise()
@@ -276,13 +276,14 @@ contains
                     end if
                     if(stardata%flags(flagsindex)%string) then
                         if(index(entrystr, "/") > 1) then ! handles leading slash of absolute paths
-                            if(index(self%starfile%rootdir, "job") > 0) then ! relion
-                                if(index(entrystr, ":mrc") > 0) then ! relion ctf names!
-                                    entrystr = trim(adjustl(entrystr(:index(entrystr, ":mrc") - 1)))
+                            if(index(self%starfile%rootdir, 'job') > 0) then ! relion
+                                if(index(entrystr, ':mrc') > 0) then ! relion ctf names!
+                                    entrystr = trim(adjustl(entrystr(:index(entrystr, ':mrc') - 1)))
                                 end if
                                 call make_relativepath(cwd, stemname(stemname(trim(adjustl(self%starfile%rootdir)))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
                             else ! other\
+                                
                                 call make_relativepath(cwd, stemname(trim(adjustl(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
                             end if
