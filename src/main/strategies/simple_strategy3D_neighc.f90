@@ -55,6 +55,8 @@ contains
             ! currently the best correlation is the previous one
             corr_best  = self%s%prev_corr
             got_better = .false.
+            ! init cnt
+            self%s%nrefs_eval = 0
             do isample=1,self%s%nsample_neigh
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
@@ -62,22 +64,30 @@ contains
                     ! calculate Cartesian corr and simultaneously stochastically search shifts (Gaussian sampling)
                     shvec = shvec_best
                     call cftcc_glob%project_and_srch_shifts(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr)
+                    ! keep track of how many references we are evaluating
+                    self%s%nrefs_eval = self%s%nrefs_eval + 1
                     if( corr > corr_best )then
                         corr_best  = corr
                         shvec_best = shvec
                         obest      = o
                         got_better = .true.
+                        if( corr > 0. ) exit
                     endif
                 else
                     ! calculate Cartesian corr
                     corr = cftcc_glob%project_and_correlate(self%s%iptcl, o)
+                    ! keep track of how many references we are evaluating
+                    self%s%nrefs_eval = self%s%nrefs_eval + 1
                     if( corr > corr_best )then
                         corr_best  = corr
                         obest      = o
                         got_better = .true.
+                        if( corr > 0. ) exit
                     endif
                 endif
             end do
+            ! in first-improvement mode we set the fraction of search space scanned
+            call build_glob%spproj_field%set(self%s%iptcl, 'frac', 100. * (real(self%s%nrefs_eval) / real(self%s%nsample_neigh)))
             if( got_better )then
                 call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
                 call obest%set('dist',      euldist)
