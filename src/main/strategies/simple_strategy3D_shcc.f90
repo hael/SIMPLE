@@ -18,10 +18,10 @@ type, extends(strategy3D) :: strategy3D_shcc
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure          :: new         => new_shcc
-    procedure          :: srch        => srch_shcc
-    procedure          :: oris_assign => oris_assign_shcc
-    procedure          :: kill        => kill_shcc
+    procedure :: new         => new_shcc
+    procedure :: srch        => srch_shcc
+    procedure :: oris_assign => oris_assign_shcc
+    procedure :: kill        => kill_shcc
 end type strategy3D_shcc
 
 contains
