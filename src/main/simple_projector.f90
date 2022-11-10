@@ -294,14 +294,13 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    function fproject_and_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
+    function fproject_and_correlate_serial( self, e, lims, cmat, ctfmat, resmsk ) result( corr )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
         integer,                       intent(in)    :: lims(2,2)
         complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
         integer :: h, k
         complex :: ref_comp
@@ -312,9 +311,9 @@ contains
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     if( h > 0 )then
-                        ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
+                        ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
                     else
-                        ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
+                        ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
                     endif
                     ! update cross product
                     cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
@@ -327,14 +326,13 @@ contains
         corr = norm_corr(cc(1),cc(2),cc(3))
     end function fproject_and_correlate_serial
 
-    function fproject_and_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
+    function fproject_and_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk ) result( corrs )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
         integer,                       intent(in)    :: lims(2,2), nptcls
         complex(kind=c_float_complex), intent(inout) :: cmats(  lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
         real,                          intent(in)    :: ctfmats(lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
         logical,                       intent(in)    :: resmsk( lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), ccs(3,nptcls), corrs(nptcls)
         integer :: h, k, iptcl
         complex :: ref_comp
@@ -348,9 +346,9 @@ contains
                     if( resmsk(h,k) )then
                         loc = matmul(real([h,k,0]), e_rotmat)
                         if( h > 0 )then
-                            ref_comp =       self%interp_fcomp(loc)  * ctfmats(h,k,iptcl) * filtw(h,k)
+                            ref_comp =       self%interp_fcomp(loc)  * ctfmats(h,k,iptcl)
                         else
-                            ref_comp = conjg(self%interp_fcomp(loc)) * ctfmats(h,k,iptcl) * filtw(h,k)
+                            ref_comp = conjg(self%interp_fcomp(loc)) * ctfmats(h,k,iptcl)
                         endif
                         ! update cross product
                         ccs(1,iptcl) = ccs(1,iptcl) + real(ref_comp         * conjg(cmats(h,k,iptcl)))
