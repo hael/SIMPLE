@@ -287,7 +287,7 @@ type :: parameters
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
-    real    :: athres=7.           !< angular threshold(in degrees)
+    real    :: athres=15.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
@@ -1421,8 +1421,8 @@ contains
                     if( .not. cline%defined('nsample')       ) self%nsample       = 2000
                 case('neighc')
                     if( .not. cline%defined('nsample')       ) self%nsample       = 2000
-                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
-                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
+                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 500
+                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 0
                 case('greedyc')
                     if( .not. cline%defined('nspace')        ) self%nspace        = 500
                     if( .not. cline%defined('athres')        ) self%athres        = 10.

@@ -44,7 +44,7 @@ type strategy3D_srch
     integer                 :: class         = 0         !< 2D class index
     integer                 :: prev_ref      = 0         !< previous reference index
     integer                 :: prev_proj     = 0         !< previous projection direction index
-    real                    :: athres        = 7.        !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
+    real                    :: athres        = 15.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
     real                    :: prev_corr     = 1.        !< previous best correlation
     real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
