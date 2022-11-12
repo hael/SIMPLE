@@ -114,11 +114,11 @@ contains
             else
                 call build_glob%spproj_field%set(self%s%iptcl, 'better', 0.)
             endif
-            if( self%s%doshift .and. got_better ) then
+            if( self%s%doshift ) then
                 ! Cartesian shift search using L-BFGS-B with analytical derivatives
                 call cftcc_glob%prep4shift_srch(self%s%iptcl, obest)
                 l_within_lims = .true.
-                if( self%s%nsample_trs > 0 )then ! we have a prior shift vector
+                if( self%s%nsample_trs > 0 .and. got_better )then ! we have a prior shift vector
                     ! check that it is within the limits
                     if( any(shvec_best < - params_glob%trs) ) l_within_lims = .false.
                     if( any(shvec_best >   params_glob%trs) ) l_within_lims = .false.
@@ -139,12 +139,15 @@ contains
                 endif
                 shvec      = 0.
                 shvec_incr = 0.
-                if( cxy(1) >= corr_best )then
+                if( cxy(1) > corr_best )then
                     shvec      = self%s%prev_shvec
                     ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
                     shvec_incr = - cxy(2:3)
                     shvec      = shvec + shvec_incr
+                    call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 1.)
+                else
+                    call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 0.)
                 end if
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)

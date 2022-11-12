@@ -23,6 +23,7 @@ type convergence
     type(stats_struct) :: nevals     !< # cost function evaluations
     type(stats_struct) :: ngevals    !< # gradient evaluations
     type(stats_struct) :: better     !< improvement statistics
+    type(stats_struct) :: better_l   !< improvement statistics, LBFGS-B
     type(stats_struct) :: npeaks     !< peak statistics
     type(stats_struct) :: cc_peak    !< cc peak statistics
     type(stats_struct) :: cc_nonpeak !< cc non-peak statistics
@@ -329,6 +330,7 @@ contains
         call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('ngevals',    self%ngevals,    mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('better',     self%better,     mask=mask)
+        call build_glob%spproj_field%stats('better_l',   self%better,     mask=mask)
         corr_t = self%corr%avg - 2. * self%corr%sdev
         ! particle updates
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
@@ -343,6 +345,7 @@ contains
         write(logfhandle,604) '>>> % EULER SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> % SHIFT SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_sh%avg, self%frac_sh%sdev, self%frac_sh%minv, self%frac_sh%maxv
         write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:', 100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
+        write(logfhandle,604) '>>> % IMPROVED LBFGS-B       AVG/SDEV/MIN/MAX:', 100.*self%better_l%avg, 100.*self%better_l%sdev, 100.*self%better_l%minv, 100.*self%better_l%maxv
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         if( self%npeaks%avg > 1e-6 )then

@@ -49,8 +49,8 @@ enum, bind(c)
     enumerator :: I_CC_NONPEAK = 42
     ! added Nov12 2022
     enumerator :: I_FRAC_SH    = 43
+    enumerator :: I_BETTER_L   = 44
     ! empties
-    enumerator :: I_EMPTY4     = 44
     enumerator :: I_EMPTY5     = 45
     enumerator :: I_EMPTY6     = 46
     enumerator :: I_EMPTY7     = 47
@@ -60,7 +60,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 43
+integer, parameter :: N_NON_EMPTY      = 44
 
 contains
 
@@ -158,6 +158,8 @@ contains
             ! added Nov12 2022
             case('frac_sh')
                 get_oriparam_ind = I_FRAC_SH
+            case('better_l')
+                get_oriparam_ind = I_BETTER_L
         end select
     end function get_oriparam_ind
 
@@ -255,6 +257,8 @@ contains
             ! added Nov12 2022
             case(I_FRAC_SH)
                 flag = 'frac_sh'
+            case(I_BETTER_L)
+                flag ='better_l'
             case DEFAULT
                 flag = 'empty'
         end select
