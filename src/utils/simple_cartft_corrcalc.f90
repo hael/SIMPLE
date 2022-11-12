@@ -556,13 +556,14 @@ contains
         call self%corr_shifted(iptcl, shvec, corr)
     end function project_and_correlate_2
 
-    subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best )
+    subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best, nevals )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         integer,                intent(in)    :: nsample
         real,                   intent(in)    :: trs
         real,                   intent(inout) :: shvec(2), corr_best
+        integer,                intent(inout) :: nevals
         type(projector),        pointer       :: vol_ptr => null()
         logical :: iseven
         integer :: ithr, isample
@@ -583,14 +584,17 @@ contains
         endif
         sigma = trs / 2. ! 2 sigma (soft) criterion, fixed for now
         call self%corr_shifted(iptcl, shvec, corr_best)
+        nevals = 0
         do isample = 1,nsample
             xshift = gasdev(shvec(1), sigma)
             yshift = gasdev(shvec(2), sigma)
             call self%corr_shifted(iptcl, [xshift,yshift], corr)
+            nevals = nevals + 1
             if( corr > corr_best )then
                 corr_best = corr
                 shvec(1)  = xshift
                 shvec(2)  = yshift
+                exit ! SHC
             endif
         end do
     end subroutine project_and_srch_shifts

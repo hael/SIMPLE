@@ -17,6 +17,7 @@ type convergence
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
     type(stats_struct) :: dist_peaks !< average angular distance between peaks
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
+    type(stats_struct) :: frac_sh    !< fraction of search space scanned stats, shifts
     type(stats_struct) :: shincarg   !< shift increment
     type(stats_struct) :: pw         !< particle weight stats
     type(stats_struct) :: nevals     !< # cost function evaluations
@@ -322,6 +323,7 @@ contains
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
         call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
+        call build_glob%spproj_field%stats('frac_sh',    self%frac_sh,    mask=mask)
         call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
@@ -338,7 +340,8 @@ contains
         write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:', self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
         endif
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> % EULER SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> % SHIFT SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_sh%avg, self%frac_sh%sdev, self%frac_sh%minv, self%frac_sh%maxv
         write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:', 100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
         ! correlation & particle weights
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:', self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv

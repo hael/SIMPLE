@@ -39,6 +39,7 @@ type strategy3D_srch
     integer                 :: nnn           = 0         !< # nearest neighbors
     integer                 :: nbetter       = 0         !< # better orientations identified
     integer                 :: nrefs_eval    = 0         !< # references evaluated
+    integer                 :: ntrs_eval     = 0         !< # shifts evaluated
     integer                 :: prev_roind    = 0         !< previous in-plane rotation index
     integer                 :: prev_state    = 0         !< previous state index
     integer                 :: class         = 0         !< 2D class index
@@ -136,6 +137,7 @@ contains
         self%athres        = params_glob%athres
         self%nbetter       = 0
         self%nrefs_eval    = 0
+        self%ntrs_eval     = 0
         self%nsym          = build_glob%pgrpsyms%get_nsym()
         self%doshift       = params_glob%l_doshift
         self%l_neigh       = str_has_substr(params_glob%refine, 'neigh')
