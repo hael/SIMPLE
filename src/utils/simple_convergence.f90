@@ -330,7 +330,7 @@ contains
         call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('ngevals',    self%ngevals,    mask=mask, nozero=.true.)
         call build_glob%spproj_field%stats('better',     self%better,     mask=mask)
-        call build_glob%spproj_field%stats('better_l',   self%better,     mask=mask)
+        call build_glob%spproj_field%stats('better_l',   self%better_l,   mask=mask)
         corr_t = self%corr%avg - 2. * self%corr%sdev
         ! particle updates
         write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
