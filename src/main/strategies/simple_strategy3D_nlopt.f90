@@ -93,7 +93,7 @@ contains
             call o%e1set(real(x_in(1)))
             call o%e2set(real(x_in(2)))
             call o%e3set(real(x_in(3)))
-            call cftcc_glob%project_and_shift( self%s%iptcl, o, real(x_in(4:5)), f_sp )
+            f_sp = cftcc_glob%project_and_correlate( self%s%iptcl, o, real(x_in(4:5)))
             f = f_sp
         end function nloptf_myfunc
     end subroutine srch_nlopt

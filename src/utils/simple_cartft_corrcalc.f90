@@ -22,10 +22,13 @@ type :: cartft_corrcalc
     integer,                       allocatable :: pinds(:)               !< index array (to reduce memory when frac_update < 1)
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
+    real(sp),                      allocatable :: ref_filt_w(:,:,:)      !< reference filter weights
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
     logical,                       allocatable :: iseven(:)              !< e/o assignment for gold-standard FSC
+    logical                                    :: l_clsfrcs    = .false. !< CLS2D/3DRefs flag
+    logical                                    :: l_match_filt = .false. !< matched filter flag
     logical                                    :: with_ctf     = .false. !< CTF flag
     logical                                    :: existence    = .false. !< to indicate existence
     contains
@@ -38,6 +41,9 @@ type :: cartft_corrcalc
     ! SETTERS
     procedure          :: set_ptcl
     procedure          :: set_ref
+    procedure, private :: set_ref_optlp_1
+    procedure, private :: set_ref_optlp_2
+    generic            :: set_ref_optlp => set_ref_optlp_1, set_ref_optlp_2
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
@@ -49,11 +55,12 @@ type :: cartft_corrcalc
     procedure, private :: setup_resmsk_and_pxls_p_shell
     procedure          :: create_absctfmats
     procedure          :: prep4shift_srch
-    procedure          :: prep4parallel_shift_srch
+    ! procedure          :: prep4parallel_shift_srch
     ! CALCULATORS
-    procedure          :: project_and_correlate
+    procedure, private :: project_and_correlate_1
+    procedure, private :: project_and_correlate_2
+    generic            :: project_and_correlate => project_and_correlate_1, project_and_correlate_2
     procedure          :: project_and_srch_shifts
-    procedure          :: project_and_shift
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
     generic            :: corr_shifted => corr_shifted_1, corr_shifted_2
@@ -69,10 +76,11 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, vol_even, vol_odd, pfromto, ptcl_mask, eoarr )
+    subroutine new( self, vol_even, vol_odd, pfromto, l_match_filt, ptcl_mask, eoarr )
         class(cartft_corrcalc), target, intent(inout) :: self
         type(projector),        target, intent(in)    :: vol_even, vol_odd
         integer,                        intent(in)    :: pfromto(2)
+        logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         logical  :: even_dims, test(2)
@@ -96,13 +104,14 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%filtsz      = fdim(params_glob%box) - 1
+        self%filtsz       = fdim(params_glob%box) - 1
+        self%l_match_filt = l_match_filt                         !< do shellnorm and filtering here
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
-        ! allocate index translation table
+        ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         ! set pointers to projectors
         self%vol_even => vol_even
@@ -141,10 +150,17 @@ contains
         self%lims(1,2) =  params_glob%kfromto(2)
         self%lims(2,1) = -params_glob%kfromto(2)
         self%lims(2,2) =  params_glob%kfromto(2)
-        ! allocate references and particles
-        allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob),&
-                &self%particles (self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
+        if( self%l_clsfrcs )then
+            allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=cmplx(0.,0.))
+            allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        else
+            allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
+            allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),           source=1.)
+        endif
         ! allocate the rest
+        allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
@@ -181,8 +197,9 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%filtsz = fdim(params_glob%box) - 1
-        self%nptcls = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
+        self%filtsz       = fdim(params_glob%box) - 1
+        self%l_match_filt = .false.
+        self%nptcls       = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         self%pinds = (/(i,i=1,self%nptcls)/)
@@ -196,9 +213,12 @@ contains
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),&
+        &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = .false.
         ! setup resolution mask pxls_p_shell
         call self%setup_resmsk_and_pxls_p_shell
         ! flag existence
@@ -285,6 +305,42 @@ contains
             self%references(:,:,ithr) = self%references(:,:,1)
         end do
     end subroutine set_ref
+
+    subroutine set_ref_optlp_1( self, ref_optlp )
+        class(cartft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer :: h,k,sh,sqlp,sqarg
+        self%ref_filt_w(:,:,1) = 0.
+        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                if( (h==0) .and. (k==0) ) cycle
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                sh = nint(hyp(real(h),real(k)))
+                self%ref_filt_w(h,k,1) = ref_optlp(sh)
+            end do
+        end do
+    end subroutine set_ref_optlp_1
+
+    subroutine set_ref_optlp_2( self, iref, ref_optlp )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref
+        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer :: h,k,sh,sqlp,sqarg
+        if( iref < 1 .or. iref > self%nptcls ) THROW_HARD('iref '//int2str(iref)//' is out of bounds')
+        self%ref_filt_w(:,:,iref) = 0.
+        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                if( (h==0) .and. (k==0) ) cycle
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                sh = nint(hyp(real(h),real(k)))
+                self%ref_filt_w(h,k,iref) = ref_optlp(sh)
+            end do
+        end do
+    end subroutine set_ref_optlp_2
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
@@ -411,32 +467,36 @@ contains
         ! get thread index
         ithr = omp_get_thread_num() + 1
         ! put reference projection in the heap
-        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        if( self%l_match_filt )then
+            call vol_ptr%fproject_shellnorm_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        else
+            call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        endif
     end subroutine prep4shift_srch
 
-    subroutine prep4parallel_shift_srch( self, iptcl, os )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iptcl
-        class(oris),            intent(in)    :: os
-        type(projector), pointer :: vol_ptr => null()
-        logical :: iseven
-        integer :: i
-        i      = self%pinds(iptcl)
-        iseven = self%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        ! expand references such that we have one per particle (for efficient parallel shift search)
-        call self%expand_refs
-        ! make one reference projection per particle
-        call vol_ptr%fproject4cartftcc(os, self%lims, self%nptcls, self%references(:,:,:), self%resmsk(:,:))
-    end subroutine prep4parallel_shift_srch
+    ! subroutine prep4parallel_shift_srch( self, iptcl, os )
+    !     class(cartft_corrcalc), intent(inout) :: self
+    !     integer,                intent(in)    :: iptcl
+    !     class(oris),            intent(in)    :: os
+    !     type(projector), pointer :: vol_ptr => null()
+    !     logical :: iseven
+    !     integer :: i
+    !     i      = self%pinds(iptcl)
+    !     iseven = self%ptcl_iseven(iptcl)
+    !     if( iseven )then
+    !         vol_ptr => self%vol_even
+    !     else
+    !         vol_ptr => self%vol_odd
+    !     endif
+    !     ! expand references such that we have one per particle (for efficient parallel shift search)
+    !     call self%expand_refs
+    !     ! make one reference projection per particle
+    !     call vol_ptr%fproject4cartftcc(os, self%lims, self%nptcls, self%references(:,:,:), self%resmsk(:,:))
+    ! end subroutine prep4parallel_shift_srch
 
     ! CALCULATORS
 
-    function project_and_correlate( self, iptcl, o ) result( corr )
+    function project_and_correlate_1( self, iptcl, o ) result( corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
@@ -451,8 +511,50 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        corr = vol_ptr%fproject_and_correlate_serial(o, self%lims, self%particles(:,:,i), self%ctfmats(:,:,i), self%resmsk(:,:))
-    end function project_and_correlate
+        if( self%l_match_filt )then
+            if( self%l_clsfrcs )then
+                corr = vol_ptr%fproject_shellnorm_correlate_serial(o, self%lims, self%particles(:,:,i),&
+                &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,i))
+            else
+                corr = vol_ptr%fproject_shellnorm_correlate_serial(o, self%lims, self%particles(:,:,i),&
+                &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,1))
+            endif
+        else
+            if( self%l_clsfrcs )then
+                corr = vol_ptr%fproject_correlate_serial(o, self%lims, self%particles(:,:,i),&
+                &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,i))
+            else
+                corr = vol_ptr%fproject_correlate_serial(o, self%lims, self%particles(:,:,i),&
+                &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,1))
+            endif
+        endif
+    end function project_and_correlate_1
+
+    function project_and_correlate_2( self, iptcl, o, shvec ) result( corr )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        real,                   intent(in)    :: shvec(2)
+        type(projector),        pointer       :: vol_ptr => null()
+        logical :: iseven
+        integer :: ithr
+        real    :: corr
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        if( self%l_match_filt )then
+            call vol_ptr%fproject_shellnorm_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        else
+            call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        endif
+        call self%corr_shifted(iptcl, shvec, corr)
+    end function project_and_correlate_2
 
     subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best )
         class(cartft_corrcalc), intent(inout) :: self
@@ -474,7 +576,11 @@ contains
         ! get thread index
         ithr = omp_get_thread_num() + 1
         ! put reference projection in the heap
-        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        if( self%l_match_filt )then
+            call vol_ptr%fproject_shellnorm_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        else
+            call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        endif
         sigma = trs / 2. ! 2 sigma (soft) criterion, fixed for now
         call self%corr_shifted(iptcl, shvec, corr_best)
         do isample = 1,nsample
@@ -488,28 +594,6 @@ contains
             endif
         end do
     end subroutine project_and_srch_shifts
-
-    subroutine project_and_shift( self, iptcl, o, shvec, corr )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iptcl
-        class(ori),             intent(in)    :: o
-        real,                   intent(in)    :: shvec(2)
-        real,                   intent(inout) :: corr
-        type(projector),        pointer       :: vol_ptr => null()
-        logical :: iseven
-        integer :: ithr
-        iseven = self%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! put reference projection in the heap
-        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
-        call self%corr_shifted(iptcl, shvec, corr)
-    end subroutine project_and_shift
 
     subroutine corr_shifted_1( self, iptcl, shvec, corr )
         class(cartft_corrcalc), target, intent(inout)  :: self
@@ -540,24 +624,45 @@ contains
             hsin(h) = dsin(arg)
         enddo
         cc(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i)
-                ! update cross product
-                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
-                ! update normalization terms
-                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+        if( self%l_clsfrcs )then
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,i)
+                    ! shift the particle Fourier component
+                    ptcl_comp = self%particles(h,k,i)
+                    ! update cross product
+                    cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                    ! update normalization terms
+                    cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                end do
             end do
-        end do
+        else
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                    ! shift the particle Fourier component
+                    ptcl_comp = self%particles(h,k,i)
+                    ! update cross product
+                    cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
+                    ! update normalization terms
+                    cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                end do
+            end do
+        endif
         corr = norm_corr(cc(1),cc(2),cc(3))
     end subroutine corr_shifted_1
 
@@ -591,29 +696,55 @@ contains
         enddo
         cc(:)   = 0.
         grad(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp   = self%particles(h,k,i)
-                ! update cross product
-                ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
-                cc(1)       = cc(1) + realpart(ref_ptcl_sh)
-                ! update normalization terms
-                cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                ! update the gradient
-                ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
-                grad(1)     = grad(1) + real(ref_ptcl_sh) * h
-                grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+        if( self%l_clsfrcs )then
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,i)
+                    ! shift the particle Fourier component
+                    ptcl_comp   = self%particles(h,k,i)
+                    ! update cross product
+                    ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
+                    cc(1)       = cc(1) + realpart(ref_ptcl_sh)
+                    ! update normalization terms
+                    cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                    ! update the gradient
+                    ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
+                    grad(1)     = grad(1) + real(ref_ptcl_sh) * h
+                    grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+                end do
             end do
-        end do
+        else
+            do k = self%lims(2,1),self%lims(2,2)
+                arg = real(k,dp) * sh(2)
+                ck  = dcos(arg)
+                sk  = dsin(arg)
+                do h = self%lims(1,1),self%lims(1,2)
+                    if( .not. self%resmsk(h,k) ) cycle
+                    sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+                    ! retrieve reference component
+                    ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                    ! shift the particle Fourier component
+                    ptcl_comp   = self%particles(h,k,i)
+                    ! update cross product
+                    ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
+                    cc(1)       = cc(1) + realpart(ref_ptcl_sh)
+                    ! update normalization terms
+                    cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
+                    cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                    ! update the gradient
+                    ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
+                    grad(1)     = grad(1) + real(ref_ptcl_sh) * h
+                    grad(2)     = grad(2) + real(ref_ptcl_sh) * k
+                end do
+            end do
+        endif
         grad(1) = norm_corr(grad(1),cc(2), cc(3))
         grad(2) = norm_corr(grad(2),cc(2), cc(3))
         corr    = norm_corr(cc(1),  cc(2), cc(3))
@@ -690,6 +821,7 @@ contains
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
+            if( allocated(self%ref_filt_w)   ) deallocate(self%ref_filt_w)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)

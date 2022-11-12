@@ -53,7 +53,8 @@ type :: ori
     procedure, private :: rnd_euler_1
     procedure, private :: rnd_euler_2
     procedure, private :: rnd_euler_3
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3
+    procedure, private :: rnd_euler_4
+    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
@@ -513,31 +514,13 @@ contains
         class(ori), intent(in)    :: o_prev       !< template ori
         real,       intent(in)    :: athres       !< Euler angle threshold in degrees
         real,       intent(inout) :: eullims(3,2) !< Euler angle limits
-        real :: euls(3), ran1, ran2
+        real :: euls(3), ran
         euls(1) = o_prev%e1get()
         euls(2) = o_prev%e2get()
         euls(3) = o_prev%e3get()
-        ran1 = ran3()
-        ran2 = ran3()
-        if( ran1 <= 0.5 )then
-            euls(1) = euls(1) - ran2 * athres
-        else
-            euls(1) = euls(1) + ran2 * athres
-        endif
-        ran1 = ran3()
-        ran2 = ran3()
-        if( ran1 <= 0.5 )then
-            euls(2) = euls(2) - ran2 * athres
-        else
-            euls(2) = euls(2) + ran2 * athres
-        endif
-        ran1 = ran3()
-        ran2 = ran3()
-        if( ran1 <= 0.5 )then
-            euls(3) = euls(3) - ran2 * athres
-        else
-            euls(3) = euls(3) + ran2 * athres
-        endif
+        euls(1) = euls(1) + 2. * (ran3() - 0.5) * athres
+        euls(2) = euls(2) + 2. * (ran3() - 0.5) * athres
+        euls(3) = euls(3) + 2. * (ran3() - 0.5) * athres
         euls(1) = max(eullims(1,1), euls(1))
         euls(2) = max(eullims(2,1), euls(2))
         euls(3) = max(eullims(3,1), euls(3))
@@ -546,6 +529,27 @@ contains
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
     end subroutine rnd_euler_3
+
+    subroutine rnd_euler_4( self, o_prev, athres_proj, athres_inpl, eullims )
+        class(ori), intent(inout) :: self                     !< instance
+        class(ori), intent(in)    :: o_prev                   !< template ori
+        real,       intent(in)    :: athres_proj, athres_inpl !< Euler angle thresholds in degrees
+        real,       intent(inout) :: eullims(3,2)             !< Euler angle limits
+        real :: euls(3), ran
+        euls(1) = o_prev%e1get()
+        euls(2) = o_prev%e2get()
+        euls(3) = o_prev%e3get()
+        euls(1) = euls(1) + 2. * (ran3() - 0.5) * athres_proj
+        euls(2) = euls(2) + 2. * (ran3() - 0.5) * athres_proj
+        euls(3) = euls(3) + 2. * (ran3() - 0.5) * athres_inpl
+        euls(1) = max(eullims(1,1), euls(1))
+        euls(2) = max(eullims(2,1), euls(2))
+        euls(3) = max(eullims(3,1), euls(3))
+        euls(1) = min(eullims(1,2), euls(1))
+        euls(2) = min(eullims(2,2), euls(2))
+        euls(3) = min(eullims(3,2), euls(3))
+        call self%set_euler(euls)
+    end subroutine rnd_euler_4
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
