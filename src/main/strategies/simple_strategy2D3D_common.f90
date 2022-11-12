@@ -7,6 +7,7 @@ use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
 use simple_stack_io,         only: stack_io
 use simple_polarft_corrcalc, only: pftcc_glob
+use simple_cartft_corrcalc,  only: cftcc_glob
 implicit none
 
 public :: set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -345,7 +346,7 @@ contains
                 call fsc2optlp_sub(filtsz, frc, filter)
                 if( params_glob%l_match_filt )then
                     if( params_glob%l_cartesian )then
-                        ! shellnormalization and filtering done on the 3D reference
+                        call cftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     else
                         call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
                     endif
@@ -597,13 +598,23 @@ contains
         if( params_glob%l_match_filt )then
             ! stores filters in cftcc
             if( params_glob%clsfrcs.eq.'yes')then
-                ! this will have to be done differently for the Cartesian search
-            else
-                call vol_ptr%fft()
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                    call vol_ptr%shellnorm_and_apply_filter(filter)
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
+                        call cftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    enddo
                 endif
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                else
+                    filter = 1.
+                endif
+                call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             endif
         else
             if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then

@@ -458,7 +458,7 @@ contains
         logical   :: do_center
         character(len=:), allocatable :: fname
         ! must be done here since params_glob%kfromto is dynamically set
-        call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
+        call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max], params_glob%l_match_filt)
         do s = 1,params_glob%nstates
             if( params_glob%l_align_reg )then
                 call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols_ref(s), do_center, xyz)

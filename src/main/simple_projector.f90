@@ -38,12 +38,14 @@ type, extends(image) :: projector
     procedure          :: is_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
-    procedure          :: fproject4cartftcc
+    ! procedure          :: fproject4cartftcc
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
-    procedure          :: fproject_and_correlate_serial
-    procedure          :: fproject_and_correlate
+    procedure          :: fproject_shellnorm_serial
+    procedure          :: fproject_correlate_serial
+    ! procedure          :: fproject_correlate
+    procedure          :: fproject_shellnorm_correlate_serial
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
@@ -206,33 +208,33 @@ contains
     end subroutine fproject
 
     ! used in prep4parallel_shift_srch in simple_cartft_corrcalc
-    subroutine fproject4cartftcc( self, os, lims, nptcls, cmats, resmsk )
-        class(projector),              intent(inout) :: self
-        class(oris),                   intent(in)    :: os
-        integer,                       intent(in)    :: lims(2,2), nptcls
-        complex(kind=c_float_complex), intent(inout) :: cmats( lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real    :: loc(3), e_rotmat(3,3)
-        integer :: h, k, iptcl
-        !$omp parallel do collapse(3) schedule(static) default(shared)&
-        !$omp private(h,k,iptcl,e_rotmat,loc) proc_bind(close)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                do iptcl = 1,nptcls
-                    if( resmsk(h,k) )then
-                        e_rotmat = os%get_mat(iptcl)
-                        loc      = matmul(real([h,k,0]), e_rotmat)
-                        if( h > 0 )then
-                            cmats(h,k,iptcl) = self%interp_fcomp(loc)
-                        else
-                            cmats(h,k,iptcl) = conjg(self%interp_fcomp(loc))
-                        endif
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine fproject4cartftcc
+    ! subroutine fproject4cartftcc( self, os, lims, nptcls, cmats, resmsk )
+    !     class(projector),              intent(inout) :: self
+    !     class(oris),                   intent(in)    :: os
+    !     integer,                       intent(in)    :: lims(2,2), nptcls
+    !     complex(kind=c_float_complex), intent(inout) :: cmats( lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
+    !     logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+    !     real    :: loc(3), e_rotmat(3,3)
+    !     integer :: h, k, iptcl
+    !     !$omp parallel do collapse(3) schedule(static) default(shared)&
+    !     !$omp private(h,k,iptcl,e_rotmat,loc) proc_bind(close)
+    !     do h = lims(1,1),lims(1,2)
+    !         do k = lims(2,1),lims(2,2)
+    !             do iptcl = 1,nptcls
+    !                 if( resmsk(h,k) )then
+    !                     e_rotmat = os%get_mat(iptcl)
+    !                     loc      = matmul(real([h,k,0]), e_rotmat)
+    !                     if( h > 0 )then
+    !                         cmats(h,k,iptcl) = self%interp_fcomp(loc)
+    !                     else
+    !                         cmats(h,k,iptcl) = conjg(self%interp_fcomp(loc))
+    !                     endif
+    !                 endif
+    !             end do
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end subroutine fproject4cartftcc
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
     subroutine fproject_serial_1( self, e, fplane )
@@ -294,13 +296,55 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    function fproject_and_correlate_serial( self, e, lims, cmat, ctfmat, resmsk ) result( corr )
+    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_shellnorm_serial( self, e, lims, cmat, resmsk )
+        class(projector),              intent(inout) :: self
+        class(ori),                    intent(in)    :: e
+        integer,                       intent(in)    :: lims(2,2)
+        complex(kind=c_float_complex), intent(inout) :: cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real        :: loc(3), e_rotmat(3,3), powvec(params_glob%kfromto(2)), cntvec(params_glob%kfromto(2)), x, eps
+        integer     :: h, k, sh
+        e_rotmat = e%get_mat()
+        powvec   = 0.
+        cntvec   = 0.
+        eps      = epsilon(x)
+        do h =  lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                if( resmsk(h,k) )then
+                    loc = matmul(real([h,k,0]), e_rotmat)
+                    sh  = nint(hyp(real(h),real(k)))
+                    if( h > 0 )then
+                        cmat(h,k) = self%interp_fcomp(loc)
+                    else
+                        cmat(h,k) = conjg(self%interp_fcomp(loc))
+                    endif
+                    powvec(sh) = powvec(sh) + csq_fast(cmat(h,k))
+                    cntvec(sh) = cntvec(sh) + 1.
+                else
+                    cmat(h,k) = CMPLX_ZERO
+                endif
+            end do
+        end do
+        where(cntvec > 0.) powvec = powvec / cntvec
+        do h =  lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                if( resmsk(h,k) )then
+                    sh = nint(hyp(real(h),real(k)))
+                    if( powvec(sh) > eps ) cmat(h,k) = cmat(h,k) / sqrt(powvec(sh))
+                endif
+            end do
+        end do
+    end subroutine fproject_shellnorm_serial
+
+    function fproject_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
         integer,                       intent(in)    :: lims(2,2)
         complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
         integer :: h, k
         complex :: ref_comp
@@ -311,9 +355,9 @@ contains
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     if( h > 0 )then
-                        ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
+                        ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
                     else
-                        ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
+                        ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
                     endif
                     ! update cross product
                     cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
@@ -324,44 +368,95 @@ contains
             end do
         end do
         corr = norm_corr(cc(1),cc(2),cc(3))
-    end function fproject_and_correlate_serial
+    end function fproject_correlate_serial
 
-    function fproject_and_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk ) result( corrs )
+    function fproject_shellnorm_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
-        integer,                       intent(in)    :: lims(2,2), nptcls
-        complex(kind=c_float_complex), intent(inout) :: cmats(  lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-        real,                          intent(in)    :: ctfmats(lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
-        logical,                       intent(in)    :: resmsk( lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real    :: loc(3), e_rotmat(3,3), ccs(3,nptcls), corrs(nptcls)
-        integer :: h, k, iptcl
-        complex :: ref_comp
+        integer,                       intent(in)    :: lims(2,2)
+        complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        complex(kind=c_float_complex) :: cmat_ref(lims(1,1):lims(1,2),lims(2,1):lims(2,2)), ref_comp
+        real    :: loc(3), e_rotmat(3,3), cc(3), corr, powvec(params_glob%kfromto(2)), cntvec(params_glob%kfromto(2)), x, eps
+        integer :: h, k, sh
         e_rotmat = e%get_mat()
-        ccs(:,:) = 0.
-        !$omp parallel do collapse(3) schedule(static) default(shared)&
-        !$omp private(h,k,iptcl,loc,ref_comp) proc_bind(close)
+        powvec   = 0.
+        cntvec   = 0.
+        eps      = epsilon(x)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
-                do iptcl = 1,nptcls
-                    if( resmsk(h,k) )then
-                        loc = matmul(real([h,k,0]), e_rotmat)
-                        if( h > 0 )then
-                            ref_comp =       self%interp_fcomp(loc)  * ctfmats(h,k,iptcl)
-                        else
-                            ref_comp = conjg(self%interp_fcomp(loc)) * ctfmats(h,k,iptcl)
-                        endif
-                        ! update cross product
-                        ccs(1,iptcl) = ccs(1,iptcl) + real(ref_comp         * conjg(cmats(h,k,iptcl)))
-                        ! update normalization terms
-                        ccs(2,iptcl) = ccs(2,iptcl) + real(ref_comp         * conjg(ref_comp))
-                        ccs(3,iptcl) = ccs(3,iptcl) + real(cmats(h,k,iptcl) * conjg(cmats(h,k,iptcl)))
+                if( resmsk(h,k) )then
+                    loc = matmul(real([h,k,0]), e_rotmat)
+                    sh  = nint(hyp(real(h),real(k)))
+                    if( h > 0 )then
+                        cmat_ref(h,k) =       self%interp_fcomp(loc)
+                    else
+                        cmat_ref(h,k) = conjg(self%interp_fcomp(loc))
                     endif
-                end do
+                    powvec(sh) = powvec(sh) + csq_fast(cmat(h,k))
+                    cntvec(sh) = cntvec(sh) + 1.
+                endif
             end do
         end do
-        !$omp end parallel do
-        corrs = norm_corr(ccs(1,:),ccs(2,:),ccs(3,:))
-    end function fproject_and_correlate
+        where(cntvec > 0.) powvec = powvec / cntvec
+        cc(:) = 0.
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                if( resmsk(h,k) )then
+                    sh = nint(hyp(real(h),real(k)))
+                    if( powvec(sh) > eps )then
+                        ref_comp = (cmat_ref(h,k) / sqrt(powvec(sh))) * ctfmat(h,k) * filtw(h,k)
+                        ! update cross product
+                        cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
+                        ! update normalization terms
+                        cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                        cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
+                    endif
+                endif
+            end do
+        end do
+        corr = norm_corr(cc(1),cc(2),cc(3))
+    end function fproject_shellnorm_correlate_serial
+
+    ! function fproject_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
+    !     class(projector),              intent(inout) :: self
+    !     class(ori),                    intent(in)    :: e
+    !     integer,                       intent(in)    :: lims(2,2), nptcls
+    !     complex(kind=c_float_complex), intent(inout) :: cmats(  lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
+    !     real,                          intent(in)    :: ctfmats(lims(1,1):lims(1,2),lims(2,1):lims(2,2), nptcls)
+    !     logical,                       intent(in)    :: resmsk( lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+    !     real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+    !     real    :: loc(3), e_rotmat(3,3), ccs(3,nptcls), corrs(nptcls)
+    !     integer :: h, k, iptcl
+    !     complex :: ref_comp
+    !     e_rotmat = e%get_mat()
+    !     ccs(:,:) = 0.
+    !     !$omp parallel do collapse(3) schedule(static) default(shared)&
+    !     !$omp private(h,k,iptcl,loc,ref_comp) proc_bind(close)
+    !     do h = lims(1,1),lims(1,2)
+    !         do k = lims(2,1),lims(2,2)
+    !             do iptcl = 1,nptcls
+    !                 if( resmsk(h,k) )then
+    !                     loc = matmul(real([h,k,0]), e_rotmat)
+    !                     if( h > 0 )then
+    !                         ref_comp =       self%interp_fcomp(loc)  * ctfmats(h,k,iptcl) * filtw(h,k)
+    !                     else
+    !                         ref_comp = conjg(self%interp_fcomp(loc)) * ctfmats(h,k,iptcl) * filtw(h,k)
+    !                     endif
+    !                     ! update cross product
+    !                     ccs(1,iptcl) = ccs(1,iptcl) + real(ref_comp         * conjg(cmats(h,k,iptcl)))
+    !                     ! update normalization terms
+    !                     ccs(2,iptcl) = ccs(2,iptcl) + real(ref_comp         * conjg(ref_comp))
+    !                     ccs(3,iptcl) = ccs(3,iptcl) + real(cmats(h,k,iptcl) * conjg(cmats(h,k,iptcl)))
+    !                 endif
+    !             end do
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    !     corrs = norm_corr(ccs(1,:),ccs(2,:),ccs(3,:))
+    ! end function fproject_correlate
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
