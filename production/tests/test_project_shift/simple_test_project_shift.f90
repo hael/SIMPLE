@@ -15,7 +15,7 @@ type(cmdline)           :: cline
 type(parameters)        :: p
 integer                 :: ifoo, rc, i, nevals(2)
 type(projector)         :: vol_proj
-type(sym)               :: pgrpsyms  
+type(sym)               :: pgrpsyms
 type(ori)               :: o, o_cur
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
@@ -58,7 +58,7 @@ call vol_proj%fft()
 call vol_proj%expand_cmat(1.)
 call pgrpsyms%new('c1')
 call o%new(.true.)
-call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS]) ! 2 particles for now
+call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS], l_match_filt=.false.) ! 2 particles for now
 do i = 1, N_PTCLS
     call pgrpsyms%rnd_euler(o)
     call vol_proj%fproject(o, o_proj)
@@ -67,19 +67,19 @@ do i = 1, N_PTCLS
     ! call o_proj%write('TEST.mrc', i)
 enddo
 o_cur = o
-call cftcc%project_and_shift(N_PTCLS, o_cur, [0., 0.], corr)
+corr  = cftcc%project_and_correlate(N_PTCLS, o_cur, [0., 0.])
 print *, 'corr comparing projection against itself: ', corr
 euls(1) = o_cur%e1get() + 3.
 euls(2) = o_cur%e2get() - 3.
 euls(3) = o_cur%e3get() + 3.
 call o%set_euler(euls)
-call cftcc%project_and_shift(N_PTCLS, o, [-3., 3.], corr)
+corr = cftcc%project_and_correlate(N_PTCLS, o, [-3., 3.])
 print *, 'corr comparing projection against itself at 3 angerr, 3 sherr: ', corr
 euls(1) = o_cur%e1get() - 5.
 euls(2) = o_cur%e2get() + 5.
 euls(3) = o_cur%e3get() - 5.
 call o%set_euler(euls)
-call cftcc%project_and_shift(N_PTCLS, o, [-1., 1.], corr)
+corr = cftcc%project_and_correlate(N_PTCLS, o, [-1., 1.])
 print *, 'corr comparing projection against itself at 5 angerr, 1 sherr: ', corr
 lims(1,1) = -6.
 lims(1,2) =  6.
