@@ -1421,8 +1421,8 @@ contains
                     if( .not. cline%defined('nsample')       ) self%nsample       = 2000
                 case('neighc')
                     if( .not. cline%defined('nsample')       ) self%nsample       = 2000
-                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 500
-                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 0
+                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 200
+                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
                 case('greedyc')
                     if( .not. cline%defined('nspace')        ) self%nspace        = 500
                     if( .not. cline%defined('athres')        ) self%athres        = 10.
