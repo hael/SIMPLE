@@ -36,7 +36,7 @@ contains
     subroutine srch_neighc( self, ithr )
         class(strategy3D_neighc), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        integer   :: isample, nevals(2)
+        integer   :: isample, nevals(2), nsh
         type(ori) :: o, osym, obest
         real      :: corr, euldist, dist_inpl, corr_best
         real      :: cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
@@ -55,17 +55,20 @@ contains
             ! currently the best correlation is the previous one
             corr_best  = self%s%prev_corr
             got_better = .false.
-            ! init cnt
+            ! init counters
             self%s%nrefs_eval = 0
+            self%s%ntrs_eval  = 0
             do isample=1,self%s%nsample_neigh
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
                 if( self%s%nsample_trs > 0 )then
                     ! calculate Cartesian corr and simultaneously stochastically search shifts (Gaussian sampling)
                     shvec = shvec_best
-                    call cftcc_glob%project_and_srch_shifts(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr)
+                    call cftcc_glob%project_and_srch_shifts(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr, nsh)
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
+                    ! keep track of how many shifts we are evaluating
+                    self%s%ntrs_eval  = self%s%ntrs_eval + nsh
                     if( corr > corr_best )then
                         corr_best  = corr
                         shvec_best = shvec
@@ -88,6 +91,10 @@ contains
             end do
             ! in first-improvement mode we set the fraction of search space scanned
             call build_glob%spproj_field%set(self%s%iptcl, 'frac', 100. * (real(self%s%nrefs_eval) / real(self%s%nsample_neigh)))
+            if( self%s%nsample_trs > 0 )then
+                call build_glob%spproj_field%set(self%s%iptcl, 'frac_sh',&
+                &100. * (real(self%s%ntrs_eval) / real(self%s%nsample_neigh * self%s%nsample_trs)))
+            endif
             if( got_better )then
                 call build_glob%pgrpsyms%sym_dists(self%s%o_prev, obest, osym, euldist, dist_inpl)
                 call obest%set('dist',      euldist)

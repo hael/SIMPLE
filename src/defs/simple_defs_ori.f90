@@ -2,53 +2,54 @@ module simple_defs_ori
 implicit none
 
 enum, bind(c)
-    enumerator :: I_ANGAST    = 1
-    enumerator :: I_CLASS     = 2
-    enumerator :: I_CORR      = 3
-    enumerator :: I_DFX       = 4
-    enumerator :: I_DFY       = 5
-    enumerator :: I_DIST      = 6
-    enumerator :: I_DIST_INPL = 7
-    enumerator :: I_E1        = 8
-    enumerator :: I_E2        = 9
-    enumerator :: I_E3        = 10
-    enumerator :: I_EO        = 11
-    enumerator :: I_FRAC      = 12
-    enumerator :: I_INDSTK    = 13
-    enumerator :: I_INPL      = 14
-    enumerator :: I_LP        = 15
-    enumerator :: I_MI_CLASS  = 16
-    enumerator :: I_MI_PROJ   = 17
-    enumerator :: I_MI_STATE  = 18
-    enumerator :: I_PHSHIFT   = 19
-    enumerator :: I_PROJ      = 20
-    enumerator :: I_SHINCARG  = 21
-    enumerator :: I_SPECSCORE = 22
-    enumerator :: I_STATE     = 23
-    enumerator :: I_STKIND    = 24
-    enumerator :: I_UPDATECNT = 25
-    enumerator :: I_W         = 26
-    enumerator :: I_X         = 27
-    enumerator :: I_XINCR     = 28
-    enumerator :: I_XPOS      = 29
-    enumerator :: I_Y         = 30
-    enumerator :: I_YINCR     = 31
-    enumerator :: I_YPOS      = 32
-    enumerator :: I_GID       = 33
-    enumerator :: I_OGID      = 34
-    enumerator :: I_PIND      = 35
+    enumerator :: I_ANGAST     = 1
+    enumerator :: I_CLASS      = 2
+    enumerator :: I_CORR       = 3
+    enumerator :: I_DFX        = 4
+    enumerator :: I_DFY        = 5
+    enumerator :: I_DIST       = 6
+    enumerator :: I_DIST_INPL  = 7
+    enumerator :: I_E1         = 8
+    enumerator :: I_E2         = 9
+    enumerator :: I_E3         = 10
+    enumerator :: I_EO         = 11
+    enumerator :: I_FRAC       = 12
+    enumerator :: I_INDSTK     = 13
+    enumerator :: I_INPL       = 14
+    enumerator :: I_LP         = 15
+    enumerator :: I_MI_CLASS   = 16
+    enumerator :: I_MI_PROJ    = 17
+    enumerator :: I_MI_STATE   = 18
+    enumerator :: I_PHSHIFT    = 19
+    enumerator :: I_PROJ       = 20
+    enumerator :: I_SHINCARG   = 21
+    enumerator :: I_SPECSCORE  = 22
+    enumerator :: I_STATE      = 23
+    enumerator :: I_STKIND     = 24
+    enumerator :: I_UPDATECNT  = 25
+    enumerator :: I_W          = 26
+    enumerator :: I_X          = 27
+    enumerator :: I_XINCR      = 28
+    enumerator :: I_XPOS       = 29
+    enumerator :: I_Y          = 30
+    enumerator :: I_YINCR      = 31
+    enumerator :: I_YPOS       = 32
+    enumerator :: I_GID        = 33
+    enumerator :: I_OGID       = 34
+    enumerator :: I_PIND       = 35
     ! added Oct 31 2022
-    enumerator :: I_NEVALS    = 36
-    enumerator :: I_NGEVALS   = 37
-    enumerator :: I_BETTER    = 38
+    enumerator :: I_NEVALS     = 36
+    enumerator :: I_NGEVALS    = 37
+    enumerator :: I_BETTER     = 38
     ! added Nov 2 2022
     enumerator :: I_NPEAKS     = 39
     enumerator :: I_DIST_PEAKS = 40
     ! added Nov3 2022
     enumerator :: I_CC_PEAK    = 41
     enumerator :: I_CC_NONPEAK = 42
+    ! added Nov12 2022
+    enumerator :: I_FRAC_SH    = 43
     ! empties
-    enumerator :: I_EMPTY3     = 43
     enumerator :: I_EMPTY4     = 44
     enumerator :: I_EMPTY5     = 45
     enumerator :: I_EMPTY6     = 46
@@ -59,7 +60,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 42
+integer, parameter :: N_NON_EMPTY      = 43
 
 contains
 
@@ -154,6 +155,9 @@ contains
                 get_oriparam_ind = I_CC_PEAK
             case('cc_nonpeak')
                 get_oriparam_ind = I_CC_NONPEAK
+            ! added Nov12 2022
+            case('frac_sh')
+                get_oriparam_ind = I_FRAC_SH
         end select
     end function get_oriparam_ind
 
@@ -248,6 +252,9 @@ contains
                 flag = 'cc_peak'
             case(I_CC_NONPEAK)
                 flag = 'cc_nonpeak'
+            ! added Nov12 2022
+            case(I_FRAC_SH)
+                flag = 'frac_sh'
             case DEFAULT
                 flag = 'empty'
         end select
@@ -302,8 +309,10 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_CC_NONPEAK)
                 oriparam_isthere = abs(val) > TINY
+            case(I_FRAC_SH)
+                oriparam_isthere = abs(val) > TINY
             case DEFAULT
-                ! default case is defined 
+                ! default case is defined
                 oriparam_isthere = .true.
         end select
     end function oriparam_isthere
