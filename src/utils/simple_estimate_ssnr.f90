@@ -131,38 +131,36 @@ contains
         lpcen   = min(max(mskdiam/6.,  20.), 30.)
     end subroutine mskdiam2lplimits
 
+
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
-    subroutine calc_dose_weights( nframes, box, smpd, kV, exp_time, dose_rate, weights )
+    subroutine calc_dose_weights( nframes, box, smpd, kV, total_dose, weights )
         integer,           intent(in)    :: nframes, box
-        real,              intent(in)    :: smpd, kV, exp_time, dose_rate
+        real,              intent(in)    :: smpd, kV, total_dose
         real, allocatable, intent(inout) :: weights(:,:)
         real, parameter :: A=0.245, B=-1.665, C=2.81
-        real            :: frame_dose(nframes), acc_doses(nframes), spaFreq, current_time
-        real            :: twoNe, limksq, time_per_frame
+        real            :: acc_doses(nframes), spaFreq, current_time
+        real            :: twoNe, limksq, dose_per_frame
         integer         :: filtsz, iframe, k
-        time_per_frame = exp_time/real(nframes)               ! unit: s
-        do iframe=1,nframes
-            current_time      = real(iframe) * time_per_frame ! unit: s
-            acc_doses(iframe) = dose_rate * current_time      ! unit: e/A2/s * s = e/A2
-        end do
         filtsz = fdim(box) - 1
-        ! doses
-        limksq = real(box*smpd)**2.
-        do iframe = 1,nframes
-            frame_dose(iframe) = acc_doses(iframe)
-            if( is_equal(kV,200.) )then
-                frame_dose(iframe) = frame_dose(iframe) / 0.8
-            else if( is_equal(kV,100.) )then
-                frame_dose(iframe) = frame_dose(iframe) / 0.64
-            endif
-        enddo
+        ! accumulated doses
+        dose_per_frame = total_dose / real(nframes) ! e-/Angs2/frame
+        do iframe=1,nframes
+            acc_doses(iframe) = real(iframe) * dose_per_frame ! e-/Angs2
+        end do
+        ! voltage scaling
+        if( is_equal(kV,200.) )then
+            acc_doses = acc_doses / 0.8
+        else if( is_equal(kV,100.) )then
+            acc_doses = acc_doses / 0.64
+        endif
         if( allocated(weights) ) deallocate( weights )
         allocate( weights(nframes,filtsz), source=0.)
         ! dose normalization
+        limksq = real(box*smpd)**2.
         do k = 1,filtsz
             spaFreq      = sqrt(real(k*k)/limksq)
             twoNe        = 2.*(A * spaFreq**B + C)
-            weights(:,k) = exp(-frame_dose / twoNe)
+            weights(:,k) = exp(-acc_doses / twoNe)
             weights(:,k) = weights(:,k) / sqrt(sum(weights(:,k) * weights(:,k)))
         enddo
     end subroutine calc_dose_weights

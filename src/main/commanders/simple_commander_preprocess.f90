@@ -17,7 +17,6 @@ public :: preprocess_commander_stream
 public :: preprocess_commander_distr
 public :: preprocess_commander
 public :: motion_correct_commander_distr
-public :: motion_correct_tomo_commander_distr
 public :: motion_correct_commander
 public :: gen_pspecs_and_thumbs_commander_distr
 public :: gen_pspecs_and_thumbs_commander
@@ -55,11 +54,6 @@ type, extends(commander_base) :: motion_correct_commander_distr
   contains
     procedure :: execute      => exec_motion_correct_distr
 end type motion_correct_commander_distr
-
-type, extends(commander_base) :: motion_correct_tomo_commander_distr
-  contains
-    procedure :: execute      => exec_motion_correct_tomo_distr
-end type motion_correct_tomo_commander_distr
 
 type, extends(commander_base) :: motion_correct_commander
   contains
@@ -176,10 +170,9 @@ contains
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',     'no')
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres'))call cline%set('mcpatch_thres','yes')
+        if( .not. cline%defined('mcpatch_thres')   )call cline%set('mcpatch_thres',   'yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
@@ -713,7 +706,6 @@ contains
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',     'no')
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
         if( .not. cline%defined('mcpatch_thres')) call cline%set('mcpatch_thres','yes')
@@ -808,9 +800,6 @@ contains
         call params%new(cline)
         if( params%scale > 1.01 )then
             THROW_HARD('scale cannot be > 1; exec_preprocess')
-        endif
-        if( params%tomo .eq. 'yes' )then
-            THROW_HARD('tomography mode (tomo=yes) not yet supported!')
         endif
         l_pick = cline%defined('refs')
         l_del_forctf = .false.
@@ -969,7 +958,6 @@ contains
         if( .not. cline%defined('groupframes')   ) call cline%set('groupframes',  'no')
         if( .not. cline%defined('mcconvention')  ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',   'softmax')
-        if( .not. cline%defined('eer_fraction')  ) call cline%set('eer_fraction',  20.)
         if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling', 1.)
         if( .not. cline%defined('mcpatch')       ) call cline%set('mcpatch',      'yes')
         if( .not. cline%defined('mcpatch_thres'))call cline%set('mcpatch_thres','yes')
@@ -999,67 +987,6 @@ contains
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct_distr
 
-    subroutine exec_motion_correct_tomo_distr( self, cline )
-        class(motion_correct_tomo_commander_distr), intent(inout) :: self
-        class(cmdline),                             intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: tomonames(:)
-        type(parameters)         :: params
-        type(oris)               :: exp_doc
-        integer                  :: nseries, ipart
-        type(qsys_env)           :: qenv
-        character(len=KEYLEN)    :: str
-        type(chash)              :: job_descr
-        type(chash), allocatable :: part_params(:)
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs',         10.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',     20.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',       6.)
-        if( .not. cline%defined('tomo')    ) call cline%set('tomo',      'yes')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype',   'stk')
-        if( .not. cline%defined('wcrit')   ) call cline%set('wcrit', 'softmax')
-        call cline%set('prg', 'motion_correct')
-        call params%new(cline)
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        if( cline%defined('tomoseries') )then
-            call read_filetable(params%tomoseries, tomonames)
-        else
-            THROW_HARD('need tomoseries (filetable of filetables) to be part of the command line when tomo=yes')
-        endif
-        nseries = size(tomonames)
-        call exp_doc%new(nseries, is_ptcl=.false.)
-        if( cline%defined('exp_doc') )then
-            if( file_exists(params%exp_doc) )then
-                call exp_doc%read(params%exp_doc)
-            else
-                THROW_HARD('the required parameter file (flag exp_doc): '//trim(params%exp_doc)//' not in cwd')
-            endif
-        else
-            THROW_HARD('need exp_doc (line: exp_time=X dose_rate=Y) to be part of the command line when tomo=yes')
-        endif
-        params%nparts = nseries
-        params%nptcls = nseries
-        ! prepare part-dependent parameters
-        allocate(part_params(params%nparts))
-        do ipart=1,params%nparts
-            call part_params(ipart)%new(4)
-            call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
-            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,params%numlen_tomo))
-            str = real2str(exp_doc%get(ipart,'exp_time'))
-            call part_params(ipart)%set('exp_time', trim(str))
-            str = real2str(exp_doc%get(ipart,'dose_rate'))
-            call part_params(ipart)%set('dose_rate', trim(str))
-        end do
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
-        call qsys_cleanup
-        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
-    end subroutine exec_motion_correct_tomo_distr
-
     subroutine exec_motion_correct( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
@@ -1070,8 +997,8 @@ contains
         type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
-        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
+        character(len=:), allocatable :: output_dir, moviename, fbody
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, cnt
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -1082,12 +1009,6 @@ contains
         endif
         if( params%scale > 1.01 )then
             THROW_HARD('scale cannot be > 1; exec_motion_correct')
-        endif
-        if( params%tomo .eq. 'yes' )then
-            if( .not. params%l_dose_weight )then
-                write(logfhandle,*) 'tomo=yes only supported with dose weighting!'
-                THROW_HARD('give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)')
-            endif
         endif
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
@@ -1102,26 +1023,12 @@ contains
             fbody = ''
         endif
         ! determine loop range & fetch movies oris object
-        if( params%tomo .eq. 'no' )then
-            if( cline%defined('fromp') .and. cline%defined('top') )then
-                fromto = [params%fromp, params%top]
-            else
-                THROW_HARD('fromp & top args need to be defined in parallel execution; motion_correct')
-            endif
+        if( cline%defined('fromp') .and. cline%defined('top') )then
+            fromto = [params%fromp, params%top]
         else
-            ! all movies
-            fromto(1) = 1
-            fromto(2) = spproj%os_mic%get_noris()
+            THROW_HARD('fromp & top args need to be defined in parallel execution; motion_correct')
         endif
         ntot = fromto(2) - fromto(1) + 1
-        ! for series of tomographic movies we need to calculate the time_per_frame
-        if( params%tomo .eq. 'yes' )then
-            ! get number of frames & dim from stack
-            call spproj%os_mic%getter(1, 'movie', moviename)
-            call find_ldim_nptcls(moviename, lfoo, nframes)
-            ! calculate time_per_frame
-            params%time_per_frame = params%exp_time/real(nframes*nmovies)
-        endif
         ! align
         frame_counter = 0
         cnt = 0

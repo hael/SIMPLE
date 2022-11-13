@@ -1456,6 +1456,9 @@ contains
         ldim(3) = 1 ! by convention
         nptcls  = TIFFNumDirectories(fhandle)
         call TIFFClose(fhandle)
+        if( doprint )then
+            write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), nptcls
+        endif
 #endif
     end subroutine get_eerfile_info
 

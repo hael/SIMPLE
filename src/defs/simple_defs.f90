@@ -166,6 +166,7 @@ real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling dista
 real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
 
 ! preprocessing constants
+real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2
 real, parameter    :: DFMAX_DEFAULT        = 5.0       !< Default maximum bound for defocus search (microns)
 real, parameter    :: DFMIN_DEFAULT        = 0.2       !< Default minimum bound for defocus search (microns)
 

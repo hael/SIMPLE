@@ -70,7 +70,6 @@ type :: parameters
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)      :: taper_edges='no'     !< self-explanatory
-    character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
@@ -155,7 +154,6 @@ type :: parameters
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
     character(len=STDLEN) :: executable=''        !< name of executable
-    character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)      :: element ='    '      !< atom kind
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
@@ -183,7 +181,6 @@ type :: parameters
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN) :: tag=''               !< just a tag
-    character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: vol_even=''          !< even reference volume
     character(len=STDLEN) :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN) :: wfun='kb'
@@ -255,7 +252,6 @@ type :: parameters
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
-    integer :: numlen_tomo=3       !< length of number string tomo series index{3}
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
     integer :: offset=10           !< pixels offset{10}
@@ -302,7 +298,6 @@ type :: parameters
     real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)
     real    :: dfmin=DFMIN_DEFAULT !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
-    real    :: dose_rate=1.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
     real    :: dsteppd=0.
     real    :: e1=0.               !< 1st Euler(in degrees){0}
@@ -310,7 +305,6 @@ type :: parameters
     real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
-    real    :: exp_time=2.0        !< exposure time(in s)
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
     real    :: focusmsk=0.         !< spherical msk for use with focused refinement (radius in pixels)
@@ -320,6 +314,7 @@ type :: parameters
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_diam=0.8       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
+    real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
@@ -371,7 +366,7 @@ type :: parameters
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
     real    :: tiltgroupmax=0
-    real    :: time_per_frame=0.
+    real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
     real    :: width=10.           !< falloff of mask(in pixels){10}
@@ -388,6 +383,7 @@ type :: parameters
     logical :: l_distr_exec   = .false.
     logical :: l_dose_weight  = .false.
     logical :: l_doshift      = .false.
+    logical :: l_eer_fraction = .false.
     logical :: l_envfsc       = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
@@ -471,7 +467,6 @@ contains
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
-        call check_carg('exp_doc',        self%exp_doc)
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
@@ -534,8 +529,6 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
-        call check_carg('tomo',           self%tomo)
-        call check_carg('tomoseries',     self%tomoseries)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
@@ -645,7 +638,6 @@ contains
         call check_iarg('nthr',           self%nthr)
         call check_iarg('nthr2D',         self%nthr2D)
         call check_iarg('numlen',         self%numlen)
-        call check_iarg('numlen_tomo',    self%numlen_tomo)
         call check_iarg('nxpatch',        self%nxpatch)
         call check_iarg('nypatch',        self%nypatch)
         call check_iarg('offset',         self%offset)
@@ -687,12 +679,10 @@ contains
         call check_rarg('dfmax',          self%dfmax)
         call check_rarg('dfmin',          self%dfmin)
         call check_rarg('dfsdev',         self%dfsdev)
-        call check_rarg('dose_rate',      self%dose_rate)
         call check_rarg('e1',             self%e1)
         call check_rarg('e2',             self%e2)
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
-        call check_rarg('exp_time',       self%exp_time)
         call check_rarg('extr_init',      self%extr_init)
         call check_rarg('focusmsk',       self%focusmsk)
         call check_rarg('focusmskdiam',   self%focusmskdiam)
@@ -701,6 +691,7 @@ contains
         call check_rarg('fracdeadhot',    self%fracdeadhot)
         call check_rarg('frac_diam',      self%frac_diam)
         call check_rarg('fracsrch',       self%fracsrch)
+        call check_rarg('fraction_dose_target',self%fraction_dose_target)
         call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
@@ -740,6 +731,7 @@ contains
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
+        call check_rarg('total_dose',     self%total_dose)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
         call check_rarg('motion_correctgtol', self%motion_correctgtol)
@@ -1313,17 +1305,6 @@ contains
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd
         endif
-        ! check if we are dose-weighting or not
-        self%l_dose_weight = .false.
-        if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
-            if( cline%defined('exp_time') .and. .not. cline%defined('dose_rate') )then
-                THROW_HARD('need dose_rate to be part of the command line!')
-            endif
-            if( .not. cline%defined('exp_time') .and. cline%defined('dose_rate') )then
-                THROW_HARD('need exp_time to be part of the command line!')
-            endif
-            self%l_dose_weight = .true.
-        endif
         ! objective function used
         select case(trim(self%objfun))
             case('cc')
@@ -1334,13 +1315,17 @@ contains
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')
         end select
+        ! dose weighing
+        self%l_dose_weight = cline%defined('total_dose')
+        if( self%fraction_dose_target < 0.01 ) THROW_HARD('Invalid : fraction_dose_target'//real2str(self%fraction_dose_target))
         ! eer sanity checks
+        self%l_eer_fraction = cline%defined('eer_fraction')
         select case(self%eer_upsampling)
             case(1,2)
+                ! supported
             case DEFAULT
                 THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
         end select
-        if( self%eer_fraction < 1 )THROW_HARD('invalid eer_fraction: '//int2str(self%eer_fraction))
         ! FILTERS
         ! matched filter and sigma needs flags
         select case(self%cc_objfun)
@@ -1429,7 +1414,6 @@ contains
             end select
         endif
         ! motion correction
-        if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then
             self%nxpatch = 0
@@ -1578,6 +1562,10 @@ contains
                         ! .gain, which is a single tiff image
                         cntfile = cntfile+1
                         checkupfile(cntfile) = 'L'
+                    case('K')
+                        ! .eer
+                        cntfile = cntfile+1
+                        checkupfile(cntfile) = 'K'
 #endif
                     case DEFAULT
                         write(logfhandle,*) 'file: ', trim(var)
