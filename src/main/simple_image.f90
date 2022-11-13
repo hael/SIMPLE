@@ -1837,7 +1837,7 @@ contains
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k
         integer :: phys1, phys2
-        if (h .ge. 0) then
+        if (h > 0) then
             phys1 = h + 1
             phys2 = k + 1 + merge(self%ldim(2),0, k<0)
             get_fcomp2D = self%cmat(phys1,phys2,1)
