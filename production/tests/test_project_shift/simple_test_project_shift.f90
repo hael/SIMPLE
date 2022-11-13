@@ -67,18 +67,22 @@ do i = 1, N_PTCLS
     ! call o_proj%write('TEST.mrc', i)
 enddo
 o_cur = o
-corr  = cftcc%project_and_correlate(N_PTCLS, o_cur, [0., 0.])
+corr  = cftcc%project_and_correlate(N_PTCLS, o_cur)
 print *, 'corr comparing projection against itself: ', corr
 euls(1) = o_cur%e1get() + 3.
 euls(2) = o_cur%e2get() - 3.
 euls(3) = o_cur%e3get() + 3.
 call o%set_euler(euls)
+corr = cftcc%project_and_correlate(N_PTCLS, o)
+print *, 'corr comparing projection against itself at 3 angerr: ', corr
 corr = cftcc%project_and_correlate(N_PTCLS, o, [-3., 3.])
 print *, 'corr comparing projection against itself at 3 angerr, 3 sherr: ', corr
 euls(1) = o_cur%e1get() - 5.
 euls(2) = o_cur%e2get() + 5.
 euls(3) = o_cur%e3get() - 5.
 call o%set_euler(euls)
+corr = cftcc%project_and_correlate(N_PTCLS, o)
+print *, 'corr comparing projection against itself at 5 angerr: ', corr
 corr = cftcc%project_and_correlate(N_PTCLS, o, [-1., 1.])
 print *, 'corr comparing projection against itself at 5 angerr, 1 sherr: ', corr
 lims(1,1) = -6.
