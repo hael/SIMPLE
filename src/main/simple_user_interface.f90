@@ -120,7 +120,6 @@ type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
-type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter2D
 type(simple_program), target :: nununiform_filter3D
@@ -199,16 +198,15 @@ type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
 type(simple_input_param) :: dir_movies
-type(simple_input_param) :: dose_rate
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
-type(simple_input_param) :: exp_time
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
+type(simple_input_param) :: fraction_dose_target
 type(simple_input_param) :: frcs
 type(simple_input_param) :: gainref
 type(simple_input_param) :: graphene_filt
@@ -292,6 +290,7 @@ type(simple_input_param) :: stk2
 type(simple_input_param) :: stktab
 type(simple_input_param) :: stepsz
 type(simple_input_param) :: time_per_image
+type(simple_input_param) :: total_dose
 type(simple_input_param) :: trs
 type(simple_input_param) :: tseries
 type(simple_input_param) :: update_frac
@@ -370,7 +369,6 @@ contains
         call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
-        call new_motion_correct_tomo
         call new_new_project
         call new_nununiform_filter2D
         call new_nununiform_filter3D
@@ -476,7 +474,6 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
-        call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter2D)
         call push2prg_ptr_array(nununiform_filter3D)
@@ -640,8 +637,6 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
-            case('motion_correct_tomo')
-                ptr2prg => motion_correct_tomo
             case('new_project')
                 ptr2prg => new_project
             case('nununiform_filter2D')
@@ -799,7 +794,6 @@ contains
         write(logfhandle,'(A)') merge_stream_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
-        write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nununiform_filter2D%name
         write(logfhandle,'(A)') nununiform_filter3D%name
@@ -966,8 +960,8 @@ contains
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
         &'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
-        call set_param(dose_rate,     'dose_rate',     'num',    'Dose rate (e/Ang^2/s)', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 1.)
-        call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call set_param(total_dose,    'total_dose',     'num',    'Total exposure dose (e/Ang^2)', 'Total exposure dose (e/Ang^2)', 'in e/Ang^2', .false., 50.)
+        call set_param(fraction_dose_target,'fraction_dose_target','num','EER fraction dose target (e/Ang^2)', 'EER fraction dose target, used to determine how many EER frames are included in each movie fraction(e/Ang^2)', 'in e/Ang^2', .false., 1.)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
         call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.2}', 'in microns{0.2}', .false., DFMIN_DEFAULT)
@@ -2657,7 +2651,7 @@ contains
         &'motion_correct', &                                                      ! name
         &'Anisotropic motion correction of movies',&                              ! descr_short
         &'is a distributed workflow for anisotropic motion correction of movies.&
-        & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
+        & If then total dose is given the individual frames will be filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&     ! descr_long
@@ -2667,8 +2661,8 @@ contains
         ! image input/output
         call motion_correct%set_input('img_ios', 1, gainref)
         ! parameter input/output
-        call motion_correct%set_input('parm_ios', 1, dose_rate)
-        call motion_correct%set_input('parm_ios', 2, exp_time)
+        call motion_correct%set_input('parm_ios', 1, total_dose)
+        call motion_correct%set_input('parm_ios', 2, fraction_dose_target)
         call motion_correct%set_input('parm_ios', 3, max_dose)
         call motion_correct%set_input('parm_ios', 4, scale_movies)
         call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
@@ -2702,54 +2696,6 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts)
         call motion_correct%set_input('comp_ctrls', 2, nthr)
     end subroutine new_motion_correct
-
-    subroutine new_motion_correct_tomo
-        ! PROGRAM SPECIFICATION
-        call motion_correct_tomo%new(&
-        &'motion_correct_tomo', &                   ! name
-        &'Motion correction of tomography movies',& ! descr_short
-        &'is a distributed workflow for motion correction of tomography movies based on the same &
-        &principal strategy as Grigorieffs program. There are two important differences: automatic &
-        &weighting of the frames using a correlation-based M-estimator and continuous optimisation of &
-        &the shift parameters. If dose_rate and exp_time are given, the individual frames will be &
-        &low-pass filtered accordingly (dose-weighting strategy). The exp_doc document should contain &
-        &per line exp_time=X and dose_rate=Y. It is assumed that the input list of movies (one per tilt) &
-        &are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. &
-        &If scale is given, the movie will be Fourier cropped according to the down-scaling factor &
-        &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
-        &chunk size (Falcon 3 movies)',& ! descr_long
-        &'simple_exec',&           ! executable
-        &0, 7, 0, 2, 4, 0, 1, .false.)   ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call motion_correct_tomo%set_input('parm_ios', 1, 'tomoseries', 'file', '.txt filetable of filetables of tomograms',&
-        &'.txt filetable of filetables; each line referring to a .txt file listing all movies in the tilt-series', 'e.g. filetab_of_filetabs.txt', .true., '')
-        call motion_correct_tomo%set_input('parm_ios', 2, 'exp_doc', 'file', '.txt file with exp_time and dose_rate per tomogram',&
-        &'.txt file with exp_time and dose_rate per tomogram', 'e.g. exp_doc.txt', .true., '')
-        call motion_correct_tomo%set_input('parm_ios', 3, smpd)
-        call motion_correct_tomo%set_input('parm_ios', 4, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. motion_correct/', .false., 'motion_correct')
-        call motion_correct_tomo%set_input('parm_ios', 5, scale_movies)
-        call motion_correct_tomo%set_input('parm_ios', 6, pspecsz)
-        call motion_correct_tomo%set_input('parm_ios', 7, numlen)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call motion_correct_tomo%set_input('srch_ctrls', 1, trs)
-        call motion_correct_tomo%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
-        ! filter controls
-        call motion_correct_tomo%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
-        call motion_correct_tomo%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 8.)
-        call motion_correct_tomo%set_input('filt_ctrls', 3, kv)
-        call motion_correct_tomo%set_input('filt_ctrls', 4, wcrit)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_motion_correct_tomo
 
     subroutine new_nununiform_filter2D
         ! PROGRAM SPECIFICATION
@@ -2979,8 +2925,8 @@ contains
         call preprocess%set_input('img_ios', 2, 'refs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
         call preprocess%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
         ! parameter input/output
-        call preprocess%set_input('parm_ios', 1,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess%set_input('parm_ios', 2,  exp_time)
+        call preprocess%set_input('parm_ios', 1,  total_dose)
+        call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
         call preprocess%set_input('parm_ios', 3,  max_dose)
         call preprocess%set_input('parm_ios', 4,  scale_movies)
         call preprocess%set_input('parm_ios', 5,  eer_fraction)
@@ -3048,8 +2994,8 @@ contains
         call preprocess_stream%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
-        call preprocess_stream%set_input('parm_ios', 1, dose_rate)
-        call preprocess_stream%set_input('parm_ios', 2, exp_time)
+        call preprocess_stream%set_input('parm_ios', 1, total_dose)
+        call preprocess_stream%set_input('parm_ios', 2, fraction_dose_target)
         call preprocess_stream%set_input('parm_ios', 3, max_dose)
         call preprocess_stream%set_input('parm_ios', 4, scale_movies)
         call preprocess_stream%set_input('parm_ios', 5, eer_fraction)
@@ -3131,10 +3077,10 @@ contains
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '')
         call preprocess_stream_dev%set_gui_params('img_ios', 6, submenu="data", advanced=.false.)
         ! parameter input/output
-        call preprocess_stream_dev%set_input('parm_ios', 1, dose_rate)
+        call preprocess_stream_dev%set_input('parm_ios', 1, total_dose)
         call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
-        call preprocess_stream_dev%set_input('parm_ios', 2, exp_time)
-        call preprocess_stream_dev%set_gui_params('parm_ios', 2, submenu="data", advanced=.false.)
+        call preprocess_stream_dev%set_input('parm_ios', 2, fraction_dose_target)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 2, submenu="data")
         call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream_dev%set_gui_params('parm_ios', 3, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
@@ -3284,7 +3230,7 @@ contains
         &'Print dose weights used in motion correction',&                         ! descr_short
         &'is a program for printing the dose weights used in motion correction',& ! descr_long
         &'simple_exec',&                                                          ! executable
-        &0, 6, 0, 0, 0, 0, 0, .false.)                                            ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 0, .false.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3293,10 +3239,8 @@ contains
         call print_dose_weights%set_input('parm_ios', 2, box)
         call print_dose_weights%set_input('parm_ios', 3, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
         call print_dose_weights%set_input('parm_ios', 4, kv)
-        call print_dose_weights%set_input('parm_ios', 5, exp_time)
+        call print_dose_weights%set_input('parm_ios', 5, total_dose)
         print_dose_weights%parm_ios(5)%required = .true.
-        call print_dose_weights%set_input('parm_ios', 6, dose_rate)
-        print_dose_weights%parm_ios(6)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4443,9 +4387,7 @@ contains
         call tseries_motion_correct%new(&
         &'tseries_motion_correct', &                                       ! name
         &'Anisotropic motion correction of time-series of nanoparticles',& ! descr_short
-        &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.&
-        & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
-        & (dose-weighting strategy).',&                                    ! descr_long
+        &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! descr_long
         &'single_exec',&                                                   ! executable
         &0, 1, 0, 7, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

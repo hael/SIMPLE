@@ -56,6 +56,13 @@ contains
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
         endif
+        ! sanity check
+        if( fname2format(self%moviename) .eq. 'K' )then
+            ! eer movie
+            if( (.not.params_glob%l_dose_weight) .and. (.not.cline%defined('eer_fraction')) )then
+                THROW_HARD('eer_fraction must be defined!')
+            endif
+        endif
         ! make filenames
         fbody_here = basename(trim(moviename))
         ext        = fname2ext(trim(fbody_here))
@@ -104,7 +111,6 @@ contains
         ! ALIGNEMENT
         select case(params_glob%algorithm)
         case('iso','wpatch','poly')
-            if( params_glob%tomo.eq.'yes' ) THROW_HARD('TOMO unsupported')
             write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
             if( cline%defined('boxfile') )then
                 if( file_exists(params_glob%boxfile) )then
@@ -135,7 +141,6 @@ contains
             call orientation%set('gof',   goodnessoffit(1))
             call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         case DEFAULT
-            if( params_glob%tomo.eq.'yes' ) motion_correct_with_patched = .false.
             ! b-factors for alignment
             bfac_here = -1.
             if( cline%defined('bfac') ) bfac_here = params_glob%bfac
@@ -175,12 +180,7 @@ contains
                 if( patch_success )then
                     call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
                 else
-                    if( params_glob%tomo .eq. 'yes' )then
-                        call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
-                        &self%moviesum_corrected, self%moviesum_ctf)
-                    else
-                        call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                    endif
+                    call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
                     THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
                     THROW_WARN('Only isotropic/stage-drift correction will be used')
                 endif
@@ -189,13 +189,7 @@ contains
                 ! cleanup
                 call motion_correct_patched_kill
             else
-                ! generate sums
-                if( params_glob%tomo .eq. 'yes' )then
-                    call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
-                    &self%moviesum_corrected, self%moviesum_ctf)
-                else
-                    call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                endif
+                call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
             endif
             ! STAR output
             if( .not. l_tseries )then

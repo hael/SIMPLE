@@ -69,7 +69,6 @@ contains
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         call cline%set('groupframes',     'no')
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')

@@ -13,7 +13,7 @@ use simple_parameters,                    only: params_glob
 implicit none
 
 ! Stage drift
-public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_shift_frames
+public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_shift_frames
 public :: motion_correct_iso_kill
 ! Beam-induced motion correction
 public :: motion_correct_dev, motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
@@ -42,10 +42,11 @@ type(eer_decoder)        :: eer                           !< eer object
 type(image)              :: gain_img                      !< gain reference image
 real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
 real,        allocatable :: frameweights(:)               !< array of frameweights
-real,        allocatable :: acc_doses(:)                  !< accumulated doses
 complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrice
 
 ! module global variables
+character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
+integer,          allocatable :: pos_outliers(:,:)        !< positions of defects & hot pixels
 integer :: nframes        = 0                             !< number of frames used for alignement
 integer :: total_nframes  = 0                             !< total number of frames in movie
 integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
@@ -53,23 +54,23 @@ integer :: ldim(3)        = [0,0,0]                       !< logical dimension o
 integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
 integer :: ldim_gain(3)   = [0,0,0]                       !< gain reference dimensions
+integer :: eer_fraction   = 0
+real    :: total_dose     = 0.                            !< total dose in e/A2
 real    :: hp             = 0.                            !< high-pass limit
 real    :: lp             = 0.                            !< low-pass limit
 real    :: resstep        = 0.                            !< resolution step size (in angstrom)
 real    :: smpd           = 0.                            !< sampling distance
 real    :: smpd_scaled    = 0.                            !< sampling distance
 real    :: kV             = 300.                          !< acceleration voltage
-real    :: dose_rate      = 0.                            !< dose rate
 logical :: do_scale                    = .false.          !< scale or not
 logical :: l_eer                       = .false.          !< whether eer format is in use
 logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
-character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
-integer,          allocatable :: pos_outliers(:,:)        !< positions of defects & hot pixels
+
 
 ! module global constants
-real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
-logical, parameter :: FITSHIFTS                     = .true.
-logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously optimize weights after alignment
+real,    parameter :: NSIGMAS          = 6.       !< Number of standard deviations for outliers detection
+logical, parameter :: FITSHIFTS        = .true.
+logical, parameter :: DO_OPT_WEIGHTS   = .false.  !< continuously optimize weights after alignment
 ! benchmarking
 logical                 :: L_BENCH = .false.
 integer(timer_int_kind) :: t_read, t_cure, t_forctf, t_mic, t_fft_clip, t_patched, t_patched_forctf, t_patched_mic
@@ -89,15 +90,29 @@ contains
         character(len=*), optional, intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
         complex,     pointer     :: pcmat(:,:,:)
-        real     :: dimo4, time_per_frame, current_time, total_dose
-        integer  :: shp(3), iframe, nrawframes
-        smpd = ctfvars%smpd ! un-scaled pixel size
+        real     :: dimo4, dose_per_frame
+        integer  :: shp(3), iframe, n_eer_frames
+        smpd       = ctfvars%smpd ! un-scaled pixel size
+        total_dose = params_glob%total_dose
         ! get number of frames & dim from stack
         select case(fname2format(movie_stack_fname))
         case('K')
-            call find_ldim_nptcls(movie_stack_fname, ldim, nrawframes)
-            nframes = floor(real(nrawframes)/real(params_glob%eer_fraction))
-            l_eer   = .true.
+            ! EER case, we need to determine fractionation
+            l_eer = .true.
+            call find_ldim_nptcls(movie_stack_fname, ldim, n_eer_frames)
+            if( params_glob%l_eer_fraction )then
+                eer_fraction = params_glob%eer_fraction
+                nframes      = floor(real(n_eer_frames)/real(eer_fraction))
+                ! because we ignore the last eer frames we need to update the dose
+                total_dose   = total_dose * real(nframes) * real(eer_fraction) / real(n_eer_frames)
+            else
+                if( .not.params_glob%l_dose_weight )then
+                    THROW_HARD('Either eer_fraction or total_dose must be defined; motion_correct_init')
+                endif
+                call calc_eer_fraction(n_eer_frames, params_glob%fraction_dose_target, total_dose, nframes, eer_fraction)
+            endif
+            write(logfhandle,'(A,2I6)')'>>> NUMBER OF FRACTIONS; EER FRAMES PER FRACTION: ', nframes, eer_fraction
+            if( params_glob%l_dose_weight )write(logfhandle,'(A,F8.2)')'>>> EFFECTIVE TOTAL DOSE:', total_dose
             select case(params_glob%eer_upsampling)
             case(1)
                 ! 4K, physical pixel size is by convention set on import
@@ -125,13 +140,12 @@ contains
         ! dose weighting prep
         if( params_glob%l_dose_weight )then
             kV = ctfvars%kv
-            time_per_frame = params_glob%exp_time/real(nframes)  ! s
-            dose_rate      = params_glob%dose_rate
+            dose_per_frame = total_dose / real(nframes)
             if( params_glob%max_dose > 0.001 )then
                 ! adjusting number of frames for maximum dose
                 total_dose = 0.0
                 do iframe = 1,nframes
-                    total_dose  = total_dose + dose_rate * time_per_frame ! e/A2
+                    total_dose  = total_dose + dose_per_frame ! e/A2
                     if( total_dose > params_glob%max_dose ) exit
                 enddo
                 nframes = min(iframe,nframes)
@@ -142,12 +156,6 @@ contains
                 THROW_WARN('nframes of movie < 2, aborting motion_correct')
                 return
             endif
-            if( allocated(acc_doses) ) deallocate(acc_doses)
-            allocate(acc_doses(nframes), source=0.0)
-            do iframe=1,nframes
-                current_time      = real(iframe)*time_per_frame
-                acc_doses(iframe) = dose_rate*current_time      ! e/A2/s * s = e/A2
-            end do
         endif
         ! scaling
         if( params_glob%scale < 0.99 )then
@@ -203,7 +211,7 @@ contains
             call eer%new(movie_stack_fname, ctfvars%smpd, params_glob%eer_upsampling) ! 4K, default
             if( l_BENCH ) rt_read = toc(t_read)
             if( l_BENCH ) t_new = tic()
-            call eer%decode(movie_frames, params_glob%eer_fraction)
+            call eer%decode(movie_frames, eer_fraction)
             if( l_BENCH ) rt_new = toc(t_new)
         else
             if( l_BENCH ) t_new = tic()
@@ -400,21 +408,6 @@ contains
         endif
     end subroutine motion_correct_iso_calc_sums
 
-    subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum_corrected, movie_sum_ctf )
-        integer,     intent(inout) :: frame_counter  !< frame counter
-        real,        intent(in)    :: time_per_frame !< time resolution
-        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
-        real    :: current_time
-        integer :: iframe
-        ! re-calculates doses
-        do iframe=1,nframes
-            frame_counter     = frame_counter + 1
-            current_time      = real(frame_counter)*time_per_frame ! unit: seconds
-            acc_doses(iframe) = dose_rate*current_time             ! unit e/A2
-        end do
-        call  motion_correct_iso_calc_sums(movie_sum_corrected, movie_sum_ctf)
-    end subroutine motion_correct_iso_calc_sums_tomo
-
     subroutine motion_correct_calc_msd( include_patch, msd )
         logical, intent(in)  :: include_patch
         real,    intent(out) :: msd
@@ -441,7 +434,7 @@ contains
         character(len=*), optional, intent(in) :: gainref_fname
         type(starfile_table_type) :: mc_starfile
         real(dp) :: poly_coeffs(size(patched_polyn,1)),dpscale
-        real     :: shift(2), doserateperframe
+        real     :: shift(2), doseperframe
         integer  :: i,iframe, n, ndeadpixels, motion_model
         motion_model = 0
         if( writepoly ) motion_model = 1
@@ -465,18 +458,15 @@ contains
         else
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(smpd,dp))
         endif
-        doserateperframe = 0.
-        if( params_glob%l_dose_weight )then
-            doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
-            doserateperframe = doserateperframe / real(total_nframes)             ! per frame
-        endif
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
+        doseperframe = 0.
+        if( params_glob%l_dose_weight ) doseperframe = params_glob%total_dose / real(total_nframes)
+        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doseperframe, dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
         call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
         if( l_eer )then
             call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_UPSAMPLING, params_glob%eer_upsampling)
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_GROUPING, params_glob%eer_fraction)
+            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_GROUPING, eer_fraction)
         endif
         call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, motion_model)
         call starfile_table__write_ofile(mc_starfile)
@@ -655,7 +645,7 @@ contains
         type(motion_align_poly)    :: align_obj
         real, allocatable         :: iso_shifts(:,:)
         real(dp)                  :: star_polyn(36)
-        real                      :: ave, sdev, var, dose_per_frame
+        real                      :: ave, sdev, var
         integer                   :: t
         logical                   :: err, err_stat
         ! initialise
@@ -704,8 +694,6 @@ contains
             if( aniso_success ) call movie_frames_scaled(t)%ifft
         enddo
         !$omp end parallel do
-        dose_per_frame = 0.
-        if( params_glob%l_dose_weight ) dose_per_frame = params_glob%exp_time*params_glob%dose_rate/real(nframes)
         if( aniso_success )then
             ! dummy init to access interpolation routine
             call motion_patch%new(0.)
@@ -796,7 +784,6 @@ contains
         integer :: iframe
         if( allocated(shifts_toplot)      ) deallocate(shifts_toplot)
         if( allocated(frameweights)       ) deallocate(frameweights)
-        if( allocated(acc_doses)          ) deallocate(acc_doses)
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
         if( allocated(pos_outliers)       ) deallocate(pos_outliers)
         call gain_img%kill
@@ -819,7 +806,7 @@ contains
         class(image), intent(inout) :: frames(nframes)
         real, parameter   :: A=0.245, B=-1.665, C=2.81
         real, allocatable :: qs(:)
-        real    :: frame_dose(nframes), spaFreqk
+        real    :: acc_doses(nframes), spaFreqk, dose_per_frame
         real    :: twoNe, smpd, spafreq, limhsq,limksq
         integer :: nrflims(3,2), ldim(3), hphys,kphys, iframe, h,k
         if( .not.params_glob%l_dose_weight ) return
@@ -828,17 +815,18 @@ contains
         smpd    = frames(1)%get_smpd()
         allocate(qs(nframes),source=0.)
         ! doses
-        ldim   = frames(1)%get_ldim()
-        limhsq = (real(ldim(1))*smpd)**2.
-        limksq = (real(ldim(2))*smpd)**2.
-        do iframe = 1,nframes
-            frame_dose(iframe) = acc_doses(iframe)
-            if( is_equal(kV,200.) )then
-                frame_dose(iframe) = frame_dose(iframe) / 0.8
-            else if( is_equal(kV,100.) )then
-                frame_dose(iframe) = frame_dose(iframe) / 0.64
-            endif
-        enddo
+        ldim           = frames(1)%get_ldim()
+        limhsq         = (real(ldim(1))*smpd)**2.
+        limksq         = (real(ldim(2))*smpd)**2.
+        dose_per_frame = total_dose / real(nframes)
+        do iframe=1,nframes
+            acc_doses(iframe) = real(iframe) * dose_per_frame
+        end do
+        if( is_equal(kV,200.) )then
+            acc_doses = acc_doses / 0.8
+        else if( is_equal(kV,100.) )then
+            acc_doses = acc_doses / 0.64
+        endif
         ! dose normalization
         !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,iframe,qs)&
         !$omp default(shared) schedule(static) proc_bind(close)
@@ -849,7 +837,7 @@ contains
                 hphys   = h + 1
                 spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
                 twoNe   = 2.*(A*spaFreq**B + C)
-                qs = exp(-frame_dose/twoNe)
+                qs = exp(-acc_doses/twoNe)
                 qs = qs / sqrt(sum(qs*qs))
                 do iframe = 1,nframes
                     call frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
@@ -1015,5 +1003,30 @@ contains
             !$omp end parallel do
         endif
     end subroutine cure_outliers
+
+        !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
+    !   while minimizing the number of leftover frames given total dose, total # of eer frames & a dose target
+    subroutine calc_eer_fraction(n_eer_frames, fraction_dose_target, tot_dose, nfractions, eerfraction)
+        integer, intent(in)    :: n_eer_frames
+        real,    intent(in)    :: fraction_dose_target
+        real,    intent(inout) :: tot_dose
+        integer, intent(out)   :: nfractions, eerfraction
+        real    :: dose_per_eer_frame
+        integer :: ffloor, fceil, nffloor, nfceil
+        ffloor  = floor(real(n_eer_frames) / (tot_dose / fraction_dose_target))
+        fceil   = ffloor+1
+        nffloor = floor(real(n_eer_frames) / real(ffloor))
+        nfceil  = floor(real(n_eer_frames) / real(fceil))
+        if( nffloor*ffloor > nfceil*fceil )then
+            nfractions   = nffloor
+            eer_fraction = ffloor
+        else
+            nfractions   = nfceil
+            eer_fraction = fceil
+        endif
+        ! adjusting total dose
+        dose_per_eer_frame = tot_dose / real(n_eer_frames)
+        tot_dose           = dose_per_eer_frame * real(eerfraction) * real(nfractions)
+    end subroutine calc_eer_fraction
 
 end module simple_motion_correct

@@ -127,7 +127,7 @@ contains
         real, allocatable :: weights(:,:), res(:)
         integer           :: iframe, k, filtsz
         call params%new(cline)
-        call calc_dose_weights(params%nframes, params%box, params%smpd, params%kV, params%exp_time, params%dose_rate, weights)
+        call calc_dose_weights(params%nframes, params%box, params%smpd, params%kV, params%total_dose, weights)
         filtsz = size(weights, dim=2)
         res = get_resarr(params%box, params%smpd)
         write(logfhandle,'(A)') 'RESOLUTION, DOSE_WEIGHTS'
@@ -357,7 +357,6 @@ contains
         if( .not. cline%defined('lpstop')        ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')          ) call cline%set('bfac',          50.)
         if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',   'softmax')
-        if( .not. cline%defined('eer_fraction')  ) call cline%set('eer_fraction',  20.)
         if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling', 1.)
         call cline%set('oritype', 'mic')
         call params%new(cline)
