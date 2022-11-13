@@ -54,7 +54,6 @@ type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
 type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
-type(motion_correct_tomo_commander_distr)   :: xmotion_correct_tomo_distr
 type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
 type(pick_commander_distr)                  :: xpick_distr
 
@@ -215,8 +214,6 @@ select case(trim(prg))
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         call xgen_pspecs_and_thumbs%execute(cline)
-    case( 'motion_correct_tomo' )
-        call xmotion_correct_tomo_distr%execute(cline)
     case( 'ctf_estimate' )
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
@@ -369,7 +366,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('5d1f97f')
+call simple_print_git_version('f633dd0')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
