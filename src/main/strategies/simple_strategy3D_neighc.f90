@@ -61,8 +61,13 @@ contains
             ! set angular thresholds
             athres_proj = build_glob%spproj_field%get(self%s%iptcl,      'dist')
             athres_inpl = build_glob%spproj_field%get(self%s%iptcl, 'dist_inpl')
-            athres_proj = max(2.,min(15.,2. * athres_proj))
-            athres_inpl = max(2.,min(15.,2. * athres_inpl))
+            if( athres_proj > TINY )then
+                athres_proj = max(2., min(params_glob%athres, 2. * athres_proj))
+                athres_inpl = max(2., min(params_glob%athres, 2. * athres_inpl))
+            else
+                athres_proj = params_glob%athres
+                athres_inpl = params_glob%athres
+            endif
 
             print *, athres_proj, athres_inpl
             
