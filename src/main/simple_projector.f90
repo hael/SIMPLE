@@ -347,7 +347,7 @@ contains
         real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
         integer :: h, k
-        complex :: ref_comp, ptl_comp
+        complex :: ref_comp, ptl_comp, diff_comp
         e_rotmat = e%get_mat()
         cc(:)    = 0.
         select case(params_glob%cc_objfun)
@@ -380,17 +380,17 @@ contains
                             else
                                 ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
                             endif
-                            ptl_comp = cmat(h,k)
+                            ptl_comp  = cmat(h,k)
+                            diff_comp = ref_comp  - ptl_comp
                             ! update euclidean difference
-                            cc(1) = cc(1) + real((ref_comp  - ptl_comp) * conjg(ref_comp  - ptl_comp))
+                            cc(1) = cc(1) + real(diff_comp * conjg(diff_comp))
                             ! update normalization terms
                             cc(2) = cc(2) + real(ref_comp * conjg(ref_comp))
                             cc(3) = cc(3) + real(ptl_comp * conjg(ptl_comp))
                         endif
                     end do
                 end do
-                corr = sqrt(cc(1)/(cc(2)+cc(3)))
-                corr = (exp(1. - corr) - 1.)/(exp(1.) - 1.)
+                corr = 1 - cc(1)/(cc(2)+cc(3))
         end select
     end function fproject_correlate_serial
 

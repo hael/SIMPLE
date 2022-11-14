@@ -867,8 +867,7 @@ contains
                 end do
             end do
         endif
-        corr = sqrt(cc(1)/(cc(2)+cc(3)))
-        corr = (exp(1. - corr) - 1.)/(exp(1.) - 1.)
+        corr = 1 - cc(1)/(cc(2)+cc(3))
     end subroutine corr_shifted_euler_1
 
     subroutine corr_shifted_euler_2( self, iptcl, shvec, corr, grad )
@@ -913,14 +912,14 @@ contains
                     ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,i)
                     ! shift the particle Fourier component
                     ptcl_comp = self%particles(h,k,i) * sh_comp
-                    diff_comp = (ref_comp - ptcl_comp) * conjg(ref_comp - ptcl_comp)
+                    diff_comp = ref_comp  - ptcl_comp
                     ! update euclidean difference
-                    cc(1)     = cc(1) + real(diff_comp)
+                    cc(1)     = cc(1) + real(diff_comp * conjg(diff_comp))
                     ! update normalization terms
                     cc(2)     = cc(2) + real( ref_comp * conjg( ref_comp))
                     cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
                     ! update the gradient
-                    ptcl_comp = 2 * diff_comp * shconst * imagpart(ptcl_comp)
+                    ptcl_comp = 2 * shconst * imagpart(ptcl_comp * conjg(diff_comp))
                     grad(1)   = grad(1) + real(ptcl_comp)*h
                     grad(2)   = grad(2) + real(ptcl_comp)*k
                 end do
@@ -937,22 +936,21 @@ contains
                     ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
                     ! shift the particle Fourier component
                     ptcl_comp = self%particles(h,k,i) * sh_comp
-                    diff_comp = (ref_comp - ptcl_comp) * conjg(ref_comp - ptcl_comp)
+                    diff_comp = ref_comp  - ptcl_comp
                     ! update euclidean difference
-                    cc(1)     = cc(1) + real(diff_comp)
+                    cc(1)     = cc(1) + real(diff_comp * conjg(diff_comp))
                     ! update normalization terms
                     cc(2)     = cc(2) + real( ref_comp * conjg( ref_comp))
                     cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
                     ! update the gradient
-                    ptcl_comp = 2 * diff_comp * shconst * imagpart(ptcl_comp)
+                    ptcl_comp = 2 * shconst * imagpart(ptcl_comp * conjg(diff_comp))
                     grad(1)   = grad(1) + real(ptcl_comp)*h
                     grad(2)   = grad(2) + real(ptcl_comp)*k
                 end do
             end do
         endif
-        corr = sqrt(cc(1)/(cc(2)+cc(3)))
-        corr = (exp(1. - corr) - 1.)/(exp(1.) - 1.)
-        grad = grad*exp(1. - corr)/(exp(1.) - 1.)/sqrt(cc(1))/(cc(2)+cc(3))/2
+        corr = 1 - cc(1)/(cc(2)+cc(3))
+        grad =   -  grad/(cc(2)+cc(3))
     end subroutine corr_shifted_euler_2
 
     ! auto differentiation gives substandard performance to anaytical gradients

@@ -92,6 +92,7 @@ lims(2,2) =  6.
 call cftcc_shsrch%new(lims)
 call cftcc_shsrch%set_pind(N_PTCLS)
 call o_proj%fft()
+call o_proj%shift2Dserial([-2., 2.]) 
 call cftcc%set_ref(o_proj)
 cxy = cftcc_shsrch%minimize(nevals)
 print *, 'shsrch corr: ', cxy(1), ' at shift = ', cxy(2:3)
