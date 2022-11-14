@@ -191,7 +191,7 @@ contains
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
-                if (h > 0) then
+                if (h .ge. 0) then
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
                     phys(3) = 1
@@ -255,7 +255,7 @@ contains
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
                 comp = self%interp_fcomp(loc)
-                if (h > 0) then
+                if (h .ge. 0) then
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
                     phys(3) = 1
@@ -284,7 +284,7 @@ contains
             do k = lims(2,1),lims(2,2)
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
-                    if( h > 0 )then
+                    if( h .ge. 0 )then
                         cmat(h,k) = self%interp_fcomp(loc)
                     else
                         cmat(h,k) = conjg(self%interp_fcomp(loc))
@@ -314,7 +314,7 @@ contains
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     sh  = nint(hyp(real(h),real(k)))
-                    if( h > 0 )then
+                    if( h .ge. 0 )then
                         cmat(h,k) = self%interp_fcomp(loc)
                     else
                         cmat(h,k) = conjg(self%interp_fcomp(loc))
@@ -359,7 +359,7 @@ contains
                     do k = lims(2,1),lims(2,2)
                         if( resmsk(h,k) )then
                             loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h > 0 )then
+                            if( h .ge. 0 )then
                                 ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
                             else
                                 ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
@@ -378,7 +378,7 @@ contains
                     do k = lims(2,1),lims(2,2)
                         if( resmsk(h,k) )then
                             loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h > 0 )then
+                            if( h .ge. 0 )then
                                 ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
                             else
                                 ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
@@ -396,7 +396,7 @@ contains
                     do k = lims(2,1),lims(2,2)
                         if( resmsk(h,k) )then
                             loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h > 0 )then
+                            if( h .ge. 0 )then
                                 ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
                             else
                                 ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
@@ -436,7 +436,7 @@ contains
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     sh  = nint(hyp(real(h),real(k)))
-                    if( h > 0 )then
+                    if( h .ge. 0 )then
                         cmat_ref(h,k) =       self%interp_fcomp(loc)
                     else
                         cmat_ref(h,k) = conjg(self%interp_fcomp(loc))
