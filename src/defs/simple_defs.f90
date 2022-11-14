@@ -150,7 +150,7 @@ real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3
 real, parameter    :: FRAC_SH_LIM          = 75.0      !< at what frac to turn on the shift search
 real, parameter    :: NEIGH_MINFRAC        = 0.3       !< minimum fraction of search space scanned in refine=neigh
 real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
-real, parameter    :: EXTRINITHRES        = 0.5       !< initial randomization threshold for extremal search
+real, parameter    :: EXTRINITHRES        = 0.5        !< initial randomization threshold for extremal search
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
 real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
 real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC

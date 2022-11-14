@@ -38,7 +38,7 @@ contains
         integer,                  intent(in)    :: ithr
         integer   :: isample, nevals(2), nsh
         type(ori) :: o, osym, obest
-        real      :: corr, euldist, dist_inpl, corr_best
+        real      :: corr, euldist, dist_inpl, corr_best, athres_proj, athres_inpl
         real      :: cxy(3), shvec(2), shvec_incr(2), shvec_best(2)
         logical   :: got_better, l_within_lims
         ! continuous sochastic search
@@ -58,9 +58,17 @@ contains
             ! init counters
             self%s%nrefs_eval = 0
             self%s%ntrs_eval  = 0
+            ! set angular thresholds
+            athres_proj = build_glob%spproj_field%get(self%s%iptcl,      'dist')
+            athres_inpl = build_glob%spproj_field%get(self%s%iptcl, 'dist_inpl')
+            athres_proj = max(2.,min(15.,2. * athres_proj))
+            athres_inpl = max(2.,min(15.,2. * athres_inpl))
+
+            print *, athres_proj, athres_inpl
+            
             do isample=1,self%s%nsample_neigh
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
-                call build_glob%pgrpsyms%rnd_euler(obest, self%s%athres, o)
+                call build_glob%pgrpsyms%rnd_euler(obest, athres_proj, athres_inpl, o)
                 if( self%s%nsample_trs > 0 )then
                     ! calculate Cartesian corr and simultaneously stochastically search shifts (Gaussian sampling)
                     shvec = shvec_best

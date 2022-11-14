@@ -77,9 +77,6 @@ contains
                 call obest%set('corr',      corr_best)
                 call obest%set('better',      1.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
-
-                print *, 'GLOB FOUND BETTER'
-
             else
                 call build_glob%spproj_field%set(self%s%iptcl, 'better', 0.)
             endif

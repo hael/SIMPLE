@@ -15,9 +15,7 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: HALFROT      = 30. ! half rotational range for in-plane refinement
 real, parameter :: MIN_2DWEIGHT = 0.001
-
 
 type strategy2D_spec
     real    :: stoch_bound = 0.
