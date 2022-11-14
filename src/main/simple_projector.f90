@@ -346,13 +346,10 @@ contains
         logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
-        integer :: h, k, cnt
-        complex :: ref_comp, ptl_comp, mean_ref, mean_ptl
+        integer :: h, k
+        complex :: ref_comp, ptl_comp
         e_rotmat = e%get_mat()
         cc(:)    = 0.
-        mean_ref = 0.
-        mean_ptl = 0.
-        cnt      = 0
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 do h = lims(1,1),lims(1,2)
@@ -383,27 +380,8 @@ contains
                             else
                                 ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
                             endif
-                            ! update normalization terms
-                            mean_ref = mean_ref + ref_comp
-                            mean_ptl = mean_ptl + cmat(h,k)
-                            cnt      = cnt + 1
-                        endif
-                    end do
-                end do
-                mean_ref = mean_ref/cnt
-                mean_ptl = mean_ptl/cnt
-                do h = lims(1,1),lims(1,2)
-                    do k = lims(2,1),lims(2,2)
-                        if( resmsk(h,k) )then
-                            loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h .ge. 0 )then
-                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
-                            else
-                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
-                            endif
-                            ref_comp = ref_comp  - mean_ref
-                            ptl_comp = cmat(h,k) - mean_ptl
-                            ! update cross product
+                            ptl_comp = cmat(h,k)
+                            ! update euclidean difference
                             cc(1) = cc(1) + real((ref_comp  - ptl_comp) * conjg(ref_comp  - ptl_comp))
                             ! update normalization terms
                             cc(2) = cc(2) + real(ref_comp * conjg(ref_comp))
