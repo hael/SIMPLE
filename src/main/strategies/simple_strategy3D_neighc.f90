@@ -63,14 +63,14 @@ contains
             athres_inpl = build_glob%spproj_field%get(self%s%iptcl, 'dist_inpl')
             if( athres_proj > TINY )then
                 athres_proj = max(2., min(params_glob%athres, 2. * athres_proj))
-                athres_inpl = max(2., min(params_glob%athres, 2. * athres_inpl))
             else
                 athres_proj = params_glob%athres
+            endif
+            if( athres_inpl > TINY )then
+                athres_inpl = max(2., min(params_glob%athres, 2. * athres_inpl))
+            else
                 athres_inpl = params_glob%athres
             endif
-
-            print *, athres_proj, athres_inpl
-            
             do isample=1,self%s%nsample_neigh
                 ! make a random rotation matrix neighboring the previous best within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(obest, athres_proj, athres_inpl, o)
