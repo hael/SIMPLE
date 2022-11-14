@@ -402,7 +402,7 @@ contains
         real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        complex(kind=c_float_complex) :: cmat_ref(lims(1,1):lims(1,2),lims(2,1):lims(2,2)), ref_comp
+        complex(kind=c_float_complex) :: cmat_ref(lims(1,1):lims(1,2),lims(2,1):lims(2,2)), ref_comp, diff_comp
         real    :: loc(3), e_rotmat(3,3), cc(3), corr, powvec(params_glob%kfromto(2)), cntvec(params_glob%kfromto(2)), x, eps
         integer :: h, k, sh
         e_rotmat = e%get_mat()
@@ -426,22 +426,43 @@ contains
         end do
         where(cntvec > 0.) powvec = powvec / cntvec
         cc(:) = 0.
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                if( resmsk(h,k) )then
-                    sh = nint(hyp(real(h),real(k)))
-                    if( powvec(sh) > eps )then
-                        ref_comp = (cmat_ref(h,k) / sqrt(powvec(sh))) * ctfmat(h,k) * filtw(h,k)
-                        ! update cross product
-                        cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
-                        ! update normalization terms
-                        cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                        cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
-                    endif
-                endif
-            end do
-        end do
-        corr = norm_corr(cc(1),cc(2),cc(3))
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                do h = lims(1,1),lims(1,2)
+                    do k = lims(2,1),lims(2,2)
+                        if( resmsk(h,k) )then
+                            sh = nint(hyp(real(h),real(k)))
+                            if( powvec(sh) > eps )then
+                                ref_comp = (cmat_ref(h,k) / sqrt(powvec(sh))) * ctfmat(h,k) * filtw(h,k)
+                                ! update cross product
+                                cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
+                                ! update normalization terms
+                                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                                cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
+                            endif
+                        endif
+                    end do
+                end do
+                corr = norm_corr(cc(1),cc(2),cc(3))
+            case(OBJFUN_EUCLID)
+                do h = lims(1,1),lims(1,2)
+                    do k = lims(2,1),lims(2,2)
+                        if( resmsk(h,k) )then
+                            sh = nint(hyp(real(h),real(k)))
+                            if( powvec(sh) > eps )then
+                                ref_comp  = (cmat_ref(h,k) / sqrt(powvec(sh))) * ctfmat(h,k) * filtw(h,k)
+                                diff_comp = ref_comp - cmat(h,k)
+                                ! update euclidean difference
+                                cc(1) = cc(1) + real(diff_comp * conjg(diff_comp))
+                                ! update normalization terms
+                                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                                cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
+                            endif
+                        endif
+                    end do
+                end do
+                corr = 1 - cc(1)/(cc(2)+cc(3))
+            end select
     end function fproject_shellnorm_correlate_serial
 
     ! function fproject_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
