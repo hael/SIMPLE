@@ -34,14 +34,14 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//&
-&'MAX_NDISPL'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//&
-&'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//&
-&'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//&
+&'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//&
+&'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DOA'//&
-&CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -53,6 +53,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
 &CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
+&CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
@@ -66,6 +67,7 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
 &CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
+&CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
@@ -85,8 +87,9 @@ type :: atom_stats
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: aniso(3,3)        = 0. ! Ansisotropic displacement parameter matrix
     real    :: doa               = 0. ! Degree of anisotropy                                        DOA
+    real    :: displ             = 0. ! Lattice displacement                                        DISPL
+    real    :: max_ndispl        = 0. ! Maximum lattice displacement of neighboring atoms           NDISPL
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
-    real    :: max_ndispl        = 0. ! Maximum displacement of neighboring atoms                   NDISPL
     
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
@@ -121,6 +124,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: doa_stats
+    type(stats_struct)    :: displ_stats
     type(stats_struct)    :: max_ndispl_stats
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
@@ -135,6 +139,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: doa_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: displ_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_ndispl_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
@@ -175,7 +180,7 @@ type :: nanoparticle
     procedure          :: fillin_atominfo
     procedure, private :: masscen
     procedure, private :: calc_longest_atm_dist
-    procedure, private :: identify_displacement_neighbors
+    procedure, private :: lattice_displ_analysis
     ! visualization and output
     procedure          :: simulate_atoms
     procedure, private :: write_centers_1
@@ -1178,8 +1183,8 @@ contains
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
-            ! Maximum lattice displacement of neighboring atoms
-            call self%identify_displacement_neighbors(cc, centers_A, a, lattice_displ)
+            ! Lattice displacement magnitudes ( |center - expected center| ) and max neighboring lattice displ
+            call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
@@ -1219,6 +1224,7 @@ contains
         call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
+        call calc_stats(  self%atominfo(:)%displ,         self%displ_stats    )
         call calc_stats(  self%atominfo(:)%max_ndispl,    self%max_ndispl_stats    )
         call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
@@ -1268,6 +1274,7 @@ contains
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%doa,           self%doa_stats_cns(cn),           mask=doa_mask  )
+                call calc_stats( self%atominfo(:)%displ,         self%displ_stats_cns(cn),         mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_ndispl,    self%max_ndispl_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
             end subroutine calc_cn_stats
@@ -1671,7 +1678,7 @@ contains
 
     ! For the input cc, model of atomic centers, and lattice displacements |center - expected center|,
     ! finds the maximum lattice displacement of the atoms neighboring the atom cc.
-    subroutine identify_displacement_neighbors(self, cc, model, a, lattice_displ )
+    subroutine lattice_displ_analysis(self, cc, model, a, lattice_displ )
         class(nanoparticle), intent(inout) :: self
         integer,          intent(in)    :: cc
         real,             intent(in)    :: model(:,:), a(3), lattice_displ(:, :) ! a = lattice params
@@ -1692,13 +1699,21 @@ contains
             case DEFAULT ! FCC by default
                 d = a0 * ((1. + 1. / sqrt(2.)) / 2.)
         end select
-
+        ! Calculate displacement magnitude of atom cc if not yet calculated
+        if (self%atominfo(cc)%displ == 0.) then
+            ! displ magnitude is not yet calculated
+            self%atominfo(cc)%displ = norm_2(lattice_displ(cc, :))
+        end if
         ! Find all atoms withing sphere of radius d and calculate max lattice displacement
         max = 0
         max_cc = -1
         do i=1, self%n_cc
             if (i/=cc .and. euclid(model(:, i), model(:, cc)) < d) then
-                displ = norm_2(lattice_displ(i, :))
+                if (self%atominfo(i)%displ == 0.) then
+                    ! displ magnitude is not yet calculated
+                    self%atominfo(i)%displ = norm_2(lattice_displ(i, :))
+                end if
+                displ = self%atominfo(i)%displ
                 if (displ > max) then
                     max = displ
                     max_cc = i
@@ -1706,8 +1721,8 @@ contains
             end if
         end do
         self%atominfo(cc)%max_ndispl = max
-        print *, cc, max, max_cc
-    end subroutine identify_displacement_neighbors
+        !print *, cc, self%atominfo(cc)%displ, max, max_cc
+    end subroutine lattice_displ_analysis
 
     ! visualization and output
 
@@ -1930,6 +1945,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
         write(funit,601,advance='no') self%atominfo(cc)%doa,                    CSV_DELIM ! DOA
+        write(funit,601,advance='no') self%atominfo(cc)%displ,                  CSV_DELIM ! DISPL
         write(funit,601,advance='no') self%atominfo(cc)%max_ndispl,             CSV_DELIM ! MAX_NDISPL
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
@@ -1995,6 +2011,10 @@ contains
         write(funit,601,advance='no') self%doa_stats%avg,            CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%doa_stats%med,            CSV_DELIM ! MED_DOA
         write(funit,601,advance='no') self%doa_stats%sdev,           CSV_DELIM ! SDEV_DOA
+        ! -- lattice displacement
+        write(funit,601,advance='no') self%displ_stats%avg,     CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%displ_stats%med,     CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%displ_stats%sdev,    CSV_DELIM ! SDEV_DOA
         ! -- maximum neighboring displacement
         write(funit,601,advance='no') self%max_ndispl_stats%avg,     CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%max_ndispl_stats%med,     CSV_DELIM ! MED_DOA
@@ -2049,6 +2069,10 @@ contains
         write(funit,601,advance='no') self%doa_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%doa_stats_cns(cn)%med,            CSV_DELIM ! MED_DOA
         write(funit,601,advance='no') self%doa_stats_cns(cn)%sdev,           CSV_DELIM! SDEV_DOA
+        ! -- lattice displacement
+        write(funit,601,advance='no') self%displ_stats_cns(cn)%avg,          CSV_DELIM ! AVG_MAX_NDISPL
+        write(funit,601,advance='no') self%displ_stats_cns(cn)%med,          CSV_DELIM ! MED_MAX_NDISPL
+        write(funit,601,advance='no') self%displ_stats_cns(cn)%sdev,         CSV_DELIM! SDEV_MAX_NDISPL
         ! -- maximum displacement of neighboring atoms
         write(funit,601,advance='no') self%max_ndispl_stats_cns(cn)%avg,     CSV_DELIM ! AVG_MAX_NDISPL
         write(funit,601,advance='no') self%max_ndispl_stats_cns(cn)%med,     CSV_DELIM ! MED_MAX_NDISPL
