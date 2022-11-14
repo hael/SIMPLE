@@ -50,7 +50,8 @@ type sym
     procedure          :: build_refspiral
     procedure, private :: rnd_euler_1
     procedure, private :: rnd_euler_2
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
+    procedure, private :: rnd_euler_3
+    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3
     ! calculators
     procedure, private :: sym_dists_1, sym_dists_2
     generic            :: sym_dists => sym_dists_1, sym_dists_2
@@ -753,6 +754,14 @@ contains
         class(ori),     intent(inout) :: osym
         call osym%rnd_euler(o_prev, athres, self%eullims)
     end subroutine rnd_euler_2
+
+    subroutine rnd_euler_3( self, o_prev, athres_proj, athres_inpl, osym )
+        class(sym),     intent(inout) :: self
+        class(ori),     intent(in)    :: o_prev
+        real,           intent(in)    :: athres_proj, athres_inpl
+        class(ori),     intent(inout) :: osym
+        call osym%rnd_euler(o_prev, athres_proj, athres_inpl, self%eullims)
+    end subroutine rnd_euler_3
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
