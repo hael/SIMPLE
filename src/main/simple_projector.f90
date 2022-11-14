@@ -419,7 +419,7 @@ contains
                     else
                         cmat_ref(h,k) = conjg(self%interp_fcomp(loc))
                     endif
-                    powvec(sh) = powvec(sh) + csq_fast(cmat(h,k))
+                    powvec(sh) = powvec(sh) + csq_fast(cmat_ref(h,k))
                     cntvec(sh) = cntvec(sh) + 1.
                 endif
             end do
