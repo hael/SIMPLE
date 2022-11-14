@@ -282,12 +282,12 @@ contains
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
-                if (h > 0) then
+                if( h .ge. 0 )then
                     phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2),0, k<0)
+                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
                 else
                     phys1 = -h + 1
-                    phys2 = -k + 1 + merge(self%ldim(2),0, -k<0)
+                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
                 endif
                 self%particles(h,k,self%pinds(iptcl)) = img%get_cmat_at(phys1, phys2, 1)
             end do
@@ -305,12 +305,12 @@ contains
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
-                if (h > 0) then
+                if( h .ge. 0 )then
                     phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2),0, k<0)
+                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
                 else
                     phys1 = -h + 1
-                    phys2 = -k + 1 + merge(self%ldim(2),0, -k<0)
+                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
                 endif
                 self%references(h,k,1) = img%get_cmat_at(phys1, phys2, 1)
             end do

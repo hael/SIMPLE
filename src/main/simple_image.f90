@@ -1837,7 +1837,7 @@ contains
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k
         integer :: phys1, phys2
-        if (h > 0) then
+        if (h .ge. 0) then
             phys1 = h + 1
             phys2 = k + 1 + merge(self%ldim(2),0, k<0)
             get_fcomp2D = self%cmat(phys1,phys2,1)
@@ -3011,7 +3011,7 @@ contains
         filtsz = fdim(self%ldim(1)) - 1
         spec   = 0.
         counts = 0.
-        lims   = self%fit%loop_lims(2)       
+        lims   = self%fit%loop_lims(2)
         do l=lims(3,1),lims(3,2)
             do k=lims(2,1),lims(2,2)
                 do h=lims(1,1),lims(1,2)
