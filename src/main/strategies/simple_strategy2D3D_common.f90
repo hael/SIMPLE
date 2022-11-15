@@ -256,8 +256,8 @@ contains
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
     subroutine prepimg4align( iptcl, img )
-        use simple_polarizer,     only: polarizer
-        use simple_ctf,           only: ctf
+        use simple_polarizer, only: polarizer
+        use simple_ctf,       only: ctf
         integer,          intent(in)    :: iptcl
         class(polarizer), intent(inout) :: img
         type(ctf)       :: tfun

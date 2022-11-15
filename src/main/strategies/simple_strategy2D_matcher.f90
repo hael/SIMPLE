@@ -166,6 +166,7 @@ contains
             call cavger_read(params_glob%refs, 'odd')
         endif
         if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
+            params_glob%l_nonuniform = .true. ! to turn off filtering but retain shell normalisation in pftcc
             do icls = 1,params_glob%ncls
                 call build_glob%env_masks(icls)%copy(cavgs_even(icls))
                 call build_glob%env_masks(icls)%add(cavgs_odd(icls))
