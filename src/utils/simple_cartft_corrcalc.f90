@@ -66,8 +66,8 @@ type :: cartft_corrcalc
     generic            :: corr_shifted => corr_shifted_1, corr_shifted_2
     procedure, private :: corr_shifted_cc_1
     procedure, private :: corr_shifted_cc_2
-    procedure, private :: corr_shifted_euler_1
-    procedure, private :: corr_shifted_euler_2
+    procedure, private :: corr_shifted_euclid_1
+    procedure, private :: corr_shifted_euclid_2
     procedure          :: corr_shifted_ad
     ! DESTRUCTOR
     procedure          :: kill
@@ -626,7 +626,7 @@ contains
             case(OBJFUN_CC)
                 call corr_shifted_cc_1( self, iptcl, shvec, corr )
             case(OBJFUN_EUCLID)
-                call corr_shifted_euler_1( self, iptcl, shvec, corr )
+                call corr_shifted_euclid_1( self, iptcl, shvec, corr )
         end select
     end subroutine corr_shifted_1
 
@@ -640,7 +640,7 @@ contains
             case(OBJFUN_CC)
                 call corr_shifted_cc_2( self, iptcl, shvec, corr, grad )
             case(OBJFUN_EUCLID)
-                call corr_shifted_euler_2( self, iptcl, shvec, corr, grad )
+                call corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
         end select
     end subroutine corr_shifted_2
 
@@ -799,7 +799,7 @@ contains
         corr    = norm_corr(cc(1),  cc(2), cc(3))
     end subroutine corr_shifted_cc_2
 
-    subroutine corr_shifted_euler_1( self, iptcl, shvec, corr )
+    subroutine corr_shifted_euclid_1( self, iptcl, shvec, corr )
         class(cartft_corrcalc), target, intent(inout)  :: self
         integer,                        intent(in)     :: iptcl
         real,                           intent(in)     :: shvec(2)
@@ -868,9 +868,9 @@ contains
             end do
         endif
         corr = 1 - cc(1)/(cc(2)+cc(3))
-    end subroutine corr_shifted_euler_1
+    end subroutine corr_shifted_euclid_1
 
-    subroutine corr_shifted_euler_2( self, iptcl, shvec, corr, grad )
+    subroutine corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
         class(cartft_corrcalc), target, intent(inout)  :: self
         integer,                        intent(in)     :: iptcl
         real,                           intent(in)     :: shvec(2)
@@ -951,7 +951,7 @@ contains
         endif
         corr = 1 - cc(1)/(cc(2)+cc(3))
         grad =   -  grad/(cc(2)+cc(3))
-    end subroutine corr_shifted_euler_2
+    end subroutine corr_shifted_euclid_2
 
     ! auto differentiation gives substandard performance to anaytical gradients
     function corr_shifted_ad( self, iptcl, shvec, grad ) result( corr )
