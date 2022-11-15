@@ -502,7 +502,7 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2, trs_stage2, lpstart, lpstop, lpcen
+        real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: scaling, l_shmem
         call set_cluster2D_defaults( cline )
@@ -552,7 +552,7 @@ contains
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%set('objfun',     'cc')
             call cline_cluster2D_stage1%set('match_filt', 'no')
-            call cline_cluster2D_stage1%set('lpstop',  lpstart)
+            call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw','no')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
@@ -767,7 +767,7 @@ contains
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
-        real                      :: frac_srch_space, lpstart, lpstop, lpcen
+        real                      :: frac_srch_space
         logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
