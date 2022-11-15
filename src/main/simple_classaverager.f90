@@ -52,6 +52,14 @@ type(image),       allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for Wi
 type(image),       allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 type(image),       allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
+type(image),       allocatable :: cavgs_even_bak(:)            !< class averages
+type(image),       allocatable :: cavgs_odd_bak(:)             !< -"-
+type(image),       allocatable :: cavgs_even_wfilt_bak(:)      !< class averages wiener filtered
+type(image),       allocatable :: cavgs_odd_wfilt_bak(:)       !< -"-
+type(image),       allocatable :: ctfsqsums_even_bak(:)        !< CTF**2 sums for Wiener normalisation
+type(image),       allocatable :: ctfsqsums_odd_bak(:)         !< -"-
+type(image),       allocatable :: ctfsqsums_even_wfilt_bak(:)  !< CTF**2 sums for Wiener normalisation
+type(image),       allocatable :: ctfsqsums_odd_wfilt_bak(:)   !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
 logical                        :: l_stream      = .false.  !< flag for cluster2D_stream
@@ -98,7 +106,7 @@ contains
         ldim_pd(3)    = 1
         filtsz        = build_glob%img%get_filtsz()
         ! ML-regularization
-        ! l_ml_reg      = apply_euclid_regularization()
+        l_ml_reg      = apply_euclid_regularization()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -313,7 +321,7 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale
         integer :: batch_iprecs(READBUFFSZ)
         integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2), sigma2_kfromto(2)
         integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
@@ -342,10 +350,12 @@ contains
         enddo
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
+        reg_scale = 1.0
         if( l_ml_reg )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
-        end if
+            reg_scale         = real(ldim(1)) / real(ldim_pd(1))
+        endif
         ! Objects allocations
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
         !$omp parallel default(shared) proc_bind(close) private(i)
@@ -424,8 +434,10 @@ contains
                     if( l_ml_reg )then
                         do h=logi_lims(1,1),logi_lims(1,2)
                             do k=logi_lims(2,1),logi_lims(2,2)
-                                sh = nint(hyp(real(h),real(k)))
-                                if( sh > sigma2_kfromto(2) )cycle
+                                sh = nint(hyp(real(h),real(k)))             ! shell in padded image
+                                if( sh > interp_shlim )cycle
+                                sh = nint(reg_scale*hyp(real(h),real(k)))   ! shell at original scale
+                                if( sh > sigma2_kfromto(2) ) cycle
                                 phys = cgrid_imgs(i)%comp_addr_phys(h,k)
                                 if( sh >= sigma2_kfromto(1) )then
                                     call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
@@ -611,6 +623,15 @@ contains
         type(image) :: gridcorrection_img
         integer     :: icls, eo_pop(2), pop
         call cavger_prep_gridding_correction(gridcorrection_img)
+        if( l_ml_reg )then
+            ! Fourier components & CTF2 need to be stashed
+            allocate(cavgs_even_bak(ncls),cavgs_odd_bak(ncls),&
+            &ctfsqsums_even_bak(ncls),ctfsqsums_odd_bak(ncls))
+            if( l_stream )then
+                allocate(cavgs_even_wfilt_bak(ncls),cavgs_odd_wfilt_bak(ncls),&
+                &ctfsqsums_even_wfilt_bak(ncls),ctfsqsums_odd_wfilt_bak(ncls))
+            endif
+        endif
         !$omp parallel do default(shared) private(icls,eo_pop,pop) schedule(static) proc_bind(close)
         do icls=1,ncls
             eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
@@ -640,6 +661,18 @@ contains
                     call ctfsqsums_merged_wfilt(icls)%zero_and_flag_ft
                     call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_even_wfilt(icls))
                     call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_odd_wfilt(icls))
+                endif
+                if( l_ml_reg )then
+                    call cavgs_even_bak(icls)%copy(cavgs_even(icls))
+                    call cavgs_odd_bak(icls)%copy(cavgs_odd(icls))
+                    call ctfsqsums_even_bak(icls)%copy(ctfsqsums_even(icls))
+                    call ctfsqsums_odd_bak(icls)%copy(ctfsqsums_odd(icls))
+                    if( l_stream )then
+                        call cavgs_even_wfilt_bak(icls)%copy(cavgs_even_wfilt(icls))
+                        call cavgs_odd_wfilt_bak(icls)%copy(cavgs_odd_wfilt(icls))
+                        call ctfsqsums_even_wfilt_bak(icls)%copy(ctfsqsums_even_wfilt(icls))
+                        call ctfsqsums_odd_wfilt_bak(icls)%copy(ctfsqsums_odd_wfilt(icls))
+                    endif
                 endif
                 ! (w*CTF)**2 density correction
                 if(eo_pop(1) > 1)then
@@ -692,7 +725,7 @@ contains
         integer,          intent(in) :: which_iter
         type(image), allocatable     :: even_imgs(:), odd_imgs(:), mask_imgs(:)
         real,        allocatable     :: frc(:), diams(:)
-        integer :: icls, find, find_plate
+        integer :: icls, find, find_plate, pop, eo_pop(2)
         logical :: l_automsk
         allocate(even_imgs(ncls), odd_imgs(ncls), mask_imgs(ncls), frc(filtsz), diams(ncls))
         do icls=1,ncls
@@ -706,44 +739,133 @@ contains
         if( l_automsk )then
             call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
         endif
-        !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
-        do icls=1,ncls
-            if( l_automsk )then
-                call even_imgs(icls)%mul(mask_imgs(icls))
-                call odd_imgs(icls)%mul(mask_imgs(icls))
-            else
-                call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-            endif
-            call even_imgs(icls)%fft()
-            call odd_imgs(icls)%fft()
-            call even_imgs(icls)%fsc(odd_imgs(icls), frc)
-            find_plate = 0
-            if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-            call build_glob%clsfrcs%set_frc(icls, frc, 1)
-            ! average low-resolution info between eo pairs to keep things in register
-            find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
-            find = max(find, find_plate)
-            call cavgs_merged(icls)%fft()
-            call cavgs_even(icls)%fft()
-            call cavgs_odd(icls)%fft()
-            call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
-            call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
-            call cavgs_merged(icls)%ifft()
-            call cavgs_even(icls)%ifft()
-            call cavgs_odd(icls)%ifft()
-            if( l_stream )then
-                call cavgs_merged_wfilt(icls)%fft()
-                call cavgs_even_wfilt(icls)%fft()
-                call cavgs_odd_wfilt(icls)%fft()
-                call cavgs_even_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
-                call cavgs_odd_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
-                call cavgs_merged_wfilt(icls)%ifft
-                call cavgs_even_wfilt(icls)%ifft()
-                call cavgs_odd_wfilt(icls)%ifft()
-            endif
-        end do
-        !$omp end parallel do
+        if( l_ml_reg )then
+            !$omp parallel do default(shared) private(icls,frc,find,find_plate,pop,eo_pop) schedule(static) proc_bind(close)
+            do icls=1,ncls
+                eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
+                pop    = sum(eo_pop)
+                if( pop > 0 )then
+                    if( l_automsk )then
+                        call even_imgs(icls)%mul(mask_imgs(icls))
+                        call odd_imgs(icls)%mul(mask_imgs(icls))
+                    else
+                        call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                        call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+                    endif
+                    call even_imgs(icls)%fft()
+                    call odd_imgs(icls)%fft()
+                    call even_imgs(icls)%fsc(odd_imgs(icls), frc)
+                    find_plate = 0
+                    if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+                    call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                    find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                    find = max(find, find_plate)
+                    ! add noise term to denominator
+                    call add_invtausq2rho(ctfsqsums_even(icls), frc)
+                    call add_invtausq2rho(ctfsqsums_odd(icls), frc)
+                    ! re-generate classes
+                    call cavgs_even(icls)%copy(cavgs_even_bak(icls))
+                    call cavgs_odd(icls)%copy(cavgs_odd_bak(icls))
+                    call cavgs_merged(icls)%copy(cavgs_even_bak(icls))
+                    call cavgs_merged(icls)%add(cavgs_odd_bak(icls))
+                    call ctfsqsums_merged(icls)%copy(ctfsqsums_even(icls))
+                    call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
+                    if(eo_pop(1) > 1)then
+                        call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
+                        if( l_stream ) call cavgs_even_wfilt(icls)%ctf_dens_correct(ctfsqsums_even_wfilt(icls))
+                    endif
+                    if(eo_pop(2) > 1)then
+                        call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
+                        if( l_stream ) call cavgs_odd_wfilt(icls)%ctf_dens_correct(ctfsqsums_odd_wfilt(icls))
+                    endif
+                    call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
+                    if( l_stream ) call cavgs_merged_wfilt(icls)%ctf_dens_correct(ctfsqsums_merged_wfilt(icls))
+                    ! clip to original dimension
+                    call cavgs_merged(icls)%ifft()
+                    call cavgs_even(icls)%ifft()
+                    call cavgs_odd(icls)%ifft()
+                    call cavgs_even(icls)%clip_inplace(ldim)
+                    call cavgs_odd(icls)%clip_inplace(ldim)
+                    call cavgs_merged(icls)%clip_inplace(ldim)
+                    if( l_stream )then
+                        call cavgs_merged_wfilt(icls)%ifft
+                        call cavgs_even_wfilt(icls)%ifft()
+                        call cavgs_odd_wfilt(icls)%ifft()
+                        call cavgs_even_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+                    endif
+                    ! average low-resolution info between eo pairs to keep things in register
+                    call cavgs_merged(icls)%fft()
+                    call cavgs_even(icls)%fft()
+                    call cavgs_odd(icls)%fft()
+                    call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+                    call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+                    call cavgs_merged(icls)%ifft()
+                    call cavgs_even(icls)%ifft()
+                    call cavgs_odd(icls)%ifft()
+                    if( l_stream )then
+                        call cavgs_merged_wfilt(icls)%fft()
+                        call cavgs_even_wfilt(icls)%fft()
+                        call cavgs_odd_wfilt(icls)%fft()
+                        call cavgs_even_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                        call cavgs_odd_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                        call cavgs_merged_wfilt(icls)%ifft
+                        call cavgs_even_wfilt(icls)%ifft()
+                        call cavgs_odd_wfilt(icls)%ifft()
+                    endif
+                else
+                    call cavgs_even(icls)%clip_inplace(ldim)
+                    call cavgs_odd(icls)%clip_inplace(ldim)
+                    call cavgs_merged(icls)%clip_inplace(ldim)
+                    if( l_stream )then
+                        call cavgs_even_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+                    endif
+                endif
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
+            do icls=1,ncls
+                if( l_automsk )then
+                    call even_imgs(icls)%mul(mask_imgs(icls))
+                    call odd_imgs(icls)%mul(mask_imgs(icls))
+                else
+                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+                endif
+                call even_imgs(icls)%fft()
+                call odd_imgs(icls)%fft()
+                call even_imgs(icls)%fsc(odd_imgs(icls), frc)
+                find_plate = 0
+                if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
+                call build_glob%clsfrcs%set_frc(icls, frc, 1)
+                ! average low-resolution info between eo pairs to keep things in register
+                find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
+                find = max(find, find_plate)
+                call cavgs_merged(icls)%fft()
+                call cavgs_even(icls)%fft()
+                call cavgs_odd(icls)%fft()
+                call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+                call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+                call cavgs_merged(icls)%ifft()
+                call cavgs_even(icls)%ifft()
+                call cavgs_odd(icls)%ifft()
+                if( l_stream )then
+                    call cavgs_merged_wfilt(icls)%fft()
+                    call cavgs_even_wfilt(icls)%fft()
+                    call cavgs_odd_wfilt(icls)%fft()
+                    call cavgs_even_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                    call cavgs_odd_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                    call cavgs_merged_wfilt(icls)%ifft
+                    call cavgs_even_wfilt(icls)%ifft()
+                    call cavgs_odd_wfilt(icls)%ifft()
+                endif
+            end do
+            !$omp end parallel do
+        endif
         ! write FRCs
         call build_glob%clsfrcs%write(fname)
         ! destruct
@@ -753,6 +875,76 @@ contains
         end do
         deallocate(even_imgs, odd_imgs, frc, diams)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
+
+    ! private function to add noise term to denomnator
+    subroutine add_invtausq2rho( ctfsqsum, frc )
+        class(image),          intent(inout) :: ctfsqsum
+        real,     allocatable, intent(in)    :: frc(:)
+        real,     allocatable :: sig2(:), tau2(:), ssnr(:)
+        integer,  allocatable :: cnt(:)
+        real(dp), allocatable :: rsum(:)
+        complex,      pointer :: pctfsqsum(:,:,:)
+        real,     parameter   :: fudge = 1.0
+        real    :: cc, scale, pad_factor, invtau2
+        integer :: flims(3,2), phys(2), h, k, sh, sz, reslim_ind
+        call ctfsqsum%get_cmat_ptr(pctfsqsum)
+        flims = ctfsqsum%loop_lims(3)
+        sz = size(frc)
+        allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
+        rsum = 0.d0
+        cnt  = 0
+        ssnr = 0.0
+        tau2 = 0.0
+        sig2 = 0.0
+        scale = real(ldim(1)) / real(ldim_pd(1))
+        pad_factor = 1.0 / scale**2
+        ! SSNR
+        do k = 1,sz
+            cc      = max(0.001,frc(k))
+            cc      = min(0.999,cc)
+            ssnr(k) = fudge * cc / (1.-cc)
+        enddo
+        ! Noise
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
+        do h = flims(1,1),flims(1,2)
+            do k = flims(2,1),flims(2,2)
+                sh = nint(scale * sqrt(real(h*h + k*k)))
+                if( sh > sz ) cycle
+                phys     = ctfsqsum%comp_addr_phys(h,k)
+                cnt(sh)  = cnt(sh) + 1
+                rsum(sh) = rsum(sh) + real(pctfsqsum(phys(1),phys(2),1),dp)
+            enddo
+        enddo
+        !$omp end parallel do
+        rsum = rsum * pad_factor
+        where( rsum > 1.d-10 )
+            sig2 = real(real(cnt,dp) / rsum)
+        else where
+            sig2 = 0.0
+        end where
+        ! Signal
+        tau2 = ssnr * sig2
+        ! add Tau2 inverse to denominator
+        ! because signal assumed infinite at very low resolution there is no addition
+        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,phys,sh,invtau2) proc_bind(close)
+        do h = flims(1,1),flims(1,2)
+            do k = flims(2,1),flims(2,2)
+                    sh = nint(scale*sqrt(real(h*h + k*k)))
+                    if( (sh < reslim_ind) .or. (sh > sz) ) cycle
+                    phys = ctfsqsum%comp_addr_phys(h, k)
+                    if( tau2(sh) > TINY)then
+                        invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
+                    else
+                        invtau2 = min(1.e3, 1.e3 * real(pctfsqsum(phys(1),phys(2),1)))
+                    endif
+                    pctfsqsum(phys(1),phys(2),1) = pctfsqsum(phys(1),phys(2),1) + cmplx(invtau2,0.)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine add_invtausq2rho
 
     ! I/O
 
@@ -1172,6 +1364,20 @@ contains
             end do
             deallocate( cavgs_even, cavgs_odd, cavgs_merged, ctfsqsums_even,&
             &ctfsqsums_odd, ctfsqsums_merged, pptcl_mask, prev_eo_pops)
+            if( allocated(cavgs_even_bak) )then
+                do icls=1,ncls
+                    call cavgs_even_bak(icls)%kill
+                    call cavgs_odd_bak(icls)%kill
+                    call cavgs_even_wfilt_bak(icls)%kill
+                    call cavgs_odd_wfilt_bak(icls)%kill
+                    call ctfsqsums_even_bak(icls)%kill
+                    call ctfsqsums_odd_bak(icls)%kill
+                    call ctfsqsums_even_wfilt_bak(icls)%kill
+                    call ctfsqsums_odd_wfilt_bak(icls)%kill
+                enddo
+                deallocate(cavgs_even_bak,cavgs_odd_bak,cavgs_even_wfilt_bak,cavgs_odd_wfilt_bak,&
+                &ctfsqsums_even_bak,ctfsqsums_odd_bak,ctfsqsums_even_wfilt_bak,ctfsqsums_odd_wfilt_bak)
+            endif
             deallocate(precs)
             istart = 0
             iend   = 0
