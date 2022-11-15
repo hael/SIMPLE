@@ -161,64 +161,8 @@ contains
             ! update params
             params%frcs = trim(frcs_fname)
         endif
-        ! if( params%l_automsk )then
-        !     ! retrieve even/odd stack names
-        !     stk_even = add2fbody(stk, ext, '_even')
-        !     stk_odd  = add2fbody(stk, ext, '_odd')
-        !     if( .not. file_exists(trim(stk_even)) ) THROW_HARD('Even stack '//trim(stk_even)//' does not exist!')
-        !     if( .not. file_exists(trim(stk_odd))  ) THROW_HARD('Odd stack '//trim(stk_even)//' does not exist!')
-        !     ! read even/odd class averages into array
-        !     allocate( cavgs_eo(ncavgs,2), masks(ncavgs) )
-        !     call find_ldim_nptcls(stk_even, ldim, ifoo)
-        !     ldim(3) = 1 ! class averages
-        !     call stkio_r%open(stk_odd,   orig_smpd, 'read', bufsz=500)
-        !     call stkio_r2%open(stk_even, orig_smpd, 'read', bufsz=500)
-        !     do icls = 1, ncavgs
-        !         call cavgs_eo(icls,1)%new(ldim, orig_smpd)
-        !         call cavgs_eo(icls,2)%new(ldim, orig_smpd)
-        !         call stkio_r%read(icls, cavgs_eo(icls,1))
-        !         call stkio_r2%read(icls, cavgs_eo(icls,2))
-        !         call masks(icls)%copy(cavgs_eo(icls,1))
-        !         call masks(icls)%add(cavgs_eo(icls,2))
-        !         call masks(icls)%mul(0.5)
-        !     end do
-        !     call stkio_r%close
-        !     call stkio_r2%close
-        !     call automask2D(masks, params%ngrow, WINSZ_AUTOMSK, params%edge, diams)
-        !     call uni_filt2D_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
-        !     ! write even filtered cavgs
-        !     stk_even = 'cavgs_filt_even.mrc'
-        !     call stkio_w%open(stk_even, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-        !     do icls = 1, ncavgs
-        !         call stkio_w%write(icls, cavgs_eo(icls,2))
-        !     end do
-        !     call stkio_w%close
-        !     ! write odd filtered cavgs
-        !     stk_odd = 'cavgs_filt_odd.mrc'
-        !     call stkio_w%open(stk_odd, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-        !     do icls = 1, ncavgs
-        !         call stkio_w%write(icls, cavgs_eo(icls,1))
-        !     end do
-        !     call stkio_w%close
-        !     ! write merged filtered cavgs
-        !     stk = 'cavgs_filt.mrc'
-        !     call stkio_w%open(stk, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
-        !     do icls = 1, ncavgs
-        !         call cavgs_eo(icls,1)%add(cavgs_eo(icls,2))
-        !         call cavgs_eo(icls,1)%mul(0.5)
-        !         call stkio_w%write(icls, cavgs_eo(icls,1))
-        !     end do
-        !     call stkio_w%close
-        !     do icls = 1, ncavgs
-        !         call cavgs_eo(icls,1)%kill
-        !         call cavgs_eo(icls,2)%kill
-        !         call masks(icls)%kill
-        !     end do
-        !     deallocate(cavgs_eo, masks)
-        ! else
-            stk_even = add2fbody(trim(stk), trim(ext), '_even')
-            stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
-        ! endif
+        stk_even = add2fbody(trim(stk), trim(ext), '_even')
+        stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
         ctfvars%smpd = orig_smpd
         params%smpd  = orig_smpd
         orig_stk     = stk
@@ -318,6 +262,7 @@ contains
         call cline_refine3D_snhc%set('silence_fsc','yes')              ! no FSC plot printing in snhc phase
         call cline_refine3D_snhc%set('lp_iters',    real(MAXITS_SNHC)) ! low-pass limited resolution, no e/o
         call cline_refine3D_snhc%delete('frac')                        ! no rejections in first phase
+        call cline_refine3D_snhc%delete('nonuniform')                  ! never in the first stage
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(work_projfile))
         call cline_refine3D_init%set('box',      real(box))
@@ -333,6 +278,7 @@ contains
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//ext)
         call cline_refine3D_init%delete('frac')           ! no rejections in 2nd phase
+        call cline_refine3D_init%delete('nonuniform')     ! never in the 2nd stage
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -356,12 +302,13 @@ contains
         call cline_refine3D_refine%set('refine',    'shc')
         call cline_refine3D_refine%set('nspace',      real(NSPACE_REFINE))
         ! call cline_refine3D_refine%set('refine',    'neighc')
-        call cline_refine3D_refine%set('athres',         15.)
-        call cline_refine3D_refine%set('nsample_neigh', 500.)
-        call cline_refine3D_refine%set('nsample_trs',    50.)
+        ! call cline_refine3D_refine%set('athres',         15.)
+        ! call cline_refine3D_refine%set('nsample_neigh', 500.)
+        ! call cline_refine3D_refine%set('nsample_trs',    50.)
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))
             call cline_refine3D_refine%set('lp_iters', real(MAXITS_REFINE)) ! low-pass limited resolution, no e/o
+            call cline_refine3D_refine%delete('nonuniform')
         else
             call cline_refine3D_refine%delete('lp')
             call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
@@ -373,6 +320,9 @@ contains
         if( params%l_automsk )then
             call cline_refine3D_refine%set('automsk', trim(params%automsk))
             call cline_refine3D_refine%set('amsklp', params%amsklp)
+        endif
+        if( params%l_nonuniform )then
+            call cline_refine3D_refine%set('nonuniform', 'yes')
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
