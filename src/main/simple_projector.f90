@@ -319,23 +319,19 @@ contains
                     else
                         cmat(h,k) = conjg(self%interp_fcomp(loc))
                     endif
-                    if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
-                        powvec(sh) = powvec(sh) + real(csq_fast(cmat(h,k)), kind=dp)
-                        cntvec(sh) = cntvec(sh) + 1.
-                    endif
+                    powvec(sh) = powvec(sh) + real(csq_fast(cmat(h,k)), kind=dp)
+                    cntvec(sh) = cntvec(sh) + 1.d0
                 else
                     cmat(h,k) = CMPLX_ZERO
                 endif
             end do
         end do
-        where(cntvec > 0.) powvec = powvec / cntvec
+        where(cntvec > 0.d0) powvec = powvec / cntvec
         do h =  lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 if( resmsk(h,k) )then
                     sh = nint(hyp(real(h),real(k)))
-                    if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
-                        if( powvec(sh) > DTINY ) cmat(h,k) = cmat(h,k) / real(dsqrt(powvec(sh)),kind=sp)
-                    endif
+                    if( powvec(sh) > DTINY ) cmat(h,k) = cmat(h,k) / real(dsqrt(powvec(sh)),kind=sp)
                 endif
             end do
         end do
@@ -423,20 +419,22 @@ contains
                     else
                         cmat_ref(h,k) = conjg(self%interp_fcomp(loc))
                     endif
-                    if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
+                    ! should not be necessary
+                    ! if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
                         powvec(sh) = powvec(sh) + real(csq_fast(cmat_ref(h,k)),kind=dp)
-                        cntvec(sh) = cntvec(sh) + 1.
-                    endif
+                        cntvec(sh) = cntvec(sh) + 1.d0
+                    ! endif
                 endif
             end do
         end do
-        where(cntvec > 0.) powvec = powvec / cntvec
+        where(cntvec > 0.d0) powvec = powvec / cntvec
         cc(:) = 0.
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 if( resmsk(h,k) )then
                     sh = nint(hyp(real(h),real(k)))
-                    if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
+                    ! should not be necessary
+                    ! if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
                         if( powvec(sh) > DTINY )then
                             ref_comp = (cmat_ref(h,k) / real(dsqrt(powvec(sh)),kind=sp)) * ctfmat(h,k) * filtw(h,k)
                             ! update cross product
@@ -445,7 +443,7 @@ contains
                             cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
                             cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
                         endif
-                    endif
+                    ! endif
                 endif
             end do
         end do
