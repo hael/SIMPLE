@@ -881,7 +881,6 @@ contains
             iter_switch2euclid = params%startit
             if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
             call cline%set('needs_sigma','yes')
-            call cline_cavgassemble%set('needs_sigma','yes')
             ! GENERATE INITIAL NOISE POWER ESTIMATES
             call build%spproj_field%set_all2single('w', 1.0)
             call build%spproj%write_segment_inside(params%oritype)
