@@ -22,6 +22,7 @@ type simple_input_param
     real                          :: rval_default = 0.
     logical :: required = .true.
     logical :: advanced = .true.
+    logical :: online = .false.
 end type simple_input_param
 
 type :: simple_program
@@ -3157,7 +3158,7 @@ contains
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 18, submenu="cluster 2D", advanced=.false.)
         call preprocess_stream_dev%set_input('srch_ctrls',19, lpthres)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 19, submenu="cluster 2D")
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 19, submenu="cluster 2D", online=.true.)
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_thres)
@@ -4903,13 +4904,14 @@ contains
 
     end subroutine set_input_3
 
-    subroutine set_gui_params( self, which, i, submenu, exclusive_group, advanced, active_flags)
+    subroutine set_gui_params( self, which, i, submenu, exclusive_group, advanced, active_flags, online)
         class(simple_program), target, intent(inout) :: self
         character(len=*),              intent(in)    :: which
         character(len=*),              intent(in),optional    :: submenu
         character(len=*),              intent(in),optional    :: exclusive_group
         character(len=*),              intent(in),optional    :: active_flags
         logical,                       intent(in),optional    :: advanced
+        logical,                       intent(in),optional    :: online
         integer,                       intent(in)    :: i
         select case(trim(which))
             case('img_ios')
@@ -4946,6 +4948,9 @@ contains
                 endif
                 if( present(active_flags) ) then
                   allocate(arr(i)%active_flags, source=trim(active_flags))
+                endif
+                if( present(online) ) then
+                  arr(i)%online = online
                 endif
             end subroutine set
 
@@ -5204,6 +5209,7 @@ contains
                           call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
                         endif
                         call json%add(entry, 'advanced', arr(i)%advanced)
+                        call json%add(entry, 'online', arr(i)%online)
                         param_is_multi  = trim(arr(i)%keytype).eq.'multi'
                         param_is_binary = trim(arr(i)%keytype).eq.'binary'
                         if( param_is_multi .or. param_is_binary )then
