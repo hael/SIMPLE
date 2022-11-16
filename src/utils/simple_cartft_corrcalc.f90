@@ -69,6 +69,7 @@ type :: cartft_corrcalc
     procedure, private :: corr_shifted_euclid_1
     procedure, private :: corr_shifted_euclid_2
     procedure          :: corr_shifted_ad
+    procedure          :: ori_chance
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -1012,6 +1013,27 @@ contains
         grad(1) = norm_corr(grad(1),cc(2),cc(3))
         grad(2) = norm_corr(grad(2),cc(2),cc(3))
     end function corr_shifted_ad
+
+    ! computing the chance/probability that the particle's orientation is correct
+    function ori_chance( self, iptcl, o, prev_oris, prev_corrs, R, n ) result(prob)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: n               ! current iteration number
+        integer,                intent(in)    :: iptcl
+        type(ori),              intent(in)    :: o               ! current orientation
+        type(ori),              intent(in)    :: prev_oris(n)    ! previous iterations' oris
+        real,                   intent(in)    :: prev_corrs(n)   ! previous iterations' corrs, corresponding to the previous references
+        real,                   intent(in)    :: R               ! a large number
+        real                                  :: prob            ! chance/probability
+        integer :: i
+        real    :: angle_diff, o_mat(3,3)
+        prob  = 0.
+        o_mat = o%get_mat()
+        do i = 1, n
+            angle_diff = rot_angle(o_mat, prev_oris(i)%get_mat())
+            prob       = prob + sin(R*angle_diff)*prev_corrs(i)/angle_diff
+        enddo
+        prob = prob/(2*n*pi)
+    end function ori_chance
 
     ! DESTRUCTOR
 
