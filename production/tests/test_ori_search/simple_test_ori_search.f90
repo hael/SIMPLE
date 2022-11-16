@@ -9,17 +9,17 @@ use simple_sym
 use simple_ori
 implicit none
 character(len=:),   allocatable :: cmd
-integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS = 100
+integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS = 200
 type(cmdline)           :: cline
 type(parameters)        :: p
-integer                 :: ifoo, rc, iptcl, iter, isample
+integer                 :: ifoo, rc, iptcl, iter, isample, cnt
 type(projector)         :: vol_proj
 type(sym)               :: pgrpsyms
-type(ori)               :: o, o_truth, o_arr(N_ITERS), o_better, o_best
+type(ori)               :: o, o_truth, o_arr(N_ITERS), o_best, o_init
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
-logical                 :: mrc_exists, l_match_filt, got_best
-real                    :: corr, corr_arr(N_ITERS), corr_better, p_cur, p_best, p_better
+logical                 :: mrc_exists, l_match_filt
+real                    :: corr, corr_arr(N_ITERS), p_cur, p_best
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_ori_search smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -65,38 +65,47 @@ call vol_proj%fproject(o_truth, o_proj)
 call cftcc%set_ptcl(iptcl, o_proj)
 call o_proj%write('TEST_PTCL.mrc', 1)
 ! randomizing the orientation and compare with the truth
+print *, '-- SHC on probability --'
 call pgrpsyms%rnd_euler(o)
-corr = cftcc%project_and_correlate(iptcl, o)
+o_init = o
+corr   = cftcc%project_and_correlate(iptcl, o)
 o_arr(1)    = o
 corr_arr(1) = corr
 p_best      = 0.
+cnt         = 1
 do iter = 2, N_ITERS
-    got_best = .false.
-    p_better = 0.
     do isample = 1, N_SAMPLES
         call pgrpsyms%rnd_euler(o)
         corr  = cftcc%project_and_correlate(iptcl, o)
-        p_cur = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = iter-1 )
+        p_cur = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = cnt )
         if( p_cur > p_best )then
-            got_best = .true.
+            cnt           = cnt + 1
+            corr_arr(cnt) = corr
+            o_arr(   cnt) = o
+            p_best        = p_cur
+            o_best        = o
+            print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat())
             exit
         endif
-        if( corr > corr_better )then
-            p_better    = p_cur
-            o_better    = o
-            corr_better = corr
+    enddo       
+enddo
+print *, o_best%get_euler()
+print *, o_truth%get_euler()
+! normal SHC
+print *, '-- SHC on corr only --'
+o      = o_init
+p_best = 0.
+do iter = 1, N_ITERS
+    do isample = 1, N_SAMPLES
+        call pgrpsyms%rnd_euler(o)
+        corr = cftcc%project_and_correlate(iptcl, o)
+        if( corr > p_best )then
+            p_best = corr
+            o_best = o
+            print *, 'iter = ', iter, '; corr best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat())
+            exit            ! SHC
         endif
     enddo
-    if( got_best )then
-        corr_arr(iter) = corr
-        o_arr(   iter) = o
-        p_best         = p_cur
-        o_best         = o
-    else
-        corr_arr(iter) = corr_better
-        o_arr(   iter) = o_better
-    endif
-    print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat())
 enddo
 print *, o_best%get_euler()
 print *, o_truth%get_euler()
