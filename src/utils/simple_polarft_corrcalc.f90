@@ -138,9 +138,9 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MODIFIERS
     procedure          :: shift_ptcl
-    procedure, private :: filter_and_shellnorm_ref
-    procedure, private :: filter_and_shellnorm_ref_8
-    procedure, private :: filter_and_shellnorm_ref_dref_8
+    procedure, private :: shellnorm_and_filter_ref
+    procedure, private :: shellnorm_and_filter_ref_8
+    procedure, private :: shellnorm_and_filter_ref_dref_8
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
@@ -757,49 +757,51 @@ contains
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
     end subroutine shift_ptcl
 
-    subroutine filter_and_shellnorm_ref( self, iptcl, iref, pft )
+    subroutine shellnorm_and_filter_ref( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real    :: w, pw
+        real    :: pw
         integer :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=self%kfromto(1),self%kfromto(2)
+                pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
                 if( params_glob%l_nonuniform )then
-                    pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
                     if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
                 else
-                    w        = self%ref_optlp(k,iref)
-                    pft(:,k) = pft(:,k) * w
-                    pw       = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
-                    if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
+                    if( pw > 1.e-12 )then
+                        pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
+                    else
+                        pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)
+                    endif
                 endif
             enddo
         endif
-    end subroutine filter_and_shellnorm_ref
+    end subroutine shellnorm_and_filter_ref
 
-    subroutine filter_and_shellnorm_ref_8( self, iptcl, iref, pft )
+    subroutine shellnorm_and_filter_ref_8( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp) :: w, pw
+        real(dp) :: pw
         integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=self%kfromto(1),self%kfromto(2)
+                pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( params_glob%l_nonuniform )then
-                    pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                     if( pw > 1.d-12 ) pft(:,k) = pft(:,k) / dsqrt(pw)
                 else
-                    w        = real(self%ref_optlp(k,iref),kind=dp)
-                    pft(:,k) = pft(:,k) * w
-                    pw       = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
-                    if( pw > 1.d-12 ) pft(:,k) = pft(:,k)/ dsqrt(pw)
+                    if( pw > 1.d-12 )then
+                        pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
+                    else
+                        pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
+                    endif
                 endif
             enddo
         endif
-    end subroutine filter_and_shellnorm_ref_8
+    end subroutine shellnorm_and_filter_ref_8
 
-    subroutine filter_and_shellnorm_ref_dref_8( self, iptcl, iref, pft, dpft )
+    subroutine shellnorm_and_filter_ref_dref_8( self, iptcl, iref, pft, dpft )
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -807,28 +809,26 @@ contains
         real(dp) :: w, pw
         integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
-            do k=self%kfromto(1),self%kfromto(2)   
+            do k=self%kfromto(1),self%kfromto(2)
+                pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( params_glob%l_nonuniform )then
-                    pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                     if( pw > 1.d-12 )then
-                        w           = dsqrt(pw)
-                        pft(:,k)    = pft(:,k)    / w
-                        dpft(:,k,:) = dpft(:,k,:) / w
+                        w  = 1.d0 / dsqrt(pw)
+                    else
+                        w  = 1.d0
                     endif
                 else
-                    w           = real(self%ref_optlp(k,iref),kind=dp)
-                    pft(:,k)    = pft(:,k)    * w
-                    dpft(:,k,:) = dpft(:,k,:) * w
-                    pw          = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                     if( pw > 1.d-12 )then
-                        w           = dsqrt(pw)
-                        pft(:,k)    = pft(:,k)    / w
-                        dpft(:,k,:) = dpft(:,k,:) / w
+                        w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
+                    else
+                        w  = real(self%ref_optlp(k,iref),kind=dp)
                     endif
                 endif
+                pft(:,k)    = w * pft(:,k)
+                dpft(:,k,:) = w * dpft(:,k,:)
             enddo
         endif
-    end subroutine filter_and_shellnorm_ref_dref_8
+    end subroutine shellnorm_and_filter_ref_dref_8
 
     ! MEMOIZERS
 
@@ -980,9 +980,9 @@ contains
         endif
         ! shell normalization and filtering
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
@@ -1353,9 +1353,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
@@ -1411,9 +1411,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1600,9 +1600,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1645,9 +1645,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1698,9 +1698,9 @@ contains
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1745,9 +1745,9 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1790,9 +1790,9 @@ contains
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1857,9 +1857,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1936,9 +1936,9 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%l_clsfrcs )then
-            call self%filter_and_shellnorm_ref_8(iptcl, iptcl, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
         else
-            call self%filter_and_shellnorm_ref_8(iptcl, iref, pft_ref)
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
