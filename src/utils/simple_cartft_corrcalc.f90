@@ -1029,14 +1029,14 @@ contains
         real,                   intent(in)    :: R               ! a large number
         real                                  :: prob            ! chance/probability
         integer :: i
-        real    :: angle_diff, o_mat(3,3)
-        prob  = 0.
-        o_mat = o%get_mat()
+        real    :: o_euls(3), diff_euls(3)
+        prob   = 0.
+        o_euls = o%get_euler()
         do i = 1, n
-            angle_diff = rot_angle(o_mat, prev_oris(i)%get_mat())
-            prob       = prob + sin(R*angle_diff)*prev_corrs(i)/angle_diff
+            diff_euls = o_euls - prev_oris(i)%get_euler()
+            prob      = prob + product(sin(R*diff_euls)/diff_euls)*prev_corrs(i)
         enddo
-        prob = prob/(2*n*pi)
+        prob = prob/(n*pi**3)
     end function ori_chance_1
 
     ! computing the chance/probability that the particle's orientation is correct (prev_corrs are recomputed with the new reference)
@@ -1049,14 +1049,14 @@ contains
         real,                   intent(in)    :: R               ! a large number
         real                                  :: prob            ! chance/probability
         integer :: i
-        real    :: angle_diff, o_mat(3,3)
-        prob  = 0.
-        o_mat = o%get_mat()
+        real    :: o_euls(3), diff_euls(3)
+        prob   = 0.
+        o_euls = o%get_euler()
         do i = 1, n
-            angle_diff = rot_angle(o_mat, prev_oris(i)%get_mat())
-            prob       = prob + sin(R*angle_diff)*self%project_and_correlate(iptcl, prev_oris(i))/angle_diff
+            diff_euls = o_euls - prev_oris(i)%get_euler()
+            prob      = prob + product(sin(R*diff_euls)/diff_euls)*self%project_and_correlate(iptcl, prev_oris(i))
         enddo
-        prob = prob/(2*n*pi)
+        prob = prob/(n*pi**3)
     end function ori_chance_2
 
     subroutine assign_sigma2_noise( self, sigma2_noise )

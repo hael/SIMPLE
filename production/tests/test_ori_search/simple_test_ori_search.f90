@@ -19,7 +19,7 @@ type(ori)               :: o, o_truth, o_arr(N_ITERS), o_best, o_init
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
 logical                 :: mrc_exists, l_match_filt
-real                    :: corr, corr_arr(N_ITERS), p_cur, p_best
+real                    :: corr, corr_arr(N_ITERS), p_cur, p_best, corr_best
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_ori_search smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -73,19 +73,25 @@ o_arr(1)    = o
 corr_arr(1) = corr
 p_best      = 0.
 cnt         = 1
-do iter = 2, N_ITERS
-    do isample = 1, N_SAMPLES
+o_best      = o
+corr_best   = corr
+do iter = 1, N_ITERS*10
+    o = o_best
+    do isample = 1, N_SAMPLES*10
         call pgrpsyms%rnd_euler(o)
-        corr  = cftcc%project_and_correlate(iptcl, o)
         p_cur = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = cnt )
         if( p_cur > p_best )then
-            cnt           = cnt + 1
-            corr_arr(cnt) = corr
-            o_arr(   cnt) = o
-            p_best        = p_cur
-            o_best        = o
-            print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat())
-            exit
+            corr = cftcc%project_and_correlate(iptcl, o)
+            if( corr > corr_best )then
+                cnt           = cnt + 1
+                corr_arr(cnt) = corr
+                o_arr(   cnt) = o
+                p_best        = p_cur
+                o_best        = o
+                corr_best     = corr
+                print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat()), '; corr = ', corr_best
+                exit
+            endif
         endif
     enddo       
 enddo
