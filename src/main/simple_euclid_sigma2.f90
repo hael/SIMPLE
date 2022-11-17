@@ -1,6 +1,7 @@
 module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
+use simple_cartft_corrcalc,  only: cartft_corrcalc, cftcc_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
@@ -68,6 +69,10 @@ contains
             call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
             call pftcc_glob%assign_pinds(self%pinds)
         endif
+        if( associated(cftcc_glob) )then
+            call cftcc_glob%assign_sigma2_noise(self%sigma2_noise)
+            call cftcc_glob%assign_pinds(self%pinds)
+        endif
         self%binfname         = trim(binfname)
         self%fromp            = params_glob%fromp
         self%top              = params_glob%top
@@ -100,6 +105,7 @@ contains
         logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                             :: iptcl,igroup,tom,eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
+        if( associated(cftcc_glob) ) call cftcc_glob%assign_pinds(self%pinds)
         ! determine number of groups
         tom   = 0
         do iptcl = 1, params_glob%nptcls

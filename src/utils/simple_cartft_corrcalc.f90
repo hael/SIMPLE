@@ -14,6 +14,7 @@ private
 type :: cartft_corrcalc
     private
     type(projector),               pointer     :: vol_even => null(), vol_odd => null() ! prepared e/o vols
+    real,                          pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
     integer                                    :: nptcls     = 1         !< # particles in partition (logically indexded [fromp,top])
     integer                                    :: filtsz     = 0         !< Nyqvist limit
     integer                                    :: pfromto(2) = 0         !< particle index range
@@ -72,6 +73,7 @@ type :: cartft_corrcalc
     generic            :: ori_chance => ori_chance_1, ori_chance_2
     procedure, private :: ori_chance_1
     procedure, private :: ori_chance_2
+    procedure          :: assign_sigma2_noise
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -1056,6 +1058,12 @@ contains
         enddo
         prob = prob/(2*n*pi)
     end function ori_chance_2
+
+    subroutine assign_sigma2_noise( self, sigma2_noise )
+        class(cartft_corrcalc),       intent(inout) :: self
+        real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
+        self%sigma2_noise => sigma2_noise
+    end subroutine assign_sigma2_noise
 
     ! DESTRUCTOR
 
