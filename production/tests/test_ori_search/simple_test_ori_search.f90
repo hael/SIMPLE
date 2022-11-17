@@ -63,6 +63,7 @@ call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS], l_match_filt=l_match_filt)
 call pgrpsyms%rnd_euler(o_truth)
 call vol_proj%fproject(o_truth, o_proj)
 call cftcc%set_ptcl(iptcl, o_proj)
+call o_proj%ifft()
 call o_proj%write('TEST_PTCL.mrc', 1)
 ! randomizing the orientation and compare with the truth
 print *, '-- SHC on probability --'
