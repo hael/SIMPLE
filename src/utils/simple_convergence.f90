@@ -52,8 +52,8 @@ contains
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t, percen_nonzero_pw
         logical :: converged, chk4conv
-        601 format(A,1X,F8.3)
-        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        601 format(A,1X,F12.3)
+        604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states            = build_glob%spproj_field%get_all('state')
         corrs             = build_glob%spproj_field%get_all('corr')
         updatecnts        = build_glob%spproj_field%get_all('updatecnt')

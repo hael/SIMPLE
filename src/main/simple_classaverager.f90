@@ -6,13 +6,14 @@ use simple_parameters,    only: params_glob
 use simple_ctf,           only: ctf
 use simple_image,         only: image, image_ptr
 use simple_stack_io,      only: stack_io
-use simple_euclid_sigma2, only: eucl_sigma2_glob, apply_euclid_regularization
+use simple_euclid_sigma2
 use simple_fsc
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
-cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged
+cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged,&
+cavger_read_euclid_sigma2
 private
 #include "simple_local_flags.inc"
 
@@ -52,6 +53,7 @@ type(image),       allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for Wi
 type(image),       allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 type(image),       allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
+type(euclid_sigma2)            :: eucl_sigma
 type(image),       allocatable :: cavgs_even_bak(:)            !< class averages
 type(image),       allocatable :: cavgs_odd_bak(:)             !< -"-
 type(image),       allocatable :: cavgs_even_wfilt_bak(:)      !< class averages wiener filtered
@@ -188,6 +190,16 @@ contains
             enddo
         endif
     end subroutine cavger_transf_oridat
+
+    subroutine cavger_read_euclid_sigma2
+        character(len=STDLEN) :: fname
+        if( l_ml_reg )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, pptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, pptcl_mask)
+        end if
+    end subroutine cavger_read_euclid_sigma2
 
     !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
@@ -434,17 +446,17 @@ contains
                     if( l_ml_reg )then
                         do h=logi_lims(1,1),logi_lims(1,2)
                             do k=logi_lims(2,1),logi_lims(2,2)
-                                sh = nint(hyp(real(h),real(k)))             ! shell in padded image
+                                sh = nint(hyp(real(h),real(k)))                 ! shell in padded image
                                 if( sh > interp_shlim )cycle
-                                sh = nint(reg_scale*hyp(real(h),real(k)))   ! shell at original scale
+                                sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
                                 if( sh > sigma2_kfromto(2) ) cycle
                                 phys = cgrid_imgs(i)%comp_addr_phys(h,k)
                                 if( sh >= sigma2_kfromto(1) )then
                                     call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
-                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind)
+                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
                                 else
                                     call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
-                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind)
+                                    tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
                                 endif
                             enddo
                         enddo
@@ -763,23 +775,38 @@ contains
                     ! add noise term to denominator
                     call add_invtausq2rho(ctfsqsums_even(icls), frc)
                     call add_invtausq2rho(ctfsqsums_odd(icls), frc)
-                    ! re-generate classes
+                    if( eo_pop(1) < 3 ) call ctfsqsums_even(icls)%add(1.)
+                    if( eo_pop(2) < 3 ) call ctfsqsums_odd(icls)%add(1.)
+                    if( l_stream )then
+                        call add_invtausq2rho(ctfsqsums_even_wfilt(icls), frc)
+                        call add_invtausq2rho(ctfsqsums_odd_wfilt(icls), frc)
+                        if( eo_pop(1) < 3 ) call ctfsqsums_even_wfilt(icls)%add(1.)
+                        if( eo_pop(2) < 3 ) call ctfsqsums_odd_wfilt(icls)%add(1.)
+                    endif
+                    ! re-generate sums
                     call cavgs_even(icls)%copy(cavgs_even_bak(icls))
                     call cavgs_odd(icls)%copy(cavgs_odd_bak(icls))
-                    call cavgs_merged(icls)%copy(cavgs_even_bak(icls))
-                    call cavgs_merged(icls)%add(cavgs_odd_bak(icls))
+                    call cavgs_merged(icls)%copy(cavgs_even(icls))
+                    call cavgs_merged(icls)%add(cavgs_odd(icls))
                     call ctfsqsums_merged(icls)%copy(ctfsqsums_even(icls))
                     call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
-                    if(eo_pop(1) > 1)then
-                        call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
-                        if( l_stream ) call cavgs_even_wfilt(icls)%ctf_dens_correct(ctfsqsums_even_wfilt(icls))
+                    if( l_stream )then
+                        call cavgs_even_wfilt(icls)%copy(cavgs_even_wfilt_bak(icls))
+                        call cavgs_odd_wfilt(icls)%copy(cavgs_odd_wfilt_bak(icls))
+                        call cavgs_merged_wfilt(icls)%copy(cavgs_even_wfilt(icls))
+                        call cavgs_merged_wfilt(icls)%add(cavgs_odd_wfilt(icls))
+                        call ctfsqsums_merged_wfilt(icls)%copy(ctfsqsums_even_wfilt(icls))
+                        call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_odd_wfilt(icls))
                     endif
-                    if(eo_pop(2) > 1)then
-                        call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
-                        if( l_stream ) call cavgs_odd_wfilt(icls)%ctf_dens_correct(ctfsqsums_odd_wfilt(icls))
-                    endif
+                    ! regularization
+                    call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
+                    call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
                     call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
-                    if( l_stream ) call cavgs_merged_wfilt(icls)%ctf_dens_correct(ctfsqsums_merged_wfilt(icls))
+                    if( l_stream )then
+                        call cavgs_even_wfilt(icls)%ctf_dens_correct(ctfsqsums_even_wfilt(icls))
+                        call cavgs_odd_wfilt(icls)%ctf_dens_correct(ctfsqsums_odd_wfilt(icls))
+                        call cavgs_merged_wfilt(icls)%ctf_dens_correct(ctfsqsums_merged_wfilt(icls))
+                    endif
                     ! clip to original dimension
                     call cavgs_merged(icls)%ifft()
                     call cavgs_even(icls)%ifft()
@@ -1368,15 +1395,17 @@ contains
                 do icls=1,ncls
                     call cavgs_even_bak(icls)%kill
                     call cavgs_odd_bak(icls)%kill
-                    call cavgs_even_wfilt_bak(icls)%kill
-                    call cavgs_odd_wfilt_bak(icls)%kill
                     call ctfsqsums_even_bak(icls)%kill
                     call ctfsqsums_odd_bak(icls)%kill
-                    call ctfsqsums_even_wfilt_bak(icls)%kill
-                    call ctfsqsums_odd_wfilt_bak(icls)%kill
+                    if( l_stream )then
+                        call cavgs_even_wfilt_bak(icls)%kill
+                        call cavgs_odd_wfilt_bak(icls)%kill
+                        call ctfsqsums_even_wfilt_bak(icls)%kill
+                        call ctfsqsums_odd_wfilt_bak(icls)%kill
+                    endif
                 enddo
-                deallocate(cavgs_even_bak,cavgs_odd_bak,cavgs_even_wfilt_bak,cavgs_odd_wfilt_bak,&
-                &ctfsqsums_even_bak,ctfsqsums_odd_bak,ctfsqsums_even_wfilt_bak,ctfsqsums_odd_wfilt_bak)
+                deallocate(cavgs_even_bak,cavgs_odd_bak, ctfsqsums_even_bak,ctfsqsums_odd_bak)
+                if( l_stream ) deallocate(cavgs_even_wfilt_bak,cavgs_odd_wfilt_bak,ctfsqsums_even_wfilt_bak,ctfsqsums_odd_wfilt_bak)
             endif
             deallocate(precs)
             istart = 0

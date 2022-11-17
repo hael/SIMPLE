@@ -42,12 +42,13 @@ type :: sigma_array
     real,             allocatable :: sigma2(:,:)
 end type sigma_array
 
+character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
+
 contains
 
     subroutine exec_calc_pspec_distr( self, cline )
         class(calc_pspec_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
         ! command lines
         type(cmdline)    :: cline_calc_pspec
         type(cmdline)    :: cline_calc_pspec_assemble
@@ -191,7 +192,6 @@ contains
         use simple_image,               only: image
         class(calc_pspec_assemble_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
         type(parameters)                 :: params
         type(image)                      :: avg_img
         type(builder)                    :: build
@@ -336,35 +336,35 @@ contains
     subroutine exec_calc_group_sigmas( self, cline )
         use simple_image,               only: image
         class(calc_group_sigmas_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
+        class(cmdline),                     intent(inout) :: cline
         type(parameters)                 :: params
         type(builder)                    :: build
         type(sigma2_binfile)             :: binfile
-        type(sigma_array), allocatable   :: sigma2_arrays(:)
+        type(sigma_array)                :: sigma2_array
         character(len=:),  allocatable   :: starfile_fname
         real,              allocatable   :: group_pspecs(:,:,:),pspecs(:,:)
         real,              allocatable   :: group_weights(:,:)
         real                             :: w
-        integer                          :: iptcl,ipart,eo,ngroups,igroup,pspec_l,pspec_u
+        integer                          :: iptcl,ipart,eo,ngroups,igroup,fromp,top
         call cline%set('mkdir', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! set Fourier index range
-        params%kfromto(1) = 1
-        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
         ! read sigmas from binfiles
-        allocate(pspecs(params%kfromto(1):params%kfromto(2),params%nptcls),sigma2_arrays(params%nparts))
         do ipart = 1,params%nparts
-            sigma2_arrays(ipart)%fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
-            call binfile%new_from_file(sigma2_arrays(ipart)%fname)
-            call binfile%read(sigma2_arrays(ipart)%sigma2)
-            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
-            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
-            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
-                THROW_HARD('commander_refine3d; exec_calc_group_sigmas; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
+            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+            call binfile%new_from_file(sigma2_array%fname)
+            call binfile%read(sigma2_array%sigma2)
+            fromp = lbound(sigma2_array%sigma2,2)
+            top   = ubound(sigma2_array%sigma2,2)
+            if( (fromp<1).or.(top>params%nptcls) )then
+                THROW_HARD('commander_refine3d; exec_calc_group_sigmas; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
             end if
-            pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
+            if( ipart == 1 )then
+                call binfile%get_resrange(params%kfromto)
+                allocate(pspecs(params%kfromto(1):params%kfromto(2),params%nptcls))
+            endif
+            pspecs(:,fromp:top) = sigma2_array%sigma2(:,:)
+            deallocate(sigma2_array%sigma2)
         end do
         ngroups = 0
         !$omp parallel do default(shared) private(iptcl,igroup)&
