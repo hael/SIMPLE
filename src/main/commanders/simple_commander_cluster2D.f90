@@ -10,8 +10,8 @@ use simple_qsys_env,         only: qsys_env
 use simple_image,            only: image
 use simple_stack_io,         only: stack_io
 use simple_starproject,      only: starproject
-use simple_commander_euclid, only: calc_pspec_commander_distr
 use simple_euclid_sigma2,    only: euclid_sigma2
+use simple_commander_euclid
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
@@ -508,7 +508,6 @@ contains
         type(scale_project_commander_distr) :: xscale_proj
         type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         ! command lines
-        type(cmdline) :: cline_cluster2D
         type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_scale
         type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
@@ -767,6 +766,7 @@ contains
         logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
+        ! streaming
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'

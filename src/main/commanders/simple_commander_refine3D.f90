@@ -250,7 +250,7 @@ contains
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
-                if( .not.l_griddingset ) call cline%set('gridding','yes')
+                if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
                 call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                 nfiles = size(list)
                 if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -593,7 +593,7 @@ contains
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun',    'euclid')
                 call cline%set('match_filt','no')
-                if(.not.l_griddingset )then
+                if(.not.l_griddingset .and. .not.params%l_cartesian )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
