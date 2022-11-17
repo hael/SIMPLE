@@ -9,17 +9,17 @@ use simple_sym
 use simple_ori
 implicit none
 character(len=:),   allocatable :: cmd
-integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS_SHC = 100, N_ITERS_PROB = N_ITERS_SHC*10
+integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS_SHC = 100, N_ITERS_PROB = N_ITERS_SHC
 type(cmdline)           :: cline
 type(parameters)        :: p
-integer                 :: ifoo, rc, iptcl, iter, isample, cnt
+integer                 :: ifoo, rc, iptcl, iter, isample, cnt, j
 type(projector)         :: vol_proj
 type(sym)               :: pgrpsyms
 type(ori)               :: o, o_truth, o_arr(N_ITERS_PROB+1), o_best, o_init
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
 logical                 :: mrc_exists, l_match_filt
-real                    :: corr, corr_arr(N_ITERS_PROB+1), p_cur, p_best, corr_best
+real                    :: corr, corr_arr(N_ITERS_PROB+1), p_cur, p_best, corr_best, corr_2
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_ori_search smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -77,21 +77,31 @@ o_best      = o
 corr_best   = corr
 do iter = 1, N_ITERS_PROB
     o = o_best
-    do isample = 1, N_SAMPLES*10
+    do isample = 1, N_SAMPLES
         call pgrpsyms%rnd_euler(o)
-        p_cur = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = cnt )
-        if( p_cur > p_best )then
-            corr = cftcc%project_and_correlate(iptcl, o)
-            if( corr > corr_best )then
-                cnt           = cnt + 1
-                corr_arr(cnt) = corr
-                o_arr(   cnt) = o
-                p_best        = p_cur
-                o_best        = o
-                corr_best     = corr
-                print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat()), '; corr = ', corr_best
-                exit
-            endif
+        corr = cftcc%project_and_correlate(iptcl, o)
+        if( corr > corr_best )then
+            p_best        = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = cnt )
+            cnt           = cnt + 1
+            corr_arr(cnt) = corr
+            o_arr(   cnt) = o
+            do j = isample, N_SAMPLES
+                call pgrpsyms%rnd_euler(o)
+                p_cur = cftcc%ori_chance( iptcl, o, o_arr, corr_arr, R = 100., n = cnt )
+                if( p_cur > p_best )then
+                    corr_2 = cftcc%project_and_correlate(iptcl, o)
+                    if( corr_2 > corr_best )then
+                        corr_arr(cnt) = corr_2
+                        o_arr(   cnt) = o
+                        corr          = corr_2
+                        exit
+                    endif
+                endif
+            enddo
+            o_best    = o
+            corr_best = corr
+            print *, 'iter = ', iter, '; p_best = ', p_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat()), '; corr = ', corr_best
+            exit
         endif
     enddo       
 enddo
