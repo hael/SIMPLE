@@ -9,17 +9,17 @@ use simple_sym
 use simple_ori
 implicit none
 character(len=:),   allocatable :: cmd
-integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS = 200
+integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 1000, N_ITERS_SHC = 100, N_ITERS_PROB = N_ITERS_SHC*10
 type(cmdline)           :: cline
 type(parameters)        :: p
 integer                 :: ifoo, rc, iptcl, iter, isample, cnt
 type(projector)         :: vol_proj
 type(sym)               :: pgrpsyms
-type(ori)               :: o, o_truth, o_arr(N_ITERS), o_best, o_init
+type(ori)               :: o, o_truth, o_arr(N_ITERS_PROB+1), o_best, o_init
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
 logical                 :: mrc_exists, l_match_filt
-real                    :: corr, corr_arr(N_ITERS), p_cur, p_best, corr_best
+real                    :: corr, corr_arr(N_ITERS_PROB+1), p_cur, p_best, corr_best
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_ori_search smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -75,7 +75,7 @@ p_best      = 0.
 cnt         = 1
 o_best      = o
 corr_best   = corr
-do iter = 1, N_ITERS*10
+do iter = 1, N_ITERS_PROB
     o = o_best
     do isample = 1, N_SAMPLES*10
         call pgrpsyms%rnd_euler(o)
@@ -101,7 +101,7 @@ print *, o_truth%get_euler()
 print *, '-- SHC on corr only --'
 o      = o_init
 p_best = 0.
-do iter = 1, N_ITERS
+do iter = 1, N_ITERS_SHC
     do isample = 1, N_SAMPLES
         call pgrpsyms%rnd_euler(o)
         corr = cftcc%project_and_correlate(iptcl, o)
