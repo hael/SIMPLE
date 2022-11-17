@@ -29,6 +29,8 @@ contains
     procedure, private            :: open_and_check_header
     procedure, private            :: read_header
     ! getters / setters
+    procedure                     :: get_resrange
+    ! destructor
     procedure                     :: kill
 end type sigma2_binfile
 
@@ -196,6 +198,14 @@ contains
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) sigmas_empty
     end subroutine create_empty
+
+    ! getters / setters
+
+    subroutine get_resrange(self, kfromto)
+        class(sigma2_binfile), intent(in)  :: self
+        integer,               intent(out) :: kfromto(2)
+        kfromto = self%kfromto
+    end subroutine get_resrange
 
     ! destructor
 

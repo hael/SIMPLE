@@ -11,6 +11,7 @@ use simple_image,            only: image
 use simple_stack_io,         only: stack_io
 use simple_starproject,      only: starproject
 use simple_commander_euclid, only: calc_pspec_commander_distr
+use simple_euclid_sigma2,    only: euclid_sigma2
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
@@ -174,6 +175,7 @@ contains
         call cavger_new
         ! transfer ori data to object
         call cavger_transf_oridat(build%spproj)
+        call cavger_read_euclid_sigma2
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
         if( l_shmem )then
@@ -210,9 +212,11 @@ contains
         type(scale_project_commander_distr) :: xscale_proj
         type(scale_commander)               :: xscale
         type(rank_cavgs_commander)          :: xrank_cavgs
+        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         ! command lines
         type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
         type(cmdline)                       :: cline_rank_cavgs, cline_scale, cline_scalerefs
+        type(cmdline)                       :: cline_calc_pspec_distr
         ! other variables
         class(parameters), pointer          :: params_ptr => null()
         type(parameters)                    :: params
@@ -222,7 +226,7 @@ contains
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, lp1, lp2
         integer                             :: last_iter, box
-        logical                             :: do_scaling, l_shmem
+        logical                             :: do_scaling, l_shmem, l_euclid
         ! parameters
         character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
         integer, parameter    :: MINBOX      = 128
@@ -277,15 +281,26 @@ contains
         call spproj%write_segment_inside(params%oritype)
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! noise power estimates for objfun = euclid at original sampling
+        l_euclid = .false.
+        if( cline%defined('objfun') )then
+            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+        endif
+        if( l_euclid )then
+            cline_calc_pspec_distr  = cline
+            call spproj%os_ptcl2D%set_all2single('w', 1.0)
+            call spproj%write_segment_inside(params%oritype)
+            call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+        endif
         ! first stage
         ! down-scaling for fast execution, greedy optimisation, no match filter
-        ! no incremental learning, objective function is standard cross-correlation (cc), no centering
+        ! no incremental learning, no centering
         cline_cluster2D1 = cline
         cline_cluster2D2 = cline
         cline_scale      = cline
         call cline_cluster2D1%set('prg', 'cluster2D')
         call cline_cluster2D1%set('maxits',   MINITS)
-        call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
@@ -293,15 +308,14 @@ contains
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter
-        ! objective function default is standard cross-correlation (cc)
         call cline_cluster2D2%set('prg', 'cluster2D')
         call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',    MINSHIFT)
-        call cline_cluster2D2%set('objfun',     'cc')
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
+        if( l_euclid ) call cline_cluster2D2%set('needs_sigma', 'yes')
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
@@ -492,19 +506,22 @@ contains
         type(rank_cavgs_commander)          :: xrank_cavgs
         type(scale_commander)               :: xscale
         type(scale_project_commander_distr) :: xscale_proj
+        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         ! command lines
+        type(cmdline) :: cline_cluster2D
         type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
-        type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
+        type(cmdline) :: cline_scalerefs, cline_scale
         type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
+        type(cmdline) :: cline_calc_pspec_distr
         ! other variables
         class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
-        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2, trs_stage2
+        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
+        real     :: scale, trs_stage2
         integer  :: last_iter_stage1, last_iter_stage2
-        logical  :: scaling, l_shmem
+        logical  :: scaling, l_shmem, l_euclid
         call set_cluster2D_defaults( cline )
         call cline%delete('clip')
         ! set shared-memory flag
@@ -543,14 +560,24 @@ contains
         endif
         ! splitting
         if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! noise power estimates for objfun = euclid at original sampling
+        l_euclid = .false.
+        if( cline%defined('objfun') )then
+            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+        endif
+        if( l_euclid )then
+            cline_calc_pspec_distr  = cline
+            call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+            call spproj%os_ptcl2D%set_all2single('w', 1.0)
+            call spproj%write_segment_inside(params%oritype)
+            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+        endif
         ! general options planning
         if( params%l_autoscale )then
             ! this workflow executes two stages of CLUSTER2D
-            ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
+            ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
-            !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('objfun',     'cc')
             call cline_cluster2D_stage1%set('match_filt', 'no')
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw','no')
@@ -561,16 +588,16 @@ contains
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
             ! Scaling
-            call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
-                &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
+            call spproj%scale_projfile(params%smpd_targets2D(2), projfile_sc,&
+                &cline_cluster2D_stage1, cline_scale, dir=trim(STKPARTSDIR))
             call spproj%kill
-            scale_stage1 = cline_scale1%get_rarg('scale')
-            scaling      = basename(projfile_sc) /= basename(orig_projfile)
+            scale   = cline_scale%get_rarg('scale')
+            scaling = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
-                call cline_scale1%delete('smpd') !!
-                call cline_scale1%set('state',1.)
+                call cline_scale%delete('smpd') !!
+                call cline_scale%set('state',1.)
                 call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-                call xscale_proj%execute( cline_scale1 )
+                call xscale_proj%execute( cline_scale )
                 ! rename scaled projfile and stash original project file
                 ! such that the scaled project file has the same name as the original and can be followed from the GUI
                 call simple_copy_file(orig_projfile, orig_projfile_bak)
@@ -587,7 +614,7 @@ contains
                     refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
                     call cline_scalerefs%set('outstk', trim(refs_sc))
                     call cline_scalerefs%set('smpd', params%smpd)
-                    call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
+                    call cline_scalerefs%set('newbox', cline_scale%get_rarg('newbox'))
                     call xscale%execute(cline_scalerefs)
                     call cline_cluster2D_stage1%set('refs',trim(refs_sc))
                 endif
@@ -604,48 +631,18 @@ contains
                 call xcluster2D_distr%execute(cline_cluster2D_stage1)
             endif
             last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
-            ! update original project backup and copy to original project file
-            if( scaling )then
-                call spproj_sc%read(orig_projfile)
-                call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage1)
-                call spproj%read(orig_projfile_bak)
-                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                spproj%os_cls2D  = spproj_sc%os_cls2D
-                spproj%os_cls3D  = spproj_sc%os_cls3D
-                call spproj%write(orig_projfile_bak)
-                call spproj%kill()
-                call simple_copy_file(orig_projfile_bak, orig_projfile)
-                ! clean stacks
-                call simple_rmdir(STKPARTSDIR)
-            endif
-            ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
+            cavgs            = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//params%ext
+            ! Stage 2: refinement stage, down-scaling, no extremal updates, optional incremental
             !          learning for acceleration
             cline_cluster2D_stage2 = cline
-            call cline_cluster2D_stage2%delete('refs')
+            call cline_cluster2D_stage2%set('refs', cavgs)
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
                 call cline_cluster2D_stage2%set('update_frac', params%update_frac)
             endif
-            ! Scaling
-            call spproj%read(orig_projfile)
-            call spproj%scale_projfile( params%smpd_targets2D(2), projfile_sc,&
-                &cline_cluster2D_stage2, cline_scale2, dir=trim(STKPARTSDIR))
-            call spproj%kill
-            scale_stage2 = cline_scale2%get_rarg('scale')
-            scaling      = basename(projfile_sc) /= basename(orig_projfile)
-            if( scaling )then
-                call cline_scale2%delete('smpd') !!
-                call cline_scale2%set('state',1.)
-                call xscale_proj%execute( cline_scale2 )
-                ! rename scaled projfile and stash original project file
-                ! such that the scaled project file has the same name as the original and can be followed from the GUI
-                call spproj%read_non_data_segments(projfile_sc)
-                call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
-                call spproj%projinfo%set(1,'projfile',orig_projfile)
-                call spproj%write_non_data_segments(projfile_sc)
-                call spproj%kill
-                call simple_rename(projfile_sc,orig_projfile)
-                deallocate(projfile_sc)
+            if( l_euclid )then
+                call cline_cluster2D_stage2%set('objfun',      'euclid')
+                call cline_cluster2D_stage2%set('needs_sigma', 'yes')
             endif
             trs_stage2 = MSK_FRAC * params%mskdiam / (2 * params%smpd_targets2D(2))
             trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
@@ -667,7 +664,7 @@ contains
             if( scaling )then
                 ! shift modulation
                 call spproj_sc%read(orig_projfile)
-                call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage2)
+                call spproj_sc%os_ptcl2D%mul_shifts(1./scale)
                 call spproj%read(orig_projfile_bak)
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
                 spproj%os_cls2D  = spproj_sc%os_cls2D
@@ -751,12 +748,11 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(make_cavgs_commander_distr) :: xmake_cavgs
-        type(calc_pspec_commander_distr) :: xcalc_pspec_distr
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
-        type(cmdline) :: cline_calc_group_sigmas, cline_calc_pspec_distr
+        type(cmdline) :: cline_calc_group_sigmas
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         character(len=STDLEN)     :: benchfname
@@ -777,13 +773,25 @@ contains
         endif
         call cline%set('stream','no') ! for parameters determination
         ! objfun=euclid logics, part 1
-        l_griddingset    = cline%defined('gridding')
-        l_switch2euclid  = .false.
+        l_griddingset   = cline%defined('gridding')
+        l_switch2euclid = .false.
         if( cline%defined('objfun') )then
             if( trim(cline%get_carg('objfun')).eq.'euclid' )then
-                l_switch2euclid = .true.
                 l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
-                call cline%set('objfun','cc')
+                if( cline%defined('needs_sigma') )then
+                    if(trim(cline%get_carg('needs_sigma')).eq.'yes')then
+                        ! were are already doing ML, no need to switch from cc nor calculate noise power
+                        if( .not.l_griddingset ) call cline%set('gridding','yes')
+                    else
+                        l_switch2euclid = .true.
+                        call cline%set('objfun','cc')
+                        call cline%set('needs_sigma','yes')
+                    endif
+                else
+                    l_switch2euclid = .true.
+                    call cline%set('objfun','cc')
+                    call cline%set('needs_sigma','yes')
+                endif
             endif
         endif
         ! builder & params
@@ -801,17 +809,21 @@ contains
         call cline%gen_job_descr(job_descr)
         ! splitting
         call build%spproj%split_stk(params%nparts)
+        ! objfun=euclid logics, part 2
+        iter_switch2euclid = -1
+        if( l_switch2euclid )then
+            iter_switch2euclid = params%startit
+            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+        endif
         ! prepare command lines from prototype master
         cline_check_2Dconv      = cline
         cline_cavgassemble      = cline
         cline_make_cavgs        = cline ! ncls is transferred here
         cline_calc_group_sigmas = cline
-        cline_calc_pspec_distr  = cline
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set(     'prg', 'cavgassemble')
         call cline_make_cavgs%set(       'prg', 'make_cavgs')
         call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas' )! required for local call
-        call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )       ! required for distributed call
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -875,17 +887,6 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
-        ! objfun=euclid logics, part 2
-        iter_switch2euclid = -1
-        if( l_switch2euclid )then
-            iter_switch2euclid = params%startit
-            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
-            call cline%set('needs_sigma','yes')
-            ! GENERATE INITIAL NOISE POWER ESTIMATES
-            call build%spproj_field%set_all2single('w', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-        endif
         ! initialise progress monitor
         if(.not. l_stream) call progressfile_init()
         ! main loop
@@ -903,8 +904,8 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
-            ! Initial noise estimates
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
+            ! noise power
+            if( trim(params%objfun).eq.'euclid' .or. l_switch2euclid )then
                 call cline_calc_group_sigmas%set('which_iter',real(params%which_iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_group_sigmas, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -1018,7 +1019,6 @@ contains
 
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
-        use simple_euclid_sigma2,      only: euclid_sigma2
         use simple_classaverager
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

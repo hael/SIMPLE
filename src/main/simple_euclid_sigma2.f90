@@ -64,12 +64,13 @@ contains
         self%kfromto = [1, fdim(box)-1]
         allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
                   self%pinds(params_glob%fromp:params_glob%top) )
-        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
-        call pftcc_glob%assign_pinds(self%pinds)
+        if( associated(pftcc_glob) )then
+            call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
+            call pftcc_glob%assign_pinds(self%pinds)
+        endif
         self%binfname         = trim(binfname)
         self%fromp            = params_glob%fromp
         self%top              = params_glob%top
-        self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
         self%exists           = .true.
         eucl_sigma2_glob      => self
@@ -80,7 +81,6 @@ contains
         write(logfhandle,*) 'kfromto: ',self%kfromto
         write(logfhandle,*) 'fromp:   ',self%fromp
         write(logfhandle,*) 'top:     ',self%top
-        write(logfhandle,*) 'pftsz:   ',self%pftsz
     end subroutine write_info
 
     ! I/O
@@ -99,7 +99,7 @@ contains
         class(oris),          intent(inout) :: os
         logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                             :: iptcl,igroup,tom,eo
-        call pftcc_glob%assign_pinds(self%pinds)
+        if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
         ! determine number of groups
         tom   = 0
         do iptcl = 1, params_glob%nptcls
