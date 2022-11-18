@@ -735,35 +735,22 @@ contains
         use simple_masker, only: automask2D
         character(len=*), intent(in) :: fname
         integer,          intent(in) :: which_iter
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:), mask_imgs(:)
-        real,        allocatable     :: frc(:), diams(:)
+        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
+        real,        allocatable     :: frc(:)
         integer :: icls, find, find_plate, pop, eo_pop(2)
-        logical :: l_automsk
-        allocate(even_imgs(ncls), odd_imgs(ncls), mask_imgs(ncls), frc(filtsz), diams(ncls))
+        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
-            call mask_imgs(icls)%copy(cavgs_even(icls))
-            call mask_imgs(icls)%add(cavgs_odd(icls))
-            call mask_imgs(icls)%mul(0.5)
         end do
-        l_automsk = params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM
-        if( l_automsk )then
-            call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
-        endif
         if( l_ml_reg )then
             !$omp parallel do default(shared) private(icls,frc,find,find_plate,pop,eo_pop) schedule(static) proc_bind(close)
             do icls=1,ncls
                 eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
                 pop    = sum(eo_pop)
                 if( pop > 0 )then
-                    if( l_automsk )then
-                        call even_imgs(icls)%mul(mask_imgs(icls))
-                        call odd_imgs(icls)%mul(mask_imgs(icls))
-                    else
-                        call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                        call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-                    endif
+                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -856,13 +843,8 @@ contains
         else
             !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
             do icls=1,ncls
-                if( l_automsk )then
-                    call even_imgs(icls)%mul(mask_imgs(icls))
-                    call odd_imgs(icls)%mul(mask_imgs(icls))
-                else
-                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-                endif
+                call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
