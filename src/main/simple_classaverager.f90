@@ -882,7 +882,7 @@ contains
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
         end do
-        deallocate(even_imgs, odd_imgs, frc, diams)
+        deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     ! private function to add noise term to denomnator
