@@ -79,7 +79,7 @@ contains
             THROW_HARD('no particles found! :exec_refine3D_distr')
         endif
         if( build%spproj_field%get_nevenodd() == 0 )then
-            THROW_HARD('no eve/odd flag found! :calc_pspec__distr')
+            THROW_HARD('no even/odd flag found! :calc_pspec_distr')
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')

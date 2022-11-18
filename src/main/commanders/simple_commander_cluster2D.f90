@@ -281,6 +281,11 @@ contains
         call spproj%write_segment_inside(params%oritype)
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! deal with eo partitioning
+        if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
+            call spproj%os_ptcl2D%partition_eo
+            call spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
@@ -559,6 +564,11 @@ contains
         endif
         ! splitting
         if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! deal with eo partitioning
+        if( spproj%os_ptcl2D%get_nevenodd() == 0 )then
+            call spproj%os_ptcl2D%partition_eo
+            call spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
