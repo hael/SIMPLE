@@ -17,11 +17,10 @@ end interface butterworth_filter
 
 type optfilt2Dvars
     real, allocatable :: cur_fil(:)
-    type(image)       :: even_backgr, odd_backgr
     type(image)       :: odd_copy_rmat, even_copy_rmat
     type(image)       :: odd_copy_cmat, even_copy_cmat
     type(image)       :: odd_filt, even_filt, diff_img_odd, diff_img_even, diff_img_opt_odd, diff_img_opt_even
-    integer           :: best_ind_odd, best_ind_even       ! for uniform filter
+    integer           :: best_ind_odd, best_ind_even ! for uniform filter
     integer           :: lplim_hres
     logical           :: have_mask = .false.
 end type optfilt2Dvars
@@ -774,7 +773,7 @@ contains
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
                 ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, 0.1)                ! little overshoot, filter function anyway applied in polarft_corrcalc
+                find = get_lplim_at_corr(frc, 0.1)                ! little overshoot
                 lp   = calc_lowpass_lim(find, box, smpd)          ! box is the padded box size
                 optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
@@ -782,8 +781,6 @@ contains
         ! fill up optf2Dvars struct
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
-            call optf2Dvars(iptcl)%even_backgr%copy(even(iptcl))
-            call optf2Dvars(iptcl)%odd_backgr%copy(odd(iptcl))
             call optf2Dvars(iptcl)%even_filt%copy(even(iptcl))
             call optf2Dvars(iptcl)%odd_filt %copy( odd(iptcl))
             call optf2Dvars(iptcl)%odd_copy_cmat%copy(odd(iptcl))
@@ -797,16 +794,9 @@ contains
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
             call uni_filt2D(odd(iptcl), even(iptcl), mask(iptcl), optf2Dvars(iptcl))
-            call mask(iptcl)%bin_inv
-            call uni_filt2D(optf2Dvars(iptcl)%odd_backgr, optf2Dvars(iptcl)%even_backgr, mask(iptcl), optf2Dvars(iptcl))
-            call mask(iptcl)%bin_inv
-            call odd(iptcl)%combine_fgbg_filt(optf2Dvars(iptcl)%odd_backgr, mask(iptcl))
-            call even(iptcl)%combine_fgbg_filt(optf2Dvars(iptcl)%even_backgr, mask(iptcl))
         enddo
         !$omp end parallel do
         do iptcl = 1, nptcls
-            call optf2Dvars(iptcl)%even_backgr%kill
-            call optf2Dvars(iptcl)%odd_backgr%kill
             call optf2Dvars(iptcl)%odd_copy_cmat%kill
             call optf2Dvars(iptcl)%even_copy_cmat%kill
             call optf2Dvars(iptcl)%even_filt%kill
