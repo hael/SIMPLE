@@ -191,12 +191,6 @@ contains
         else
             corr = max(0.,maxval(corrs))
         endif
-        if( params_glob%l_align_reg .and. params_glob%which_iter > 1 )then
-            call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs, eo_switch = .true.)
-            ! interpolated corr value between corr_odd and corr_even, for the first 10 iterations
-            alpha = min(1., max(0., (params_glob%which_iter-2.)/8.))  ! between 0 and 1
-            corr  = alpha*corr + (1. - alpha)*maxval(corrs)
-        endif
         self%prev_corr = corr
         call o_prev%kill
     end subroutine prep4srch
