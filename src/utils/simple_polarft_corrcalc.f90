@@ -965,18 +965,27 @@ contains
         endif
     end subroutine create_polar_absctfmats
 
-    subroutine prep_ref4corr( self, iref, iptcl, pft_ref, sqsum_ref)
+    subroutine prep_ref4corr( self, iref, iptcl, pft_ref, sqsum_ref, eo_switch)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         complex(sp),             intent(out)   :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp),                intent(out)   :: sqsum_ref
+        logical,     optional,   intent(in)    :: eo_switch
         integer :: i
         i = self%pinds(iptcl)
         ! copy
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
+        if( present(eo_switch) .and. eo_switch )then
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            endif
         else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            endif
         endif
         ! shell normalization and filtering
         if( self%l_clsfrcs )then
@@ -1375,10 +1384,11 @@ contains
         end do
     end subroutine calc_frc
 
-    subroutine gencorrs_cc_1( self, iref, iptcl, cc )
+    subroutine gencorrs_cc_1( self, iref, iptcl, cc, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real,                    intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: corrs_over_k(:)
         real(sp) :: sqsum_ref
@@ -1386,16 +1396,17 @@ contains
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
-        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref)
+        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, eo_switch)
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), corrs_over_k)
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end subroutine gencorrs_cc_1
 
-    subroutine gencorrs_cc_2( self, iref, iptcl, shvec, cc )
+    subroutine gencorrs_cc_2( self, iref, iptcl, shvec, cc, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: corrs_over_k(:)
         real(sp) :: sqsum_ref
@@ -1405,10 +1416,18 @@ contains
         shmat        => self%heap_vars(ithr)%shmat
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%gen_shmat(ithr, shvec, shmat)
-        if( self%iseven(self%pinds(iptcl)) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
+        if( present(eo_switch) .and. eo_switch )then
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            endif
         else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
+            if( self%iseven(self%pinds(iptcl)) )then
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            endif
         endif
         if( self%l_clsfrcs )then
             call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
@@ -1473,10 +1492,11 @@ contains
         end do
     end function genmaxspecscore_comlin
 
-    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
+    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: euclids(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqref, sumsqptcl
@@ -1485,7 +1505,7 @@ contains
         i              =  self%pinds(iptcl)
         pft_ref        => self%heap_vars(ithr)%pft_ref
         keuclids       => self%heap_vars(ithr)%kcorrs ! can be reused
-        call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref)
+        call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref, eo_switch)
         euclids(:) = 0.
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
@@ -1496,11 +1516,12 @@ contains
         end do
     end subroutine gencorrs_euclid_1
 
-    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids )
+    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: euclids(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqptcl, sumsqref
@@ -1511,10 +1532,18 @@ contains
         shmat    => self%heap_vars(ithr)%shmat
         keuclids => self%heap_vars(ithr)%kcorrs ! can be reused
         call self%gen_shmat(ithr, shvec, shmat)
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
+        if( present(eo_switch) .and. eo_switch )then
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            endif
         else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
@@ -1531,28 +1560,30 @@ contains
         end do
     end subroutine gencorrs_euclid_2
 
-    subroutine gencorrs_1( self, iref, iptcl, cc )
+    subroutine gencorrs_1( self, iref, iptcl, cc, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc_1(iref, iptcl, cc)
+                call self%gencorrs_cc_1(iref, iptcl, cc, eo_switch)
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_1(iref, iptcl, cc)
+                call self%gencorrs_euclid_1(iref, iptcl, cc, eo_switch)
         end select
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shvec, cc )
+    subroutine gencorrs_2( self, iref, iptcl, shvec, cc, eo_switch )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: eo_switch
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
+                call self%gencorrs_cc_2(iref, iptcl, shvec, cc, eo_switch)
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
+                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc, eo_switch)
         end select
     end subroutine gencorrs_2
 
