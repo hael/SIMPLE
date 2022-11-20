@@ -189,16 +189,11 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced meory usage
-        if( params%l_align_reg ) call build%eoref%kill_exp         ! reduced meory usage
         allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
         call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
-        if( params%l_align_reg )then
-            call eoref_read%new( build%spproj)
-            call eoref_read%kill_exp ! reduced memory usage
-        endif
         n = params%nstates*params%nparts
         l_euclid_regularization = apply_euclid_regularization()
         if( L_BENCH_GLOB )then
@@ -225,29 +220,23 @@ contains
                 rt_sum_reduce = 0.
             endif
             call build%eorecvol%reset_all
-            if( params%l_align_reg ) call build%eoref%reset_all
             ! assemble volumes
             do part=1,params%nparts
                 if( L_BENCH_GLOB ) t_read = tic()
                 call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
-                if( params%l_align_reg ) call eoref_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
                 ! sum the Fourier coefficients
                 if( L_BENCH_GLOB )then
                     rt_read       = rt_read + toc(t_read)
                     t_sum_reduce  = tic()
                 endif
                 call build%eorecvol%sum_reduce(eorecvol_read)
-                if( params%l_align_reg ) call build%eoref%sum_reduce(eoref_read)
                 if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
             end do
             ! correct for sampling density and estimate resolution
             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
             allocate(volname, source=recname//params%ext)
-            if( params%l_align_reg ) allocate(volname_ref, source=recname//'_ref'//params%ext)
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
-            eonames_ref(1) = trim(recname)//'_ref_even'//params%ext
-            eonames_ref(2) = trim(recname)//'_ref_odd'//params%ext
             if( l_euclid_regularization )then
                 ! the sum is done after regularization
             else
@@ -259,14 +248,12 @@ contains
                 t_sampl_dens_correct_eos = tic()
             endif
             call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            if( params%l_align_reg ) call build%eoref%sampl_dens_correct_eos(state, eonames_ref(1), eonames_ref(2), find4eoavg)
             if( L_BENCH_GLOB )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
             endif
             if( l_euclid_regularization )then
                 if( L_BENCH_GLOB ) t_sum_eos = tic()
                 call build%eorecvol%sum_eos
-                if( params%l_align_reg ) call build%eoref%sum_eos
                 if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
             endif
             call build%eorecvol%get_res(res05s(s), res0143s(s))
@@ -291,24 +278,6 @@ contains
             call build%vol2%ifft()
             call build%vol2%write(eonames(2), del_if_exists=.true.)
             if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
-            if( params%l_align_reg )then
-                call build%eoref%sampl_dens_correct_sum( build%vol )
-                call build%vol%write( volname_ref, del_if_exists=.true. )
-                call wait_for_closure( volname_ref )
-                call build%vol%fft()
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames_ref(1))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%write(eonames_ref(1), del_if_exists=.true.)
-                call build%vol2%zero_and_unflag_ft
-                call build%vol2%read(eonames_ref(2))
-                call build%vol2%fft()
-                call build%vol2%insert_lowres(build%vol, find4eoavg)
-                call build%vol2%ifft()
-                call build%vol2%write(eonames_ref(2), del_if_exists=.true.)
-            endif
             deallocate(recname, volname)
             if( cline%defined('state') )exit
         end do

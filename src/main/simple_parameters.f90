@@ -133,9 +133,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: vols(MAXS)=''
     character(len=LONGSTRLEN) :: vols_even(MAXS)=''
     character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
-    character(len=LONGSTRLEN) :: vols_ref(MAXS)=''
-    character(len=LONGSTRLEN) :: vols_even_ref(MAXS)=''
-    character(len=LONGSTRLEN) :: vols_odd_ref(MAXS)=''
     character(len=LONGSTRLEN) :: xmldir=''
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
@@ -1053,11 +1050,6 @@ contains
                 self%vols_even(1) = trim(self%vol_even)
                 self%vols_odd(1)  = trim(self%vol_odd)
                 self%vols(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
-                if( self%l_align_reg )then
-                    self%vols_even_ref(1) = trim(self%vol_even)
-                    self%vols_odd_ref(1)  = trim(self%vol_odd)
-                    self%vols_ref(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
-                endif
             else
                 if( def_vol1 )then
                     do istate=1,self%nstates
@@ -1068,18 +1060,6 @@ contains
                             if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
                         endif
                     end do
-                    if( self%l_align_reg )then
-                        self%vols_ref = self%vols
-                        if( self%which_iter > 1 )then
-                            do istate=1,self%nstates
-                                self%vols_even_ref(istate) = add2fbody(self%vols_ref(istate), self%ext, '_ref_even')
-                                self%vols_odd_ref(istate)  = add2fbody(self%vols_ref(istate), self%ext, '_ref_odd' )
-                            end do
-                        else
-                            self%vols_even_ref = self%vols_even
-                            self%vols_odd_ref  = self%vols_odd
-                        endif
-                    endif
                 else
                     THROW_HARD('both vol_even and vol_odd need to be part of the command line')
                 endif

@@ -40,12 +40,9 @@ type :: builder
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
     real,                   allocatable :: diams(:)               !< class average diameters
     ! RECONSTRUCTION TOOLBOX
-    type(reconstructor_eo)              :: eorecvol               !< object for regularized eo reconstruction
-    type(reconstructor_eo)              :: eoref                  !< object for reference eo reconstruction
-    type(oris)            , allocatable :: reg_oris               !< regularized oris
+    type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
-    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for regularized eo-reconstruction ()
-    type(reconstructor_eo), allocatable :: eorefs(:)              !< array of volumes for reference eo-reconstruction
+    type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction ()
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
@@ -72,7 +69,6 @@ type :: builder
     procedure                           :: kill_general_tbox
     procedure                           :: build_rec_eo_tbox
     procedure, private                  :: kill_rec_eo_tbox
-    procedure, private                  :: kill_ref_eo_tbox
     procedure                           :: build_strategy3D_tbox
     procedure, private                  :: kill_strategy3D_tbox
     procedure, private                  :: build_strategy2D_tbox
@@ -324,10 +320,6 @@ contains
         class(parameters),      intent(inout) :: params
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
-        if( params%l_align_reg )then
-            call self%kill_ref_eo_tbox
-            call self%eoref%new(self%spproj)
-        endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
@@ -342,14 +334,6 @@ contains
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_eo_tbox
-
-    subroutine kill_ref_eo_tbox( self )
-        class(builder), intent(inout) :: self
-        if( self%eo_ref_tbox_exists )then
-            call self%eoref%kill
-            self%eo_ref_tbox_exists = .false.
-        endif
-    end subroutine kill_ref_eo_tbox
 
     subroutine build_strategy2D_tbox( self, params )
         class(builder), target, intent(inout) :: self
@@ -390,12 +374,6 @@ contains
         integer :: i
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates))
-        ! allocating regularized oris and references
-        if( params%l_align_reg )then
-            allocate(self%eorefs(params%nstates))
-            allocate(self%reg_oris)
-            call self%reg_oris%new(params%nptcls, .true.)
-        endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         rot = 0.
         params%nrots = 0
@@ -426,14 +404,6 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
-            if( allocated(self%eorefs) )then
-                do i=1,size(self%eorefs)
-                    call self%eorefs(i)%kill
-                end do
-                deallocate(self%eorefs)
-            endif
-            ! allocating regularized oris
-            if( allocated(self%reg_oris ) ) deallocate(self%reg_oris)
             if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%strategy3D_tbox_exists = .false.
         endif
