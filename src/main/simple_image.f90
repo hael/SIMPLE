@@ -223,6 +223,7 @@ contains
     procedure          :: shellnorm_and_apply_filter
     procedure          :: shellnorm_and_apply_filter_serial
     procedure          :: ran_phases_below_noise_power
+    procedure          :: whiten_noise_power
     procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
     procedure          :: bp
@@ -3006,26 +3007,28 @@ contains
     subroutine power_spectrum( self, spec )
         class(image), intent(in)    :: self
         real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
-        real    :: counts(fdim(self%ldim(1)) - 1)
+        real(dp) :: counts(fdim(self%ldim(1)) - 1)
+        real(dp) :: dspec( fdim(self%ldim(1)) - 1)
         integer :: filtsz, h, k, l, sh, lims(3,2), phys(3)
         filtsz = fdim(self%ldim(1)) - 1
-        spec   = 0.
-        counts = 0.
+        dspec  = 0.d0
+        counts = 0.d0
         lims   = self%fit%loop_lims(2)
         do l=lims(3,1),lims(3,2)
             do k=lims(2,1),lims(2,2)
                 do h=lims(1,1),lims(1,2)
                     phys = self%fit%comp_addr_phys([h,k,l])
-                    sh = nint(hyp(real(h),real(k),real(l)))
+                    sh   = nint(hyp(real(h),real(k),real(l)))
                     if( sh == 0 .or. sh > filtsz ) cycle
-                    spec(sh) = spec(sh) + csq_fast(self%cmat(phys(1),phys(2),phys(3)))
-                    counts(sh) = counts(sh) + 1.
+                    dspec(sh)  = dspec(sh)  + csq_fast(dcmplx(self%cmat(phys(1),phys(2),phys(3))))
+                    counts(sh) = counts(sh) + 1.d0
                 end do
             end do
         end do
-        where(counts > 0.)
-            spec = spec/counts
+        where(counts > DTINY)
+            dspec = dspec / counts
         end where
+        spec = real(dspec,kind=sp)
     end subroutine power_spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
@@ -3587,6 +3590,47 @@ contains
         enddo
         !$omp end parallel do
     end subroutine ran_phases_below_noise_power
+
+    subroutine whiten_noise_power( self_even, self_odd )
+        class(image), intent(inout) :: self_even, self_odd
+        real(dp) :: counts(fdim(self_even%ldim(1)) - 1)
+        real(dp) ::  dspec(fdim(self_even%ldim(1)) - 1)
+        complex  :: diff
+        integer  :: filtsz, h, k, l, sh, lims(3,2), phys(3)
+        filtsz = fdim(self_even%ldim(1)) - 1
+        dspec  = 0.d0
+        counts = 0.d0
+        lims   = self_even%fit%loop_lims(2)
+        do l = lims(3,1),lims(3,2)
+            do k = lims(2,1),lims(2,2)
+                do h = lims(1,1),lims(1,2)
+                    phys = self_even%fit%comp_addr_phys([h,k,l])
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > filtsz ) cycle
+                    diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
+                                &self_odd%cmat(phys(1),phys(2),phys(3))
+                    dspec(sh)  = dspec(sh)  + csq_fast(dcmplx(diff))
+                    counts(sh) = counts(sh) + 1.d0
+                end do
+            end do
+        end do
+        where(counts > DTINY)
+            dspec = dspec / counts
+        end where
+        do l = lims(3,1),lims(3,2)
+            do k = lims(2,1),lims(2,2)
+                do h = lims(1,1),lims(1,2)
+                    phys = self_even%fit%comp_addr_phys([h,k,l])
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > filtsz ) cycle
+                    if( dspec(sh) > DTINY )then
+                        self_even%cmat(phys(1),phys(2),phys(3)) = self_even%cmat(phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
+                        self_odd%cmat( phys(1),phys(2),phys(3)) = self_odd%cmat( phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
+                    endif
+                end do
+            end do
+        end do
+    end subroutine whiten_noise_power
 
     ! This function performs image filtering by convolution
     ! with the 1D kernel filt. REAL SPACE.
