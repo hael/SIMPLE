@@ -1473,11 +1473,10 @@ contains
         end do
     end function genmaxspecscore_comlin
 
-    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids, norm_const )
+    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: euclids(self%nrots)
-        real(sp), optional,      intent(inout) :: norm_const(self%nrots, 2)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqref, sumsqptcl
@@ -1488,35 +1487,20 @@ contains
         keuclids       => self%heap_vars(ithr)%kcorrs ! can be reused
         call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref)
         euclids(:) = 0.
-        if( present(norm_const) )then
-            norm_const = 0.
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, i, k, keuclids)
-                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-                sumsqref  = sum(csq_fast(pft_ref(:,k)))
-                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-                norm_const(:, 1) = norm_const(:, 1) + (self%npix_per_shell(k) / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))**2
-                norm_const(:, 2) = norm_const(:, 2) + (2. * keuclids(:) - sumsqptcl - sumsqref )**2
-            end do
-            euclids = euclids/sqrt(norm_const(:,1))/sqrt(norm_const(:,2))
-        else
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, i, k, keuclids)
-                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-                sumsqref  = sum(csq_fast(pft_ref(:,k)))
-                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-            end do
-        endif
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
+                (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
+        end do
     end subroutine gencorrs_euclid_1
 
-    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids, norm_const )
+    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: euclids(self%nrots)
-        real(sp), optional,      intent(inout) :: norm_const(self%nrots, 2)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqptcl, sumsqref
@@ -1538,53 +1522,37 @@ contains
             pft_ref = pft_ref * shmat
         endif
         euclids(:) = 0.
-        if( present(norm_const) )then
-            norm_const = 0.
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, i, k, keuclids)
-                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-                sumsqref  = sum(csq_fast(pft_ref(:,k)))
-                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-                norm_const(:, 1) = norm_const(:, 1) + (self%npix_per_shell(k) / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))**2
-                norm_const(:, 2) = norm_const(:, 2) + (2. * keuclids(:) - sumsqptcl - sumsqref )**2
-            end do
-            euclids = euclids/sqrt(norm_const(:,1))/sqrt(norm_const(:,2))
-        else
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, i, k, keuclids)
-                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-                sumsqref  = sum(csq_fast(pft_ref(:,k)))
-                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-            end do
-        endif
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
+                (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
+        end do
     end subroutine gencorrs_euclid_2
 
-    subroutine gencorrs_1( self, iref, iptcl, cc, norm_const )
+    subroutine gencorrs_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
-        real(sp), optional,      intent(inout) :: norm_const(self%nrots, 2)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 call self%gencorrs_cc_1(iref, iptcl, cc )
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_1(iref, iptcl, cc, norm_const )
+                call self%gencorrs_euclid_1(iref, iptcl, cc )
         end select
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shvec, cc, norm_const )
+    subroutine gencorrs_2( self, iref, iptcl, shvec, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        real(sp), optional,      intent(inout) :: norm_const(self%nrots, 2)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc, norm_const)
+                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
         end select
     end subroutine gencorrs_2
 
