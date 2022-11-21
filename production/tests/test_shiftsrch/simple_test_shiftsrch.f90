@@ -13,8 +13,9 @@ type(parameters)       :: p
 type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: img_copy
 logical                :: be_verbose=.false.
-real, parameter        :: SHMAG=1.0
-real, allocatable      :: corrs(:), norm_const(:, :)
+real,    parameter     :: SHMAG=1.0
+integer, parameter     :: N_PTCLS = 9
+real,    allocatable   :: corrs(:), norm_const(:, :)
 real                   :: corrmax, corr
 integer                :: xsh, ysh, xbest, ybest, i
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
@@ -37,9 +38,9 @@ endif
 call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 40
-allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:8), source=1. )
+allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=0.001 )
 call b%build_general_tbox(p, cline)
-call pftcc%new(8, [1,8], p%kfromto, .false.)
+call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto, .false.)
 call pftcc%assign_sigma2_noise(sigma2_noise)
 allocate(corrs(pftcc%get_nrots()), norm_const(pftcc%get_nrots(), 2))
 call img_copy%init_polarizer(pftcc, p%alpha)
@@ -47,7 +48,7 @@ call b%img%read(p%stk, 1)
 img_copy = b%img
 call img_copy%fft()
 call img_copy%polarize(pftcc, 1, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-call img_copy%shift([0.,0.,0.])   ! left
+call img_copy%shift([SHMAG,0.,0.])   ! left
 call img_copy%polarize(pftcc, 1, isptcl=.true., iseven=.true., mask=b%l_resmsk)
 call img_copy%ifft()
 call img_copy%write('shifted.mrc', 1)
@@ -100,12 +101,19 @@ call img_copy%shift([SHMAG,-SHMAG,0.])  ! left + up
 call img_copy%polarize(pftcc, 8, isptcl=.true., iseven=.true., mask=b%l_resmsk)
 call img_copy%ifft()
 call img_copy%write('shifted.mrc', 8)
+img_copy = b%img
+call img_copy%fft()
+call img_copy%polarize(pftcc, 9, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+call img_copy%shift([0.,0.,0.])   ! nothing
+call img_copy%polarize(pftcc, 9, isptcl=.true., iseven=.true., mask=b%l_resmsk)
+call img_copy%ifft()
+call img_copy%write('shifted.mrc', 9)
 call pftcc%memoize_ffts
-do i=1,8
+do i=1,N_PTCLS
     corrmax = -1.
     do xsh=-2,2
         do ysh=-2,2
-            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs, norm_const)
+            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
             corr  = maxval(corrs)
 
             print *, 'corr: ', corr, xsh, ysh
