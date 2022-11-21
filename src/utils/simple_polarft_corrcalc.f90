@@ -1552,7 +1552,6 @@ contains
                 euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
                     (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
             end do
-            euclids = euclids/(self%kfromto(2)-self%kfromto(1)+1)
         endif
     end subroutine gencorrs_euclid_2
 
