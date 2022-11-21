@@ -38,7 +38,7 @@ endif
 call p%new(cline)
 p%kfromto(1) = 2
 p%kfromto(2) = 40
-allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=0.001 )
+allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1. )
 call b%build_general_tbox(p, cline)
 call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto, .false.)
 call pftcc%assign_sigma2_noise(sigma2_noise)
@@ -113,7 +113,7 @@ do i=1,N_PTCLS
     corrmax = -1.
     do xsh=-2,2
         do ysh=-2,2
-            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
+            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs, l_norm = .true.)
             corr  = maxval(corrs)
 
             print *, 'corr: ', corr, xsh, ysh

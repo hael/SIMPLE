@@ -1473,10 +1473,11 @@ contains
         end do
     end function genmaxspecscore_comlin
 
-    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
+    subroutine gencorrs_euclid_1( self, iref, iptcl, euclids, l_norm )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: euclids(self%nrots)
+        logical, optional,       intent(in)    :: l_norm                ! normalized
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqref, sumsqptcl
@@ -1487,20 +1488,32 @@ contains
         keuclids       => self%heap_vars(ithr)%kcorrs ! can be reused
         call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref)
         euclids(:) = 0.
-        do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corrs(pft_ref, i, k, keuclids)
-            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            sumsqref  = sum(csq_fast(pft_ref(:,k)))
-            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-        end do
+        if( present(l_norm) .and. l_norm)then
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, i, k, keuclids)
+                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+                sumsqref  = sum(csq_fast(pft_ref(:,k)))
+                euclids   = euclids + exp(- self%npix_per_shell(k) / real(self%pftsz) *&
+                    abs(2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl)))
+            end do
+            euclids = euclids/(self%kfromto(2)-self%kfromto(1)+1)
+        else
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, i, k, keuclids)
+                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+                sumsqref  = sum(csq_fast(pft_ref(:,k)))
+                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
+                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
+            end do
+        endif
     end subroutine gencorrs_euclid_1
 
-    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids )
+    subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids, l_norm )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: euclids(self%nrots)
+        logical, optional,       intent(in)    :: l_norm                ! normalized
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqptcl, sumsqref
@@ -1522,37 +1535,51 @@ contains
             pft_ref = pft_ref * shmat
         endif
         euclids(:) = 0.
-        do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corrs(pft_ref, i, k, keuclids)
-            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            sumsqref  = sum(csq_fast(pft_ref(:,k)))
-            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
-                (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
-        end do
+        if( present(l_norm) .and. l_norm)then
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, i, k, keuclids)
+                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+                sumsqref  = sum(csq_fast(pft_ref(:,k)))
+                euclids   = euclids + exp(- self%npix_per_shell(k) / real(self%pftsz) *&
+                    abs(2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl)))
+            end do
+            euclids = euclids/(self%kfromto(2)-self%kfromto(1)+1)
+        else
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, i, k, keuclids)
+                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+                sumsqref  = sum(csq_fast(pft_ref(:,k)))
+                euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
+                    (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
+            end do
+            euclids = euclids/(self%kfromto(2)-self%kfromto(1)+1)
+        endif
     end subroutine gencorrs_euclid_2
 
-    subroutine gencorrs_1( self, iref, iptcl, cc )
+    subroutine gencorrs_1( self, iref, iptcl, cc, l_norm )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: l_norm
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 call self%gencorrs_cc_1(iref, iptcl, cc )
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_1(iref, iptcl, cc )
+                call self%gencorrs_euclid_1(iref, iptcl, cc, l_norm )
         end select
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shvec, cc )
+    subroutine gencorrs_2( self, iref, iptcl, shvec, cc, l_norm )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical, optional,       intent(in)    :: l_norm
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
             case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
+                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc, l_norm)
         end select
     end subroutine gencorrs_2
 
