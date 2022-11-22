@@ -26,15 +26,14 @@ type :: builder
     type(oris)                          :: eulspace               !< discrete spaces(red for reduced)
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
-    type(polarizer)                     :: img_match              !< -"-
+    type(polarizer)                     :: img_match              !< polarizer for particles
+    type(polarizer)                     :: ref_polarizer          !< polarizer for references
     type(image)                         :: img_pad                !< -"-
     type(image)                         :: img_tmp                !< -"-
-    type(image)                         :: img_msk                !< -"-
     type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
-    type(masker)                        :: mskimg                 !< mask image
-    type(polarizer),        allocatable :: imgbatch(:)            !< batch of images
+    type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
@@ -254,11 +253,10 @@ contains
             ! build image objects
             call self%img%new([params%box,params%box,1],params%smpd,       wthreads=.false.)
             call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
+            call self%ref_polarizer%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
             call self%img%construct_thread_safe_tmp_imgs(params%nthr) ! for thread safety in the image class
             call self%img_tmp%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
-            call self%img_msk%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
-            call self%mskimg%new ([params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then
@@ -298,16 +296,16 @@ contains
             call self%img%kill
             call self%img_match%kill_polarizer
             call self%img_match%kill
+            call self%ref_polarizer%kill_polarizer
+            call self%ref_polarizer%kill
             call self%img_copy%kill
             call self%img_tmp%kill
-            call self%img_msk%kill
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
             call self%vol_odd%kill_expanded
             call self%vol_odd%kill
             call self%vol2%kill
-            call self%mskimg%kill
             if( allocated(self%fsc)  )     deallocate(self%fsc)
             if( allocated(self%lmsk) )     deallocate(self%lmsk)
             if( allocated(self%l_resmsk) ) deallocate(self%l_resmsk)
@@ -371,7 +369,6 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         real    :: rot
-        integer :: i
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates))
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)

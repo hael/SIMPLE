@@ -49,7 +49,6 @@ contains
             !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
             do ibatch = 1,batchsz
                 call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                if( build_glob%img_match%polarizer_initialized() ) call build_glob%imgbatch(ibatch)%copy_polarizer(build_glob%img_match)
             end do
             !$omp end parallel do
         endif
@@ -255,10 +254,9 @@ contains
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
     subroutine prepimg4align( iptcl, img )
-        use simple_polarizer, only: polarizer
         use simple_ctf,       only: ctf
-        integer,          intent(in)    :: iptcl
-        class(polarizer), intent(inout) :: img
+        integer,      intent(in)    :: iptcl
+        class(image), intent(inout) :: img
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise
@@ -294,16 +292,15 @@ contains
             endif
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call img%div_by_instrfun
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_match%div_by_instrfun(img)
         ! return in Fourier space
         call img%fft()
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( img_in, img_out, icls, iseven, center, xyz_in, xyz_out )
-        use simple_polarizer,  only: polarizer
         class(image),      intent(inout) :: img_in
-        class(polarizer),  intent(inout) :: img_out
+        class(image),      intent(inout) :: img_out
         integer,           intent(in)    :: icls
         logical,           intent(in)    :: iseven
         logical, optional, intent(in)    :: center
@@ -366,7 +363,7 @@ contains
             call img_out%mask(params_glob%msk, 'soft')
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call img_out%div_by_instrfun
+        if( params_glob%gridding.eq.'yes' ) call build_glob%ref_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref

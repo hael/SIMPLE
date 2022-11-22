@@ -8,7 +8,7 @@ use simple_polarft_corrcalc,    only: polarft_corrcalc
 use simple_cmdline,             only: cmdline
 use simple_builder,             only: build_glob
 use simple_parameters,          only: params_glob
-use simple_polarizer,           only: polarizer
+use simple_image,               only: image
 use simple_qsys_funs,           only: qsys_job_finished
 use simple_convergence,         only: convergence
 use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
@@ -199,6 +199,7 @@ contains
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
+        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
@@ -386,7 +387,7 @@ contains
             iptcl = pinds(iptcl_batch)
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
             ! transfer to polar coordinates
-            call build_glob%imgbatch(iptcl_batch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -399,7 +400,7 @@ contains
     subroutine preppftcc4align( which_iter )
         use simple_strategy2D3D_common, only: prep2dref
         integer,           intent(in) :: which_iter
-        type(polarizer),  allocatable :: match_imgs(:)
+        type(image),      allocatable :: match_imgs(:)
         character(len=:), allocatable :: fname
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
@@ -414,7 +415,7 @@ contains
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
         ! prepare the polarizer images
-        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
+        call build_glob%ref_polarizer%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
@@ -431,7 +432,6 @@ contains
             endif
             if( pop > 0 )then
                 call match_imgs(icls)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                call match_imgs(icls)%copy_polarizer(build_glob%img_match)
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
@@ -441,21 +441,20 @@ contains
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
+                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
                     call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
-                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
+                    call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
-                call match_imgs(icls)%kill_polarizer
                 call match_imgs(icls)%kill
             endif
         end do

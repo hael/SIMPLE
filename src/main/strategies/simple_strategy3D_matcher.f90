@@ -11,7 +11,6 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
-use simple_polarizer,               only: polarizer
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
@@ -478,7 +477,7 @@ contains
             ! prep
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
             ! transfer to polar coordinates
-            call build_glob%imgbatch(iptcl_batch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
