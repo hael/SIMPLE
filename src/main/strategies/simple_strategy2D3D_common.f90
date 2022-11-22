@@ -253,11 +253,11 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img, cavg )
+    subroutine prepimg4align( iptcl, img, is3D )
         use simple_ctf,       only: ctf
-        integer,                intent(in)    :: iptcl
-        class(image),           intent(inout) :: img
-        class(image), optional, intent(in)    :: cavg
+        integer,      intent(in)    :: iptcl
+        class(image), intent(inout) :: img
+        logical,      intent(in)    :: is3D
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         type(ori)       :: oprev
@@ -299,35 +299,25 @@ contains
         ! return in Fourier space
         call img%fft()
         ! matched filter
-        ! if( params_glob%l_match_filt )then
-        !     if( present(cavg) )then
-        !         call build_glob%img_tmp%copy_fast(cavg)
-        !         select case(ctfparms%ctfflag)
-        !             case(CTFFLAG_NO, CTFFLAG_FLIP)
-        !                 ! all good
-        !             case(CTFFLAG_YES)
-        !                 ! tfun object instantiated above
-        !                 call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
-        !         end select
-        !         call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
-        !     else
-        !         iseven = nint(build_glob%spproj_field%get(iptcl,'eo')) == 0
-        !         call build_glob%spproj_field%get_ori(iptcl, oprev)
-        !         if( iseven )then
-        !             call build_glob%vol%fproject_serial(oprev, build_glob%img_tmp)
-        !         else
-        !             call build_glob%vol_odd%fproject_serial(oprev, build_glob%img_tmp)
-        !         endif
-        !         select case(ctfparms%ctfflag)
-        !             case(CTFFLAG_NO, CTFFLAG_FLIP)
-        !                 ! all good
-        !             case(CTFFLAG_YES)
-        !                 ! tfun object instantiated above
-        !                 call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
-        !         end select
-        !         call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
-        !     endif
-        ! endif
+        if( is3D )then
+            if( params_glob%l_match_filt )then
+                iseven = nint(build_glob%spproj_field%get(iptcl,'eo')) == 0
+                call build_glob%spproj_field%get_ori(iptcl, oprev)
+                if( iseven )then
+                    call build_glob%vol%fproject_serial(oprev, build_glob%img_tmp)
+                else
+                    call build_glob%vol_odd%fproject_serial(oprev, build_glob%img_tmp)
+                endif
+                select case(ctfparms%ctfflag)
+                    case(CTFFLAG_NO, CTFFLAG_FLIP)
+                        ! all good
+                    case(CTFFLAG_YES)
+                        ! tfun object instantiated above
+                        call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
+                end select
+                call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
+            endif
+        endif
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
