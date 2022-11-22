@@ -979,10 +979,8 @@ contains
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                ! call cline%delete('lp') ????????
                 call job_descr%set('objfun',    'euclid')
                 call job_descr%set('match_filt','no')
-                ! call job_descr%delete('lp') ???????????
                 call cline_cavgassemble%set('objfun','euclid')
                 if( l_ptclw )then
                     call cline%set('ptclw',    'yes')

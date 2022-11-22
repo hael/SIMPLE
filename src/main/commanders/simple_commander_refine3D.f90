@@ -597,12 +597,15 @@ contains
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                call cline%delete('lp')
                 call job_descr%set('objfun',    'euclid')
                 call job_descr%set('match_filt','no')
-                call job_descr%delete('lp')
                 call cline_volassemble%set('objfun','euclid')
-                call cline_postprocess%delete('lp')
+                if( l_switch2eo )then
+                    ! delete resolution limit
+                    call cline%delete('lp')
+                    call job_descr%delete('lp')
+                    call cline_postprocess%delete('lp')
+                endif
                 if( l_ptclw )then
                     call cline%set('ptclw',    'yes')
                     call job_descr%set('ptclw','yes')
