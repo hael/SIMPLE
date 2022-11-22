@@ -15,7 +15,7 @@ type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: img_copy
 type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 logical                :: be_verbose=.false.
-real,    parameter     :: SHMAG=3.0
+real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
 real,    allocatable   :: corrs(:), norm_const(:, :)
 real                   :: corrmax, corr, cxy(3), lims(2,2)
@@ -120,22 +120,22 @@ call grad_shsrch_obj%set_indices(8, 8)
 irot = 0
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
-do i=1,N_PTCLS
-    corrmax = -1.
-    do xsh=-2,2
-        do ysh=-2,2
-            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
-            corr  = maxval(corrs)
+! do i=1,N_PTCLS
+!     corrmax = -1.
+!     do xsh=-2,2
+!         do ysh=-2,2
+!             call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
+!             corr  = maxval(corrs)
 
-            print *, 'corr: ', corr, xsh, ysh
+!             print *, 'corr: ', corr, xsh, ysh
 
-            if( corr > corrmax )then
-                corrmax = corr
-                xbest   = xsh
-                ybest   = ysh
-            endif
-        end do
-    end do
-    print *, xbest, ybest
-end do
+!             if( corr > corrmax )then
+!                 corrmax = corr
+!                 xbest   = xsh
+!                 ybest   = ysh
+!             endif
+!         end do
+!     end do
+!     print *, xbest, ybest
+! end do
 end program simple_test_shiftsrch
