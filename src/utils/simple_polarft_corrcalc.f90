@@ -139,9 +139,6 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MODIFIERS
     procedure          :: shift_ptcl
-    procedure, private :: shellnorm_and_filter_ref
-    procedure, private :: shellnorm_and_filter_ref_8
-    procedure, private :: shellnorm_and_filter_ref_dref_8
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
@@ -767,82 +764,6 @@ contains
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
     end subroutine shift_ptcl
 
-    subroutine shellnorm_and_filter_ref( self, iptcl, iref, pft )
-        class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iptcl, iref
-        complex(sp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real    :: pw
-        integer :: k, irot
-        return
-        if( self%l_match_filt .and. self%l_filt_set ) then
-            do k=self%kfromto(1),self%kfromto(2)
-                ! pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
-                ! if( params_glob%l_nonuniform )then
-                !     if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
-                ! else
-                    ! if( pw > 1.e-12 )then
-                    !     pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
-                    ! else
-                       ! pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)
-                    ! endif
-                ! endif
-            enddo
-        endif
-    end subroutine shellnorm_and_filter_ref
-
-    subroutine shellnorm_and_filter_ref_8( self, iptcl, iref, pft )
-        class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iptcl, iref
-        complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp) :: pw
-        integer  :: k, irot
-        return
-        if( self%l_match_filt .and. self%l_filt_set ) then
-            do k=self%kfromto(1),self%kfromto(2)
-                ! pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
-                ! if( params_glob%l_nonuniform )then
-                    ! if( pw > 1.d-12 ) pft(:,k) = pft(:,k) / dsqrt(pw)
-                ! else
-                    ! if( pw > 1.d-12 )then
-                        ! pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
-                    ! else
-                    !    pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
-                    ! endif
-                ! endif
-            enddo
-        endif
-    end subroutine shellnorm_and_filter_ref_8
-
-    subroutine shellnorm_and_filter_ref_dref_8( self, iptcl, iref, pft, dpft )
-        class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iptcl, iref
-        complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),             intent(inout) :: dpft(self%pftsz,self%kfromto(1):self%kfromto(2),3)
-        real(dp) :: w, pw
-        integer  :: k, irot
-        return
-        if( self%l_match_filt .and. self%l_filt_set ) then
-            do k=self%kfromto(1),self%kfromto(2)
-                ! pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
-                ! if( params_glob%l_nonuniform )then
-                    ! if( pw > 1.d-12 )then
-                        ! w  = 1.d0 / dsqrt(pw)
-                    ! else
-                        ! w  = 1.d0
-                    ! endif
-                ! else
-                    ! if( pw > 1.d-12 )then
-                        ! w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
-                    ! else
-                        !w  = real(self%ref_optlp(k,iref),kind=dp)
-                    ! endif
-                ! endif
-                !pft(:,k)    = w * pft(:,k)
-                !dpft(:,k,:) = w * dpft(:,k,:)
-            enddo
-        endif
-    end subroutine shellnorm_and_filter_ref_dref_8
-
     ! MEMOIZERS
 
     subroutine memoize_sqsum_ptcl( self, i )
@@ -990,12 +911,6 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
-        endif
-        ! shell normalization and filtering
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
@@ -1365,11 +1280,6 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
@@ -1422,11 +1332,6 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
-        endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1638,21 +1543,16 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( self%l_match_filt )then
-            sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
-            corr      = self%calc_corr_for_rot(pft_ref, self%pinds(iptcl), irot)
-            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-        else
+        ! if( self%l_match_filt )then
+        !     sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
+        !     corr      = self%calc_corr_for_rot(pft_ref, self%pinds(iptcl), irot)
+        !     cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        ! else
             sqsum_ref  = 0.
             sqsum_ptcl = 0.
             corr       = 0.
@@ -1663,7 +1563,7 @@ contains
                     real(ik) * self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
             end do
             cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
-        endif
+        ! endif
     end function gencorr_cc_for_rot
 
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1683,21 +1583,16 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( self%l_match_filt )then
-            sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
-            corr      = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
-            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-        else
+        ! if( self%l_match_filt )then
+        !     sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
+        !     corr      = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+        !     cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        ! else
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             corr       = 0._dp
@@ -1708,7 +1603,7 @@ contains
                     real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
             end do
             cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
-        endif
+        ! endif
     end function gencorr_cc_for_rot_8
 
     function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
@@ -1735,11 +1630,6 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
-        endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1783,11 +1673,6 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1827,11 +1712,6 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
-        endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1895,27 +1775,22 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( self%l_match_filt )then
-            denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
-            corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
-            f           = corr  / denom
-            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(1)     = corr / denom
-            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(2)     = corr / denom
-        else
+        ! if( self%l_match_filt )then
+        !     denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
+        !     corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+        !     f           = corr  / denom
+        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+        !     grad(1)     = corr / denom
+        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+        !     grad(2)     = corr / denom
+        ! else
             ! use jacobian resolution weights
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
@@ -1937,7 +1812,7 @@ contains
             end do
             f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
             grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        endif
+        ! endif
     end subroutine gencorr_cc_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -1974,25 +1849,20 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( self%l_match_filt )then
-            denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
-            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(1)     = corr / denom
-            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(2)     = corr / denom
-        else
+        ! if( self%l_match_filt )then
+        !     denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
+        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+        !     grad(1)     = corr / denom
+        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+        !     grad(2)     = corr / denom
+        ! else
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             grad(1)    = 0._dp
@@ -2012,7 +1882,7 @@ contains
                     real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
             end do
             grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        endif
+        ! endif
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     real(sp) function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot )
