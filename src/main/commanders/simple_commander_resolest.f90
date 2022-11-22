@@ -13,6 +13,7 @@ use simple_fsc
 implicit none
 
 public :: fsc_commander
+public :: whiten_and_filter_commander
 public :: nununiform_filter3D_commander
 public :: nununiform_filter2D_commander
 public :: uniform_filter2D_commander
@@ -24,6 +25,11 @@ type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
 end type fsc_commander
+
+type, extends(commander_base) :: whiten_and_filter_commander
+  contains
+    procedure :: execute      => exec_whiten_and_filter
+end type whiten_and_filter_commander
 
 type, extends(commander_base) :: nununiform_filter2D_commander
   contains
@@ -101,6 +107,54 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
+
+    subroutine exec_whiten_and_filter( self, cline )
+        class(whiten_and_filter_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(parameters)  :: params
+        type(image)       :: even, odd
+        type(masker)      :: mskvol
+        real, allocatable :: res(:), fsc(:), filter(:)
+        integer :: j, nyq
+        real    :: res_fsc05, res_fsc0143
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        ! read even/odd pair
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call odd%read(params%vols(1))
+        call even%read(params%vols(2))
+        res = even%get_res()
+        nyq = even%get_filtsz()
+        ! spherical masking
+        call even%mask(params%msk, 'soft')
+        call odd%mask(params%msk, 'soft')
+        call even%fft()
+        call odd%fft()
+        allocate(fsc(nyq),filter(nyq),source=0.)
+        call even%fsc(odd, fsc)
+        do j=1,nyq
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', fsc(j)
+        end do
+        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        ! whiten and apply filter
+        call fsc2optlp_sub(nyq, fsc, filter)
+        call even%whiten_noise_power(odd, is_ptcl=.false.)
+        call even%ifft
+        call odd%ifft
+        call even%write('even_whitened.mrc')
+        call odd%write('odd_whitened.mrc')
+        call even%apply_filter(filter)
+        call odd%apply_filter(filter)
+        call even%write('even_whitened_filtered.mrc')
+        call odd%write('odd_whitened_filter.mrc')
+        call even%kill
+        call odd%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_WHITEN_AND_FILTER NORMAL STOP ****')
+    end subroutine exec_whiten_and_filter
 
     subroutine exec_nununiform_filter3D(self, cline)
         use simple_opt_filter, only: nonuni_filt3D

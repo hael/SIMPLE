@@ -22,7 +22,7 @@ type simple_input_param
     real                          :: rval_default = 0.
     logical :: required = .true.
     logical :: advanced = .true.
-    logical :: online = .false.
+    logical :: online   = .false.
 end type simple_input_param
 
 type :: simple_program
@@ -175,6 +175,7 @@ type(simple_program), target :: uniform_filter3D
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
+type(simple_program), target :: whiten_and_filter
 type(simple_program), target :: write_classes
 
 ! declare common params here, with name same as flag
@@ -424,6 +425,7 @@ contains
         call new_update_project
         call new_vizoris
         call new_volops
+        call new_whiten_and_filter
         call new_write_classes
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
@@ -528,6 +530,7 @@ contains
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
+        call push2prg_ptr_array(whiten_and_filter)
         call push2prg_ptr_array(write_classes)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         contains
@@ -746,6 +749,8 @@ contains
                 ptr2prg => vizoris
             case('volops')
                 ptr2prg => volops
+            case('whiten_and_filter')
+                ptr2prg => whiten_and_filter
             case('write_classes')
                 ptr2prg => write_classes
             case DEFAULT
@@ -837,6 +842,7 @@ contains
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
+        write(logfhandle,'(A)') whiten_and_filter%name
         write(logfhandle,'(A)') write_classes%name
     end subroutine list_simple_prgs_in_ui
 
@@ -4730,6 +4736,32 @@ contains
         ! computer controls
         call volops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_volops
+
+    subroutine new_whiten_and_filter
+        ! PROGRAM SPECIFICATION
+        call whiten_and_filter%new(&
+        &'whiten_and_filter', &                                                      ! name
+        &'Whiten the noise power and apply optimal FSC filter',&                     ! descr_short
+        &'is a program for whitening the noise power filter the two input volumes',& ! descr_long
+        &'simple_exec',&                                                             ! executable
+        &2, 1, 0, 0, 0, 1, 1, .false.)                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call whiten_and_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call whiten_and_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call whiten_and_filter%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call whiten_and_filter%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call whiten_and_filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_whiten_and_filter
 
     subroutine new_write_classes
         ! PROGRAM SPECIFICATION
