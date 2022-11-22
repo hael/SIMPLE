@@ -418,26 +418,22 @@ contains
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-            ! PREPARE ODD REFERENCES
+            ! PREPARE E/O VOLUMES
             call preprefvol_polar(cline, s, do_center, xyz, .false.)
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1,params_glob%nspace
-                call build_glob%eulspace%get_ori(iref, o_tmp)
-                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
-            ! PREPARE EVEN REFERENCES
             call preprefvol_polar(cline, s, do_center, xyz, .true.)
+            if( params_glob%l_match_filt )then
+                call build_glob%vol%whiten_noise_power(build_glob%vol_odd, is_ptcl=.false.)
+            endif
+            ! PREPARE REFERENCES
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
-                call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                    &o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
+                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
-            !$omp end parallel do
         end do
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align

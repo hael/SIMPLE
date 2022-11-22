@@ -3591,8 +3591,11 @@ contains
         !$omp end parallel do
     end subroutine ran_phases_below_noise_power
 
-    subroutine whiten_noise_power( self_even, self_odd )
+    ! self_even can be particle if is_ptcl==.true.
+    ! then self_odd is CTF modulated reprojection
+    subroutine whiten_noise_power( self_even, self_odd, is_ptcl )
         class(image), intent(inout) :: self_even, self_odd
+        logical,      intent(in)    :: is_ptcl
         real(dp) :: counts(fdim(self_even%ldim(1)) - 1)
         real(dp) ::  dspec(fdim(self_even%ldim(1)) - 1)
         complex  :: diff
@@ -3613,10 +3616,12 @@ contains
                     counts(sh) = counts(sh) + 1.d0
                 end do
             end do
-        end do
-        where(counts > DTINY)
-            dspec = dspec / counts
-        end where
+        end do        
+        if( is_ptcl )then
+            where(counts > DTINY) dspec =         dspec / counts
+        else
+            where(counts > DTINY) dspec = 0.5d0 * dspec / counts ! 0.5 because of the e/o split
+        endif
         do l = lims(3,1),lims(3,2)
             do k = lims(2,1),lims(2,2)
                 do h = lims(1,1),lims(1,2)
@@ -3624,8 +3629,10 @@ contains
                     sh   = nint(hyp(real(h),real(k),real(l)))
                     if( sh == 0 .or. sh > filtsz ) cycle
                     if( dspec(sh) > DTINY )then
-                        self_even%cmat(phys(1),phys(2),phys(3)) = self_even%cmat(phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
-                        self_odd%cmat( phys(1),phys(2),phys(3)) = self_odd%cmat( phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
+                                            self_even%cmat(phys(1),phys(2),phys(3)) = &
+                                           &self_even%cmat(phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
+                        if( .not. is_ptcl ) self_odd%cmat( phys(1),phys(2),phys(3)) = &
+                                           &self_odd%cmat( phys(1),phys(2),phys(3)) / real(dsqrt(dspec(sh)),kind=sp)
                     endif
                 end do
             end do

@@ -775,16 +775,16 @@ contains
         integer :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=self%kfromto(1),self%kfromto(2)
-                pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
-                if( params_glob%l_nonuniform )then
-                    if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
-                else
-                    if( pw > 1.e-12 )then
-                        pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
-                    else
+                ! pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
+                ! if( params_glob%l_nonuniform )then
+                !     if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
+                ! else
+                    ! if( pw > 1.e-12 )then
+                    !     pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
+                    ! else
                         pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)
-                    endif
-                endif
+                    ! endif
+                ! endif
             enddo
         endif
     end subroutine shellnorm_and_filter_ref
@@ -797,16 +797,16 @@ contains
         integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=self%kfromto(1),self%kfromto(2)
-                pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( params_glob%l_nonuniform )then
-                    if( pw > 1.d-12 ) pft(:,k) = pft(:,k) / dsqrt(pw)
-                else
-                    if( pw > 1.d-12 )then
-                        pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
-                    else
+                ! pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
+                ! if( params_glob%l_nonuniform )then
+                    ! if( pw > 1.d-12 ) pft(:,k) = pft(:,k) / dsqrt(pw)
+                ! else
+                    ! if( pw > 1.d-12 )then
+                        ! pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
+                    ! else
                         pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
-                    endif
-                endif
+                    ! endif
+                ! endif
             enddo
         endif
     end subroutine shellnorm_and_filter_ref_8
@@ -820,20 +820,20 @@ contains
         integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=self%kfromto(1),self%kfromto(2)
-                pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( params_glob%l_nonuniform )then
-                    if( pw > 1.d-12 )then
-                        w  = 1.d0 / dsqrt(pw)
-                    else
+                ! pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
+                ! if( params_glob%l_nonuniform )then
+                    ! if( pw > 1.d-12 )then
+                        ! w  = 1.d0 / dsqrt(pw)
+                    ! else
                         w  = 1.d0
-                    endif
-                else
-                    if( pw > 1.d-12 )then
-                        w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
-                    else
+                    ! endif
+                ! else
+                    ! if( pw > 1.d-12 )then
+                        ! w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
+                    ! else
                         w  = real(self%ref_optlp(k,iref),kind=dp)
-                    endif
-                endif
+                    ! endif
+                ! endif
                 pft(:,k)    = w * pft(:,k)
                 dpft(:,k,:) = w * dpft(:,k,:)
             enddo
