@@ -76,7 +76,6 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),            allocatable :: ref_optlp(:,:)              !< references optimal filter
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -92,9 +91,7 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1                  !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2                  !< -"-
     type(c_ptr)                      :: plan_bwd                    !< -"-
-    logical                          :: l_clsfrcs    = .false.      !< CLS2D/3DRefs flag
     logical                          :: l_match_filt = .false.      !< matched filter flag
-    logical                          :: l_filt_set   = .false.      !< to indicate whether filter is set
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
@@ -108,7 +105,6 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
-    procedure          :: set_ref_optlp
     procedure          :: cp_even2odd_ref
     procedure          :: cp_odd2even_ref
     procedure          :: cp_even_ref2ptcl
@@ -252,8 +248,6 @@ contains
         self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
         self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
-        ! allocate optimal low-pass filter
-        allocate(self%ref_optlp(self%kfromto(1):self%kfromto(2),self%nrefs), source=1.)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -400,8 +394,6 @@ contains
         do irot = 1,self%pftsz
             self%fft_factors(irot) = exp(-(0.,1.) * PI * real(irot - 1) / real(self%pftsz))
         end do
-        ! 2Dclass/3Drefs mapping on/off
-        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
         ! setup npix_per_shell
         call self%setup_npix_per_shell
         ! flag existence
@@ -577,14 +569,6 @@ contains
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
         self%sigma2_noise      => sigma2_noise
     end subroutine assign_sigma2_noise
-
-    subroutine set_ref_optlp( self, iref, optlp )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        real,                    intent(in)    :: optlp(self%kfromto(1):self%kfromto(2))
-        self%ref_optlp(:,iref) = optlp(:)
-        self%l_filt_set        = .true.
-    end subroutine set_ref_optlp
 
     ! GETTERS
 
@@ -1548,11 +1532,11 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        ! if( self%l_match_filt )then
-        !     sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
-        !     corr      = self%calc_corr_for_rot(pft_ref, self%pinds(iptcl), irot)
-        !     cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-        ! else
+        if( self%l_match_filt )then
+            sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
+            corr      = self%calc_corr_for_rot(pft_ref, self%pinds(iptcl), irot)
+            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        else
             sqsum_ref  = 0.
             sqsum_ptcl = 0.
             corr       = 0.
@@ -1563,7 +1547,7 @@ contains
                     real(ik) * self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
             end do
             cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
-        ! endif
+        endif
     end function gencorr_cc_for_rot
 
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1588,11 +1572,11 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        ! if( self%l_match_filt )then
-        !     sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
-        !     corr      = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
-        !     cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-        ! else
+        if( self%l_match_filt )then
+            sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
+            corr      = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        else
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             corr       = 0._dp
@@ -1603,7 +1587,7 @@ contains
                     real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
             end do
             cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
-        ! endif
+        endif
     end function gencorr_cc_for_rot_8
 
     function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
@@ -1780,17 +1764,17 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        ! if( self%l_match_filt )then
-        !     denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
-        !     corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
-        !     f           = corr  / denom
-        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-        !     grad(1)     = corr / denom
-        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-        !     grad(2)     = corr / denom
-        ! else
+        if( self%l_match_filt )then
+            denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
+            corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+            f           = corr  / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(1)     = corr / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(2)     = corr / denom
+        else
             ! use jacobian resolution weights
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
@@ -1812,7 +1796,7 @@ contains
             end do
             f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
             grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        ! endif
+        endif
     end subroutine gencorr_cc_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -1854,15 +1838,15 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        ! if( self%l_match_filt )then
-        !     denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
-        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-        !     grad(1)     = corr / denom
-        !     pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-        !     corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-        !     grad(2)     = corr / denom
-        ! else
+        if( self%l_match_filt )then
+            denom       = sqrt(sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2)))) * self%sqsums_ptcls(self%pinds(iptcl)))
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(1)     = corr / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(2)     = corr / denom
+        else
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             grad(1)    = 0._dp
@@ -1882,7 +1866,7 @@ contains
                     real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
             end do
             grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        ! endif
+        endif
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     real(sp) function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot )
@@ -2135,7 +2119,6 @@ contains
                 end do
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
-            if( allocated(self%ref_optlp)      ) deallocate(self%ref_optlp)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
@@ -2145,7 +2128,6 @@ contains
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
             self%sigma2_noise => null()
-            self%l_filt_set   = .false.
             self%existence    = .false.
         endif
     end subroutine kill

@@ -455,6 +455,9 @@ contains
             call preprefvol_cart(cline, s, do_center, xyz, .false.)
             ! even refvol
             call preprefvol_cart(cline, s, do_center, xyz, .true.)
+            if( params_glob%l_match_filt )then
+                call build_glob%vol%whiten_noise_power(build_glob%vol_odd, is_ptcl=.false.)
+            endif
         end do
     end subroutine prepcftcc4align
 
