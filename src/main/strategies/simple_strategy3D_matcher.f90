@@ -474,7 +474,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), is3D=.true.)
             ! transfer to polar coordinates
             call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
@@ -498,7 +498,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl,  build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl,  build_glob%imgbatch(iptcl_batch), is3D=.true.)
             call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
             ! e/o flag
             call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
