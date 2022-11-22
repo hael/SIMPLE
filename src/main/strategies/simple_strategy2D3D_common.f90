@@ -299,35 +299,35 @@ contains
         ! return in Fourier space
         call img%fft()
         ! matched filter
-        if( params_glob%l_match_filt )then
-            if( present(cavg) )then
-                call build_glob%img_tmp%copy_fast(cavg)
-                select case(ctfparms%ctfflag)
-                    case(CTFFLAG_NO, CTFFLAG_FLIP)
-                        ! all good
-                    case(CTFFLAG_YES)
-                        ! tfun object instantiated above
-                        call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
-                end select
-                call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
-            else
-                iseven = nint(build_glob%spproj_field%get(iptcl,'eo')) == 0
-                call build_glob%spproj_field%get_ori(iptcl, oprev)
-                if( iseven )then
-                    call build_glob%vol%fproject_serial(oprev, build_glob%img_tmp)
-                else
-                    call build_glob%vol_odd%fproject_serial(oprev, build_glob%img_tmp)
-                endif
-                select case(ctfparms%ctfflag)
-                    case(CTFFLAG_NO, CTFFLAG_FLIP)
-                        ! all good
-                    case(CTFFLAG_YES)
-                        ! tfun object instantiated above
-                        call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
-                end select
-                call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
-            endif
-        endif
+        ! if( params_glob%l_match_filt )then
+        !     if( present(cavg) )then
+        !         call build_glob%img_tmp%copy_fast(cavg)
+        !         select case(ctfparms%ctfflag)
+        !             case(CTFFLAG_NO, CTFFLAG_FLIP)
+        !                 ! all good
+        !             case(CTFFLAG_YES)
+        !                 ! tfun object instantiated above
+        !                 call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
+        !         end select
+        !         call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
+        !     else
+        !         iseven = nint(build_glob%spproj_field%get(iptcl,'eo')) == 0
+        !         call build_glob%spproj_field%get_ori(iptcl, oprev)
+        !         if( iseven )then
+        !             call build_glob%vol%fproject_serial(oprev, build_glob%img_tmp)
+        !         else
+        !             call build_glob%vol_odd%fproject_serial(oprev, build_glob%img_tmp)
+        !         endif
+        !         select case(ctfparms%ctfflag)
+        !             case(CTFFLAG_NO, CTFFLAG_FLIP)
+        !                 ! all good
+        !             case(CTFFLAG_YES)
+        !                 ! tfun object instantiated above
+        !                 call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
+        !         end select
+        !         call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
+        !     endif
+        ! endif
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -365,6 +365,24 @@ contains
                     call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
+            endif
+        endif
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            ! no filtering
+        else
+            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(filtsz, frc, filter)
+                if( params_glob%l_match_filt )then
+                    if( params_glob%l_cartesian )then
+                        call cftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    else
+                        call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    endif
+                else
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
+                endif
             endif
         endif
         ! ensure we are in real-space
@@ -503,6 +521,42 @@ contains
             call vol_ptr%fft()
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
+        ! Volume filtering
+        filtsz = build_glob%img%get_filtsz()
+        if( params_glob%l_match_filt )then
+            ! stores filters in pftcc
+            if( params_glob%clsfrcs.eq.'yes')then
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
+                        call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    enddo
+                endif
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                else
+                    filter = 1.
+                endif
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                enddo
+            endif
+        else
+            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
+                ! no filtering
+            else
+                call vol_ptr%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
+        endif
         ! back to real space
         call vol_ptr%ifft()
         ! masking
@@ -551,6 +605,40 @@ contains
         if( do_center )then
             call vol_ptr%fft()
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
+        endif
+        ! Volume filtering
+        filtsz = build_glob%img%get_filtsz()
+        if( params_glob%l_match_filt )then
+            ! stores filters in cftcc
+            if( params_glob%clsfrcs.eq.'yes')then
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
+                        call cftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+                    enddo
+                endif
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                else
+                    filter = 1.
+                endif
+                call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
+            endif
+        else
+            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
+                ! no filtering
+            else
+                call vol_ptr%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
         endif
         ! back to real space
         call vol_ptr%ifft()

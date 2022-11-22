@@ -76,6 +76,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),            allocatable :: ref_optlp(:,:)              !< references optimal filter
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -91,7 +92,9 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1                  !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2                  !< -"-
     type(c_ptr)                      :: plan_bwd                    !< -"-
+    logical                          :: l_clsfrcs    = .false.      !< CLS2D/3DRefs flag
     logical                          :: l_match_filt = .false.      !< matched filter flag
+    logical                          :: l_filt_set   = .false.      !< to indicate whether filter is set
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
@@ -105,6 +108,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
+    procedure          :: set_ref_optlp
     procedure          :: cp_even2odd_ref
     procedure          :: cp_odd2even_ref
     procedure          :: cp_even_ref2ptcl
@@ -135,6 +139,9 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MODIFIERS
     procedure          :: shift_ptcl
+    procedure, private :: filter_ref
+    procedure, private :: filter_ref_8
+    procedure, private :: filter_ref_dref_8
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
@@ -248,6 +255,8 @@ contains
         self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
         self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
+        ! allocate optimal low-pass filter
+        allocate(self%ref_optlp(self%kfromto(1):self%kfromto(2),self%nrefs), source=1.)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -394,6 +403,8 @@ contains
         do irot = 1,self%pftsz
             self%fft_factors(irot) = exp(-(0.,1.) * PI * real(irot - 1) / real(self%pftsz))
         end do
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
         ! setup npix_per_shell
         call self%setup_npix_per_shell
         ! flag existence
@@ -569,6 +580,14 @@ contains
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
         self%sigma2_noise      => sigma2_noise
     end subroutine assign_sigma2_noise
+
+    subroutine set_ref_optlp( self, iref, optlp )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        real,                    intent(in)    :: optlp(self%kfromto(1):self%kfromto(2))
+        self%ref_optlp(:,iref) = optlp(:)
+        self%l_filt_set        = .true.
+    end subroutine set_ref_optlp
 
     ! GETTERS
 
@@ -748,6 +767,51 @@ contains
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
     end subroutine shift_ptcl
 
+    subroutine filter_ref( self, iptcl, iref, pft )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iptcl, iref
+        complex(sp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real    :: pw
+        integer :: k, irot
+        if( params_glob%l_nonuniform ) return
+        if( self%l_match_filt .and. self%l_filt_set ) then
+            do k=self%kfromto(1),self%kfromto(2)
+                pft(:,k) = pft(:,k) * self%ref_optlp(k,iref) 
+            enddo
+        endif
+    end subroutine filter_ref
+
+    subroutine filter_ref_8( self, iptcl, iref, pft )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iptcl, iref
+        complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp) :: pw
+        integer  :: k, irot
+        if( params_glob%l_nonuniform ) return
+        if( self%l_match_filt .and. self%l_filt_set ) then
+            do k=self%kfromto(1),self%kfromto(2)   
+                pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
+            enddo
+        endif
+    end subroutine filter_ref_8
+
+    subroutine filter_ref_dref_8( self, iptcl, iref, pft, dpft )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: iptcl, iref
+        complex(dp),             intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),             intent(inout) :: dpft(self%pftsz,self%kfromto(1):self%kfromto(2),3)
+        real(dp) :: w, pw
+        integer  :: k, irot
+        if( params_glob%l_nonuniform ) return
+        if( self%l_match_filt .and. self%l_filt_set ) then
+            do k=self%kfromto(1),self%kfromto(2)
+                w           = real(self%ref_optlp(k,iref),kind=dp)
+                pft(:,k)    = w * pft(:,k)
+                dpft(:,k,:) = w * dpft(:,k,:)
+            enddo
+        endif
+    end subroutine filter_ref_dref_8
+
     ! MEMOIZERS
 
     subroutine memoize_sqsum_ptcl( self, i )
@@ -895,6 +959,12 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! shell normalization and filtering
+        if( self%l_clsfrcs )then
+            call self%filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref(iptcl, iref, pft_ref)
         endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
@@ -1264,6 +1334,11 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref(iptcl, iref, pft_ref)
+        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
@@ -1316,6 +1391,11 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1527,6 +1607,11 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref(iptcl, iref, pft_ref)
+        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1566,6 +1651,11 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1615,6 +1705,11 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
+        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             do j = 1,3
@@ -1657,6 +1752,11 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
         endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
+        endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1696,6 +1796,11 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1758,6 +1863,11 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1832,6 +1942,11 @@ contains
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -2119,6 +2234,7 @@ contains
                 end do
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
+            if( allocated(self%ref_optlp)      ) deallocate(self%ref_optlp)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
@@ -2128,6 +2244,7 @@ contains
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
             self%sigma2_noise => null()
+            self%l_filt_set   = .false.
             self%existence    = .false.
         endif
     end subroutine kill
