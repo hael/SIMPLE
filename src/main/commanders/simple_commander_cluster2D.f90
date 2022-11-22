@@ -1390,9 +1390,8 @@ contains
             call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
             do icls = 1, ncls_sel
-                if( icls /= 1 ) call cavg_imgs(icls)%copy_polarizer(cavg_imgs(1))
                 call cavg_imgs(icls)%fft()
-                call cavg_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                call cavg_imgs(1)%polarize(pftcc, cavg_imgs(icls), icls, isptcl=.false., iseven=.true.) ! 2 polar coords
                 call cavg_imgs(icls)%ifft()
             end do
             !$omp end parallel do
@@ -1488,9 +1487,8 @@ contains
             call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
             do icls = 1, ncls_sel
-                if( icls /= 1 ) call cavg_imgs_good(icls)%copy_polarizer(cavg_imgs_good(1))
                 call cavg_imgs_good(icls)%fft()
-                call cavg_imgs_good(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                call cavg_imgs_good(1)%polarize(pftcc, cavg_imgs_good(icls), icls, isptcl=.false., iseven=.true.) ! 2 polar coords
                 call cavg_imgs_good(icls)%ifft()
             end do
             !$omp end parallel do

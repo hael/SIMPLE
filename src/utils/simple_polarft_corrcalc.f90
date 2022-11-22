@@ -132,6 +132,7 @@ type :: polarft_corrcalc
     procedure          :: get_nptcls
     procedure          :: assign_pinds
     procedure          :: get_npix
+    procedure          :: get_work_pft_ptr
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -708,6 +709,15 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         get_npix = sum(nint(self%npix_per_shell(self%kfromto(1):self%kfromto(2))))
     end function get_npix
+
+    ! returns pointer to temporary pft according to current thread
+    subroutine get_work_pft_ptr( self, ptr )
+        class(polarft_corrcalc), intent(in) :: self
+        complex(sp),   pointer, intent(out) :: ptr(:,:)
+        integer :: ithr
+        ithr = omp_get_thread_num()+1
+        ptr => self%heap_vars(ithr)%pft_ref_tmp
+    end subroutine get_work_pft_ptr
 
     ! PRINTERS/VISUALISERS
 
