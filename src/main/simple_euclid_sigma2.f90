@@ -7,7 +7,7 @@ use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
 
-public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile, apply_euclid_regularization
+public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
 private
 #include "simple_local_flags.inc"
 
@@ -44,13 +44,6 @@ end type euclid_sigma2
 class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
-
-    ! Utilities
-
-    logical function apply_euclid_regularization()
-        apply_euclid_regularization = params_glob%l_needs_sigma .or. (params_glob%cc_objfun==OBJFUN_EUCLID)
-        if( params_glob%l_nonuniform ) apply_euclid_regularization = .false.
-    end function apply_euclid_regularization
 
     ! TYPE euclid_sigma2
 

@@ -336,7 +336,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+        if( params_glob%l_ml_reg )then
             ! no filtering
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
@@ -516,7 +516,7 @@ contains
                 enddo
             endif
         else
-            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
+            if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
                 ! no filtering
             else
                 call vol_ptr%fft()
@@ -599,7 +599,7 @@ contains
                 call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
             endif
         else
-            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
+            if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
                 ! no filtering
             else
                 call vol_ptr%fft()
@@ -638,8 +638,7 @@ contains
     end subroutine preprefvol_cart
 
     subroutine norm_struct_facts( cline, which_iter )
-        use simple_masker,        only: masker
-        use simple_euclid_sigma2, only: apply_euclid_regularization
+        use simple_masker, only: masker
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         character(len=:), allocatable :: mskfile
@@ -676,7 +675,7 @@ contains
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
                 params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
-                if( apply_euclid_regularization() )then
+                if( params_glob%l_ml_reg )then
                     call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
                         &params_glob%vols_odd(s), find4eoavg)
                     call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))

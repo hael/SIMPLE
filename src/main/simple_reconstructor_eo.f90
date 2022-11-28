@@ -6,7 +6,6 @@ use simple_masker,        only: masker
 use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
-use simple_euclid_sigma2, only: apply_euclid_regularization
 use simple_fsc
 implicit none
 
@@ -331,7 +330,7 @@ contains
         ! if e=o then SSNR will be adjusted
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         ! ML-regularization
-        l_euclid_regularization = apply_euclid_regularization()
+        l_euclid_regularization = params_glob%l_ml_reg
         if( l_euclid_regularization )then
             ! preprocessing for FSC calculation
             ! even
@@ -520,7 +519,7 @@ contains
             allocate(volname, source=recname//params_glob%ext)
             eonames(1) = trim(recname)//'_even'//params_glob%ext
             eonames(2) = trim(recname)//'_odd'//params_glob%ext
-            if( apply_euclid_regularization() )then
+            if( params_glob%l_ml_reg )then
                 call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
                 call self%sum_eos
             else

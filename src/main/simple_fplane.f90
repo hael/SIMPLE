@@ -4,7 +4,7 @@ module simple_fplane
 include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
-use simple_euclid_sigma2, only: eucl_sigma2_glob, apply_euclid_regularization
+use simple_euclid_sigma2, only: eucl_sigma2_glob
 use simple_ctf,           only: ctf
 implicit none
 
@@ -88,7 +88,7 @@ contains
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
             invldim = 1./real(self%ldim(1:2))
         endif
-        use_sigmas = present(iptcl) .and. apply_euclid_regularization()
+        use_sigmas = present(iptcl) .and. params_glob%l_ml_reg
         if( use_sigmas )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)

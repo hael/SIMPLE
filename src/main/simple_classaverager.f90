@@ -108,7 +108,7 @@ contains
         ldim_pd(3)    = 1
         filtsz        = build_glob%img%get_filtsz()
         ! ML-regularization
-        l_ml_reg      = apply_euclid_regularization()
+        l_ml_reg      = params_glob%l_ml_reg
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
