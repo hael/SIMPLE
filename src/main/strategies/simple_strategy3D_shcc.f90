@@ -41,7 +41,7 @@ contains
         real      :: corr, euldist, dist_inpl, corr_best, corr_inpl, e3
         real      :: cxy(3), shvec(2), shvec_incr(2)
         logical   :: got_better
-        ! continuous sochastic search
+        ! continuous stochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
