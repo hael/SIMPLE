@@ -1452,7 +1452,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 9, 9, 4, 2, .true.)                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 9, 9, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1516,14 +1516,6 @@ contains
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
-        call cluster2D%set_input('mask_ctrls', 2, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
-        call cluster2D%set_gui_params('mask_ctrls', 2, submenu="mask")
-        call cluster2D%set_input('mask_ctrls', 3, 'ngrow', 'num', '# layers to grow',&
-        &'Binary layers grown for molecular envelope in pixels{3}', 'width of binary layers grown in pixels{3}', .false., 3.)
-        call cluster2D%set_gui_params('mask_ctrls', 3, submenu="mask")
-        call cluster2D%set_input('mask_ctrls', 4, automsk)
-        call cluster2D%set_gui_params('mask_ctrls', 4, submenu="mask")
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         cluster2D%comp_ctrls(1)%required = .false.

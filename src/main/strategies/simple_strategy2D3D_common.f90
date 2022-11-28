@@ -518,6 +518,8 @@ contains
         else
             if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
                 ! no filtering
+            else if( params_glob%l_nonuniform )then
+                ! filtering done in read_and_filter_refvols
             else
                 call vol_ptr%fft()
                 if( any(build_glob%fsc(s,:) > 0.143) )then
@@ -601,6 +603,8 @@ contains
         else
             if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
                 ! no filtering
+            else if( params_glob%l_nonuniform )then
+                ! filtering done in read_and_filter_refvols
             else
                 call vol_ptr%fft()
                 if( any(build_glob%fsc(s,:) > 0.143) )then
