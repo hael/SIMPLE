@@ -253,11 +253,10 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img, is3D )
+    subroutine prepimg4align( iptcl, img )
         use simple_ctf,       only: ctf
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
-        logical,      intent(in)    :: is3D
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         type(ori)       :: oprev
@@ -298,10 +297,6 @@ contains
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_match%div_by_instrfun(img)
         ! return in Fourier space
         call img%fft()
-        ! matched filter
-        if( params_glob%l_match_filt )then
-            call img%shellnorm
-        endif
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment

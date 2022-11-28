@@ -202,7 +202,7 @@ end type polarft_corrcalc
 complex(sp), parameter           :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter           :: FFTW_USE_WISDOM = 16
 class(polarft_corrcalc), pointer :: pftcc_glob => null()
-
+ 
 contains
 
     ! CONSTRUCTORS
@@ -780,9 +780,9 @@ contains
                     if( pw > 1.e-12 ) pft(:,k) = pft(:,k) / sqrt(pw)
                 else
                     if( pw > 1.e-12 )then
-                        pft(:,k) = pft(:,k) * ((self%ref_optlp(k,iref)**2.0)/ sqrt(pw))
+                        pft(:,k) = pft(:,k) * ((self%ref_optlp(k,iref))/ sqrt(pw))
                     else
-                        pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)**2.0
+                        pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)
                     endif
                 endif
             enddo
@@ -802,9 +802,9 @@ contains
                     if( pw > 1.d-12 ) pft(:,k) = pft(:,k) / dsqrt(pw)
                 else
                     if( pw > 1.d-12 )then
-                        pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref)**2.0,kind=dp) / dsqrt(pw))
+                        pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
                     else
-                        pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref)**2.0,kind=dp)
+                        pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
                     endif
                 endif
             enddo
@@ -829,9 +829,9 @@ contains
                     endif
                 else
                     if( pw > 1.d-12 )then
-                        w  = real(self%ref_optlp(k,iref)**2.0,kind=dp) / dsqrt(pw)
+                        w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
                     else
-                        w  = real(self%ref_optlp(k,iref)**2.0,kind=dp)
+                        w  = real(self%ref_optlp(k,iref),kind=dp)
                     endif
                 endif
                 pft(:,k)    = w * pft(:,k)
