@@ -47,6 +47,7 @@ type :: parameters
     character(len=3)      :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
+    character(len=3)      :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no){no}
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)      :: noise_norm ='no'
@@ -389,6 +390,7 @@ type :: parameters
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_match_filt   = .true.
+    logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
@@ -484,6 +486,7 @@ contains
         call check_carg('mcpatch_thres',  self%mcpatch_thres)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
+        call check_carg('ml_reg',         self%ml_reg)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('needs_sigma',    self%needs_sigma)
@@ -1280,7 +1283,6 @@ contains
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
         if( .not. cline%defined('noris') ) self%noris = self%nptcls
-
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd
@@ -1307,7 +1309,7 @@ contains
                 THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
         end select
         ! FILTERS
-        ! matched filter and sigma needs flags
+        ! matched filter, sigma needs flags etc.
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_match_filt  = .false.
@@ -1323,6 +1325,12 @@ contains
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
+        ! ML regularization
+        self%l_ml_reg = trim(self%ml_reg).eq.'yes'
+        if( self%l_ml_reg )then
+            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID)
+        endif
+        if( self%l_nonuniform ) self%l_ml_reg = .false.
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor

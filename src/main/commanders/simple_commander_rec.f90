@@ -166,7 +166,6 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
-        use simple_euclid_sigma2,    only: apply_euclid_regularization
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
@@ -195,7 +194,7 @@ contains
         call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = params%nstates*params%nparts
-        l_euclid_regularization = apply_euclid_regularization()
+        l_euclid_regularization = params%l_ml_reg
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
