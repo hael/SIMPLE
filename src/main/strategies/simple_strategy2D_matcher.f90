@@ -165,21 +165,6 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-        if( params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM )then
-            params_glob%l_nonuniform = .true. ! to turn off filtering but retain shell normalisation in pftcc
-            do icls = 1,params_glob%ncls
-                call build_glob%env_masks(icls)%copy(cavgs_even(icls))
-                call build_glob%env_masks(icls)%add(cavgs_odd(icls))
-                call build_glob%env_masks(icls)%mul(0.5)
-            enddo
-            call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
-            call uni_filt2D_sub(cavgs_even, cavgs_odd, build_glob%env_masks)
-            if( params_glob%part.eq.1 )then
-                do icls = 1,params_glob%ncls
-                    call cavgs_even(icls)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', icls)
-                enddo
-            endif
-        endif
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space)
