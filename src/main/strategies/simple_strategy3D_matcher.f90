@@ -389,7 +389,7 @@ contains
         logical   :: do_center
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
-        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto, .false.)
+        call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto, params_glob%l_match_filt)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -421,9 +421,6 @@ contains
             ! PREPARE E/O VOLUMES
             call preprefvol_polar(cline, s, do_center, xyz, .false.)
             call preprefvol_polar(cline, s, do_center, xyz, .true.)
-            if( params_glob%l_match_filt )then
-                call build_glob%vol%whiten_noise_power(build_glob%vol_odd, is_ptcl=.false.)
-            endif
             ! PREPARE REFERENCES
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
@@ -455,9 +452,6 @@ contains
             call preprefvol_cart(cline, s, do_center, xyz, .false.)
             ! even refvol
             call preprefvol_cart(cline, s, do_center, xyz, .true.)
-            if( params_glob%l_match_filt )then
-                call build_glob%vol%whiten_noise_power(build_glob%vol_odd, is_ptcl=.false.)
-            endif
         end do
     end subroutine prepcftcc4align
 

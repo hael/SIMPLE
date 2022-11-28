@@ -62,7 +62,7 @@ contains
                 ! exit condition
                 if( self%s%nbetter > 0 ) exit
             end do
-            call self%s%inpl_srch    ! search shifts
+            call self%s%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
         else

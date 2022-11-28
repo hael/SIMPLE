@@ -299,24 +299,8 @@ contains
         ! return in Fourier space
         call img%fft()
         ! matched filter
-        if( is3D )then
-            if( params_glob%l_match_filt )then
-                iseven = nint(build_glob%spproj_field%get(iptcl,'eo')) == 0
-                call build_glob%spproj_field%get_ori(iptcl, oprev)
-                if( iseven )then
-                    call build_glob%vol%fproject_serial(oprev, build_glob%img_tmp)
-                else
-                    call build_glob%vol_odd%fproject_serial(oprev, build_glob%img_tmp)
-                endif
-                select case(ctfparms%ctfflag)
-                    case(CTFFLAG_NO, CTFFLAG_FLIP)
-                        ! all good
-                    case(CTFFLAG_YES)
-                        ! tfun object instantiated above
-                        call tfun%apply_serial(build_glob%img_tmp, 'abs', ctfparms)
-                end select
-                call img%whiten_noise_power(build_glob%img_tmp, is_ptcl=.true.)
-            endif
+        if( params_glob%l_match_filt )then
+            call img%shellnorm
         endif
     end subroutine prepimg4align
 
