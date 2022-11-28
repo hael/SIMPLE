@@ -167,9 +167,10 @@ contains
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
+        real                 :: resmin, resmax, resmed, resave, ressdev, resvar, nr, nr_tot
         integer              :: nprojs, iptcl, icls, i, j, noris, ncls
-        real,    allocatable :: clustszs(:)
-        integer, allocatable :: clustering(:), pops(:), tmp(:)
+        real,    allocatable :: clustszs(:), pops(:), res(:)
+        integer, allocatable :: clustering(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50, NSPACE_REDUCED = 600
         logical              :: err
@@ -206,30 +207,59 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
             endif
             if( params%classtats .eq. 'yes' )then
-                noris = build%spproj_field%get_noris()
-                ncls  = build%spproj_field%get_n('class')
-                ! generate class stats
-                call build%spproj_field%get_pops(pops, 'class', consider_w=.true.)
-                popmin         = minval(pops)
-                popmax         = maxval(pops)
-                popmed         = median(real(pops))
-                call moment(real(pops), popave, popsdev, popvar, err)
+                noris  = build%spproj_field%get_noris()
+                ncls   = build%spproj_field%get_n('class')
+                ! generate pop stats
+                pops   = build%spproj_field%get_all('pop')
+                nr_tot = sum(pops)
+                popmin = minval(pops)
+                popmax = maxval(pops)
+                popmed = median(real(pops))
+                call moment(pops, popave, popsdev, popvar, err)
+                write(logfhandle,'(a)') 'CLASS POPULATION STATS'
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE POPULATION :', popave
                 write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION :', popsdev
+                ! generate res stats
+                res    = build%spproj_field%get_all('res')
+                resmin = minval(res, mask=pops > 0.1)
+                resmax = maxval(res, mask=pops > 0.1)
+                resmed = median(res)
+                call moment(res, resave, ressdev, resvar, err)
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'CLASS RESOLUTION STATS'
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RESOLUTION :', resmin
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RESOLUTION :', resmax
+                write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RESOLUTION :', resmed
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RESOLUTION :', resave
+                write(logfhandle,'(a,1x,f8.2)') 'SDEV OF RESOLUTION :', ressdev
+                nr  = sum(pack(pops, mask=res < 10.))
+                res = pack(res, mask=res < 10.)
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'CLASS RESOLUTION STATS FOR CLASSES BETTER THAN 10 A'
+                resmin = minval(res, mask=pops > 0.1)
+                resmax = maxval(res, mask=pops > 0.1)
+                resmed = median(res)
+                call moment(res, resave, ressdev, resvar, err)
+                write(logfhandle,'(a,1x,f8.2)') '% PARTICLES        :', (nr / nr_tot) * 100. 
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RESOLUTION :', resmin
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RESOLUTION :', resmax
+                write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RESOLUTION :', resmed
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RESOLUTION :', resave
+                write(logfhandle,'(a,1x,f8.2)') 'SDEV OF RESOLUTION :', ressdev
                 ! produce a histogram of class populations
-                szmax = maxval(pops)
-                ! scale to max 50 *:s
-                scale = 1.0
-                do while( nint(scale*szmax) > hlen )
-                    scale = scale - 0.001
-                end do
-                write(logfhandle,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
-                do icls=1,ncls
-                    write(logfhandle,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
-                end do
+                ! szmax = maxval(pops)
+                ! ! scale to max 50 *:s
+                ! scale = 1.0
+                ! do while( nint(scale*szmax) > hlen )
+                !     scale = scale - 0.001
+                ! end do
+                ! write(logfhandle,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
+                ! do icls=1,ncls
+                !     write(logfhandle,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
+                ! end do
             endif
             if( params%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) THROW_HARD('need nspace command line arg to provide projstats')
