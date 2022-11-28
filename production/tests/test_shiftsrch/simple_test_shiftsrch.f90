@@ -47,6 +47,7 @@ call pftcc%assign_sigma2_noise(sigma2_noise)
 allocate(corrs(pftcc%get_nrots()), norm_const(pftcc%get_nrots(), 2))
 call img_copy%init_polarizer(pftcc, p%alpha)
 call b%img%read(p%stk, 1)
+call b%img%norm
 img_copy = b%img
 call img_copy%fft()
 call img_copy%polarize(pftcc, 1, isptcl=.false., iseven=.true., mask=b%l_resmsk)
