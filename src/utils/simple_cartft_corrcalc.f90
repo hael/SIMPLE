@@ -74,6 +74,7 @@ type :: cartft_corrcalc
     procedure, private :: ori_chance_1
     procedure, private :: ori_chance_2
     procedure          :: assign_sigma2_noise
+    procedure          :: calc_sigma_contrib
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -1064,6 +1065,16 @@ contains
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
         self%sigma2_noise => sigma2_noise
     end subroutine assign_sigma2_noise
+
+    subroutine calc_sigma_contrib( self, iptcl, o, shvec, sigma_contrib)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        type(ori),              intent(in)    :: o
+        real(sp),               intent(in)    :: shvec(2)
+        real(sp),               intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        ! TODO
+        sigma_contrib = 1.0
+    end subroutine calc_sigma_contrib
 
     ! DESTRUCTOR
 

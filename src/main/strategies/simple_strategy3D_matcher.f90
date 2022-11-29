@@ -278,8 +278,11 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
-                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation, 'proj')
+                    if( params_glob%l_cartesian )then
+                        call eucl_sigma%calc_sigma2(cftcc, iptcl, orientation, 'proj')
+                    else
+                        call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
+                    endif
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -445,6 +448,12 @@ contains
         character(len=:), allocatable :: fname
         ! must be done here since params_glob%kfromto is dynamically set
         call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max], params_glob%l_match_filt)
+        if( params_glob%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname, params_glob%box)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+        end if
         do s = 1,params_glob%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
