@@ -33,7 +33,8 @@ contains
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
-    procedure          :: calc_sigma2
+    procedure, private :: calc_sigma2_1, calc_sigma2_2
+    generic            :: calc_sigma2 => calc_sigma2_1, calc_sigma2_2
     procedure          :: write_sigma2
     procedure, private :: read_groups_starfile
     ! destructor
@@ -115,22 +116,37 @@ contains
     end subroutine read_groups
 
     !>  Calculates and updates sigma2 within search resolution range
-    subroutine calc_sigma2( self, os, iptcl, o, refkind )
-        class(euclid_sigma2), intent(inout) :: self
-        class(oris),          intent(inout) :: os
-        class(ori),           intent(in)    :: o
-        integer,              intent(in)    :: iptcl
-        character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
-        integer              :: iref, irot
+    subroutine calc_sigma2_1( self, pftcc, iptcl, o, refkind )
+        class(euclid_sigma2),    intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(ori),              intent(in)    :: o
+        character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
+        integer :: iref, irot
+        real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real    :: shvec(2)
+        if ( o%isstatezero() ) return
+        shvec = o%get_2Dshift()
+        iref  = nint(o%get(trim(refkind)))
+        irot  = pftcc_glob%get_roind(360. - o%e3get())
+        call pftcc%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
+    end subroutine calc_sigma2_1
+
+        !>  Calculates and updates sigma2 within search resolution range
+    subroutine calc_sigma2_2( self, cftcc, iptcl, o, refkind )
+        class(euclid_sigma2),   intent(inout) :: self
+        class(cartft_corrcalc), intent(inout) :: cftcc
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        character(len=*),       intent(in)    :: refkind ! 'proj' or 'class'
         real                 :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         real                 :: shvec(2)
-        if ( os%get_state(iptcl)==0 ) return
-        iref  = nint(o%get(trim(refkind)))
+        if ( o%isstatezero() ) return
         shvec = o%get_2Dshift()
-        irot  = pftcc_glob%get_roind(360. - o%e3get())
-        call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        call cftcc%calc_sigma_contrib(iptcl, o, shvec, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
-    end subroutine calc_sigma2
+    end subroutine calc_sigma2_2
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self

@@ -254,8 +254,7 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
-                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation, 'class')
+                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'class')
                 end if
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
@@ -266,6 +265,7 @@ contains
 
         ! CLEAN-UP
         call clean_strategy2D
+        call orientation%kill
         do iptcl_batch = 1,batchsz_max
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
