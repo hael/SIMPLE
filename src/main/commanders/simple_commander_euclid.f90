@@ -1,14 +1,19 @@
 module simple_commander_euclid
 include 'simple_lib.f08'
-use simple_builder,          only: builder
+use simple_builder,          only: builder, build_glob
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters
+use simple_parameters,       only: parameters, params_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_euclid_sigma2,    only: write_groups_starfile
 use simple_qsys_funs
 implicit none
+
+! interface exec_calc_group_sigmas
+!     module procedure exec_calc_group_sigmas_1, exec_calc_group_sigmas_2
+! end interface exec_calc_group_sigmas
+
 
 public :: calc_pspec_commander_distr
 public :: calc_pspec_commander
@@ -265,7 +270,7 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = 'sigma2_it_1.star'
+        starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1.star'
         call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
         ! update sigmas in binfiles to match averages
         do iptcl = 1,nptcls
@@ -345,23 +350,29 @@ contains
         real,              allocatable   :: group_pspecs(:,:,:),pspecs(:,:)
         real,              allocatable   :: group_weights(:,:)
         real                             :: w
-        integer                          :: iptcl,ipart,eo,ngroups,igroup,fromp,top
-        call cline%set('mkdir', 'no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        integer                          :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
+        if( associated(build_glob) )then
+            if( .not.associated(params_glob) )then
+                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
+            endif
+        else
+            call cline%set('mkdir', 'no')
+            if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        endif
         ! read sigmas from binfiles
-        do ipart = 1,params%nparts
-            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+        do ipart = 1,params_glob%nparts
+            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
             call binfile%new_from_file(sigma2_array%fname)
             call binfile%read(sigma2_array%sigma2)
             fromp = lbound(sigma2_array%sigma2,2)
             top   = ubound(sigma2_array%sigma2,2)
-            if( (fromp<1).or.(top>params%nptcls) )then
+            if( (fromp<1).or.(top>params_glob%nptcls) )then
                 THROW_HARD('commander_refine3d; exec_calc_group_sigmas; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
             end if
             if( ipart == 1 )then
-                call binfile%get_resrange(params%kfromto)
-                allocate(pspecs(params%kfromto(1):params%kfromto(2),params%nptcls))
+                call binfile%get_resrange(kfromto)
+                allocate(pspecs(kfromto(1):kfromto(2),params_glob%nptcls))
             endif
             pspecs(:,fromp:top) = sigma2_array%sigma2(:,:)
             deallocate(sigma2_array%sigma2)
@@ -369,19 +380,19 @@ contains
         ngroups = 0
         !$omp parallel do default(shared) private(iptcl,igroup)&
         !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
-        do iptcl = 1,params%nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
+        do iptcl = 1,params_glob%nptcls
+            if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+            igroup  = nint(build_glob%spproj_field%get(iptcl,'stkind'))
             ngroups = max(igroup,ngroups)
         enddo
         !$omp end parallel do
-        allocate(group_pspecs(2,ngroups,params%kfromto(1):params%kfromto(2)),source=0.)
+        allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)),source=0.)
         allocate(group_weights(2,ngroups),source=0.)
-        do iptcl = 1,params%nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            eo     = nint(build%spproj_field%get(iptcl,'eo'    )) ! 0/1
-            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-            w      = build%spproj_field%get(iptcl,'w')
+        do iptcl = 1,params_glob%nptcls
+            if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+            eo     = nint(build_glob%spproj_field%get(iptcl,'eo'    )) ! 0/1
+            igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
+            w      = build_glob%spproj_field%get(iptcl,'w')
             if( w < TINY )cycle
             group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w*pspecs(:, iptcl)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
@@ -393,10 +404,9 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = 'sigma2_it_' // trim(int2str(params%which_iter)) // '.star'
+        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
         call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_refine3D::calc_group_sigmas')
-        call build%kill_general_tbox
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
 

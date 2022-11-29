@@ -1030,13 +1030,14 @@ contains
         use simple_classaverager
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(make_cavgs_commander) :: xmake_cavgs
+        type(make_cavgs_commander)        :: xmake_cavgs
+        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(cmdline)              :: cline_make_cavgs
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs
-        logical                    :: converged, l_stream
+        logical                    :: converged, l_stream, l_switch2euclid
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
@@ -1116,21 +1117,45 @@ contains
             else
                 params%extr_iter = params%startit - 1
             endif
+            ! ML sigmas
+            l_switch2euclid = params%cc_objfun.eq.OBJFUN_EUCLID
+            if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
+                ! we are continuing from an ML iterartion
+                l_switch2euclid = .false.
+            endif
+            if( l_switch2euclid )then
+                call cline%set('objfun','cc')
+                params%objfun        = 'cc'
+                params%cc_objfun     = OBJFUN_CC
+                params%l_needs_sigma = .true.
+            endif
+            if( params%l_needs_sigma )then
+                params%needs_sigma = 'yes'
+                call cline%set('gridding','yes')
+                call cline%set('needs_sigma', 'yes')
+            endif
             ! initialise progress monitor
             if(.not. l_stream) call progressfile_init()
             do i = 1, params%maxits
                 params%which_iter = params%startit
+                ! sigmas2
+                if( params%l_needs_sigma .and. (i > 1) ) call xcalc_group_sigmas%execute(cline)
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
                 call cline%set('which_iter', real(params%which_iter))
                 call cluster2D_exec( cline, params%startit, converged )
+                ! objfun=euclid
+                if( l_switch2euclid )then
+                    params%objfun    = 'euclid'
+                    params%cc_objfun = OBJFUN_EUCLID
+                    l_switch2euclid  = .false.
+                endif
                 ! cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
                 ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
                 call build%spproj%write_segment_inside(params%oritype)
-                ! update class information and write cavgs starfile for iteration
-                call cavger_gen2Dclassdoc(build%spproj)
+                ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
@@ -1146,6 +1171,11 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
+            if( params%l_needs_sigma .and. (i > 1) )then
+                params%which_iter = params%which_iter + 1
+                call xcalc_group_sigmas%execute(cline)
+                params%which_iter = params%which_iter - 1
+            endif
             ! end gracefully
             call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')

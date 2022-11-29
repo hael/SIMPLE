@@ -2245,7 +2245,7 @@ contains
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
-            self%sigma2_noise => null()
+            nullify(self%sigma2_noise, pftcc_glob)
             self%l_filt_set   = .false.
             self%existence    = .false.
         endif

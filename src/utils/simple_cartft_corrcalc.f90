@@ -1071,8 +1071,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: i, ithr
         if( self%existence )then
-            self%vol_even => null()
-            self%vol_odd  => null()
+            nullify(self%vol_even,self%vol_odd,self%sigma2_noise,cftcc_glob)
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)

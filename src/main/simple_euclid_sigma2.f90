@@ -207,7 +207,7 @@ contains
         logical                       :: ares
         integer(C_long)               :: num_objs, object_id
         character(len=:), allocatable :: starfile_fname
-        starfile_fname = 'sigma2_it_' // trim(int2str(iter)) // '.star'
+        starfile_fname = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
         allocate(group_pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
         call starfile_table__new(istarfile)
         if (.not. file_exists(starfile_fname)) then
