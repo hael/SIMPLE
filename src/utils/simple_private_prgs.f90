@@ -426,6 +426,7 @@ contains
         call cmd_dict%push('projfile',      'SIMPLE *.simple project file')
         call cmd_dict%push('projfile_target', 'another SIMPLE *.simple project file')
         call cmd_dict%push('projname',      'Project name (for creation of projname.simple)')
+        call cmd_dict%push('prune',         'Whether to perform particles pruning')
         call cmd_dict%push('pspecsz',       'size of power spectrum(in pixels)')
         call cmd_dict%push('clsfrcs',       'Whether the projection frcs are to be read from class(yes|no){no}')
         call cmd_dict%push('qsys_partition', 'Name of target partition of distributed computer system (SLURM/PBS)')
@@ -617,6 +618,7 @@ contains
         call private_prgs(12)%push_req_key('stk')
         call private_prgs(12)%push_req_key('stk2')
         call private_prgs(12)%push_req_key('projfile')
+        call private_prgs(12)%push_req_key('prune')
 
         ! MASSCEN, for centering images acccording to their centre of mass
         call private_prgs(13)%set_name('masscen')

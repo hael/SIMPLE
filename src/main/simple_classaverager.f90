@@ -941,15 +941,15 @@ contains
         !$omp private(h,k,phys,sh,invtau2) proc_bind(close)
         do h = flims(1,1),flims(1,2)
             do k = flims(2,1),flims(2,2)
-                    sh = nint(scale*sqrt(real(h*h + k*k)))
-                    if( (sh < reslim_ind) .or. (sh > sz) ) cycle
-                    phys = ctfsqsum%comp_addr_phys(h, k)
-                    if( tau2(sh) > TINY)then
-                        invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
-                    else
-                        invtau2 = min(1.e3, 1.e3 * real(pctfsqsum(phys(1),phys(2),1)))
-                    endif
-                    pctfsqsum(phys(1),phys(2),1) = pctfsqsum(phys(1),phys(2),1) + cmplx(invtau2,0.)
+                sh = nint(scale*sqrt(real(h*h + k*k)))
+                if( (sh < reslim_ind) .or. (sh > sz) ) cycle
+                phys = ctfsqsum%comp_addr_phys(h, k)
+                if( tau2(sh) > TINY)then
+                    invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
+                else
+                    invtau2 = min(1.e3, 1.e3 * real(pctfsqsum(phys(1),phys(2),1)))
+                endif
+                pctfsqsum(phys(1),phys(2),1) = pctfsqsum(phys(1),phys(2),1) + cmplx(invtau2,0.)
             enddo
         enddo
         !$omp end parallel do

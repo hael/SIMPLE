@@ -1097,6 +1097,10 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
+            if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
+                ! automatic pruning performed upon final writing
+                call pool_proj%prune_particles
+            endif
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
             ! preserve down-scaling
@@ -1115,6 +1119,10 @@ contains
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
             call pool_proj%write(projfile)
+            if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
+                ! automatic pruning performed upon final writing
+                call pool_proj%prune_particles
+            endif
             call pool_proj%os_ptcl3D%kill
         endif
         if( snapshot )then

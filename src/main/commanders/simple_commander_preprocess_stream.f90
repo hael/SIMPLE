@@ -98,6 +98,7 @@ contains
         if( .not. cline%defined('nonuniform')  ) call cline%set('nonuniform',    'no')
         if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
         if( .not. cline%defined('nchunks'))      call cline%set('nchunks',        2.0)
+        if( .not. cline%defined('prune'))        call cline%set('prune',         'no')
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency

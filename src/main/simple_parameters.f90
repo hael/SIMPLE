@@ -61,6 +61,7 @@ type :: parameters
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
+    character(len=3)      :: prune='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: clsfrcs='no'
@@ -192,7 +193,7 @@ type :: parameters
     integer :: angstep=5
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
-    integer :: box_original
+    integer :: box_crop=0           !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_extract
     integer :: boxpd=0
     integer :: class=1             !< cluster identity
@@ -343,6 +344,7 @@ type :: parameters
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
+    real    :: msk_crop=0.         !< mask radius(in pixels)
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
@@ -511,6 +513,7 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
+        call check_carg('prune',          self%prune)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
@@ -590,6 +593,7 @@ contains
         call check_iarg('angstep',        self%angstep)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
+        call check_iarg('box_crop',       self%box_crop)
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('clip',           self%clip)
         call check_iarg('cn',             self%cn)
@@ -716,6 +720,7 @@ contains
         call check_rarg('max_dose',       self%max_dose)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('msk',            self%msk)
+        call check_rarg('msk_crop',       self%msk_crop)
         call check_rarg('mskdiam',        self%mskdiam)
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
