@@ -590,7 +590,9 @@ contains
             call cline_cluster2D_stage1%set('match_filt', 'no')
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw','no')
-            call cline_cluster2D_stage1%set('objfun','cc')
+            if( trim(params%cc_start).eq.'yes' )then
+                call cline_cluster2D_stage1%set('objfun','cc')
+            endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
