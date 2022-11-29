@@ -267,6 +267,7 @@ type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
+type(simple_input_param) :: prune
 type(simple_input_param) :: pspecsz
 type(simple_input_param) :: ptclw
 type(simple_input_param) :: qsys_name
@@ -959,6 +960,7 @@ contains
         'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
+        call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning{no}', .false., 'no')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|euclid){cc}', '(cc|euclid){cc}', .false., 'cc')
@@ -2504,13 +2506,13 @@ contains
         &'Map class average selection to particles in project file',&    ! descr_short
         &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! descr_long
         &'all',&                                                         ! executable
-        &2, 0, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call  map_cavgs_selection%set_input('img_ios', 1, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
         call  map_cavgs_selection%set_input('img_ios', 2, 'stk2', 'file', 'Stack of selected cavgs', 'Stack of selected cavgs', 'e.g. selected.spi', .true., '')
         ! parameter input/output
-        ! <empty>
+        call  map_cavgs_selection%set_input('parm_ios',1, prune)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3057,7 +3059,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 14, 0, 21, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 21, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3108,6 +3110,8 @@ contains
         call preprocess_stream_dev%set_gui_params('parm_ios', 13, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
         call preprocess_stream_dev%set_gui_params('parm_ios', 14, submenu="CTF estimation")
+        call preprocess_stream_dev%set_input('parm_ios',15, prune)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 15, submenu="cluster 2D")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3783,7 +3787,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 3, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3792,6 +3796,7 @@ contains
         &'give .txt selection file', .true., '')
         call selection%set_input('parm_ios', 2, oritype)
         call selection%set_input('parm_ios', 3, 'state', 'num', 'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
+        call selection%set_input('parm_ios', 4, prune)
         ! alternative inputs
         ! <empty>
         ! search controls

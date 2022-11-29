@@ -1291,6 +1291,7 @@ contains
         real    :: smpd
         call cline%set('dir_exec', 'selection')
         call cline%set('mkdir',    'yes')
+        if( .not.cline%defined('prune') ) call cline%set('prune', 'no')
         call build%init_params_and_build_spproj(cline,params)
         call build%spproj%update_projinfo(cline)
         ! find number of selected cavgs
@@ -1322,6 +1323,8 @@ contains
         end do
         ! communicate selection to project
         call build%spproj%map_cavgs_selection(states)
+        ! optional pruning
+        if( trim(params%prune).eq.'yes') call build%spproj%prune_particles
         ! this needs to be a full write as many segments are updated
         call build%spproj%write
         ! end gracefully

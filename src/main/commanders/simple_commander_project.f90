@@ -749,6 +749,7 @@ contains
         real                            :: state
         class(oris), pointer :: pos => NULL()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
         call params%new(cline, silent=.true.)
         iseg = oritype2segment(trim(params%oritype))
         ! read project (almost all or largest segments are updated)
@@ -819,6 +820,7 @@ contains
             case(PTCL2D_SEG,PTCL3D_SEG)
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
+                if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
             case DEFAULT
                 THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
         end select
