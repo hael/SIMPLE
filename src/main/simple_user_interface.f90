@@ -234,6 +234,7 @@ type(simple_input_param) :: moldiam
 type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
+type(simple_input_param) :: ml_reg
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: nchunks
@@ -1057,7 +1058,8 @@ contains
         call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
-        call set_param(lpthres,       'lpthres',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
+        call set_param(lpthres,       'lpthres',       'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
+        call set_param(ml_reg,        'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1454,7 +1456,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 9, 9, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &1, 0, 0, 9, 10, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1515,6 +1517,8 @@ contains
         call cluster2D%set_input('filt_ctrls', 9, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms{20 A}', 'low-pass limit in Angstroms{20 A}', .false., 20.)
         call cluster2D%set_gui_params('filt_ctrls', 9, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 10, ml_reg)
+        call cluster2D%set_gui_params('filt_ctrls', 10, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
@@ -3620,7 +3624,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 13, 11, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 13, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3662,6 +3666,7 @@ contains
         call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         call refine3D%set_input('filt_ctrls', 11, wiener)
+        call refine3D%set_input('filt_ctrls', 12, ml_reg)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_input('mask_ctrls', 2, mskfile)
