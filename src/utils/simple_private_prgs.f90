@@ -254,7 +254,7 @@ contains
         call cmd_dict%push('cs',            'spherical aberration constant(in mm){2.7}')
         call cmd_dict%push('ctf',           'ctf flag(yes|no|flip)')
         call cmd_dict%push('ctfpatch',      'whether to perform patch-based ctf estimation(yes|no){yes}')
-        call cmd_dict%push('ctfreslim',     'ctf resolution (A) for setting state flag {8 A}')
+        call cmd_dict%push('ctfresthreshold','ctf resolution (A) rejection theshold{30 A}')
         call cmd_dict%push('ctfsq',         'apply ctf**2 to the images(yes|no){no}')
         call cmd_dict%push('ctfstats',      'calculate ctf statistics(yes|no){no}')
         call cmd_dict%push('projstats',     'calculate projection direction population statistics(yes|no){no}')
