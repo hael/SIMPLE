@@ -33,15 +33,17 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//&
-&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//&
-&'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//&
-&'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//&
+&CSV_DELIM//'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//&
+CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//&
+&CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//&
+&'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DOA'//&
-&CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//CSV_DELIM//&
+&'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//&
+&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -52,7 +54,11 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_NISO'//CSV_DELIM//'MED_NISO'//CSV_DELIM//'SDEV_NISO'//&
+&CSV_DELIM//'AVG_ISO_DISPL'//CSV_DELIM//'MED_ISO_DISPL'//CSV_DELIM//'SDEV_ISO_DISPL'//&
+&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
 &CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
+&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
@@ -66,7 +72,11 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_NISO'//CSV_DELIM//'MED_NISO'//CSV_DELIM//'SDEV_NISO'//&
+&CSV_DELIM//'AVG_ISO_DISPL'//CSV_DELIM//'MED_ISO_DISPL'//CSV_DELIM//'SDEV_ISO_DISPL'//&
+&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
 &CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
+&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
@@ -78,6 +88,7 @@ type :: atom_stats
     integer :: cc_ind            = 0  ! index of the connected component                            INDEX
     integer :: size              = 0  ! number of voxels in connected component                     NVOX
     integer :: cn_std            = 0  ! standard coordination number                                CN_STD
+    integer :: niso              = 0  ! Number of voxels in isotropic displ calculations            NISO
     real    :: bondl             = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
     real    :: cn_gen            = 0. ! generalized coordination number                             CN_GEN
     real    :: diam              = 0. ! atom diameter                                               DIAM
@@ -85,8 +96,11 @@ type :: atom_stats
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
+    real    :: iso_displ         = 0. ! isotropic displacement parameter                            ISO_DISPL
+    real    :: iso_corr          = 0. ! Correlation of atom to isotropic displacement fit           ISO_CORR
     real    :: aniso(3,3)        = 0. ! Ansisotropic displacement parameter matrix
     real    :: doa               = 0. ! Degree of anisotropy                                        DOA
+    real    :: aniso_corr        = 0. ! Correlation of atom to anisotropic displacement fit         ISO_CORR
     real    :: displ             = 0. ! Lattice displacement                                        DISPL
     real    :: max_ndispl        = 0. ! Maximum lattice displacement of neighboring atoms           NDISPL
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
@@ -108,6 +122,7 @@ type :: nanoparticle
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
     integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
+    integer               :: niso               = 0  ! number of atoms (connected components)                NISO
     real                  :: smpd               = 0. ! sampling distance
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
@@ -123,7 +138,11 @@ type :: nanoparticle
     type(stats_struct)    :: avg_int_stats
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
+    type(stats_struct)    :: niso_stats
+    type(stats_struct)    :: iso_displ_stats
+    type(stats_struct)    :: iso_corr_stats
     type(stats_struct)    :: doa_stats
+    type(stats_struct)    :: aniso_corr_stats
     type(stats_struct)    :: displ_stats
     type(stats_struct)    :: max_ndispl_stats
     type(stats_struct)    :: radial_strain_stats
@@ -138,7 +157,11 @@ type :: nanoparticle
     type(stats_struct)    :: avg_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: niso_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: iso_displ_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: iso_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: doa_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: aniso_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: displ_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_ndispl_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
@@ -1097,7 +1120,7 @@ contains
     subroutine fillin_atominfo( self, a0 )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        type(image)          :: simatms, img_scaled, fit, fit_descaled
+        type(image)          :: simatms, img_scaled, fit, fit_descaled, fit_isotropic
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), lattice_displ(:,:)
         real,    pointer     :: rmat_raw(:,:,:), rmat_scaled(:, :, :)
@@ -1106,8 +1129,9 @@ contains
         logical, allocatable :: cc_mask(:), displ_neighbor(:)
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
-        integer :: i, j, k, cc, cn, n, funit, ios, scale_fac = 2, adp_tossed
-        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", fn_fit_descaled="fit_descaled.mrc"
+        integer :: i, j, k, cc, cn, n, funit, fiso, ios, scale_fac = 1, adp_tossed
+        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", &
+                    &fn_fit_descaled="fit_descaled.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_iso='iso_disp.txt'
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1159,8 +1183,10 @@ contains
         !fit_descaled = image(ldim=self%ldim, smpd=self%smpd)
         call fit%new(scale_fac*self%img_raw%get_ldim(), 1.0/scale_fac*self%img_raw%get_smpd())
         call fit_descaled%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
+        call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
         write(funit, '(i8)') self%n_cc
+        call fopen(fiso, FILE=trim(fn_iso), STATUS='REPLACE', action='WRITE')
 
         adp_tossed = 0
         do cc = 1, self%n_cc
@@ -1187,6 +1213,7 @@ contains
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
+            call calc_isotropic_disp_lsq(cc)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
                 call calc_anisotropic_disp_sphere(cc)
             else
@@ -1206,16 +1233,23 @@ contains
             mask    = .false.
             cc_mask = .true.
         end do
+        call fclose(funit)
+        call fclose(fiso)
         write(logfhandle,*) "ADP Tossed: ", adp_tossed
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         ! Write test image of adp and report FSC based resolution
         call fit%write(fn_fit)
         call fit_descaled%write(fn_fit_descaled)
+        call fit_isotropic%write(fn_fit_isotropic)
+
+        ! Calculate correlation of isotropic fit to input map
+
 
         call fclose(funit)
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
+        call calc_stats(  real(self%atominfo(:)%niso),    self%niso_stats          )
         call calc_stats(  self%atominfo(:)%bondl,         self%bondl_stats         )
         call calc_stats(  self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
         call calc_stats(  self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
@@ -1224,9 +1258,12 @@ contains
         call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
-        call calc_stats(  self%atominfo(:)%displ,         self%displ_stats    )
+        call calc_stats(  self%atominfo(:)%displ,         self%displ_stats         )
         call calc_stats(  self%atominfo(:)%max_ndispl,    self%max_ndispl_stats    )
+        call calc_stats(  self%atominfo(:)%iso_displ,     self%iso_displ_stats     )
+        call calc_stats(  self%atominfo(:)%iso_corr,      self%iso_corr_stats      )
         call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
+        call calc_stats(  self%atominfo(:)%aniso_corr,    self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1273,7 +1310,10 @@ contains
                 call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%iso_displ,     self%iso_displ_stats_cns(cn),     mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%iso_corr,      self%iso_corr_stats_cns(cn),      mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%doa,           self%doa_stats_cns(cn),           mask=doa_mask  )
+                call calc_stats( self%atominfo(:)%aniso_corr,    self%aniso_corr_stats_cns(cn),    mask=doa_mask  )
                 call calc_stats( self%atominfo(:)%displ,         self%displ_stats_cns(cn),         mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_ndispl,    self%max_ndispl_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
@@ -1309,11 +1349,319 @@ contains
                 call atoms_obj%kill
             end subroutine write_cn_atoms
 
+            subroutine calc_isotropic_disp_lsq(cc)
+                integer, intent(in)     :: cc
+                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, var, fit_rad, A, beta, prob, prob_sum_sq, top, bottom, prob_tot, corr
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
+                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
+                center = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
+                maxrad  = (self%theoretical_radius * 6) / (self%smpd / scale_fac)
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1)*scale_fac)
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2)*scale_fac)
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3)*scale_fac)
+
+                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
+                ! First iteration: calculate the minimum intensity within the sphere
+                ! If min_int is negative, then we'll added |min_int| to all intensities
+                ! so that all probabilities are >= 0
+                min_int = self%atominfo(cc)%max_int
+                max_int = 0
+                peak = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_scaled(i, j, k) < min_int) then
+                                    min_int = rmat_scaled(i, j, k)
+                                else if (rmat_scaled(i, j, k) > max_int) then
+                                    max_int = rmat_scaled(i, j, k)
+                                    peak = (/i, j, k/)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                if (min_int > 0) then
+                    min_int = 0 ! No correction needed
+                end if
+
+                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
+                ! equal to the voxel intensity divided by the total scaled connected component intensity.
+                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
+                count0 = 0
+                count = 0
+                sum_int = 0
+                mu = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
+                                    count = count + 1
+                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
+                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
+                                else
+                                    count0 = count0 + 1
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                mu = mu / sum_int  ! Normalization
+
+                ! Third iteration: Calculate the variance sigma using by solving for the variance
+                ! That minimizes the sum of the squares of ln(y_i) = -0.5B|r-mu|^2 where B=1/var
+                ! and y = rmat(r)/peak_intensity.  Minimizing the residual of the log gives an 
+                ! analytical solution, although it's not exact since by taking the log, errors
+                ! aren't scaled uniformly
+                top = 0.0
+                bottom = 0.0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                prob = (rmat_scaled(i,j,k)+abs(min_int))/sum_int
+                                top = top + prob * euclid(1.*(/i, j, k/), 1.*mu)**4
+                                bottom = bottom + prob * log((max_int/sum_int)) * euclid(1.*(/i, j, k/), 1.*mu)**2
+                            end if
+                        end do
+                    end do
+                end do
+                var = -0.5*top/bottom
+
+                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
+                count_fit = 0.
+                center = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 6) / self%smpd
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1))
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2))
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3))
+                fit_rad = fit_rad / scale_fac
+                beta = 0.
+                var = var / scale_fac**2
+                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
+                prob_tot = 0.
+                A = 1.0 / sqrt((2*pi)**3 * var)
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                beta = -0.5 * euclid(1.*(/i, j, k/), mu)**2/var
+                                prob = A * exp(beta)
+                                if (prob > 0) then
+                                    count_fit = count_fit + 1
+                                    prob_tot = prob_tot + prob
+                                    call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int/scale_fac**3+min_int)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                ! Renormalize based on prob_tot
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
+                            end if
+                        end do
+                    end do
+                end do
+
+                ! Calculate correlation between fit and orignal map within the fit radius
+                fit_mask = .false.
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                fit_mask(i,j,k) = .true.
+                            end if
+                        end do
+                    end do
+                end do
+                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
+
+                self%atominfo(cc)%niso = count_fit
+                self%atominfo(cc)%iso_displ = var
+                self%atominfo(cc)%iso_corr = corr
+                write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
+                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
+            end subroutine
+
+            subroutine calc_isotropic_disp_sphere(cc)
+                integer, intent(in)     :: cc
+                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, vars(3), var, fit_rad, A, beta, prob, prob_tot, prob_sum_sq, corr
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
+                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+
+
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
+                center = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
+                maxrad  = (self%theoretical_radius * 6) / (self%smpd / scale_fac)
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1)*scale_fac)
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2)*scale_fac)
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3)*scale_fac)
+
+                fit_rad = self%atominfo(cc)%diam / 1.5 / (self%smpd / scale_fac)
+                ! First iteration: calculate the minimum intensity within the sphere
+                ! If min_int is negative, then we'll added |min_int| to all intensities
+                ! so that all probabilities are >= 0
+                min_int = self%atominfo(cc)%max_int
+                max_int = 0
+                peak = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_scaled(i, j, k) < min_int) then
+                                    min_int = rmat_scaled(i, j, k)
+                                else if (rmat_scaled(i, j, k) > max_int) then
+                                    max_int = rmat_scaled(i, j, k)
+                                    peak = (/i, j, k/)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                if (min_int > 0) then
+                    min_int = 0 ! No correction needed
+                end if
+
+                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
+                ! equal to the voxel intensity divided by the total scaled connected component intensity.
+                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
+                count0 = 0
+                count = 0
+                sum_int = 0
+                mu = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
+                                    count = count + 1
+                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
+                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
+                                else
+                                    count0 = count0 + 1
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                mu = mu / sum_int  ! Normalization
+
+                ! Third iteration: Calculate the variance sigma
+                vars = 0.
+                prob_sum_sq = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
+                                prob = (rmat_scaled(i, j, k)+abs(min_int)) / sum_int
+                                prob_sum_sq = prob_sum_sq + prob**2
+                                ! Diagonal terms are variance
+                                vars(1) = vars(1) + prob * (i - mu(1)) ** 2
+                                vars(2) = vars(2) + prob * (j - mu(2)) ** 2
+                                vars(3) = vars(3) + prob * (k - mu(3)) ** 2
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fill in redundant entries
+                vars = vars / (1 - prob_sum_sq) ! For unbiased estimator
+                var = sum(vars) / 3 ! Average of x,y,z variance.
+
+                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
+                prob_tot = 0.
+                count_fit = 0
+                center = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 6) / self%smpd
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1))
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2))
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3))
+                fit_rad = fit_rad / scale_fac
+                beta = 0.
+                var = var / scale_fac**2
+                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
+                A = 1.0 / sqrt((2*pi)**3 * var)
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
+                                prob = A * exp(beta)
+                                prob_tot = prob_tot + prob
+                                count_fit = count_fit + 1
+                                call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int+min_int)
+                            end if
+                        end do
+                    end do
+                end do
+                ! Renormalize based on prob_tot
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
+                            end if
+                        end do
+                    end do
+                end do
+
+                ! Calculate correlation between fit and orignal map within the fit radius
+                fit_mask = .false.
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                fit_mask(i,j,k) = .true.
+                            end if
+                        end do
+                    end do
+                end do
+                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
+                
+                self%atominfo(cc)%niso = count_fit
+                self%atominfo(cc)%iso_displ = var*(self%smpd**2)
+                self%atominfo(cc)%iso_corr = corr
+                write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
+                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
+
+                print *, cc
+            end subroutine
+
             subroutine calc_anisotropic_disp_sphere(cc)
                 integer, intent(in)     :: cc
                 real        :: sum_int, mu(3), icenter(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
-                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3), fit_rad, prob_tot, prob_sum_sq
-                integer     :: i, j, k, n, x, y, z, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, errflg, nrot
+                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3),&
+                                        &min_int, max_int, fit_rad, prob_tot, prob_sum_sq, corr
+                integer     :: i, j, k, n, x, y, z, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, errflg, nrot, peak(3)
+                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+                
                 
                 ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
                 ! by avoiding having to iterate over the entire scaled images for each connected component.
@@ -1329,7 +1677,31 @@ contains
 
                 !print *, cc, self%atominfo(cc)%size, self%atominfo(cc)%diam / self%smpd
                 !print *, cc, "Scaled  ", ihi-ilo, jhi-jlo, khi-klo
-                fit_rad = self%atominfo(cc)%diam / 2 / (self%smpd / scale_fac)
+                fit_rad = self%atominfo(cc)%diam / 1.5 / (self%smpd / scale_fac)
+
+                ! Zeroth iteration: calculate the minimum intensity within the sphere.
+                ! If min_int is negative, then we'll added |min_int| to all intensities
+                ! so that all probabilities are >= 0
+                min_int = self%atominfo(cc)%max_int
+                max_int = 0
+                peak = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                if (rmat_scaled(i, j, k) < min_int) then
+                                    min_int = rmat_scaled(i, j, k)
+                                else if (rmat_scaled(i, j, k) > max_int) then
+                                    max_int = rmat_scaled(i, j, k)
+                                    peak = (/i, j, k/)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                if (min_int > 0) then
+                    min_int = 0 ! No correction needed
+                end if
                 
                 ! First iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
                 ! equal to the voxel intensity divided by the total scaled connected component intensity.
@@ -1342,12 +1714,12 @@ contains
                     do j=jlo, jhi
                         do i=ilo, ihi
                             if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                if (rmat_scaled(i, j, k) > 0) then
+                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
                                     count = count + 1
-                                    sum_int = sum_int + rmat_scaled(i, j, k)
-                                    mu(1) = mu(1) + i * rmat_scaled(i, j, k)
-                                    mu(2) = mu(2) + j * rmat_scaled(i, j, k)
-                                    mu(3) = mu(3) + k * rmat_scaled(i, j, k)
+                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
+                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
+                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
                                 else
                                     count0 = count0 + 1
                                 end if
@@ -1365,8 +1737,8 @@ contains
                         do i=ilo, ihi
                             if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
                                 ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                if (rmat_scaled(i, j, k) > 0) then
-                                    prob = rmat_scaled(i, j, k) / sum_int
+                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
+                                    prob = (rmat_scaled(i, j, k)+abs(min_int)) / sum_int
                                     prob_sum_sq = prob_sum_sq + prob**2
                                     ! Diagonal terms are variance
                                     sigma(1, 1) = sigma(1, 1) + prob * (i - mu(1)) ** 2
@@ -1396,7 +1768,7 @@ contains
                 self%atominfo(cc)%aniso = sigma
 
                 ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
-                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :),&
+                write(funit, '(2i8, f10.3, 3i8, 12f10.3)') cc, count, self%atominfo(cc)%doa, peak(:), mu(:), sigma(1, :),&
                         &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
 
                 ! Third iteration (for testing): sample the scaled fit at each voxel in scaled space
@@ -1414,7 +1786,7 @@ contains
                                 prob = A * exp(beta(1, 1))
                                 if (prob > 0) then
                                     count_fit = count_fit + 1
-                                    call fit%set_rmat_at(i, j, k, prob*sum_int)
+                                    call fit%set_rmat_at(i, j, k, prob*sum_int+min_int)
                                 end if
                             end if
                         end do
@@ -1454,17 +1826,30 @@ contains
                                 prob = A * exp(beta(1, 1))
                                 if (prob > 0) then
                                     count_fit = count_fit + 1
-                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int)
-                                    if (cc == 20) then
-                                        !print *, prob, prob*sum_int
-                                    end if
+                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int+min_int)
                                 end if
                             end if
                         end do
                     end do
                 end do
 
-                !print *, cc, fit_rad, count0, count+count0, count_fit, (1-prob_sum_sq)
+                ! Final Iteration: calculation the correlation between the anisotropic fit and the input
+                fit_mask = .false.
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
+                                fit_mask(i,j,k) = .true.
+                            end if
+                        end do
+                    end do
+                end do
+                corr = fit_descaled%real_corr(self%img_raw, mask=fit_mask)
+
+                self%atominfo(cc)%aniso_corr = corr
+
+                !print *, cc, min_int, max_int, self%atominfo(cc)%max_int, fit_rad/self%smpd/sqrt(eigenvals(1)*(self%smpd/scale_fac)**2),&
+                !    &count0, count+count0, count_fit, (1-prob_sum_sq)
             end subroutine calc_anisotropic_disp_sphere
 
             ! For a given cc, calculates the anisotropic displacement parameters, 
@@ -1944,7 +2329,11 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
+        write(funit,601,advance='no') real(self%atominfo(cc)%niso),             CSV_DELIM ! NISO
+        write(funit,601,advance='no') self%atominfo(cc)%iso_displ,              CSV_DELIM ! ISO_DISPL
+        write(funit,601,advance='no') self%atominfo(cc)%iso_corr,               CSV_DELIM ! ISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%doa,                    CSV_DELIM ! DOA
+        write(funit,601,advance='no') self%atominfo(cc)%aniso_corr,             CSV_DELIM ! ANISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%displ,                  CSV_DELIM ! DISPL
         write(funit,601,advance='no') self%atominfo(cc)%max_ndispl,             CSV_DELIM ! MAX_NDISPL
         if( .not. omit_here )then
@@ -2007,14 +2396,30 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- numer of voxels in isotropic displacement calculations
+        write(funit,601,advance='no') self%niso_stats%avg,           CSV_DELIM ! AVG_NISO
+        write(funit,601,advance='no') self%niso_stats%med,           CSV_DELIM ! MED_NISO
+        write(funit,601,advance='no') self%niso_stats%sdev,          CSV_DELIM ! SDEV_NISO
+        ! -- isotropic displacement parameter
+        write(funit,601,advance='no') self%iso_displ_stats%avg,      CSV_DELIM ! AVG_ISO_DISPL
+        write(funit,601,advance='no') self%iso_displ_stats%med,      CSV_DELIM ! MED_ISO_DISPL
+        write(funit,601,advance='no') self%iso_displ_stats%sdev,     CSV_DELIM ! SDEV_ISO_DISPL
+        ! -- isotropic displacement fit correlation
+        write(funit,601,advance='no') self%iso_corr_stats%avg,       CSV_DELIM ! AVG_ISO_CORR
+        write(funit,601,advance='no') self%iso_corr_stats%med,       CSV_DELIM ! MED_ISO_CORR
+        write(funit,601,advance='no') self%iso_corr_stats%sdev,      CSV_DELIM ! SDEV_ISO_CORR
         ! -- degree of anisotropy
         write(funit,601,advance='no') self%doa_stats%avg,            CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%doa_stats%med,            CSV_DELIM ! MED_DOA
         write(funit,601,advance='no') self%doa_stats%sdev,           CSV_DELIM ! SDEV_DOA
+        ! -- anisotropic displacement fit correlation
+        write(funit,601,advance='no') self%aniso_corr_stats%avg,     CSV_DELIM ! AVG_ANISO_CORR
+        write(funit,601,advance='no') self%aniso_corr_stats%med,     CSV_DELIM ! MED_ANISO_CORR
+        write(funit,601,advance='no') self%aniso_corr_stats%sdev,    CSV_DELIM ! SDEV_ANISO_CORR
         ! -- lattice displacement
-        write(funit,601,advance='no') self%displ_stats%avg,     CSV_DELIM ! AVG_DOA
-        write(funit,601,advance='no') self%displ_stats%med,     CSV_DELIM ! MED_DOA
-        write(funit,601,advance='no') self%displ_stats%sdev,    CSV_DELIM ! SDEV_DOA
+        write(funit,601,advance='no') self%displ_stats%avg,          CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%displ_stats%med,          CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%displ_stats%sdev,         CSV_DELIM ! SDEV_DOA
         ! -- maximum neighboring displacement
         write(funit,601,advance='no') self%max_ndispl_stats%avg,     CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%max_ndispl_stats%med,     CSV_DELIM ! MED_DOA
@@ -2065,10 +2470,26 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- numer of voxels in isotropic displacement calculations
+        write(funit,601,advance='no') self%niso_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NISO
+        write(funit,601,advance='no') self%niso_stats_cns(cn)%med,           CSV_DELIM ! MED_NISO
+        write(funit,601,advance='no') self%niso_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_NISO
+        ! -- isotropic displacement parameter
+        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%avg,      CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%med,      CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%sdev,     CSV_DELIM ! SDEV_DOA
+        ! -- isotropic displacement fit correlation
+        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%avg,       CSV_DELIM ! AVG_DOA
+        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%med,       CSV_DELIM ! MED_DOA
+        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%sdev,      CSV_DELIM ! SDEV_DOA
         ! -- degree of anisotropy
         write(funit,601,advance='no') self%doa_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%doa_stats_cns(cn)%med,            CSV_DELIM ! MED_DOA
         write(funit,601,advance='no') self%doa_stats_cns(cn)%sdev,           CSV_DELIM! SDEV_DOA
+        ! -- anisotropic displacement fit correlation
+        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_ANISO_CORR
+        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_ANISO_CORR
+        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_ANISO_CORR
         ! -- lattice displacement
         write(funit,601,advance='no') self%displ_stats_cns(cn)%avg,          CSV_DELIM ! AVG_MAX_NDISPL
         write(funit,601,advance='no') self%displ_stats_cns(cn)%med,          CSV_DELIM ! MED_MAX_NDISPL
