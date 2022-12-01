@@ -310,6 +310,7 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
+        call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter
@@ -320,7 +321,12 @@ contains
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
-        if( l_euclid ) call cline_cluster2D2%set('needs_sigma', 'yes')
+        if( l_euclid )then
+            call cline_cluster2D2%set('objfun', 'euclid')
+            call cline_cluster2D2%set('needs_sigma', 'yes')
+        else
+            call cline_cluster2D1%set('objfun', 'cc')
+        endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
@@ -1140,7 +1146,7 @@ contains
             do i = 1, params%maxits
                 params%which_iter = params%startit
                 ! sigmas2
-                if( params%l_needs_sigma .and. (i > 1) ) call xcalc_group_sigmas%execute(cline)
+                if( params%l_needs_sigma ) call xcalc_group_sigmas%execute(cline)
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
