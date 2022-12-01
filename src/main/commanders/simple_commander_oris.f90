@@ -244,8 +244,6 @@ contains
                 resmed = median(res)
                 call moment(res, resave, ressdev, resvar, err)
                 write(logfhandle,'(a,1x,f8.2)') '% PARTICLES        :', (nr / nr_tot) * 100. 
-                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM RESOLUTION :', resmin
-                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM RESOLUTION :', resmax
                 write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  RESOLUTION :', resmed
                 write(logfhandle,'(a,1x,f8.2)') 'AVERAGE RESOLUTION :', resave
                 write(logfhandle,'(a,1x,f8.2)') 'SDEV OF RESOLUTION :', ressdev
