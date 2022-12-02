@@ -756,7 +756,15 @@ contains
         call private_prgs(24)%push_req_key('nthr')
         call private_prgs(24)%push_req_key('which_iter')
 
-        n_private_prgs = 24
+        ! CALC_GLOB_SIGMA, for asssembling sigma for refine3D
+        call private_prgs(25)%set_name('calc_glob_sigma')
+        ! required keys
+        call private_prgs(25)%push_req_key('nparts')
+        call private_prgs(25)%push_req_key('projfile')
+        call private_prgs(25)%push_req_key('nthr')
+        call private_prgs(25)%push_req_key('which_iter')
+
+        n_private_prgs = 25
     end subroutine new_private_prgs
 
 end module simple_private_prgs

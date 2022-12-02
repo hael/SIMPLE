@@ -16,68 +16,67 @@ type :: parameters
     ! pointer 2 program UI
     type(simple_program), pointer :: ptr2prg => null()
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: align_reg='no'       !< using regularized reference
-    character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
-    character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
-    character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
-    character(len=3)      :: bin='no'             !< binarize image(yes|no){no}
-    character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
-    character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)      :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
-    character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
-    character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
-    character(len=3)      :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)      :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
-    character(len=3)      :: doprint='no'
-    character(len=3)      :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
-    character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
-    character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
-    character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
-    character(len=3)      :: gridding='no'        !< to test gridding correction
-    character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
-    character(len=3)      :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
-    character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
-    character(len=3)      :: makemovie='no'
-    character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
-    character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
-    character(len=3)      :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
-    character(len=3)      :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
-    character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
-    character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
-    character(len=3)      :: ml_reg='yes'         !< apply ML regularization to class averages or volume
-    character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no){no}
-    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
-    character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: norm='no'            !< do statistical normalisation avg
-    character(len=3)      :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
-    character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
-    character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)      :: pad='no'
-    character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
-    character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
-    character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
-    character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
-    character(len=3)      :: projstats='no'
-    character(len=3)      :: prune='no'
-    character(len=3)      :: roavg='no'           !< rotationally average images in stack
-    character(len=3)      :: remap_cls='no'
-    character(len=3)      :: clsfrcs='no'
-    character(len=3)      :: script='no'          !< do not execute but generate a script for submission to the queue
-    character(len=3)      :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
-    character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
-    character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
-    character(len=3)      :: taper_edges='no'     !< self-explanatory
-    character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
-    character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
-    character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
-    character(len=3)      :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
-    character(len=3)      :: vis='no'             !< visualise(yes|no)
-    character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
+    character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
+    character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
+    character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
+    character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
+    character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
+    character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
+    character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
+    character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
+    character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
+    character(len=3)          :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
+    character(len=3)          :: doprint='no'
+    character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
+    character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
+    character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
+    character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
+    character(len=3)          :: gridding='no'        !< to test gridding correction
+    character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
+    character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
+    character(len=3)          :: makemovie='no'
+    character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
+    character(len=3)          :: match_filt='yes'     !< matched filter on (yes|no){yes}
+    character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
+    character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
+    character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
+    character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
+    character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
+    character(len=3)          :: needs_sigma='no'     !<
+    character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
+    character(len=3)          :: noise_norm ='no'
+    character(len=3)          :: norm='no'            !< do statistical normalisation avg
+    character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
+    character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
+    character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
+    character(len=3)          :: pad='no'
+    character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
+    character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
+    character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
+    character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
+    character(len=3)          :: projstats='no'
+    character(len=3)          :: prune='no'
+    character(len=3)          :: roavg='no'           !< rotationally average images in stack
+    character(len=3)          :: remap_cls='no'
+    character(len=3)          :: clsfrcs='no'
+    character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
+    character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
+    character(len=3)          :: shellnorm='no'
+    character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)          :: stream='no'          !< sream (real time) execution mode(yes|no){no}
+    character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
+    character(len=3)          :: taper_edges='no'     !< self-explanatory
+    character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
+    character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
+    character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
+    character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
+    character(len=3)          :: vis='no'             !< visualise(yes|no)
+    character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
     character(len=LONGSTRLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
@@ -138,53 +137,54 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmldir=''
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
-    character(len=STDLEN) :: algorithm=''         !< algorithm to be used
-    character(len=STDLEN) :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
-    character(len=STDLEN) :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
-    character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
-    character(len=5)      :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
-    character(len=STDLEN) :: boxtype='eman'
-    character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
-    character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
-    character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
-    character(len=STDLEN) :: dir_exec=''          !< name of execution directory
-    character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
-    character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
-    character(len=STDLEN) :: executable=''        !< name of executable
-    character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
-    character(len=4)      :: element ='    '      !< atom kind
-    character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
-    character(len=STDLEN) :: fbody=''             !< file body
-    character(len=STDLEN) :: filter='no'          !< filter type{no}
-    character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
-    character(len=STDLEN) :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
-    character(len=STDLEN) :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
-    character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|euclid){cc}
-    character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
-    character(len=STDLEN) :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
-    character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
-    character(len=STDLEN) :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
-    character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
-    character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
-    character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: ptclw='no'           !< use particle weights(yes|no){no}
-    character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
-    character(len=STDLEN) :: qsys_partition2D=''  !< partition name for streaming 2d classification
-    character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh){shc}
-    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
-    character(len=STDLEN) :: split_mode='even'
-    character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
-    character(len=STDLEN) :: tag=''               !< just a tag
-    character(len=STDLEN) :: vol_even=''          !< even reference volume
-    character(len=STDLEN) :: vol_odd=''           !< odd  reference volume
-    character(len=STDLEN) :: wfun='kb'
-    character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
-    character(len=:), allocatable :: last_prev_dir !< last previous execution directory
+    character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
+    character(len=STDLEN)     :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
+    character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
+    character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
+    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
+    character(len=STDLEN)     :: boxtype='eman'
+    character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
+    character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
+    character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
+    character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
+    character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
+    character(len=STDLEN)     :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
+    character(len=STDLEN)     :: draw_color='white'   !< color in which to identify the picked particle
+    character(len=STDLEN)     :: executable=''        !< name of executable
+    character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
+    character(len=4)          :: element ='    '      !< atom kind
+    character(len=4)          :: ext='.mrc'           !< file extension{.mrc}
+    character(len=STDLEN)     :: fbody=''             !< file body
+    character(len=STDLEN)     :: filter='no'          !< filter type{no}
+    character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
+    character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
+    character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
+    character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
+    character(len=7)          :: objfun='cc'          !< objective function(cc|euclid){cc}
+    character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
+    character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
+    character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
+    character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
+    character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
+    character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
+    character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
+    character(len=STDLEN)     :: real_filter=''
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh){shc}
+    character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
+    character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
+    character(len=STDLEN)     :: split_mode='even'
+    character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
+    character(len=STDLEN)     :: tag=''               !< just a tag
+    character(len=STDLEN)     :: vol_even=''          !< even reference volume
+    character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
+    character(len=STDLEN)     :: wfun='kb'
+    character(len=STDLEN)     :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
+    character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
@@ -396,7 +396,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_align_reg    = .false.
+    logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
@@ -440,7 +440,6 @@ contains
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('algorithm',      self%algorithm)
-        call check_carg('align_reg',      self%align_reg)
         call check_carg('angastunit',     self%angastunit)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
@@ -526,6 +525,7 @@ contains
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
+        call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
@@ -1031,9 +1031,6 @@ contains
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
         endif
-        ! set align_reg
-        self%l_align_reg = .false.
-        if( trim(self%align_reg) .eq. 'yes' ) self%l_align_reg = .true.
         ! set vols_even and vols_odd
         def_vol1 = cline%defined('vol1')
         def_even = cline%defined('vol_even')
@@ -1329,6 +1326,15 @@ contains
                 endif
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
+        end select
+        ! type of sigma estimation (group or global)
+        select case(trim(self%sigma_est))
+            case('group')
+                self%l_sigma_glob = .false.
+            case('global')
+                self%l_sigma_glob = .true.
+            case DEFAULT
+                THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'

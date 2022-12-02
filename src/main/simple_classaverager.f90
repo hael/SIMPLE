@@ -1,11 +1,11 @@
 module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
-use simple_builder,       only: build_glob
-use simple_parameters,    only: params_glob
-use simple_ctf,           only: ctf
-use simple_image,         only: image, image_ptr
-use simple_stack_io,      only: stack_io
+use simple_builder,    only: build_glob
+use simple_parameters, only: params_glob
+use simple_ctf,        only: ctf
+use simple_image,      only: image, image_ptr
+use simple_stack_io,   only: stack_io
 use simple_euclid_sigma2
 use simple_fsc
 implicit none

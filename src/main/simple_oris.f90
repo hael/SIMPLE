@@ -73,8 +73,8 @@ type :: oris
     procedure          :: get_avg
     procedure          :: included
     procedure          :: get_nevenodd
-    procedure, private :: get_neven
-    procedure, private :: get_nodd
+    procedure          :: get_neven
+    procedure          :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt

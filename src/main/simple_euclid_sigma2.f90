@@ -24,7 +24,6 @@ type euclid_sigma2
     integer                       :: pftsz      = 0
     character(len=:), allocatable :: binfname
     logical                       :: exists     = .false.
-
 contains
     ! constructor
     procedure          :: new
@@ -46,8 +45,6 @@ class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
 
-    ! TYPE euclid_sigma2
-
     subroutine new( self, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
@@ -67,12 +64,12 @@ contains
             call cftcc_glob%assign_sigma2_noise(self%sigma2_noise)
             call cftcc_glob%assign_pinds(self%pinds)
         endif
-        self%binfname         = trim(binfname)
-        self%fromp            = params_glob%fromp
-        self%top              = params_glob%top
-        self%sigma2_noise     = 0.
-        self%exists           = .true.
-        eucl_sigma2_glob      => self
+        self%binfname     =  trim(binfname)
+        self%fromp        =  params_glob%fromp
+        self%top          =  params_glob%top
+        self%sigma2_noise =  0.
+        self%exists       =  .true.
+        eucl_sigma2_glob  => self
     end subroutine new
 
     subroutine write_info(self)
@@ -100,13 +97,23 @@ contains
         integer                             :: iptcl, igroup, ngroups, eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
         if( associated(cftcc_glob) ) call cftcc_glob%assign_pinds(self%pinds)
-        call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
-        ! copy group sigmas to particles
-        do iptcl = params_glob%fromp, params_glob%top
-            igroup  = nint(os%get(iptcl, 'stkind'))
-            eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
-            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
-        end do
+        if( params_glob%l_sigma_glob )then
+            call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
+            if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
+            ! copy global sigma to particles
+            do iptcl = params_glob%fromp, params_glob%top
+                eo = nint(os%get(iptcl, 'eo')) ! 0/1
+                self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,1,:)
+            end do
+        else
+            call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
+            ! copy group sigmas to particles
+            do iptcl = params_glob%fromp, params_glob%top
+                igroup  = nint(os%get(iptcl, 'stkind'))
+                eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
+                self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
+            end do
+        endif
     end subroutine read_groups
 
     !>  Calculates and updates sigma2 within search resolution range
@@ -127,15 +134,15 @@ contains
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2_1
 
-        !>  Calculates and updates sigma2 within search resolution range
+    !>  Calculates and updates sigma2 within search resolution range
     subroutine calc_sigma2_2( self, cftcc, iptcl, o, refkind )
         class(euclid_sigma2),   intent(inout) :: self
         class(cartft_corrcalc), intent(inout) :: cftcc
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         character(len=*),       intent(in)    :: refkind ! 'proj' or 'class'
-        real                 :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        real                 :: shvec(2)
+        real :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real :: shvec(2)
         if ( o%isstatezero() ) return
         shvec = o%get_2Dshift()
         call cftcc%calc_sigma_contrib(iptcl, o, shvec, sigma_contrib)
@@ -161,13 +168,13 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         if( self%exists )then
             call self%kill_ptclsigma2
-            if(allocated(self%pinds))             deallocate(self%pinds)
-            if(allocated(self%micinds))           deallocate(self%micinds)
-            self%kfromto      = 0
-            self%fromp        = -1
-            self%top          = -1
-            self%exists       = .false.
-            eucl_sigma2_glob  => null()
+            if(allocated(self%pinds)  ) deallocate(self%pinds)
+            if(allocated(self%micinds)) deallocate(self%micinds)
+            self%kfromto     = 0
+            self%fromp       = -1
+            self%top         = -1
+            self%exists      = .false.
+            eucl_sigma2_glob => null()
         endif
     end subroutine kill
 
@@ -215,7 +222,7 @@ contains
         class(euclid_sigma2),          intent(inout) :: self
         integer,                       intent(in)    :: iter
         real,             allocatable, intent(out)   :: group_pspecs(:,:,:)
-        integer,                       intent(out)    :: ngroups
+        integer,                       intent(out)   :: ngroups
         type(str4arr),    allocatable :: names(:)
         type(starfile_table_type)     :: istarfile
         character(len=:), allocatable :: starfile_fname

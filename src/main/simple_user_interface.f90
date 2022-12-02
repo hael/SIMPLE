@@ -280,6 +280,7 @@ type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
+type(simple_input_param) :: sigma_est
 type(simple_input_param) :: smooth_ext
 type(simple_input_param) :: smpd
 type(simple_input_param) :: star_datadir
@@ -1060,6 +1061,7 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(sigma_est,      'sigma_est',    'multi', 'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1456,7 +1458,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 9, 10, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 10, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1490,6 +1492,8 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 8, submenu="search")
         call cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
         call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
+        call cluster2D%set_input('srch_ctrls', 10, sigma_est)
+        call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -3624,7 +3628,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 13, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 14, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3650,6 +3654,7 @@ contains
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations prior to e/o refinement', '# of iterations after which low-pass limited alignment is switched to e/o(0:never){1}',&
         &'# iterations prior to e/o refinement{1}', .false., 1.)
         call refine3D%set_input('srch_ctrls', 13, 'align_reg', 'binary', 'Regularizing the reference volume', 'Regularizing the reference volume (yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call refine3D%set_input('srch_ctrls', 14, sigma_est)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
