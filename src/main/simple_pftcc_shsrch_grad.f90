@@ -64,7 +64,7 @@ contains
         self%coarse_init = .false.
         if( present(coarse_init) ) self%coarse_init = coarse_init
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', 2, factr=1.d+6, pgtol=1.d-7, limits=lims,&
+        call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)

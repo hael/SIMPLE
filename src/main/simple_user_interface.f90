@@ -1458,7 +1458,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 10, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1515,14 +1515,8 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 7,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 8, 'winsz', 'num', 'Window size for median filter',&
-        &'Window size for median filter(in pixels)', 'winsz in pixels', .false., 5.0)
+        call cluster2D%set_input('filt_ctrls', 8, ml_reg)
         call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 9, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms{20 A}', 'low-pass limit in Angstroms{20 A}', .false., 20.)
-        call cluster2D%set_gui_params('filt_ctrls', 9, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 10, ml_reg)
-        call cluster2D%set_gui_params('filt_ctrls', 10, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
