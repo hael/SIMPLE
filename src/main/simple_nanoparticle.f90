@@ -1129,7 +1129,7 @@ contains
         logical, allocatable :: cc_mask(:), displ_neighbor(:)
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
-        integer :: i, j, k, cc, cn, n, funit, fiso, ios, scale_fac = 1, adp_tossed
+        integer :: i, j, k, cc, cn, n, funit, fiso, ios, scale_fac = 4, adp_tossed
         character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", &
                     &fn_fit_descaled="fit_descaled.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_iso='iso_disp.txt'
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
@@ -1213,9 +1213,9 @@ contains
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
-            call calc_isotropic_disp_lsq(cc)
+            !call calc_isotropic_disp_lsq(cc)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_anisotropic_disp_sphere(cc)
+                call calc_aniso_shell(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
                 adp_tossed = adp_tossed + 1
@@ -1349,6 +1349,95 @@ contains
                 call atoms_obj%kill
             end subroutine write_cn_atoms
 
+            subroutine calc_aniso_shell(cc)
+                integer, intent(in)     :: cc
+                real        :: center(3), maxrad, x, y, z, inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), fit_rad
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, n, m, l, size_scaled, icenter(3), ifoo
+
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the unscaled image, so i, j, k are in unscaled coordinates
+                center = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 3) / (self%smpd)
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1))
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2))
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3))
+                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd)
+
+                ! Calculate the unweighted center of the connected component.
+                size_scaled = self%atominfo(cc)%size * (scale_fac**3)
+                center = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (mask(i,j,k)) then
+                                do n=0, scale_fac-1
+                                    x = i*scale_fac - n
+                                    do m=0, scale_fac-1
+                                        y = j*scale_fac - m
+                                        do l=0, scale_fac-1
+                                            z = k*scale_fac - l
+                                            center(1) = center(1) + x/size_scaled
+                                            center(2) = center(2) + y/size_scaled
+                                            center(3) = center(3) + z/size_scaled
+                                        end do
+                                    end do
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                icenter = nint(center)
+
+
+                ! Compute the inertia tensor of the connected component. (x,y,z) are scaled coordinates
+                inertia_t = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (mask(i,j,k)) then
+                                do n=0, scale_fac-1
+                                    x = i*scale_fac - n
+                                    do m=0, scale_fac-1
+                                        y = j*scale_fac - m
+                                        do l=0, scale_fac-1
+                                            z = k*scale_fac - l
+                                            inertia_t(1,1) = inertia_t(1,1) + ((y-icenter(2))**2 +(z-icenter(3))**2) / size_scaled
+                                            inertia_t(2,2) = inertia_t(2,2) + ((x-icenter(1))**2 +(z-icenter(3))**2) / size_scaled
+                                            inertia_t(3,3) = inertia_t(3,3) + ((x-icenter(1))**2 +(y-icenter(2))**2) / size_scaled
+                                            inertia_t(1,2) = inertia_t(1,2) - (x-icenter(1))*(y-icenter(2)) / size_scaled
+                                            inertia_t(1,3) = inertia_t(1,3) - (x-icenter(1))*(z-icenter(3)) / size_scaled
+                                            inertia_t(2,3) = inertia_t(2,3) - (y-icenter(2))*(z-icenter(3)) / size_scaled
+                                        end do
+                                    end do
+                                end do
+                            end if
+                        end do
+                    end do
+                end do
+                ! The inertia tensor is symmetric
+                inertia_t(2,1) = inertia_t(1,2)
+                inertia_t(3,1) = inertia_t(1,3)
+                inertia_t(3,2) = inertia_t(2,3)
+                
+                ! Calculate principal axes of CC.
+                self%atominfo(cc)%aniso = inertia_t * (self%smpd / scale_fac)**2
+                call jacobi(inertia_t, 3, 3, eigenvals, eigenvecs, ifoo)
+                call eigsrt(eigenvals, eigenvecs, 3, 3)
+
+                write (funit, '(2i7, 9f10.3)') cc, size_scaled, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
+                write (funit, '(2i7, 12f10.3)') cc, size_scaled, eigenvals, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+
+                ! Extract the scaled surface 
+
+
+                ! Fit scaled surface with ellipse in the principal basis
+
+            end subroutine calc_aniso_shell
+
             subroutine calc_isotropic_disp_lsq(cc)
                 integer, intent(in)     :: cc
                 real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, var, fit_rad, A, beta, prob, prob_sum_sq, top, bottom, prob_tot, corr
@@ -1359,7 +1448,7 @@ contains
                 ! by avoiding having to iterate over the entire scaled images for each connected component.
                 ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
                 center = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 6) / (self%smpd / scale_fac)
+                maxrad  = (self%theoretical_radius * 4) / (self%smpd / scale_fac)
                 ilo = max(nint(center(1) - maxrad), 1)
                 ihi = min(nint(center(1) + maxrad), self%ldim(1)*scale_fac)
                 jlo = max(nint(center(2) - maxrad), 1)
