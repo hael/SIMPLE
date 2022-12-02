@@ -150,6 +150,7 @@ type :: polarft_corrcalc
     ! CALCULATORS
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
+    procedure, private :: prep_ref4euclid
     procedure, private :: gen_shmat
     procedure, private :: gen_shmat_8
     procedure, private :: calc_corrs_over_k
@@ -202,7 +203,7 @@ end type polarft_corrcalc
 complex(sp), parameter           :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter           :: FFTW_USE_WISDOM = 16
 class(polarft_corrcalc), pointer :: pftcc_glob => null()
- 
+
 contains
 
     ! CONSTRUCTORS
@@ -1000,6 +1001,22 @@ contains
         sqsum_ref = sum(csq_fast(pft_ref(:,self%kfromto(1):self%kfromto(2))))
     end subroutine prep_ref4corr
 
+    subroutine prep_ref4euclid( self, iref, iptcl, pft_ref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        complex(sp),             intent(out)   :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: i
+        i = self%pinds(iptcl)
+        ! copy
+        if( self%iseven(i) )then
+            pft_ref = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! multiply with CTF
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
+    end subroutine prep_ref4euclid
+
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
     subroutine gen_shmat_8( self, ithr, shift_8 , shmat_8 )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1495,7 +1512,7 @@ contains
         i              =  self%pinds(iptcl)
         pft_ref        => self%heap_vars(ithr)%pft_ref
         keuclids       => self%heap_vars(ithr)%kcorrs ! can be reused
-        call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref)
+        call self%prep_ref4euclid(iref, iptcl, pft_ref)
         euclids(:) = 0.
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
