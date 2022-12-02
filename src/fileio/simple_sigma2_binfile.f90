@@ -9,29 +9,28 @@ private
 type sigma2_binfile
     private
     character(len=:), allocatable :: fname
-    integer                       :: file_header(4) = 0
-    integer                       :: fromp          = 0
-    integer                       :: top            = 0
-    integer                       :: kfromto(2)     = 0
-    integer                       :: headsz         = 0
-    integer                       :: sigmassz       = 0
-    logical                       :: exists         = .false.
-
+    integer :: file_header(4) = 0
+    integer :: fromp          = 0
+    integer :: top            = 0
+    integer :: kfromto(2)     = 0
+    integer :: headsz         = 0
+    integer :: sigmassz       = 0
+    logical :: exists         = .false.
 contains
     ! constructor
-    procedure                     :: new
-    procedure                     :: new_from_file
+    procedure          :: new
+    procedure          :: new_from_file
     ! I/O
-    procedure                     :: read
-    procedure                     :: write
-    procedure                     :: write_info
-    procedure, private            :: create_empty
-    procedure, private            :: open_and_check_header
-    procedure, private            :: read_header
+    procedure          :: read
+    procedure          :: write
+    procedure          :: write_info
+    procedure, private :: create_empty
+    procedure, private :: open_and_check_header
+    procedure, private :: read_header
     ! getters / setters
-    procedure                     :: get_resrange
+    procedure          :: get_resrange
     ! destructor
-    procedure                     :: kill
+    procedure          :: kill
 end type sigma2_binfile
 
 contains
@@ -42,16 +41,16 @@ contains
         integer,                       intent(in)    :: fromp, top, kfromto(2)
         real(sp) :: r
         call self%kill
-        self%fname   = trim(fname)
-        self%fromp   = fromp
-        self%top     = top
-        self%kfromto = kfromto
+        self%fname            = trim(fname)
+        self%fromp            = fromp
+        self%top              = top
+        self%kfromto          = kfromto
         self%file_header(1)   = fromp
         self%file_header(2)   = top
         self%file_header(3:4) = kfromto
         self%headsz           = sizeof(self%file_header)
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
-        self%exists = .true.
+        self%exists           = .true.
     end subroutine new
 
     subroutine new_from_file( self, fname )
@@ -62,25 +61,15 @@ contains
         if (.not. file_exists(fname)) then
             THROW_HARD('sigma2_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
         end if
-        self%fname   = trim(fname)
+        self%fname             = trim(fname)
         call self%read_header
         self%file_header(1)   = self%fromp
         self%file_header(2)   = self%top
         self%file_header(3:4) = self%kfromto(:)
         self%headsz           = sizeof(self%file_header)
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
-        self%exists = .true.
+        self%exists           = .true.
     end subroutine new_from_file
-
-    ! utils
-
-    subroutine write_info( self )
-        class(sigma2_binfile), intent(in) :: self
-        write(logfhandle,*) 'fromto:   ',self%kfromto
-        write(logfhandle,*) 'fromp:    ',self%fromp
-        write(logfhandle,*) 'top:      ',self%top
-        write(logfhandle,*) 'sigmassz: ',self%sigmassz
-    end subroutine write_info
 
     ! I/O
 
@@ -128,7 +117,15 @@ contains
             write(funit,pos=addr) sigma2(:,iptcl)
         end do
         call fclose(funit)
-    end subroutine
+    end subroutine write
+
+    subroutine write_info( self )
+        class(sigma2_binfile), intent(in) :: self
+        write(logfhandle,*) 'fromto:   ',self%kfromto
+        write(logfhandle,*) 'fromp:    ',self%fromp
+        write(logfhandle,*) 'top:      ',self%top
+        write(logfhandle,*) 'sigmassz: ',self%sigmassz
+    end subroutine write_info
 
     function open_and_check_header( self, funit, readonly ) result ( success )
         class(sigma2_binfile), intent(inout) :: self
@@ -219,6 +216,5 @@ contains
         self%top          = 0
         self%exists       = .false.
     end subroutine kill
-
 
 end module simple_sigma2_binfile

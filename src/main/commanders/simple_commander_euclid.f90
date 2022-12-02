@@ -7,18 +7,15 @@ use simple_parameters,       only: parameters, params_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_euclid_sigma2,    only: write_groups_starfile
+use simple_image,            only: image
 use simple_qsys_funs
 implicit none
-
-! interface exec_calc_group_sigmas
-!     module procedure exec_calc_group_sigmas_1, exec_calc_group_sigmas_2
-! end interface exec_calc_group_sigmas
-
 
 public :: calc_pspec_commander_distr
 public :: calc_pspec_commander
 public :: calc_pspec_assemble_commander
 public :: calc_group_sigmas_commander
+public :: calc_glob_sigma_commander
 private
 #include "simple_local_flags.inc"
 
@@ -41,6 +38,11 @@ type, extends(commander_base) :: calc_group_sigmas_commander
   contains
     procedure :: execute      => exec_calc_group_sigmas
 end type calc_group_sigmas_commander
+
+type, extends(commander_base) :: calc_glob_sigma_commander
+  contains
+    procedure :: execute      => exec_calc_glob_sigma
+end type calc_glob_sigma_commander
 
 type :: sigma_array
     character(len=:), allocatable :: fname
@@ -78,7 +80,7 @@ contains
             case('ptcl2D','ptcl3D')
                 fall_over = build%spproj%get_nptcls() == 0
             case DEFAULT
-                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_euclid :: exec_refine3D_distr'
         end select
         if( fall_over )then
             THROW_HARD('no particles found! :exec_refine3D_distr')
@@ -110,7 +112,6 @@ contains
     subroutine exec_calc_pspec( self, cline )
         use simple_parameters,          only: params_glob
         use simple_strategy2D3D_common, only: prepimgbatch, read_imgbatch
-        use simple_image,               only: image
         class(calc_pspec_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)     :: params
@@ -189,12 +190,11 @@ contains
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
         ! end gracefully
-        call qsys_job_finished('simple_commander_refine3D :: exec_calc_pspec')
+        call qsys_job_finished('simple_commander_euclid :: exec_calc_pspec')
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_pspec
 
     subroutine exec_calc_pspec_assemble( self, cline )
-        use simple_image,               only: image
         class(calc_pspec_assemble_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)                 :: params
@@ -238,7 +238,7 @@ contains
             pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
             pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
             if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
-                THROW_HARD('commander_refine3d; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
+                THROW_HARD('commander_euclid; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
             end if
             pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
         end do
@@ -297,9 +297,10 @@ contains
             deallocate(sigma2_arrays(ipart)%fname)
             deallocate(sigma2_arrays(ipart)%sigma2)
         end do
-        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_refine3D::calc_pspec_assemble')
+        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_euclid::calc_pspec_assemble')
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
+
     contains
 
         subroutine remove_negative_sigmas(eo, igroup)
@@ -339,18 +340,17 @@ contains
     end subroutine exec_calc_pspec_assemble
 
     subroutine exec_calc_group_sigmas( self, cline )
-        use simple_image,               only: image
         class(calc_group_sigmas_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        type(parameters)                 :: params
-        type(builder)                    :: build
-        type(sigma2_binfile)             :: binfile
-        type(sigma_array)                :: sigma2_array
-        character(len=:),  allocatable   :: starfile_fname
-        real,              allocatable   :: group_pspecs(:,:,:),pspecs(:,:)
-        real,              allocatable   :: group_weights(:,:)
-        real                             :: w
-        integer                          :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(sigma2_binfile)          :: binfile
+        type(sigma_array)             :: sigma2_array
+        character(len=:), allocatable :: starfile_fname
+        real,             allocatable :: group_pspecs(:,:,:),pspecs(:,:)
+        real,             allocatable :: group_weights(:,:)
+        real                          :: w
+        integer                       :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
         if( associated(build_glob) )then
             if( .not.associated(params_glob) )then
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
@@ -368,7 +368,7 @@ contains
             fromp = lbound(sigma2_array%sigma2,2)
             top   = ubound(sigma2_array%sigma2,2)
             if( (fromp<1).or.(top>params_glob%nptcls) )then
-                THROW_HARD('commander_refine3d; exec_calc_group_sigmas; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
+                THROW_HARD('commander_euclid; exec_calc_group_sigmas; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
             end if
             if( ipart == 1 )then
                 call binfile%get_resrange(kfromto)
@@ -394,20 +394,80 @@ contains
             igroup = nint(build_glob%spproj_field%get(iptcl,'stkind'))
             w      = build_glob%spproj_field%get(iptcl,'w')
             if( w < TINY )cycle
-            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w*pspecs(:, iptcl)
+            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w * pspecs(:,iptcl)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
         enddo
         do eo = 1,2
             do igroup = 1,ngroups
                 if( group_weights(eo,igroup) < TINY ) cycle
-                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup))
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / group_weights(eo,igroup)
             end do
         end do
         ! write group sigmas to starfile
         starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
         call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
-        call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_refine3D::calc_group_sigmas')
+        call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_euclid::calc_group_sigmas')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
+
+    subroutine exec_calc_glob_sigma( self, cline )
+        class(calc_glob_sigma_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(sigma2_binfile)          :: binfile
+        type(sigma_array)             :: sigma2_array
+        character(len=:), allocatable :: starfile_fname
+        real,             allocatable :: glob_pspec(:,:,:),pspecs(:,:)
+        real(QP),         allocatable :: glob_pspec_qp(:,:)
+        real                          :: w,group_weights(2),ew,ow
+        integer                       :: kfromto(2),iptcl,ipart,eo,fromp,top
+        if( associated(build_glob) )then
+            if( .not.associated(params_glob) )then
+                THROW_HARD('Builder & parameters must be associated for shared memory execution!')
+            endif
+        else
+            call cline%set('mkdir', 'no')
+            if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        endif
+        ! read sigmas from binfiles
+        do ipart = 1,params_glob%nparts
+            sigma2_array%fname = SIGMA2_FBODY//int2str_pad(ipart,params_glob%numlen)//'.dat'
+            call binfile%new_from_file(sigma2_array%fname)
+            call binfile%read(sigma2_array%sigma2)
+            fromp = lbound(sigma2_array%sigma2,2)
+            top   = ubound(sigma2_array%sigma2,2)
+            if( (fromp<1).or.(top>params_glob%nptcls) )then
+                THROW_HARD('commander_euclid; exec_calc_glob_sigma; file ' // sigma2_array%fname // ' has ptcl range ' // int2str(fromp) // '-' // int2str(top))
+            end if
+            if( ipart == 1 )then
+                call binfile%get_resrange(kfromto)
+                allocate(pspecs(kfromto(1):kfromto(2),params_glob%nptcls))
+            endif
+            pspecs(:,fromp:top) = sigma2_array%sigma2(:,:)
+            deallocate(sigma2_array%sigma2)
+        end do
+        allocate(glob_pspec(2,1,kfromto(1):kfromto(2)), glob_pspec_qp(2,kfromto(1):kfromto(2)))
+        glob_pspec = 0.
+        glob_pspec = real(0.,kind=QP)
+        do iptcl = 1,params_glob%nptcls
+            if( build_glob%spproj_field%get_state(iptcl) == 0 ) cycle
+            eo = nint(build_glob%spproj_field%get(iptcl,'eo')) ! 0/1
+            w  = build_glob%spproj_field%get(iptcl,'w')
+            if( w < TINY )cycle
+            glob_pspec_qp(eo+1,:) = glob_pspec_qp(eo+1,:) + w * real(pspecs(:,iptcl),kind=QP)
+            group_weights(eo+1)   = group_weights(eo+1)   + w
+        enddo
+        do eo = 1,2
+            if( group_weights(eo) < TINY ) cycle
+            glob_pspec(eo,1,:) = real(glob_pspec_qp(eo,:) / real(group_weights(eo),kind=QP), kind=SP)
+        end do
+        ! write global sigma to starfile
+        starfile_fname = trim(SIGMA2_GROUP_FBODY)//trim(int2str(params_glob%which_iter))//'.star'
+        call write_groups_starfile(starfile_fname, glob_pspec, 1)
+        call simple_touch('CALC_GLOB_SIGMA_FINISHED',errmsg='In: commander_euclid::calc_glob_sigma')
+        call simple_end('**** SIMPLE_CALC_GLOB_SIGMA NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_calc_glob_sigma
 
 end module simple_commander_euclid

@@ -73,7 +73,7 @@ contains
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
-        type(cmdline)    :: cline_calc_group_sigmas
+        type(cmdline)    :: cline_calc_sigma
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
@@ -164,12 +164,16 @@ contains
         cline_check_3Dconv        = cline
         cline_volassemble         = cline
         cline_postprocess         = cline
-        cline_calc_group_sigmas   = cline
+        cline_calc_sigma          = cline
         ! initialise static command line parameters and static job description parameter
-        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )    ! required for distributed call
-        call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )       ! required for distributed call
-        call cline_postprocess%set(         'prg', 'postprocess' )      ! required for local call
-        call cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )! required for local call
+        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
+        call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
+        call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
+        if( params%l_sigma_glob )then
+            call cline_calc_sigma%set(      'prg', 'calc_glob_sigma' )   ! required for local call
+        else
+            call cline_calc_sigma%set(      'prg', 'calc_group_sigmas' ) ! required for local call
+        endif
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
@@ -351,8 +355,12 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
             if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
-                call cline_calc_group_sigmas%set('which_iter',real(iter))
-                call qenv%exec_simple_prg_in_queue(cline_calc_group_sigmas, 'CALC_GROUP_SIGMAS_FINISHED')
+                call cline_calc_sigma%set('which_iter',real(iter))
+                if( params%l_sigma_glob )then
+                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GLOB_SIGMA_FINISHED')
+                else
+                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                endif
             endif
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)

@@ -24,59 +24,60 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PRE-PROCESSING PROGRAMS
-type(preprocess_commander)            :: xpreprocess
-type(extract_commander)               :: xextract
-type(reextract_commander)             :: xreextract
-type(motion_correct_commander)        :: xmotion_correct
-type(gen_pspecs_and_thumbs_commander) :: xgen_pspecs_and_thumbs
-type(ctf_estimate_commander)          :: xctf_estimate
-type(pick_extract_commander)          :: xpick_extract
-type(pick_commander)                  :: xpick
-type(make_pickrefs_commander)         :: xmake_pickrefs
+type(preprocess_commander)              :: xpreprocess
+type(extract_commander)                 :: xextract
+type(reextract_commander)               :: xreextract
+type(motion_correct_commander)          :: xmotion_correct
+type(gen_pspecs_and_thumbs_commander)   :: xgen_pspecs_and_thumbs
+type(ctf_estimate_commander)            :: xctf_estimate
+type(pick_extract_commander)            :: xpick_extract
+type(pick_commander)                    :: xpick
+type(make_pickrefs_commander)           :: xmake_pickrefs
 
 ! CLUSTER2D PROGRAMS
-type(make_cavgs_commander)            :: xmake_cavgs
-type(cluster2D_commander)             :: xcluster2D
-type(cluster2D_commander_distr)       :: xcluster2D_distr
-type(cavgassemble_commander)          :: xcavgassemble
-type(rank_cavgs_commander)            :: xrank_cavgs
-type(export_cavgs_commander)          :: xexport_cavgs
+type(make_cavgs_commander)              :: xmake_cavgs
+type(cluster2D_commander)               :: xcluster2D
+type(cluster2D_commander_distr)         :: xcluster2D_distr
+type(cavgassemble_commander)            :: xcavgassemble
+type(rank_cavgs_commander)              :: xrank_cavgs
+type(export_cavgs_commander)            :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
-type(refine3D_commander)              :: xrefine3D
-type(calc_pspec_commander)            :: xcalc_pspec
-type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
-type(check_3Dconv_commander)          :: xcheck_3Dconv
-type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
+type(refine3D_commander)                :: xrefine3D
+type(calc_pspec_commander)              :: xcalc_pspec
+type(calc_pspec_assemble_commander)     :: xcalc_pspec_assemble
+type(check_3Dconv_commander)            :: xcheck_3Dconv
+type(calc_group_sigmas_commander)       :: xcalc_group_sigmas
+type(calc_glob_sigma_commander)         :: xcalc_glob_sigma
 
 ! RECONSTRUCTION PROGRAMS
-type(volassemble_commander)           :: xvolassemble
-type(reconstruct3D_commander)         :: xreconstruct3D
+type(volassemble_commander)             :: xvolassemble
+type(reconstruct3D_commander)           :: xreconstruct3D
 
 ! CHECKER PROGRAMS
-type(check_box_commander)             :: xcheck_box
-type(check_nptcls_commander)          :: xcheck_nptcls
+type(check_box_commander)               :: xcheck_box
+type(check_nptcls_commander)            :: xcheck_nptcls
 
 ! VOLOPS PROGRAMS
-type(postprocess_commander)           :: xpostprocess
-type(automask_commander)              :: xautomask
+type(postprocess_commander)             :: xpostprocess
+type(automask_commander)                :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(scale_commander)                 :: xscale
-type(binarize_commander)              :: xbinarize
-type(edge_detect_commander)           :: xdetector
+type(scale_commander)                   :: xscale
+type(binarize_commander)                :: xbinarize
+type(edge_detect_commander)             :: xdetector
 
 ! MISCELLANOUS PROGRAMS
-type(masscen_commander)               :: xmasscen
-type(kstest_commander)                :: xkstst
+type(masscen_commander)                 :: xmasscen
+type(kstest_commander)                  :: xkstst
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(rotmats2oris_commander)          :: xrotmats2oris
-type(print_project_vals_commander)    :: xprint_project_vals
+type(rotmats2oris_commander)            :: xrotmats2oris
+type(print_project_vals_commander)      :: xprint_project_vals
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(prune_project_commander)         :: xprune_project
-type(scale_project_commander_distr)   :: xscale_project_distr
+type(prune_project_commander)           :: xprune_project
+type(scale_project_commander_distr)     :: xscale_project_distr
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_track_particles_commander) :: xtseries_track_particles
@@ -162,6 +163,8 @@ select case(prg)
         call xcheck_3Dconv%execute(cline)
     case( 'calc_group_sigmas' )
         call xcalc_group_sigmas%execute(cline)
+    case( 'calc_glob_sigma' )
+        call xcalc_glob_sigma%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )
