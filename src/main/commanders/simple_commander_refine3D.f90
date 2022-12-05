@@ -169,11 +169,7 @@ contains
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
-        if( params%l_sigma_glob )then
-            call cline_calc_sigma%set(      'prg', 'calc_glob_sigma' )   ! required for local call
-        else
-            call cline_calc_sigma%set(      'prg', 'calc_group_sigmas' ) ! required for local call
-        endif
+        call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
@@ -356,11 +352,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
-                if( params%l_sigma_glob )then
-                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GLOB_SIGMA_FINISHED')
-                else
-                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
-                endif
+                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)

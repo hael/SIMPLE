@@ -840,11 +840,7 @@ contains
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set(     'prg', 'cavgassemble')
         call cline_make_cavgs%set(       'prg', 'make_cavgs')
-        if( params%l_sigma_glob )then
-            call cline_calc_sigma%set('prg', 'calc_glob_sigma' )   ! required for local call
-        else
-            call cline_calc_sigma%set('prg', 'calc_group_sigmas' ) ! required for local call
-        endif
+        call cline_calc_sigma%set('prg', 'calc_group_sigmas' ) ! required for local call
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -928,11 +924,7 @@ contains
             ! noise power
             if( trim(params%objfun).eq.'euclid' .or. l_switch2euclid )then
                 call cline_calc_sigma%set('which_iter',real(params%which_iter))
-                if( params%l_sigma_glob )then
-                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GLOB_SIGMA_FINISHED')
-                else
-                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
-                endif
+                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -1047,7 +1039,6 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(make_cavgs_commander)        :: xmake_cavgs
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
-        type(calc_glob_sigma_commander)   :: xcalc_glob_sigma
         type(cmdline)              :: cline_make_cavgs
         type(parameters)           :: params
         type(builder), target      :: build
@@ -1156,11 +1147,7 @@ contains
                 params%which_iter = params%startit
                 ! sigmas2
                 if( params%l_needs_sigma )then
-                    if( params%l_sigma_glob )then
-                        call xcalc_glob_sigma%execute(cline)
-                    else
-                        call xcalc_group_sigmas%execute(cline)
-                    endif
+                    call xcalc_group_sigmas%execute(cline)
                 endif
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -1195,11 +1182,7 @@ contains
             end do
             if( params%l_needs_sigma .and. (i > 1) )then
                 params%which_iter = params%which_iter + 1
-                if( params%l_sigma_glob )then
-                    call xcalc_glob_sigma%execute(cline)
-                else
-                    call xcalc_group_sigmas%execute(cline)
-                endif
+                call xcalc_group_sigmas%execute(cline)
                 params%which_iter = params%which_iter - 1
             endif
             ! end gracefully
