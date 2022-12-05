@@ -50,15 +50,20 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:), states(:), corrs(:), pws(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t, percen_nonzero_pw
+        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, corr_t, percen_nonzero_pw, lim_updatecnt
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states            = build_glob%spproj_field%get_all('state')
         corrs             = build_glob%spproj_field%get_all('corr')
         updatecnts        = build_glob%spproj_field%get_all('updatecnt')
+        lim_updatecnt     = maxval(updatecnts) - 0.5
         avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
+        if( params_glob%l_frac_update )then
+            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
+        else
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5            .and. states > 0.5)
+        endif
         pws               = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call os%stats('corr',      self%corr,      mask=mask)
@@ -166,17 +171,21 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), corrs(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t
+        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t, lim_updatecnt
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
         corrs         = build_glob%spproj_field%get_all('corr')
-
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
+        lim_updatecnt     = maxval(updatecnts) - 0.5
+        avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
+        if( params_glob%l_frac_update )then
+            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
+        else
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5            .and. states > 0.5)
+        endif
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)
@@ -302,7 +311,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:), pws(:), states(:), corrs(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t
+        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, corr_t, lim_updatecnt
         logical :: converged
         integer :: iptcl
         601 format(A,1X,F12.3)
@@ -310,8 +319,13 @@ contains
         states        = build_glob%spproj_field%get_all('state')
         corrs         = build_glob%spproj_field%get_all('corr')
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        lim_updatecnt = maxval(updatecnts) - 0.5
         avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
+        if( params_glob%l_frac_update )then
+            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
+        else
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5           .and. states > 0.5)
+        endif
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',       self%corr,       mask=mask)

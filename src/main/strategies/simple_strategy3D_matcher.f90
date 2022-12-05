@@ -298,7 +298,7 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! UPDATE PARTICLE STATS
-        if( .not. params_glob%l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
+        ! if( .not. params_glob%l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
@@ -510,56 +510,56 @@ contains
     end subroutine build_cftcc_batch_particles
 
     !> Prepare alignment search using polar projection Fourier cross correlation
-    subroutine calc_ptcl_stats( batchsz_max, l_ctf )
-        use simple_strategy2D3D_common, only: prepimg4align
-        integer,   intent(in) :: batchsz_max
-        logical,   intent(in) :: l_ctf
-        integer, allocatable  :: pinds_here(:), batches(:,:)
-        integer :: nptcls, iptcl_batch, iptcl, nbatches, ibatch, batch_start, batch_end, iptcl_map, batchsz
-        if( .not.params_glob%l_frac_update ) return
-        select case(params_glob%refine)
-            case('cluster','clustersym','eval')
-                return
-            case DEFAULT
-                ! all good
-        end select
-        ! build local particles index map
-        nptcls = 0
-        do iptcl = params_glob%fromp,params_glob%top
-            if( .not.ptcl_mask(iptcl) )then
-                if( build_glob%spproj_field%get_state(iptcl) > 0 ) nptcls = nptcls + 1
-            endif
-        enddo
-        if( nptcls == 0 ) return
-        allocate(pinds_here(nptcls),source=0)
-        nptcls = 0
-        do iptcl = params_glob%fromp,params_glob%top
-            if( .not.ptcl_mask(iptcl) )then
-                if( build_glob%spproj_field%get_state(iptcl) > 0 )then
-                    nptcls = nptcls + 1
-                    pinds_here(nptcls) = iptcl
-                endif
-            endif
-        enddo
-        ! Batch loop
-        nbatches = ceiling(real(nptcls)/real(batchsz_max))
-        batches  = split_nobjs_even(nptcls, nbatches)
-        do ibatch=1,nbatches
-            batch_start = batches(ibatch,1)
-            batch_end   = batches(ibatch,2)
-            batchsz     = batch_end - batch_start + 1
-            call build_pftcc_batch_particles(batchsz, pinds_here(batch_start:batch_end))
-            if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map)&
-            !$omp schedule(static) proc_bind(close)
-            do iptcl_batch = 1,batchsz                     ! particle batch index
-                iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
-                iptcl      = pinds_here(iptcl_map)         ! global index
-                call set_ptcl_stats(pftcc, iptcl)
-            enddo
-            !$omp end parallel do
-        enddo
-    end subroutine calc_ptcl_stats
+    ! subroutine calc_ptcl_stats( batchsz_max, l_ctf )
+    !     use simple_strategy2D3D_common, only: prepimg4align
+    !     integer,   intent(in) :: batchsz_max
+    !     logical,   intent(in) :: l_ctf
+    !     integer, allocatable  :: pinds_here(:), batches(:,:)
+    !     integer :: nptcls, iptcl_batch, iptcl, nbatches, ibatch, batch_start, batch_end, iptcl_map, batchsz
+    !     if( .not.params_glob%l_frac_update ) return
+    !     select case(params_glob%refine)
+    !         case('cluster','clustersym','eval')
+    !             return
+    !         case DEFAULT
+    !             ! all good
+    !     end select
+    !     ! build local particles index map
+    !     nptcls = 0
+    !     do iptcl = params_glob%fromp,params_glob%top
+    !         if( .not.ptcl_mask(iptcl) )then
+    !             if( build_glob%spproj_field%get_state(iptcl) > 0 ) nptcls = nptcls + 1
+    !         endif
+    !     enddo
+    !     if( nptcls == 0 ) return
+    !     allocate(pinds_here(nptcls),source=0)
+    !     nptcls = 0
+    !     do iptcl = params_glob%fromp,params_glob%top
+    !         if( .not.ptcl_mask(iptcl) )then
+    !             if( build_glob%spproj_field%get_state(iptcl) > 0 )then
+    !                 nptcls = nptcls + 1
+    !                 pinds_here(nptcls) = iptcl
+    !             endif
+    !         endif
+    !     enddo
+    !     ! Batch loop
+    !     nbatches = ceiling(real(nptcls)/real(batchsz_max))
+    !     batches  = split_nobjs_even(nptcls, nbatches)
+    !     do ibatch=1,nbatches
+    !         batch_start = batches(ibatch,1)
+    !         batch_end   = batches(ibatch,2)
+    !         batchsz     = batch_end - batch_start + 1
+    !         call build_pftcc_batch_particles(batchsz, pinds_here(batch_start:batch_end))
+    !         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+    !         !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map)&
+    !         !$omp schedule(static) proc_bind(close)
+    !         do iptcl_batch = 1,batchsz                     ! particle batch index
+    !             iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
+    !             iptcl      = pinds_here(iptcl_map)         ! global index
+    !             call set_ptcl_stats(pftcc, iptcl)
+    !         enddo
+    !         !$omp end parallel do
+    !     enddo
+    ! end subroutine calc_ptcl_stats
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, which_iter )
