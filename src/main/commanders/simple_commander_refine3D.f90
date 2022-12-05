@@ -537,14 +537,19 @@ contains
             end select
             if( iter >= params%maxits ) converged = .true.
             if ( l_combine_eo .and. converged )then
-                converged         = .false.
-                l_combine_eo      = .false.
-                params%combine_eo = 'yes'
-                params%maxits     = iter + 1
-                params%lplim_crit = min(0.143,params%lplim_crit)
+                converged            = .false.
+                l_combine_eo         = .false.
+                params%combine_eo    = 'yes'
+                params%l_frac_update = .false.
+                params%update_frac   = 1.0
+                params%maxits        = iter + 1
+                params%lplim_crit    = min(0.143,params%lplim_crit)
                 call cline%set('lplim_crit',params%lplim_crit)
+                call cline%set('update_frac',1.0)
                 call job_descr%set('lplim_crit',real2str(params%lplim_crit))
+                call job_descr%set('update_frac',real2str(1.0))
                 call cline_volassemble%set('combine_eo', 'yes')
+                call cline_volassemble%set('update_frac', 1.0)
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES & RESOLUTION LIMIT BEYOND FSC=0.143'
                 call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
