@@ -1,11 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
-use simple_qsys_env,       only: qsys_env
+use simple_builder,             only: builder
+use simple_cmdline,             only: cmdline
+use simple_commander_base,      only: commander_base
+use simple_parameters,          only: parameters
+use simple_qsys_env,            only: qsys_env
+use simple_strategy2D3D_common, only: calc_3Drec
 use simple_qsys_funs
 implicit none
 
@@ -131,15 +132,50 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
+    ! subroutine exec_reconstruct3D( self, cline )
+    !     class(reconstruct3D_commander), intent(inout) :: self
+    !     class(cmdline),                 intent(inout) :: cline
+    !     type(parameters) :: params
+    !     type(builder)    :: build
+    !     integer          :: s
+    !     character(len=:), allocatable :: fbody
+    !     call build%init_params_and_build_general_tbox(cline, params)
+    !     call build%build_rec_eo_tbox(params)
+    !     if( .not. cline%defined('nparts') )then ! shared-memory implementation
+    !         ! eo partitioning
+    !         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+    !         ! particle weights
+    !         select case(trim(params%ptclw))
+    !             case('yes')
+    !             ! weights are set at search time, so nothing to do here.
+    !             case DEFAULT
+    !                 call build%spproj_field%calc_hard_weights(params%frac)
+    !         end select
+    !         ! to update eo flags and weights
+    !         call build%spproj%write_segment_inside(params%oritype)
+    !     endif
+    !     do s=1,params%nstates
+    !         if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
+    !         fbody = 'recvol_state'
+    !         call build%eorecvol%eorec(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
+    !     end do
+    !     call qsys_job_finished( 'simple_rec_master :: exec_eorec')
+    !     write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+    ! end subroutine exec_reconstruct3D
+
     subroutine exec_reconstruct3D( self, cline )
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer          :: s
-        character(len=:), allocatable :: fbody
+        type(parameters)     :: params
+        type(builder)        :: build
+        integer, allocatable :: pinds(:)
+        logical, allocatable :: ptcl_mask(:)
+        integer :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
-        call build%build_rec_eo_tbox(params)
+        call build%build_strategy3D_tbox(params)
+        ! call build%build_rec_eo_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
             ! eo partitioning
             if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
@@ -153,13 +189,11 @@ contains
             ! to update eo flags and weights
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        do s=1,params%nstates
-            if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
-            fbody = 'recvol_state'
-            call build%eorecvol%eorec(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
-        end do
-        call qsys_job_finished( 'simple_rec_master :: exec_eorec')
-        write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
+        allocate(ptcl_mask(params%fromp:params%top))
+        call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
+        &1.0, nptcls2update, pinds, ptcl_mask)
+        call calc_3Drec( cline, nptcls2update, pinds )
+        call qsys_job_finished('simple_commander_rec :: exec_reconstruct3D')
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D

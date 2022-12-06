@@ -60,8 +60,6 @@ type :: reconstructor_eo
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
-    ! RECONSTRUCTION
-    procedure          :: eorec
     ! DESTRUCTORS
     procedure          :: kill_exp
     procedure          :: kill
@@ -461,113 +459,6 @@ contains
         call self%eosum%div(self%pad_correction)
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
-
-    ! RECONSTRUCTION
-
-    !> \brief  for distributed reconstruction of even/odd maps
-    subroutine eorec( self, spproj, o, se, state, fbody )
-        use simple_fplane,   only: fplane
-        class(reconstructor_eo),    intent(inout) :: self   !< object
-        class(sp_project),          intent(inout) :: spproj !< project description
-        class(oris),                intent(inout) :: o      !< orientations
-        class(sym),                 intent(inout) :: se     !< symmetry element
-        integer,                    intent(in)    :: state  !< state to reconstruct
-        character(len=*), optional, intent(in)    :: fbody  !< body of output file
-        character(len=:), allocatable :: recname, volname
-        character(len=LONGSTRLEN)     :: eonames(2)
-        type(fplane)         :: fpl
-        type(image)          :: img, mskimg, vol
-        logical, allocatable :: lmsk(:,:,:)
-        type(ctfparams)      :: ctfvars
-        real                 :: sdev_noise
-        integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob, find4eoavg
-        ! stash global state index
-        state_glob = state
-        ! make the images
-        call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
-        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk, lmsk)
-        call vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
-        call fpl%new(img)
-        ! zero the Fourier volumes and rhos
-        call self%reset_all
-        call self%reset_eoexp
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
-        statecnt = 0
-        cnt      = 0
-        do i=1,params_glob%nptcls
-            call progress(i, params_glob%nptcls)
-            if( i <= params_glob%top .and. i >= params_glob%fromp )then
-                cnt = cnt + 1
-                state_here = nint(o%get(i,'state'))
-                if( state_here > 0 .and. (state_here == state ) )then
-                    statecnt(state) = statecnt(state) + 1
-                    call rec_dens
-                endif
-            endif
-        end do
-        ! undo fourier components expansion
-        call self%compress_exp
-        ! density correction & output
-        if( params_glob%l_distr_exec )then
-            if( present(fbody) )then
-                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(params_glob%part,self%numlen))
-            else
-                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(params_glob%part,self%numlen))
-            endif
-        else
-            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
-            allocate(volname, source=recname//params_glob%ext)
-            eonames(1) = trim(recname)//'_even'//params_glob%ext
-            eonames(2) = trim(recname)//'_odd'//params_glob%ext
-            if( params_glob%l_ml_reg )then
-                call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-                call self%sum_eos
-            else
-                call self%sum_eos
-                call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            endif
-            call self%sampl_dens_correct_sum(vol)
-            call vol%write(volname, del_if_exists=.true.)
-        endif
-        call img%kill
-        call mskimg%kill
-        call vol%kill
-        call fpl%kill
-        ! report how many particles were used to reconstruct each state
-        if( params_glob%nstates > 1 )then
-            write(logfhandle,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
-        endif
-
-        contains
-
-            !> \brief  the density reconstruction functionality
-            subroutine rec_dens
-                character(len=:), allocatable :: stkname
-                type(ori) :: orientation
-                integer   :: state, ind_in_stk, eo
-                real      :: pw
-                state = nint(o%get(i, 'state'))
-                if( state == 0 ) return
-                call o%get_ori(i, orientation)
-                ! eo-flag
-                eo = nint(orientation%get('eo'))
-                ! particle-weight
-                pw = 1.
-                if( orientation%isthere('w') ) pw = orientation%get('w')
-                if( pw > TINY )then
-                    call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
-                    call img%read(stkname, ind_in_stk)
-                    ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    call img%noise_norm(lmsk, sdev_noise)
-                    call img%fft
-                    call fpl%gen_planes(img, ctfvars)
-                    call self%grid_plane(se, orientation, fpl, eo, pw)
-                    deallocate(stkname)
-                endif
-                call orientation%kill
-            end subroutine rec_dens
-
-    end subroutine eorec
 
     ! DESTRUCTORS
 

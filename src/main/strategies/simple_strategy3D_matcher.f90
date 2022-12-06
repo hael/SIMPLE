@@ -28,7 +28,7 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc, calc_3Drec
+public :: refine3D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
@@ -346,7 +346,7 @@ contains
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
-                call calc_3Drec( cline, which_iter )
+                call calc_3Drec( cline, nptcls2update, pinds, which_iter )
                 call eucl_sigma%kill
                 call killimgbatch
                 if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
@@ -514,68 +514,5 @@ contains
         end do
         !$omp end parallel do
     end subroutine build_cftcc_batch_particles
-
-    !> volumetric 3d reconstruction
-    subroutine calc_3Drec( cline, which_iter )
-        use simple_fplane, only: fplane
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        type(fplane),    allocatable  :: fpls(:)
-        type(ctfparams), allocatable  :: ctfparms(:)
-        type(ori)        :: orientation
-        type(kbinterpol) :: kbwin
-        real    :: sdev_noise
-        integer :: batchlims(2), iptcl, i, i_batch, ibatch
-        c1_symop = sym('c1')
-        ! make the gridding prepper
-        kbwin = build_glob%eorecvols(1)%get_kbwin()
-        ! init volumes
-        call preprecvols
-        ! prep batch imgs
-        call prepimgbatch(MAXIMGBATCHSZ)
-        ! allocate array
-        allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
-        ! prep batch imgs
-        call prepimgbatch(MAXIMGBATCHSZ)
-        ! gridding batch loop
-        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
-            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-            call read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
-            do i=batchlims(1),batchlims(2)
-                iptcl  = pinds(i)
-                ibatch = i - batchlims(1) + 1
-                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
-                call build_glob%imgbatch(ibatch)%fft
-                ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
-            end do
-            !$omp end parallel do
-            ! gridding
-            do i=batchlims(1),batchlims(2)
-                iptcl       = pinds(i)
-                ibatch      = i - batchlims(1) + 1
-                call build_glob%spproj_field%get_ori(iptcl, orientation)
-                if( orientation%isstatezero() ) cycle
-                select case(trim(params_glob%refine))
-                    case('clustersym')
-                        ! always C1 reconstruction
-                        call grid_ptcl(fpls(ibatch), c1_symop, orientation)
-                    case DEFAULT
-                        call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                end select
-            end do
-        end do
-        ! normalise structure factors
-        call norm_struct_facts( cline, which_iter)
-        ! destruct
-        call killrecvols()
-        do ibatch=1,MAXIMGBATCHSZ
-            call fpls(ibatch)%kill
-        end do
-        deallocate(fpls,ctfparms)
-        call orientation%kill
-    end subroutine calc_3Drec
 
 end module simple_strategy3D_matcher
