@@ -273,9 +273,11 @@ contains
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
-                call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
-                call strategy3Dsrch(iptcl_batch)%ptr%kill
+                if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
+                    call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
+                    call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                    call strategy3Dsrch(iptcl_batch)%ptr%kill
+                endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
