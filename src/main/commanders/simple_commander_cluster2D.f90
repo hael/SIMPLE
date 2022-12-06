@@ -701,8 +701,10 @@ contains
                 call spproj%kill()
                 call spproj_sc%kill()
                 call simple_rename(orig_projfile_bak,orig_projfile)
-                ! adjusts sigma2
-                call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
+                if( l_euclid )then
+                    ! adjusts sigma2
+                    call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
+                endif
                 ! clean stacks
                 call simple_rmdir(STKPARTSDIR)
                 ! original scale references
