@@ -314,8 +314,7 @@ contains
             call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
-            call cline_refine3D_refine%set('match_filt', 'yes')
-            ! call cline_refine3D_refine%set('match_filt', 'no')
+            call cline_refine3D_refine%set('match_filt', 'no')
         endif
         if( params%l_automsk )then
             call cline_refine3D_refine%set('automsk', trim(params%automsk))
