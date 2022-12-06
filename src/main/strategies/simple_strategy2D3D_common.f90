@@ -10,10 +10,9 @@ use simple_polarft_corrcalc, only: pftcc_glob
 use simple_cartft_corrcalc,  only: cftcc_glob
 implicit none
 
-public :: set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol_polar, preprefvol_cart, prep2Dref, preprecvols, killrecvols
-public :: prepimgbatch, read_imgbatch, killimgbatch
+public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
+&prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
+&preprefvol_polar, preprefvol_cart, grid_ptcl, calc_3Drec, norm_struct_facts
 private
 #include "simple_local_flags.inc"
 
@@ -231,25 +230,6 @@ contains
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
-
-    !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( fpl, se, o )
-        use simple_fplane,      only   : fplane
-        class(fplane),   intent(in)    :: fpl
-        class(sym),      intent(inout) :: se
-        class(ori),      intent(inout) :: o
-        real      :: pw
-        integer   :: s, eo
-        ! state flag
-        s = o%get_state()
-        if( s == 0 ) return
-        ! eo flag
-        eo = nint(o%get('eo'))
-        ! particle-weight
-        pw = 1.0
-        if( o%isthere('w') ) pw = o%get('w')
-        if( pw > TINY ) call build_glob%eorecvols(s)%grid_plane(se, o, fpl, eo, pwght=pw)
-    end subroutine grid_ptcl
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
@@ -641,16 +621,95 @@ contains
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
     end subroutine preprefvol_cart
 
+    !>  \brief  grids one particle image to the volume
+    subroutine grid_ptcl( fpl, se, o )
+        use simple_fplane,      only   : fplane
+        class(fplane),   intent(in)    :: fpl
+        class(sym),      intent(inout) :: se
+        class(ori),      intent(inout) :: o
+        real      :: pw
+        integer   :: s, eo
+        ! state flag
+        s = o%get_state()
+        if( s == 0 ) return
+        ! eo flag
+        eo = nint(o%get('eo'))
+        ! particle-weight
+        pw = 1.0
+        if( o%isthere('w') ) pw = o%get('w')
+        if( pw > TINY ) call build_glob%eorecvols(s)%grid_plane(se, o, fpl, eo, pwght=pw)
+    end subroutine grid_ptcl
+
+    !> volumetric 3d reconstruction
+    subroutine calc_3Drec( cline, nptcls2update, pinds, which_iter )
+        use simple_fplane, only: fplane
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls2update
+        integer,           intent(in)    :: pinds(nptcls2update)
+        integer, optional, intent(in)    :: which_iter 
+        type(fplane),    allocatable :: fpls(:)
+        type(ctfparams), allocatable :: ctfparms(:)
+        type(ori)        :: orientation
+        type(kbinterpol) :: kbwin
+        real             :: sdev_noise
+        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
+        ! make the gridding prepper
+        kbwin = build_glob%eorecvols(1)%get_kbwin()
+        ! init volumes
+        call preprecvols
+        ! prep batch imgs
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! allocate array
+        allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
+        ! prep batch imgs
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! gridding batch loop
+        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+            call read_imgbatch( nptcls2update, pinds, batchlims)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
+            do i=batchlims(1),batchlims(2)
+                iptcl  = pinds(i)
+                ibatch = i - batchlims(1) + 1
+                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
+                call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
+                call build_glob%imgbatch(ibatch)%fft
+                ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
+            end do
+            !$omp end parallel do
+            ! gridding
+            do i=batchlims(1),batchlims(2)
+                iptcl       = pinds(i)
+                ibatch      = i - batchlims(1) + 1
+                call build_glob%spproj_field%get_ori(iptcl, orientation)
+                if( orientation%isstatezero() ) cycle
+                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
+            end do
+        end do
+        ! normalise structure factors
+        call norm_struct_facts( cline, which_iter)
+        ! destruct
+        call killrecvols()
+        do ibatch=1,MAXIMGBATCHSZ
+            call fpls(ibatch)%kill
+        end do
+        deallocate(fpls,ctfparms)
+        call orientation%kill
+    end subroutine calc_3Drec
+
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
-        class(cmdline), intent(inout) :: cline
-        integer,        intent(in)    :: which_iter
-        character(len=:), allocatable :: mskfile
+        class(cmdline),    intent(inout) :: cline
+        integer, optional, intent(in)    :: which_iter
+        character(len=:), allocatable :: mskfile, fname
         character(len=STDLEN) :: pprocvol, lpvol
         real, allocatable     :: optlp(:), res(:)
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
         real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac
+        logical               :: which_iter_present
+        which_iter_present = present(which_iter)
         ! init
         ldim = [params_glob%box,params_glob%box,params_glob%box]
         call build_glob%vol%new(ldim,params_glob%smpd)
@@ -659,6 +718,11 @@ contains
         res05s   = 0.
         ! cycle through states
         do s=1,params_glob%nstates
+            if( which_iter_present )then
+                fname = VOL_FBODY//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
+            else
+                fname = VOL_FBODY//int2str_pad(s,2)//params_glob%ext
+            endif
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                 ! empty state
                 build_glob%fsc(s,:) = 0.
@@ -666,13 +730,13 @@ contains
             endif
             call build_glob%eorecvols(s)%compress_exp
             if( params_glob%l_distr_exec )then
-                call build_glob%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//&
+                call build_glob%eorecvols(s)%write_eos(VOL_FBODY//int2str_pad(s,2)//'_part'//&
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
                 if( trim(params_glob%refine) .eq. 'snhc' )then
                     params_glob%vols(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext
                 else
-                    params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
+                    params_glob%vols(s) = fname
                 endif
                 if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
@@ -692,7 +756,9 @@ contains
                 endif
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
-                call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
+                if( which_iter_present )then
+                    call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
+                endif
                 ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
