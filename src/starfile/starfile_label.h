@@ -416,7 +416,7 @@ enum EMDLabel
     EMDL_RESOLUTION,
     EMDL_RESOLUTION_ANGSTROM,
     EMDL_RESOLUTION_INVPIXEL,
-    EMDL_SPECTRAL_IDX,
+    EMDL_SPECTRAL_IDX, EMDL_SPECTRAL_IDX2,
 
     EMDL_CTF_MODEL_DEFOCUSU,  ///< Polynomial coeeficients of x-defocus
     EMDL_CTF_MODEL_DEFOCUSV,
@@ -865,7 +865,8 @@ private:
         EMDL::addLabel(EMDL_RESOLUTION, EMDL_DOUBLE, "rlnResolution", "Resolution (in 1/Angstroms)");
         EMDL::addLabel(EMDL_RESOLUTION_ANGSTROM, EMDL_DOUBLE, "rlnAngstromResolution", "Resolution (in Angstroms)");
         EMDL::addLabel(EMDL_RESOLUTION_INVPIXEL, EMDL_DOUBLE, "rlnResolutionInversePixel", "Resolution (in 1/pixel, Nyquist = 0.5)");
-        EMDL::addLabel(EMDL_SPECTRAL_IDX, EMDL_INT, "rlnSpectralIndex", "Spectral index (i.e. distance in pixels to the origin in Fourier space) ");
+        EMDL::addLabel(EMDL_SPECTRAL_IDX,  EMDL_INT, "rlnSpectralIndex",  "Spectral index (i.e. distance in pixels to the origin in Fourier space) ");
+        EMDL::addLabel(EMDL_SPECTRAL_IDX2, EMDL_INT, "rlnSpectralIndex2", "Spectral index2 (i.e. distance in pixels to the origin in Fourier space) ");
 
         // Custom
         EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSU, EMDL_DOUBLE, "rlnCtfModelDefocusU", "Polynomial coefficients for Defocus in U-direction");

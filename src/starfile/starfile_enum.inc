@@ -361,22 +361,23 @@
         enumerator :: EMDL_RESOLUTION_ANGSTROM                         = 342
         enumerator :: EMDL_RESOLUTION_INVPIXEL                         = 343
         enumerator :: EMDL_SPECTRAL_IDX                                = 344
+        enumerator :: EMDL_SPECTRAL_IDX2                               = 345 !< Is a convenience flag, not a proper EMDL one
 
-        enumerator :: EMDL_CTF_MODEL_DEFOCUSU                          = 345 !/<
-        enumerator :: EMDL_CTF_MODEL_DEFOCUSV                          = 346 !/<
-        enumerator :: EMDL_MOVIE_FRAME_WEIGHT                          = 347
+        enumerator :: EMDL_CTF_MODEL_DEFOCUSU                          = 346
+        enumerator :: EMDL_CTF_MODEL_DEFOCUSV                          = 347
+        enumerator :: EMDL_MOVIE_FRAME_WEIGHT                          = 348
 
-        enumerator :: EMDL_IMAGE_OPTICS_GROUP                          = 348
-        enumerator :: EMDL_IMAGE_OPTICS_GROUP_NAME                     = 349
-        enumerator :: EMDL_IMAGE_PIXEL_SIZE                            = 350
+        enumerator :: EMDL_IMAGE_OPTICS_GROUP                          = 349
+        enumerator :: EMDL_IMAGE_OPTICS_GROUP_NAME                     = 350
+        enumerator :: EMDL_IMAGE_PIXEL_SIZE                            = 351
 
-        enumerator :: EMDL_MICROGRAPH_EER_UPSAMPLING                   = 351
-        enumerator :: EMDL_MICROGRAPH_EER_GROUPING                     = 352
-        enumerator :: EMDL_ORIENT_ORIGIN_X_ANGSTROM                    = 353
-        enumerator :: EMDL_ORIENT_ORIGIN_Y_ANGSTROM                    = 354
-        enumerator :: EMDL_ORIENT_ORIGIN_Z_ANGSTROM                    = 355
-        enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 356
-        enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 357
+        enumerator :: EMDL_MICROGRAPH_EER_UPSAMPLING                   = 352
+        enumerator :: EMDL_MICROGRAPH_EER_GROUPING                     = 353
+        enumerator :: EMDL_ORIENT_ORIGIN_X_ANGSTROM                    = 354
+        enumerator :: EMDL_ORIENT_ORIGIN_Y_ANGSTROM                    = 355
+        enumerator :: EMDL_ORIENT_ORIGIN_Z_ANGSTROM                    = 356
+        enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 357
+        enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 358
 
-        enumerator :: EMDL_LAST_LABEL                                  = 358 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 359 ! **** NOTE ****: Do keep this label always at the end
     end enum

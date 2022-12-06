@@ -181,6 +181,12 @@ contains
         do iptcl = params%fromp, params%top
             sigma2(:,iptcl) = pspecs(:,iptcl-params%fromp+1)
         end do
+        ! taking account scaling of images
+        if( cline%defined('scale') .and. abs(params%scale-1.0) > 0.01 )then
+            !$omp workshare
+            sigma2 = sigma2 * params%scale
+            !$omp end workshare
+        endif
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
         ! end gracefully
