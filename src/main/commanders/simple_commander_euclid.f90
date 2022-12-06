@@ -15,6 +15,7 @@ public :: calc_pspec_commander_distr
 public :: calc_pspec_commander
 public :: calc_pspec_assemble_commander
 public :: calc_group_sigmas_commander
+public :: estimate_first_sigmas_commander
 private
 #include "simple_local_flags.inc"
 
@@ -37,6 +38,11 @@ type, extends(commander_base) :: calc_group_sigmas_commander
   contains
     procedure :: execute      => exec_calc_group_sigmas
 end type calc_group_sigmas_commander
+
+type, extends(commander_base) :: estimate_first_sigmas_commander
+  contains
+    procedure :: execute      => exec_estimate_first_sigmas
+end type estimate_first_sigmas_commander
 
 type :: sigma_array
     character(len=:), allocatable :: fname
@@ -423,5 +429,53 @@ contains
         call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_euclid::calc_group_sigmas')
         call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_calc_group_sigmas
+
+    subroutine exec_estimate_first_sigmas( self, cline )
+        class(estimate_first_sigmas_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        ! command lines
+        type(cmdline)    :: cline_first_sigmas
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        if( .not. cline%defined('vol1')     ) THROW_HARD('starting volume is needed for first sigma estimation')
+        if( .not. cline%defined('pgrp')     ) THROW_HARD('point-group symmetry (pgrp) is needed for first sigma estimation')
+        if( .not. cline%defined('mskdiam')  ) THROW_HARD('mask diameter (mskdiam) is needed for first sigma estimation')
+        if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
+        if( .not. cline%defined('nparts')   ) THROW_HARD('number of partitions (npart) is needed for first sigma estimation (distributed workflow)')
+        if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
+        cline_first_sigmas = cline
+        call cline_first_sigmas%set('prg', 'refine3D')
+        call cline_first_sigmas%set('center',    'no')
+        call cline_first_sigmas%set('continue',  'no')
+        call cline_first_sigmas%set('ptclw',     'no')
+        call cline_first_sigmas%delete('lp_iters')
+        call cline_first_sigmas%set('maxits',     1.0)
+        call cline_first_sigmas%set('which_iter', 1.0)
+        call cline_first_sigmas%set('objfun','euclid')
+        call cline_first_sigmas%set('refine', 'sigma')
+        call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
+        call cline_first_sigmas%delete('hp')
+        call cline_first_sigmas%delete('lp')
+        call cline_first_sigmas%delete('lpstop')
+        call cline_first_sigmas%set('oritype', 'ptcl3D')
+        call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
+        ! init
+        call build%init_params_and_build_spproj(cline_first_sigmas, params)
+        call build%spproj%update_projinfo(cline_first_sigmas)
+        call build%spproj%write_segment_inside('projinfo')
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline_first_sigmas%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        ! end gracefully
+        call qsys_cleanup
+        call build%spproj%kill
+        call simple_end('**** SIMPLE_ESTIMATE_FIRST_SIGMAS NORMAL STOP ****')
+    end subroutine exec_estimate_first_sigmas
 
 end module simple_commander_euclid

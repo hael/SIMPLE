@@ -3622,7 +3622,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 14, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 13, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3647,8 +3647,7 @@ contains
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations prior to e/o refinement', '# of iterations after which low-pass limited alignment is switched to e/o(0:never){1}',&
         &'# iterations prior to e/o refinement{1}', .false., 1.)
-        call refine3D%set_input('srch_ctrls', 13, 'align_reg', 'binary', 'Regularizing the reference volume', 'Regularizing the reference volume (yes|no){yes}', '(yes|no){yes}', .false., 'no')
-        call refine3D%set_input('srch_ctrls', 14, sigma_est)
+        call refine3D%set_input('srch_ctrls', 13, sigma_est)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

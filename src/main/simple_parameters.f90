@@ -269,7 +269,7 @@ type :: parameters
     integer :: tos=1
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=20       !< smoothing window extension{2D=20, 3D=8}
+    integer :: smooth_ext=8        !< smoothing window extension
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -1349,13 +1349,6 @@ contains
         ! smoothing extension
         is_2D = .false.
         if( str_has_substr(self%prg, '2D') ) is_2D = .true.
-        if( .not. cline%defined('smooth_ext') )then
-            if( is_2D )then
-                self%smooth_ext = round2even(real(self%box) * 0.16)
-            else
-                self%smooth_ext = 8
-            endif
-        endif
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then

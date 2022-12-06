@@ -10,7 +10,7 @@ use simple_builder,            only: build_glob
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
-public :: strategy3D_srch, strategy3D_spec, set_ptcl_stats, eval_ptcl
+public :: strategy3D_srch, strategy3D_spec, eval_ptcl
 private
 #include "simple_local_flags.inc"
 
@@ -67,28 +67,6 @@ type strategy3D_srch
 end type strategy3D_srch
 
 contains
-
-    ! class method: set_ptcl_stats for filling in stats
-    ! of particles not part of update fraction
-    subroutine set_ptcl_stats( pftcc, iptcl )
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        integer   :: prev_state, prev_roind, prev_proj, prev_ref
-        type(ori) :: o_prev
-        real      :: specscore
-        prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
-        if( prev_state == 0 )return
-        ! previous parameters
-        call build_glob%spproj_field%get_ori(iptcl, o_prev)
-        prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-        prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-        prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! calc specscore
-        specscore = pftcc%specscore(prev_ref, iptcl, prev_roind)
-        ! update spproj_field
-        call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
-        call o_prev%kill
-    end subroutine set_ptcl_stats
 
     ! class method: evaluation of stats and objective function
     subroutine eval_ptcl( pftcc, iptcl )
