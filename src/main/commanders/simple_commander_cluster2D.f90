@@ -10,7 +10,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_image,            only: image
 use simple_stack_io,         only: stack_io
 use simple_starproject,      only: starproject
-use simple_euclid_sigma2,    only: euclid_sigma2
+use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
 use simple_procimgstk
@@ -286,17 +286,16 @@ contains
             call spproj%os_ptcl2D%partition_eo
             call spproj%write_segment_inside(params%oritype,params%projfile)
         endif
-        ! noise power estimates for objfun = euclid at original sampling
+        ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
             l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
-        endif
-        if( l_euclid )then
-            cline_calc_pspec_distr  = cline
-            call spproj%os_ptcl2D%set_all2single('w', 1.0)
-            call spproj%write_segment_inside(params%oritype)
-            call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+            if( l_euclid )then
+                cline_calc_pspec_distr  = cline
+                call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+                call spproj%os_ptcl2D%set_all2single('w', 1.0)
+                call spproj%write_segment_inside(params%oritype)
+            endif
         endif
         ! first stage
         ! down-scaling for fast execution, greedy optimisation, no match filter
@@ -336,6 +335,7 @@ contains
             scale_factor = 1.
             box          = params%box
             projfile     = trim(params%projfile)
+            if( l_euclid ) call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
         else
             call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor)
             if( box < MINBOX ) SMPD_TARGET = params%smpd * real(params%box) / real(MINBOX)
@@ -344,6 +344,11 @@ contains
             scale_factor = cline_scale%get_rarg('scale')
             smpd         = cline_scale%get_rarg('smpd')
             box          = nint(cline_scale%get_rarg('newbox'))
+            ! noise power estimates for objfun = euclid at scaled sampling
+            if( l_euclid )then
+                call cline_calc_pspec_distr%set('scale', 1./scale_factor**2)
+                call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+            endif
             call cline_scale%set('state',1.)
             call cline_scale%delete('smpd') !!
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
@@ -579,13 +584,12 @@ contains
         l_euclid = .false.
         if( cline%defined('objfun') )then
             l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
-        endif
-        if( l_euclid )then
-            cline_calc_pspec_distr  = cline
-            call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
-            call spproj%os_ptcl2D%set_all2single('w', 1.0)
-            call spproj%write_segment_inside(params%oritype)
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+            if( l_euclid )then
+                cline_calc_pspec_distr  = cline
+                call cline_calc_pspec_distr%delete('scale')
+                call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+                call spproj%os_ptcl2D%set_all2single('w', 1.0)
+            endif
         endif
         ! general options planning
         if( params%l_autoscale )then
@@ -610,6 +614,12 @@ contains
             scale   = cline_scale%get_rarg('scale')
             scaling = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
+                if( l_euclid )then
+                    ! sigma2 need to be scaled, which will be undone prior
+                    ! to execution of make_cavgs at original sampling
+                    call cline_calc_pspec_distr%set('scale', 1./scale**2)
+                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+                endif
                 call cline_scale%delete('smpd') !!
                 call cline_scale%set('state',1.)
                 call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
@@ -634,6 +644,8 @@ contains
                     call xscale%execute(cline_scalerefs)
                     call cline_cluster2D_stage1%set('refs',trim(refs_sc))
                 endif
+            else
+                if( l_euclid ) call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
             ! execution
             call cline_cluster2D_stage1%set('projfile', trim(orig_projfile))
@@ -689,6 +701,8 @@ contains
                 call spproj%kill()
                 call spproj_sc%kill()
                 call simple_rename(orig_projfile_bak,orig_projfile)
+                ! adjusts sigma2
+                call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
                 ! clean stacks
                 call simple_rmdir(STKPARTSDIR)
                 ! original scale references

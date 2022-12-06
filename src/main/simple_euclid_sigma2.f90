@@ -8,8 +8,12 @@ use simple_starfile_wrappers
 implicit none
 
 public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
+public :: split_group_sigma2, scale_group_sigma2_magnitude
+public :: test_unit
 private
 #include "simple_local_flags.inc"
+
+character(len=STDLEN), parameter :: SIGMA2_ONE_GROUP = 'sigma2_group_'
 
 type euclid_sigma2
     private
@@ -21,12 +25,12 @@ type euclid_sigma2
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
-    integer                       :: pftsz      = 0
     character(len=:), allocatable :: binfname
     logical                       :: exists     = .false.
 contains
     ! constructor
     procedure          :: new
+    procedure, private :: init_from_group_header
     ! utils
     procedure          :: write_info
     ! I/O
@@ -71,6 +75,27 @@ contains
         self%exists       =  .true.
         eucl_sigma2_glob  => self
     end subroutine new
+
+    !>  This is a minimal constructor to allow I/O of groups
+    subroutine init_from_group_header( self, fname )
+        class(euclid_sigma2), target, intent(inout) :: self
+        character(len=*),             intent(in)    :: fname
+        type(str4arr), allocatable :: names(:)
+        type(starfile_table_type)  :: table
+        integer                    :: kfromto(2), ngroups
+        logical                    :: l
+        if (.not. file_exists(fname)) then
+            THROW_HARD('euclid_sigma2_starfile: read_groups_pspecs; file does not exists: ' // trim(fname))
+        end if
+        call starfile_table__new(table)
+        call starfile_table__getnames(table, fname, names)
+        call starfile_table__read( table, fname, names(1)%str )
+        l = starfile_table__getValue_int(table, EMDL_MLMODEL_NR_GROUPS, ngroups)
+        l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX,  kfromto(1))
+        l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX2, kfromto(2))
+        self%kfromto = kfromto
+        call starfile_table__delete(table)
+    end subroutine init_from_group_header
 
     subroutine write_info(self)
         class(euclid_sigma2), intent(in) :: self
@@ -157,41 +182,24 @@ contains
         call binfile%kill
     end subroutine write_sigma2
 
-    ! destructor
-
-    subroutine kill_ptclsigma2( self )
-        class(euclid_sigma2), intent(inout) :: self
-        if( allocated(self%sigma2_noise) ) deallocate(self%sigma2_noise)
-    end subroutine kill_ptclsigma2
-
-    subroutine kill( self )
-        class(euclid_sigma2), intent(inout) :: self
-        if( self%exists )then
-            call self%kill_ptclsigma2
-            if(allocated(self%pinds)  ) deallocate(self%pinds)
-            if(allocated(self%micinds)) deallocate(self%micinds)
-            self%kfromto     = 0
-            self%fromp       = -1
-            self%top         = -1
-            self%exists      = .false.
-            eucl_sigma2_glob => null()
-        endif
-    end subroutine kill
-
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
         character(len=:), allocatable, intent(in) :: fname
         real, allocatable,             intent(in) :: group_pspecs(:,:,:)
         integer,                       intent(in) :: ngroups
         character(len=:), allocatable :: stmp
-        integer                       :: eo, igroup, idx
+        integer                       :: kfromto(2), eo, igroup, idx
         type(starfile_table_type)     :: ostar
         call starfile_table__new(ostar)
         call starfile_table__open_ofile(ostar, fname)
         ! global fields
+        kfromto(1) = lbound(group_pspecs,3)
+        kfromto(2) = ubound(group_pspecs,3)
         call starfile_table__addObject(ostar)
-        call starfile_table__setIsList(ostar, .false.)
+        call starfile_table__setIsList(ostar, .true.)
         call starfile_table__setname(ostar, "general")
         call starfile_table__setValue_int(ostar, EMDL_MLMODEL_NR_GROUPS, ngroups)
+        call starfile_table__setValue_int(ostar, EMDL_SPECTRAL_IDX,  kfromto(1))
+        call starfile_table__setValue_int(ostar, EMDL_SPECTRAL_IDX2, kfromto(2))
         call starfile_table__write_ofile(ostar)
         ! values
         do eo = 1, 2
@@ -205,7 +213,7 @@ contains
                 call starfile_table__setComment(ostar, stmp // ', group ' // trim(int2str(igroup)) )
                 call starfile_table__setName(ostar, trim(int2str(eo)) // '_group_' // trim(int2str(igroup)) )
                 call starfile_table__setIsList(ostar, .false.)
-                do idx = lbound(group_pspecs,3), ubound(group_pspecs, 3)
+                do idx = kfromto(1), kfromto(2)
                     call starfile_table__addObject(ostar)
                     call starfile_table__setValue_int(ostar,    EMDL_SPECTRAL_IDX, idx)
                     call starfile_table__setValue_double(ostar, EMDL_MLMODEL_SIGMA2_NOISE,&
@@ -218,29 +226,39 @@ contains
         call starfile_table__delete(ostar)
     end subroutine write_groups_starfile
 
-    subroutine read_groups_starfile( self, iter, group_pspecs, ngroups )
+    subroutine read_groups_starfile( self, iter, group_pspecs, ngroups, fname )
         class(euclid_sigma2),          intent(inout) :: self
         integer,                       intent(in)    :: iter
         real,             allocatable, intent(out)   :: group_pspecs(:,:,:)
         integer,                       intent(out)   :: ngroups
+        character(len=*), optional,    intent(in)    :: fname
         type(str4arr),    allocatable :: names(:)
         type(starfile_table_type)     :: istarfile
         character(len=:), allocatable :: starfile_fname
         character                     :: eo_char
         real(dp)                      :: val
         integer(C_long)               :: num_objs, object_id
-        integer                       :: stat, spec_idx, eo, igroup, idx
+        integer                       :: kfromto(2), stat, spec_idx, eo, igroup, idx
         logical                       :: l
-        starfile_fname = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
-        call starfile_table__new(istarfile)
+        if( present(fname) )then
+            starfile_fname = trim(fname)
+        else
+            starfile_fname = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        endif
         if (.not. file_exists(starfile_fname)) then
-            THROW_HARD('euclid_sigma2_starfile: read_groups_pspecs; file does not exists: ' // starfile_fname)
+            THROW_HARD('euclid_sigma2: read_groups_starfile; file does not exists: ' // starfile_fname)
         end if
+        call starfile_table__new(istarfile)
         ! read header
         call starfile_table__getnames(istarfile, starfile_fname, names)
         call starfile_table__read( istarfile, starfile_fname, names(1)%str )
-        l         = starfile_table__getValue_int(istarfile, EMDL_MLMODEL_NR_GROUPS, ngroups)
-        object_id = starfile_table__nextobject(istarfile)
+        l = starfile_table__getValue_int(istarfile, EMDL_MLMODEL_NR_GROUPS, ngroups)
+        l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX, kfromto(1))
+        l = starfile_table__getValue_int(istarfile, EMDL_SPECTRAL_IDX2, kfromto(2))
+        if( any(kfromto-self%kfromto < 0) )then
+            print *,kfromto,self%kfromto
+            THROW_HARD('Incorrect resolution range: read_groups_starfile')
+        endif
         ! read values
         allocate(group_pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
         call starfile_table__getnames(istarfile, starfile_fname, names)
@@ -272,5 +290,111 @@ contains
         end do
         call starfile_table__delete(istarfile)
     end subroutine read_groups_starfile
+
+    ! Public modifiers
+
+    ! scale sigma2 magnitude, groups only
+    subroutine scale_group_sigma2_magnitude( iter, scale )
+        integer,          intent(in)  :: iter
+        real,             intent(in)  :: scale
+        type(euclid_sigma2)           :: euclidsigma2
+        character(len=:), allocatable :: fname
+        integer                       :: ngroups
+        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        call euclidsigma2%init_from_group_header(fname)
+        call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ngroups)
+        euclidsigma2%sigma2_groups = euclidsigma2%sigma2_groups * scale
+        call write_groups_starfile( fname, euclidsigma2%sigma2_groups, ngroups )
+        call euclidsigma2%kill
+    end subroutine scale_group_sigma2_magnitude
+
+    subroutine split_group_sigma2( iter )
+        integer,          intent(in)  :: iter
+        type(euclid_sigma2)           :: euclidsigma2
+        character(len=:), allocatable :: fname
+        real,             allocatable :: sigma2_group(:,:,:)
+        integer                       :: igroup, ngroups
+        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        call euclidsigma2%init_from_group_header(fname)
+        call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ngroups)
+        do igroup = 1,ngroups
+            fname  = trim(SIGMA2_ONE_GROUP)//int2str(igroup)//'.star'
+            allocate(sigma2_group(2,1,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),&
+            &source=euclidsigma2%sigma2_groups(:,igroup:igroup,:))
+            call write_groups_starfile( fname, sigma2_group, 1 )
+            deallocate(sigma2_group)
+        enddo
+        call euclidsigma2%kill
+    end subroutine split_group_sigma2
+
+    ! Destructor
+
+    subroutine kill_ptclsigma2( self )
+        class(euclid_sigma2), intent(inout) :: self
+        if( allocated(self%sigma2_noise) ) deallocate(self%sigma2_noise)
+    end subroutine kill_ptclsigma2
+
+    subroutine kill( self )
+        class(euclid_sigma2), intent(inout) :: self
+        if( self%exists )then
+            call self%kill_ptclsigma2
+            if(allocated(self%pinds)  )       deallocate(self%pinds)
+            if(allocated(self%micinds))       deallocate(self%micinds)
+            if(allocated(self%sigma2_groups)) deallocate(self%sigma2_groups)
+            if(allocated(self%sigma2_noise))  deallocate(self%sigma2_noise)
+            self%kfromto     = 0
+            self%fromp       = -1
+            self%top         = -1
+            self%exists      = .false.
+            eucl_sigma2_glob => null()
+        endif
+    end subroutine kill
+
+    subroutine test_unit
+        integer, parameter :: ngroups    = 19
+        integer, parameter :: kfromto(2) = [1,64]
+        integer, parameter :: iter       = 7
+        real,    parameter :: scale      = 0.3
+        type(euclid_sigma2)           :: euclidsigma2
+        character(len=:), allocatable :: fname
+        real,             allocatable :: sigma2(:,:,:)
+        integer :: igroup, ng
+        logical :: l_err
+        l_err = .false.
+        ! testing bookkeeping
+        allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
+        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        call write_groups_starfile( fname, sigma2, ngroups )
+        call scale_group_sigma2_magnitude( iter, scale )
+        call split_group_sigma2( iter )
+        do igroup = 1,ngroups
+            fname = trim(SIGMA2_ONE_GROUP)//int2str(igroup)//'.star'
+            if(.not.file_exists(fname))then
+                l_err = .true.
+                THROW_WARN('File does not exists for group: '//int2str(igroup))
+            else
+                call euclidsigma2%init_from_group_header(fname)
+                call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ng, fname=fname )
+                if( ng /= 1 )then
+                    l_err = .true.
+                    THROW_WARN('Erroneous group number for group: '//int2str(igroup))
+                endif
+                if( any(abs(euclidsigma2%sigma2_groups-scale) >  0.001) )then
+                    l_err = .true.
+                    THROW_WARN('Scaling failed for group: '//int2str(igroup))
+                endif
+                if( size(euclidsigma2%sigma2_groups,dim=3) /= (kfromto(2)-kfromto(1)+1) )then
+                    l_err = .true.
+                    THROW_WARN('Incorrect number of frequencies for group: '//int2str(igroup))
+                endif
+                call euclidsigma2%kill
+            endif
+        enddo
+        if( l_err )then
+            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST FAILED'
+        else
+            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST PASSED'
+        endif
+    end subroutine test_unit
 
 end module simple_euclid_sigma2
