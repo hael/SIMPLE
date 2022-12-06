@@ -1,4 +1,3 @@
-! projection-matching by stochastic hill-climbing, high-level search routines for REFINE3D
 module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -23,7 +22,7 @@ use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D,              only: strategy3D
-use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
+use simple_strategy3D_srch,         only: strategy3D_spec, eval_ptcl
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
@@ -263,6 +262,8 @@ contains
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle
+                    case('sigma')
+                        ! first sigma estimation (done below)
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
@@ -297,9 +298,6 @@ contains
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
-        ! UPDATE PARTICLE STATS
-        ! if( .not. params_glob%l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
-
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
             case('yes')
@@ -321,26 +319,36 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        if( L_BENCH_GLOB ) t_projio = tic()
-        select case(trim(params_glob%oritype))
-            case('ptcl3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
-                    &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
-            case('cls3D')
-                call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
-                    &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+        select case(trim(params_glob%refine))
+            case('sigma')
+                ! nothing to do
             case DEFAULT
-                THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
+                if( L_BENCH_GLOB ) t_projio = tic()
+                select case(trim(params_glob%oritype))
+                    case('ptcl3D')
+                        call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
+                            &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=PTCL3D_SEG)
+                    case('cls3D')
+                        call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
+                            &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
+                    case DEFAULT
+                        THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
+                end select
+                params_glob%oritab = params_glob%outfile
+                if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
         end select
-        params_glob%oritab = params_glob%outfile
-        if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
 
         ! VOLUMETRIC 3D RECONSTRUCTION
-        if( L_BENCH_GLOB ) t_rec = tic()
-        call calc_3Drec( cline, which_iter )
-        call eucl_sigma%kill
-        call killimgbatch
-        if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
+        select case(trim(params_glob%refine))
+            case('eval','sigma')
+                ! no reconstruction
+            case DEFAULT
+                if( L_BENCH_GLOB ) t_rec = tic()
+                call calc_3Drec( cline, which_iter )
+                call eucl_sigma%kill
+                call killimgbatch
+                if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
+        end select
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
@@ -381,7 +389,6 @@ contains
         endif
     end subroutine refine3D_exec
 
-    !> Prepare discrete search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline, batchsz_max )
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
@@ -438,7 +445,6 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
-    !> Prepare continuous search using Cartesian projection Fourier cross correlation
     subroutine prepcftcc4align( cline, batchsz_max )
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
@@ -464,7 +470,6 @@ contains
         end do
     end subroutine prepcftcc4align
 
-    !>  \brief  prepares batch particle images for alignment
     subroutine build_pftcc_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
@@ -488,7 +493,6 @@ contains
         call pftcc%memoize_ffts
     end subroutine build_pftcc_batch_particles
 
-    !>  \brief  prepares batch particle images for alignment
     subroutine build_cftcc_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
@@ -509,58 +513,6 @@ contains
         !$omp end parallel do
     end subroutine build_cftcc_batch_particles
 
-    !> Prepare alignment search using polar projection Fourier cross correlation
-    ! subroutine calc_ptcl_stats( batchsz_max, l_ctf )
-    !     use simple_strategy2D3D_common, only: prepimg4align
-    !     integer,   intent(in) :: batchsz_max
-    !     logical,   intent(in) :: l_ctf
-    !     integer, allocatable  :: pinds_here(:), batches(:,:)
-    !     integer :: nptcls, iptcl_batch, iptcl, nbatches, ibatch, batch_start, batch_end, iptcl_map, batchsz
-    !     if( .not.params_glob%l_frac_update ) return
-    !     select case(params_glob%refine)
-    !         case('cluster','clustersym','eval')
-    !             return
-    !         case DEFAULT
-    !             ! all good
-    !     end select
-    !     ! build local particles index map
-    !     nptcls = 0
-    !     do iptcl = params_glob%fromp,params_glob%top
-    !         if( .not.ptcl_mask(iptcl) )then
-    !             if( build_glob%spproj_field%get_state(iptcl) > 0 ) nptcls = nptcls + 1
-    !         endif
-    !     enddo
-    !     if( nptcls == 0 ) return
-    !     allocate(pinds_here(nptcls),source=0)
-    !     nptcls = 0
-    !     do iptcl = params_glob%fromp,params_glob%top
-    !         if( .not.ptcl_mask(iptcl) )then
-    !             if( build_glob%spproj_field%get_state(iptcl) > 0 )then
-    !                 nptcls = nptcls + 1
-    !                 pinds_here(nptcls) = iptcl
-    !             endif
-    !         endif
-    !     enddo
-    !     ! Batch loop
-    !     nbatches = ceiling(real(nptcls)/real(batchsz_max))
-    !     batches  = split_nobjs_even(nptcls, nbatches)
-    !     do ibatch=1,nbatches
-    !         batch_start = batches(ibatch,1)
-    !         batch_end   = batches(ibatch,2)
-    !         batchsz     = batch_end - batch_start + 1
-    !         call build_pftcc_batch_particles(batchsz, pinds_here(batch_start:batch_end))
-    !         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-    !         !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map)&
-    !         !$omp schedule(static) proc_bind(close)
-    !         do iptcl_batch = 1,batchsz                     ! particle batch index
-    !             iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
-    !             iptcl      = pinds_here(iptcl_map)         ! global index
-    !             call set_ptcl_stats(pftcc, iptcl)
-    !         enddo
-    !         !$omp end parallel do
-    !     enddo
-    ! end subroutine calc_ptcl_stats
-
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, which_iter )
         use simple_fplane, only: fplane
@@ -572,61 +524,56 @@ contains
         type(kbinterpol) :: kbwin
         real    :: sdev_noise
         integer :: batchlims(2), iptcl, i, i_batch, ibatch
-        select case(trim(params_glob%refine))
-            case('eval')
-                ! no reconstruction
-            case DEFAULT
-                c1_symop = sym('c1')
-                ! make the gridding prepper
-                kbwin = build_glob%eorecvols(1)%get_kbwin()
-                ! init volumes
-                call preprecvols
-                ! prep batch imgs
-                call prepimgbatch(MAXIMGBATCHSZ)
-                ! allocate array
-                allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
-                ! prep batch imgs
-                call prepimgbatch(MAXIMGBATCHSZ)
-                ! gridding batch loop
-                do i_batch=1,nptcls2update,MAXIMGBATCHSZ
-                    batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-                    call read_imgbatch( nptcls2update, pinds, batchlims)
-                    !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
-                    do i=batchlims(1),batchlims(2)
-                        iptcl  = pinds(i)
-                        ibatch = i - batchlims(1) + 1
-                        if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                        call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
-                        call build_glob%imgbatch(ibatch)%fft
-                        ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
-                    end do
-                    !$omp end parallel do
-                    ! gridding
-                    do i=batchlims(1),batchlims(2)
-                        iptcl       = pinds(i)
-                        ibatch      = i - batchlims(1) + 1
-                        call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        if( orientation%isstatezero() ) cycle
-                        select case(trim(params_glob%refine))
-                            case('clustersym')
-                                ! always C1 reconstruction
-                                call grid_ptcl(fpls(ibatch), c1_symop, orientation)
-                            case DEFAULT
-                                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
-                        end select
-                    end do
-                end do
-                ! normalise structure factors
-                call norm_struct_facts( cline, which_iter)
-                ! destruct
-                call killrecvols()
-                do ibatch=1,MAXIMGBATCHSZ
-                    call fpls(ibatch)%kill
-                end do
-                deallocate(fpls,ctfparms)
-       end select
-       call orientation%kill
+        c1_symop = sym('c1')
+        ! make the gridding prepper
+        kbwin = build_glob%eorecvols(1)%get_kbwin()
+        ! init volumes
+        call preprecvols
+        ! prep batch imgs
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! allocate array
+        allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
+        ! prep batch imgs
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! gridding batch loop
+        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+            call read_imgbatch( nptcls2update, pinds, batchlims)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
+            do i=batchlims(1),batchlims(2)
+                iptcl  = pinds(i)
+                ibatch = i - batchlims(1) + 1
+                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
+                call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
+                call build_glob%imgbatch(ibatch)%fft
+                ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
+            end do
+            !$omp end parallel do
+            ! gridding
+            do i=batchlims(1),batchlims(2)
+                iptcl       = pinds(i)
+                ibatch      = i - batchlims(1) + 1
+                call build_glob%spproj_field%get_ori(iptcl, orientation)
+                if( orientation%isstatezero() ) cycle
+                select case(trim(params_glob%refine))
+                    case('clustersym')
+                        ! always C1 reconstruction
+                        call grid_ptcl(fpls(ibatch), c1_symop, orientation)
+                    case DEFAULT
+                        call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
+                end select
+            end do
+        end do
+        ! normalise structure factors
+        call norm_struct_facts( cline, which_iter)
+        ! destruct
+        call killrecvols()
+        do ibatch=1,MAXIMGBATCHSZ
+            call fpls(ibatch)%kill
+        end do
+        deallocate(fpls,ctfparms)
+        call orientation%kill
     end subroutine calc_3Drec
 
 end module simple_strategy3D_matcher

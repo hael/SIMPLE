@@ -9,7 +9,7 @@ use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
-use simple_commander_euclid, only: calc_pspec_commander_distr
+use simple_commander_euclid
 use simple_qsys_funs
 implicit none
 
@@ -65,11 +65,12 @@ contains
         class(refine3D_commander_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
-        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
-        type(check_3Dconv_commander)        :: xcheck_3Dconv
-        type(postprocess_commander)         :: xpostprocess
-        type(refine3D_commander)            :: xrefine3D_shmem
+        type(reconstruct3D_commander_distr)   :: xreconstruct3D_distr
+        type(calc_pspec_commander_distr)      :: xcalc_pspec_distr
+        type(check_3Dconv_commander)          :: xcheck_3Dconv
+        type(postprocess_commander)           :: xpostprocess
+        type(refine3D_commander)              :: xrefine3D_shmem
+        type(estimate_first_sigmas_commander) :: xfirst_sigmas
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
@@ -299,6 +300,19 @@ contains
                 str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
                 call      simple_rename( trim(vol_odd), trim(str) )
             enddo
+            if( l_switch2euclid )then
+                ! first, estimate group sigmas
+                call cline_calc_sigma%set('which_iter',1.0)
+                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
+                call xfirst_sigmas%execute(cline)
+                ! update command lines
+                call cline%set('needs_sigma','yes')
+                call cline_volassemble%set('needs_sigma','yes')
+                call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                call cline%set('objfun','euclid')
+                l_switch2euclid = .false.
+            endif
         else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
             l_projmatch = .true.
