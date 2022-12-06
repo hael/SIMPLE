@@ -311,6 +311,7 @@ contains
                 call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline%set('objfun','euclid')
+                params%objfun   = 'euclid'
                 l_switch2euclid = .false.
             endif
         else if( vol_defined .and. params%continue .ne. 'yes' )then
