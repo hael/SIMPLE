@@ -132,39 +132,6 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
-    ! subroutine exec_reconstruct3D( self, cline )
-    !     class(reconstruct3D_commander), intent(inout) :: self
-    !     class(cmdline),                 intent(inout) :: cline
-    !     type(parameters) :: params
-    !     type(builder)    :: build
-    !     integer          :: s
-    !     character(len=:), allocatable :: fbody
-    !     call build%init_params_and_build_general_tbox(cline, params)
-    !     call build%build_rec_eo_tbox(params)
-    !     if( .not. cline%defined('nparts') )then ! shared-memory implementation
-    !         ! eo partitioning
-    !         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-    !         ! particle weights
-    !         select case(trim(params%ptclw))
-    !             case('yes')
-    !             ! weights are set at search time, so nothing to do here.
-    !             case DEFAULT
-    !                 call build%spproj_field%calc_hard_weights(params%frac)
-    !         end select
-    !         ! to update eo flags and weights
-    !         call build%spproj%write_segment_inside(params%oritype)
-    !     endif
-    !     do s=1,params%nstates
-    !         if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
-    !         fbody = 'recvol_state'
-    !         call build%eorecvol%eorec(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
-    !     end do
-    !     call qsys_job_finished( 'simple_rec_master :: exec_eorec')
-    !     write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
-    ! end subroutine exec_reconstruct3D
-
     subroutine exec_reconstruct3D( self, cline )
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -175,7 +142,6 @@ contains
         integer :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
-        ! call build%build_rec_eo_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
             ! eo partitioning
             if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
