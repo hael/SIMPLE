@@ -622,9 +622,15 @@ contains
                 params_glob => params_ptr
                 params_ptr  => null()
                 call build%spproj_field%kill
-                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
-                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                call simple_rename('recvol_state01.mrc', 'startvol.mrc')
+                if( l_rnd )then
+                    call simple_rename('snhc_recvol_state01_even.mrc', 'startvol_even.mrc')
+                    call simple_rename('snhc_recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                    call simple_rename('snhc_recvol_state01.mrc',      'startvol.mrc')
+                else
+                    call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
+                    call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                    call simple_rename('recvol_state01.mrc',      'startvol.mrc')
+                endif
                 call cline%set('vol1', 'startvol.mrc')
             end subroutine rec
 
