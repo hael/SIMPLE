@@ -18,7 +18,7 @@ type(sym)               :: pgrpsyms
 type(ori)               :: o, o_truth, o_arr(N_ITERS_PROB+1), o_best, o_init
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
-logical                 :: mrc_exists, l_match_filt
+logical                 :: mrc_exists
 real                    :: corr, corr_arr(N_ITERS_PROB+1), p_cur, p_best, corr_best
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_ori_search smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
@@ -57,9 +57,8 @@ call vol_proj%expand_cmat(1.)
 call pgrpsyms%new('c1')
 call o_truth%new(.true.)
 call o%new(.true.)
-l_match_filt = (p%match_filt .eq. 'yes')
 iptcl        = 1 ! working on just one particle
-call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS], l_match_filt=l_match_filt)
+call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS])
 call pgrpsyms%rnd_euler(o_truth)
 call vol_proj%fproject(o_truth, o_proj)
 call cftcc%set_ptcl(iptcl, o_proj)

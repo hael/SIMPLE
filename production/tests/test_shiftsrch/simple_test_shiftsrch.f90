@@ -42,7 +42,7 @@ p%kfromto(1) = 2
 p%kfromto(2) = 40
 allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1. )
 call b%build_general_tbox(p, cline)
-call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto, .false.)
+call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto)
 call pftcc%assign_sigma2_noise(sigma2_noise)
 allocate(corrs(pftcc%get_nrots()), norm_const(pftcc%get_nrots(), 2))
 call img_copy%init_polarizer(pftcc, p%alpha)

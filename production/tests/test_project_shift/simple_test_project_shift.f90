@@ -20,7 +20,7 @@ type(ori)               :: o, o_cur, o1, o2
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
 type(cftcc_shsrch_grad) :: cftcc_shsrch
-logical                 :: mrc_exists, l_match_filt
+logical                 :: mrc_exists
 real                    :: corr, corr1, corr2, euls(3), lims(2,2), cxy(3), ran_ang, norm1, norm2
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_project_shift smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
@@ -58,8 +58,7 @@ call vol_proj%fft()
 call vol_proj%expand_cmat(1.)
 call pgrpsyms%new('c1')
 call o%new(.true.)
-l_match_filt = (p%match_filt .eq. 'yes')
-call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS], l_match_filt=l_match_filt)
+call cftcc%new(vol_proj, vol_proj, [1, N_PTCLS])
 success_ang  = 0
 success_norm = 0
 do i = 1, N_PTCLS

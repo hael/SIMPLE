@@ -391,11 +391,8 @@ contains
                         THROW_HARD('Unknown filter!')
                 end select
             else if( params%phrand .eq. 'no')then
-                ! class_frcs filtering
-                if( cline%defined('frcs') )then
-                    call matchfilt_imgfile(params%stk, params%outstk, params%frcs, params%smpd)
                 ! Band pass
-                else if( cline%defined('lp') .and. cline%defined('hp') )then
+                if( cline%defined('lp') .and. cline%defined('hp') )then
                     call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, params%lp)
                 else if( cline%defined('lp') )then
                     call bp_imgfile(params%stk, params%outstk, params%smpd, 0., params%lp)
@@ -474,10 +471,9 @@ contains
     !! If you want to normalize your images inputted with stk, set norm=yes.
     !! hfun (e.g. hfun=sigm) controls the normalization function. If you want to
     !! perform noise normalization of the images set noise_norm=yes given a mask
-    !! radius msk (pixels). If you want to normalize your images or volume
-    !! (vol1) with respect to their power spectrum set shellnorm=yes
+    !! radius msk (pixels).
     subroutine exec_normalize( self, cline )
-        use simple_procimgstk, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
+        use simple_procimgstk, only: norm_imgfile, noise_norm_imgfile
         class(normalize_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
@@ -498,9 +494,6 @@ contains
                 else
                     THROW_HARD('need msk parameter for noise normalization')
                 endif
-            else if( params%shellnorm.eq.'yes' )then
-                ! shell normalization
-                call shellnorm_imgfile( params%stk, params%outstk, params%smpd)
             endif
         else if( cline%defined('vol1') )then
             ! 3D
@@ -509,11 +502,6 @@ contains
             call build%vol%read(params%vols(1))
             if( params%norm.eq.'yes' )then
                 call build%vol%norm()
-                call build%vol%write(params%outvol, del_if_exists=.true.)
-            else if( params%shellnorm.eq.'yes' )then
-                ! shell normalization
-                call build%vol%shellnorm()
-                call build%vol%spectrum('power', spec)
                 call build%vol%write(params%outvol, del_if_exists=.true.)
             else
                 THROW_HARD('Normalization type not implemented yet')

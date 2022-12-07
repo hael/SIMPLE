@@ -167,7 +167,6 @@ contains
         cline_reconstruct3D_multi_distr = cline
         ! first stage
         call cline_refine3D1%set('prg',       'refine3D')
-        call cline_refine3D1%set('match_filt','no')
         call cline_refine3D1%set('maxits',     real(MAXITS1))
         if( .not.cline_refine3D1%defined('athres') )then
             call cline_refine3D1%set('athres', 20.)
@@ -175,7 +174,6 @@ contains
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
-        call cline_refine3D2%set('match_filt','no')
         call cline_refine3D2%set('refine', 'shc')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions

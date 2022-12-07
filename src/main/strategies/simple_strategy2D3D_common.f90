@@ -322,16 +322,8 @@ contains
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(filtsz, frc, filter)
-                if( params_glob%l_match_filt )then
-                    if( params_glob%l_cartesian )then
-                        call cftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    else
-                        call pftcc_glob%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    endif
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
-                endif
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space
@@ -471,41 +463,16 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()
-        if( params_glob%l_match_filt )then
-            ! stores filters in pftcc
-            if( params_glob%clsfrcs.eq.'yes')then
-                if( file_exists(params_glob%frcs) )then
-                    iproj = 0
-                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                        iproj = iproj+1
-                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                        call fsc2optlp_sub(filtsz, frc, filter)
-                        call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    enddo
-                endif
-            else
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                else
-                    filter = 1.
-                endif
-                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    call pftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                enddo
-            endif
+        filtsz = build_glob%img%get_filtsz()        
+        if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
+            ! no filtering
+        else if( params_glob%l_nonuniform )then
+            ! filtering done in read_and_filter_refvols
         else
-            if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
-                ! no filtering
-            else if( params_glob%l_nonuniform )then
-                ! filtering done in read_and_filter_refvols
-            else
-                call vol_ptr%fft()
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                    call vol_ptr%apply_filter(filter)
-                endif
+            call vol_ptr%fft()
+            if( any(build_glob%fsc(s,:) > 0.143) )then
+                call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                call vol_ptr%apply_filter(filter)
             endif
         endif
         ! back to real space
@@ -558,39 +525,16 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()
-        if( params_glob%l_match_filt )then
-            ! stores filters in cftcc
-            if( params_glob%clsfrcs.eq.'yes')then
-                if( file_exists(params_glob%frcs) )then
-                    iproj = 0
-                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                        iproj = iproj+1
-                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                        call fsc2optlp_sub(filtsz, frc, filter)
-                        call cftcc_glob%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-                    enddo
-                endif
-            else
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                else
-                    filter = 1.
-                endif
-                call cftcc_glob%set_ref_optlp(filter(params_glob%kfromto(1):params_glob%kfromto(2)))
-            endif
+        filtsz = build_glob%img%get_filtsz()        
+        if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
+            ! no filtering
+        else if( params_glob%l_nonuniform )then
+            ! filtering done in read_and_filter_refvols
         else
-            if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
-                ! no filtering
-            else if( params_glob%l_nonuniform )then
-                ! filtering done in read_and_filter_refvols
-            else
-                call vol_ptr%fft()
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                    call vol_ptr%apply_filter(filter)
-                endif
+            call vol_ptr%fft()
+            if( any(build_glob%fsc(s,:) > 0.143) )then
+                call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                call vol_ptr%apply_filter(filter)
             endif
         endif
         ! back to real space

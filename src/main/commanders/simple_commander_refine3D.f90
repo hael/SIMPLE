@@ -580,24 +580,11 @@ contains
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
                 l_projmatch = .false.
-                if( cline%defined('match_filt') )then
-                    if( cline%get_carg('match_filt').eq.'no' )then
-                        ! flags are kept so match_filt is not used
-                        call job_descr%set('match_filt','no')
-                    else
-                        call cline%delete('lp')
-                        call job_descr%delete('lp')
-                        call cline_postprocess%delete('lp')
-                        call cline%delete('lp_iters')
-                        call job_descr%delete('lp_iters')
-                    endif
-                else
-                    call cline%delete('lp')
-                    call job_descr%delete('lp')
-                    call cline_postprocess%delete('lp')
-                    call cline%delete('lp_iters')
-                    call job_descr%delete('lp_iters')
-                endif
+                call cline%delete('lp')
+                call job_descr%delete('lp')
+                call cline_postprocess%delete('lp')
+                call cline%delete('lp_iters')
+                call job_descr%delete('lp_iters')
             endif
             if( l_projmatch )then
                 if( params%l_frac_update )then
@@ -612,13 +599,11 @@ contains
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun',    'euclid')
-                call cline%set('match_filt','no')
                 if(.not.l_griddingset .and. .not.params%l_cartesian )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
                 call job_descr%set('objfun',    'euclid')
-                call job_descr%set('match_filt','no')
                 call cline_volassemble%set('objfun','euclid')
                 if( l_switch2eo )then
                     ! delete resolution limit

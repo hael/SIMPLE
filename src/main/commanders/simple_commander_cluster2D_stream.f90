@@ -139,7 +139,6 @@ contains
         call cline_cluster2D_chunk%delete('projname')
         call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('match_filt','no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
@@ -158,13 +157,6 @@ contains
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('ptclw',     'no')
-        if( cline%defined('match_filt') )then
-            carg = cline%get_carg('match_filt')
-            call cline_cluster2D%set('match_filt',carg)
-            deallocate(carg)
-        else
-            call cline_cluster2D%set('match_filt','no')
-        endif
         call cline_cluster2D%set('extr_iter', 100.)
         call cline_cluster2D%set('mkdir',     'no')
         call cline_cluster2D%set('async',     'yes') ! to enable hard termination

@@ -41,7 +41,6 @@ type :: parameters
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
-    character(len=3)          :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
@@ -66,7 +65,6 @@ type :: parameters
     character(len=3)          :: clsfrcs='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
-    character(len=3)          :: shellnorm='no'
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -391,7 +389,6 @@ type :: parameters
     logical :: l_graphene     = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
-    logical :: l_match_filt   = .true.
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
@@ -482,7 +479,6 @@ contains
         call check_carg('keepvol',        self%keepvol)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
-        call check_carg('match_filt',     self%match_filt)
         call check_carg('mcpatch',        self%mcpatch)
         call check_carg('mcpatch_thres',  self%mcpatch_thres)
         call check_carg('mirr',           self%mirr)
@@ -524,7 +520,6 @@ contains
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('shellnorm',      self%shellnorm)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
@@ -1311,21 +1306,13 @@ contains
                 THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
         end select
         ! FILTERS
-        ! matched filter, sigma needs flags etc.
+        ! sigma needs flags etc.
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
-                self%l_match_filt  = .false.
                 self%l_needs_sigma = .true.
                 self%l_incrreslim  = .true.
             case(OBJFUN_CC)
-                if( cline%defined('match_filt') )then
-                    self%l_match_filt  = (trim(self%match_filt) .eq.'yes')
-                else
-                    ! default behaviour
-                    self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
-                endif
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
-                if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
         ! type of sigma estimation (group or global)
         select case(trim(self%sigma_est))
@@ -1388,7 +1375,6 @@ contains
         select case(trim(self%refine))
             case('shcc','neighc','greedyc')
                 self%l_cartesian = .true.
-                if( .not. cline%defined('match_filt') ) self%l_match_filt = .false.
             case DEFAULT
                 self%l_cartesian = .false.
         end select

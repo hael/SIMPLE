@@ -119,12 +119,11 @@ contains
         call cline%set('smpd',     smpd)
         call cline%set('box',      real(box))
         call cline%set('nthr',     1.)
-        call cline%set('match_filt','no')
         call cline%set('ctf',      'no')
         call params%new(cline, silent=.true.)
         params_glob%kfromto(1) = 5
         params_glob%kfromto(2) = nyq-1
-        call pftcc%new(1,[1,1], params_glob%kfromto, .false.)
+        call pftcc%new(1,[1,1], params_glob%kfromto)
         angstep = abs(pftcc%get_rot(2)-pftcc%get_rot(1))
         nrots   = pftcc%get_nrots()
         ! reference polar coordinates
