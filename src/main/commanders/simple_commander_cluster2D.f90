@@ -305,7 +305,6 @@ contains
         cline_scale      = cline
         call cline_cluster2D1%set('prg', 'cluster2D')
         call cline_cluster2D1%set('maxits',   MINITS)
-        call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
@@ -314,7 +313,6 @@ contains
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter
         call cline_cluster2D2%set('prg', 'cluster2D')
-        call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',    MINSHIFT)
         if( .not.cline%defined('maxits') )then
@@ -597,7 +595,6 @@ contains
             ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('match_filt', 'no')
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw','no')
             call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
@@ -997,13 +994,11 @@ contains
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun',    'euclid')
-                call cline%set('match_filt','no')
                 if(.not.l_griddingset )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
                 call job_descr%set('objfun',    'euclid')
-                call job_descr%set('match_filt','no')
                 call cline_cavgassemble%set('objfun','euclid')
                 if( l_ptclw )then
                     call cline%set('ptclw',    'yes')
@@ -1351,7 +1346,6 @@ contains
         real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
         logical :: l_apply_optlp, use_shifted
         ! defaults
-        call cline%set('match_filt', 'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
@@ -1437,7 +1431,7 @@ contains
         ! create the polarft_corrcalc object
         params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
-        call pftcc%new(ncls_sel, [1,1], params%kfromto, .false.) ! matched filter turned off
+        call pftcc%new(ncls_sel, [1,1], params%kfromto)
         if( trim(params%bin_cls).ne.'no' .and. .not. DEBUG )then
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
@@ -1535,7 +1529,7 @@ contains
             write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
             ! re-create the polarft_corrcalc object
             call pftcc%kill
-            call pftcc%new(ncls_sel, [1,1], params%kfromto, .false.) ! matched filter turned off
+            call pftcc%new(ncls_sel, [1,1], params%kfromto)
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)

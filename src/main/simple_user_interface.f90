@@ -221,7 +221,6 @@ type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_lowres
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: lpthres
-type(simple_input_param) :: match_filt
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
@@ -1057,7 +1056,6 @@ contains
         call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(lp_lowres,      'lp_lowres',    'num',    'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
         call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
-        call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
@@ -1458,7 +1456,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 7, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1509,14 +1507,12 @@ contains
         call cluster2D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
         call cluster2D%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 5,  match_filt)
+        call cluster2D%set_input('filt_ctrls', 5,  wiener)
         call cluster2D%set_gui_params('filt_ctrls', 5, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 6,  wiener)
+        call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 7,  graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 7, ml_reg)
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 8, ml_reg)
-        call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
@@ -1572,7 +1568,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 7, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 6, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1602,9 +1598,8 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5,  match_filt)
-        call cluster2D_stream%set_input('filt_ctrls', 6,  wiener)
-        call cluster2D_stream%set_input('filt_ctrls', 7, lplim_crit)
+        call cluster2D_stream%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D_stream%set_input('filt_ctrls', 6, lplim_crit)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1622,7 +1617,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 5, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1651,8 +1646,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_subsets%set_input('filt_ctrls', 5, match_filt)
-        call cluster2D_subsets%set_input('filt_ctrls', 6,  wiener)
+        call cluster2D_subsets%set_input('filt_ctrls', 5,  wiener)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -3061,7 +3055,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 21, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 21, 8, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3190,10 +3184,8 @@ contains
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 8,  match_filt)
+        call preprocess_stream_dev%set_input('filt_ctrls', 8,  wiener)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 9,  wiener)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
@@ -3440,7 +3432,7 @@ contains
         &'Normalize volume/stack',&            ! descr_short
         &'is a program for normalization of MRC or SPIDER stacks and volumes',&
         &'simple_exec',&                       ! executable
-        &0, 4, 2, 0, 0, 1, 1, .false.)         ! # entries in each group, requires sp_project
+        &0, 3, 2, 0, 0, 1, 1, .false.)         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3448,7 +3440,6 @@ contains
         call normalize_%set_input('parm_ios', 1, smpd)
         call normalize_%set_input('parm_ios', 2, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',     '(yes|no){no}', .false., 'no')
         call normalize_%set_input('parm_ios', 3, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}',  '(yes|no){no}', .false., 'no')
-        call normalize_%set_input('parm_ios', 4, 'shellnorm', 'binary', 'Power whitening', 'Normalisation of each Fourier shell to power=1(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         call normalize_%set_input('alt_ios', 1, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
         call normalize_%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')

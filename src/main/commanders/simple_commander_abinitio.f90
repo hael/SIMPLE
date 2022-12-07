@@ -257,7 +257,6 @@ contains
         call cline_refine3D_snhc%set('lp',         lplims(1))
         call cline_refine3D_snhc%set('nspace',     real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',     real(MAXITS_SNHC))
-        call cline_refine3D_snhc%set('match_filt', 'no')
         call cline_refine3D_snhc%set('ptclw',      'no')               ! no soft particle weights in first phase
         call cline_refine3D_snhc%set('silence_fsc','yes')              ! no FSC plot printing in snhc phase
         call cline_refine3D_snhc%set('lp_iters',    real(MAXITS_SNHC)) ! low-pass limited resolution, no e/o
@@ -273,7 +272,6 @@ contains
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
-        call cline_refine3D_init%set('match_filt','no')
         call cline_refine3D_init%set('ptclw',     'no')   ! no soft particle weights in init phase
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//ext)
@@ -314,7 +312,6 @@ contains
             call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
-            call cline_refine3D_refine%set('match_filt', 'no')
         endif
         if( params%l_automsk )then
             call cline_refine3D_refine%set('automsk', trim(params%automsk))

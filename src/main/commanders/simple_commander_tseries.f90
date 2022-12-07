@@ -615,7 +615,6 @@ contains
         integer :: last_iter_stage2, nptcls
         logical :: l_shmem
         call cline%set('dir_exec', 'center2D_nano')
-        call cline%set('match_filt',          'no')
         call cline%set('ptclw',               'no')
         call cline%set('center',             'yes')
         call cline%set('autoscale',           'no')
@@ -705,7 +704,6 @@ contains
         ! static parameters
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
-        call cline%set('match_filt',           'no')
         call cline%set('ptclw',                'no')
         call cline%set('center',              'yes')
         call cline%set('autoscale',            'no')
@@ -899,7 +897,6 @@ contains
         ! static parameters
         call cline%set('prg',           'refine3D')
         call cline%set('dir_exec', 'refine3D_nano')
-        call cline%set('match_filt',          'no')
         ! dynamic parameters
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')

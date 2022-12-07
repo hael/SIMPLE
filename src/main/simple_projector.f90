@@ -42,10 +42,8 @@ type, extends(image) :: projector
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
-    procedure          :: fproject_shellnorm_serial
     procedure          :: fproject_correlate_serial
     ! procedure          :: fproject_correlate
-    procedure          :: fproject_shellnorm_correlate_serial
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
@@ -296,47 +294,6 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_shellnorm_serial( self, e, lims, cmat, resmsk )
-        class(projector),              intent(inout) :: self
-        class(ori),                    intent(in)    :: e
-        integer,                       intent(in)    :: lims(2,2)
-        complex(kind=c_float_complex), intent(inout) :: cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real     :: loc(3), e_rotmat(3,3)
-        real(dp) :: powvec(params_glob%kfromto(2)), cntvec(params_glob%kfromto(2))
-        integer  :: h, k, sh
-        e_rotmat = e%get_mat()
-        powvec   = 0.
-        cntvec   = 0.
-        do h =  lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                if( resmsk(h,k) )then
-                    loc = matmul(real([h,k,0]), e_rotmat)
-                    sh  = nint(hyp(real(h),real(k)))
-                    if( h .ge. 0 )then
-                        cmat(h,k) = self%interp_fcomp(loc)
-                    else
-                        cmat(h,k) = conjg(self%interp_fcomp(loc))
-                    endif
-                    powvec(sh) = powvec(sh) + real(csq_fast(cmat(h,k)), kind=dp)
-                    cntvec(sh) = cntvec(sh) + 1.d0
-                else
-                    cmat(h,k) = CMPLX_ZERO
-                endif
-            end do
-        end do
-        where(cntvec > 0.d0) powvec = powvec / cntvec
-        do h =  lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                if( resmsk(h,k) )then
-                    sh = nint(hyp(real(h),real(k)))
-                    if( powvec(sh) > DTINY ) cmat(h,k) = cmat(h,k) / real(dsqrt(powvec(sh)),kind=sp)
-                endif
-            end do
-        end do
-    end subroutine fproject_shellnorm_serial
-
     function fproject_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
@@ -393,62 +350,6 @@ contains
                 corr = 1 - cc(1)/(cc(2)+cc(3))
         end select
     end function fproject_correlate_serial
-
-    function fproject_shellnorm_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
-        class(projector),              intent(inout) :: self
-        class(ori),                    intent(in)    :: e
-        integer,                       intent(in)    :: lims(2,2)
-        complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        complex(kind=c_float_complex) :: cmat_ref(lims(1,1):lims(1,2),lims(2,1):lims(2,2)), ref_comp, diff_comp
-        real     :: loc(3), e_rotmat(3,3), cc(3), corr
-        real(dp) :: powvec(params_glob%kfromto(2)), cntvec(params_glob%kfromto(2))
-        integer  :: h, k, sh
-        e_rotmat = e%get_mat()
-        powvec   = 0.
-        cntvec   = 0.
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                if( resmsk(h,k) )then
-                    loc = matmul(real([h,k,0]), e_rotmat)
-                    sh  = nint(hyp(real(h),real(k)))
-                    if( h .ge. 0 )then
-                        cmat_ref(h,k) =       self%interp_fcomp(loc)
-                    else
-                        cmat_ref(h,k) = conjg(self%interp_fcomp(loc))
-                    endif
-                    ! should not be necessary
-                    ! if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
-                        powvec(sh) = powvec(sh) + real(csq_fast(cmat_ref(h,k)),kind=dp)
-                        cntvec(sh) = cntvec(sh) + 1.d0
-                    ! endif
-                endif
-            end do
-        end do
-        where(cntvec > 0.d0) powvec = powvec / cntvec
-        cc(:) = 0.
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                if( resmsk(h,k) )then
-                    sh = nint(hyp(real(h),real(k)))
-                    ! should not be necessary
-                    ! if( sh > 0 .and. sh <= params_glob%kfromto(2) )then
-                        if( powvec(sh) > DTINY )then
-                            ref_comp = (cmat_ref(h,k) / real(dsqrt(powvec(sh)),kind=sp)) * ctfmat(h,k) * filtw(h,k)
-                            ! update cross product
-                            cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
-                            ! update normalization terms
-                            cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                            cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
-                        endif
-                    ! endif
-                endif
-            end do
-        end do
-        corr = norm_corr(cc(1),cc(2),cc(3))
-    end function fproject_shellnorm_correlate_serial
 
     ! function fproject_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
     !     class(projector),              intent(inout) :: self

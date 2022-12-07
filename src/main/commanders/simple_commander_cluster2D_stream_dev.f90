@@ -169,7 +169,6 @@ contains
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
         call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('match_filt','no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
@@ -201,13 +200,6 @@ contains
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_pool%set('lp_lowres',real(params_glob%lp_lowres))
-        if( cline%defined('match_filt') )then
-            carg = cline%get_carg('match_filt')
-            call cline_cluster2D_pool%set('match_filt',carg)
-            deallocate(carg)
-        else
-            call cline_cluster2D_pool%set('match_filt','no')
-        endif
         if( cline%defined('cenlp') )then
             rarg = cline%get_rarg('cenlp')
             call cline_cluster2D_pool%set('cenlp', rarg)
@@ -1428,7 +1420,6 @@ contains
         if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
         if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
         if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
-        if( .not. cline%defined('match_filt')   ) call cline%set('match_filt',    'no')
         if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',    'no')
         call cline%set('ptclw',      'no')
         call seed_rnd
@@ -1470,7 +1461,6 @@ contains
         call cline_cluster2D_chunk%delete('projname')
         call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('match_filt','no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
@@ -1495,13 +1485,6 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
-        if( cline%defined('match_filt') )then
-            carg = cline%get_carg('match_filt')
-            call cline_cluster2D_pool%set('match_filt',carg)
-            deallocate(carg)
-        else
-            call cline_cluster2D_pool%set('match_filt','no')
-        endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
         ! read strictly required fields project

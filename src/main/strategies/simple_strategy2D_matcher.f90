@@ -392,7 +392,7 @@ contains
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto, params_glob%l_match_filt)
+         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
