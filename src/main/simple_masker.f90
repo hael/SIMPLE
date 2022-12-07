@@ -71,6 +71,7 @@ contains
         ! extract all cc sizes (in # pixels)
         ccsizes = self%size_ccs()
         sz      = size(ccsizes)
+        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz, ' CONNECTED COMPONENT(S)'
         if( sz > 1 )then
             ! identify the largest connected component
             imax = maxval(ccsizes)
