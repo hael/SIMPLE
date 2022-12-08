@@ -80,6 +80,7 @@ contains
         if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
+        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',CTFRES_THRESHOLD)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
@@ -683,8 +684,11 @@ contains
         state  = 0
         call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
         if( ptcl_check )then
-            if( nmics /= 1 .or. nptcls < 1 )then
-                THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+            if( nmics /= 1 )then
+                THROW_WARN('No micrograph for: '//trim(fname)//'. Skipping')
+                nptcls = 0
+            else if( nptcls < 1 )then
+                THROW_WARN('No particles extracted for: '//trim(fname)//'. Skipping')
                 nptcls = 0
             else
                 call spproj_here%read_segment('mic',fname)
@@ -694,7 +698,7 @@ contains
             endif
         else
             if( nmics /= 1 )then
-                THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+                THROW_WARN('No micrograph for: '//trim(fname)//'. Skipping')
             else
                 call spproj_here%read_segment('mic',fname)
                 state  = spproj_here%os_mic%get_state(1)
