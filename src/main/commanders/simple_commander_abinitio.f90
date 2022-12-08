@@ -473,6 +473,7 @@ contains
         if( l_euclid )then
             call cline_refine3D_refine%set('objfun',    'euclid')
             call cline_refine3D_refine%set('ml_reg',    'yes')
+            call cline_refine3D_refine%set('sigma_est', 'global')
         endif
         if( l_shmem )then
             params_ptr  => params_glob
@@ -514,6 +515,7 @@ contains
             ! scale sigmas
             if( l_euclid )then
                 call cline_reconstruct3D%set('which_iter',real(iter))
+                call cline_reconstruct3D%set('sigma_est', 'global')
                 ! delete particle sigma2
                 do ipart = 1,params%nparts
                     call del_file('init_pspec_part'//int2str(ipart)//'.dat')
@@ -523,6 +525,7 @@ contains
                 cline_calc_pspec = cline
                 call cline_calc_pspec%set('prg', 'calc_pspec' )
                 call cline_calc_pspec%set('projfile', ORIG_work_projfile)
+                call cline_calc_pspec%set('sigma_est', 'global')
                 if( l_shmem )then
                     ! todo?
                 else
