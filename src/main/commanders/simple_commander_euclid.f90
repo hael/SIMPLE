@@ -249,21 +249,29 @@ contains
             pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
         end do
         ! generate group averages & write
-        ngroups = 0
-        !$omp parallel do default(shared) private(iptcl,igroup)&
-        !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
-        do iptcl = 1,nptcls
-            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-            igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
-            ngroups = max(igroup,ngroups)
-        enddo
-        !$omp end parallel do
+        if( params_glob%l_sigma_glob )then
+            ngroups = 1
+        else
+            ngroups = 0
+            !$omp parallel do default(shared) private(iptcl,igroup)&
+            !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
+            do iptcl = 1,nptcls
+                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
+                ngroups = max(igroup,ngroups)
+            enddo
+            !$omp end parallel do
+        endif
         allocate(group_pspecs(2,ngroups,nyq),source=0.)
         allocate(group_weights(2,ngroups),source=0)
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            if( params_glob%l_sigma_glob )then
+                igroup = 1
+            else
+                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            endif
             group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + pspecs(:, iptcl)
             group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
         enddo
@@ -282,7 +290,11 @@ contains
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            if( params_glob%l_sigma_glob )then
+                igroup = 1
+            else
+                igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            endif
             pspecs(:,iptcl) = group_pspecs(eo+1,igroup,:)
         enddo
         ! write updated sigmas to disc
