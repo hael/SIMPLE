@@ -489,7 +489,7 @@ contains
                     call build%spproj%write_segment_inside('out')
                     ! automasking in postprocess
                     if( params%l_automsk )then
-                        if( mod(niters),AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
+                        if( mod(niters,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             call cline_postprocess%delete('mskfile')
                             call cline_postprocess%set('automsk', trim(params%automsk))
                         endif
