@@ -326,6 +326,9 @@ contains
         if( params%l_nonuniform )then
             call cline_refine3D_refine%set('nonuniform', 'yes')
         endif
+        if( l_euclid )then
+            call cline_refine3D_refine%set('refine', 'greedy')
+        endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(orig_box))
