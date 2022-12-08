@@ -181,6 +181,7 @@ contains
         if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
+        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',CTFRES_THRESHOLD)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         ! extraction
@@ -708,14 +709,14 @@ contains
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres')) call cline%set('mcpatch_thres','yes')
+        if( .not. cline%defined('mcpatch_thres')   ) call cline%set('mcpatch_thres',  'yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
-        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            DFMAX_DEFAULT)
+        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',          DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',          DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
@@ -795,7 +796,7 @@ contains
         character(len=LONGSTRLEN)     :: boxfile
         real    :: smpd_pick
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
-        logical :: l_pick, l_del_forctf
+        logical :: l_pick, l_del_forctf, l_skip_pick
         call cline%set('oritype', 'mic')
         call params%new(cline)
         if( params%scale > 1.01 )then
@@ -838,7 +839,7 @@ contains
             fbody = ''
         endif
         ! range
-        if( params%stream.eq.'yes' )then
+        if( trim(params%stream).eq.'yes' )then
             ! STREAMING MODE
             fromto(:) = 1
         else
@@ -896,10 +897,18 @@ contains
                 call o_mov%delete_entry('forctf')
                 call del_file(moviename_forctf)
             endif
+            ! optional rejection
+            l_skip_pick = .false.
+            if( trim(params%stream).eq.'yes' )then
+                if( l_pick .and. o_mov%isthere('ctfres') )then
+                    l_skip_pick = o_mov%get('ctfres') > (params_glob%ctfresthreshold-0.001)
+                    if( l_skip_pick ) call o_mov%set('nptcls',0.)
+                endif
+            endif
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
-            ! picker
-            if( l_pick )then
+            ! pick
+            if( l_pick .and. (.not.l_skip_pick) )then
                 smpd_pick      = o_mov%get('smpd')
                 params_glob%lp = max(2.*smpd_pick, params%lp_pick)
                 call o_mov%getter('intg', moviename_intg)
@@ -929,8 +938,8 @@ contains
                 endif
             endif
         end do
-        if( params%stream .eq. 'yes' )then
-            if( .not.l_pick )then
+        if( trim(params%stream).eq.'yes' )then
+            if( (.not.l_pick) .or. l_skip_pick)then
                 ! because extract performs the writing otherwise
                 call spproj%write_segment_inside(params%oritype)
             endif
