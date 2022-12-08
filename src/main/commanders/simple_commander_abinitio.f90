@@ -92,6 +92,7 @@ contains
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.9)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',     'cc')
+        call cline%set('nonuniform', 'no') ! for speed
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -261,7 +262,6 @@ contains
         call cline_refine3D_snhc%set('silence_fsc','yes')              ! no FSC plot printing in snhc phase
         call cline_refine3D_snhc%set('lp_iters',    real(MAXITS_SNHC)) ! low-pass limited resolution, no e/o
         call cline_refine3D_snhc%delete('frac')                        ! no rejections in first phase
-        call cline_refine3D_snhc%delete('nonuniform')                  ! never in the first stage
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(work_projfile))
         call cline_refine3D_init%set('box',      real(box))
@@ -276,7 +276,6 @@ contains
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//ext)
         call cline_refine3D_init%delete('frac')           ! no rejections in 2nd phase
-        call cline_refine3D_init%delete('nonuniform')     ! never in the 2nd stage
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -299,18 +298,12 @@ contains
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine', 'shc')
         call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
-        if( params%l_nonuniform )then
-            call cline_refine3D_refine%set('nonuniform', 'yes')
-        endif
         if( l_euclid )then
             call cline_refine3D_refine%set('objfun',     'euclid')
             call cline_refine3D_refine%set('sigma_est',  'global')
             call cline_reconstruct3D%set('sigma_est',    'global')
             call cline_reconstruct3D%set('needs_sigma',  'yes')
-            if( params%l_nonuniform )then
-                call cline_refine3D_refine%set('ml_reg', 'no')
-                call cline_reconstruct3D%set('ml_reg',   'no')
-            else
+            if( .not. cline%defined('ml_reg') )then
                 call cline_refine3D_refine%set('ml_reg', 'yes')
                 call cline_reconstruct3D%set('ml_reg',   'yes')
             endif
@@ -322,12 +315,10 @@ contains
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))
             call cline_refine3D_refine%set('lp_iters', real(MAXITS_REFINE)) ! low-pass limited resolution, no e/o
-            call cline_refine3D_refine%delete('nonuniform')
         else
             call cline_refine3D_refine%delete('lp')
             call cline_refine3D_refine%set('lp_iters',      0.)             ! no lp, e/o only
             call cline_refine3D_refine%set('lpstop',      lplims(2))
-            call cline_refine3D_refine%set('clsfrcs',    'yes')
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
@@ -452,7 +443,6 @@ contains
                 call xscale%execute( cline_scale2 )
                 call work_proj2%os_ptcl3D%mul_shifts(scale_factor2)
                 call work_proj2%write
-                if( .not.l_lpset ) call rescale_2Dfilter
             else
                 do_autoscale = .false.
                 box = orig_box
@@ -483,20 +473,6 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
-            ! if( params%l_automsk )then
-            !     ! scale the mask
-            !     if( .not. file_exists('automask'//trim(ext)) ) THROW_HARD('file '//'automask'//trim(ext)//' does not exist')
-            !     call cline_scale_msk%set('smpd',   smpd_target)
-            !     call cline_scale_msk%set('vol1',   'automask'//trim(ext))
-            !     call cline_scale_msk%set('newbox', real(orig_box))
-            !     call cline_scale_msk%set('outvol', 'automask_scaled'//trim(ext))
-            !     call cline_scale_msk%set('mkdir',  'no')
-            !     call cline_scale_msk%set('nthr',   real(params%nthr))
-            !     call xscale_msk%execute(cline_scale_msk)
-            !     call del_file('automask'//trim(ext))
-            !     call simple_rename('automask_scaled'//trim(ext), 'automask'//trim(ext))
-            !     call cline_reconstruct3D%set('mskfile', 'automask'//trim(ext))
-            ! endif
             ! modulates shifts
             os = work_proj2%os_ptcl3D
             call os%mul_shifts(1./scale_factor2)
@@ -692,18 +668,6 @@ contains
                 call o_even%kill
                 call o_odd%kill
             end subroutine prep_eo_stks_refine
-
-            subroutine rescale_2Dfilter
-                use simple_class_frcs, only: class_frcs
-                type(class_frcs) :: clsfrcs, clsfrcs_sc
-                call clsfrcs%read(frcs_fname)
-                call clsfrcs%downsample(box, clsfrcs_sc)
-                frcs_fname = trim(FRCS_FILE)
-                call clsfrcs_sc%write(frcs_fname)
-                call cline_refine3D_refine%set('frcs',frcs_fname)
-                call clsfrcs%kill
-                call clsfrcs_sc%kill
-            end subroutine rescale_2Dfilter
 
             subroutine conv_eo( os )
                 class(oris), intent(inout) :: os

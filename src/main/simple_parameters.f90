@@ -62,7 +62,6 @@ type :: parameters
     character(len=3)          :: prune='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
-    character(len=3)          :: clsfrcs='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
@@ -510,7 +509,6 @@ contains
         call check_carg('projstats',      self%projstats)
         call check_carg('prune',          self%prune)
         call check_carg('ptclw',          self%ptclw)
-        call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('real_filter',    self%real_filter)

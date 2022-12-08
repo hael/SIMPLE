@@ -564,7 +564,6 @@ contains
                 do state=1,params%nstates
                     call cline_refine3D(state)%delete('lp')
                     call cline_refine3D(state)%set('frcs',trim(frcs_fname))
-                    call cline_refine3D(state)%set('clsfrcs',   'yes')
                 enddo
                 ! add stks
                 ext   = '.'//fname2ext( cavg_stk )
