@@ -94,6 +94,7 @@ contains
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.9)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
+        if( .not. cline%defined('objfun')    ) call cline%set('objfun',     'cc')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
