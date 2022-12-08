@@ -9,7 +9,7 @@ implicit none
 
 public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
 public :: split_group_sigma2, scale_group_sigma2_magnitude
-public :: test_unit
+public :: fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
 
@@ -88,8 +88,8 @@ contains
             THROW_HARD('euclid_sigma2_starfile: read_groups_pspecs; file does not exists: ' // trim(fname))
         end if
         call starfile_table__new(table)
-        call starfile_table__getnames(table, fname, names)
-        call starfile_table__read( table, fname, names(1)%str )
+        call starfile_table__getnames(table, trim(fname), names)
+        call starfile_table__read( table, trim(fname), names(1)%str )
         l = starfile_table__getValue_int(table, EMDL_MLMODEL_NR_GROUPS, ngroups)
         l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX,  kfromto(1))
         l = starfile_table__getValue_int(table, EMDL_SPECTRAL_IDX2, kfromto(2))
@@ -183,14 +183,14 @@ contains
     end subroutine write_sigma2
 
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
-        character(len=:), allocatable, intent(in) :: fname
-        real, allocatable,             intent(in) :: group_pspecs(:,:,:)
-        integer,                       intent(in) :: ngroups
+        character(len=*),  intent(in) :: fname
+        real, allocatable, intent(in) :: group_pspecs(:,:,:)
+        integer,           intent(in) :: ngroups
         character(len=:), allocatable :: stmp
         integer                       :: kfromto(2), eo, igroup, idx
         type(starfile_table_type)     :: ostar
         call starfile_table__new(ostar)
-        call starfile_table__open_ofile(ostar, fname)
+        call starfile_table__open_ofile(ostar, trim(fname))
         ! global fields
         kfromto(1) = lbound(group_pspecs,3)
         kfromto(2) = ubound(group_pspecs,3)
@@ -308,6 +308,32 @@ contains
         call euclidsigma2%kill
     end subroutine scale_group_sigma2_magnitude
 
+    ! Updates the lowest resolution info of the file with most frequencies with the other & overwrites it
+    subroutine fill_sigma2_before_nyq( fname1, fname2 )
+        character(len=*), intent(in)  :: fname1, fname2
+        type(euclid_sigma2)           :: sigma2_1, sigma2_2
+        integer                       :: ngroups1, ngroups2, k0
+        call sigma2_1%init_from_group_header(fname1)
+        call sigma2_2%init_from_group_header(fname2)
+        call sigma2_1%read_groups_starfile(0, sigma2_1%sigma2_groups, ngroups1, fname=fname1)
+        call sigma2_2%read_groups_starfile(0, sigma2_2%sigma2_groups, ngroups2, fname=fname2)
+        if( ngroups1 /= ngroups2 ) THROW_HARD('Inconsistent dimensions; fill_sigma2_beyond_nyq')
+        if( sigma2_1%kfromto(1) /= sigma2_2%kfromto(1) ) THROW_HARD('Inconsistent fourier dimensions 1; fill_sigma2_beyond_nyq')
+        k0 = sigma2_1%kfromto(1)
+        if( sigma2_1%kfromto(2) > sigma2_2%kfromto(2) )then
+            sigma2_1%sigma2_groups(:,:,k0:sigma2_2%kfromto(2)) = sigma2_2%sigma2_groups
+            call write_groups_starfile( fname2, sigma2_1%sigma2_groups, ngroups1 )
+        else if(sigma2_1%kfromto(2) == sigma2_2%kfromto(2))then
+            ! nothing to do?
+        else
+            sigma2_2%sigma2_groups(:,:,k0:sigma2_1%kfromto(2)) = sigma2_1%sigma2_groups
+            print *,trim(fname1)
+            call write_groups_starfile( fname1, sigma2_2%sigma2_groups, ngroups1 )
+        endif
+        call sigma2_1%kill
+        call sigma2_2%kill
+    end subroutine fill_sigma2_before_nyq
+
     subroutine split_group_sigma2( iter )
         integer,          intent(in)  :: iter
         type(euclid_sigma2)           :: euclidsigma2
@@ -356,7 +382,7 @@ contains
         integer, parameter :: iter       = 7
         real,    parameter :: scale      = 0.3
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: fname
+        character(len=STDLEN)         :: fname, fname1, fname2
         real,             allocatable :: sigma2(:,:,:)
         integer :: igroup, ng
         logical :: l_err
@@ -391,10 +417,20 @@ contains
             endif
         enddo
         if( l_err )then
-            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST FAILED'
+            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST 1 FAILED'
         else
-            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST PASSED'
+            write(*,'(A)')'>>> EUCLID_SIGMA2 UNIT TEST 1 PASSED'
         endif
+        deallocate(sigma2)
+        allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
+        fname1 = trim(SIGMA2_GROUP_FBODY) // '1.star'
+        call write_groups_starfile( fname1, sigma2, ngroups )
+        deallocate(sigma2)
+        allocate(sigma2(2,ngroups,kfromto(1):2*kfromto(2)),source=2.0)
+        fname2 = trim(SIGMA2_GROUP_FBODY) // '2.star'
+        call write_groups_starfile( fname2, sigma2, ngroups )
+        deallocate(sigma2)
+        call fill_sigma2_before_nyq(fname1, fname2)
     end subroutine test_unit
 
 end module simple_euclid_sigma2
