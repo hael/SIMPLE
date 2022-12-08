@@ -302,7 +302,8 @@ contains
             enddo
             if( l_switch2euclid )then
                 ! first, estimate group sigmas
-                call cline_calc_sigma%set('which_iter',1.0)
+                ! call cline_calc_sigma%set('which_iter',1.0)
+                call cline_calc_sigma%set('which_iter', real(params%startit))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
                 ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
                 call xfirst_sigmas%execute(cline)

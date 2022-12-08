@@ -133,12 +133,15 @@ contains
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_reconstruct3D( self, cline )
+        use simple_euclid_sigma2, only: euclid_sigma2
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
-        integer, allocatable :: pinds(:)
-        logical, allocatable :: ptcl_mask(:)
+        type(euclid_sigma2)  :: eucl_sigma
+        character(len=:), allocatable :: fname
+        integer,          allocatable :: pinds(:)
+        logical,          allocatable :: ptcl_mask(:)
         integer :: nptcls2update
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
@@ -158,6 +161,11 @@ contains
         allocate(ptcl_mask(params%fromp:params%top))
         call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
         &1.0, nptcls2update, pinds, ptcl_mask)
+        if( params%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            call eucl_sigma%new(fname, params%box)
+            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+        end if
         call calc_3Drec( cline, nptcls2update, pinds )
         call qsys_job_finished('simple_commander_rec :: exec_reconstruct3D')
         ! end gracefully
