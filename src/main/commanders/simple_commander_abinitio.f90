@@ -12,13 +12,11 @@ use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_comm
 use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
 use simple_commander_project,  only: scale_project_commander_distr
 use simple_commander_imgproc,  only: scale_commander
-use simple_commander_euclid
-use simple_euclid_sigma2
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
-use simple_opt_filter,         only: uni_filt2D_sub
-use simple_masker,             only: automask2D
+use simple_commander_euclid
+use simple_euclid_sigma2
 use simple_qsys_funs
 implicit none
 
@@ -87,7 +85,6 @@ contains
         integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3), iter, ipart
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_euclid
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('automsk')   ) call cline%set('automsk',   'no')
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
         if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
@@ -122,8 +119,6 @@ contains
         ! make master parameters
         call params%new(cline)
         l_euclid = params%cc_objfun == OBJFUN_EUCLID
-        ! take care of automask flag
-        if( cline%defined('automsk') ) call cline%delete('automsk')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -302,13 +297,28 @@ contains
         call cline_refine3D_refine%set('prg',    'refine3D')
         call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine',    'shc')
-        call cline_refine3D_refine%set('nspace',      real(NSPACE_REFINE))
-        ! call cline_refine3D_refine%set('refine',    'neighc')
-        ! call cline_refine3D_refine%set('athres',         15.)
-        ! call cline_refine3D_refine%set('nsample_neigh', 500.)
-        ! call cline_refine3D_refine%set('nsample_trs',    50.)
-        call cline_refine3D_refine%delete('objfun')
+        call cline_refine3D_refine%set('refine', 'shc')
+        call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
+        if( params%l_nonuniform )then
+            call cline_refine3D_refine%set('nonuniform', 'yes')
+        endif
+        if( l_euclid )then
+            call cline_refine3D_refine%set('objfun',     'euclid')
+            call cline_refine3D_refine%set('sigma_est',  'global')
+            call cline_reconstruct3D%set('sigma_est',    'global')
+            call cline_reconstruct3D%set('needs_sigma',  'yes')
+            if( params%l_nonuniform )then
+                call cline_refine3D_refine%set('ml_reg', 'no')
+                call cline_reconstruct3D%set('ml_reg',   'no')
+            else
+                call cline_refine3D_refine%set('ml_reg', 'yes')
+                call cline_reconstruct3D%set('ml_reg',   'yes')
+            endif
+        else
+            call cline_refine3D_refine%set('objfun',     'cc')
+            call cline_reconstruct3D%set('needs_sigma',  'no')
+            call cline_reconstruct3D%set('ml_reg',       'no')
+        endif
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))
             call cline_refine3D_refine%set('lp_iters', real(MAXITS_REFINE)) ! low-pass limited resolution, no e/o
@@ -319,24 +329,10 @@ contains
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
         endif
-        if( params%l_automsk )then
-            call cline_refine3D_refine%set('automsk', trim(params%automsk))
-            call cline_refine3D_refine%set('amsklp', params%amsklp)
-        endif
-        if( params%l_nonuniform )then
-            call cline_refine3D_refine%set('nonuniform', 'yes')
-        endif
-        if( l_euclid )then
-            call cline_refine3D_refine%set('refine', 'greedy')
-        endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(orig_box))
         call cline_reconstruct3D%set('projfile', ORIG_work_projfile)
-        if( l_euclid )then
-            call cline_reconstruct3D%set('needs_sigma', 'yes')
-            call cline_reconstruct3D%set('ml_reg',      'yes')
-        endif
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_work_projfile)
         call cline_postprocess%set('mkdir',      'no')
@@ -345,9 +341,6 @@ contains
             call cline_postprocess%set('lp', lplims(2))
         else
             call cline_postprocess%delete('lp')
-        endif
-        if( params%l_automsk )then
-            call cline_postprocess%set('automsk', trim(params%automsk))
         endif
         call cline_reproject%set('prg',    'reproject')
         call cline_reproject%set('pgrp',   trim(pgrp_refine))
@@ -474,11 +467,6 @@ contains
         iter = iter + 1
         call cline_refine3D_refine%set('startit', real(iter))
         if( l_shmem ) call rec(cline_refine3D_refine, l_rnd=.false.)
-        if( l_euclid )then
-            call cline_refine3D_refine%set('objfun',    'euclid')
-            call cline_refine3D_refine%set('ml_reg',    'yes')
-            call cline_refine3D_refine%set('sigma_est', 'global')
-        endif
         if( l_shmem )then
             params_ptr  => params_glob
             params_glob => null()
@@ -495,20 +483,20 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
-            if( params%l_automsk )then
-                ! scale the mask
-                if( .not. file_exists('automask'//trim(ext)) ) THROW_HARD('file '//'automask'//trim(ext)//' does not exist')
-                call cline_scale_msk%set('smpd',   smpd_target)
-                call cline_scale_msk%set('vol1',   'automask'//trim(ext))
-                call cline_scale_msk%set('newbox', real(orig_box))
-                call cline_scale_msk%set('outvol', 'automask_scaled'//trim(ext))
-                call cline_scale_msk%set('mkdir',  'no')
-                call cline_scale_msk%set('nthr',   real(params%nthr))
-                call xscale_msk%execute(cline_scale_msk)
-                call del_file('automask'//trim(ext))
-                call simple_rename('automask_scaled'//trim(ext), 'automask'//trim(ext))
-                call cline_reconstruct3D%set('mskfile', 'automask'//trim(ext))
-            endif
+            ! if( params%l_automsk )then
+            !     ! scale the mask
+            !     if( .not. file_exists('automask'//trim(ext)) ) THROW_HARD('file '//'automask'//trim(ext)//' does not exist')
+            !     call cline_scale_msk%set('smpd',   smpd_target)
+            !     call cline_scale_msk%set('vol1',   'automask'//trim(ext))
+            !     call cline_scale_msk%set('newbox', real(orig_box))
+            !     call cline_scale_msk%set('outvol', 'automask_scaled'//trim(ext))
+            !     call cline_scale_msk%set('mkdir',  'no')
+            !     call cline_scale_msk%set('nthr',   real(params%nthr))
+            !     call xscale_msk%execute(cline_scale_msk)
+            !     call del_file('automask'//trim(ext))
+            !     call simple_rename('automask_scaled'//trim(ext), 'automask'//trim(ext))
+            !     call cline_reconstruct3D%set('mskfile', 'automask'//trim(ext))
+            ! endif
             ! modulates shifts
             os = work_proj2%os_ptcl3D
             call os%mul_shifts(1./scale_factor2)
@@ -519,7 +507,6 @@ contains
             ! scale sigmas
             if( l_euclid )then
                 call cline_reconstruct3D%set('which_iter',real(iter))
-                call cline_reconstruct3D%set('sigma_est', 'global')
                 ! delete particle sigma2
                 do ipart = 1,params%nparts
                     call del_file('init_pspec_part'//int2str(ipart)//'.dat')
@@ -531,7 +518,7 @@ contains
                 call cline_calc_pspec%set('projfile', ORIG_work_projfile)
                 call cline_calc_pspec%set('sigma_est', 'global')
                 if( l_shmem )then
-                    ! todo?
+                    ! todo? YES
                 else
                     call xcalc_pspec_distr%execute( cline_calc_pspec )
                 endif
