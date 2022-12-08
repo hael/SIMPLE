@@ -302,7 +302,6 @@ contains
             enddo
             if( l_switch2euclid )then
                 ! first, estimate group sigmas
-                ! call cline_calc_sigma%set('which_iter',1.0)
                 call cline_calc_sigma%set('which_iter', real(params%startit))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
                 ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
@@ -490,7 +489,7 @@ contains
                     call build%spproj%write_segment_inside('out')
                     ! automasking in postprocess
                     if( params%l_automsk )then
-                        if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
+                        if( mod(niters),AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             call cline_postprocess%delete('mskfile')
                             call cline_postprocess%set('automsk', trim(params%automsk))
                         endif
@@ -520,7 +519,7 @@ contains
                     enddo
                     ! update command-lines to use the mskfile for the next AUTOMSK_FREQ - 1 iterations
                     if( params%l_automsk )then
-                        if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
+                        if( mod(niters,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             params%mskfile = 'automask'//params%ext
                             call cline_postprocess%set('mskfile', trim(params%mskfile))
                             call cline_postprocess%delete('automsk')
@@ -543,14 +542,14 @@ contains
                         if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
                     endif
             end select
-            if( iter >= params%maxits ) converged = .true.
+            if( niters == params%maxits ) converged = .true.
             if ( l_combine_eo .and. converged )then
                 converged            = .false.
                 l_combine_eo         = .false.
                 params%combine_eo    = 'yes'
                 params%l_frac_update = .false.
                 params%update_frac   = 1.0
-                params%maxits        = iter + 1
+                params%maxits        = niters + 1
                 params%lplim_crit    = min(0.143,params%lplim_crit)
                 call cline%set('lplim_crit',params%lplim_crit)
                 call cline%set('update_frac',1.0)
