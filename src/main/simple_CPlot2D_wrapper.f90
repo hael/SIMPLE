@@ -83,6 +83,11 @@ module CPlot2D_wrapper_module
             type(C_ptr), value :: this
             logical(C_bool), value :: flag
         end subroutine C_CDataSet__SetDrawMarker
+        subroutine C_CDataSet__SetDrawLine(this, flag) bind(C,name="CDataSet__SetDrawLine")
+            import
+            type(C_ptr), value :: this
+            logical(C_bool), value :: flag
+        end subroutine C_CDataSet__SetDrawLine
         subroutine C_CDataSet__SetMarkerSize(this, size) bind(C,name="CDataSet__SetMarkerSize")
             import
             type(C_ptr), value :: this
@@ -182,6 +187,11 @@ contains
         logical(C_bool), intent(in) :: flag
         call C_CDataSet__SetDrawMarker(this%object, flag)
     end subroutine CDataSet__SetDrawMarker
+    subroutine CDataSet__SetDrawLine(this, flag)
+        type(CDataSet_type), intent(inout) :: this
+        logical(C_bool), intent(in) :: flag
+        call C_CDataSet__SetDrawLine(this%object, flag)
+    end subroutine CDataSet__SetDrawLine
     subroutine CDataSet__SetMarkerSize(this, size)
         type(CDataSet_type), intent(inout) :: this
         real(C_double), intent(in) :: size

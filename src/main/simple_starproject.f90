@@ -895,6 +895,7 @@ contains
         do i=1, maxval(self%tiltinfo%finaltiltgroupid)
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_TRUE)
+            call CDataSet__SetDrawLine(dataSet, C_FALSE)
             call CDataSet__SetMarkerSize(dataSet, real(3.0, c_double))
             call CDataSet__SetDatasetColor(dataSet, real(ran3(), c_double), real(ran3(), c_double), real(ran3(), c_double))
             do j=1, size(self%tiltinfo)

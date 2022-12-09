@@ -1023,6 +1023,11 @@ void CDataSet__SetDrawMarker(CDataSet* This, bool flag)
   This->SetDrawMarker(flag);
 }
 
+void CDataSet__SetDrawLine(CDataSet* This, bool flag)
+{
+  This->SetDrawLine(flag);	
+}
+
 void CDataSet__SetMarkerSize(CDataSet* This, double size)
 {
   This->SetMarkerSize(size);

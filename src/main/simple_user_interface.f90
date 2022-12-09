@@ -3057,7 +3057,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 21, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 22, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3163,6 +3163,9 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_thres)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 21, submenu="motion correction")
+        call preprocess_stream_dev%set_input('srch_ctrls', 22, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
+        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 22, submenu="motion correction", online=.true.)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
