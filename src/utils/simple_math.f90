@@ -950,8 +950,9 @@ contains
         call opt%set_lower_bounds(lims(:,1))
         call opt%set_upper_bounds(lims(:,2))
         ! optimization
-        associate(f => nlopt_func(nloptf_myfunc))
+        associate(f => nlopt_func(nloptf_myfunc), fc => nlopt_func(nloptf_ineq_constraint))
             call opt%set_min_objective(f)
+            call opt%add_inequality_constraint(fc, TOL)
             call opt%set_ftol_rel(TOL)
             x = [mat_avg]
             call opt%optimize(x, lowest_cost, stat)
@@ -972,6 +973,14 @@ contains
                 f = f + weights(i)*rot_angle(x_mat, mats(:,:,i))
             enddo
         end function nloptf_myfunc
+
+        function nloptf_ineq_constraint(x, gradient, func_data) result(f)
+            real(wp), intent(in)              :: x(:)
+            real(wp), intent(inout), optional :: gradient(:)
+            class(*), intent(in),    optional :: func_data
+            real(wp) :: f
+            ! TODO: optimal orientation + shifts that improves the cost value
+        end function nloptf_ineq_constraint
     end subroutine avg_rotmat
 
     ! finding the "average" rotation matrix + shift using the optimization approach
@@ -1007,8 +1016,9 @@ contains
         call opt%set_lower_bounds(lims(:,1))
         call opt%set_upper_bounds(lims(:,2))
         ! optimization
-        associate(f => nlopt_func(nloptf_myfunc))
+        associate(f => nlopt_func(nloptf_myfunc), fc => nlopt_func(nloptf_ineq_constraint))
             call opt%set_min_objective(f)
+            call opt%add_inequality_constraint(fc, TOL)
             call opt%set_ftol_rel(TOL)
             x(1:9)   = [mat_avg]
             x(10:11) = [sh_avg]
@@ -1032,6 +1042,14 @@ contains
                 f = f + weights(i)*rot_sh_angle(x_mat, sh, mats(:,:,i), shifts(:,i))
             enddo
         end function nloptf_myfunc
+
+        function nloptf_ineq_constraint(x, gradient, func_data) result(f)
+            real(wp), intent(in)              :: x(:)
+            real(wp), intent(inout), optional :: gradient(:)
+            class(*), intent(in),    optional :: func_data
+            real(wp) :: f
+            ! TODO: optimal orientation + shifts that improves the cost value
+        end function nloptf_ineq_constraint
     end subroutine avg_rotmat_sh
 
     ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
