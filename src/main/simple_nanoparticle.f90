@@ -2,10 +2,13 @@ module simple_nanoparticle
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
+
 use simple_image,      only: image
 use simple_binimage,   only: binimage
 use simple_atoms,      only: atoms
+use simple_neighs,     only: neigh_4_3D
 use simple_parameters, only: params_glob
+use simple_qr_solve
 use simple_nanoparticle_utils
 implicit none
 
@@ -1121,17 +1124,19 @@ contains
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
         type(image)          :: simatms, img_scaled, fit, fit_descaled, fit_isotropic
+        type(binimage)       :: img_cc_scaled
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), lattice_displ(:,:)
         real,    pointer     :: rmat_raw(:,:,:), rmat_scaled(:, :, :)
-        integer, allocatable :: imat_cc(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:), imat_cc_scaled(:,:,:), neigh_4_pixs(:)
         character(len=256)   :: io_msg
-        logical, allocatable :: cc_mask(:), displ_neighbor(:)
+        logical, allocatable :: cc_mask(:), displ_neighbor(:), border(:,:,:)
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
-        integer :: i, j, k, cc, cn, n, funit, fiso, ios, scale_fac = 4, adp_tossed
+        integer :: i, j, k, cc, cn, n, m, l, x, y, z, funit, fiso, ios, scale_fac = 4, adp_tossed, nsz
         character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", &
-                    &fn_fit_descaled="fit_descaled.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_iso='iso_disp.txt'
+                    &fn_fit_descaled="fit_descaled.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_iso='iso_disp.txt', &
+                    &fn_img_cc_scaled="cc_map_scaled.mrc"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1188,6 +1193,44 @@ contains
         write(funit, '(i8)') self%n_cc
         call fopen(fiso, FILE=trim(fn_iso), STATUS='REPLACE', action='WRITE')
 
+        ! Create scaled CC map from unscale CC map (i,j,k)->(x,y,z)
+        call img_cc_scaled%new_bimg(scale_fac*self%ldim, self%smpd / scale_fac)
+        allocate(imat_cc_scaled(scale_fac*self%ldim(1), scale_fac*self%ldim(2), scale_fac*self%ldim(3)), source=0)
+        do k=1, self%ldim(3)
+            do j=1, self%ldim(2)
+                do i=1, self%ldim(1)
+                    do n=0, scale_fac-1
+                        x = i*scale_fac - n
+                        do m=0, scale_fac-1 
+                            y = j*scale_fac - m
+                            do l=0, scale_fac-1
+                                z=k*scale_fac - l
+                                imat_cc_scaled(x,y,z) = imat_cc(i,j,k)
+                            end do
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        call img_cc_scaled%set_imat(imat_cc_scaled)
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: CC MAP SCALED BY ", scale_fac**3
+
+        ! Find the surfaces of each atom (We assume atomic surfaces don't overlap)
+        allocate(border(scale_fac*self%ldim(1), scale_fac*self%ldim(2), scale_fac*self%ldim(3)), source=.false.)
+        allocate(neigh_4_pixs(6),  source=0) ! There are 6 neighbors since we don't count diagonals
+        do k=1, scale_fac*self%ldim(3)
+            do j=1, scale_fac*self%ldim(2)
+                do i=1, scale_fac*self%ldim(1)
+                    if(imat_cc_scaled(i,j,k) /= 0) then
+                        call neigh_4_3D(scale_fac*self%ldim, imat_cc_scaled, [i,j,k], neigh_4_pixs, nsz)
+                        if(any(neigh_4_pixs(:nsz)<1)) border(i,j,k) = .true.
+                    endif
+                enddo
+            enddo
+        enddo
+        deallocate(neigh_4_pixs)
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: IDENTIFIED ATOMIC BORDERS"
+
         adp_tossed = 0
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
@@ -1241,6 +1284,7 @@ contains
         call fit%write(fn_fit)
         call fit_descaled%write(fn_fit_descaled)
         call fit_isotropic%write(fn_fit_isotropic)
+        call img_cc_scaled%write_bimg(fn_img_cc_scaled)
 
         ! Calculate correlation of isotropic fit to input map
 
@@ -1277,8 +1321,12 @@ contains
         call self%write_centers('doa_in_bfac_field',        'doa')
         call self%write_centers_aniso('aniso_bfac_field', scale_fac)
         ! destruct
-        deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
+        deallocate(mask, cc_mask, imat_cc, imat_cc_scaled, tmpcens, strain_array, centers_A, border, &
+            &lattice_displ)
         call fit%kill
+        call fit_descaled%kill
+        call fit_isotropic%kill
+        call img_cc_scaled%kill_bimg
         call simatms%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
@@ -1351,69 +1399,57 @@ contains
 
             subroutine calc_aniso_shell(cc)
                 integer, intent(in)     :: cc
-                real        :: center(3), maxrad, x, y, z, inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), fit_rad
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, n, m, l, size_scaled, icenter(3), ifoo
+                real(kind=8), allocatable   :: uvw(:,:), ones(:)
+                real(kind=8)                :: beta(3), A(3,3), A_inv(3,3), Y(3)
+                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
+                               &eigenvecs_inv(3,3), fit_rad, u, v, w, aniso(3,3)
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
 
                 ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
                 ! by avoiding having to iterate over the entire scaled images for each connected component.
                 ! Iterations are over the unscaled image, so i, j, k are in unscaled coordinates
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 3) / (self%smpd)
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd)
+                center_scaled = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
+                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
+                ilo = max(nint(center_scaled(1) - maxrad), 1)
+                ihi = min(nint(center_scaled(1) + maxrad), scale_fac*self%ldim(1))
+                jlo = max(nint(center_scaled(2) - maxrad), 1)
+                jhi = min(nint(center_scaled(2) + maxrad), scale_fac*self%ldim(2))
+                klo = max(nint(center_scaled(3) - maxrad), 1)
+                khi = min(nint(center_scaled(3) + maxrad), scale_fac*self%ldim(3))
+                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
 
-                ! Calculate the unweighted center of the connected component.
+                ! Calculate the unweighted center of mass of the connected component.
                 size_scaled = self%atominfo(cc)%size * (scale_fac**3)
-                center = 0.
+                com = 0.
+                n = 0
                 do k=klo, khi
                     do j=jlo, jhi
                         do i=ilo, ihi
-                            if (mask(i,j,k)) then
-                                do n=0, scale_fac-1
-                                    x = i*scale_fac - n
-                                    do m=0, scale_fac-1
-                                        y = j*scale_fac - m
-                                        do l=0, scale_fac-1
-                                            z = k*scale_fac - l
-                                            center(1) = center(1) + x/size_scaled
-                                            center(2) = center(2) + y/size_scaled
-                                            center(3) = center(3) + z/size_scaled
-                                        end do
-                                    end do
-                                end do
+                            if (imat_cc_scaled(i,j,k) == cc) then
+                                n = n + 1
+                                com(1) = com(1) + i
+                                com(2) = com(2) + j
+                                com(3) = com(3) + k
                             end if
                         end do
                     end do
                 end do
-                icenter = nint(center)
-
+                com = com / size_scaled
+                com = 1.*nint(com)
 
                 ! Compute the inertia tensor of the connected component. (x,y,z) are scaled coordinates
                 inertia_t = 0.
                 do k=klo, khi
                     do j=jlo, jhi
                         do i=ilo, ihi
-                            if (mask(i,j,k)) then
-                                do n=0, scale_fac-1
-                                    x = i*scale_fac - n
-                                    do m=0, scale_fac-1
-                                        y = j*scale_fac - m
-                                        do l=0, scale_fac-1
-                                            z = k*scale_fac - l
-                                            inertia_t(1,1) = inertia_t(1,1) + ((y-icenter(2))**2 +(z-icenter(3))**2) / size_scaled
-                                            inertia_t(2,2) = inertia_t(2,2) + ((x-icenter(1))**2 +(z-icenter(3))**2) / size_scaled
-                                            inertia_t(3,3) = inertia_t(3,3) + ((x-icenter(1))**2 +(y-icenter(2))**2) / size_scaled
-                                            inertia_t(1,2) = inertia_t(1,2) - (x-icenter(1))*(y-icenter(2)) / size_scaled
-                                            inertia_t(1,3) = inertia_t(1,3) - (x-icenter(1))*(z-icenter(3)) / size_scaled
-                                            inertia_t(2,3) = inertia_t(2,3) - (y-icenter(2))*(z-icenter(3)) / size_scaled
-                                        end do
-                                    end do
-                                end do
+                            !if (imat_cc_scaled(i,j,k) == cc) then
+                            if (imat_cc_scaled(i,j,k) == cc) then
+                                inertia_t(1,1) = inertia_t(1,1) + ((j-com(2))**2 + (k-com(3))**2)
+                                inertia_t(2,2) = inertia_t(2,2) + ((i-com(1))**2 + (k-com(3))**2)
+                                inertia_t(3,3) = inertia_t(3,3) + ((i-com(1))**2 + (j-com(2))**2)
+                                inertia_t(1,2) = inertia_t(1,2) - (i-com(1))*(j-com(2))
+                                inertia_t(1,3) = inertia_t(1,3) - (i-com(1))*(k-com(3))
+                                inertia_t(2,3) = inertia_t(2,3) - (j-com(2))*(k-com(3))
                             end if
                         end do
                     end do
@@ -1422,19 +1458,74 @@ contains
                 inertia_t(2,1) = inertia_t(1,2)
                 inertia_t(3,1) = inertia_t(1,3)
                 inertia_t(3,2) = inertia_t(2,3)
+                inertia_t = inertia_t / size_scaled
                 
                 ! Calculate principal axes of CC.
-                self%atominfo(cc)%aniso = inertia_t * (self%smpd / scale_fac)**2
                 call jacobi(inertia_t, 3, 3, eigenvals, eigenvecs, ifoo)
-                call eigsrt(eigenvals, eigenvecs, 3, 3)
+                !call eigsrt(eigenvals, eigenvecs, 3, 3)
 
-                write (funit, '(2i7, 9f10.3)') cc, size_scaled, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
-                write (funit, '(2i7, 12f10.3)') cc, size_scaled, eigenvals, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                !write (funit, '(2i7, 12f10.3)') cc, size_scaled, eigenvals, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                !write(funit, '(3i7, 9f10.3)') cc, size_scaled, n, self%atominfo(cc)%center(:), center_scaled(:), com(:)
+                !write(funit, '(7i7, 9f10.3)') cc, ilo, ihi, jlo, jhi, klo, khi
 
-                ! Extract the scaled surface 
+                ! Find the number of border voxels in the cc
+                nborder = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                                nborder = nborder + 1
+                            end if
+                        end do
+                    end do
+                end do
 
+                ! Extract the border voxel positions in the principal basis (in unscaled Angstroms)
+                allocate(uvw(nborder, 3), source=0.0_dp)
+                A = 0.0_dp
+                Y = 0.0_dp
+                nborder = 1
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                                u = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 1)) * self%smpd / scale_fac
+                                v = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 2)) * self%smpd / scale_fac
+                                w = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 3)) * self%smpd / scale_fac
+                                uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
+                                !print *, nborder, uvw(nborder, 1), uvw(nborder, 2), uvw(nborder, 3)
+                                A(1,1) = A(1,1) + 2*u**4
+                                A(2,2) = A(2,2) + 2*v**4
+                                A(3,3) = A(3,3) + 2*w**4
+                                A(1,2) = A(1,2) + (u**2)*(v**2)
+                                A(1,3) = A(1,3) + (u**2)*(w**2)
+                                A(2,3) = A(2,3) + (v**2)*(w**2)
+                                Y(1) = Y(1) + u**2
+                                Y(2) = Y(2) + v**2
+                                Y(3) = Y(3) + w**2
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fit scaled surface with ellipse by solving the least squares regression uvw*beta=ones
+                ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
+                !allocate(ones(nborder), source=1.0_dp)
+                !call qr_solve(nborder, 3, uvw, ones, beta)
+                !write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
+                call matinv(A, A_inv, 3, errflg)
+                beta = matmul(A_inv, Y)
+                write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
+                ! Fill in the 3x3 aniso matrix with squares of the semi-axes
+                aniso = 0.
+                aniso(1,1) = 1./beta(1)
+                aniso(2,2) = 1./beta(2)
+                aniso(3,3) = 1./beta(3)
+                write (funit, '(i7, 9f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
+                call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! (u,v,w)->(x,y,z)
+                write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
 
-                ! Fit scaled surface with ellipse in the principal basis
+                !deallocate(uvw, ones)
 
             end subroutine calc_aniso_shell
 
@@ -2337,7 +2428,7 @@ contains
         call centers_pdb%set_element(cc,self%element)
         call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
         call centers_pdb%set_resnum(cc,cc)
-        aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:)*(self%smpd/scale_fac)**2 ! Covert scaled pixels^2 to Angstrom^2
+        aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:) ! in Angstroms
     enddo
     call centers_pdb%writepdb_aniso(fname, aniso)
     end subroutine write_centers_aniso
