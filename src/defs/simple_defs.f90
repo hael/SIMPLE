@@ -210,6 +210,10 @@ integer, parameter :: SZSN_INIT  = 5
 integer, parameter :: SZSN_STEP  = 3
 integer, parameter :: SZSN_MAX   = 20
 
+! qsys related
+integer, parameter :: QSYS_SUBMISSION_RETRY_LIMIT = 5
+integer, parameter :: QSYS_SUBMISSION_RETRY_SLEEP = 2
+
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100     ! seconds

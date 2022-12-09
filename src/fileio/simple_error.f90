@@ -24,7 +24,7 @@ contains
         endif
         if( ll_stop )then
             call backtrace()
-            stop
+            error stop 1
         endif
     end subroutine simple_exception
 

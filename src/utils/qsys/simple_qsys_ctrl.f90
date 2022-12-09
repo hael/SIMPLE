@@ -481,7 +481,7 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=LONGSTRLEN) :: qsys_cmd
         character(len=STDLEN)     :: script_name
-        integer :: ipart
+        integer :: ipart, submission_exitstat, submission_retry
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask
         submit_or_not = .false.
@@ -512,7 +512,18 @@ contains
                     class DEFAULT
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(script_name)
                 end select
-                call exec_cmdline(trim(adjustl(qsys_cmd)))
+                ! attempt to execute the command up to QSYS_SUBMISSION_RETRY_LIMIT
+                submission_exitstat = -1
+                do submission_retry = 1, QSYS_SUBMISSION_RETRY_LIMIT
+                    call exec_cmdline(trim(adjustl(qsys_cmd)), exitstat=submission_exitstat)
+                    if(submission_exitstat == 0) then
+                        exit
+                    else
+                        write(logfhandle,'(A,I2,A,I2)')'qsys submission failed. Retrying ', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
+                        call sleep(QSYS_SUBMISSION_RETRY_SLEEP)
+                    end if
+                    if(submission_retry == QSYS_SUBMISSION_RETRY_LIMIT) THROW_HARD('qsys submission failed after multiple retries!')
+                end do
             endif
         end do
     end subroutine submit_scripts
@@ -522,6 +533,7 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
+        integer :: submission_exitstat, submission_retry
         if( .not.file_exists(filepath(PATH_HERE,trim(script_name))))then
             write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif
@@ -534,8 +546,15 @@ contains
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
                     &filepath(trim(cwd_glob),trim(script_name))
         end select
-        ! execute the command
-        call exec_cmdline(trim(cmd))
+        ! attempt to execute the command up to QSYS_SUBMISSION_RETRY_LIMIT
+        submission_exitstat = -1
+        do submission_retry = 1, QSYS_SUBMISSION_RETRY_LIMIT
+            call exec_cmdline(trim(cmd), exitstat=submission_exitstat)
+            if(submission_exitstat == 0) return    
+            write(logfhandle,'(A,I2,A,I2)')'qsys submission failed. Retrying ', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
+            call sleep(QSYS_SUBMISSION_RETRY_SLEEP)
+        end do
+        THROW_HARD('qsys submission failed after multiple retries!')
     end subroutine submit_script
 
     ! QUERIES
