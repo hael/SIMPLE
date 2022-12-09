@@ -246,6 +246,10 @@ contains
         allocate(splitline(stardata%flagscount))
         if(isptcl) then
             call sporis%new(self%starfile%stkptclcount, .true.)
+            !set all stkind to 1
+            do ival = 1, self%starfile%stkptclcount
+               call sporis%set(ival, "stkind", real(1))
+            end do 
         else
             call sporis%new(stardata%dataend - stardata%datastart, .false.)
         end if
@@ -266,11 +270,11 @@ contains
                     if(stardata%flags(flagsindex)%imagesplit) then
                         splitimage = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                         if(.not. stardata%flags(flagsindex)%splflag2 == "") then
-                            entrystr = splitimage(1:index(splitimage, "@") - 1)
+                            entrystr = trim(adjustl(splitimage(1:index(splitimage, "@") - 1)))
                             read(entrystr,*) ival
                             call sporis%set(projindex, stardata%flags(flagsindex)%splflag2, real(ival))
                         end if
-                        entrystr = splitimage(index(splitimage, "@") + 1:)
+                        entrystr = trim(adjustl(splitimage(index(splitimage, "@") + 1:)))
                     else
                         entrystr = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                     end if
@@ -282,8 +286,7 @@ contains
                                 end if
                                 call make_relativepath(cwd, stemname(stemname(trim(adjustl(self%starfile%rootdir)))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
-                            else ! other\
-                                
+                            else ! other
                                 call make_relativepath(cwd, stemname(trim(adjustl(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
                             end if
