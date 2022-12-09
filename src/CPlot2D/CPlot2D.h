@@ -1514,6 +1514,7 @@ extern "C"
   void CPlot2D__OutputPostScriptPlot(CPlot2D* This, const char* fileName);
   void CPlot2D__delete(CPlot2D* This);
   CDataSet* CDataSet__new();
+  void CDataSet__SetDrawLine(CDataSet* This, bool flag);
   void CDataSet__SetDrawMarker(CDataSet* This, bool flag);
   void CDataSet__SetMarkerSize(CDataSet* This, double size);
   void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b);

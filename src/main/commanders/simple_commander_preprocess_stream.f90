@@ -72,7 +72,8 @@ contains
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres'))call cline%set('mcpatch_thres','yes')
+        if( .not. cline%defined('mcpatch_thres')   ) call cline%set('mcpatch_thres','  yes')
+        if( .not. cline%defined('tilt_thres')      ) call cline%set('tilt_thres',      0.05)
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -261,14 +262,20 @@ contains
                 n_imported     = spproj%os_mic%get_noris()
                 ! always write micrographs snapshot if less than 1000 mics, else every INACTIVE_TIME
                 if( n_imported < 1000 .and. l_haschanged )then
+                    call update_user_params
+                    call cline%set('tilt_thres', params_glob%tilt_thres)
                     call write_migrographs_starfile
                 else if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                    call update_user_params
+                    call cline%set('tilt_thres', params_glob%tilt_thres)
                     call write_migrographs_starfile
                 endif
             else
                 ! wait & write snapshot
                 if( l_cluster2D )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                        call update_user_params
+                        call cline%set('tilt_thres', params_glob%tilt_thres)
                         call write_migrographs_starfile
                         l_haschanged = .false.
                     endif
@@ -277,6 +284,8 @@ contains
                         if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                             ! write project when inactive...
                             call write_project
+                            call update_user_params
+                            call cline%set('tilt_thres', params_glob%tilt_thres)
                             call write_migrographs_starfile
                             l_haschanged = .false.
                         else
@@ -285,6 +294,10 @@ contains
                         endif
                     endif
                 endif
+            endif
+            ! update beamtilt 
+            if(cline%defined('dir_meta')) then
+                call read_xml_beamtilts()
             endif
             ! 2D classification section
             if( l_cluster2D )then
@@ -309,6 +322,8 @@ contains
         else
             call write_project
         endif
+        call update_user_params
+        call cline%set('tilt_thres', params_glob%tilt_thres)
         call write_migrographs_starfile
         ! cleanup
         call spproj%kill
@@ -485,7 +500,6 @@ contains
                 type(sp_project)             :: spproj_here
                 type(cmdline)                :: cline_here
                 type(ctfparams)              :: ctfvars
-                type(Node), pointer          :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
                 character(len=STDLEN)        :: ext, movie_here
                 character(len=LONGSTRLEN)    :: projname, projfile,xmlfile,xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
@@ -495,28 +509,6 @@ contains
                 call simple_getcwd(cwd)
                 cwd_glob = trim(cwd)
                 movie_here = basename(trim(movie))
-                tiltx = 0.0
-                tilty = 0.0
-                if(cline%defined('dir_meta')) then
-                    xmlfile = basename(trim(movie))
-                    xmldir = cline%get_carg('dir_meta')
-                    if(index(xmlfile, '_fractions') > 0) then
-                        xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
-                    end if
-                    if(index(xmlfile, '_EER') > 0) then
-                        xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
-                    end if
-                    xmlfile = trim(adjustl(xmlfile)) // '.xml'
-                    if( file_exists( trim( adjustl(xmldir) ) // '/' // trim( adjustl(xmlfile) ) ) ) then
-                        xmldoc => parseFile( trim( adjustl(xmldir) ) // '/' // trim( adjustl(xmlfile) ) )
-                        beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0)
-                        beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                        beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                        tiltx = str2real(getTextContent(beamtiltnodex))
-                        tilty = str2real(getTextContent(beamtiltnodey))
-                        call destroy(xmldoc)
-                    end if
-                end if
                 ext        = fname2ext(trim(movie_here))
                 projname   = trim(PREPROCESS_PREFIX)//trim(get_fbody(trim(movie_here), trim(ext)))
                 projfile   = trim(projname)//trim(METADATA_EXT)
@@ -532,8 +524,20 @@ contains
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
-                call spproj_here%os_mic%set(1, "tiltx", tiltx)
-                call spproj_here%os_mic%set(1, "tilty", tilty)
+                if(cline%defined('dir_meta')) then
+                    xmlfile = basename(trim(movie))
+                    xmldir = cline%get_carg('dir_meta')
+                    if(index(xmlfile, '_fractions') > 0) then
+                        xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
+                    end if
+                    if(index(xmlfile, '_EER') > 0) then
+                        xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
+                    end if
+                    xmlfile = trim(adjustl(xmldir)) // '/' // trim(adjustl(xmlfile)) // '.xml'
+                    call spproj_here%os_mic%set(1, "meta", trim(adjustl(xmlfile)))
+                    call spproj_here%os_mic%set(1, "tiltx", 0.0)
+                    call spproj_here%os_mic%set(1, "tilty", 0.0)
+                end if
                 call spproj_here%write
                 call cline%set('projname', trim(projname))
                 call cline%set('projfile', trim(projfile))
@@ -670,6 +674,24 @@ contains
                 call make_relativepath(trim(CWD_GLOB)//'/spprojs/',dest,reldest)
                 call o%set(key,reldest)
             end subroutine movefile2folder
+            
+            subroutine read_xml_beamtilts()
+                type(Node), pointer :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
+                integer :: i
+                do i = 1, spproj%os_mic%get_noris()
+                    if ( spproj%os_mic%get(i, "tiltx") == 0.0 .and. spproj%os_mic%get(i, "tilty") == 0.0) then
+                        if(file_exists(spproj%os_mic%get_static(i, "meta"))) then
+                            xmldoc => parseFile(trim(adjustl(spproj%os_mic%get_static(i,"meta"))))
+                            beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"),0)
+                            beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
+                            beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
+                            call spproj%os_mic%set(i, "tiltx", str2real(getTextContent(beamtiltnodex)))
+                            call spproj%os_mic%set(i, "tilty", str2real(getTextContent(beamtiltnodey)))
+                            call destroy(xmldoc)
+                        endif
+                    endif
+                end do
+            end subroutine read_xml_beamtilts
 
     end subroutine exec_preprocess_stream_dev
 

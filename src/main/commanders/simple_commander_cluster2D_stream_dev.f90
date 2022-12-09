@@ -834,7 +834,7 @@ contains
     !> updates current parameters with user input
     subroutine update_user_params
         type(oris) :: os
-        real       :: lpthres, ndev
+        real       :: lpthres, ndev, tilt_thres
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -858,6 +858,19 @@ contains
                         params_glob%ndev2D = ndev
                         write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D   UPDATED TO: ',params_glob%ndev2D
                     endif
+                endif
+            endif
+            if( os%isthere(1,'tilt_thres') ) then
+                tilt_thres = os%get(1,'tilt_thres')
+                if( abs(tilt_thres-params_glob%tilt_thres) > 0.001) then
+                     if(tilt_thres < 0.01)then
+                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO LOW: ',tilt_thres
+                     else if(tilt_thres > 1) then
+                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO HIGH: ',tilt_thres
+                     else
+                         params_glob%tilt_thres = tilt_thres
+                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES UPDATED TO: ',tilt_thres
+                     endif
                 endif
             endif
             call del_file(USER_PARAMS)
