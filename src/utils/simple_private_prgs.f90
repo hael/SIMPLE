@@ -247,7 +247,7 @@ contains
         call cmd_dict%push('classtats',     'calculate class population statistics(yes|no){no}')
         call cmd_dict%push('clip',          'clipped image box size(in pixels)')
         call cmd_dict%push('clustvalid',    'validate clustering(yes|homo|no){no}')
-        call cmd_dict%push('combine_eo',    'whether combined e/o references have been combined for alignment(yes|no){no}')
+        call cmd_dict%push('combine_eo',    'whether e/o references are combined for final alignment(yes|no){no}')
         call cmd_dict%push('compare',       'do comparison(yes|no){no}')
         call cmd_dict%push('corner',        'corner size(in pixels){0}')
         call cmd_dict%push('countvox',      'count # voxels(yes|no){no}')
