@@ -191,6 +191,7 @@ type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
 type(simple_input_param) :: cn_min
 type(simple_input_param) :: cn_max
+type(simple_input_param) :: combine_eo
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -1061,7 +1062,8 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(sigma_est,      'sigma_est',    'multi', 'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
+        call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
+        call set_param(combine_eo,     'combine_eo',   'binary', 'whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3620,7 +3622,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 13, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 13, 13, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3663,6 +3665,7 @@ contains
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         call refine3D%set_input('filt_ctrls', 11, wiener)
         call refine3D%set_input('filt_ctrls', 12, ml_reg)
+        call refine3D%set_input('filt_ctrls', 13, combine_eo)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_input('mask_ctrls', 2, mskfile)
