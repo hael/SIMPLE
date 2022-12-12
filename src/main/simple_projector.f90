@@ -294,14 +294,13 @@ contains
         end do
     end subroutine fproject_serial_2
 
-    function fproject_correlate_serial( self, e, lims, cmat, ctfmat, resmsk, filtw ) result( corr )
+    function fproject_correlate_serial( self, e, lims, cmat, ctfmat, resmsk ) result( corr )
         class(projector),              intent(inout) :: self
         class(ori),                    intent(in)    :: e
         integer,                       intent(in)    :: lims(2,2)
         complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: filtw(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         real    :: loc(3), e_rotmat(3,3), cc(3), corr
         integer :: h, k
         complex :: ref_comp, ptl_comp, diff_comp
@@ -314,9 +313,9 @@ contains
                         if( resmsk(h,k) )then
                             loc = matmul(real([h,k,0]), e_rotmat)
                             if( h .ge. 0 )then
-                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
+                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
                             else
-                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
+                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
                             endif
                             ! update cross product
                             cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
@@ -333,9 +332,9 @@ contains
                         if( resmsk(h,k) )then
                             loc = matmul(real([h,k,0]), e_rotmat)
                             if( h .ge. 0 )then
-                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k) * filtw(h,k)
+                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
                             else
-                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k) * filtw(h,k)
+                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
                             endif
                             ptl_comp  = cmat(h,k)
                             diff_comp = ref_comp  - ptl_comp

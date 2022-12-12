@@ -76,7 +76,6 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),            allocatable :: ref_optlp(:,:)              !< references optimal filter
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -106,7 +105,6 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
-    procedure          :: set_ref_optlp
     procedure          :: cp_even2odd_ref
     procedure          :: cp_odd2even_ref
     procedure          :: cp_even_ref2ptcl
@@ -252,8 +250,6 @@ contains
         self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
         self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
-        ! allocate optimal low-pass filter
-        allocate(self%ref_optlp(self%kfromto(1):self%kfromto(2),self%nrefs), source=1.)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -575,14 +571,6 @@ contains
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
         self%sigma2_noise => sigma2_noise
     end subroutine assign_sigma2_noise
-
-    subroutine set_ref_optlp( self, iref, optlp )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref
-        real,                    intent(in)    :: optlp(self%kfromto(1):self%kfromto(2))
-        self%ref_optlp(:,iref) = optlp(:)
-        self%l_filt_set        = .true.
-    end subroutine set_ref_optlp
 
     ! GETTERS
 
@@ -1954,7 +1942,6 @@ contains
                 end do
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
-            if( allocated(self%ref_optlp)      ) deallocate(self%ref_optlp)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
