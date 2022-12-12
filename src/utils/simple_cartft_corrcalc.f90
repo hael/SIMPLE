@@ -466,7 +466,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr => null()
+        type(projector), pointer :: vol_ptr
         integer :: ithr
         logical :: iseven
         iseven = self%ptcl_iseven(iptcl)
@@ -507,7 +507,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr => null()
+        type(projector), pointer :: vol_ptr
         real    :: corr
         logical :: iseven
         integer :: i
@@ -527,7 +527,7 @@ contains
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         real,                   intent(in)    :: shvec(2)
-        type(projector),        pointer       :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         logical :: iseven
         integer :: ithr
         real    :: corr
@@ -552,7 +552,7 @@ contains
         real,                   intent(in)    :: trs
         real,                   intent(inout) :: shvec(2), corr_best
         integer,                intent(inout) :: nevals
-        type(projector),        pointer       :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         logical :: iseven
         integer :: ithr, isample
         real    :: sigma, xshift, yshift, xavg, yavg, corr
@@ -938,8 +938,49 @@ contains
         type(ori),              intent(in)    :: o
         real(sp),               intent(in)    :: shvec(2)
         real(sp),               intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        ! TODO
-        sigma_contrib = 1.0
+        type(projector),        pointer       :: vol_ptr
+        logical  :: iseven
+        integer  :: ithr, sh_ind, npix, h, k, i
+        real(sp) :: euclid_sh, sh_comp, hcos, hsin, kcos, ksin, arg, sh(2), shconst
+        i      = self%pinds(iptcl)
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        sigma_contrib = 0.0
+        sh            = shvec * shconst
+        do sh_ind = params_glob%kfromto(1), params_glob%kfromto(2)
+            npix      = 0
+            euclid_sh = 0.
+            do h = self%lims(1,1), self%lims(1,2)
+                arg  = real(h) * sh(1)
+                hcos = cos(arg)
+                hsin = sin(arg)
+                do k = self%lims(2,1), self%lims(2,2)
+                    if( sh_ind == nint(hyp(real(h),real(k))) )then
+                        arg       = real(k) * sh(2)
+                        kcos      = cos(arg)
+                        ksin      = sin(arg)
+                        sh_comp   = cmplx(kcos * hcos - ksin * hsin, kcos * hsin + ksin * hcos, sp)
+                        npix      = npix + 1.
+                        euclid_sh = euclid_sh + csq_fast(self%references(h,k,ithr) * self%ctfmats(h,k,i) - self%particles(h,k,i) * sh_comp)
+                    endif
+                end do
+            end do
+            sigma_contrib(sh_ind) = 0.5 * euclid_sh / real(npix)
+        end do
     end subroutine calc_sigma_contrib
 
     ! DESTRUCTOR
