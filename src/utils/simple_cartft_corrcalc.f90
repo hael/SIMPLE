@@ -25,6 +25,7 @@ type :: cartft_corrcalc
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
+    complex(kind=c_float_complex), allocatable :: cur_refs(:,:,:)        !< current reference for correlation
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
     logical,                       allocatable :: iseven(:)              !< e/o assignment for gold-standard FSC
     logical                                    :: with_ctf     = .false. !< CTF flag
@@ -50,25 +51,30 @@ type :: cartft_corrcalc
     procedure, private :: setup_resmsk_and_pxls_p_shell
     procedure          :: create_absctfmats
     procedure          :: prep4shift_srch
+    procedure, private :: prep_ref4corr_o
+    procedure, private :: prep_ref4corr_sh
+    procedure, private :: prep_ref4corr_o_sh
+    generic            :: prep_ref4corr => prep_ref4corr_o, prep_ref4corr_sh, prep_ref4corr_o_sh
     ! procedure          :: prep4parallel_shift_srch
     ! CALCULATORS
     procedure, private :: project_and_correlate_1
     procedure, private :: project_and_correlate_2
     generic            :: project_and_correlate => project_and_correlate_1, project_and_correlate_2
+    procedure, private :: correlate_cc_1
+    procedure, private :: correlate_cc_2
+    generic            :: correlate_cc => correlate_cc_1, correlate_cc_2
+    procedure, private :: correlate_euclid
     procedure          :: project_and_srch_shifts
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
     generic            :: corr_shifted => corr_shifted_1, corr_shifted_2
-    procedure, private :: corr_shifted_cc_1
-    procedure, private :: corr_shifted_cc_2
-    procedure, private :: corr_shifted_euclid_1
-    procedure, private :: corr_shifted_euclid_2
-    procedure          :: corr_shifted_ad
     generic            :: ori_chance => ori_chance_1, ori_chance_2
     procedure, private :: ori_chance_1
     procedure, private :: ori_chance_2
     procedure          :: assign_sigma2_noise
     procedure          :: calc_sigma_contrib
+    procedure, private :: weight_ref_ptcl
+    procedure, private :: deweight_ref_ptcl
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -154,6 +160,7 @@ contains
         self%lims(2,2) =  params_glob%kfromto(2)
         ! 2Dclass/3Drefs mapping on/off        
         allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
+        allocate(self%cur_refs(  self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
@@ -206,7 +213,8 @@ contains
         self%lims(2,2) =  params_glob%kfromto(2)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
-        &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
+        &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), &
+        &       self%cur_refs(  self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
@@ -439,6 +447,100 @@ contains
         call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
     end subroutine prep4shift_srch
 
+    subroutine prep_ref4corr_o( self, iptcl, o, i, ithr)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        integer,                intent(out)   :: i, ithr
+        type(projector),        pointer       :: vol_ptr
+        logical :: iseven
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ! put reference projection in the heap
+        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
+        self%cur_refs = self%references
+        if( self%with_ctf ) self%cur_refs(:,:,ithr) = self%cur_refs(:,:,ithr) * self%ctfmats(:,:,i)
+    end subroutine prep_ref4corr_o
+
+    subroutine prep_ref4corr_o_sh( self, iptcl, o, shvec, i, ithr)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        real,                   intent(in)    :: shvec(2)
+        integer,                intent(out)   :: i, ithr
+        real    :: shconst, sh(2), arg, sh_comp, ck, sk
+        real    :: hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2))
+        integer :: h, k
+        call self%prep_ref4corr_o(iptcl, o, i, ithr)
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        ! optimized shift calculation following (shift2Dserial_1 in image class)
+        sh = shvec * shconst
+        do h = self%lims(1,1),self%lims(1,2)
+            arg     = real(h) * sh(1)
+            hcos(h) = cos(arg)
+            hsin(h) = sin(arg)
+        enddo
+        do k = self%lims(2,1),self%lims(2,2)
+            arg = real(k) * sh(2)
+            ck  = cos(arg)
+            sk  = sin(arg)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                sh_comp                 = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
+                self%cur_refs(h,k,ithr) = self%cur_refs(h,k,ithr) * sh_comp
+            end do
+        end do
+    end subroutine prep_ref4corr_o_sh
+
+    subroutine prep_ref4corr_sh( self, iptcl, shvec, i, ithr)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        real,                   intent(in)    :: shvec(2)
+        integer,                intent(out)   :: i, ithr
+        real    :: shconst, sh(2), arg, sh_comp, ck, sk
+        real    :: hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2))
+        integer :: h, k
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        ! optimized shift calculation following (shift2Dserial_1 in image class)
+        sh = shvec * shconst
+        do h = self%lims(1,1),self%lims(1,2)
+            arg     = real(h) * sh(1)
+            hcos(h) = cos(arg)
+            hsin(h) = sin(arg)
+        enddo
+        do k = self%lims(2,1),self%lims(2,2)
+            arg = real(k) * sh(2)
+            ck  = cos(arg)
+            sk  = sin(arg)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                sh_comp                 = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
+                self%cur_refs(h,k,ithr) = self%references(h,k,ithr) * sh_comp
+            end do
+        end do
+        if( self%with_ctf ) self%cur_refs(:,:,ithr) = self%cur_refs(:,:,ithr) * self%ctfmats(:,:,i)
+    end subroutine prep_ref4corr_sh
+
     ! subroutine prep4parallel_shift_srch( self, iptcl, os )
     !     class(cartft_corrcalc), intent(inout) :: self
     !     integer,                intent(in)    :: iptcl
@@ -465,19 +567,15 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr
         real    :: corr
-        logical :: iseven
-        integer :: i
-        i      = self%pinds(iptcl)
-        iseven = self%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        corr = vol_ptr%fproject_correlate_serial(o, self%lims, self%particles(:,:,i),&
-                                                   &self%ctfmats(:,:,i), self%resmsk(:,:))
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, o, i, ithr)
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                call self%correlate_cc(    ithr, i, iptcl, corr)
+            case(OBJFUN_EUCLID)
+                call self%correlate_euclid(ithr, i, iptcl, corr)
+        end select
     end function project_and_correlate_1
 
     function project_and_correlate_2( self, iptcl, o, shvec ) result( corr )
@@ -486,21 +584,104 @@ contains
         class(ori),             intent(in)    :: o
         real,                   intent(in)    :: shvec(2)
         type(projector),        pointer       :: vol_ptr
-        logical :: iseven
-        integer :: ithr
         real    :: corr
-        iseven = self%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! put reference projection in the heap
-        call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
-        call self%corr_shifted(iptcl, shvec, corr)
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, o, shvec, i, ithr)
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                call self%correlate_cc(    ithr, i, iptcl, corr)
+            case(OBJFUN_EUCLID)
+                call self%correlate_euclid(ithr, i, iptcl, corr)
+        end select
     end function project_and_correlate_2
+
+    subroutine correlate_cc_1( self, ithr, i, iptcl, corr )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        real,                   intent(out)   :: corr
+        real    :: cc(3)
+        complex :: ref_comp, ptcl_comp
+        integer :: h, k
+        cc = 0.
+        do k = self%lims(2,1),self%lims(2,2)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                ! retrieve reference component
+                ref_comp = self%cur_refs(h,k,ithr)
+                ! retrieve reference component
+                ptcl_comp = self%particles(h,k,i)
+                ! update cross product
+                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp))
+                ! update normalization terms
+                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+            end do
+        end do
+        corr = norm_corr(cc(1),cc(2),cc(3))
+    end subroutine correlate_cc_1
+
+    subroutine correlate_cc_2( self, ithr, i, iptcl, corr, grad )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        real,                   intent(out)   :: corr
+        real,                   intent(inout) :: grad(2)
+        real    :: cc(3), shconst
+        complex :: ref_comp, ptcl_comp, ref_ptcl
+        integer :: h, k
+        cc   = 0.
+        grad = 0.
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        do k = self%lims(2,1),self%lims(2,2)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                ! retrieve reference component
+                ref_comp  = self%cur_refs(h,k,ithr)
+                ! retrieve reference component
+                ptcl_comp = self%particles(h,k,i)
+                ref_ptcl  = ref_comp * conjg(ptcl_comp)
+                ! update cross product
+                cc(1) = cc(1) + realpart(ref_ptcl)
+                ! update normalization terms
+                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
+                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+                ! gradient
+                ref_ptcl = imagpart(ref_ptcl) * shconst
+                grad(1)  = grad(1) + real(ref_ptcl) * h
+                grad(2)  = grad(2) + real(ref_ptcl) * k
+            end do
+        end do
+        corr    = norm_corr(cc(1),   cc(2), cc(3))
+        grad(1) = norm_corr(grad(1), cc(2), cc(3))
+        grad(2) = norm_corr(grad(2), cc(2), cc(3))
+    end subroutine correlate_cc_2
+
+    subroutine correlate_euclid( self, ithr, i, iptcl, corr )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        real,                   intent(out)   :: corr
+        real    :: euclid, denom
+        complex :: diff, ptcl_comp
+        integer :: h, k
+        call self%weight_ref_ptcl( ithr, i, iptcl )
+        denom  = 0.
+        euclid = 0.
+        do k = self%lims(2,1),self%lims(2,2)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                ptcl_comp = self%particles(h,k,i)
+                diff      = self%cur_refs(h,k,ithr) - ptcl_comp
+                euclid    = euclid + real(diff      * conjg(diff))
+                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp))
+            end do
+        end do
+        corr = exp( - euclid/denom )
+        call self%deweight_ref_ptcl( ithr, i, iptcl )
+    end subroutine correlate_euclid
 
     subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best, nevals )
         class(cartft_corrcalc), intent(inout) :: self
@@ -546,11 +727,13 @@ contains
         integer,                        intent(in)     :: iptcl
         real,                           intent(in)     :: shvec(2)
         real,                           intent(inout)  :: corr
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, shvec, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call corr_shifted_cc_1( self, iptcl, shvec, corr )
+                call self%correlate_cc(     ithr, i, iptcl, corr )
             case(OBJFUN_EUCLID)
-                call corr_shifted_euclid_1( self, iptcl, shvec, corr )
+                call self%correlate_euclid( ithr, i, iptcl, corr )
         end select
     end subroutine corr_shifted_1
 
@@ -560,288 +743,72 @@ contains
         real,                           intent(in)     :: shvec(2)
         real,                           intent(inout)  :: corr
         real,                           intent(inout)  :: grad(2)
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, shvec, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call corr_shifted_cc_2( self, iptcl, shvec, corr, grad )
+                call self%correlate_cc(     ithr, i, iptcl, corr, grad )
             case(OBJFUN_EUCLID)
-                call corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
+                ! call self%correlate_euclid( ithr, i, iptcl, corr, grad )
         end select
     end subroutine corr_shifted_2
 
-    subroutine corr_shifted_cc_1( self, iptcl, shvec, corr )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        integer  :: i, h, k, ithr
-        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
-        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2))
-        real(dp) :: hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-        real(sp) :: cc(3), shconst
-        logical  :: iseven
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        sh = real(shvec * shconst,dp)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h,dp) * sh(1)
-            hcos(h) = dcos(arg)
-            hsin(h) = dsin(arg)
-        enddo
-        cc(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i)
-                ! update cross product
-                cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp * sh_comp))
-                ! update normalization terms
-                cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-            end do
-        end do
-        corr = norm_corr(cc(1),cc(2),cc(3))
-    end subroutine corr_shifted_cc_1
-
-    subroutine corr_shifted_cc_2( self, iptcl, shvec, corr, grad )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        real,                           intent(inout)  :: grad(2)
-        integer  :: i, h, k, ithr
-        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
-        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-        real(sp) :: cc(3), shconst
-        logical  :: iseven
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        sh = real(shvec * shconst,dp)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h,dp) * sh(1)
-            hcos(h) = dcos(arg)
-            hsin(h) = dsin(arg)
-        enddo
-        cc(:)   = 0.
-        grad(:) = 0.        
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp   = self%particles(h,k,i)
-                ! update cross product
-                ref_ptcl_sh = ref_comp  * conjg(ptcl_comp * sh_comp)
-                cc(1)       = cc(1) + realpart(ref_ptcl_sh)
-                ! update normalization terms
-                cc(2)       = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3)       = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                ! update the gradient
-                ref_ptcl_sh = imagpart(ref_ptcl_sh) * shconst
-                grad(1)     = grad(1) + real(ref_ptcl_sh) * h
-                grad(2)     = grad(2) + real(ref_ptcl_sh) * k
-            end do
-        end do
-        grad(1) = norm_corr(grad(1),cc(2), cc(3))
-        grad(2) = norm_corr(grad(2),cc(2), cc(3))
-        corr    = norm_corr(cc(1),  cc(2), cc(3))
-    end subroutine corr_shifted_cc_2
-
-    subroutine corr_shifted_euclid_1( self, iptcl, shvec, corr )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        integer  :: i, h, k, ithr
-        complex  :: ref_comp, sh_comp, ptcl_comp, ref_ptcl_sh
-        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2))
-        real(dp) :: hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-        real(sp) :: cc(3), shconst
-        logical  :: iseven
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        sh = real(shvec * shconst,dp)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h,dp) * sh(1)
-            hcos(h) = dcos(arg)
-            hsin(h) = dsin(arg)
-        enddo
-        cc(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i) * sh_comp
-                ! update euclidean difference
-                cc(1) = cc(1) + real((ref_comp - ptcl_comp) * conjg(ref_comp - ptcl_comp))
-                ! update normalization terms
-                cc(2) = cc(2) + real( ref_comp * conjg( ref_comp))
-                cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-            end do
-        end do
-        corr = 1 - cc(1)/(cc(2)+cc(3))
-    end subroutine corr_shifted_euclid_1
-
-    subroutine corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        real,                           intent(inout)  :: grad(2)
-        integer  :: i, h, k, ithr
-        complex  :: ref_comp, sh_comp, ptcl_comp, diff_comp
-        real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-        real(sp) :: cc(3), shconst
-        logical  :: iseven
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        ! optimized shift calculation following (shift2Dserial_1 in image class)
-        sh = real(shvec * shconst,dp)
-        do h = self%lims(1,1),self%lims(1,2)
-            arg     = real(h,dp) * sh(1)
-            hcos(h) = dcos(arg)
-            hsin(h) = dsin(arg)
-        enddo
-        cc(:)   = 0.
-        grad(:) = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            arg = real(k,dp) * sh(2)
-            ck  = dcos(arg)
-            sk  = dsin(arg)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                sh_comp   = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-                ! retrieve reference component
-                ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i) * sh_comp
-                diff_comp = ref_comp  - ptcl_comp
-                ! update euclidean difference
-                cc(1)     = cc(1) + real(diff_comp * conjg(diff_comp))
-                ! update normalization terms
-                cc(2)     = cc(2) + real( ref_comp * conjg( ref_comp))
-                cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-                ! update the gradient
-                ptcl_comp = 2 * shconst * imagpart(ptcl_comp * conjg(diff_comp))
-                grad(1)   = grad(1) + real(ptcl_comp)*h
-                grad(2)   = grad(2) + real(ptcl_comp)*k
-            end do
-        end do
-        corr = 1 - cc(1)/(cc(2)+cc(3))
-        grad =   -  grad/(cc(2)+cc(3))
-    end subroutine corr_shifted_euclid_2
-
-    ! auto differentiation gives substandard performance to anaytical gradients
-    function corr_shifted_ad( self, iptcl, shvec, grad ) result( corr )
-        use ADLib_NumParameters_m
-        use ADdnSVM_m
-        class(cartft_corrcalc), intent(inout)  :: self
-        integer,                intent(in)     :: iptcl
-        real,                   intent(in)     :: shvec(2)
-        real,                   intent(inout)  :: grad(2)
-        integer          :: i, h, k, ithr
-        complex          :: ref_ptcl, ref_comp, ptcl_comp
-        real(sp)         :: cc(3), corr, d0(2)
-        logical          :: iseven
-        type(dnS_t)      :: sh(2), arg, arg_k, numer_ad, arg_h(self%lims(1,1):self%lims(1,2))
-        real(kind=Rkind) :: shconst
-        ! physical particle index
-        i = self%pinds(iptcl)
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-        if( is_even(self%ldim(1)) )then
-            shconst = PI / real(self%ldim(1)/2.)
-        else
-            shconst = PI / real((self%ldim(1)-1)/2.)
-        endif
-        sh(1)    = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
-        sh(2)    = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
-        sh(1)    = sh(1)*shconst
-        sh(2)    = sh(2)*shconst
-        cc(:)    = 0.
-        numer_ad = ZERO
-        do h = self%lims(1,1),self%lims(1,2)
-            arg_h(h) = real(h, kind=Rkind) * sh(1)
-        enddo
-        do k = self%lims(2,1),self%lims(2,2)
-            arg_k = real(k, kind=Rkind) * sh(2)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                ! shift component
-                arg       = arg_k + arg_h(h)
-                ! retrieve reference component
-                ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-                ! shift the particle Fourier component
-                ptcl_comp = self%particles(h,k,i)
-                ref_ptcl  = ref_comp*conjg(ptcl_comp)
-                ! update cross product
-                numer_ad  = numer_ad + cos(arg)*real(realpart(ref_ptcl), kind=Rkind) &
-                                    &+ sin(arg)*real(imagpart(ref_ptcl), kind=Rkind)
-                ! update normalization terms
-                cc(2)     = cc(2) + real(ref_comp  * conjg(ref_comp))
-                cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-            end do
-        end do
-        d0      = get_d0(numer_ad)
-        cc(1)   = d0(1)
-        grad    = get_d1(numer_ad)
-        corr    = norm_corr(  cc(1),cc(2),cc(3))
-        grad(1) = norm_corr(grad(1),cc(2),cc(3))
-        grad(2) = norm_corr(grad(2),cc(2),cc(3))
-    end function corr_shifted_ad
+    ! subroutine corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
+    !     class(cartft_corrcalc), target, intent(inout)  :: self
+    !     integer,                        intent(in)     :: iptcl
+    !     real,                           intent(in)     :: shvec(2)
+    !     real,                           intent(inout)  :: corr
+    !     real,                           intent(inout)  :: grad(2)
+    !     integer  :: i, h, k, ithr
+    !     complex  :: ref_comp, sh_comp, ptcl_comp, diff_comp
+    !     real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
+    !     real(sp) :: cc(3), shconst
+    !     logical  :: iseven
+    !     ! physical particle index
+    !     i = self%pinds(iptcl)
+    !     ! get thread index
+    !     ithr = omp_get_thread_num() + 1
+    !     ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+    !     if( is_even(self%ldim(1)) )then
+    !         shconst = PI / real(self%ldim(1)/2.)
+    !     else
+    !         shconst = PI / real((self%ldim(1)-1)/2.)
+    !     endif
+    !     ! optimized shift calculation following (shift2Dserial_1 in image class)
+    !     sh = real(shvec * shconst,dp)
+    !     do h = self%lims(1,1),self%lims(1,2)
+    !         arg     = real(h,dp) * sh(1)
+    !         hcos(h) = dcos(arg)
+    !         hsin(h) = dsin(arg)
+    !     enddo
+    !     cc(:)   = 0.
+    !     grad(:) = 0.
+    !     do k = self%lims(2,1),self%lims(2,2)
+    !         arg = real(k,dp) * sh(2)
+    !         ck  = dcos(arg)
+    !         sk  = dsin(arg)
+    !         do h = self%lims(1,1),self%lims(1,2)
+    !             if( .not. self%resmsk(h,k) ) cycle
+    !             sh_comp   = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
+    !             ! retrieve reference component
+    !             ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
+    !             ! shift the particle Fourier component
+    !             ptcl_comp = self%particles(h,k,i) * sh_comp
+    !             diff_comp = ref_comp  - ptcl_comp
+    !             ! update euclidean difference
+    !             cc(1)     = cc(1) + real(diff_comp * conjg(diff_comp))
+    !             ! update normalization terms
+    !             cc(2)     = cc(2) + real( ref_comp * conjg( ref_comp))
+    !             cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
+    !             ! update the gradient
+    !             ptcl_comp = 2 * shconst * imagpart(ptcl_comp * conjg(diff_comp))
+    !             grad(1)   = grad(1) + real(ptcl_comp)*h
+    !             grad(2)   = grad(2) + real(ptcl_comp)*k
+    !         end do
+    !     end do
+    !     corr = 1 - cc(1)/(cc(2)+cc(3))
+    !     grad =   -  grad/(cc(2)+cc(3))
+    ! end subroutine corr_shifted_euclid_2
 
     ! computing the chance/probability that the particle's orientation is correct (prev_corrs are given)
     function ori_chance_1( self, iptcl, o, prev_oris, prev_corrs, R, n ) result(prob)
@@ -942,6 +909,42 @@ contains
         end do
     end subroutine calc_sigma_contrib
 
+    subroutine weight_ref_ptcl( self, ithr, i, iptcl )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        integer :: r_ind, h, k
+        real    :: w
+        do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
+            w = sqrt(k / (2. * self%sigma2_noise(r_ind, iptcl)))
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
+                        self%cur_refs( h,k,ithr) = w*self%cur_refs( h,k,ithr)
+                        self%particles(h,k,i)    = w*self%particles(h,k,i)
+                    endif
+                enddo
+            enddo
+        enddo
+    end subroutine weight_ref_ptcl
+
+    subroutine deweight_ref_ptcl( self, ithr, i, iptcl )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        integer :: r_ind, h, k
+        real    :: w
+        do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
+            w = sqrt(k / (2. * self%sigma2_noise(r_ind, iptcl)))
+            do k = self%lims(2,1), self%lims(2,2)
+                do h = self%lims(1,1), self%lims(1,2)
+                    if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
+                        self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
+                        self%particles(h,k,i)    = self%particles(h,k,i)/w
+                    endif
+                enddo
+            enddo
+        enddo
+    end subroutine deweight_ref_ptcl
+
     ! DESTRUCTOR
 
     subroutine kill( self )
@@ -954,6 +957,7 @@ contains
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
+            if( allocated(self%cur_refs)     ) deallocate(self%cur_refs)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
             self%existence  = .false.
