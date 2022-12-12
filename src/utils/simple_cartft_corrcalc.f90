@@ -940,8 +940,8 @@ contains
         real(sp),               intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         type(projector),        pointer       :: vol_ptr
         logical  :: iseven
-        integer  :: ithr, sh_ind, npix, h, k, i
-        real(sp) :: euclid_sh, sh_comp, hcos, hsin, kcos, ksin, arg, sh(2), shconst
+        integer  :: ithr, r_ind, npix, h, k, i
+        real(sp) :: euclid_r, sh_comp, hcos, hsin, kcos, ksin, arg, sh(2), shconst
         i      = self%pinds(iptcl)
         iseven = self%ptcl_iseven(iptcl)
         if( iseven )then
@@ -961,25 +961,26 @@ contains
         endif
         sigma_contrib = 0.0
         sh            = shvec * shconst
-        do sh_ind = params_glob%kfromto(1), params_glob%kfromto(2)
-            npix      = 0
-            euclid_sh = 0.
+        do r_ind = params_glob%kfromto(1), params_glob%kfromto(2)
+            npix     = 0
+            euclid_r = 0.
             do h = self%lims(1,1), self%lims(1,2)
                 arg  = real(h) * sh(1)
                 hcos = cos(arg)
                 hsin = sin(arg)
                 do k = self%lims(2,1), self%lims(2,2)
-                    if( sh_ind == nint(hyp(real(h),real(k))) )then
-                        arg       = real(k) * sh(2)
-                        kcos      = cos(arg)
-                        ksin      = sin(arg)
-                        sh_comp   = cmplx(kcos * hcos - ksin * hsin, kcos * hsin + ksin * hcos, sp)
-                        npix      = npix + 1.
-                        euclid_sh = euclid_sh + csq_fast(self%references(h,k,ithr) * self%ctfmats(h,k,i) - self%particles(h,k,i) * sh_comp)
+                    if( r_ind == nint(hyp(real(h),real(k))) )then
+                        arg      = real(k) * sh(2)
+                        kcos     = cos(arg)
+                        ksin     = sin(arg)
+                        sh_comp  = cmplx(kcos * hcos - ksin * hsin, kcos * hsin + ksin * hcos, sp)
+                        npix     = npix + 1.
+                        euclid_r = euclid_r + csq_fast(self%references(h,k,ithr) * self%ctfmats(h,k,i) - &
+                                                      &self%particles( h,k,i)    * sh_comp)
                     endif
                 end do
             end do
-            sigma_contrib(sh_ind) = 0.5 * euclid_sh / real(npix)
+            sigma_contrib(r_ind) = 0.5 * euclid_r / real(npix)
         end do
     end subroutine calc_sigma_contrib
 
