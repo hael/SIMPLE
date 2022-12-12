@@ -23,7 +23,6 @@ type :: cartft_corrcalc
     integer,                       allocatable :: pinds(:)               !< index array (to reduce memory when frac_update < 1)
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
-    real(sp),                      allocatable :: ref_filt_w(:,:,:)      !< reference filter weights
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
@@ -40,9 +39,6 @@ type :: cartft_corrcalc
     ! SETTERS
     procedure          :: set_ptcl
     procedure          :: set_ref
-    procedure, private :: set_ref_optlp_1
-    procedure, private :: set_ref_optlp_2
-    generic            :: set_ref_optlp => set_ref_optlp_1, set_ref_optlp_2
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
@@ -158,7 +154,6 @@ contains
         self%lims(2,2) =  params_glob%kfromto(2)
         ! 2Dclass/3Drefs mapping on/off        
         allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),           source=1.)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
@@ -212,8 +207,7 @@ contains
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
-        allocate(self%ref_filt_w(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1),&
-        &           self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
+        allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
         ! setup resolution mask pxls_p_shell
@@ -316,42 +310,6 @@ contains
             self%references(:,:,ithr) = self%references(:,:,1)
         end do
     end subroutine set_ref
-
-    subroutine set_ref_optlp_1( self, ref_optlp )
-        class(cartft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
-        integer :: h,k,sh,sqlp,sqarg
-        self%ref_filt_w(:,:,1) = 0.
-        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                if( (h==0) .and. (k==0) ) cycle
-                sqarg = dot_product([h,k],[h,k])
-                if( sqarg > sqlp ) cycle
-                sh = nint(hyp(real(h),real(k)))
-                self%ref_filt_w(h,k,1) = ref_optlp(sh)
-            end do
-        end do
-    end subroutine set_ref_optlp_1
-
-    subroutine set_ref_optlp_2( self, iref, ref_optlp )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref
-        real,                   intent(in)    :: ref_optlp(params_glob%kfromto(1):params_glob%kfromto(2))
-        integer :: h,k,sh,sqlp,sqarg
-        if( iref < 1 .or. iref > self%nptcls ) THROW_HARD('iref '//int2str(iref)//' is out of bounds')
-        self%ref_filt_w(:,:,iref) = 0.
-        sqlp = params_glob%kfromto(2) * params_glob%kfromto(2)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                if( (h==0) .and. (k==0) ) cycle
-                sqarg = dot_product([h,k],[h,k])
-                if( sqarg > sqlp ) cycle
-                sh = nint(hyp(real(h),real(k)))
-                self%ref_filt_w(h,k,iref) = ref_optlp(sh)
-            end do
-        end do
-    end subroutine set_ref_optlp_2
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
@@ -519,7 +477,7 @@ contains
             vol_ptr => self%vol_odd
         endif
         corr = vol_ptr%fproject_correlate_serial(o, self%lims, self%particles(:,:,i),&
-        &self%ctfmats(:,:,i), self%resmsk(:,:), self%ref_filt_w(:,:,1))
+                                                   &self%ctfmats(:,:,i), self%resmsk(:,:))
     end function project_and_correlate_1
 
     function project_and_correlate_2( self, iptcl, o, shvec ) result( corr )
@@ -647,7 +605,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i)
                 ! update cross product
@@ -698,7 +656,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp     = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                ref_comp    = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp   = self%particles(h,k,i)
                 ! update cross product
@@ -755,7 +713,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp  = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                ref_comp = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i) * sh_comp
                 ! update euclidean difference
@@ -806,7 +764,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 sh_comp   = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
                 ! retrieve reference component
-                ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i) * self%ref_filt_w(h,k,1)
+                ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
                 ! shift the particle Fourier component
                 ptcl_comp = self%particles(h,k,i) * sh_comp
                 diff_comp = ref_comp  - ptcl_comp
@@ -994,7 +952,6 @@ contains
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
-            if( allocated(self%ref_filt_w)   ) deallocate(self%ref_filt_w)
             if( allocated(self%particles)    ) deallocate(self%particles)
             if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
