@@ -54,7 +54,7 @@ type :: cartft_corrcalc
     procedure, private :: prep_ref4corr_o
     procedure, private :: prep_ref4corr_sh
     procedure, private :: prep_ref4corr_o_sh
-    generic            :: prep_ref4corr => prep_ref4corr_o, prep_ref4corr_sh, prep_ref4corr_o_sh
+    generic  , private :: prep_ref4corr => prep_ref4corr_o, prep_ref4corr_sh, prep_ref4corr_o_sh
     ! procedure          :: prep4parallel_shift_srch
     ! CALCULATORS
     procedure, private :: project_and_correlate_1
@@ -62,8 +62,10 @@ type :: cartft_corrcalc
     generic            :: project_and_correlate => project_and_correlate_1, project_and_correlate_2
     procedure, private :: correlate_cc_1
     procedure, private :: correlate_cc_2
-    generic            :: correlate_cc => correlate_cc_1, correlate_cc_2
-    procedure, private :: correlate_euclid
+    generic  , private :: correlate_cc => correlate_cc_1, correlate_cc_2
+    procedure, private :: correlate_euclid_1
+    procedure, private :: correlate_euclid_2
+    generic  , private :: correlate_euclid => correlate_euclid_1, correlate_euclid_2
     procedure          :: project_and_srch_shifts
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
@@ -597,6 +599,37 @@ contains
         end select
     end function project_and_correlate_2
 
+    subroutine corr_shifted_1( self, iptcl, shvec, corr )
+        class(cartft_corrcalc), target, intent(inout)  :: self
+        integer,                        intent(in)     :: iptcl
+        real,                           intent(in)     :: shvec(2)
+        real,                           intent(inout)  :: corr
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, shvec, i, ithr)
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                call self%correlate_cc(     ithr, i, iptcl, corr )
+            case(OBJFUN_EUCLID)
+                call self%correlate_euclid( ithr, i, iptcl, corr )
+        end select
+    end subroutine corr_shifted_1
+
+    subroutine corr_shifted_2( self, iptcl, shvec, corr, grad )
+        class(cartft_corrcalc), target, intent(inout)  :: self
+        integer,                        intent(in)     :: iptcl
+        real,                           intent(in)     :: shvec(2)
+        real,                           intent(inout)  :: corr
+        real,                           intent(inout)  :: grad(2)
+        integer :: i, ithr
+        call self%prep_ref4corr(iptcl, shvec, i, ithr)
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                call self%correlate_cc(     ithr, i, iptcl, corr, grad )
+            case(OBJFUN_EUCLID)
+                call self%correlate_euclid( ithr, i, iptcl, corr, grad )
+        end select
+    end subroutine corr_shifted_2
+
     subroutine correlate_cc_1( self, ithr, i, iptcl, corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: ithr, i, iptcl
@@ -662,7 +695,7 @@ contains
         grad(2) = norm_corr(grad(2), cc(2), cc(3))
     end subroutine correlate_cc_2
 
-    subroutine correlate_euclid( self, ithr, i, iptcl, corr )
+    subroutine correlate_euclid_1( self, ithr, i, iptcl, corr )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: ithr, i, iptcl
         real,                   intent(out)   :: corr
@@ -683,7 +716,44 @@ contains
         end do
         corr = exp( - euclid/denom )
         call self%deweight_ref_ptcl( ithr, i, iptcl )
-    end subroutine correlate_euclid
+    end subroutine correlate_euclid_1
+
+    subroutine correlate_euclid_2( self, ithr, i, iptcl, corr, grad )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: ithr, i, iptcl
+        real,                   intent(out)   :: corr, grad(2)
+        real     :: shconst
+        real(dp) :: euclid, denom, corr_8, grad_8(2)
+        complex  :: diff, ptcl_comp, ref_comp
+        integer  :: h, k
+        call self%weight_ref_ptcl( ithr, i, iptcl )
+        ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
+        if( is_even(self%ldim(1)) )then
+            shconst = PI / real(self%ldim(1)/2.)
+        else
+            shconst = PI / real((self%ldim(1)-1)/2.)
+        endif
+        denom  = 0._dp
+        euclid = 0._dp
+        grad_8 = 0._dp
+        do k = self%lims(2,1),self%lims(2,2)
+            do h = self%lims(1,1),self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                ptcl_comp = self%particles(h,k,i)
+                ref_comp  = self%cur_refs(h,k,ithr)
+                diff      = ref_comp - ptcl_comp
+                euclid    = euclid + real(diff      * conjg(diff)     , dp)
+                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp), dp)
+                diff      = 2 * shconst * (0.d0, 1.d0) * ref_comp * conjg(diff)
+                grad_8(1) = grad_8(1) + real(diff, dp) * real(h, dp)
+                grad_8(2) = grad_8(2) + real(diff, dp) * real(k, dp)
+            end do
+        end do
+        corr_8 = dexp( - euclid/denom )
+        corr   = corr_8
+        grad   = - corr_8/denom*grad_8
+        call self%deweight_ref_ptcl( ithr, i, iptcl )
+    end subroutine correlate_euclid_2
 
     subroutine project_and_srch_shifts( self, iptcl, o, nsample, trs, shvec, corr_best, nevals )
         class(cartft_corrcalc), intent(inout) :: self
@@ -723,94 +793,6 @@ contains
             endif
         end do
     end subroutine project_and_srch_shifts
-
-    subroutine corr_shifted_1( self, iptcl, shvec, corr )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        integer :: i, ithr
-        call self%prep_ref4corr(iptcl, shvec, i, ithr)
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%correlate_cc(     ithr, i, iptcl, corr )
-            case(OBJFUN_EUCLID)
-                call self%correlate_euclid( ithr, i, iptcl, corr )
-        end select
-    end subroutine corr_shifted_1
-
-    subroutine corr_shifted_2( self, iptcl, shvec, corr, grad )
-        class(cartft_corrcalc), target, intent(inout)  :: self
-        integer,                        intent(in)     :: iptcl
-        real,                           intent(in)     :: shvec(2)
-        real,                           intent(inout)  :: corr
-        real,                           intent(inout)  :: grad(2)
-        integer :: i, ithr
-        call self%prep_ref4corr(iptcl, shvec, i, ithr)
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%correlate_cc(     ithr, i, iptcl, corr, grad )
-            case(OBJFUN_EUCLID)
-                ! call self%correlate_euclid( ithr, i, iptcl, corr, grad )
-        end select
-    end subroutine corr_shifted_2
-
-    ! subroutine corr_shifted_euclid_2( self, iptcl, shvec, corr, grad )
-    !     class(cartft_corrcalc), target, intent(inout)  :: self
-    !     integer,                        intent(in)     :: iptcl
-    !     real,                           intent(in)     :: shvec(2)
-    !     real,                           intent(inout)  :: corr
-    !     real,                           intent(inout)  :: grad(2)
-    !     integer  :: i, h, k, ithr
-    !     complex  :: ref_comp, sh_comp, ptcl_comp, diff_comp
-    !     real(dp) :: sh(2), arg, hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2)), ck, sk
-    !     real(sp) :: cc(3), shconst
-    !     logical  :: iseven
-    !     ! physical particle index
-    !     i = self%pinds(iptcl)
-    !     ! get thread index
-    !     ithr = omp_get_thread_num() + 1
-    !     ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
-    !     if( is_even(self%ldim(1)) )then
-    !         shconst = PI / real(self%ldim(1)/2.)
-    !     else
-    !         shconst = PI / real((self%ldim(1)-1)/2.)
-    !     endif
-    !     ! optimized shift calculation following (shift2Dserial_1 in image class)
-    !     sh = real(shvec * shconst,dp)
-    !     do h = self%lims(1,1),self%lims(1,2)
-    !         arg     = real(h,dp) * sh(1)
-    !         hcos(h) = dcos(arg)
-    !         hsin(h) = dsin(arg)
-    !     enddo
-    !     cc(:)   = 0.
-    !     grad(:) = 0.
-    !     do k = self%lims(2,1),self%lims(2,2)
-    !         arg = real(k,dp) * sh(2)
-    !         ck  = dcos(arg)
-    !         sk  = dsin(arg)
-    !         do h = self%lims(1,1),self%lims(1,2)
-    !             if( .not. self%resmsk(h,k) ) cycle
-    !             sh_comp   = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h),sp)
-    !             ! retrieve reference component
-    !             ref_comp  = self%references(h,k,ithr) * self%ctfmats(h,k,i)
-    !             ! shift the particle Fourier component
-    !             ptcl_comp = self%particles(h,k,i) * sh_comp
-    !             diff_comp = ref_comp  - ptcl_comp
-    !             ! update euclidean difference
-    !             cc(1)     = cc(1) + real(diff_comp * conjg(diff_comp))
-    !             ! update normalization terms
-    !             cc(2)     = cc(2) + real( ref_comp * conjg( ref_comp))
-    !             cc(3)     = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
-    !             ! update the gradient
-    !             ptcl_comp = 2 * shconst * imagpart(ptcl_comp * conjg(diff_comp))
-    !             grad(1)   = grad(1) + real(ptcl_comp)*h
-    !             grad(2)   = grad(2) + real(ptcl_comp)*k
-    !         end do
-    !     end do
-    !     corr = 1 - cc(1)/(cc(2)+cc(3))
-    !     grad =   -  grad/(cc(2)+cc(3))
-    ! end subroutine corr_shifted_euclid_2
 
     ! computing the chance/probability that the particle's orientation is correct (prev_corrs are given)
     function ori_chance_1( self, iptcl, o, prev_oris, prev_corrs, R, n ) result(prob)
@@ -902,8 +884,8 @@ contains
                         ksin     = sin(arg)
                         sh_comp  = cmplx(kcos * hcos - ksin * hsin, kcos * hsin + ksin * hcos, sp)
                         npix     = npix + 1.
-                        euclid_r = euclid_r + csq_fast(self%references(h,k,ithr) * self%ctfmats(h,k,i) - &
-                                                      &self%particles( h,k,i)    * sh_comp)
+                        euclid_r = euclid_r + csq_fast(self%references(h,k,ithr) * self%ctfmats(h,k,i) * sh_comp - &
+                                                      &self%particles( h,k,i))
                     endif
                 end do
             end do
@@ -914,17 +896,16 @@ contains
     subroutine weight_ref_ptcl( self, ithr, i, iptcl )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: ithr, i, iptcl
-        integer :: r_ind, h, k
-        real    :: w
-        do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
-            w = sqrt(r_ind / (2. * self%sigma2_noise(r_ind, iptcl)))
-            do k = self%lims(2,1), self%lims(2,2)
-                do h = self%lims(1,1), self%lims(1,2)
-                    if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
-                        self%cur_refs( h,k,ithr) = w*self%cur_refs( h,k,ithr)
-                        self%particles(h,k,i)    = w*self%particles(h,k,i)
-                    endif
-                enddo
+        integer :: r, h, k
+        real    :: w, kd
+        do k = self%lims(2,1), self%lims(2,2)
+            do h = self%lims(1,1), self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                r = nint(hyp(real(h),real(k)))
+                if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
+                w = sqrt(r / (2. * self%sigma2_noise(r, iptcl)) / self%pxls_p_shell(r))
+                self%cur_refs( h,k,ithr) = w*self%cur_refs( h,k,ithr)
+                self%particles(h,k,i)    = w*self%particles(h,k,i)
             enddo
         enddo
     end subroutine weight_ref_ptcl
@@ -932,17 +913,16 @@ contains
     subroutine deweight_ref_ptcl( self, ithr, i, iptcl )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: ithr, i, iptcl
-        integer :: r_ind, h, k
+        integer :: r, h, k
         real    :: w
-        do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
-            w = sqrt(r_ind / (2. * self%sigma2_noise(r_ind, iptcl)))
-            do k = self%lims(2,1), self%lims(2,2)
-                do h = self%lims(1,1), self%lims(1,2)
-                    if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
-                        self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
-                        self%particles(h,k,i)    = self%particles(h,k,i)/w
-                    endif
-                enddo
+        do k = self%lims(2,1), self%lims(2,2)
+            do h = self%lims(1,1), self%lims(1,2)
+                if( .not. self%resmsk(h,k) ) cycle
+                r = nint(hyp(real(h),real(k)))
+                if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
+                w = sqrt(r / (2. * self%sigma2_noise(r, iptcl)) / self%pxls_p_shell(r))
+                self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
+                self%particles(h,k,i)    = self%particles(h,k,i)/w
             enddo
         enddo
     end subroutine deweight_ref_ptcl
