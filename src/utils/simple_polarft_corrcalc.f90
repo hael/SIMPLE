@@ -188,9 +188,9 @@ type :: polarft_corrcalc
     generic            :: specscore => specscore_1, specscore_2
     procedure          :: calc_roinv_corrmat
     procedure, private :: weight_ref_ptcl_sp, weight_ref_ptcl_dp
-    generic            :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
+    generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
-    generic            :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
+    generic,   private :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
