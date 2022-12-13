@@ -14,11 +14,11 @@ type(cartft_corrcalc)   :: cftcc
 type(cftcc_shsrch_grad) :: cftcc_shsrch
 type(image)             :: noise_img
 real, parameter         :: SHMAG=5.0
-integer                 :: i, noise_n, noise_i, nevals(2)
+integer                 :: i, noise_n, noise_i, nevals(2), xsh, ysh
 real                    :: grad(2), cxy(3), lims(2,2)
 integer(timer_int_kind) :: t_tot
 real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1
-real                    :: ave, sdev, maxv, minv, noise_lvl, correct_sh(2)
+real                    :: ave, sdev, maxv, minv, noise_lvl, correct_sh(2), corr
 real, allocatable       :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted stk=<particles.ext>'
@@ -45,9 +45,18 @@ end do
 do i = 1,1
     call b%img%read(p%stk, i)
     call b%img%fft
-    call b%img%shift2Dserial([-0.5,-0.5]) 
+    call b%img%shift2Dserial([-1.,-1.]) 
     call cftcc%set_ref(b%img)
     call srch_shifts(0.5, i)
+end do
+! corr of different orientations
+do i = 1,p%nptcls
+    do xsh=-4,4
+        do ysh=-4,4
+            call cftcc%corr_shifted(i, real([xsh,ysh]), corr)
+            print *, 'corr: ', corr, xsh, ysh
+        end do
+    end do
 end do
 ! lbfgsb shift search
 lims(1,1) = -6.
