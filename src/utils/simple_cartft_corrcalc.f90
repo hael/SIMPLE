@@ -475,9 +475,10 @@ contains
         class(ori),             intent(in)    :: o
         real,                   intent(in)    :: shvec(2)
         integer,                intent(out)   :: i, ithr
-        real    :: shconst, sh(2), arg, sh_comp, ck, sk
+        real    :: shconst, sh(2), arg, ck, sk
         real    :: hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2))
         integer :: h, k
+        complex :: sh_comp
         call self%prep_ref4corr_o(iptcl, o, i, ithr)
         ! calculate constant factor (assumes self%ldim(1) == self%ldim(2))
         if( is_even(self%ldim(1)) )then
@@ -509,9 +510,10 @@ contains
         integer,                intent(in)    :: iptcl
         real,                   intent(in)    :: shvec(2)
         integer,                intent(out)   :: i, ithr
-        real    :: shconst, sh(2), arg, sh_comp, ck, sk
+        real    :: shconst, sh(2), arg, ck, sk
         real    :: hcos(self%lims(1,1):self%lims(1,2)), hsin(self%lims(1,1):self%lims(1,2))
         integer :: h, k
+        complex :: sh_comp
         ! get thread index
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
@@ -650,7 +652,7 @@ contains
                 cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
                 cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
                 ! gradient
-                ref_ptcl = imagpart(ref_ptcl) * shconst
+                ref_ptcl = (0.d0, 1.d0) * ref_ptcl * shconst
                 grad(1)  = grad(1) + real(ref_ptcl) * h
                 grad(2)  = grad(2) + real(ref_ptcl) * k
             end do
@@ -915,7 +917,7 @@ contains
         integer :: r_ind, h, k
         real    :: w
         do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
-            w = sqrt(k / (2. * self%sigma2_noise(r_ind, iptcl)))
+            w = sqrt(r_ind / (2. * self%sigma2_noise(r_ind, iptcl)))
             do k = self%lims(2,1), self%lims(2,2)
                 do h = self%lims(1,1), self%lims(1,2)
                     if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
@@ -933,7 +935,7 @@ contains
         integer :: r_ind, h, k
         real    :: w
         do r_ind = params_glob%kfromto(1),params_glob%kfromto(2)
-            w = sqrt(k / (2. * self%sigma2_noise(r_ind, iptcl)))
+            w = sqrt(r_ind / (2. * self%sigma2_noise(r_ind, iptcl)))
             do k = self%lims(2,1), self%lims(2,2)
                 do h = self%lims(1,1), self%lims(1,2)
                     if( self%resmsk(h,k) .and. r_ind == nint(hyp(real(h),real(k))) )then
