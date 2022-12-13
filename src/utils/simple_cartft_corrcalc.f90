@@ -847,7 +847,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: ithr, i, iptcl
         integer :: r, h, k
-        real    :: w, kd
+        real    :: w
         if( .not. associated(self%sigma2_noise) ) return
         do k = self%lims(2,1), self%lims(2,2)
             do h = self%lims(1,1), self%lims(1,2)
