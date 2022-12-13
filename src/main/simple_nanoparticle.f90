@@ -1464,7 +1464,7 @@ contains
                 call jacobi(inertia_t, 3, 3, eigenvals, eigenvecs, ifoo)
                 !call eigsrt(eigenvals, eigenvecs, 3, 3)
 
-                !write (funit, '(2i7, 12f10.3)') cc, size_scaled, eigenvals, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                write (funit, '(i7, 9f10.3)') cc, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
                 !write(funit, '(3i7, 9f10.3)') cc, size_scaled, n, self%atominfo(cc)%center(:), center_scaled(:), com(:)
                 !write(funit, '(7i7, 9f10.3)') cc, ilo, ihi, jlo, jhi, klo, khi
 
