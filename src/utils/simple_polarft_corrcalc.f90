@@ -1837,10 +1837,10 @@ contains
         real(sp) :: w
         do k=self%kfromto(1),self%kfromto(2)
             w                         = sqrt(self%npix_per_shell(k) / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))
-            pft_ref(:,k)              = w * pft_ref(:,k)              / w
-            self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)    / w
-            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re / w
-            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im / w
+            pft_ref(:,k)              = pft_ref(:,k)              / w
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
+            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
+            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
         end do
     end subroutine deweight_ref_ptcl_sp
 
