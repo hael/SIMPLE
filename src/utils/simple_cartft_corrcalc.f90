@@ -261,6 +261,7 @@ contains
             self%nptcls = nptcls
             if( allocated(self%iseven)    ) deallocate(self%iseven)
             if( allocated(self%particles) ) deallocate(self%particles)
+            if( allocated(self%cur_ptcls) ) deallocate(self%cur_ptcls)
             allocate(self%iseven(1:self%nptcls))
             allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
             allocate(self%cur_ptcls(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
