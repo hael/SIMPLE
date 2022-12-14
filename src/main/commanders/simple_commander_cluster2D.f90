@@ -1452,8 +1452,7 @@ contains
             do i = 1, ncls_sel - 1
                 do j = i + 1, ncls_sel
                     ! Common line correlation
-                    ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
-                    corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                    corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j)
                     corrmat_comlin(j,i) = corrmat_comlin(i,j)
                 enddo
                 corrmat_comlin(i,i) = 1.
@@ -1545,8 +1544,7 @@ contains
             do i = 1, ncls_sel - 1
                 do j = i + 1, ncls_sel
                     ! Common line orrelations
-                    ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
-                    corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                    corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j)
                     corrmat_comlin(j,i) = corrmat_comlin(i,j)
                 enddo
                 corrmat_comlin(i,i) = 1.
