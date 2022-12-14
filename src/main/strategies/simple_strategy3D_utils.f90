@@ -111,36 +111,37 @@ contains
         integer,                intent(in)  :: ref, nrefs_eval, nrefs_tot
         real,                   intent(in)  :: frac ! in %
         real,                   intent(out) :: pw
-        real(dp) :: sumw, diff2, max_diff2
+        real     :: sumw, diff2, max_diff2
         integer  :: iref, npix
         pw = 1.0
         ! Accumulate sum of significant individual weights
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
             npix      = pftcc_glob%get_npix()
             max_diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
-            sumw      = 0.d0
+            sumw      = 0.
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then
                     diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,iref), npix, params_glob%tau) - max_diff2
-                    if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
+                    sumw = sumw + exp(-diff2)
                 endif
             enddo
         else
             max_diff2 = s3D%proj_space_corrs(s%ithr,ref)
-            sumw      = 0.d0
+            sumw      = 0.
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then
-                    diff2 = real(max_diff2 - s3D%proj_space_corrs(s%ithr,iref),dp)
-                    sumw = sumw + exp(-diff2)
+                    diff2 = max_diff2 - s3D%proj_space_corrs(s%ithr,iref)
+                    sumw  = sumw + exp(-diff2)
                 endif
             enddo
         endif
+        ! SUMW SHOULD NOT NEED ADJUSTMENT GIVEN THAT s3D%proj_space_mask(iref,s%ithr) IS USED IN THE ABOVE LOOP
         ! adjust sum for size of the stochastic search space
-        if( frac < 99.0 )then
-            if( nrefs_eval > 1 ) sumw = 1.d0 + (sumw-1.d0) * real(nrefs_tot-1,dp)/real(nrefs_eval-1,dp)
-        endif
+        ! if( frac < 99.0 )then
+        !     if( nrefs_eval > 1 ) sumw = 1. + (sumw - 1.) * real(nrefs_tot-1)/real(nrefs_eval-1)
+        ! endif
         ! weight
-        pw = max(0.0,min(1.0,real(1.d0 / sumw)))
+        pw = max(0.,min(1.,real(1. / sumw)))
     end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils
