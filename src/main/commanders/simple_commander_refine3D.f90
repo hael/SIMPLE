@@ -96,7 +96,7 @@ contains
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates
-        logical :: l_ptclw, l_combine_eo, l_lpset, l_griddingset
+        logical :: l_combine_eo, l_lpset, l_griddingset ! l_ptclw,
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
@@ -120,8 +120,8 @@ contains
             if( (trim(cline%get_carg('objfun')).eq.'euclid') .and. .not.l_continue )then
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
-                l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
-                call cline%set('ptclw', 'no')
+                ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
+                ! call cline%set('ptclw', 'no')
             endif
         endif
         ! init
@@ -611,10 +611,10 @@ contains
                     call job_descr%delete('lp')
                     call cline_postprocess%delete('lp')
                 endif
-                if( l_ptclw )then
-                    call cline%set('ptclw',    'yes')
-                    call job_descr%set('ptclw','yes')
-                endif
+                ! if( l_ptclw )then
+                !     call cline%set('ptclw',    'yes')
+                !     call job_descr%set('ptclw','yes')
+                ! endif
                 params%objfun    = 'euclid'
                 params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid  = .false.
