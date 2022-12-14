@@ -88,9 +88,11 @@ contains
                 shvec      = 0.
                 shvec_incr = 0.
                 if( cxy(1) >= corr_best )then
-                    ! reference is shifted in the Cartesian formulation now
-                    shvec_incr = cxy(2:3)
-                    shvec      = self%s%prev_shvec + shvec_incr
+                    shvec      = self%s%prev_shvec
+                    ! since particle image is shifted in the Cartesian formulation and we apply
+                    ! with negative sign in rec3D the sign of the increment found needs to be negative
+                    shvec_incr = - cxy(2:3)
+                    shvec      = shvec + shvec_incr
                 end if
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
