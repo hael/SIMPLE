@@ -77,7 +77,7 @@ contains
                 if( self%s%nsample_trs > 0 )then
                     ! calculate Cartesian corr and simultaneously stochastically search shifts (Gaussian sampling)
                     shvec = shvec_best
-                    call cftcc_glob%project_and_shift_shc(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr, nsh)
+                    call cftcc_glob%project_and_srch_shifts(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr, nsh)
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
                     ! keep track of how many shifts we are evaluating
