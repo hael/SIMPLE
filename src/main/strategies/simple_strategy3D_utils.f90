@@ -98,7 +98,7 @@ contains
         call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
         pw = 1.0
-        if( s%l_ptclw ) call calc_ori_weight(s, ref, nrefs_eval, nrefs_tot, frac, pw)
+        if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
         call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
@@ -106,15 +106,13 @@ contains
         call o_new%kill
     end subroutine extract_peak_ori
 
-    subroutine calc_ori_weight( s, ref, nrefs_eval, nrefs_tot, frac, pw )
+    subroutine calc_ori_weight( s, ref, pw )
         class(strategy3D_srch), intent(in)  :: s
-        integer,                intent(in)  :: ref, nrefs_eval, nrefs_tot
-        real,                   intent(in)  :: frac ! in %
+        integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
-        real     :: sumw, diff2, max_diff2
+        real     :: sumw, diff2, max_diff2, best_score, sum_score
         integer  :: iref, npix
         pw = 1.0
-        ! Accumulate sum of significant individual weights
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
             npix      = pftcc_glob%get_npix()
             max_diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
@@ -125,23 +123,21 @@ contains
                     sumw = sumw + exp(-diff2)
                 endif
             enddo
+            pw = max(0.,min(1.,real(1. / sumw)))
         else
-            max_diff2 = s3D%proj_space_corrs(s%ithr,ref)
-            sumw      = 0.
+            ! objective function is exp(- euclid/denom ) in [0,1] where 1 is best
+            best_score = s3D%proj_space_corrs(s%ithr,ref) ! best score as identified by stochastic search
+            sum_score  = 0.
             do iref = 1,s%nrefs
-                if( s3D%proj_space_mask(iref,s%ithr) )then
-                    diff2 = max_diff2 - s3D%proj_space_corrs(s%ithr,iref)
-                    sumw  = sumw + exp(diff2)
+                if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
+                    sum_score  = sum_score + s3D%proj_space_corrs(s%ithr,iref)
                 endif
             enddo
+            ! this normalization ensures that particles that do not show a distinct peak are down-weighted
+            ! if sum_score -> best_score, pw -> 1
+            ! if sum_score >> best_score, pw -> 0
+            pw = max(0.,min(1.,best_score/sum_score))
         endif
-        ! SUMW SHOULD NOT NEED ADJUSTMENT GIVEN THAT s3D%proj_space_mask(iref,s%ithr) IS USED IN THE ABOVE LOOP
-        ! adjust sum for size of the stochastic search space
-        ! if( frac < 99.0 )then
-        !     if( nrefs_eval > 1 ) sumw = 1. + (sumw - 1.) * real(nrefs_tot-1)/real(nrefs_eval-1)
-        ! endif
-        ! weight
-        pw = max(0.,min(1.,real(1. / sumw)))
     end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils
