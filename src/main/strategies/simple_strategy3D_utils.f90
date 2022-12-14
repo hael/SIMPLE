@@ -131,7 +131,7 @@ contains
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then
                     diff2 = real(max_diff2 - s3D%proj_space_corrs(s%ithr,iref),dp)
-                    if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
+                    sumw = sumw + exp(-diff2)
                 endif
             enddo
         endif
