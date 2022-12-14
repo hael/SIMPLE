@@ -116,10 +116,9 @@ contains
                 call obest%set('better',      1.0)
                 call build_glob%spproj_field%set_ori(self%s%iptcl, obest)
                 if( self%s%nsample_trs > 0 )then ! we did stochastic shift search
-                    ! since particle image is shifted in the Cartesian formulation and we apply
-                    ! with negative sign in rec3D the sign of the increment found needs to be negative
-                    shvec_incr = - shvec_best
-                    shvec      =   self%s%prev_shvec + shvec_incr
+                    ! reference is shifted in the Cartesian formulation now
+                    shvec_incr = shvec_best
+                    shvec      = self%s%prev_shvec + shvec_incr
                     where( abs(shvec) < 1e-6 ) shvec = 0.
                     call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
                     call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
@@ -153,11 +152,9 @@ contains
                 shvec      = 0.
                 shvec_incr = 0.
                 if( cxy(1) > corr_best )then
-                    shvec      = self%s%prev_shvec
-                    ! since particle image is shifted in the Cartesian formulation and we apply
-                    ! with negative sign in rec3D the sign of the increment found needs to be negative
-                    shvec_incr = - cxy(2:3)
-                    shvec      = shvec + shvec_incr
+                    ! reference is shifted in the Cartesian formulation now
+                    shvec_incr = cxy(2:3)
+                    shvec      = self%s%prev_shvec + shvec_incr
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 1.)
                 else
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 0.)
