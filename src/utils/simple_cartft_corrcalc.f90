@@ -263,6 +263,7 @@ contains
             if( allocated(self%particles) ) deallocate(self%particles)
             allocate(self%iseven(1:self%nptcls))
             allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+            allocate(self%cur_ptcls(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
         endif
         self%iseven = .true.
         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
@@ -282,7 +283,7 @@ contains
                 deallocate(self%references)
             endif
         endif
-        allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+        allocate(self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
     end subroutine expand_refs
 
     ! SETTERS
@@ -309,7 +310,6 @@ contains
                 self%particles(h,k,self%pinds(iptcl)) = img%get_cmat_at(phys1, phys2, 1)
             end do
         end do
-        self%cur_ptcls(:,:,self%pinds(iptcl)) = self%particles(:,:,self%pinds(iptcl))
     end subroutine set_ptcl
 
     subroutine set_ref( self, img )
@@ -758,9 +758,8 @@ contains
         real,                   intent(in)    :: trs
         real,                   intent(inout) :: shvec(2), corr_best
         integer,                intent(inout) :: nevals
-        type(projector),        pointer       :: vol_ptr
         integer :: ithr, isample, i
-        real    :: sigma, xshift, yshift, xavg, yavg, corr
+        real    :: sigma, xshift, yshift, corr
         call self%prep_ref4corr(iptcl, o, i, ithr)
         sigma = trs / 2. ! 2 sigma (soft) criterion, fixed for now
         call self%corr_shifted(iptcl, shvec, corr_best)
