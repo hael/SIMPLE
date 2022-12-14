@@ -1435,7 +1435,8 @@ contains
                     end do
                 end do
                 com = com / size_scaled
-                com = 1.*nint(com)
+                !com = 1.*nint(com)
+                write (funit, '(i7, 9f10.3)') cc, com(:), center_scaled(:)
 
                 ! Compute the inertia tensor of the connected component. (x,y,z) are scaled coordinates
                 inertia_t = 0.
@@ -1464,7 +1465,7 @@ contains
                 call jacobi(inertia_t, 3, 3, eigenvals, eigenvecs, ifoo)
                 !call eigsrt(eigenvals, eigenvecs, 3, 3)
 
-                write (funit, '(i7, 9f10.3)') cc, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                write (funit, '(i7, 12f10.3)') cc, eigenvals(:), eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
                 !write(funit, '(3i7, 9f10.3)') cc, size_scaled, n, self%atominfo(cc)%center(:), center_scaled(:), com(:)
                 !write(funit, '(7i7, 9f10.3)') cc, ilo, ihi, jlo, jhi, klo, khi
 
@@ -1481,10 +1482,10 @@ contains
                 end do
 
                 ! Extract the border voxel positions in the principal basis (in unscaled Angstroms)
-                allocate(uvw(nborder, 3), source=0.0_dp)
+                !allocate(uvw(nborder, 3), source=0.0_dp)
                 A = 0.0_dp
                 Y = 0.0_dp
-                nborder = 1
+                !nborder = 1
                 do k=klo, khi
                     do j=jlo, jhi
                         do i=ilo, ihi
@@ -1492,7 +1493,7 @@ contains
                                 u = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 1)) * self%smpd / scale_fac
                                 v = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 2)) * self%smpd / scale_fac
                                 w = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 3)) * self%smpd / scale_fac
-                                uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
+                                !uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
                                 !print *, nborder, uvw(nborder, 1), uvw(nborder, 2), uvw(nborder, 3)
                                 A(1,1) = A(1,1) + 2*u**4
                                 A(2,2) = A(2,2) + 2*v**4
@@ -1507,12 +1508,18 @@ contains
                         end do
                     end do
                 end do
+                ! The A matrix is symmetric
+                A(2,1) = A(1,2)
+                A(3,1) = A(1,3)
+                A(3,2) = A(2,3)
+
                 ! Fit scaled surface with ellipse by solving the least squares regression uvw*beta=ones
                 ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
                 !allocate(ones(nborder), source=1.0_dp)
                 !call qr_solve(nborder, 3, uvw, ones, beta)
-                !write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
+                write (funit, '(1i7, 15f8.1)') cc, A(1,:), A(2,:), A(3,:), Y(:)
                 call matinv(A, A_inv, 3, errflg)
+                write (funit, '(1i7, 12f12.7)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
                 beta = matmul(A_inv, Y)
                 write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
                 ! Fill in the 3x3 aniso matrix with squares of the semi-axes
@@ -1524,6 +1531,7 @@ contains
                 call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
                 self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! (u,v,w)->(x,y,z)
                 write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
+                write (funit, '(a)') ''
 
                 !deallocate(uvw, ones)
 
