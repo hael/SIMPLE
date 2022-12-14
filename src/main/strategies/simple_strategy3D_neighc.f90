@@ -149,8 +149,8 @@ contains
                     ! wait with L-BFGS-B refinement until the particle is within the bounds
                     return
                 endif
-                shvec_incr = shvec_best
-                shvec      = self%s%prev_shvec + shvec_incr
+                shvec      = 0.
+                shvec_incr = 0.
                 if( cxy(1) > corr_best )then
                     ! reference is shifted in the Cartesian formulation now
                     shvec_incr = cxy(2:3)
