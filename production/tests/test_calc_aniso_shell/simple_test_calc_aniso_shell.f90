@@ -43,31 +43,31 @@ program simple_test_3D_opt_filt
     allocate(ellipsoids(natoms, 6), source=0.)
     do cc=1, 20
         ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,2) = 1.0
+        ellipsoids(cc,3) = 1.0
         ellipsoids(cc,4) = PI/2
         ellipsoids(cc,5:6) = 0.
     end do
     do cc=21, 40
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,1) = 0.8
+        ellipsoids(cc,2) = 0.8
+        ellipsoids(cc,3) = 0.8
         ellipsoids(cc,4) = 0.0
         ellipsoids(cc,5) = PI/2
         ellipsoids(cc,6) = 0.0
     end do
     do cc=41, 60
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,1) = 0.6
+        ellipsoids(cc,2) = 0.6
+        ellipsoids(cc,3) = 0.6
         ellipsoids(cc,4) = 0.0
         ellipsoids(cc,5) = 0.0
         ellipsoids(cc,6) = PI/2
     end do
     do cc=61, natoms
-        ellipsoids(cc,1) = 0.8
-        ellipsoids(cc,2) = 0.8
-        ellipsoids(cc,3) = 0.8
+        ellipsoids(cc,1) = 0.4
+        ellipsoids(cc,2) = 0.4
+        ellipsoids(cc,3) = 0.4
         ellipsoids(cc,4:6) = 0.
     end do
 
