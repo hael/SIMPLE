@@ -159,7 +159,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: gencorrs_cc
     procedure          :: genmaxcorr_comlin
-    procedure          :: genmaxspecscore_comlin
     procedure, private :: gencorrs_euclid
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
@@ -186,7 +185,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_frc
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
-    procedure          :: calc_roinv_corrmat
     procedure, private :: weight_ref_ptcl_sp, weight_ref_ptcl_dp
     generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
@@ -1310,30 +1308,6 @@ contains
         end do
     end function genmaxcorr_comlin
 
-    function genmaxspecscore_comlin( self, ieven, jeven ) result( specscore_max )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: ieven, jeven
-        complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
-        real     :: specscore, specscore_max, corrs(self%kfromto(1):self%kfromto(2))
-        integer  :: ithr, i, j, k
-        ithr      =       omp_get_thread_num() + 1
-        pft_ref_i =>      self%heap_vars(ithr)%pft_ref
-        pft_ref_j =>      self%heap_vars(ithr)%pft_ref_tmp
-        pft_ref_i =       self%pfts_refs_even(:,:,ieven)
-        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven))
-        ! no CTF to worry about since this is intended for class avgs
-        specscore_max = -1.
-        do i = 1, self%pftsz
-            do j = 1, self%pftsz
-                do k = self%kfromto(1), self%kfromto(2)
-                    corrs(k) = real( pft_ref_i(i,k) * pft_ref_j(j,k) ) / sqrt( csq_fast(pft_ref_i(i,k)) * csq_fast(pft_ref_j(j,k)) )
-                end do
-                specscore = max(0.,median_nocopy(corrs))
-                if( specscore > specscore_max ) specscore_max = specscore
-            end do
-        end do
-    end function genmaxspecscore_comlin
-
     subroutine gencorrs_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1825,30 +1799,6 @@ contains
         specscore_2 = max(0.,median_nocopy(frc))
     end function specscore_2
 
-    function calc_roinv_corrmat( self) result(corrmat )
-        ! assumes particles/references in pftcc identical sets
-        class(polarft_corrcalc), intent(inout) :: self
-        real, allocatable   :: corrmat(:,:)
-        real    :: corrs(self%nrots)
-        integer :: iref, iptcl, loc(1)
-        if( self%nptcls /= self%nrefs ) THROW_HARD('nptcls == nrefs in pftcc required; calc_roinv_corrmat')
-        if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(self%nptcls,self%nptcls))
-        corrmat = 1.
-        !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
-        do iref=1,self%nptcls - 1
-            do iptcl=iref + 1,self%nptcls
-                ! rotational corr
-                call self%gencorrs(iref, iptcl, corrs)
-                loc  = maxloc(corrs)
-                corrmat(iref,iptcl) = corrs(loc(1))
-                ! symmetrize
-                corrmat(iptcl,iref) = corrmat(iref,iptcl)
-            end do
-        end do
-        !$omp end parallel do
-    end function calc_roinv_corrmat
-
     subroutine weight_ref_ptcl_sp( self, pft_ref, i, iptcl )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
@@ -1857,10 +1807,10 @@ contains
         real(sp) :: w
         do k=self%kfromto(1),self%kfromto(2)
             w                         = sqrt(self%npix_per_shell(k) / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))
-            pft_ref(:,k)              = w*pft_ref(:,k)
-            self%pfts_ptcls(:,k,i)    = w*self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = w*self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = w*self%fftdat_ptcls(i,k)%im
+            pft_ref(:,k)              = w * pft_ref(:,k)
+            self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
+            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
+            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im
         end do
     end subroutine weight_ref_ptcl_sp
 
@@ -1872,10 +1822,10 @@ contains
         real(dp) :: w
         do k=self%kfromto(1),self%kfromto(2)
             w                         = dsqrt(self%npix_per_shell(k) / real(self%pftsz, dp) / (2.0_dp * self%sigma2_noise(k,iptcl)))
-            pft_ref(:,k)              = w*pft_ref(:,k)
-            self%pfts_ptcls(:,k,i)    = w*self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = w*self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = w*self%fftdat_ptcls(i,k)%im
+            pft_ref(:,k)              = w * pft_ref(:,k)
+            self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
+            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
+            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im
         end do
     end subroutine weight_ref_ptcl_dp
 
@@ -1887,10 +1837,10 @@ contains
         real(sp) :: w
         do k=self%kfromto(1),self%kfromto(2)
             w                         = sqrt(self%npix_per_shell(k) / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))
-            pft_ref(:,k)              = 1.0/w*pft_ref(:,k)
-            self%pfts_ptcls(:,k,i)    = 1.0/w*self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = 1.0/w*self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = 1.0/w*self%fftdat_ptcls(i,k)%im
+            pft_ref(:,k)              = w * pft_ref(:,k)              / w
+            self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)    / w
+            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re / w
+            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im / w
         end do
     end subroutine deweight_ref_ptcl_sp
 
@@ -1902,10 +1852,10 @@ contains
         real(dp) :: w
         do k=self%kfromto(1),self%kfromto(2)
             w                         = dsqrt(self%npix_per_shell(k) / real(self%pftsz, dp) / (2.0_dp * self%sigma2_noise(k,iptcl)))
-            pft_ref(:,k)              = 1.0/w*pft_ref(:,k)
-            self%pfts_ptcls(:,k,i)    = 1.0/w*self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = 1.0/w*self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = 1.0/w*self%fftdat_ptcls(i,k)%im
+            pft_ref(:,k)              = pft_ref(:,k)              / w
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
+            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
+            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
         end do
     end subroutine deweight_ref_ptcl_dp
 
