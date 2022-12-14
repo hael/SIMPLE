@@ -123,7 +123,7 @@ contains
                     sumw = sumw + exp(-diff2)
                 endif
             enddo
-            pw = max(0.,min(1.,real(1.d0 / sumw), kind=sp))
+            pw = max(0.,min(1.,real(1.d0 / sumw)))
         else
             ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
             best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
@@ -141,7 +141,7 @@ contains
                 endif
             enddo
             ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-            pw = max(0.,min(1.,real(1.d0 / sumw, kind=sp)))
+            pw = max(0.,min(1.,real(1.d0 / sumw)))
         endif
     end subroutine calc_ori_weight
 
