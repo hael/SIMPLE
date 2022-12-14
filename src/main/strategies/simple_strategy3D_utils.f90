@@ -110,7 +110,7 @@ contains
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref, nrefs_eval
         real,                   intent(out) :: pw
-        real     :: sumw, diff2, max_diff2, best_score, sum_score
+        real(dp) :: sumw, diff2, max_diff2, best_score, sum_diff
         integer  :: iref, npix
         pw = 1.0
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
@@ -125,16 +125,23 @@ contains
             enddo
             pw = max(0.,min(1.,real(1. / sumw)))
         else
-            ! objective function is exp(- euclid/denom ) in [0,1] where 1 is best
-            best_score = s3D%proj_space_corrs(s%ithr,ref) ! best score as identified by stochastic search
-            sum_score  = 0.
+            ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
+            best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
+            sumw       = 0.d0
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
-                    sum_score  = sum_score + s3D%proj_space_corrs(s%ithr,iref)
+                    ! the argument to the exponential function is always negative
+                    diff2 = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp) - best_score
+                    ! hence, for the best score the exponent will be 1 and < 1 for all others
+                    if( ref == iref )then
+                        sumw  = sumw + 1.d0
+                    else if( diff2 < 0.d0 )then
+                        sumw  = sumw + exp(diff2)
+                    endif
                 endif
             enddo
             ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-            pw = (best_score * real(nrefs_eval)) / sum_score
+            pw = real(exp(best_score) / sumw, kind=sp)
         endif
     end subroutine calc_ori_weight
 
