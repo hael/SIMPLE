@@ -25,6 +25,7 @@ type :: cartft_corrcalc
     real,                          allocatable :: pxls_p_shell(:)        !< number of (cartesian) pixels per shell
     real(sp),                      allocatable :: ctfmats(:,:,:)         !< logically indexed CTF matrices (for efficient parallel exec)
     complex(kind=c_float_complex), allocatable :: particles(:,:,:)       !< particle Fourier components (h,k,iptcl)
+    complex(kind=c_float_complex), allocatable :: cur_ptcls(:,:,:)       !< current reference for correlation
     complex(kind=c_float_complex), allocatable :: references(:,:,:)      !< reference Fourier components (h,k,ithr) or (h,k,iptcl) when expanded
     complex(kind=c_float_complex), allocatable :: cur_refs(:,:,:)        !< current reference for correlation
     logical,                       allocatable :: resmsk(:,:)            !< resolution mask
@@ -172,6 +173,7 @@ contains
         allocate(self%cur_refs(  self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:nthr_glob), source=cmplx(0.,0.))
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
+        allocate(self%cur_ptcls(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
         ! set CTF flag
         self%with_ctf = .false.
@@ -228,6 +230,7 @@ contains
         self%lims(2,2) =  params_glob%kfromto(2)
         ! allocate the rest
         allocate(self%particles(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
+        &        self%cur_ptcls(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%nptcls),&
         &       self%references(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), &
         &       self%cur_refs(  self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),nthr_glob), source=cmplx(0.,0.))
         allocate(self%ctfmats(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),1:self%nptcls), source=1.)
@@ -306,6 +309,7 @@ contains
                 self%particles(h,k,self%pinds(iptcl)) = img%get_cmat_at(phys1, phys2, 1)
             end do
         end do
+        self%cur_ptcls(:,:,self%pinds(iptcl)) = self%particles(:,:,self%pinds(iptcl))
     end subroutine set_ptcl
 
     subroutine set_ref( self, img )
@@ -480,7 +484,8 @@ contains
         i    = self%pinds(iptcl)
         ! put reference projection in the heap
         call vol_ptr%fproject_serial(o, self%lims, self%references(:,:,ithr), self%resmsk(:,:))
-        self%cur_refs = self%references
+        self%cur_refs(:,:,ithr) = self%references(:,:,ithr)
+        self%cur_ptcls(:,:,i)   = self%particles(:,:,i)
         if( self%with_ctf ) self%cur_refs(:,:,ithr) = self%cur_refs(:,:,ithr) * self%ctfmats(:,:,i)
     end subroutine prep_ref4corr_o
 
@@ -508,8 +513,8 @@ contains
             sk  = sin(arg)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                sh_comp                 = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
-                self%cur_refs(h,k,ithr) = self%cur_refs(h,k,ithr) * sh_comp
+                sh_comp               = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
+                self%cur_ptcls(h,k,i) = self%particles(h,k,i) * sh_comp
             end do
         end do
     end subroutine prep_ref4corr_o_sh
@@ -539,10 +544,11 @@ contains
             sk  = sin(arg)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                sh_comp                 = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
-                self%cur_refs(h,k,ithr) = self%references(h,k,ithr) * sh_comp
+                sh_comp               = cmplx(ck * hcos(h) - sk * hsin(h), ck * hsin(h) + sk * hcos(h))
+                self%cur_ptcls(h,k,i) = self%particles(h,k,i) * sh_comp
             end do
         end do
+        self%cur_refs(:,:,ithr) = self%references(:,:,ithr)
         if( self%with_ctf ) self%cur_refs(:,:,ithr) = self%cur_refs(:,:,ithr) * self%ctfmats(:,:,i)
     end subroutine prep_ref4corr_sh
 
@@ -645,7 +651,7 @@ contains
                 ! retrieve reference component
                 ref_comp = self%cur_refs(h,k,ithr)
                 ! retrieve reference component
-                ptcl_comp = self%particles(h,k,i)
+                ptcl_comp = self%cur_ptcls(h,k,i)
                 ! update cross product
                 cc(1) = cc(1) + real(ref_comp  * conjg(ptcl_comp))
                 ! update normalization terms
@@ -672,7 +678,7 @@ contains
                 ! retrieve reference component
                 ref_comp  = self%cur_refs(h,k,ithr)
                 ! retrieve reference component
-                ptcl_comp = self%particles(h,k,i)
+                ptcl_comp = self%cur_ptcls(h,k,i)
                 ref_ptcl  = ref_comp * conjg(ptcl_comp)
                 ! update cross product
                 cc(1) = cc(1) + realpart(ref_ptcl)
@@ -680,7 +686,7 @@ contains
                 cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
                 cc(3) = cc(3) + real(ptcl_comp * conjg(ptcl_comp))
                 ! gradient
-                ref_ptcl = (0.d0, 1.d0) * ref_ptcl * self%shconst
+                ref_ptcl = imagpart(ref_ptcl) * self%shconst
                 grad(1)  = grad(1) + real(ref_ptcl) * h
                 grad(2)  = grad(2) + real(ref_ptcl) * k
             end do
@@ -703,7 +709,7 @@ contains
         do k = self%lims(2,1),self%lims(2,2)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%particles(h,k,i)
+                ptcl_comp = self%cur_ptcls(h,k,i)
                 diff      = self%cur_refs(h,k,ithr) - ptcl_comp
                 euclid    = euclid + real(diff      * conjg(diff))
                 denom     = denom  + real(ptcl_comp * conjg(ptcl_comp))
@@ -727,12 +733,12 @@ contains
         do k = self%lims(2,1),self%lims(2,2)
             do h = self%lims(1,1),self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%particles(h,k,i)
+                ptcl_comp = self%cur_ptcls(h,k,i)
                 ref_comp  = self%cur_refs(h,k,ithr)
                 diff      = ref_comp - ptcl_comp
                 euclid    = euclid + real(diff      * conjg(diff)     , dp)
                 denom     = denom  + real(ptcl_comp * conjg(ptcl_comp), dp)
-                diff      = 2 * self%shconst * (0.d0, 1.d0) * ref_comp * conjg(diff)
+                diff      = 2 * self%shconst * imagpart(ptcl_comp * conjg(diff))
                 grad_8(1) = grad_8(1) + real(diff, dp) * real(h, dp)
                 grad_8(2) = grad_8(2) + real(diff, dp) * real(k, dp)
             end do
@@ -856,7 +862,7 @@ contains
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 w = sqrt(r / (2. * self%sigma2_noise(r, iptcl)) / self%pxls_p_shell(r))
                 self%cur_refs( h,k,ithr) = w*self%cur_refs( h,k,ithr)
-                self%particles(h,k,i)    = w*self%particles(h,k,i)
+                self%cur_ptcls(h,k,i)    = w*self%cur_ptcls(h,k,i)
             enddo
         enddo
     end subroutine weight_ref_ptcl
@@ -874,7 +880,7 @@ contains
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 w = sqrt(r / (2. * self%sigma2_noise(r, iptcl)) / self%pxls_p_shell(r))
                 self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
-                self%particles(h,k,i)    = self%particles(h,k,i)/w
+                self%cur_ptcls(h,k,i)    = self%cur_ptcls(h,k,i)/w
             enddo
         enddo
     end subroutine deweight_ref_ptcl
@@ -890,6 +896,7 @@ contains
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
             if( allocated(self%particles)    ) deallocate(self%particles)
+            if( allocated(self%cur_ptcls)    ) deallocate(self%cur_ptcls)
             if( allocated(self%references)   ) deallocate(self%references)
             if( allocated(self%cur_refs)     ) deallocate(self%cur_refs)
             if( allocated(self%resmsk)       ) deallocate(self%resmsk)
