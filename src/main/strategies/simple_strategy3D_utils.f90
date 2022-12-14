@@ -98,7 +98,7 @@ contains
         call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
         pw = 1.0
-        if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
+        if( s%l_ptclw ) call calc_ori_weight(s, ref, nrefs_eval, pw)
         call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
@@ -106,9 +106,9 @@ contains
         call o_new%kill
     end subroutine extract_peak_ori
 
-    subroutine calc_ori_weight( s, ref, pw )
+    subroutine calc_ori_weight( s, ref, nrefs_eval, pw )
         class(strategy3D_srch), intent(in)  :: s
-        integer,                intent(in)  :: ref
+        integer,                intent(in)  :: ref, nrefs_eval
         real,                   intent(out) :: pw
         real     :: sumw, diff2, max_diff2, best_score, sum_score
         integer  :: iref, npix
@@ -134,9 +134,7 @@ contains
                 endif
             enddo
             ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-            ! if sum_score -> best_score, pw -> 1
-            ! if sum_score >> best_score, pw -> 0
-            pw = max(0.,min(1.,best_score/sum_score))
+            pw = (best_score * real(nrefs_eval)) / sum_score
         endif
     end subroutine calc_ori_weight
 

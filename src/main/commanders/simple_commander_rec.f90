@@ -151,7 +151,7 @@ contains
             ! particle weights
             select case(trim(params%ptclw))
                 case('yes')
-                ! weights are set at search time, so nothing to do here.
+                    ! weights are set at search time, so nothing to do here.
                 case DEFAULT
                     call build%spproj_field%calc_hard_weights(params%frac)
             end select
