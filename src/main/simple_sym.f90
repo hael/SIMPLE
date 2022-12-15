@@ -586,11 +586,7 @@ contains
                     dists(i) = min(dists(i), osym.euldist.o)
                 end do
             end do
-            where(dists <= euldist_thres_rad)
-                lnns = .true.
-            elsewhere
-                lnns = .false.
-            endwhere
+            where(dists <= euldist_thres_rad) lnns = .true.
         endif
         call oasym%kill
         call osym%kill

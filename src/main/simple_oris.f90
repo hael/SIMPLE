@@ -2684,7 +2684,7 @@ contains
         endif
     end subroutine discretize
 
-    !>  \brief  to identify the indices of the k nearest projection neighbors (excluding self)
+    !>  \brief  to identify the indices of the k nearest projection neighbors (including self)
     subroutine nearest_proj_neighbors_1( self, k, nnmat )
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
@@ -2694,12 +2694,8 @@ contains
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
         do i=1,self%n
             do j=1,self%n
-                inds(j) = j
-                if( i == j )then
-                    dists(j) = -huge(x)
-                else
-                    dists(j) = self%o(j).euldist.self%o(i)
-                endif
+                inds(j)  = j
+                dists(j) = self%o(j).euldist.self%o(i)
             end do
             call hpsort(dists, inds)
             do j=1,k
@@ -2728,7 +2724,7 @@ contains
 
     subroutine detect_peaks( self, nnmat, corrs, peaks )
         class(oris), intent(in)    :: self
-        integer,     intent(in)    :: nnmat(4,self%n) ! 3NN, 4 because "self" is included
+        integer,     intent(in)    :: nnmat(4,self%n) ! 4 because "self" is included
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real, allocatable :: corrs_packed(:)

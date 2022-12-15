@@ -82,7 +82,7 @@ contains
                 s3D%srch_order = 0
         end select
         ! precalculate neaarest neighbour matrix
-        call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat)
+        call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays

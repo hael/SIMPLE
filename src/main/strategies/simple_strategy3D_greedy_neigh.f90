@@ -48,6 +48,7 @@ contains
             call self%s%prep4srch
             ! initialize, ctd
             call build_glob%spproj_field%get_ori(self%s%iptcl, o)
+            lnns = .false.
             call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
             self%s%nnn = count(lnns)
             ! search
