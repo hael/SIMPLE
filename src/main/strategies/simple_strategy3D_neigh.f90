@@ -50,6 +50,7 @@ contains
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             call build_glob%spproj_field%get_ori(self%s%iptcl, o)
+            lnns = .false.
             call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
             self%s%nnn = count(lnns)
             minnrefs   = ceiling(real(self%s%nnn) * NEIGH_MINFRAC)
