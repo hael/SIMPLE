@@ -109,8 +109,9 @@ type :: ori
     procedure          :: mirror3d
     procedure          :: mirror2d
     procedure          :: transp
-    procedure, private :: geodesic_dist
-    generic            :: operator(.geod.)   => geodesic_dist
+    procedure          :: geodesic_dist_frobdev
+     generic           :: operator(.geod.)        => geodesic_dist_frobdev
+    procedure          :: geodesic_dist_trace
     procedure, private :: euldist
     procedure, private :: inplrotdist
     procedure          :: compose                 => compeuler
@@ -1309,9 +1310,9 @@ contains
     !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
     !!          129, 883--886 (2007)
     !! \param self1,self2 ori class type rotational matrices
-    pure real function geodesic_dist( self1, self2 )
+    pure function geodesic_dist_frobdev( self1, self2 ) result(angle)
         class(ori), intent(in) :: self1, self2
-        real :: Imat(3,3), sumsq, diffmat(3,3)
+        real :: Imat(3,3), sumsq, diffmat(3,3), angle
         real :: euls1(3), euls2(3), rmat1(3,3), rmat2(3,3)
         Imat      = 0.
         Imat(1,1) = 1.
@@ -1324,11 +1325,28 @@ contains
         diffmat = Imat - matmul(rmat1, transpose(rmat2))
         sumsq   = sum(diffmat * diffmat)
         if( sumsq > 1e-6 )then
-            geodesic_dist = sqrt(sumsq)
+            angle = sqrt(sumsq)
         else
-            geodesic_dist = 0.
+            angle = 0.
         endif
-    end function geodesic_dist
+    end function geodesic_dist_frobdev
+
+    ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
+    pure function geodesic_dist_trace( self1, self2 ) result(angle)
+        class(ori), intent(in) :: self1, self2
+        real :: angle, mat_diff(3, 3), arg_tr, mat1(3,3), mat2(3,3), euls1(3), euls2(3)
+        euls1 = self1%get_euler()
+        euls2 = self2%get_euler()
+        mat1  = euler2m(euls1)
+        mat2  = euler2m(euls2)
+        mat_diff = matmul(mat1, transpose(mat2))
+        arg_tr   = (trace(mat_diff) - 1.)/2.
+        if( arg_tr < -1 .or. arg_tr > 1)then
+            angle = huge(arg_tr)
+        else
+            angle = acos(arg_tr)
+        endif
+    end function geodesic_dist_trace
 
     ! CLASSIC DISTANCE METRICS
 
@@ -1384,7 +1402,153 @@ contains
         endif
     end subroutine kill
 
-    ! PRIVATE STUFF
+    ! finding the "average" rotation matrix using the optimization approach
+    !!!!!!!!!!!!!! for Cong to move to oris
+    !!!!!!!!!!!!!! rename geod_opt_rotmat
+    !!!!!!!!!!!!!! option to use either frobdev or trace
+    ! subroutine avg_rotmat( mats, mat_avg, weights)
+    !     use nlopt_wrap, only: nlopt_opt, nlopt_func, create, destroy
+    !     use nlopt_enum, only: algorithm_from_string
+    !     real, intent(in)    :: mats(:,:,:)
+    !     real, intent(inout) :: mat_avg(3,3)
+    !     real, intent(in)    :: weights(:)
+    !     integer,  parameter :: wp  = kind(0.0d0)
+    !     real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
+    !     type(nlopt_opt)     :: opt
+    !     integer  :: N, stat, initial_ind, i, j
+    !     real(wp) :: x(9), lowest_cost, lims(9, 2)
+    !     real     :: initial_best, total
+    !     N       = size(mats, 3)
+    !     mat_avg =  sum(mats, 3)/N
+    !     ! bounds
+    !     lims(1:3,1) = -1
+    !     lims(1:3,2) = +1
+    !     lims(4:5,1) = -2
+    !     lims(4:5,2) = +2
+    !     lims(  6,1) = -1
+    !     lims(  6,2) = +1
+    !     lims(7:8,1) = -2
+    !     lims(7:8,2) = +2
+    !     lims(  9,1) = -1
+    !     lims(  9,2) = +1
+    !     call create(opt, algorithm_from_string('LN_BOBYQA'), 9)
+    !     call opt%set_lower_bounds(lims(:,1))
+    !     call opt%set_upper_bounds(lims(:,2))
+    !     ! optimization
+    !     associate(f => nlopt_func(nloptf_myfunc), fc => nlopt_func(nloptf_ineq_constraint))
+    !         call opt%set_min_objective(f)
+    !         call opt%add_inequality_constraint(fc, TOL)
+    !         call opt%set_ftol_rel(TOL)
+    !         x = [mat_avg]
+    !         call opt%optimize(x, lowest_cost, stat)
+    !     end associate
+    !     mat_avg = reshape(x, (/3, 3/))
+    !     call destroy(opt)
+    ! contains
+    !     function nloptf_myfunc(x_in, gradient, func_data) result(f)
+    !         real(wp), intent(in)              :: x_in(:)
+    !         real(wp), intent(inout), optional :: gradient(:)
+    !         class(*), intent(in),    optional :: func_data
+    !         real(wp) :: f
+    !         integer  :: i
+    !         real     :: x_mat(3,3)
+    !         x_mat = real(reshape(x_in, (/3, 3/)))
+    !         f     = 0.
+    !         do i = 1, N
+    !             f = f + weights(i)*rot_angle(x_mat, mats(:,:,i))
+    !         enddo
+    !     end function nloptf_myfunc
+
+    !     function nloptf_ineq_constraint(x, gradient, func_data) result(f)
+    !         real(wp), intent(in)              :: x(:)
+    !         real(wp), intent(inout), optional :: gradient(:)
+    !         class(*), intent(in),    optional :: func_data
+    !         real(wp) :: f
+    !         ! TODO: optimal orientation + shifts that improves the cost value
+    !     end function nloptf_ineq_constraint
+    ! end subroutine avg_rotmat
+
+    ! finding the "average" rotation matrix + shift using the optimization approach
+    !!!!!!!!!!!!! Cong to veryify consistent with make_transfmat + see above
+    ! subroutine avg_rotmat_sh( mats, shifts, mat_avg, sh_avg, weights)
+    !     use nlopt_wrap, only: nlopt_opt, nlopt_func, create, destroy
+    !     use nlopt_enum, only: algorithm_from_string
+    !     real, intent(in)    :: mats(:,:,:)
+    !     real, intent(in)    :: shifts(:,:)
+    !     real, intent(inout) :: mat_avg(3,3)
+    !     real, intent(inout) :: sh_avg(2)
+    !     real, intent(in)    :: weights(:)
+    !     integer,  parameter :: wp  = kind(0.0d0)
+    !     real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
+    !     type(nlopt_opt)     :: opt
+    !     integer  :: N, stat, initial_ind, i, j
+    !     real(wp) :: x(11), lowest_cost, lims(11, 2)
+    !     real     :: initial_best, total
+    !     N       = size(mats, 3)
+    !     mat_avg =  sum(mats, 3)/N
+    !     sh_avg  = sum(shifts, 2)/N
+    !     ! bounds
+    !     lims(1:3,1) = -1
+    !     lims(1:3,2) = +1
+    !     lims(4:5,1) = -2
+    !     lims(4:5,2) = +2
+    !     lims(  6,1) = -1
+    !     lims(  6,2) = +1
+    !     lims(7:8,1) = -2
+    !     lims(7:8,2) = +2
+    !     lims(  9,1) = -1
+    !     lims(  9,2) = +1
+    !     call create(opt, algorithm_from_string('LN_BOBYQA'), 11)
+    !     call opt%set_lower_bounds(lims(:,1))
+    !     call opt%set_upper_bounds(lims(:,2))
+    !     ! optimization
+    !     associate(f => nlopt_func(nloptf_myfunc), fc => nlopt_func(nloptf_ineq_constraint))
+    !         call opt%set_min_objective(f)
+    !         call opt%add_inequality_constraint(fc, TOL)
+    !         call opt%set_ftol_rel(TOL)
+    !         x(1:9)   = [mat_avg]
+    !         x(10:11) = [sh_avg]
+    !         call opt%optimize(x, lowest_cost, stat)
+    !     end associate
+    !     mat_avg = reshape(x(1:9), (/3, 3/))
+    !     sh_avg  = x(10:11)
+    !     call destroy(opt)
+    ! contains
+    !     function nloptf_myfunc(x_in, gradient, func_data) result(f)
+    !         real(wp), intent(in)              :: x_in(:)
+    !         real(wp), intent(inout), optional :: gradient(:)
+    !         class(*), intent(in),    optional :: func_data
+    !         real(wp) :: f
+    !         integer  :: i
+    !         real     :: x_mat(3,3), sh(2)
+    !         x_mat = real(reshape(x_in(1:9), (/3, 3/)))
+    !         sh    = x_in(10:11)
+    !         f     = 0.
+    !         do i = 1, N
+    !             f = f + weights(i)*rot_sh_angle(x_mat, sh, mats(:,:,i), shifts(:,i))
+    !         enddo
+    !     end function nloptf_myfunc
+
+    !     function nloptf_ineq_constraint(x, gradient, func_data) result(f)
+    !         real(wp), intent(in)              :: x(:)
+    !         real(wp), intent(inout), optional :: gradient(:)
+    !         class(*), intent(in),    optional :: func_data
+    !         real(wp) :: f
+    !         ! TODO: optimal orientation + shifts that improves the cost value
+    !     end function nloptf_ineq_constraint
+    ! end subroutine avg_rotmat_sh
+
+    ! computing the angle of the difference rotation + shift
+    ! function rot_sh_angle( mat1, sh1, mat2, sh2 ) result(angle)
+    !     real, intent(in) :: mat1(3,3), mat2(3,3)
+    !     real, intent(in) :: sh1(2), sh2(2)
+    !     real :: angle, sh1_mat(3, 3), sh2_mat(3, 3)
+    !     sh1_mat = reshape([1., 0., sh1(1), 0., 1., sh1(2), 0., 0., 1.], (/3, 3/))
+    !     sh2_mat = reshape([1., 0., sh2(1), 0., 1., sh2(2), 0., 0., 1.], (/3, 3/))
+    !     sh1_mat = matmul(mat1, sh1_mat)
+    !     sh2_mat = matmul(mat2, sh2_mat)
+    !     angle   = rot_angle(sh1_mat, sh2_mat)
+    ! end function rot_sh_angle
 
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
     pure function euler2m( euls ) result( r )

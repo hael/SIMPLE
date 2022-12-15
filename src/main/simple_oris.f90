@@ -188,9 +188,7 @@ type :: oris
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1
     procedure, private :: nearest_proj_neighbors_2
-    procedure, private :: nearest_proj_neighbors_3
-    procedure, private :: nearest_proj_neighbors_4
-    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3, nearest_proj_neighbors_4
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
     procedure          :: detect_peaks
     procedure          :: min_euldist
     procedure          :: find_angres
@@ -2686,7 +2684,7 @@ contains
         endif
     end subroutine discretize
 
-    !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
+    !>  \brief  to identify the indices of the k nearest projection neighbors (excluding self)
     subroutine nearest_proj_neighbors_1( self, k, nnmat )
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
@@ -2710,30 +2708,11 @@ contains
         end do
     end subroutine nearest_proj_neighbors_1
 
-    !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
-    !!          self is search space with finer angular resolution
-    subroutine nearest_proj_neighbors_2( self, o_in, k, lnns )
-        class(oris), intent(inout) :: self
-        class(ori),  intent(in)    :: o_in
-        integer,     intent(in)    :: k
-        logical,     intent(inout) :: lnns(self%n)
-        real      :: dists(self%n)
-        integer   :: inds(self%n), i, j
-        type(ori) :: o
-        lnns  = .false.
-        do i=1,self%n
-            inds(i) = i
-            call self%get_ori(i, o)
-            dists(i) = o.euldist.o_in
-        end do
-        call hpsort(dists, inds)
-        do j=1,k
-            lnns(inds(j)) = .true.
-        end do
-    end subroutine nearest_proj_neighbors_2
-
     !>  \brief  to identify the nearest projection neighbors based on euldist threshold
-    subroutine nearest_proj_neighbors_3( self, o, euldist_thres, lnns )
+    !! the policy here is based solely on angular distance and initialization of lnns is
+    !! deferred to the calling unit, so that we can add additional neighborhoods on top of
+    !! of each other to create more complex search spaces
+    subroutine nearest_proj_neighbors_2( self, o, euldist_thres, lnns )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o
         real,        intent(in)    :: euldist_thres ! in degrees
@@ -2741,39 +2720,11 @@ contains
         real      :: dists(self%n), euldist_thres_rad
         integer   :: inds(self%n), j
         euldist_thres_rad = deg2rad(euldist_thres)
-        lnns  = .false.
         do j=1,self%n
-            inds(j)  = j
             dists(j) = self%o(j).euldist.o
         end do
-        call hpsort(dists, inds)
-        do j=1,self%n
-            if( dists(j) <= euldist_thres_rad ) lnns(inds(j)) = .true.
-        end do
-    end subroutine nearest_proj_neighbors_3
-
-    !>  \brief  to identify the nearest projection neighbors based on nearest neigh matrix and euldist threshold
-    subroutine nearest_proj_neighbors_4( self, os_cls, icls, nnn, nnmat, euldist_thres, lnns )
-        class(oris), intent(inout) :: self
-        class(oris), intent(in)    :: os_cls
-        integer,     intent(in)    :: icls, nnn, nnmat(os_cls%n,nnn)
-        real,        intent(in)    :: euldist_thres ! in degrees
-        logical,     intent(inout) :: lnns(self%n)
-        real      :: dists(self%n), euldist_thres_rad
-        integer   :: inds(self%n), j, k
-        euldist_thres_rad = deg2rad(euldist_thres)
-        lnns  = .false.
-        do k=1,nnn
-            do j=1,self%n
-                inds(j)  = j
-                dists(j) = self%o(j).euldist.os_cls%o(nnmat(icls,k))
-            end do
-            call hpsort(dists, inds)
-            do j=1,self%n
-                if( dists(j) <= euldist_thres_rad ) lnns(inds(j)) = .true.
-            end do
-        end do
-    end subroutine nearest_proj_neighbors_4
+        where( dists <= euldist_thres_rad ) lnns = .true.
+    end subroutine nearest_proj_neighbors_2
 
     subroutine detect_peaks( self, nnmat, corrs, peaks )
         class(oris), intent(in)    :: self

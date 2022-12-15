@@ -558,6 +558,9 @@ contains
     end function find_closest_proj
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
+    !! the policy here is based solely on angular distance and initialization of lnns is
+    !! deferred to the calling unit, so that we can add additional neighborhoods on top of
+    !! of each other to create more complex search spaces
     subroutine nearest_proj_neighbors( self, os_asym_unit, o, euldist_thres, lnns )
         class(sym), intent(inout) :: self
         type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
