@@ -1351,8 +1351,14 @@ contains
         ! refine flag dependent things
         ! -- neigh defaults
         if( str_has_substr(self%refine, 'neigh') )then
-            if( .not. cline%defined('nspace')    ) self%nspace = 5000
-            if( .not. cline%defined('athres')    ) self%athres = 15.
+            if( .not. cline%defined('nspace') ) self%nspace = 5000
+            if( .not. cline%defined('athres') ) self%athres = 15.
+        endif
+        ! -- check that refinement is greedy if particle weights are used
+        if( trim(self%ptclw).eq.'yes' )then
+            if( .not. str_has_substr(self%refine, 'greedy') )then
+                THROW_HARD('ML-like particle weighting (ptclw=yes) only supported for greedy refinement modes')
+            endif
         endif
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
