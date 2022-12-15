@@ -1,5 +1,7 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_builder
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_image,            only: image
@@ -23,7 +25,7 @@ type :: builder
     ! GENERAL TOOLBOX
     type(sp_project)                    :: spproj                 !< centralised single-particle project meta-data handler
     class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
-    type(oris)                          :: eulspace               !< discrete spaces(red for reduced)
+    type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
     type(polarizer)                     :: img_match              !< polarizer for particles
@@ -34,6 +36,7 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
+    integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
@@ -226,8 +229,10 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d, wthreads
+        type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
-        integer     :: lfny, cyc_lims(3,2)
+        type(ori)   :: o
+        integer     :: lfny, cyc_lims(3,2), i
         logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
@@ -248,6 +253,18 @@ contains
         if( ddo3d )then
             call self%eulspace%new(params%nspace, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace)
+            if( params%l_neigh )then
+                call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
+                call self%pgrpsyms%build_refspiral(eulspace_sub)
+                allocate(self%subspace_inds(params%nspace_sub), source=0)
+                !$omp parallel do default(shared) proc_bind(close) private(i,o)
+                do i = 1, params%nspace_sub
+                    call eulspace_sub%get_ori(i, o)
+                    self%subspace_inds(i) = self%pgrpsyms%find_closest_proj(self%eulspace, o)
+                end do
+                !$omp end parallel do
+                call eulspace_sub%kill
+            endif
         endif
         if( params%box > 0 )then
             ! build image objects
@@ -306,9 +323,10 @@ contains
             call self%vol_odd%kill_expanded
             call self%vol_odd%kill
             call self%vol2%kill
-            if( allocated(self%fsc)  )     deallocate(self%fsc)
-            if( allocated(self%lmsk) )     deallocate(self%lmsk)
-            if( allocated(self%l_resmsk) ) deallocate(self%l_resmsk)
+            if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
+            if( allocated(self%fsc)           ) deallocate(self%fsc)
+            if( allocated(self%lmsk)          ) deallocate(self%lmsk)
+            if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox

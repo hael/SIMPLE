@@ -243,6 +243,7 @@ type :: parameters
     integer :: nsample_trs=0       !< # continuous translations (2D origin shifts) to sample during stochastic search
     integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
+    integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
@@ -279,7 +280,7 @@ type :: parameters
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
-    real    :: athres=15.           !< angular threshold(in degrees)
+    real    :: athres=10.          !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
@@ -390,6 +391,7 @@ type :: parameters
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
     logical :: l_needs_sigma  = .false.
+    logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_sigma_glob   = .false.
@@ -624,6 +626,7 @@ contains
         call check_iarg('nsample_neigh',  self%nsample_neigh)
         call check_iarg('nsample_trs',    self%nsample_trs)
         call check_iarg('nspace',         self%nspace)
+        call check_iarg('nspace_sub',     self%nspace_sub)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
@@ -1350,9 +1353,11 @@ contains
         end select
         ! refine flag dependent things
         ! -- neigh defaults
+        self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
-            if( .not. cline%defined('nspace') ) self%nspace = 5000
-            if( .not. cline%defined('athres') ) self%athres = 15.
+            if( .not. cline%defined('nspace') ) self%nspace = 20000
+            if( .not. cline%defined('athres') ) self%athres = 10.
+            self%l_neigh = .true.
         endif
         ! -- check that refinement is greedy if particle weights are used
         if( trim(self%ptclw).eq.'yes' )then
