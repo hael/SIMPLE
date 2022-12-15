@@ -29,11 +29,13 @@ type strategy3D_srch
     integer                 :: iptcl         = 0         !< global particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                 :: nrefs_sub     = 0         !< total # references (nstates*nprojs), subspace
     integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample uniformly
     integer                 :: nsample_neigh = 0         !< # of continuous 3D rotational orientations to sample Gaussian
     integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample Gaussian
     integer                 :: nstates       = 0         !< # states
     integer                 :: nprojs        = 0         !< # projections
+    integer                 :: nprojs_sub    = 0         !< # projections, subspace
     integer                 :: nrots         = 0         !< # in-plane rotations
     integer                 :: nsym          = 0         !< symmetry order
     integer                 :: nnn           = 0         !< # nearest neighbors
@@ -45,7 +47,7 @@ type strategy3D_srch
     integer                 :: class         = 0         !< 2D class index
     integer                 :: prev_ref      = 0         !< previous reference index
     integer                 :: prev_proj     = 0         !< previous projection direction index
-    real                    :: athres        = 15.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
+    real                    :: athres        = 10.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
     real                    :: prev_corr     = 1.        !< previous best correlation
     real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
@@ -108,7 +110,9 @@ contains
         self%iptcl         = spec%iptcl
         self%nstates       = params_glob%nstates
         self%nprojs        = params_glob%nspace
-        self%nrefs         = self%nprojs*self%nstates
+        self%nprojs_sub    = params_glob%nspace_sub
+        self%nrefs         = self%nprojs     * self%nstates
+        self%nrefs_sub     = self%nprojs_sub * self%nstates
         self%nsample       = params_glob%nsample
         self%nsample_neigh = params_glob%nsample_neigh
         self%nsample_trs   = params_glob%nsample_trs
