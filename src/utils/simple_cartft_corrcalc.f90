@@ -424,7 +424,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         integer :: ithr
         logical :: iseven
         iseven = self%ptcl_iseven(iptcl)
@@ -465,7 +465,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
-        type(projector), pointer :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         real    :: corr
         logical :: iseven
         integer :: i
@@ -485,7 +485,7 @@ contains
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         real,                   intent(in)    :: shvec(2)
-        type(projector),        pointer       :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         logical :: iseven
         integer :: ithr
         real    :: corr
@@ -510,7 +510,7 @@ contains
         real,                   intent(in)    :: trs
         real,                   intent(inout) :: shvec(2), corr_best
         integer,                intent(inout) :: nevals
-        type(projector),        pointer       :: vol_ptr => null()
+        type(projector),        pointer       :: vol_ptr
         logical :: iseven
         integer :: ithr, isample
         real    :: sigma, xshift, yshift, xavg, yavg, corr
