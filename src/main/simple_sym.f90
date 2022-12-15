@@ -43,6 +43,7 @@ type sym
     generic            :: apply => apply_1, apply_2
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
+    procedure          :: find_closest_proj
     procedure          :: nearest_proj_neighbors
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
@@ -526,6 +527,36 @@ contains
         call o%kill
     end subroutine apply_sym_with_shift
 
+    !>  \brief  to find the closest matching projection direction
+    !! KEEP THIS ROUTINE SERIAL
+    function find_closest_proj( self, os_asym_unit, o_in ) result( closest )
+        class(sym),  intent(inout) :: self
+        class(oris), intent(in)    :: os_asym_unit
+        class(ori),  intent(in)    :: o_in
+        real      :: dists(os_asym_unit%get_noris())
+        integer   :: closest, i, isym
+        type(ori) :: oasym, osym
+        if( trim(self%pgrp).eq.'c1' )then
+            closest = os_asym_unit%find_closest_proj(o_in)
+        else
+            dists = pi
+            do i=1,os_asym_unit%get_noris()
+                call os_asym_unit%get_ori(i, oasym)
+                do isym = 1, self%n
+                    if(isym == 1)then
+                        call osym%copy(oasym)
+                    else
+                        call self%apply(oasym, isym, osym)
+                    endif
+                    dists(i) = min(dists(i), osym.euldist.o_in)
+                end do
+            end do
+            closest = minloc(dists, dim=1)
+        endif
+        call oasym%kill
+        call osym%kill
+    end function find_closest_proj
+
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
     subroutine nearest_proj_neighbors( self, os_asym_unit, o, euldist_thres, lnns )
         class(sym), intent(inout) :: self
@@ -534,17 +565,15 @@ contains
         real,       intent(in)    :: euldist_thres ! in degrees
         logical,    intent(inout) :: lnns(os_asym_unit%get_noris())
         real      :: dists(os_asym_unit%get_noris()), euldist_thres_rad
-        integer   :: inds(os_asym_unit%get_noris()), i, isym
+        integer   :: i, isym
         type(ori) :: oasym, osym
         if( trim(self%pgrp).eq.'c1' )then
             call os_asym_unit%nearest_proj_neighbors(o, euldist_thres, lnns)
         else
             euldist_thres_rad = deg2rad(euldist_thres)
-            lnns  = .false.
             dists = pi
             do i=1,os_asym_unit%get_noris()
                 call os_asym_unit%get_ori(i, oasym)
-                inds(i) = i
                 do isym = 1, self%n
                     if(isym == 1)then
                         call osym%copy(oasym)
@@ -554,10 +583,11 @@ contains
                     dists(i) = min(dists(i), osym.euldist.o)
                 end do
             end do
-            call hpsort(dists, inds)
-            do i=1,os_asym_unit%get_noris()
-                if( dists(i) <= euldist_thres_rad ) lnns(inds(i)) = .true.
-            end do
+            where(dists <= euldist_thres_rad)
+                lnns = .true.
+            elsewhere
+                lnns = .false.
+            endwhere
         endif
         call oasym%kill
         call osym%kill

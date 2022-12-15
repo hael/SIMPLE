@@ -2827,11 +2827,9 @@ contains
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
         class(oris), intent(in) :: self
-        real    :: dists(self%n), res, x, nearest3(3)
+        real    :: dists(self%n), dists_max(self%n), x, nearest3(3), res
         integer :: i, j
-        res = 0.
-        !$omp parallel do default(shared) proc_bind(close)&
-        !$omp private(j,i,dists,nearest3) reduction(+:res)
+        !$omp parallel do default(shared) proc_bind(close) private(j,i,dists,nearest3) reduction(max:res)
         do j=1,self%n
             do i=1,self%n
                 if( i == j )then
@@ -2840,11 +2838,11 @@ contains
                     dists(i) = self%o(i).euldist.self%o(j)
                 endif
             end do
-            nearest3 = min3(dists)
-            res = res + sum(nearest3) / 3. ! average of three nearest neighbors
+            nearest3     = min3(dists)
+            dists_max(j) = maxval(nearest3)
         end do
         !$omp end parallel do
-        res = rad2deg(res / real(self%n))
+        res = rad2deg(maxval(dists_max))
     end function find_angres
 
     !>  \brief  to find the correlation bound in extremal search
