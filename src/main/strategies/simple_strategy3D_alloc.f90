@@ -10,18 +10,20 @@ private
 
 type strategy3D_alloc
     ! global parameters
-    integer,        allocatable  :: proj_space_nnmat(:,:)   !< 3 nearest neighbours per reference + self
+    integer,        allocatable :: proj_space_nnmat(:,:)    !< 3 nearest neighbours per reference + self
     ! per-ptcl/ref allocation
     integer,        allocatable :: proj_space_state(:)      !< states
     integer,        allocatable :: proj_space_proj(:)       !< projection directions (1 state assumed)
     logical,        allocatable :: state_exists(:)          !< indicates state existence
     ! per thread allocation
     type(ran_tabu), allocatable :: rts(:)                   !< stochastic search order generators
+    type(ran_tabu), allocatable :: rts_sub(:)               !< stochastic search order generators, subspace
     real,           allocatable :: proj_space_euls(:,:,:)   !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:)  !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:)    !< reference vs. particle correlations
     integer,        allocatable :: proj_space_inplinds(:,:) !< in-plane indices
     integer,        allocatable :: srch_order(:,:)          !< stochastic search index
+    integer,        allocatable :: srch_order_sub(:,:)      !< stochastic search index, subspace
     logical,        allocatable :: proj_space_mask(:,:)     !< reference vs. particle correlations mask
 end type strategy3D_alloc
 
@@ -33,12 +35,13 @@ contains
 
     subroutine prep_strategy3D( ptcl_mask )
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer :: istate, iproj, ithr, cnt, nrefs
+        integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
         ! clean all class arrays & types
         call clean_strategy3D()
         ! parameters
-        nrefs  = params_glob%nspace * params_glob%nstates
+        nrefs     = params_glob%nspace     * params_glob%nstates
+        nrefs_sub = params_glob%nspace_sub * params_glob%nstates
         ! shared-memory arrays
         allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
             &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
@@ -74,12 +77,15 @@ contains
             case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
-                allocate(s3D%srch_order(nthr_glob,nrefs), s3D%rts(nthr_glob))
+                allocate(s3D%srch_order(nthr_glob,nrefs), s3D%srch_order_sub(nthr_glob,nrefs_sub),&
+                &s3D%rts(nthr_glob), s3D%rts_sub(nthr_glob))
                 do ithr=1,nthr_glob
-                    s3D%rts(ithr) = ran_tabu(nrefs)
+                    s3D%rts(ithr)     = ran_tabu(nrefs)
+                    s3D%rts_sub(ithr) = ran_tabu(nrefs_sub)
                 end do
                 srch_order_allocated = .true.
-                s3D%srch_order = 0
+                s3D%srch_order       = 0
+                s3D%srch_order_sub   = 0
         end select
         ! precalculate neaarest neighbour matrix
         call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
@@ -89,32 +95,37 @@ contains
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in)    :: ithr
         real(sp)               :: areal
-        s3D%proj_space_euls(:,:,ithr)                   = master_proj_space_euls
-        s3D%proj_space_corrs(ithr,:)                    = -HUGE(areal)
-        s3D%proj_space_mask(:,ithr)                     = .false.
-        s3D%proj_space_shift(:,:,ithr)                  = 0.
-        s3D%proj_space_inplinds(ithr,:)                 = 0
-        if(srch_order_allocated) s3D%srch_order(ithr,:) = 0
+        s3D%proj_space_euls(:,:,ithr)   = master_proj_space_euls
+        s3D%proj_space_corrs(ithr,:)    = -HUGE(areal)
+        s3D%proj_space_mask(:,ithr)     = .false.
+        s3D%proj_space_shift(:,:,ithr)  = 0.
+        s3D%proj_space_inplinds(ithr,:) = 0
+        if(srch_order_allocated)then
+            s3D%srch_order(ithr,:)     = 0
+            s3D%srch_order_sub(ithr,:) = 0
+        endif
     end subroutine prep_strategy3D_thread
 
     subroutine clean_strategy3D
         integer :: ithr
-        if( allocated(master_proj_space_euls)     ) deallocate(master_proj_space_euls)
-        if( allocated(s3D%state_exists)           ) deallocate(s3D%state_exists)
-        if( allocated(s3D%proj_space_state)       ) deallocate(s3D%proj_space_state)
-        if( allocated(s3D%proj_space_proj)        ) deallocate(s3D%proj_space_proj)
-        if( allocated(s3D%srch_order)             ) deallocate(s3D%srch_order)
-        if( allocated(s3D%proj_space_euls)        ) deallocate(s3D%proj_space_euls)
-        if( allocated(s3D%proj_space_shift)       ) deallocate(s3D%proj_space_shift)
-        if( allocated(s3D%proj_space_corrs)       ) deallocate(s3D%proj_space_corrs)
-        if( allocated(s3D%proj_space_mask)        ) deallocate(s3D%proj_space_mask)
-        if( allocated(s3D%proj_space_inplinds)    ) deallocate(s3D%proj_space_inplinds)
-        if( allocated(s3D%proj_space_nnmat)       ) deallocate(s3D%proj_space_nnmat)
+        if( allocated(master_proj_space_euls)  ) deallocate(master_proj_space_euls)
+        if( allocated(s3D%state_exists)        ) deallocate(s3D%state_exists)
+        if( allocated(s3D%proj_space_state)    ) deallocate(s3D%proj_space_state)
+        if( allocated(s3D%proj_space_proj)     ) deallocate(s3D%proj_space_proj)
+        if( allocated(s3D%srch_order)          ) deallocate(s3D%srch_order)
+        if( allocated(s3D%srch_order_sub)      ) deallocate(s3D%srch_order_sub)
+        if( allocated(s3D%proj_space_euls)     ) deallocate(s3D%proj_space_euls)
+        if( allocated(s3D%proj_space_shift)    ) deallocate(s3D%proj_space_shift)
+        if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
+        if( allocated(s3D%proj_space_mask)     ) deallocate(s3D%proj_space_mask)
+        if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
+        if( allocated(s3D%proj_space_nnmat)    ) deallocate(s3D%proj_space_nnmat)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill
+                call s3D%rts_sub(ithr)%kill
             enddo
-            deallocate(s3D%rts)
+            deallocate(s3D%rts, s3D%rts_sub)
         endif
         srch_order_allocated = .false.
     end subroutine clean_strategy3D

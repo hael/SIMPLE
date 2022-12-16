@@ -122,7 +122,7 @@ contains
         self%ntrs_eval     = 0
         self%nsym          = build_glob%pgrpsyms%get_nsym()
         self%doshift       = params_glob%l_doshift
-        self%l_neigh       = str_has_substr(params_glob%refine, 'neigh')
+        self%l_neigh       = params_glob%l_neigh
         self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
         self%l_ptclw       = trim(params_glob%ptclw).eq.'yes'
         lims(:,1)          = -params_glob%trs
@@ -146,21 +146,39 @@ contains
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o_prev
-        real      :: corrs(self%nrots), corr, alpha
+        real      :: corrs(self%nrots), corr
+        integer   :: tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
         ! previous parameters
-        call build_glob%spproj_field%get_ori(self%iptcl, o_prev)            ! previous ori
-        self%prev_state = o_prev%get_state()                                ! state index
-        self%class      = o_prev%get_class()                                ! 2D class index
-        self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
-        self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
-        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)     ! previous projection direction
+        call build_glob%spproj_field%get_ori(self%iptcl, o_prev)           ! previous ori
+        self%prev_state = o_prev%get_state()                               ! state index
+        self%class      = o_prev%get_class()                               ! 2D class index
+        self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())        ! in-plane angle index
+        self%prev_shvec = o_prev%get_2Dshift()                             ! shift vector
+        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)    ! previous projection direction
+        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj ! previous reference
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
-        self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj    ! previous reference
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order
+        ! -- > full space
         call s3D%rts(self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
         call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
+        ! --> subspace
+        if( self%l_neigh )then
+            call s3D%rts_sub(self%ithr)%ne_ran_iarr(tmp_inds)
+            ! --> do the mapping
+            do iref_sub = 1, self%nrefs_sub
+                ! index for build_glob%subspace_inds needs to be a projection direction
+                prev_proj_sub = build_glob%subspace_inds(&
+                &tmp_inds(iref_sub) - (self%prev_state - 1) * params_glob%nspace_sub)
+                ! but then we need to turn it back into a reference index in the full search space
+                s3D%srch_order_sub(self%ithr,iref_sub) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
+            enddo
+            ! --> check if we have prev_ref in subspace, put last
+            if( any(s3D%srch_order_sub(self%ithr,:) == self%prev_ref ) )then
+                call put_last(self%prev_ref, s3D%srch_order_sub(self%ithr,:))
+            endif
+        endif
         ! sanity check
         if( self%prev_state > 0 )then
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
