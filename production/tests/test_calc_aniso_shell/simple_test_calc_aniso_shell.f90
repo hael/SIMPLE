@@ -15,14 +15,29 @@ program simple_test_3D_opt_filt
     type(image)                 :: simvol
     type(atoms)                 :: simatoms
     type(atoms_stats_commander) :: xatoms_stats
-    character(*), parameter     :: cc_out='sim_cc.mrc', vol_out='sim_vol.mrc', aniso_pdb='sim_aniso'
-    character(len=256)          :: pdbin, nthrChar
     real, parameter             :: smpd = 0.358
     real, allocatable           :: ellipsoids(:,:), centers(:,:), sim_rmat(:,:,:), sim_aniso(:,:,:)
-    real                        :: eigenvecs(3,3), eigenvecs_inv(3,3), u, v, w, lhs
+    real                        :: eigenvecs(3,3), eigenvecs_inv(3,3), u, v, w, lhs, fit_aniso(3,3), &
+                                    &fit_egnvals(3), fit_egnvecs(3,3), axes_error(3), angular_error(3)
     integer, parameter          :: ldim(3)=(/160,160,160/), window=30
     integer, allocatable        :: sim_imat(:,:,:)
-    integer                     :: i, j, k, cc, funit, natoms, icenter(3), errflg, nthr
+    integer                     :: i, j, k, cc, fu_fit, fu_results, natoms, icenter(3), errflg, nthr, &
+                                    & aniso_in_pdb(3,3), ifoo
+    character(len=256)          :: pdbin, nthrChar, junk1, junk2
+    character(*), parameter     :: cc_out='sim_cc.mrc', vol_out='sim_vol.mrc', aniso_pdb='sim_aniso', &
+        &fn_results='test_calc_aniso_shell_results.csv', fn_fit='aniso_bfac_field.pdb', &
+        &aniso_fmt='(a28,6i7,a10)'
+
+    character(len=*), parameter :: RESULTS_HEAD = 'INDEX'//CSV_DELIM//'EVAL_RESULT_1'//CSV_DELIM//&
+        &'EVAL_RESULT_2'//CSV_DELIM//'EVAL_RESULT_3'//CSV_DELIM//'EVAL_TRUTH_1'//CSV_DELIM//'EVAL_TRUTH_2'&
+        &//CSV_DELIM//'EVAL_TRUTH_3'//CSV_DELIM//'PCT_ERR_1'//CSV_DELIM//'PCT_ERR_2'//CSV_DELIM//'PCT_ERR_3'&
+        &//CSV_DELIM//'EVEC_RESULT_1X'//CSV_DELIM//'EVEC_RESULT_1Y'//CSV_DELIM//'EVEC_RESULT_1Z'&
+        &//CSV_DELIM//'EVEC_RESULT_2X'//CSV_DELIM//'EVEC_RESULT_2Y'//CSV_DELIM//'EVEC_RESULT_2Z'&
+        &//CSV_DELIM//'EVEC_RESULT_3X'//CSV_DELIM//'EVEC_RESULT_3Y'//CSV_DELIM//'EVEC_RESULT_3Z'&
+        &//CSV_DELIM//'EVEC_TRUTH_1X'//CSV_DELIM//'EVEC_TRUTH_1Y'//CSV_DELIM//'EVEC_TRUTH_1Z'&
+        &//CSV_DELIM//'EVEC_TRUTH_2X'//CSV_DELIM//'EVEC_TRUTH_2Y'//CSV_DELIM//'EVEC_TRUTH_2Z'&
+        &//CSV_DELIM//'EVEC_TRUTH_3X'//CSV_DELIM//'EVEC_TRUTH_3Y'//CSV_DELIM//'EVEC_TRUTH_3Z'&
+        &//CSV_DELIM//'ANGLE_ERR_1'//CSV_DELIM//'ANGLE_ERR_2'//CSV_DELIM//'ANGLE_ERR_3'
 
     if( command_argument_count() /= 2 )then
         write(logfhandle,'(a)') 'Usage: simple_test_calc_aniso_shell file.pdb nthr'
@@ -43,30 +58,30 @@ program simple_test_3D_opt_filt
     allocate(ellipsoids(natoms, 6), source=0.)
     do cc=1, 20
         ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 1.0
-        ellipsoids(cc,3) = 1.0
-        ellipsoids(cc,4) = PI/2
+        ellipsoids(cc,2) = 0.7
+        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,4) = PI/4
         ellipsoids(cc,5:6) = 0.
     end do
     do cc=21, 40
-        ellipsoids(cc,1) = 0.8
-        ellipsoids(cc,2) = 0.8
-        ellipsoids(cc,3) = 0.8
-        ellipsoids(cc,4) = 0.0
+        ellipsoids(cc,1) = 1.0
+        ellipsoids(cc,2) = 0.7
+        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,4) = PI/4
         ellipsoids(cc,5) = PI/2
-        ellipsoids(cc,6) = 0.0
+        ellipsoids(cc,6) = -PI/6
     end do
     do cc=41, 60
-        ellipsoids(cc,1) = 0.6
-        ellipsoids(cc,2) = 0.6
-        ellipsoids(cc,3) = 0.6
-        ellipsoids(cc,4) = 0.0
-        ellipsoids(cc,5) = 0.0
-        ellipsoids(cc,6) = PI/2
+        ellipsoids(cc,1) = 1.0
+        ellipsoids(cc,2) = 0.7
+        ellipsoids(cc,3) = 0.4
+        ellipsoids(cc,4) = PI/4
+        ellipsoids(cc,5) = PI/3
+        ellipsoids(cc,6) = PI/5
     end do
     do cc=61, natoms
-        ellipsoids(cc,1) = 0.4
-        ellipsoids(cc,2) = 0.4
+        ellipsoids(cc,1) = 1.0
+        ellipsoids(cc,2) = 0.7
         ellipsoids(cc,3) = 0.4
         ellipsoids(cc,4:6) = 0.
     end do
@@ -110,7 +125,7 @@ program simple_test_3D_opt_filt
     write(logfhandle,'(a)') '>>> SIMULATED VOLUME: '//vol_out
     write(logfhandle,'(a)') '>>> OUTPUT SIMULATED ANISOU PDB: '//aniso_pdb//'.pdb'
     call simatoms%writepdb_aniso(aniso_pdb, sim_aniso)
-    deallocate(ellipsoids, sim_imat, sim_rmat, sim_aniso)
+    deallocate(sim_imat, sim_rmat, sim_aniso)
 
     ! Pass to atoms stats
     write(logfhandle,'(a)') '>>> PASSING ELLIPTICAL ATOMS TO ATOMS_STATS'
@@ -122,6 +137,42 @@ program simple_test_3D_opt_filt
     call cline_atoms_stats%set('mskdiam', 40.)
     call cline_atoms_stats%set('nthr', 1.*nthr)
     call xatoms_stats%execute(cline_atoms_stats)
+
+    ! Calculate and output error
+    write(logfhandle,'(a)') '>>> CALCULATING ERROR OF ELLIPTICAL FITS'
+    call fopen(fu_fit, FILE=trim(fn_fit), STATUS='OLD', action='READ')
+    call fopen(fu_results, FILE=trim(fn_results), STATUS='REPLACE', action='WRITE')
+    aniso_in_pdb = 0
+    do cc=1, natoms
+        ! Read in aniso matrix
+        read (fu_fit, *)  ! Skip the 'ATOM' lines.
+        read (fu_fit, aniso_fmt) junk1, aniso_in_pdb(1,1), aniso_in_pdb(2,2), aniso_in_pdb(3,3),&
+            &aniso_in_pdb(1,2), aniso_in_pdb(1,3), aniso_in_pdb(2,3), junk2
+        fit_aniso = aniso_in_pdb/10000.
+        fit_aniso(2,1) = fit_aniso(1,2)
+        fit_aniso(3,1) = fit_aniso(1,3)
+        fit_aniso(3,2) = fit_aniso(2,3)
+        ! Calculate fit eigenvalues and eigenvecs
+        call jacobi(fit_aniso, 3, 3, fit_egnvals, fit_egnvecs, ifoo)
+        call eigsrt(fit_egnvals, fit_egnvecs, 3, 3)
+        fit_egnvals = sqrt(fit_egnvals) ! ANISOU format has squared aniso vals
+        ! Calculate percent error in eigenvalues and eigenvecs
+        eigenvecs = find_eigenvecs(ellipsoids(cc,4), ellipsoids(cc,5), ellipsoids(cc,6))
+        do i=1,3
+            axes_error(i) = 100. * (fit_egnvals(i) - ellipsoids(cc, i)) / ellipsoids(cc, i)
+            angular_error(i) = abs(dot_product(fit_egnvecs(:,i),eigenvecs(:,i)))
+            angular_error(i) = angular_error(i) / norm_2(fit_egnvecs(:,i)) / norm_2(eigenvecs(:,i))
+            ! Floating point arithmetic errors can cause values slightly greater than 1 to be passed to acos() 
+            angular_error(i) = acos(min(1.,angular_error(i))) * 180. / PI ! Output in degrees
+        end do
+        ! Output into results CSV file
+        call write_results(cc, fu_results, fit_egnvals, ellipsoids(cc, 1:3), axes_error, fit_egnvecs, &
+            &eigenvecs, angular_error)
+    end do
+
+    call fclose(fu_fit)
+    call fclose(fu_results)
+
 
     contains
 
@@ -160,5 +211,53 @@ program simple_test_3D_opt_filt
             end do
             eigenvecs = matmul(rotz, matmul(roty, matmul(rotx, eigenvecs)))
         end function find_eigenvecs
+
+        subroutine write_results(cc, funit, eval_result, eval_truth, eval_err, evecs_result, &
+                &evecs_truth, evecs_err)
+            integer, intent(in)     :: cc, funit
+            real, intent(in)        :: eval_result(3), eval_truth(3), eval_err(3), evecs_result(3,3), &
+                                        &evecs_truth(3,3), evecs_err(3)
+            
+            601 format(F7.3,A2)
+            602 format(F7.3)
+
+            write(funit,601,advance='no') real(cc),                 CSV_DELIM ! INDEX
+            ! Eigenvalues measured by atoms_stats
+            write(funit,601,advance='no') eval_result(1),           CSV_DELIM ! EVAL_RESULT_1
+            write(funit,601,advance='no') eval_result(2),           CSV_DELIM ! EVAL_RESULT_2
+            write(funit,601,advance='no') eval_result(3),           CSV_DELIM ! EVAL_RESULT_3
+            ! Input eigenvalues
+            write(funit,601,advance='no') eval_truth(1),            CSV_DELIM ! EVAL_TRUTH_1
+            write(funit,601,advance='no') eval_truth(2),            CSV_DELIM ! EVAL_TRUTH_2
+            write(funit,601,advance='no') eval_truth(3),            CSV_DELIM ! EVAL_TRUTH_3
+            ! Pct error in eigenvalues
+            write(funit,601,advance='no') eval_err(1),              CSV_DELIM ! EVAL_ERR_1
+            write(funit,601,advance='no') eval_err(2),              CSV_DELIM ! EVAL_ERR_2
+            write(funit,601,advance='no') eval_err(3),              CSV_DELIM ! EVAL_ERR_3
+            ! Eigenvectors measured by atoms_stats
+            write(funit,601,advance='no') evecs_result(1,1),        CSV_DELIM ! EVEC_RESULT_1X
+            write(funit,601,advance='no') evecs_result(2,1),        CSV_DELIM ! EVEC_RESULT_1Y
+            write(funit,601,advance='no') evecs_result(3,1),        CSV_DELIM ! EVEC_RESULT_1Z
+            write(funit,601,advance='no') evecs_result(1,2),        CSV_DELIM ! EVEC_RESULT_2X
+            write(funit,601,advance='no') evecs_result(2,2),        CSV_DELIM ! EVEC_RESULT_2Y
+            write(funit,601,advance='no') evecs_result(3,2),        CSV_DELIM ! EVEC_RESULT_2Z
+            write(funit,601,advance='no') evecs_result(1,3),        CSV_DELIM ! EVEC_RESULT_3X
+            write(funit,601,advance='no') evecs_result(2,3),        CSV_DELIM ! EVEC_RESULT_3Y
+            write(funit,601,advance='no') evecs_result(3,3),        CSV_DELIM ! EVEC_RESULT_3Z
+            ! Input eigenvectors
+            write(funit,601,advance='no') evecs_truth(1,1),         CSV_DELIM ! EVEC_TRUTH_1X
+            write(funit,601,advance='no') evecs_truth(2,1),         CSV_DELIM ! EVEC_TRUTH_1Y
+            write(funit,601,advance='no') evecs_truth(3,1),         CSV_DELIM ! EVEC_TRUTH_1Z
+            write(funit,601,advance='no') evecs_truth(1,2),         CSV_DELIM ! EVEC_TRUTH_2X
+            write(funit,601,advance='no') evecs_truth(2,2),         CSV_DELIM ! EVEC_TRUTH_2Y
+            write(funit,601,advance='no') evecs_truth(3,2),         CSV_DELIM ! EVEC_TRUTH_2Z
+            write(funit,601,advance='no') evecs_truth(1,3),         CSV_DELIM ! EVEC_TRUTH_3X
+            write(funit,601,advance='no') evecs_truth(2,3),         CSV_DELIM ! EVEC_TRUTH_3Y
+            write(funit,601,advance='no') evecs_truth(3,3),         CSV_DELIM ! EVEC_TRUTH_3Z
+            ! Angular 
+            write(funit,601,advance='no') evecs_err(1),             CSV_DELIM ! EVEC_ERR_1
+            write(funit,601,advance='no') evecs_err(2),             CSV_DELIM ! EVEC_ERR_2
+            write(funit,602)              evecs_err(3)                        ! EVEC_ERR_3
+        end subroutine
 
 end program simple_test_3D_opt_filt
