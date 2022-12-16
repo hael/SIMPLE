@@ -35,7 +35,7 @@ contains
 
     subroutine srch_greedy_neigh( self, ithr )
         class(strategy3D_greedy_neigh), intent(inout) :: self
-        integer,                       intent(in)    :: ithr
+        integer,                        intent(in)    :: ithr
         type(ori) :: o
         integer   :: iref, iproj, minnrefs, loc(1)
         real      :: inpl_corrs(self%s%nrots)
@@ -65,7 +65,7 @@ contains
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nnn
             ! take care of the in-planes
-            call self%s%inpl_srch   ! search shifts
+            call self%s%inpl_srch
             ! prepare orientation
             call self%oris_assign
         else

@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peak_ori
+public :: extract_peak_ori, extract_peak_oris
 private
 #include "simple_local_flags.inc"
 
@@ -105,6 +105,34 @@ contains
         call o_prev%kill
         call o_new%kill
     end subroutine extract_peak_ori
+
+    subroutine extract_peak_oris( s )
+        class(strategy3D_srch), intent(inout) :: s
+        integer   :: refs(s%npeaks), state, ipeak
+        real      :: shvec(2), corr
+        logical   :: l_multistates
+        refs = maxnloc(s3D%proj_space_corrs(s%ithr,:), s%npeaks)
+        if( any(refs < 1) .or. any(refs > s%nrefs) ) THROW_HARD('at least one refs index out of bound; extract_peak_oris')
+        l_multistates = s%nstates > 1
+        do ipeak = 1, s%npeaks
+            call s%opeaks%set_euler(ipeak, s3D%proj_space_euls(:,refs(ipeak),s%ithr))
+            shvec = s%prev_shvec
+            if( s%doshift ) shvec = shvec + s3D%proj_space_shift(:,refs(ipeak),s%ithr)
+            where( abs(shvec) < 1e-6 ) shvec = 0.
+            call s%opeaks%set_shift(ipeak, shvec)
+            state = 1
+            if( l_multistates )then
+                state = s3D%proj_space_state(refs(ipeak))
+                if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peak_oris')
+            endif
+            call s%opeaks%set_state(ipeak, state)
+            corr = s3D%proj_space_corrs(s%ithr,refs(ipeak))
+            if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+                if( corr < 0. ) corr = 0.
+            end if
+            call s%opeaks%set(ipeak, 'corr', corr)
+        end do
+    end subroutine extract_peak_oris
 
     subroutine calc_ori_weight( s, ref, pw )
         class(strategy3D_srch), intent(in)  :: s

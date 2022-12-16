@@ -10,7 +10,7 @@ use simple_builder,            only: build_glob
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
-public :: strategy3D_srch, strategy3D_spec, eval_ptcl
+public :: strategy3D_srch, strategy3D_spec
 private
 #include "simple_local_flags.inc"
 
@@ -25,11 +25,12 @@ type strategy3D_srch
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
-    type(oris)              :: eulspace                  !< copy of build_glob%eulspace, needed for peak detection
+    type(oris)              :: opeaks                    !< peak orientations to consider for refinement
     integer                 :: iptcl         = 0         !< global particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                 :: nrefs_sub     = 0         !< total # references (nstates*nprojs), subspace
+    integer                 :: npeaks        = 0         !< # peak orientations to consider
     integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample uniformly
     integer                 :: nsample_neigh = 0         !< # of continuous 3D rotational orientations to sample Gaussian
     integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample Gaussian
@@ -55,51 +56,18 @@ type strategy3D_srch
     logical                 :: l_ptclw       = .false.   !< whether to calculate particle weight
     logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                 :: exists        = .false.   !< 2 indicate existence
-    logical                 :: ref_only      = .false.   !< in regularization: updating the reference oris (stored in builder%reg_oris), not the particle oris
   contains
-    procedure          :: new
-    procedure          :: prep4srch
-    procedure          :: prep4_cont_srch
-    procedure, private :: inpl_srch_1
-    procedure, private :: inpl_srch_2
-    generic            :: inpl_srch => inpl_srch_1, inpl_srch_2
-    procedure          :: store_solution
-    procedure          :: shift_srch_cart
-    procedure          :: kill
+    procedure :: new
+    procedure :: prep4srch
+    procedure :: prep4_cont_srch
+    procedure :: inpl_srch
+    procedure :: inpl_srch_peaks
+    procedure :: store_solution
+    procedure :: shift_srch_cart
+    procedure :: kill
 end type strategy3D_srch
 
 contains
-
-    ! class method: evaluation of stats and objective function
-    subroutine eval_ptcl( pftcc, iptcl )
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        integer   :: prev_state, prev_roind, prev_proj, prev_ref
-        type(ori) :: o_prev
-        real      :: specscore, corr, corrs(pftcc_glob%get_nrots())
-        prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
-        if( prev_state == 0 )return
-        ! previous parameters
-        call build_glob%spproj_field%get_ori(iptcl, o_prev)
-        prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
-        prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
-        prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! calc specscore
-        specscore = pftcc%specscore(prev_ref, iptcl, prev_roind)
-        ! prep corr
-        call pftcc_glob%gencorrs(prev_ref, iptcl, corrs)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            corr = maxval(corrs)
-        else
-            corr = max(0.,maxval(corrs))
-        endif
-        ! update spproj_field
-        call build_glob%spproj_field%set(iptcl, 'proj',      real(prev_proj))
-        call build_glob%spproj_field%set(iptcl, 'corr',      corr)
-        call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
-        call build_glob%spproj_field%set(iptcl, 'w',         1.)
-        call o_prev%kill
-    end subroutine eval_ptcl
 
     subroutine new( self, spec )
         class(strategy3D_srch), intent(inout) :: self
@@ -113,6 +81,7 @@ contains
         self%nprojs_sub    = params_glob%nspace_sub
         self%nrefs         = self%nprojs     * self%nstates
         self%nrefs_sub     = self%nprojs_sub * self%nstates
+        self%npeaks        = params_glob%npeaks
         self%nsample       = params_glob%nsample
         self%nsample_neigh = params_glob%nsample_neigh
         self%nsample_trs   = params_glob%nsample_trs
@@ -129,8 +98,8 @@ contains
         lims(:,2)          =  params_glob%trs
         lims_init(:,1)     = -SHC_INPL_TRSHWDTH
         lims_init(:,2)     =  SHC_INPL_TRSHWDTH
-        call self%o_prev%new(.true.)
-        call self%eulspace%copy(build_glob%eulspace, is_ptcl=.false.)
+        call self%o_prev%new(is_ptcl=.true.)
+        call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         if( params_glob%l_cartesian )then
             self%nrots = params_glob%nrots
@@ -147,7 +116,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o_prev
         real      :: corrs(self%nrots), corr
-        integer   :: tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
+        integer   :: ipeak, tmp_inds(self%nrefs_sub), iref_sub, prev_proj_sub
         ! previous parameters
         call build_glob%spproj_field%get_ori(self%iptcl, o_prev)           ! previous ori
         self%prev_state = o_prev%get_state()                               ! state index
@@ -157,6 +126,10 @@ contains
         self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)    ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj ! previous reference
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
+        ! copy o_prev to opeaks to transfer paticle-dependent parameters
+        do ipeak = 1, self%npeaks
+            call self%opeaks%set_ori(ipeak, o_prev)
+        end do
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order
@@ -220,7 +193,7 @@ contains
         cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
     end function shift_srch_cart
 
-    subroutine inpl_srch_1( self )
+    subroutine inpl_srch( self )
         class(strategy3D_srch), intent(inout) :: self
         real      :: cxy(3)
         integer   :: ref, irot, loc(1)
@@ -238,30 +211,28 @@ contains
                 s3D%proj_space_mask(ref,self%ithr)    = .true.
             endif
         endif
-    end subroutine inpl_srch_1
+    end subroutine inpl_srch
 
-    subroutine inpl_srch_2( self, iptcl )
+    subroutine inpl_srch_peaks( self )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(inout) :: iptcl
-        type(ori) :: o
         real      :: cxy(3)
-        integer   :: ref, irot
-        ! class constrained refinement
-        call build_glob%spproj_field%get_ori(iptcl, o)
-        ref  = nint(build_glob%spproj_field%get(iptcl, 'class'))
-        ! BFGS over shifts with in-plane rot exhaustive callback
-        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-        cxy = self%grad_shsrch_obj%minimize(irot=irot)
-        if( irot > 0 )then
-            ! irot > 0 guarantees improvement found, update solution
-            s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
-            s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-            s3D%proj_space_shift(:,ref,self%ithr) = cxy(2:3)
-            s3D%proj_space_mask(ref,self%ithr)    = .true.
-        else
-            iptcl = 0
+        integer   :: refs(self%npeaks), irot, ipeak
+        if( self%doshift )then
+            ! BFGS over shifts with in-plane rot exhaustive callback
+            refs = maxnloc(s3D%proj_space_corrs(self%ithr,:), self%npeaks)
+            do ipeak = 1, self%npeaks
+                call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                if( irot > 0 )then
+                    ! irot > 0 guarantees improvement found, update solution
+                    s3D%proj_space_euls(3,refs(ipeak),self%ithr)  = 360. - pftcc_glob%get_rot(irot)
+                    s3D%proj_space_corrs(self%ithr,refs(ipeak))   = cxy(1)
+                    s3D%proj_space_shift(:,refs(ipeak),self%ithr) = cxy(2:3)
+                    s3D%proj_space_mask(refs(ipeak),self%ithr)    = .true.
+                endif
+            enddo
         endif
-    end subroutine inpl_srch_2
+    end subroutine inpl_srch_peaks
 
     subroutine store_solution( self, ref, inpl_ind, corr )
         class(strategy3D_srch), intent(inout) :: self
@@ -276,8 +247,8 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
+        call self%opeaks%kill
         call self%o_prev%kill
-        call self%eulspace%kill
     end subroutine kill
 
 end module simple_strategy3D_srch

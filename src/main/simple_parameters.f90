@@ -231,6 +231,7 @@ type :: parameters
     integer :: nparts=1            !< # partitions in distributed execution
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
+    integer :: npeaks=NPEAKS_DEFAULT !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -632,6 +633,7 @@ contains
         call check_iarg('nparts',         self%nparts)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('nparts_pool',    self%nparts_pool)
+        call check_iarg('npeaks',         self%npeaks)
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
