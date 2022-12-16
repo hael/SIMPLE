@@ -2692,6 +2692,7 @@ contains
         real      :: dists(self%n), x
         integer   :: inds(self%n), i, j
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
+        !$omp parallel do default(shared) proc_bind(close) private(i,j,inds,dists)
         do i=1,self%n
             do j=1,self%n
                 inds(j)  = j
@@ -2702,6 +2703,7 @@ contains
                 nnmat(j,i) = inds(j)
             end do
         end do
+        !$omp end parallel do
     end subroutine nearest_proj_neighbors_1
 
     !>  \brief  to identify the nearest projection neighbors based on euldist threshold

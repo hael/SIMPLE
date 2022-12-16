@@ -173,7 +173,7 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
-         if( pftcc%exists() )call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
+        if( pftcc%exists() )call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
 
         ! STOCHASTIC IMAGE ALIGNMENT
