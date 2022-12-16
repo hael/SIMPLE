@@ -15,29 +15,29 @@ program simple_test_3D_opt_filt
     type(image)                 :: simvol
     type(atoms)                 :: simatoms
     type(atoms_stats_commander) :: xatoms_stats
-    real, parameter             :: smpd = 0.358
+    real, parameter             :: smpd=0.358, min_axis=0.38, max_axis=1.00
     real, allocatable           :: ellipsoids(:,:), centers(:,:), sim_rmat(:,:,:), sim_aniso(:,:,:)
     real                        :: eigenvecs(3,3), eigenvecs_inv(3,3), u, v, w, lhs, fit_aniso(3,3), &
-                                    &fit_egnvals(3), fit_egnvecs(3,3), axes_error(3), angular_error(3)
+                                    &fit_egnvals(3), fit_egnvecs(3,3), axes_error(3), angular_error(3), step
     integer, parameter          :: ldim(3)=(/160,160,160/), window=30
-    integer, allocatable        :: sim_imat(:,:,:)
+    integer, allocatable        :: sim_imat(:,:,:), nvox(:)
     integer                     :: i, j, k, cc, fu_fit, fu_results, natoms, icenter(3), errflg, nthr, &
-                                    & aniso_in_pdb(3,3), ifoo
+                                    &aniso_in_pdb(3,3), ifoo
     character(len=256)          :: pdbin, nthrChar, junk1, junk2
     character(*), parameter     :: cc_out='sim_cc.mrc', vol_out='sim_vol.mrc', aniso_pdb='sim_aniso', &
         &fn_results='test_calc_aniso_shell_results.csv', fn_fit='aniso_bfac_field.pdb', &
         &aniso_fmt='(a28,6i7,a10)'
 
-    character(len=*), parameter :: RESULTS_HEAD = 'INDEX'//CSV_DELIM//'EVAL_RESULT_1'//CSV_DELIM//&
-        &'EVAL_RESULT_2'//CSV_DELIM//'EVAL_RESULT_3'//CSV_DELIM//'EVAL_TRUTH_1'//CSV_DELIM//'EVAL_TRUTH_2'&
-        &//CSV_DELIM//'EVAL_TRUTH_3'//CSV_DELIM//'PCT_ERR_1'//CSV_DELIM//'PCT_ERR_2'//CSV_DELIM//'PCT_ERR_3'&
-        &//CSV_DELIM//'EVEC_RESULT_1X'//CSV_DELIM//'EVEC_RESULT_1Y'//CSV_DELIM//'EVEC_RESULT_1Z'&
-        &//CSV_DELIM//'EVEC_RESULT_2X'//CSV_DELIM//'EVEC_RESULT_2Y'//CSV_DELIM//'EVEC_RESULT_2Z'&
-        &//CSV_DELIM//'EVEC_RESULT_3X'//CSV_DELIM//'EVEC_RESULT_3Y'//CSV_DELIM//'EVEC_RESULT_3Z'&
-        &//CSV_DELIM//'EVEC_TRUTH_1X'//CSV_DELIM//'EVEC_TRUTH_1Y'//CSV_DELIM//'EVEC_TRUTH_1Z'&
-        &//CSV_DELIM//'EVEC_TRUTH_2X'//CSV_DELIM//'EVEC_TRUTH_2Y'//CSV_DELIM//'EVEC_TRUTH_2Z'&
-        &//CSV_DELIM//'EVEC_TRUTH_3X'//CSV_DELIM//'EVEC_TRUTH_3Y'//CSV_DELIM//'EVEC_TRUTH_3Z'&
-        &//CSV_DELIM//'ANGLE_ERR_1'//CSV_DELIM//'ANGLE_ERR_2'//CSV_DELIM//'ANGLE_ERR_3'
+    character(len=*), parameter :: RESULTS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'EVAL_RESULT_1'//&
+    &CSV_DELIM//'EVAL_RESULT_2'//CSV_DELIM//'EVAL_RESULT_3'//CSV_DELIM//'EVAL_TRUTH_1'//CSV_DELIM//'EVAL_TRUTH_2'&
+    &//CSV_DELIM//'EVAL_TRUTH_3'//CSV_DELIM//'PCT_ERR_1'//CSV_DELIM//'PCT_ERR_2'//CSV_DELIM//'PCT_ERR_3'&
+    &//CSV_DELIM//'EVEC_RESULT_1X'//CSV_DELIM//'EVEC_RESULT_1Y'//CSV_DELIM//'EVEC_RESULT_1Z'&
+    &//CSV_DELIM//'EVEC_RESULT_2X'//CSV_DELIM//'EVEC_RESULT_2Y'//CSV_DELIM//'EVEC_RESULT_2Z'&
+    &//CSV_DELIM//'EVEC_RESULT_3X'//CSV_DELIM//'EVEC_RESULT_3Y'//CSV_DELIM//'EVEC_RESULT_3Z'&
+    &//CSV_DELIM//'EVEC_TRUTH_1X'//CSV_DELIM//'EVEC_TRUTH_1Y'//CSV_DELIM//'EVEC_TRUTH_1Z'&
+    &//CSV_DELIM//'EVEC_TRUTH_2X'//CSV_DELIM//'EVEC_TRUTH_2Y'//CSV_DELIM//'EVEC_TRUTH_2Z'&
+    &//CSV_DELIM//'EVEC_TRUTH_3X'//CSV_DELIM//'EVEC_TRUTH_3Y'//CSV_DELIM//'EVEC_TRUTH_3Z'&
+    &//CSV_DELIM//'ANGLE_ERR_1'//CSV_DELIM//'ANGLE_ERR_2'//CSV_DELIM//'ANGLE_ERR_3'
 
     if( command_argument_count() /= 2 )then
         write(logfhandle,'(a)') 'Usage: simple_test_calc_aniso_shell file.pdb nthr'
@@ -55,38 +55,32 @@ program simple_test_3D_opt_filt
     natoms = simatoms%get_n()
 
     ! Create simulated CC eigenvalues and eigenvectors
-    allocate(ellipsoids(natoms, 6), source=0.)
-    do cc=1, 20
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
-        ellipsoids(cc,4) = PI/4
-        ellipsoids(cc,5:6) = 0.
-    end do
-    do cc=21, 40
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
-        ellipsoids(cc,4) = PI/4
-        ellipsoids(cc,5) = PI/2
-        ellipsoids(cc,6) = -PI/6
-    end do
-    do cc=41, 60
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
-        ellipsoids(cc,4) = PI/4
-        ellipsoids(cc,5) = PI/3
-        ellipsoids(cc,6) = PI/5
-    end do
-    do cc=61, natoms
-        ellipsoids(cc,1) = 1.0
-        ellipsoids(cc,2) = 0.7
-        ellipsoids(cc,3) = 0.4
+    allocate(ellipsoids(natoms, 6), source=0.) ! 1:3 are major axes, 4:6 are rotation angles about x,y,z
+    ! Test spheres
+    do cc=1, natoms/3
+        ellipsoids(cc,1:3) = min_axis + (max_axis-min_axis)*cc/(natoms/3)
         ellipsoids(cc,4:6) = 0.
+    end do
+    ! Test ellipses with principal axes along x,y,z
+    step = (max_axis-min_axis)/3. ! Eval1 > Eval2 > Eval3
+    do cc = 1, natoms/3
+        ellipsoids(cc+natoms/3,1) = min_axis + (step)*cc/(natoms/3) + 2*step
+        ellipsoids(cc+natoms/3,2) = min_axis + (step)*cc/(natoms/3) + step
+        ellipsoids(cc+natoms/3,3) = min_axis + (step)*cc/(natoms/3)
+        ellipsoids(cc+natoms/3,4:6) = 0.
+    end do
+    ! Test ellipses with various orientations
+    do cc = 1, natoms/3
+        ellipsoids(cc+2*natoms/3,1) = min_axis + (step)*cc/(natoms/3) + 2*step
+        ellipsoids(cc+2*natoms/3,2) = min_axis + (step)*cc/(natoms/3) + step
+        ellipsoids(cc+2*natoms/3,3) = min_axis + (step)*cc/(natoms/3)
+        ellipsoids(cc+2*natoms/3,4) = PI/2*cos(cc*PI/(natoms/3))
+        ellipsoids(cc+2*natoms/3,5) = PI/2*sin(cc*3*PI/(natoms/3))
+        ellipsoids(cc+2*natoms/3,6) = -PI/2*cos(cc*5*PI/(natoms/3))
     end do
 
     ! Create a simulated CC map, volume, and ANISOU pdb file
+    allocate(nvox(natoms), source=0)
     allocate(sim_imat(ldim(1), ldim(2), ldim(3)), source=0)
     allocate(sim_rmat(ldim(1), ldim(2), ldim(3)), source=0.)
     allocate(sim_aniso(3,3,natoms), source=0.) ! 3x3 anisotropic displacment matrix
@@ -104,6 +98,7 @@ program simple_test_3D_opt_filt
                     if ( sum(((/u,v,w/)/ellipsoids(cc,1:3))**2) <= 1. ) then
                         sim_imat(i,j,k) = cc
                         sim_rmat(i,j,k) = 1.
+                        nvox(cc) = nvox(cc) + 1
                     end if
                 end do
             end do
@@ -142,6 +137,7 @@ program simple_test_3D_opt_filt
     write(logfhandle,'(a)') '>>> CALCULATING ERROR OF ELLIPTICAL FITS'
     call fopen(fu_fit, FILE=trim(fn_fit), STATUS='OLD', action='READ')
     call fopen(fu_results, FILE=trim(fn_results), STATUS='REPLACE', action='WRITE')
+    write (fu_results, '(a)') RESULTS_HEAD
     aniso_in_pdb = 0
     do cc=1, natoms
         ! Read in aniso matrix
@@ -166,13 +162,11 @@ program simple_test_3D_opt_filt
             angular_error(i) = acos(min(1.,angular_error(i))) * 180. / PI ! Output in degrees
         end do
         ! Output into results CSV file
-        call write_results(cc, fu_results, fit_egnvals, ellipsoids(cc, 1:3), axes_error, fit_egnvecs, &
+        call write_results(cc, fu_results, nvox(cc), fit_egnvals, ellipsoids(cc, 1:3), axes_error, fit_egnvecs, &
             &eigenvecs, angular_error)
     end do
-
     call fclose(fu_fit)
     call fclose(fu_results)
-
 
     contains
 
@@ -212,9 +206,9 @@ program simple_test_3D_opt_filt
             eigenvecs = matmul(rotz, matmul(roty, matmul(rotx, eigenvecs)))
         end function find_eigenvecs
 
-        subroutine write_results(cc, funit, eval_result, eval_truth, eval_err, evecs_result, &
+        subroutine write_results(cc, funit, size, eval_result, eval_truth, eval_err, evecs_result, &
                 &evecs_truth, evecs_err)
-            integer, intent(in)     :: cc, funit
+            integer, intent(in)     :: cc, funit, size
             real, intent(in)        :: eval_result(3), eval_truth(3), eval_err(3), evecs_result(3,3), &
                                         &evecs_truth(3,3), evecs_err(3)
             
@@ -222,6 +216,7 @@ program simple_test_3D_opt_filt
             602 format(F7.3)
 
             write(funit,601,advance='no') real(cc),                 CSV_DELIM ! INDEX
+            write(funit,601,advance='no') real(size),               CSV_DELIM ! NVOX
             ! Eigenvalues measured by atoms_stats
             write(funit,601,advance='no') eval_result(1),           CSV_DELIM ! EVAL_RESULT_1
             write(funit,601,advance='no') eval_result(2),           CSV_DELIM ! EVAL_RESULT_2
