@@ -126,8 +126,8 @@ end enum
 integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
 ! general parameters
-real,    parameter :: PRUNE_FRAC             = 0.3     !< fraction of particles after which a project is automatically pruned
-integer, parameter :: BUFSZ_DEFAULT          = 1024    !< Default stack_io buffer size
+real,    parameter :: PRUNE_FRAC            = 0.3      !< fraction of particles after which a project is automatically pruned
+integer, parameter :: BUFSZ_DEFAULT         = 1024     !< Default stack_io buffer size
 
 ! power spectrum related stuff
 integer, parameter :: GUI_PSPECSZ           = 512      !< hard-coded image size for gui
@@ -181,6 +181,7 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter :: MAX_STREAM_NPTCLS    = 500000    !< cap for adjusting update_frac in 2D streaming
 integer, parameter :: NPEAKS_DEFAULT       = 3         !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
+integer, parameter :: NPEAKS_INPL_DEFAULT  = 10        !< # neighborhood search peaks to refine with L-BFGS
 integer, parameter :: STREAM_SRCHLIM       = 5         !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search

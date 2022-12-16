@@ -30,7 +30,8 @@ type strategy3D_srch
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                 :: nrefs_sub     = 0         !< total # references (nstates*nprojs), subspace
-    integer                 :: npeaks        = 0         !< # peak orientations to consider
+    integer                 :: npeaks        = 0         !< # peak subspace orientations to consider
+    integer                 :: npeaks_inpl   = 0         !< # # multi-neighborhood peaks to refine with L-BFGS
     integer                 :: nsample       = 0         !< # of continuous 3D rotational orientations to sample uniformly
     integer                 :: nsample_neigh = 0         !< # of continuous 3D rotational orientations to sample Gaussian
     integer                 :: nsample_trs   = 0         !< # of continuous origin shifts (2D) to sample Gaussian
@@ -82,6 +83,7 @@ contains
         self%nrefs         = self%nprojs     * self%nstates
         self%nrefs_sub     = self%nprojs_sub * self%nstates
         self%npeaks        = params_glob%npeaks
+        self%npeaks_inpl   = params_glob%npeaks_inpl
         self%nsample       = params_glob%nsample
         self%nsample_neigh = params_glob%nsample_neigh
         self%nsample_trs   = params_glob%nsample_trs
@@ -216,11 +218,11 @@ contains
     subroutine inpl_srch_peaks( self )
         class(strategy3D_srch), intent(inout) :: self
         real      :: cxy(3)
-        integer   :: refs(self%npeaks), irot, ipeak
+        integer   :: refs(self%npeaks_inpl), irot, ipeak
         if( self%doshift )then
             ! BFGS over shifts with in-plane rot exhaustive callback
-            refs = maxnloc(s3D%proj_space_corrs(self%ithr,:), self%npeaks)
-            do ipeak = 1, self%npeaks
+            refs = maxnloc(s3D%proj_space_corrs(self%ithr,:), self%npeaks_inpl)
+            do ipeak = 1, self%npeaks_inpl
                 call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)
                 if( irot > 0 )then
