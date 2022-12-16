@@ -38,15 +38,17 @@ character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//&
 &CSV_DELIM//'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//&
-CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//&
-&CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//&
-&'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'ANISO_XX'//CSV_DELIM//'ANISO_YY'//CSV_DELIM//&
+&'ANISO_ZZ'//CSV_DELIM//'ANISO_XY'//CSV_DELIM//'ANISO_YZ'//CSV_DELIM//'ANISO_XZ'//'X'//CSV_DELIM//&
+&'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//&
+&CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//CSV_DELIM//&
 &'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//&
-&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'RADIAL_STRAIN'
+&'DISPL'//CSV_DELIM//'MAX_NDISPL'//'ANISO_XX'//CSV_DELIM//'ANISO_YY'//CSV_DELIM//'ANISO_ZZ'//&
+&CSV_DELIM//'ANISO_XY'//CSV_DELIM//'ANISO_YZ'//CSV_DELIM//'ANISO_XZ'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -1400,7 +1402,7 @@ contains
             subroutine calc_aniso_shell(cc)
                 integer, intent(in)     :: cc
                 real(kind=8), allocatable   :: uvw(:,:), ones(:)
-                real(kind=8)                :: beta(3), A(3,3), A_inv(3,3), Y(3)
+                real(kind=8)                :: beta(3), A(3,3), A_inv(3,3), Y(3), matavg
                 real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
                                &eigenvecs_inv(3,3), fit_rad, u, v, w, aniso(3,3)
                 integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
@@ -1512,14 +1514,19 @@ contains
                 A(2,1) = A(1,2)
                 A(3,1) = A(1,3)
                 A(3,2) = A(2,3)
+                ! Elements of A tend to be large.  Normalize to make matinv easier on the computer
+                matavg = sum(A)/size(A)
+                A = A / matavg
+                Y = Y / matavg
+                
 
                 ! Fit scaled surface with ellipse by solving the least squares regression uvw*beta=ones
                 ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
                 !allocate(ones(nborder), source=1.0_dp)
                 !call qr_solve(nborder, 3, uvw, ones, beta)
-                write (funit, '(1i7, 15f8.1)') cc, A(1,:), A(2,:), A(3,:), Y(:)
+                write (funit, '(1i7, 15f10.3)') cc, A(1,:), A(2,:), A(3,:), Y(:)
                 call matinv(A, A_inv, 3, errflg)
-                write (funit, '(1i7, 12f12.7)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
+                write (funit, '(1i7, 12f10.3)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
                 beta = matmul(A_inv, Y)
                 write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
                 ! Fill in the 3x3 aniso matrix with squares of the semi-axes
@@ -2210,6 +2217,15 @@ contains
                 det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
             end function det3by3
 
+            ! Returns the determinant det of a real 3x3 matrix a.
+            pure function det3by3_dp(a) result(det)
+                real(kind=8), intent(in)    :: a(3, 3)
+                real(kind=8)                :: det
+                det = a(1, 1) * (a(2, 2)*a(3, 3) - a(2, 3)*a(3, 2))
+                det = det - a(1, 2) * (a(2, 1)*a(3, 3) - a(2, 3)*a(3, 1))
+                det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
+            end function det3by3_dp
+
     end subroutine fillin_atominfo
 
     ! calc the avg of the centers coords
@@ -2524,6 +2540,13 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%aniso_corr,             CSV_DELIM ! ANISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%displ,                  CSV_DELIM ! DISPL
         write(funit,601,advance='no') self%atominfo(cc)%max_ndispl,             CSV_DELIM ! MAX_NDISPL
+        ! aniso
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(1,1),             CSV_DELIM ! ANISO_XX
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(2,2),             CSV_DELIM ! ANISO_YY
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(3,3),             CSV_DELIM ! ANISO_ZZ
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(1,2),             CSV_DELIM ! ANISO_XY
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(2,3),             CSV_DELIM ! ANISO_YZ
+        write(funit,601,advance='no') self%atominfo(cc)%aniso(3,3),             CSV_DELIM ! ANISO_XZ
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
