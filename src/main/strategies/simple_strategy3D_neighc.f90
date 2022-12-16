@@ -77,7 +77,7 @@ contains
                 if( self%s%nsample_trs > 0 )then
                     ! calculate Cartesian corr and simultaneously stochastically search shifts (Gaussian sampling)
                     shvec = shvec_best
-                    call cftcc_glob%project_and_srch_shifts(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr, nsh)
+                    call cftcc_glob%project_and_shift_shc(self%s%iptcl, o, self%s%nsample_trs, params_glob%trs, shvec, corr, nsh)
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
                     ! keep track of how many shifts we are evaluating
@@ -150,18 +150,17 @@ contains
                     ! wait with L-BFGS-B refinement until the particle is within the bounds
                     return
                 endif
-                shvec      = 0.
+                shvec      = self%s%prev_shvec
                 shvec_incr = 0.
                 if( cxy(1) > corr_best )then
-                    shvec      = self%s%prev_shvec
                     ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
                     shvec_incr = - cxy(2:3)
-                    shvec      = shvec + shvec_incr
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 1.)
                 else
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 0.)
                 end if
+                shvec = shvec + shvec_incr
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
                 call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
