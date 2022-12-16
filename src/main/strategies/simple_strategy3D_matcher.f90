@@ -33,7 +33,7 @@ public :: refine3D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: DEBUG_HERE = .false.
+logical, parameter             :: DEBUG_HERE = .true.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(cartft_corrcalc),  target :: cftcc
@@ -301,7 +301,9 @@ contains
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
+        write(logfhandle,'(A)') '>>> WRITING SIGMAS'
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
+        write(logfhandle,'(A)') '>>> WRITING SIGMAS, DONE'
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))

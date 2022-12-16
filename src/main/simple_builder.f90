@@ -254,6 +254,7 @@ contains
             call self%eulspace%new(params%nspace, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace)
             if( params%l_neigh )then
+                write(logfhandle,'(A)') '>>> SETTING UP SUBSPACE FOR GREEDY SEARCH'
                 call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                 call self%pgrpsyms%build_refspiral(eulspace_sub)
                 allocate(self%subspace_inds(params%nspace_sub), source=0)
@@ -264,6 +265,7 @@ contains
                 end do
                 !$omp end parallel do
                 call eulspace_sub%kill
+                write(logfhandle,'(A)') '>>> SETTING UP SUBSPACE FOR GREEDY SEARCH, DONE'
             endif
         endif
         if( params%box > 0 )then
