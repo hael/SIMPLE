@@ -19,6 +19,7 @@ use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
+use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D,              only: strategy3D
@@ -241,6 +242,8 @@ contains
                                 allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('neigh_test')
+                        allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neighc')
                         if( ran3() < GLOB_FREQ )then
                             allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
