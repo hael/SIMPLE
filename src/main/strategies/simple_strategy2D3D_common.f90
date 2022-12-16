@@ -429,7 +429,9 @@ contains
                 call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
+            write(logfhandle,'(A)') '>>> NONUNIFORM FILTERING'
             call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            write(logfhandle,'(A)') '>>> NONUNIFORM FILTERING, DONE'
             ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft
@@ -463,7 +465,7 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()        
+        filtsz = build_glob%img%get_filtsz()
         if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
             ! no filtering
         else if( params_glob%l_nonuniform )then
@@ -525,7 +527,7 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()        
+        filtsz = build_glob%img%get_filtsz()
         if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
             ! no filtering
         else if( params_glob%l_nonuniform )then
@@ -590,13 +592,14 @@ contains
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls2update
         integer,           intent(in)    :: pinds(nptcls2update)
-        integer, optional, intent(in)    :: which_iter 
+        integer, optional, intent(in)    :: which_iter
         type(fplane),    allocatable :: fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
         type(kbinterpol) :: kbwin
         real             :: sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
+        write(logfhandle,'(A)') '>>> CALCULATING 3D RECONSTRUCTION'
         ! make the gridding prepper
         kbwin = build_glob%eorecvols(1)%get_kbwin()
         ! init volumes
@@ -640,6 +643,7 @@ contains
         end do
         deallocate(fpls,ctfparms)
         call orientation%kill
+        write(logfhandle,'(A)') '>>> CALCULATING 3D RECONSTRUCTION, DONE'
     end subroutine calc_3Drec
 
     subroutine norm_struct_facts( cline, which_iter )
