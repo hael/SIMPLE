@@ -23,7 +23,7 @@ use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D,              only: strategy3D
-use simple_strategy3D_srch,         only: strategy3D_spec, eval_ptcl
+use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
 use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
@@ -33,7 +33,7 @@ public :: refine3D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: DEBUG_HERE = .true.
+logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(cartft_corrcalc),  target :: cftcc
@@ -262,9 +262,6 @@ contains
                         endif
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('eval')
-                        call eval_ptcl(pftcc, iptcl)
-                        cycle
                     case('sigma')
                         ! first sigma estimation (done below)
                     case DEFAULT

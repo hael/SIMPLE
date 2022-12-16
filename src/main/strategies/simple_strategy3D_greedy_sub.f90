@@ -37,8 +37,10 @@ contains
     subroutine srch_greedy_sub( self, ithr )
         class(strategy3D_greedy_sub), intent(inout) :: self
         integer,                      intent(in)    :: ithr
-        integer   :: iref, isample, loc(1)
+        integer   :: iref, isample, loc(1), iproj, ipeak
         real      :: inpl_corrs(self%s%nrots)
+        logical   :: lnns(params_glob%nspace)
+        type(ori) :: o
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -54,12 +56,33 @@ contains
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 endif
             end do
+            ! prepare peak orientations
+            call extract_peak_oris(self%s)
+            ! construct multi-neighborhood search space from subspace peaks
+            lnns = .false.
+            do ipeak = 1, self%s%npeaks
+                call self%s%opeaks%get_ori(ipeak, o)
+                call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
+            end do
+            ! count the number of nearest neighbors
+            self%s%nnn = count(lnns)
+            ! search
+            do iproj=1,params_glob%nspace
+                if( .not. lnns(iproj) ) cycle
+                iref = (self%s%prev_state - 1) * params_glob%nspace + iproj
+                if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                    ! identify the top scoring in-plane angle
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    loc = maxloc(inpl_corrs)
+                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                endif
+            end do
             ! in greedy mode, we evaluate all refs
-            self%s%nrefs_eval = self%s%nrefs_sub
+            self%s%nrefs_eval = self%s%nnn
             ! take care of the in-planes
-            call self%s%inpl_srch
+            call self%s%inpl_srch_peaks
             ! prepare orientation
-            call self%oris_assign()
+            call self%oris_assign
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

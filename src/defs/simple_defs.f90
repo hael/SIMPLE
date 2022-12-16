@@ -180,6 +180,7 @@ integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for recon
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter :: MAX_STREAM_NPTCLS    = 500000    !< cap for adjusting update_frac in 2D streaming
+integer, parameter :: NPEAKS_DEFAULT       = 3         !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
 integer, parameter :: STREAM_SRCHLIM       = 5         !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search
