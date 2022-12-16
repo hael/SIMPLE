@@ -87,18 +87,17 @@ contains
                 ! report # cost function and gradient evaluations
                 call build_glob%spproj_field%set(self%s%iptcl, 'nevals',  real(nevals(1)))
                 call build_glob%spproj_field%set(self%s%iptcl, 'ngevals', real(nevals(2)))
-                shvec      = 0.
+                shvec      = self%s%prev_shvec
                 shvec_incr = 0.
                 if( cxy(1) > corr_best )then
-                    shvec      = self%s%prev_shvec
                     ! since particle image is shifted in the Cartesian formulation and we apply
                     ! with negative sign in rec3D the sign of the increment found needs to be negative
                     shvec_incr = - cxy(2:3)
-                    shvec      = shvec + shvec_incr
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 1.)
                 else
                     call build_glob%spproj_field%set(self%s%iptcl, 'better_l', 0.)
                 end if
+                shvec = shvec + shvec_incr
                 where( abs(shvec) < 1e-6 ) shvec = 0.
                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
                 call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
