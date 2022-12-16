@@ -429,9 +429,7 @@ contains
                 call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
-            write(logfhandle,'(A)') '>>> NONUNIFORM FILTERING'
             call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
-            write(logfhandle,'(A)') '>>> NONUNIFORM FILTERING, DONE'
             ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft
@@ -599,7 +597,6 @@ contains
         type(kbinterpol) :: kbwin
         real             :: sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
-        write(logfhandle,'(A)') '>>> CALCULATING 3D RECONSTRUCTION'
         ! make the gridding prepper
         kbwin = build_glob%eorecvols(1)%get_kbwin()
         ! init volumes
@@ -643,7 +640,6 @@ contains
         end do
         deallocate(fpls,ctfparms)
         call orientation%kill
-        write(logfhandle,'(A)') '>>> CALCULATING 3D RECONSTRUCTION, DONE'
     end subroutine calc_3Drec
 
     subroutine norm_struct_facts( cline, which_iter )
