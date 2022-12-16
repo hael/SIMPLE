@@ -301,9 +301,7 @@ contains
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        write(logfhandle,'(A)') '>>> WRITING SIGMAS'
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
-        write(logfhandle,'(A)') '>>> WRITING SIGMAS, DONE'
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
