@@ -1270,6 +1270,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         kcorrs  => self%heap_vars(ithr)%kcorrs
         shmat   => self%heap_vars(ithr)%shmat
+        call self%gen_shmat(ithr, shvec, shmat)
         pft_ref =  pft_ref * shmat
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
