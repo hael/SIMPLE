@@ -1,4 +1,4 @@
-program simple_test_3D_opt_filt
+program simple_test_calc_aniso_shell
     include 'simple_lib.f08'
     use simple_cmdline,            only: cmdline
     use simple_builder,            only: builder
@@ -255,4 +255,4 @@ program simple_test_3D_opt_filt
             write(funit,602)              evecs_err(3)                        ! EVEC_ERR_3
         end subroutine
 
-end program simple_test_3D_opt_filt
+end program simple_test_calc_aniso_shell
