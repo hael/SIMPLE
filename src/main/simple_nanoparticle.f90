@@ -1182,7 +1182,7 @@ contains
         call self%img_raw%pad(img_scaled)
         call img_scaled%ifft()
         call self%img_raw%ifft()
-        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY", scale_fac**3
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY ", scale_fac**3
         call img_scaled%get_rmat_ptr(rmat_scaled)
         ! For testing
         call img_scaled%write(fn_scaled) 
@@ -1543,7 +1543,6 @@ contains
                         theta = min(theta, dot_product(eigenvecs(:,i), (/0.,1.,0./)))
                         theta = min(theta, dot_product(eigenvecs(:,i), (/0.,0.,1./)))
                         aniso(i,i) = aniso(i,i) - 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
-                        print *, cc, 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
                     end do
                 end if
                 ! ANISOU format uses the squared values
