@@ -45,6 +45,7 @@ type, extends(image) :: projector
     ! procedure          :: fproject_correlate
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
+    procedure          :: interp_fcomp_norm_ad
     procedure          :: interp_fcomp_grid
     procedure          :: interp_fcomp_trilinear
     procedure          :: fdf_interp_fcomp_norm
@@ -379,6 +380,35 @@ contains
         ! SUM( kernel x components )
         comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum(w)
     end function interp_fcomp_norm
+
+    !>  \brief (autodiff version) is to interpolate from the expanded complex matrix
+    function interp_fcomp_norm_ad( self, loc )result( comp )
+        use ADLib_NumParameters_m
+        use ADdnSVM_m
+        class(projector), intent(in) :: self
+        type(dnS_t),      intent(in) :: loc(3)
+        type(dnS_t) :: comp(2)
+        type(dnS_t) :: w(1:self%wdim,1:self%wdim,1:self%wdim), win(2,3) ! window boundary array in fortran contiguous format
+        integer     :: i, win_ind(2,3)
+        ! interpolation kernel window
+        win(1,:) = loc
+        win(2,:) = win(1,:) + real(self%iwinsz, kind=Rkind)
+        win(1,:) = win(1,:) - real(self%iwinsz, kind=Rkind)
+        ! interpolation kernel window index
+        win_ind(1,:) = nint(get_d0(loc))
+        win_ind(2,:) = win_ind(1,:) + self%iwinsz
+        win_ind(1,:) = win_ind(1,:) - self%iwinsz
+        ! interpolation kernel matrix
+        w = ONE
+        do i=1,self%wdim
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod_ad( win(1,1)+i-1-loc(1) )
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod_ad( win(1,2)+i-1-loc(2) )
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod_ad( win(1,3)+i-1-loc(3) )
+        end do
+        ! SUM( kernel x components )
+        comp(1) = sum( w * real(realpart(self%cmat_exp(win_ind(1,1):win_ind(2,1), win_ind(1,2):win_ind(2,2),win_ind(1,3):win_ind(2,3))), kind=Rkind) ) / sum(w)
+        comp(2) = sum( w * real(imagpart(self%cmat_exp(win_ind(1,1):win_ind(2,1), win_ind(1,2):win_ind(2,2),win_ind(1,3):win_ind(2,3))), kind=Rkind) ) / sum(w)
+    end function interp_fcomp_norm_ad
 
     !>  \brief is to interpolate from the expanded complex matrix
     pure function interp_fcomp_grid( self, loc )result( comp )

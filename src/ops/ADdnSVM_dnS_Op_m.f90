@@ -50,7 +50,7 @@ MODULE ADdnSVM_dnS_Op_m
     MODULE PROCEDURE AD_product_VecOFdnS
   END INTERFACE
   INTERFACE sum
-    MODULE PROCEDURE AD_sum_VecOFdnS,AD_SUM_MatOFdnS
+    MODULE PROCEDURE AD_sum_VecOFdnS,AD_SUM_MatOFdnS,AD_SUM_3DMatOFdnS
   END INTERFACE
   INTERFACE transpose
     MODULE PROCEDURE AD_transpose_MatOFdnS
@@ -214,6 +214,27 @@ CONTAINS
 
 
     END FUNCTION AD_SUM_MatOFdnS
+
+    FUNCTION AD_SUM_3DMatOFdnS(Mat) RESULT(Sres)
+      USE ADLib_NumParameters_m
+
+      TYPE (dnS_t)                              :: Sres
+      TYPE (dnS_t),        intent(in)           :: Mat(:,:,:)
+
+      integer :: i,j,k
+      character (len=*), parameter :: name_sub='AD_SUM_3DMatOFdnS'
+
+      Sres = ZERO
+      DO k=lbound(Mat,dim=3),ubound(Mat,dim=3)
+      DO i=lbound(Mat,dim=2),ubound(Mat,dim=2)
+      DO j=lbound(Mat,dim=1),ubound(Mat,dim=1)
+        Sres = Sres + Mat(j,i,k)
+      END DO
+      END DO
+      END DO
+
+
+    END FUNCTION AD_SUM_3DMatOFdnS
 
     FUNCTION AD_transpose_MatOFdnS(Mat) RESULT(Mres)
       USE ADLib_NumParameters_m
