@@ -1404,8 +1404,9 @@ contains
                 real(kind=8), allocatable   :: uvw(:,:), ones(:)
                 real(kind=8)                :: beta(3), A(3,3), A_inv(3,3), Y(3), matavg
                 real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
-                               &eigenvecs_inv(3,3), fit_rad, u, v, w, aniso(3,3)
+                               &eigenvecs_inv(3,3), fit_rad, u, v, w, aniso(3,3), theta
                 integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
+                logical, parameter      :: boundScalingAdj = .true.
 
                 ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
                 ! by avoiding having to iterate over the entire scaled images for each connected component.
@@ -1529,11 +1530,24 @@ contains
                 write (funit, '(1i7, 12f10.3)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
                 beta = matmul(A_inv, Y)
                 write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
-                ! Fill in the 3x3 aniso matrix with squares of the semi-axes
+                ! Fill in the 3x3 aniso matrix with the semi-axes
                 aniso = 0.
-                aniso(1,1) = 1./beta(1)
-                aniso(2,2) = 1./beta(2)
-                aniso(3,3) = 1./beta(3)
+                aniso(1,1) = 1./sqrt(beta(1))
+                aniso(2,2) = 1./sqrt(beta(2))
+                aniso(3,3) = 1./sqrt(beta(3))
+                ! Boundary scaling correction
+                if (boundScalingAdj) then
+                    do i=1,3
+                        ! Find x,y,z unit vector closest to eigenvector
+                        theta = dot_product(eigenvecs(:,i), (/1.,0.,0./))
+                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,1.,0./)))
+                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,0.,1./)))
+                        aniso(i,i) = aniso(i,i) - 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
+                        print *, cc, 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
+                    end do
+                end if
+                ! ANISOU format uses the squared values
+                aniso = aniso**2
                 write (funit, '(i7, 9f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
                 call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
                 self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! (u,v,w)->(x,y,z)
