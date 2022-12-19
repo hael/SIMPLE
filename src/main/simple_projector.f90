@@ -42,7 +42,6 @@ type, extends(image) :: projector
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
-    procedure          :: fproject_correlate_serial
     ! procedure          :: fproject_correlate
     procedure          :: fproject_polar
     procedure          :: interp_fcomp_norm
@@ -247,8 +246,8 @@ contains
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
@@ -278,8 +277,8 @@ contains
         real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k
         e_rotmat = e%get_mat()
-        do h =  lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
                 if( resmsk(h,k) )then
                     loc = matmul(real([h,k,0]), e_rotmat)
                     if( h .ge. 0 )then
@@ -293,62 +292,6 @@ contains
             end do
         end do
     end subroutine fproject_serial_2
-
-    function fproject_correlate_serial( self, e, lims, cmat, ctfmat, resmsk ) result( corr )
-        class(projector),              intent(inout) :: self
-        class(ori),                    intent(in)    :: e
-        integer,                       intent(in)    :: lims(2,2)
-        complex(kind=c_float_complex), intent(inout) :: cmat(  lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real,                          intent(in)    :: ctfmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        logical,                       intent(in)    :: resmsk(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        real    :: loc(3), e_rotmat(3,3), cc(3), corr
-        integer :: h, k
-        complex :: ref_comp, ptl_comp, diff_comp
-        e_rotmat = e%get_mat()
-        cc(:)    = 0.
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                do h = lims(1,1),lims(1,2)
-                    do k = lims(2,1),lims(2,2)
-                        if( resmsk(h,k) )then
-                            loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h .ge. 0 )then
-                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
-                            else
-                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
-                            endif
-                            ! update cross product
-                            cc(1) = cc(1) + real(ref_comp  * conjg(cmat(h,k)))
-                            ! update normalization terms
-                            cc(2) = cc(2) + real(ref_comp  * conjg(ref_comp))
-                            cc(3) = cc(3) + real(cmat(h,k) * conjg(cmat(h,k)))
-                        endif
-                    end do
-                end do
-                corr = norm_corr(cc(1),cc(2),cc(3))
-            case(OBJFUN_EUCLID)
-                do h = lims(1,1),lims(1,2)
-                    do k = lims(2,1),lims(2,2)
-                        if( resmsk(h,k) )then
-                            loc = matmul(real([h,k,0]), e_rotmat)
-                            if( h .ge. 0 )then
-                                ref_comp =       self%interp_fcomp(loc)  * ctfmat(h,k)
-                            else
-                                ref_comp = conjg(self%interp_fcomp(loc)) * ctfmat(h,k)
-                            endif
-                            ptl_comp  = cmat(h,k)
-                            diff_comp = ref_comp  - ptl_comp
-                            ! update euclidean difference
-                            cc(1) = cc(1) + real(diff_comp * conjg(diff_comp))
-                            ! update normalization terms
-                            cc(2) = cc(2) + real(ref_comp * conjg(ref_comp))
-                            cc(3) = cc(3) + real(ptl_comp * conjg(ptl_comp))
-                        endif
-                    end do
-                end do
-                corr = 1 - cc(1)/(cc(2)+cc(3))
-        end select
-    end function fproject_correlate_serial
 
     ! function fproject_correlate( self, e, lims, nptcls, cmats, ctfmats, resmsk, filtw ) result( corrs )
     !     class(projector),              intent(inout) :: self

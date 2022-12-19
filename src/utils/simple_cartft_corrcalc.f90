@@ -818,8 +818,8 @@ contains
         integer  :: r, h, k, ithr
         call self%prep_ref4corr(iptcl, o, shvec, ithr)
         sigma_contrib = 0.0
-        do h = self%lims(1,1), self%lims(1,2)
-            do k = self%lims(2,1), self%lims(2,2)
+        do k = self%lims(2,1), self%lims(2,2)
+            do h = self%lims(1,1), self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
                 r = nint(hyp(real(h),real(k)))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
