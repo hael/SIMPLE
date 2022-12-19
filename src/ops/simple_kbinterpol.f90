@@ -17,6 +17,7 @@ type :: kbinterpol
     procedure :: get_alpha
     procedure :: get_wdim
     procedure :: apod
+    procedure :: apod_ad
     procedure :: apod_dp
     procedure :: dapod
     procedure :: apod_memo
@@ -152,6 +153,22 @@ contains
         r = self%oneoW * bessi0(self%beta * sqrt(arg))
     end function apod
 
+    !>  \brief (autodiff verison) is the Kaiser-Bessel apodization function (autodiff version), abs(x) <= Whalf
+    pure function apod_ad( self, x ) result( r )
+        use ADLib_NumParameters_m
+        use ADdnSVM_m
+        class(kbinterpol), intent(in) :: self
+        type(dnS_t),       intent(in) :: x
+        type(dnS_t) :: r, arg
+        if( abs(x) > real(self%Whalf, kind=Rkind) )then
+            r = ZERO
+            return ! for insignificant values return as soon as possible
+        endif
+        arg = real(self%twooW, kind=Rkind) * x
+        arg = ONE - arg * arg
+        r   = real(self%oneoW, kind=Rkind) * bessi0_ad(real(self%beta, kind=Rkind) * sqrt(arg))
+    end function apod_ad
+
     function apod_memo( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
@@ -256,6 +273,29 @@ contains
                 y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
         end if
     end function bessi0
+
+    !>  \brief (autodiff version) returns the modified Bessel function I0(x) for any real x
+    !! p.378 Handbook of Mathematical Functions, Abramowitz and Stegun
+    elemental pure function bessi0_ad( x ) result(ret)
+        use ADLib_NumParameters_m
+        use ADdnSVM_m
+        type(dnS_t), intent(in) :: x
+        type(dnS_t) :: y, ax, ret
+        ax = x ! abs(x)  !! Assumption 1:  beta * sqrt(arg) is always positive
+        if ( ax < 3.75d0 ) then
+            y= x / 3.75d0
+            y=y*y
+            ret=1.0d0+&
+                y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
+                y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
+                   else
+            y=3.75d0/ax
+            ret=( 0.39894228d0 + y*(  0.01328592d0 +&
+                y*( 0.00225319d0 + y*( -0.00157565d0 + y*( 0.00916281d0 +&
+                y*(-0.02057706d0 + y*(  0.02635537d0 + y*(-0.01647633d0 +&
+                y*  0.00392377d0)))))))) * exp( ax ) / sqrt( ax )
+        end if
+    end function bessi0_ad
 
     !>  \brief returns the modified Bessel function I0(x) for any real x
     !! p.378 Handbook of Mathematical Functions, Abramowitz and Stegun
