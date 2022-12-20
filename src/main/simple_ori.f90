@@ -12,7 +12,7 @@ use simple_stat
 use simple_nrtxtfile
 implicit none
 
-public :: ori, test_ori, euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose
+public :: ori, test_ori, euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, geodesic_dist_trace, geodesic_dist_frobdev
 private
 #include "simple_local_flags.inc"
 

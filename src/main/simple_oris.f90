@@ -18,7 +18,7 @@ use simple_defs_ori
 use simple_syslib
 implicit none
 
-public :: oris, test_oris
+public :: oris, test_oris, geodesic_opt_ori
 private
 #include "simple_local_flags.inc"
 
@@ -213,20 +213,6 @@ end type oris
 interface oris
     module procedure constructor
 end interface oris
-
-!>  \brief defines the geodesic distance interface
-abstract interface
-function geodesic_dist_interface( self1, self2 ) result( angle )
-    use simple_ori
-    type(ori), intent(in)    :: self1, self2
-    real                     :: angle
-end function
-end interface
-
-type :: geodesic_func
-    private
-    procedure(geodesic_dist_interface), nopass, pointer :: f => null()
-end type geodesic_func
 
 contains
 
@@ -3077,17 +3063,18 @@ contains
     end function geodesic_scaled_dist
 
     ! finding the "average" orientation using the optimization approach
-    ! geodesic_f: to use either frobdev or trace
-    subroutine geodesic_opt_ori( os, o_avg, weights, geodesic_f)
+    ! geodesic_type: to use either frobdev (0) or trace (1)
+    subroutine geodesic_opt_ori( os, o_avg, weights, geodesic_type)
         use nlopt_wrap, only: nlopt_opt, nlopt_func, create, destroy
         use nlopt_enum, only: algorithm_from_string
         type(ori),           intent(in)    :: os(:)
         type(ori),           intent(inout) :: o_avg
         real,                intent(in)    :: weights(:)
-        type(geodesic_func), intent(in)    :: geodesic_f
+        integer,             intent(in)    :: geodesic_type
         integer,  parameter :: wp  = kind(0.0d0)
         real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
         type(nlopt_opt)     :: opt
+        type(nlopt_func)    :: fct, fc
         integer  :: N, stat, j
         real(wp) :: x(9), lowest_cost, lims(9, 2)
         real     :: initial_best, total, mat_avg(3,3)
@@ -3112,18 +3099,23 @@ contains
         call opt%set_lower_bounds(lims(:,1))
         call opt%set_upper_bounds(lims(:,2))
         ! optimization
-        associate(f => nlopt_func(nloptf_myfunc), fc => nlopt_func(nloptf_ineq_constraint))
-            call opt%set_min_objective(f)
-            call opt%add_inequality_constraint(fc, TOL)
-            call opt%set_ftol_rel(TOL)
-            x = [mat_avg]
-            call opt%optimize(x, lowest_cost, stat)
-        end associate
+        select case(geodesic_type)
+            case(0)
+                fct = nlopt_func(nloptf_frobdev)
+            case(1)
+                fct = nlopt_func(nloptf_trace)
+        end select
+        fc = nlopt_func(nloptf_ineq_constraint)
+        call opt%set_min_objective(fct)
+        ! call opt%add_inequality_constraint(fc, TOL)
+        call opt%set_ftol_rel(TOL)
+        x = [mat_avg]
+        call opt%optimize(x, lowest_cost, stat)
         mat_avg = reshape(x, (/3, 3/))
         call o_avg%set_euler(m2euler(mat_avg))
         call destroy(opt)
     contains
-        function nloptf_myfunc(x_in, gradient, func_data) result(f)
+        function nloptf_frobdev(x_in, gradient, func_data) result(f)
             real(wp), intent(in)              :: x_in(:)
             real(wp), intent(inout), optional :: gradient(:)
             class(*), intent(in),    optional :: func_data
@@ -3134,9 +3126,24 @@ contains
             call o_avg%set_euler(m2euler(x_mat))
             f     = 0.
             do i = 1, N
-                f = f + weights(i)*geodesic_f%f(o_avg, os(i))
+                f = f + weights(i)*geodesic_dist_frobdev(o_avg, os(i))
             enddo
-        end function nloptf_myfunc
+        end function nloptf_frobdev
+
+        function nloptf_trace(x_in, gradient, func_data) result(f)
+            real(wp), intent(in)              :: x_in(:)
+            real(wp), intent(inout), optional :: gradient(:)
+            class(*), intent(in),    optional :: func_data
+            real(wp) :: f
+            integer  :: i
+            real     :: x_mat(3,3)
+            x_mat = real(reshape(x_in, (/3, 3/)))
+            call o_avg%set_euler(m2euler(x_mat))
+            f     = 0.
+            do i = 1, N
+                f = f + weights(i)*geodesic_dist_trace(o_avg, os(i))
+            enddo
+        end function nloptf_trace
 
         function nloptf_ineq_constraint(x_in, gradient, func_data) result(f)
             real(wp), intent(in)              :: x_in(:)
