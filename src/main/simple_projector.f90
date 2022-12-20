@@ -121,9 +121,9 @@ contains
         self%cmat_exp = CMPLX_ZERO
         !$omp parallel do collapse(3) schedule(static) default(shared)&
         !$omp private(h,k,m,logi,phys) proc_bind(close)
-        do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
+        do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
             do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
-                do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
+                do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
                     logi = [cych(h),cyck(k),cycm(m)]
                     phys = self%comp_addr_phys(logi)
                     self%cmat_exp(h,k,m) = factor * self%get_fcomp(logi, phys)
