@@ -325,6 +325,7 @@ contains
         call cmd_dict%push('hp_fsc',        'FSC high-pass limit(in A)')
         call cmd_dict%push('hp_ctf_estimate', 'high-pass limit 4 ctf_estimate(in A)')
         call cmd_dict%push('iares',         'integer angular resolution{10}')
+        call cmd_dict%push('icefracthreshold','ice fraction rejection theshold{1.0}')
         call cmd_dict%push('imgkind',       'type of image(ptcl|cavg|mic|movie){ptcl}')
         call cmd_dict%push('infile',        'file with inputs(.txt)')
         call cmd_dict%push('infile2',       'file with inputs(.txt)')

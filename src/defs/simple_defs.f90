@@ -171,6 +171,7 @@ real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction do
 real, parameter    :: DFMAX_DEFAULT        = 5.0       !< Default maximum bound for defocus search (microns)
 real, parameter    :: DFMIN_DEFAULT        = 0.2       !< Default minimum bound for defocus search (microns)
 real, parameter    :: CTFRES_THRESHOLD     = 50.0      !< Ctfres rejection threshold (Angstroms)
+real, parameter    :: ICEFRAC_THRESHOLD    = 1.0       !< Icefrac rejection threshold
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -196,6 +197,10 @@ real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank
 ! Graphene
 real, parameter :: GRAPHENE_BAND1 = 2.14        !< graphene band 1 for omission in score function
 real, parameter :: GRAPHENE_BAND2 = 1.23        !< graphene band 2 for omission in score function
+
+! Ice
+real, parameter :: ICE_BAND1 = 3.7   
+real, parameter :: ICE_BAND2 = 1.23 
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
