@@ -1260,7 +1260,7 @@ contains
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             !call calc_isotropic_disp_lsq(cc)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_aniso_shell(cc)
+                call calc_aniso_shell_6param(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
                 adp_tossed = adp_tossed + 1
@@ -1520,7 +1520,6 @@ contains
                 A = A / matavg
                 Y = Y / matavg
                 
-
                 ! Fit scaled surface with ellipse by solving the least squares regression uvw*beta=ones
                 ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
                 !allocate(ones(nborder), source=1.0_dp)
@@ -1553,9 +1552,129 @@ contains
                 write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
                 write (funit, '(a)') ''
 
-                !deallocate(uvw, ones)
-
             end subroutine calc_aniso_shell
+
+            subroutine calc_aniso_shell_6param(cc)
+                integer, intent(in)     :: cc
+                real(kind=8), allocatable   :: A(:,:), AT(:,:), ones(:)
+                real(kind=8)                :: beta(6), ATA(6,6), ATA_inv(6,6), matavg
+                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
+                               &eigenvecs_inv(3,3), fit_rad, u, v, w, B(3,3), aniso(3,3), theta
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
+                logical, parameter      :: boundScalingAdj = .false.
+
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the unscaled image, so i, j, k are in unscaled coordinates
+                center_scaled = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
+                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
+                ilo = max(nint(center_scaled(1) - maxrad), 1)
+                ihi = min(nint(center_scaled(1) + maxrad), scale_fac*self%ldim(1))
+                jlo = max(nint(center_scaled(2) - maxrad), 1)
+                jhi = min(nint(center_scaled(2) + maxrad), scale_fac*self%ldim(2))
+                klo = max(nint(center_scaled(3) - maxrad), 1)
+                khi = min(nint(center_scaled(3) + maxrad), scale_fac*self%ldim(3))
+                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
+
+                ! Calculate the unweighted center of mass of the connected component.
+                size_scaled = self%atominfo(cc)%size * (scale_fac**3)
+                com = 0.
+                n = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (imat_cc_scaled(i,j,k) == cc) then
+                                n = n + 1
+                                com(1) = com(1) + i
+                                com(2) = com(2) + j
+                                com(3) = com(3) + k
+                            end if
+                        end do
+                    end do
+                end do
+                com = com / size_scaled
+                !com = 1.*nint(com)
+
+                ! Find the number of border voxels in the cc
+                nborder = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                                nborder = nborder + 1
+                            end if
+                        end do
+                    end do
+                end do
+
+                ! Extract the border voxel positions in the principal basis (in unscaled Angstroms)
+                allocate(A(nborder, 6), AT(6, nborder), source=0.0_dp)
+                allocate(ones(nborder), source=1.0_dp)
+                nborder = 1
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                                u = (i-com(1)) * self%smpd / scale_fac
+                                v = (j-com(2)) * self%smpd / scale_fac
+                                w = (k-com(3)) * self%smpd / scale_fac
+                                !uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
+                                !print *, nborder, uvw(nborder, 1), uvw(nborder, 2), uvw(nborder, 3)
+                                A(nborder, 1) = u**2
+                                A(nborder, 2) = v**2
+                                A(nborder, 3) = w**2
+                                A(nborder, 4) = 2*u*v
+                                A(nborder, 5) = 2*u*w
+                                A(nborder, 6) = 2*v*w
+                                nborder = nborder + 1
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fiind the least squares solution to A*beta=ones where beta are the fitting params.
+                ! This minimizes the squared error in B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1
+                AT = transpose(A)
+                ATA = matmul(AT, A) 
+                matavg = sum(ATA)/size(ATA) !Normalize ATA to make matinv easier on the computer
+                ATA = ATA / matavg
+                call matinv(ATA, ATA_inv, 6, errflg)
+                beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
+                write (funit, '(2i5, 6f10.3)') cc, nborder, beta
+                
+                ! Find the principal axes of the ellipsoid
+                B(1,1) = beta(1)
+                B(2,2) = beta(2)
+                B(3,3) = beta(3)
+                B(1,2) = beta(4)
+                B(1,3) = beta(5)
+                B(2,3) = beta(6)
+                B(2,1) = B(1,2)
+                B(3,1) = B(1,3)
+                B(3,2) = B(2,3)
+                call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
+
+                ! Fill in the aniso matrix
+                aniso = 0.
+                aniso(1,1) = 1/sqrt(eigenvals(1))
+                aniso(2,2) = 1/sqrt(eigenvals(2))
+                aniso(3,3) = 1/sqrt(eigenvals(3))
+                if (boundScalingAdj) then
+                    do i=1,3
+                        ! Find x,y,z unit vector closest to eigenvector
+                        theta = dot_product(eigenvecs(:,i), (/1.,0.,0./))
+                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,1.,0./)))
+                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,0.,1./)))
+                        aniso(i,i) = aniso(i,i) - 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
+                    end do
+                end if
+                write (funit, '(i7, 6f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
+                aniso = aniso**2   ! ANISOU format uses the squared matrix values
+                call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
+                write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
+
+                write (funit, '(a)') ''
+            end subroutine calc_aniso_shell_6param
 
             subroutine calc_isotropic_disp_lsq(cc)
                 integer, intent(in)     :: cc
