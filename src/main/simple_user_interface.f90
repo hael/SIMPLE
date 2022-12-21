@@ -216,6 +216,7 @@ type(simple_input_param) :: gainref
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
+type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
@@ -929,6 +930,7 @@ contains
         call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
         call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(ctfresthreshold,'ctfresthreshold','num',  'CTF Resolution rejection threshold', 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', 'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
+        call set_param(icefracthreshold,'icefracthreshold','num','Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
@@ -3059,7 +3061,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 22, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3195,6 +3197,8 @@ contains
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 9, ctfresthreshold)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 9, submenu="CTF estimation")
+        call preprocess_stream_dev%set_input('filt_ctrls', 10, icefracthreshold)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 10, submenu="CTF estimation")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)

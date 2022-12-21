@@ -44,7 +44,7 @@ contains
             mask(loc(i)) = .false.
         end do
     end function calc_graphene_mask
-
+    
     !>   returns the Fourier index of res
     real pure function calc_lowpass_lim( find, box, smpd )
         integer, intent(in) :: find, box !< box size

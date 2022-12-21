@@ -78,6 +78,7 @@ contains
         call orientation%set('phshift',        ctfvars%phshift)
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())
         call orientation%set('ctfres',         ctffit%get_ctfres())
+        call orientation%set('icefrac',        ctffit%get_icefrac())
         call orientation%set('ctfjpg',         rel_fname)
         ! clean
         call ctffit%kill

@@ -161,31 +161,32 @@ contains
         logical                                :: l_pick, l_movies_left, l_haschanged
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
-        if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
-        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('oritype')         )  call cline%set('oritype',        'mic')
+        if( .not. cline%defined('mkdir')           )  call cline%set('mkdir',          'yes')
         ! motion correction
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
-        if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
-        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',     'no')
-        if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
-        if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
-        if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres')   )call cline%set('mcpatch_thres',   'yes')
-        if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
+        if( .not. cline%defined('trs')             )  call cline%set('trs',              20.)
+        if( .not. cline%defined('lpstart')         )  call cline%set('lpstart',           8.)
+        if( .not. cline%defined('lpstop')          )  call cline%set('lpstop',            5.)
+        if( .not. cline%defined('bfac')            )  call cline%set('bfac',             50.)
+        if( .not. cline%defined('groupframes')     )  call cline%set('groupframes',     'no')
+        if( .not. cline%defined('mcconvention')    )  call cline%set('mcconvention','simple')
+        if( .not. cline%defined('eer_upsampling')  )  call cline%set('eer_upsampling',    1.)
+        if( .not. cline%defined('mcpatch')         )  call cline%set('mcpatch',        'yes')
+        if( .not. cline%defined('mcpatch_thres')   )  call cline%set('mcpatch_thres',   'yes')
+        if( .not. cline%defined('algorithm')       )  call cline%set('algorithm',    'patch')
         ! ctf estimation
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
-        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
-        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            DFMIN_DEFAULT)
-        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
-        if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',CTFRES_THRESHOLD)
+        if( .not. cline%defined('pspecsz')         )  call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('hp_ctf_estimate') )  call cline%set('hp_ctf_estimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') )  call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('dfmin')           )  call cline%set('dfmin',            DFMIN_DEFAULT)
+        if( .not. cline%defined('dfmax')           )  call cline%set('dfmax',            DFMAX_DEFAULT)
+        if( .not. cline%defined('ctfpatch')        )  call cline%set('ctfpatch',       'yes')
+        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',CTFRES_THRESHOLD)
+        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD)
         ! picking
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
         ! extraction
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('pcontrast')       )  call cline%set('pcontrast',    'black')
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
@@ -903,7 +904,12 @@ contains
                 if( l_pick .and. o_mov%isthere('ctfres') )then
                     l_skip_pick = o_mov%get('ctfres') > (params_glob%ctfresthreshold-0.001)
                     if( l_skip_pick ) call o_mov%set('nptcls',0.)
-                endif
+                end if
+               ! temporarily disabled rejection on icefrac whilst gathering data to determine optimal default cutoff.
+               ! if( l_pick .and. .not. l_skip_pick .and. o_mov%isthere('icefrac') )then
+               !     l_skip_pick = o_mov%get('icefrac') > (params_glob%icefracthreshold-0.001)
+               !     if( l_skip_pick ) call o_mov%set('nptcls',0.)
+               ! endif
             endif
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)

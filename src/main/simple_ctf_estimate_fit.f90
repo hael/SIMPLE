@@ -49,6 +49,7 @@ type ctf_estimate_fit
     real                      :: lp           = 0.       ! low-pass limit
     real                      :: cc_fit       = -1.
     real                      :: ctfres       = -1.
+    real                      :: icefrac      = 0.
     integer                   :: box          = 0        ! box size
     integer                   :: ntiles(2)    = 0        ! # tiles along x/y
     integer                   :: ntotpatch    = 0
@@ -62,7 +63,7 @@ type ctf_estimate_fit
     logical                   :: l_nano       = .false.
     logical                   :: exists       = .false.
     integer(timer_int_kind)   :: t, t_tot
-    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch
+    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
 contains
     ! constructor
     procedure          :: new
@@ -72,6 +73,7 @@ contains
     procedure          :: get_ccfit
     procedure          :: get_pspec
     procedure          :: get_ctfres
+    procedure          :: get_icefrac
     procedure          :: get_parms
     ! CTF fitting
     procedure, private :: gen_resmsk
@@ -90,6 +92,7 @@ contains
     procedure          :: write_doc
     procedure          :: write_star
     procedure, private :: calc_ctfres
+    procedure, private :: calc_icefrac
     procedure          :: write_diagnostic
     procedure, private :: ctf2pspecimg
     procedure, private :: calc_tilt
@@ -364,7 +367,12 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         get_ccfit = self%cc_fit
     end function get_ccfit
-
+    
+    real function get_icefrac(self)
+        class(ctf_estimate_fit), intent(inout) :: self
+        get_icefrac = self%icefrac
+    end function get_icefrac
+    
     ! for visualization
     subroutine get_pspec(self, pspec_out)
         class(ctf_estimate_fit), intent(inout) :: self
@@ -390,7 +398,7 @@ contains
     ! DOERS
 
     !>  Performs initial grid search & 2D refinement, calculate stats
-    subroutine fit( self, parms, spec, nano )
+    subroutine fit( self, parms, spec, nano)
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctfparams),         intent(inout) :: parms
         class(image),  optional, intent(inout) :: spec
@@ -427,6 +435,10 @@ contains
         if( BENCH ) self%t = tic()
         call self%calc_ctfres
         if( BENCH ) self%rt_stats = toc(self%t)
+        ! calculate ice stats
+        if( BENCH ) self%t = tic()
+        call self%calc_icefrac
+        if( BENCH ) self%rt_icefrac = toc(self%t)
         ! output
         parms%dfx          = self%parms%dfx
         parms%dfy          = self%parms%dfy
@@ -1328,6 +1340,66 @@ contains
 
     end subroutine calc_ctfres
 
+    subroutine calc_icefrac( self )
+        class(ctf_estimate_fit), intent(inout) :: self
+        type(ctf)                              :: tfun
+        real, allocatable                      :: res(:)
+        real                                   :: phshift, start_freq, end_freq, mean_ice_band1, mean_ctf_peak1
+        integer                                :: cnt, start_find, end_find, ctf_max, ice_max
+        ! init
+        phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
+        tfun    = ctf(self%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
+        res     = get_resarr( self%box, self%smpd )
+        call tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
+        ! recalculate 1d power spectrum to nyquist
+        self%freslims1d(2) = self%pspec%get_nyq()
+        if(allocated(self%roavg_spec1d)) deallocate(self%roavg_spec1d)
+        if(allocated(self%resmsk1D)) deallocate(self%resmsk1D)
+        allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
+        allocate(self%resmsk1D(self%flims1d(1):self%flims1d(2)), source=.false.)
+        do cnt = self%freslims1d(1),self%freslims1d(2)
+            self%resmsk1D(cnt) = .true.
+        enddo
+        call self%gen_roavspec1d
+        ! find index of pspec max amplitude between 1st and second zero
+        start_freq = sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))
+        end_freq   = sqrt(tfun%SpaFreqSqAtNthZero(2,phshift,deg2rad(self%parms%angast)))
+        start_find = nint(start_freq * real(self%box))
+        end_find   = nint(end_freq   * real(self%box))
+        ctf_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1
+        ! find index of pspec max amplitude at ideal ice peak location += 10 frequencies
+        call get_find_at_crit(size(res), res, ICE_BAND1, ice_max)
+        start_find = ice_max - 10
+        end_find   = ice_max + 10
+        ice_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1
+        ! mean peaks +- 1 frequency (so long as positive to account for very sharp peaks)
+        mean_ctf_peak1 = mean_positive_amps(ctf_max, 1)
+        mean_ice_band1 = mean_positive_amps(ice_max, 1)
+        ! adjust ice mean if thon rings in ice band. Assume damping of 1st peak / 2.
+        if( self%ctfres < 3.8 .and. mean_ice_band1 > (mean_ctf_peak1 / 2) ) mean_ice_band1 = mean_ice_band1 - (mean_ctf_peak1 / 2)
+        self%icefrac = mean_ice_band1 / mean_ctf_peak1
+        ! clean up
+        if(allocated(res)) deallocate(res)
+        
+        contains
+        
+            real function mean_positive_amps(peak, width)
+                integer, intent(in) :: peak, width
+                integer             :: cnt, n
+                real                :: peaksum
+                peaksum = 0.
+                n = 0
+                do cnt = peak - width, peak + width
+                    if(self%roavg_spec1d(cnt) > 0.) then 
+                        peaksum = peaksum + self%roavg_spec1d(cnt)
+                        n = n + 1
+                    end if
+                end do
+                mean_positive_amps = peaksum / n
+            end function mean_positive_amps
+        
+    end subroutine calc_icefrac
+    
     ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -1462,6 +1534,7 @@ contains
         call os%set(1,'xdim',    real(self%ldim_mic(1)))
         call os%set(1,'ydim',    real(self%ldim_mic(2)))
         call os%set(1,'ctfres',  self%ctfres)
+        call os%set(1,'icefrac', self%icefrac)
         call os%set(1,'ctfcc',   self%cc_fit)
         call os%set(1,'npatch',  real(self%ntotpatch))
         if( self%parms%l_phaseplate )then
@@ -1543,6 +1616,7 @@ contains
         integer :: i,j
         self%cc_fit       = -1.
         self%ctfres       = -1.
+        self%icefrac      = -1.
         nullify(self%micrograph)
         call self%pspec%kill
         call self%pspec_ctf%kill
