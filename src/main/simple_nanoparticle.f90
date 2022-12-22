@@ -1260,7 +1260,7 @@ contains
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             !call calc_isotropic_disp_lsq(cc)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_aniso_shell_6param(cc)
+                call calc_aniso_shell(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
                 adp_tossed = adp_tossed + 1
@@ -1439,7 +1439,7 @@ contains
                 end do
                 com = com / size_scaled
                 !com = 1.*nint(com)
-                write (funit, '(i7, 9f10.3)') cc, com(:), center_scaled(:)
+                !write (funit, '(i7, 9f10.3)') cc, com(:), center_scaled(:)
 
                 ! Compute the inertia tensor of the connected component. (x,y,z) are scaled coordinates
                 inertia_t = 0.
@@ -1524,9 +1524,9 @@ contains
                 ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
                 !allocate(ones(nborder), source=1.0_dp)
                 !call qr_solve(nborder, 3, uvw, ones, beta)
-                write (funit, '(1i7, 15f10.3)') cc, A(1,:), A(2,:), A(3,:), Y(:)
+                !write (funit, '(1i7, 15f10.3)') cc, A(1,:), A(2,:), A(3,:), Y(:)
                 call matinv(A, A_inv, 3, errflg)
-                write (funit, '(1i7, 12f10.3)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
+                !write (funit, '(1i7, 12f10.3)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
                 beta = matmul(A_inv, Y)
                 write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
                 ! Fill in the 3x3 aniso matrix with the semi-axes
@@ -1545,8 +1545,8 @@ contains
                     end do
                 end if
                 ! ANISOU format uses the squared values
-                aniso = aniso**2
                 write (funit, '(i7, 9f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
+                aniso = aniso**2
                 call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
                 self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! (u,v,w)->(x,y,z)
                 write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
@@ -1639,7 +1639,7 @@ contains
                 ATA = ATA / matavg
                 call matinv(ATA, ATA_inv, 6, errflg)
                 beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
-                write (funit, '(2i5, 6f10.3)') cc, nborder, beta
+                write (funit, '(2i7, 6f10.3)') cc, nborder, beta
                 
                 ! Find the principal axes of the ellipsoid
                 B(1,1) = beta(1)
@@ -1652,6 +1652,7 @@ contains
                 B(3,1) = B(1,3)
                 B(3,2) = B(2,3)
                 call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
+                write (funit, '(i7, 12f10.3)') cc, eigenvals(:), eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
 
                 ! Fill in the aniso matrix
                 aniso = 0.
