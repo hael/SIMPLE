@@ -1260,7 +1260,7 @@ contains
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             !call calc_isotropic_disp_lsq(cc)
             if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_aniso_shell(cc)
+                call calc_aniso_shell_6param(cc)
             else
                 self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
                 adp_tossed = adp_tossed + 1

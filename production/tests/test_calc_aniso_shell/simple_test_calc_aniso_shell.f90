@@ -21,7 +21,7 @@ program simple_test_calc_aniso_shell
                                     &fit_egnvals(3), fit_egnvecs(3,3), twice_fit_evals(3), twice_fit_evecs(3,3), &
                                     &axes_error(3), angular_error(3), step
     integer, parameter          :: ldim(3)=(/160,160,160/), window=30
-    integer, allocatable        :: imat(:,:,:), nvox(:)
+    integer, allocatable        :: imat(:,:,:), nvox(:), fit_nvox(:)
     integer                     :: i, j, k, cc, fu_fit, fu_twice_fit, fu_results, natoms, icenter(3), errflg, nthr, &
                                     &ifoo
     logical, parameter          :: check_consistency = .true.
@@ -123,7 +123,7 @@ program simple_test_calc_aniso_shell
     write(logfhandle,'(a)') '>>> SIMULATED VOLUME: '//vol_out
     write(logfhandle,'(a)') '>>> OUTPUT SIMULATED ANISOU PDB: '//aniso_pdb//'.pdb'
     call simatoms%writepdb_aniso(aniso_pdb, sim_aniso)
-    deallocate(imat, rmat, nvox, sim_aniso)
+    deallocate(imat, rmat, sim_aniso)
 
     ! Pass to atoms stats
     write(logfhandle,'(a)') '>>> PASSING ELLIPTICAL ATOMS TO ATOMS_STATS'
@@ -142,7 +142,7 @@ program simple_test_calc_aniso_shell
     call fopen(fu_results, FILE=trim(fn_results), STATUS='REPLACE', action='WRITE')
     write (fu_results, '(a)') RESULTS_HEAD
     if (check_consistency) then
-        allocate(nvox(natoms), source=0)
+        allocate(fit_nvox(natoms), source=0)
         allocate(imat(ldim(1), ldim(2), ldim(3)), source=0)
         allocate(rmat(ldim(1), ldim(2), ldim(3)), source=0.)
     end if
@@ -170,7 +170,7 @@ program simple_test_calc_aniso_shell
                         if ( sum(((/u,v,w/)/fit_egnvals(:))**2) <= 1. ) then
                             imat(i,j,k) = cc
                             rmat(i,j,k) = 1.
-                            nvox(cc) = nvox(cc) + 1
+                            fit_nvox(cc) = fit_nvox(cc) + 1
                         end if
                     end do
                 end do
