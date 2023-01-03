@@ -29,7 +29,7 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc
+public :: refine3D_exec, prep_ccobjs4align, pftcc
 private
 #include "simple_local_flags.inc"
 
@@ -150,17 +150,13 @@ contains
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
-        ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
+        ! PREPARE THE FT_CORRCALC DATA STRUCTURES
         if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
 
-        if( params_glob%l_cartesian )then
-            call prepcftcc4align(cline, batchsz_max)
-        else
-            call preppftcc4align(cline, batchsz_max)
-        endif
+        call prep_ccobjs4align(cline, batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
         if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
@@ -196,13 +192,9 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            if( params_glob%l_cartesian )then
-                call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
-            else
-                call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-            endif
+            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+            call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+            call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -391,7 +383,7 @@ contains
         endif
     end subroutine refine3D_exec
 
-    subroutine preppftcc4align( cline, batchsz_max )
+    subroutine prep_ccobjs4align( cline, batchsz_max )
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
         character(len=:), allocatable :: fname
@@ -399,6 +391,7 @@ contains
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs
         logical   :: do_center
+        ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
@@ -431,8 +424,8 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
             ! PREPARE E/O VOLUMES
-            call preprefvol_polar(cline, s, do_center, xyz, .false.)
-            call preprefvol_polar(cline, s, do_center, xyz, .true.)
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
             ! PREPARE REFERENCES
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
@@ -444,16 +437,7 @@ contains
                 call o_tmp%kill
             end do
         end do
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
-    end subroutine preppftcc4align
-
-    subroutine prepcftcc4align( cline, batchsz_max )
-        class(cmdline), intent(inout) :: cline !< command line
-        integer,        intent(in)    :: batchsz_max
-        real      :: xyz(3)
-        integer   :: s
-        logical   :: do_center
-        character(len=:), allocatable :: fname
+        ! then the Cartesian
         ! must be done here since params_glob%kfromto is dynamically set
         call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
         if( params_glob%l_needs_sigma )then
@@ -462,17 +446,10 @@ contains
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
-        do s = 1,params_glob%nstates
-            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
-            ! odd refvol
-            call preprefvol_cart(cline, s, do_center, xyz, .false.)
-            ! even refvol
-            call preprefvol_cart(cline, s, do_center, xyz, .true.)
-        end do
-    end subroutine prepcftcc4align
+        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
+    end subroutine prep_ccobjs4align
 
-    subroutine build_pftcc_batch_particles( nptcls_here, pinds_here )
+    subroutine build_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
@@ -480,6 +457,7 @@ contains
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             iptcl = pinds_here(iptcl_batch)
@@ -487,32 +465,15 @@ contains
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
             ! transfer to polar coordinates
             call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flag
+            ! set Cartesian
+            call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
+            ! e/o flags
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters
         call pftcc%memoize_ffts
-    end subroutine build_pftcc_batch_particles
-
-    subroutine build_cftcc_batch_particles( nptcls_here, pinds_here )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl,  build_glob%imgbatch(iptcl_batch))
-            call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
-            ! e/o flag
-            call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-    end subroutine build_cftcc_batch_particles
+    end subroutine build_batch_particles
 
 end module simple_strategy3D_matcher

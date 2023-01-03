@@ -12,7 +12,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol_polar, preprefvol_cart, grid_ptcl, calc_3Drec, norm_struct_facts
+&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts
 private
 #include "simple_local_flags.inc"
 
@@ -441,8 +441,7 @@ contains
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol_polar( cline, s, do_center, xyz, iseven )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+    subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,        only: projector
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
@@ -452,7 +451,7 @@ contains
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, filtsz
+        integer :: iref, filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -501,69 +500,7 @@ contains
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-    end subroutine preprefvol_polar
-
-    !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol_cart( cline, s, do_center, xyz, iseven )
-        use simple_projector, only: projector
-        class(cmdline),          intent(inout) :: cline
-        integer,                 intent(in)    :: s
-        logical,                 intent(in)    :: do_center
-        real,                    intent(in)    :: xyz(3)
-        logical,                 intent(in)    :: iseven
-        type(projector),  pointer :: vol_ptr => null()
-        type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, filtsz
-        if( iseven )then
-            vol_ptr => build_glob%vol
-        else
-            vol_ptr => build_glob%vol_odd
-        endif
-        if( do_center )then
-            call vol_ptr%fft()
-            call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
-        endif
-        ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()
-        if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
-            ! no filtering
-        else if( params_glob%l_nonuniform )then
-            ! filtering done in read_and_filter_refvols
-        else
-            call vol_ptr%fft()
-            if( any(build_glob%fsc(s,:) > 0.143) )then
-                call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                call vol_ptr%apply_filter(filter)
-            endif
-        endif
-        ! back to real space
-        call vol_ptr%ifft()
-        ! masking
-        if( params_glob%l_filemsk )then
-            ! envelope masking
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
-            call mskvol%read(params_glob%mskfile)
-            call vol_ptr%zero_env_background(mskvol)
-            call vol_ptr%mul(mskvol)
-            call mskvol%kill
-        else
-            ! circular masking
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
-            else
-                call vol_ptr%mask(params_glob%msk, 'soft')
-            endif
-        endif
-        ! gridding prep
-        if( params_glob%gridding.eq.'yes' )then
-            call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
-        endif
-        ! FT volume
-        call vol_ptr%fft()
-        ! expand for fast interpolation & correct for norm when clipped
-        call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-    end subroutine preprefvol_cart
+    end subroutine preprefvol
 
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( fpl, se, o )
