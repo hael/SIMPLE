@@ -50,14 +50,15 @@ character(len=STDLEN)          :: benchfname
 contains
 
     subroutine refine3D_exec( cline, which_iter, converged )
-        class(cmdline),        intent(inout) :: cline
-        integer,               intent(in)    :: which_iter
-        logical,               intent(inout) :: converged
-        integer, target, allocatable :: symmat(:,:)
-        logical,         allocatable :: het_mask(:)
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: which_iter
+        logical,        intent(inout) :: converged
+        integer, target, allocatable  :: symmat(:,:)
+        logical,         allocatable  :: het_mask(:)
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
-            class(strategy3D), pointer :: ptr  => null()
+            class(strategy3D), pointer :: ptr  => null() ! 1st polar greedy discrete search
+            class(strategy3D), pointer :: ptr2 => null() ! 2nd Cartesian stochastic continuous search
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
@@ -225,17 +226,19 @@ contains
                             allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('neigh')
-                        if( ran3() < GLOB_FREQ )then
-                            allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
-                            endif
-                        endif
+                        ! if( ran3() < GLOB_FREQ )then
+                        !     allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
+                        ! else
+                        !     if( ran3() < GREEDY_FREQ )then
+                        !         allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                        !     else
+                        !         allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                        !     endif
+                        ! endif
+                        allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr2)
                     case('neighc')
                         if( ran3() < GLOB_FREQ )then
                             allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -270,6 +273,11 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
+                if( associated(strategy3Dsrch(iptcl_batch)%ptr2) )then
+                    call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
+                    call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
+                    call strategy3Dsrch(iptcl_batch)%ptr2%kill
+                endif
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
@@ -286,6 +294,7 @@ contains
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
+            nullify(strategy3Dsrch(iptcl_batch)%ptr2)
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
