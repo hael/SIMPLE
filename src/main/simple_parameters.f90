@@ -1388,7 +1388,7 @@ contains
         endif
         ! -- Cartesian refinement flag
         select case(trim(self%refine))
-            case('shcc','neighc','greedyc')
+            case('shcc','neighc','greedyc','neigh_test')
                 self%l_cartesian = .true.
             case DEFAULT
                 self%l_cartesian = .false.
