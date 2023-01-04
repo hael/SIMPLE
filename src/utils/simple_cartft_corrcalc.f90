@@ -837,7 +837,7 @@ contains
         integer,                intent(in)    :: iptcl
         type(ori),              intent(in)    :: o
         real(sp),               intent(in)    :: shvec(2)
-        call self%calc_sigma_contrib( iptcl, o, shvec, self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),iptcl))
+        call self%calc_sigma_contrib( iptcl, o, shvec, self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2), iptcl))
     end subroutine update_sigma
 
     subroutine weight_ref_ptcl( self, ithr, iptcl )
@@ -852,8 +852,8 @@ contains
                 r = nint(hyp(real(h),real(k)))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 w = sqrt( self%pxls_p_shell(r) / 2. / self%sigma2_noise(r, iptcl) )
-                self%cur_refs( h,k,ithr) = w*self%cur_refs( h,k,ithr)
-                self%cur_ptcls(h,k,ithr) = w*self%cur_ptcls(h,k,ithr)
+                self%cur_refs( h,k,ithr) = w * self%cur_refs( h,k,ithr)
+                self%cur_ptcls(h,k,ithr) = w * self%cur_ptcls(h,k,ithr)
             enddo
         enddo
     end subroutine weight_ref_ptcl
