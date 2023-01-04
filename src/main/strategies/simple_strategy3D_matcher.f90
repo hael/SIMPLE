@@ -274,6 +274,13 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr2) )then
+                    ! updating sigma with new orientation (same reference though), when ptr2 is set
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( params_glob%l_cartesian )then
+                        call eucl_sigma%update_sigma2(cftcc, iptcl, orientation, 'proj')
+                    else
+                        call eucl_sigma%update_sigma2(pftcc, iptcl, orientation, 'proj')
+                    endif
                     call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
                     call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
                     call strategy3Dsrch(iptcl_batch)%ptr2%kill
