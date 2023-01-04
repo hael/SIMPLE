@@ -89,8 +89,8 @@ contains
         if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
-        if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.9)
-        if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
+        if( .not. cline%defined('overlap')   ) call cline%set('overlap',    0.98)
+        if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',   0.95)
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',     'cc')
         call cline%set('nonuniform', 'no') ! for speed
         ! set shared-memory flag
@@ -125,7 +125,7 @@ contains
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         call cline%set('oritype', 'ptcl3D')
         ! state string
-        str_state = int2str_pad(1,2)
+        str_state    = int2str_pad(1,2)
         ! decide wether to search for the symmetry axis
         pgrp_init    = trim(params%pgrp_start)
         pgrp_refine  = trim(params%pgrp)
@@ -203,8 +203,8 @@ contains
         ! prepare a temporary project file for the class average processing
         allocate(work_projfile, source=trim(ORIG_work_projfile))
         call del_file(work_projfile)
-        work_proj1%projinfo  = spproj%projinfo
-        work_proj1%compenv   = spproj%compenv
+        work_proj1%projinfo = spproj%projinfo
+        work_proj1%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris()  > 0 ) work_proj1%jobproc = spproj%jobproc
         call work_proj1%add_stk(trim(stk), ctfvars)
         call work_proj1%os_ptcl3D%set_all('state', real(states)) ! takes care of states
@@ -247,7 +247,7 @@ contains
         ! in stage 2 it follows optional user input and defaults to cc
         call cline_refine3D_snhc%set('objfun', 'cc')
         call cline_refine3D_init%set('objfun', 'cc')
-        ! re-project is never a distributed executions, so remove the nparts flag if there
+        ! re-project is never a distributed execution, so remove the nparts flag if there
         call cline_reproject%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
@@ -266,6 +266,7 @@ contains
         call cline_refine3D_init%set('projfile', trim(work_projfile))
         call cline_refine3D_init%set('box',      real(box))
         call cline_refine3D_init%set('prg',      'refine3D')
+        call cline_refine3D_init%set('refine',   'neigh')
         call cline_refine3D_init%set('lp',       lplims(1))
         call cline_refine3D_init%set('lp_iters', real(MAXITS_INIT))   ! low-pass limited resolution, no e/o
         if( .not. cline_refine3D_init%defined('nspace') )then
@@ -296,7 +297,7 @@ contains
         call cline_refine3D_refine%set('prg',    'refine3D')
         call cline_refine3D_refine%set('pgrp',   trim(pgrp_refine))
         call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine', 'shc')
+        call cline_refine3D_refine%set('refine', 'neigh')
         call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
         if( l_euclid )then
             call cline_refine3D_refine%set('objfun',     'euclid')
