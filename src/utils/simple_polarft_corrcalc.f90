@@ -113,6 +113,7 @@ type :: polarft_corrcalc
     procedure          :: set_eo
     procedure          :: set_eos
     procedure          :: assign_sigma2_noise
+    procedure          :: update_sigma
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
@@ -1763,25 +1764,23 @@ contains
         real(sp),                intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer  :: i, ithr, k
-        i       =  self%pinds(iptcl)
-        ithr    =  omp_get_thread_num() + 1
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        shmat   => self%heap_vars(ithr)%shmat
+        call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
+        shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat(ithr, shvec, shmat)
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = self%pfts_refs_odd (:,:,iref)
-        endif
-        if( self%with_ctf )then
-            pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
-        else
-            pft_ref = pft_ref * shmat
-        endif
+        pft_ref = pft_ref * shmat
         do k = self%kfromto(1), self%kfromto(2)
             sigma_contrib(k) = 0.5 * self%calc_euclidk_for_rot(pft_ref, i, k, irot) / real(self%pftsz)
         end do
     end subroutine gencorr_sigma_contrib
+
+    !< updating sigma for this particle/reference pair
+    subroutine update_sigma( self, iref, iptcl, shvec, irot)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        call self%gencorr_sigma_contrib( iref, iptcl, shvec, irot, self%sigma2_noise(self%kfromto(1), self%kfromto(2),iptcl))
+    end subroutine update_sigma
 
     real function specscore_1( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self

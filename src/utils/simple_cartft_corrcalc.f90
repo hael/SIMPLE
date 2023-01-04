@@ -77,6 +77,7 @@ type :: cartft_corrcalc
     procedure, private :: ori_chance_2
     procedure          :: assign_sigma2_noise
     procedure          :: calc_sigma_contrib
+    procedure          :: update_sigma
     procedure, private :: weight_ref_ptcl
     procedure, private :: deweight_ref_ptcl
     ! DESTRUCTOR
@@ -830,6 +831,14 @@ contains
             sigma_contrib(r) = 0.5 * sigma_contrib(r) / self%pxls_p_shell(r)
         end do
     end subroutine calc_sigma_contrib
+
+    subroutine update_sigma( self, iptcl, o, shvec)
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        type(ori),              intent(in)    :: o
+        real(sp),               intent(in)    :: shvec(2)
+        call self%calc_sigma_contrib( iptcl, o, shvec, self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),iptcl))
+    end subroutine update_sigma
 
     subroutine weight_ref_ptcl( self, ithr, iptcl )
         class(cartft_corrcalc), intent(inout) :: self

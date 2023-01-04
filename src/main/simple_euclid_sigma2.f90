@@ -38,6 +38,8 @@ contains
     procedure          :: read_groups
     procedure, private :: calc_sigma2_1, calc_sigma2_2
     generic            :: calc_sigma2 => calc_sigma2_1, calc_sigma2_2
+    procedure, private :: update_sigma2_1, update_sigma2_2
+    generic            :: update_sigma2 => update_sigma2_1, update_sigma2_2
     procedure          :: write_sigma2
     procedure, private :: read_groups_starfile
     ! destructor
@@ -173,6 +175,35 @@ contains
         call cftcc%calc_sigma_contrib(iptcl, o, shvec, sigma_contrib)
         self%sigma2_part(params_glob%kfromto(1):params_glob%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2_2
+
+    !>  Calculates and updates sigma2 within search resolution range
+    subroutine update_sigma2_1( self, pftcc, iptcl, o, refkind )
+        class(euclid_sigma2),    intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iptcl
+        class(ori),              intent(in)    :: o
+        character(len=*),        intent(in)    :: refkind ! 'proj' or 'class'
+        integer :: iref, irot
+        real    :: shvec(2)
+        if ( o%isstatezero() ) return
+        shvec = o%get_2Dshift()
+        iref  = nint(o%get(trim(refkind)))
+        irot  = pftcc_glob%get_roind(360. - o%e3get())
+        call pftcc%update_sigma(iref, iptcl, shvec, irot)
+    end subroutine update_sigma2_1
+
+    !>  Calculates and updates sigma2 within search resolution range
+    subroutine update_sigma2_2( self, cftcc, iptcl, o, refkind )
+        class(euclid_sigma2),   intent(inout) :: self
+        class(cartft_corrcalc), intent(inout) :: cftcc
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        character(len=*),       intent(in)    :: refkind ! 'proj' or 'class'
+        real :: shvec(2)
+        if ( o%isstatezero() ) return
+        shvec = o%get_2Dshift()
+        call cftcc%update_sigma(iptcl, o, shvec)
+    end subroutine update_sigma2_2
 
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
