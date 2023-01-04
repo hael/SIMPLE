@@ -1779,7 +1779,7 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        call self%gencorr_sigma_contrib( iref, iptcl, shvec, irot, self%sigma2_noise(self%kfromto(1), self%kfromto(2),iptcl))
+        call self%gencorr_sigma_contrib( iref, iptcl, shvec, irot, self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl))
     end subroutine update_sigma
 
     real function specscore_1( self, iref, iptcl, irot )
