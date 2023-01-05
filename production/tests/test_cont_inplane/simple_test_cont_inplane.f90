@@ -77,7 +77,7 @@ do iter = 1, N_ITERS_SHC
         if( corr > corr_best )then
             corr_best = corr
             o_best    = o
-            print *, 'iter = ', iter, '; corr best = ', corr_best, '; angle_diff = ', rot_angle(o_best%get_mat(), o_truth%get_mat())
+            print *, 'iter = ', iter, '; corr best = ', corr_best
             exit            ! SHC
         endif
     enddo
