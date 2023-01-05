@@ -542,6 +542,25 @@ contains
         endwhere
     end subroutine otsu_3
 
+    function calc_score_thres( n, scores, npeaks ) result( t )
+        integer, intent(in) :: n, npeaks
+        real,    intent(in) :: scores(n)
+        real    :: t, scores_sorted(n)
+        integer :: i, cnt
+        scores_sorted = scores
+        call hpsort(scores_sorted) ! largest last
+        if( npeaks >= n )then
+            t = scores_sorted(n)
+        else 
+            cnt = 0
+            do i = n, 1, -1
+                t   = scores_sorted(i)
+                cnt = cnt + 1
+                if( cnt == npeaks ) exit
+            end do
+        endif
+    end function calc_score_thres
+
     !>   calculates the euclidean distance between one pixel and a list of other pixels.
     ! if which == 'max' then distance is the maximum value of the distance between
     !              the selected pixel and all the others

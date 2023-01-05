@@ -138,7 +138,7 @@ contains
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
-        real(dp) :: sumw, diff2, max_diff2, best_score, sum_diff
+        real(dp) :: sumw, diff2, max_diff2, best_score, sum_diff, score_t, score
         integer  :: iref, npix
         pw = 1.0
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
@@ -156,16 +156,20 @@ contains
             ! if weights are to be used, greedy refinement modes need to be used
             ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
             best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
+            score_t    = real(calc_score_thres(s%nrefs, s3D%proj_space_corrs(s%ithr,:), NPEAKS_ORIW),kind=dp)
             sumw       = 0.d0
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
-                    ! the argument to the exponential function is always negative
-                    diff2 = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp) - best_score
-                    ! hence, for the best score the exponent will be 1 and < 1 for all others
-                    if( ref == iref )then
-                        sumw  = sumw + 1.d0
-                    else if( diff2 < 0.d0 )then
-                        sumw  = sumw + exp(diff2)
+                    score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
+                    if( score >= score_t )then
+                        ! the argument to the exponential function is always negative
+                        diff2 = score - best_score
+                        ! hence, for the best score the exponent will be 1 and < 1 for all others
+                        if( ref == iref )then
+                            sumw  = sumw + 1.d0
+                        else if( diff2 < 0.d0 )then
+                            sumw  = sumw + exp(diff2)
+                        endif
                     endif
                 endif
             enddo

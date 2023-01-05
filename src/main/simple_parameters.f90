@@ -1365,12 +1365,6 @@ contains
             if( .not. cline%defined('athres') ) self%athres = 10.
             self%l_neigh = .true.
         endif
-        ! -- check that refinement is greedy if particle weights are used
-        if( trim(self%ptclw).eq.'yes' )then
-            if( .not. str_has_substr(self%refine, 'greedy') )then
-                THROW_HARD('ML-like particle weighting (ptclw=yes) only supported for greedy refinement modes')
-            endif
-        endif
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
