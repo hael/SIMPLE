@@ -19,7 +19,7 @@ program simple_test_calc_aniso_shell
     real, allocatable           :: ellipsoids(:,:), centers(:,:), rmat(:,:,:), sim_aniso(:,:,:)
     real                        :: eigenvecs(3,3), eigenvecs_inv(3,3), u, v, w, lhs,&
                                     &fit_egnvals(3), fit_egnvecs(3,3), twice_fit_evals(3), twice_fit_evecs(3,3), &
-                                    &axes_error(3), angular_error(3), step
+                                    &axes_error(3), angular_error(3), xyzdisp(3), fit_xyzdisp(3), twice_fit_xyzdisp(3), step
     integer, parameter          :: ldim(3)=(/160,160,160/), window=30
     integer, allocatable        :: imat(:,:,:), nvox(:), fit_nvox(:)
     integer                     :: i, j, k, cc, fu_fit, fu_twice_fit, fu_results, natoms, icenter(3), errflg, nthr, &
@@ -40,7 +40,9 @@ program simple_test_calc_aniso_shell
     &//CSV_DELIM//'EVEC_TRUTH_1X'//CSV_DELIM//'EVEC_TRUTH_1Y'//CSV_DELIM//'EVEC_TRUTH_1Z'&
     &//CSV_DELIM//'EVEC_TRUTH_2X'//CSV_DELIM//'EVEC_TRUTH_2Y'//CSV_DELIM//'EVEC_TRUTH_2Z'&
     &//CSV_DELIM//'EVEC_TRUTH_3X'//CSV_DELIM//'EVEC_TRUTH_3Y'//CSV_DELIM//'EVEC_TRUTH_3Z'&
-    &//CSV_DELIM//'ANGLE_ERR_1'//CSV_DELIM//'ANGLE_ERR_2'//CSV_DELIM//'ANGLE_ERR_3'
+    &//CSV_DELIM//'ANGLE_ERR_1'//CSV_DELIM//'ANGLE_ERR_2'//CSV_DELIM//'ANGLE_ERR_3'&
+    &//CSV_DELIM//'XRESULT'//CSV_DELIM//'YRESULT'//CSV_DELIM//'ZRESULT'&
+    &//CSV_DELIM//'XTRUTH'//CSV_DELIM//'YTRUTH'//CSV_DELIM//'ZTRUTH'
 
     if( command_argument_count() /= 2 )then
         write(logfhandle,'(a)') 'Usage: simple_test_calc_aniso_shell file.pdb nthr'
@@ -148,15 +150,18 @@ program simple_test_calc_aniso_shell
     end if
     do cc=1, natoms
         call read_from_aniso_pdb(fu_fit, fit_egnvals, fit_egnvecs)
-        ! Calculate error in eigenvalues and eigenvecs
         eigenvecs = find_eigenvecs(ellipsoids(cc,4), ellipsoids(cc,5), ellipsoids(cc,6))
+        ! Get truth displacement in x, y, z direction from truth eigenvals and eigenvecs
+        xyzdisp = get_xyzdisp(eigenvecs, ellipsoids(cc, 1:3))
+        fit_xyzdisp = get_xyzdisp(fit_egnvecs, fit_egnvals)
+        ! Calculate eigenvalue and eigevector error
         do i=1,3
-            axes_error(i) = 100. * (fit_egnvals(i) - ellipsoids(cc, i)) / ellipsoids(cc, i) ! PCT error
+            axes_error(i) = 100. * (fit_egnvals(i) - ellipsoids(cc, i)) / ellipsoids(cc, i) ! Signed PCT error
             angular_error(i) = angular_diff(fit_egnvecs(:,i), eigenvecs(:,i))
         end do
         ! Output into results CSV file
         call write_results(cc, fu_results, nvox(cc), fit_egnvals, ellipsoids(cc, 1:3), axes_error, fit_egnvecs, &
-            &eigenvecs, angular_error)
+            &eigenvecs, angular_error, fit_xyzdisp, xyzdisp)
         if (check_consistency) then
             ! Create the fit imat and rmat to pass to atoms_stats and second time
             icenter=nint(simatoms%get_coord(cc)/smpd) + 1
@@ -212,12 +217,14 @@ program simple_test_calc_aniso_shell
         do cc=1, natoms
             call read_from_aniso_pdb(fu_fit, fit_egnvals, fit_egnvecs)
             call read_from_aniso_pdb(fu_twice_fit, twice_fit_evals, twice_fit_evecs)
+            fit_xyzdisp = get_xyzdisp(fit_egnvecs, fit_egnvals)
+            twice_fit_xyzdisp = get_xyzdisp(twice_fit_evecs, twice_fit_evals)
             do i=1,3
                 axes_error(i) = 100. * (twice_fit_evals(i) - fit_egnvals(i)) / twice_fit_evals(i) ! PCT error
                 angular_error(i) = angular_diff(twice_fit_evecs(:,i), fit_egnvecs(:,i))
             end do
             call write_results(cc, fu_results, nvox(cc), twice_fit_evals, fit_egnvals, axes_error, twice_fit_evecs, &
-                fit_egnvecs, angular_error)
+                fit_egnvecs, angular_error, fit_xyzdisp, xyzdisp)
         end do
         call fclose(fu_fit)
         call fclose(fu_twice_fit)
@@ -254,10 +261,10 @@ program simple_test_calc_aniso_shell
         end subroutine read_from_aniso_pdb
 
         subroutine write_results(cc, funit, size, eval_result, eval_truth, eval_err, evecs_result, &
-                &evecs_truth, evecs_err)
+                &evecs_truth, evecs_err, xyz_result, xyz_truth)
             integer, intent(in)     :: cc, funit, size
             real, intent(in)        :: eval_result(3), eval_truth(3), eval_err(3), evecs_result(3,3), &
-                                        &evecs_truth(3,3), evecs_err(3)
+                                        &evecs_truth(3,3), evecs_err(3), xyz_result(3), xyz_truth(3)
             
             601 format(F7.3,A2)
             602 format(F7.3)
@@ -299,7 +306,15 @@ program simple_test_calc_aniso_shell
             ! Angular 
             write(funit,601,advance='no') evecs_err(1),             CSV_DELIM ! EVEC_ERR_1
             write(funit,601,advance='no') evecs_err(2),             CSV_DELIM ! EVEC_ERR_2
-            write(funit,602)              evecs_err(3)                        ! EVEC_ERR_3
+            write(funit,601,advance='no') evecs_err(3)                        ! EVEC_ERR_3
+            ! Input displacement in x,y,z directions
+            write(funit,601,advance='no') xyz_result(1),            CSV_DELIM ! XRESULT
+            write(funit,601,advance='no') xyz_result(2),            CSV_DELIM ! YRESULT
+            write(funit,601,advance='no') xyz_result(3),            CSV_DELIM ! ZRESULT
+            ! Output displacement in x,y,z directions
+            write(funit,601,advance='no') xyz_truth(1),             CSV_DELIM ! XTRUTH
+            write(funit,601,advance='no') xyz_truth(2),             CSV_DELIM ! YTRUTH
+            write(funit,602)              xyz_truth(3)                        ! ZTRUTH
         end subroutine write_results
 
         ! Finds the eigenvectors by rotating the x,y,z basis by angles a,b,c about the x,y,z 
@@ -350,5 +365,31 @@ program simple_test_calc_aniso_shell
             ! so in that case replace with 1.
             theta = acos(min(1.,theta)) * 180. / PI ! Output in degrees
         end function angular_diff
+
+        ! Returns the atomic displacements in the x,y,z directions as an array
+        ! Given an input matrix of eigenvectors and array of eigenvals.
+        function get_xyzdisp(eigenvecs, eigenvals) result(xyzdisp)
+            real, intent(in)    :: eigenvecs(3,3), eigenvals(3)
+            real                :: aniso(3,3), eigenvecs_inv(3,3), xyzdisp(3)
+            real(kind=8)        :: a(3,3), b(3,3)
+            integer             :: i, errflg, errflg1
+
+            ! Build aniso matrix in principal basis
+            aniso = 0.  
+            aniso(1,1) = eigenvals(1)
+            aniso(2,2) = eigenvals(2)
+            aniso(3,3) = eigenvals(3)
+            eigenvecs_inv = 0.
+            ! Transform to x,y,z basis
+            call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+            aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv)
+            if (errflg /= 0) then
+                print *, cc, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                print *, aniso
+            end if
+            do i=1,3
+                xyzdisp(i) = aniso(i,i)
+            end do
+        end function get_xyzdisp
 
 end program simple_test_calc_aniso_shell
