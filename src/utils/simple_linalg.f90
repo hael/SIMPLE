@@ -505,12 +505,12 @@ contains
                         flag = .true.
                         exit
                     endif
-                    if(flag .eqv. .false.)then
-                        inverse = 0.
-                        errflg = -1
-                        return
-                    endif
                 end do
+                if(flag .eqv. .false.)then
+                    inverse = 0.
+                    errflg = -1
+                    return
+                endif
             endif
             do j=k+1, n
                 m = augmatrix(j,k)/augmatrix(k,k)
@@ -585,12 +585,12 @@ contains
                         flag = .true.
                         exit
                     endif
-                    if(flag .eqv. .false.)then
-                        inverse = 0.d0
-                        errflg = -1
-                        return
-                    endif
                 end do
+                if(flag .eqv. .false.)then
+                    inverse = 0.d0
+                    errflg = -1
+                    return
+                endif
             endif
             do j=k+1, n
                 m = augmatrix(j,k)/augmatrix(k,k)
