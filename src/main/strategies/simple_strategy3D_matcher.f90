@@ -237,6 +237,9 @@ contains
                         ! endif
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
+                        ! updating sigma for polar_corrcalc, for greedy_sub
+                        call build_glob%spproj_field%get_ori(iptcl, orientation)
+                        call eucl_sigma%update_sigma2(pftcc, iptcl, orientation, 'proj')
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                         allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr2)
                     case('neighc')
