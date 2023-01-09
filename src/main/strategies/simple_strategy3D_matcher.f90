@@ -237,6 +237,8 @@ contains
                         ! endif
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
+                        ! only do shifting in the ptr2
+                        params_glob%l_doshift = .false.
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                         allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr2)
                     case('neighc')
@@ -274,6 +276,8 @@ contains
                     call strategy3Dsrch(iptcl_batch)%ptr%kill
                 endif
                 if( associated(strategy3Dsrch(iptcl_batch)%ptr2) )then
+                    ! do shifting in the ptr2 now
+                    params_glob%l_doshift = .true.
                     ! updating sigma with new orientation (same reference though), when ptr2 is set
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     if( params_glob%l_cartesian )then
