@@ -665,7 +665,7 @@ contains
             call img%get_rmat_ptr(rmat)
             x = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                     &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.)
-            call otsu(x, scaled_thresh)
+            call otsu(size(x), x, scaled_thresh)
         end subroutine otsu_nano
 
         real function t2c( thres )

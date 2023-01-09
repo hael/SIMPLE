@@ -409,62 +409,28 @@ contains
         q = f0+dx0*(c1+dxb*c2+dy0*c5)+dy0*(c3+dyb*c4)
     end function quadri
 
-    ! takes in input a vector x and an integer n
-    ! stores in xhist the discretisation of the values in x
-    ! returns the number of occurences in yhist
-    subroutine create_hist_vector(x,n,xhist,yhist)
-        real,                 intent(in)  :: x(:)     !data
-        integer,              intent(in)  :: n        !number of intervals
-        real,    allocatable, intent(out) :: xhist(:) !discretization of the values
-        integer, allocatable, intent(out) :: yhist(:) !number of occurences
-        integer   :: i, j
-        real      :: xmin, xmax, dx
-        if(allocated(xhist)) deallocate(xhist)
-        if(allocated(yhist)) deallocate(yhist)
-        xmin=minval(x)
-        xmax=maxval(x)
-        if(abs(xmin-xmax)<TINY) then !just one value
-            allocate(xhist(1), source = xmin)
-            allocate(yhist(1), source = size(x, dim = 1)) !all of them have value xmin
-        else
-            allocate(xhist(0:n-1), source = 0.)
-            allocate(yhist(n), source = 0 )
-            dx=(xmax+1-xmin)/n
-            do i=0,n-1
-                xhist(i)=xmin+i*dx
-            end do
-            do i=1,size(x)
-                j=nint((x(i)-xmin)/dx)+1
-                if(j <= size(yhist)) then
-                    yhist(j)=yhist(j)+1
-                else
-                    yhist(size(yhist)) = yhist(size(yhist)) + 1
-                endif
-            end do
-        endif
-    end subroutine create_hist_vector
-
     ! Otsu's method
     ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
     ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
-    subroutine otsu_1( x, thresh )
-        real, intent(inout) :: x(:)
-        real, intent(inout) :: thresh ! threshold for binarisation, in the old value range
-        integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255
-        real, allocatable   :: x_copy(:)
-        integer :: i, T
+    subroutine otsu_1( n, x, thresh )
+        integer, intent(in)    :: n
+        real,    intent(inout) :: x(:)
+        real,    intent(inout) :: thresh ! threshold for binarisation, in the old value range
+        integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255, NHIST = MAX_VAL-MIN_VAL+1
+        integer :: i, T, yhist(NHIST)
         real    :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
-        real,    allocatable :: p(:), xhist(:)
-        integer, allocatable :: yhist(:)
-        real :: sc, old_range(2) !scale factor and old pixel range
-        allocate(x_copy(size(x)), source = x)
-        call scale_vector(x_copy,real([MIN_VAL,MAX_VAL]), sc, old_range)
-        allocate(p(MIN_VAL:MAX_VAL), source=0.)
-        call create_hist_vector(x_copy, MAX_VAL-MIN_VAL+1, xhist, yhist)
+        real    :: p(MIN_VAL:MAX_VAL), xhist(0:NHIST-1), x_copy(n), sc, old_range(2) ! scale factor and old pixel range
+        x_copy = x
+        ! scale vecor
+        old_range(1) = minval(x_copy)
+        old_range(2) = maxval(x_copy)
+        sc = (MAX_VAL - MIN_VAL)/(old_range(2) - old_range(1))
+        x_copy(:) = sc * x_copy(:) + MIN_VAL - sc * old_range(1)
+        p = 0.
+        call create_hist_vector(x_copy, NHIST, xhist, yhist)
         do i = MIN_VAL, MAX_VAL
             p(i) = yhist(i+1)
         enddo
-        deallocate(xhist,yhist)
         p    = p / size(x_copy, dim = 1) ! normalise, it's a probability
         q1   = 0.
         q2   = sum(p)
@@ -508,17 +474,45 @@ contains
           endif
         enddo
         ! rescale in the old range
-        thresh = thresh/sc+old_range(1)
-        deallocate(x_copy)
+        thresh = thresh / sc + old_range(1)
+
+    contains
+
+        subroutine create_hist_vector(x,n,xhist,yhist)
+            real,    intent(in)    :: x(:)         ! data
+            integer, intent(in)    :: n            ! number of intervals
+            real,    intent(inout) :: xhist(0:n-1) ! discretization of the values
+            integer, intent(inout) :: yhist(n)     ! number of occurences
+            integer   :: i, j
+            real      :: xmin, xmax, dx
+            xmin  = minval(x)
+            xmax  = maxval(x)
+            xhist = 0.
+            yhist = 0
+            dx=(xmax+1-xmin)/n
+            do i=0,n-1
+                xhist(i)=xmin+i*dx
+            end do
+            do i=1,size(x)
+                j=nint((x(i)-xmin)/dx)+1
+                if(j <= size(yhist)) then
+                    yhist(j)=yhist(j)+1
+                else
+                    yhist(size(yhist)) = yhist(size(yhist)) + 1
+                endif
+            end do
+        end subroutine create_hist_vector
+
     end subroutine otsu_1
 
     ! Otsu's method, see above
-    subroutine otsu_2(x, x_out, thresh)
-        real,              intent(inout) :: x(:)
-        real,              intent(inout) :: x_out(size(x))
-        real, optional,    intent(inout) :: thresh  !selected threshold for binarisation
+    subroutine otsu_2(n, x, x_out, thresh)
+        integer,        intent(in)    :: n
+        real,           intent(inout) :: x(n)
+        real,           intent(inout) :: x_out(n)
+        real, optional, intent(inout) :: thresh ! selected threshold for binarisation
         real :: threshold ! threshold for binarisation
-        call otsu_1(x, threshold)
+        call otsu_1(n, x, threshold)
         where(x > threshold)
             x_out = 1.
         elsewhere
@@ -528,13 +522,12 @@ contains
     end subroutine otsu_2
 
     ! Otsu's method, see above
-    subroutine otsu_3(x, mask)
-        real,                 intent(inout) :: x(:)
-        logical, allocatable, intent(out)   :: mask(:)
+    subroutine otsu_3(n, x, mask)
+        integer, intent(in)    :: n
+        real,    intent(inout) :: x(n)
+        logical, intent(inout) :: mask(n)
         real :: threshold ! threshold for binarisation
-        call otsu_1(x, threshold)
-        if( allocated(mask) ) deallocate(mask)
-        allocate(mask(size(x)), source=.false.)
+        call otsu_1(n, x, threshold)
         where(x > threshold)
             mask = .true.
         elsewhere
@@ -750,21 +743,6 @@ contains
         integer, intent( in ) :: i, j
         lcm = ( i * j ) / gcd( i, j )
     end function lcm
-
-    ! rescales the vector to a new input range
-    ! optional output: scale factor and oldrange(2)
-    subroutine scale_vector( x, new_range, ssc ,oold_range)
-        real, intent(inout) :: x(:)
-        real, intent(in)    :: new_range(2)
-        real, optional, intent(out) :: oold_range(2), ssc
-        real :: old_range(2), sc
-        old_range(1) = minval(x)
-        old_range(2) = maxval(x)
-        sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
-        x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
-        if(present(ssc)) ssc = sc
-        if(present(oold_range)) oold_range = old_range
-    end subroutine scale_vector
 
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
         real, intent(in) :: smpd             !< sampling distance

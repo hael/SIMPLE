@@ -1474,7 +1474,7 @@ contains
                 corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
             end do
             ! use Otsu's algorithm to remove the junk
-            call otsu(corrs_top_ranking, mask_otsu)
+            call otsu(ncls_sel, corrs_top_ranking, mask_otsu)
             pop1 = count(      mask_otsu)
             pop2 = count(.not. mask_otsu)
             write(logfhandle,*) 'average corr cluster 1: ', sum(corrs_top_ranking, mask=      mask_otsu) / real(pop1), ' pop ', pop1
