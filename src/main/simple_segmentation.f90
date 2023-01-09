@@ -350,7 +350,7 @@ contains
                 x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
             endif
         endif
-        call otsu(x, selected_t)
+        call otsu(size(x), x, selected_t)
         if(present(thresh)) thresh= selected_t
         deallocate(x)
         where(rmat(1:ldim(1),1:ldim(2),1:ldim(3))>=selected_t)

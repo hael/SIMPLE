@@ -2730,7 +2730,7 @@ contains
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real, allocatable :: corrs_packed(:)
-        integer :: i, j
+        integer :: i, j, npeaks
         real    :: corr_t
         corr_t = 0.0
         do i = 1,self%n
@@ -2746,10 +2746,11 @@ contains
                 peaks(i) = .false.
             endif
         end do
-        if( count(peaks) > 0 )then
+        npeaks = count(peaks .and. corrs > 0.)
+        if( npeaks > 0 )then
             ! good/bad binning with Otsu's algorithm
             corrs_packed = pack(corrs, mask=peaks .and. corrs > 0.)
-            call otsu(corrs_packed, corr_t)
+            call otsu(npeaks, corrs_packed, corr_t)
             deallocate(corrs_packed)
             where( corrs <= corr_t ) peaks = .false.
         endif
