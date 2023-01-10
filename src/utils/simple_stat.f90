@@ -500,21 +500,10 @@ contains
     subroutine normalize_minmax( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
-        if( size(arr) == 1 )then
-            arr(1) = max(0., min(arr(1), 1.))
-            return
-        endif
-         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax - smin
-        if( delta > TINY )then
-            !$omp parallel workshare default(shared)
-            arr = (arr - smin)/delta
-            !$omp end parallel workshare
-        else
-            THROW_WARN('normalize_minmax, division with zero, no normalisation done')
-        endif
+        arr   = (arr - smin)/delta
     end subroutine normalize_minmax
 
     function stdev (a)
@@ -888,6 +877,30 @@ contains
         dev = mad_gau(x, med)
         x   = (x - med) / dev
     end subroutine robust_normalization
+
+    subroutine expweights_from_scores( n, scores, weights )
+        integer, intent(in)    :: n
+        real,    intent(in)    :: scores(n)
+        real,    intent(inout) :: weights(n)
+        real(dp) :: best_score, sumw, diff, diffs(n)
+        integer  :: i, loc(1)
+        loc        = maxloc(scores)
+        best_score = real(scores(loc(1)),kind=dp)
+        sumw       = 0.d0
+        do i = 1,n
+            ! the argument to the exponential function is always negative
+            diffs(i) = real(scores(i),kind=dp) - best_score
+            ! hence, for the best score the exponent will be 1 and < 1 for all others
+            if( i == loc(1) )then
+                sumw  = sumw + 1.d0
+            else if( diffs(i) < 0.d0 )then
+                sumw  = sumw + exp(diff)
+            endif
+        end do
+        do i = 1,n
+            weights(i) = max(0.,min(1.,real(diffs(i) / sumw)))
+        end do
+    end subroutine expweights_from_scores
 
     ! RANK STUFF
 

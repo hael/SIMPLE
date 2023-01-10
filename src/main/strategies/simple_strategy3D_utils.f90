@@ -138,64 +138,53 @@ contains
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
-        ! real(dp) :: sumw, diff2, max_diff2, best_score, sum_diff, score_t, score
-        real, allocatable :: scores(:), peak(:), nonpeak(:)
-        real    :: best_score, score_t, ksstat, prob
-        integer :: sz_peak, sz_nonpeak
-        ! integer :: iref, npix
+        real(dp) :: sumw, diff, max_diff, best_score, sum_diff, score_t, score, cnt, sigma2
+        integer  :: iref, npix
         pw = 1.0
-        ! if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
-        !     npix      = pftcc_glob%get_npix()
-        !     max_diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
-        !     sumw      = 0.
-        !     do iref = 1,s%nrefs
-        !         if( s3D%proj_space_mask(iref,s%ithr) )then
-        !             diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,iref), npix, params_glob%tau) - max_diff2
-        !             sumw = sumw + exp(-diff2)
-        !         endif
-        !     enddo
-        !     pw = max(0.,min(1.,real(1.d0 / sumw)))
-        ! else
-        !     ! objective function is exp(-euclid/denom) in [0,1] where 1 is best 
-        !     best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
-        !     score_t    = real(calc_score_thres(s%nrefs, s3D%proj_space_corrs(s%ithr,:), NPEAKS_ORIW),kind=dp)
-        !     sumw       = 0.d0
-        !     do iref = 1,s%nrefs
-        !         if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
-        !             score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
-        !             if( score >= score_t )then
-        !                 ! the argument to the exponential function is always negative
-        !                 diff2 = score - best_score
-        !                 ! hence, for the best score the exponent will be 1 and < 1 for all others
-        !                 if( ref == iref )then
-        !                     sumw  = sumw + 1.d0
-        !                 else if( diff2 < 0.d0 )then
-        !                     sumw  = sumw + exp(diff2)
-        !                 endif
-        !             endif
-        !         endif
-        !     enddo
-        !     ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-        !     pw = max(0.,min(1.,real(1.d0 / sumw)))
-        ! endif
-        ! objective functions are exp(-euclid/denom) in [0,1] where 1 is best or corr [-1,1] where 1 is best
-        ! best_score = s3D%proj_space_corrs(s%ithr,ref) ! best score as identified by stochastic search
-        scores     = pack(s3D%proj_space_corrs(s%ithr,:), s3D%proj_space_mask(:,s%ithr))
-        score_t    = calc_score_thres(s%nrefs, scores, NPEAKS_ORIW)
-        peak       = pack(scores, mask=scores >= score_t)
-        nonpeak    = pack(scores, mask=scores <  score_t)
-        sz_peak    = 0
-        sz_nonpeak = 0
-        if( allocated(peak)    ) sz_peak    = size(peak)
-        if( allocated(nonpeak) ) sz_nonpeak = size(nonpeak)
-        if( sz_peak > 0 .and. sz_nonpeak > 0 )then
-            call kstwo(peak, sz_peak, nonpeak, sz_nonpeak, ksstat, prob) ! prob is probability that distributions are the same
-            ! pw = best_score * (1. - prob)
-            pw = 1. - prob
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+            npix      = pftcc_glob%get_npix()
+            max_diff = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
+            sumw      = 0.
+            do iref = 1,s%nrefs
+                if( s3D%proj_space_mask(iref,s%ithr) )then
+                    diff = corr2distweight(s3D%proj_space_corrs(s%ithr,iref), npix, params_glob%tau) - max_diff
+                    sumw = sumw + exp(-diff)
+                endif
+            enddo
+            pw = max(0.,min(1.,real(1.d0 / sumw)))
+        else
+            ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
+            best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
+            ! calculate the variance around the best score
+            sigma2 = 0.d0
+            cnt    = 0.d0
+            do iref = 1,s%nrefs
+                if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
+                    score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
+                    diff   = score  - best_score
+                    sigma2 = sigma2 + diff * diff
+                    cnt    = cnt    + 1.d0
+                endif
+            enddo
+            sigma2 = 2. * (sigma2 / (cnt - 1.d0))
+            ! calculate the weights
+            sumw = 0.d0
+            do iref = 1,s%nrefs
+                if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
+                    score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
+                    ! the argument to the exponential function is always negative
+                    diff = score - best_score
+                    ! hence, for the best score the exponent will be 1 and < 1 for all others
+                    if( ref == iref )then
+                        sumw = sumw + 1.d0
+                    else if( diff < 0.d0 )then
+                        sumw = sumw + exp(diff / sigma2)
+                    endif
+                endif
+            enddo
+            ! this normalization ensures that particles that do not show a distinct peak are down-weighted
+            pw = max(0.,min(1.,real(1.d0 / sumw))) * real(params_glob%nspace_sub)
         endif
-        if( allocated(scores)  ) deallocate(scores)
-        if( allocated(peak)    ) deallocate(peak)
-        if( allocated(nonpeak) ) deallocate(nonpeak)
     end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils
