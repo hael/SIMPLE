@@ -268,19 +268,13 @@ contains
         endif
         if( params%box > 0 )then
             ! build image objects
-            call self%img%new([params%box,params%box,1],params%smpd,       wthreads=.false.)
+            call self%img%new(      [params%box,params%box,1],params%smpd,       wthreads=.false.)
             call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
-            call self%ref_polarizer%new([params%box,params%box,1],params%smpd, wthreads=.false.)
-            call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
+            call self%img_copy%new( [params%box,params%box,1],params%smpd,  wthreads=.false.)
             call self%img%construct_thread_safe_tmp_imgs(params%nthr) ! for thread safety in the image class
-            call self%img_tmp%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
+            call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
-            call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
-            if( ddo3d )then
-                call self%vol%new([params%box,params%box,params%box], params%smpd)
-                call self%vol_odd%new([params%box,params%box,params%box], params%smpd)
-                call self%vol2%new([params%box,params%box,params%box], params%smpd)
-            endif
+            call self%img_pad%new(  [params%boxpd,params%boxpd,1],params%smpd)
             ! build arrays
             lfny       = self%img%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
@@ -292,6 +286,15 @@ contains
             ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
             self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
             if( .not. params%l_graphene ) self%l_resmsk = .true.
+        endif
+        if( params%box_crop > 0 )then
+            ! build image objects
+            call self%ref_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
+            if( ddo3d )then
+                call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd)
+                call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd)
+                call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd)
+            endif
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -356,11 +359,11 @@ contains
         class(parameters),      intent(inout) :: params
         integer :: i
         call self%kill_strategy2D_tbox
-        call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
+        call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd, params%nstates)
         allocate(self%env_masks(params%ncls), self%diams(params%ncls))
         self%diams = 0.
         do i = 1,params%ncls
-            call self%env_masks(i)%new([params%box,params%box,1], params%smpd)
+            call self%env_masks(i)%new([params%box_crop,params%box_crop,1], params%smpd)
         end do
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
