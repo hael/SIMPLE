@@ -359,6 +359,7 @@ type :: parameters
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
+    real    :: smpd_crop=2.        !< sampling distance, same as EMANs apix(in A), refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
@@ -733,6 +734,7 @@ contains
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
+        call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)
@@ -949,10 +951,11 @@ contains
                     call spproj%read_segment('out', self%projfile)
                     call spproj%get_imginfo_from_osout(smpd, box, nptcls)
                     call spproj%kill
-                    if( .not.cline%defined('smpd'))     self%smpd     = smpd
-                    if( .not.cline%defined('box'))      self%box      = box
-                    if( .not.cline%defined('box_crop')) self%box_crop = box
-                    if( .not.cline%defined('nptcls'))   self%nptcls   = nptcls
+                    if( .not.cline%defined('smpd'))     self%smpd      = smpd
+                    if( .not.cline%defined('smpd_crop'))self%smpd_crop = smpd
+                    if( .not.cline%defined('box'))      self%box       = box
+                    if( .not.cline%defined('box_crop')) self%box_crop  = box
+                    if( .not.cline%defined('nptcls'))   self%nptcls    = nptcls
                 else
                     call bos%open(trim(self%projfile)) ! projfile opened here
                     ! nptcls
@@ -968,12 +971,13 @@ contains
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
-                    ! box_crop
-                    if( .not.cline%defined('box_crop') )then
+                    ! smpd/box_crop
+                    if( .not.cline%defined('box_crop') .or. .not.cline%defined('box_crop') )then
                         call spproj%read_segment('out', self%projfile)
                         call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
                         call spproj%kill
-                        self%box_crop = box
+                        if( .not.cline%defined('box_crop') )  self%box_crop  = box
+                        if( .not.cline%defined('smpd_crop') ) self%smpd_crop = smpd
                     endif
                 endif
             else
