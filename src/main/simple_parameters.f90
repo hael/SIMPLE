@@ -190,7 +190,7 @@ type :: parameters
     integer :: angstep=5
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
-    integer :: box_crop=0           !< square image size(in pixels), relates to Fourier cropped references
+    integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_extract
     integer :: boxpd=0
     integer :: class=1             !< cluster identity
@@ -890,15 +890,18 @@ contains
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. cline%defined('vol_even') )then
             call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            self%box_crop = self%box
         else if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            self%box_crop = self%box
         endif
         ! no stack given, no vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            self%box_crop = self%box
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
@@ -946,9 +949,10 @@ contains
                     call spproj%read_segment('out', self%projfile)
                     call spproj%get_imginfo_from_osout(smpd, box, nptcls)
                     call spproj%kill
-                    if( .not.cline%defined('smpd'))   self%smpd   = smpd
-                    if( .not.cline%defined('box'))    self%box    = box
-                    if( .not.cline%defined('nptcls')) self%nptcls = nptcls
+                    if( .not.cline%defined('smpd'))     self%smpd     = smpd
+                    if( .not.cline%defined('box'))      self%box      = box
+                    if( .not.cline%defined('box_crop')) self%box_crop = box
+                    if( .not.cline%defined('nptcls'))   self%nptcls   = nptcls
                 else
                     call bos%open(trim(self%projfile)) ! projfile opened here
                     ! nptcls
@@ -964,6 +968,13 @@ contains
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
+                    ! box_crop
+                    if( .not.cline%defined('box_crop') )then
+                        call spproj%read_segment('out', self%projfile)
+                        call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
+                        call spproj%kill
+                        self%box_crop = box
+                    endif
                 endif
             else
                 ! nothing to do for streaming, values set at runtime
@@ -1015,7 +1026,12 @@ contains
                 if( .not. cline%defined('box') )then
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
-                    self%box = self%ldim(1)
+                    self%box     = self%ldim(1)
+                endif
+                if( .not. cline%defined('box_crop') )then
+                    call find_ldim_nptcls(self%refs, self%ldim, ifoo)
+                    self%ldim(3)  = 1
+                    self%box_crop = self%ldim(1)
                 endif
             else
                 ! we don't check for existence of refs as they can be output as well as input (cavgassemble)
@@ -1026,8 +1042,9 @@ contains
         call double_check_file_formats
         ! make file names
         call mkfnames
-        ! check box
-        if( self%box > 0 .and. self%box < 26 ) THROW_HARD('box size need to be larger than 26')
+        ! check box, box_crop
+        if( self%box > 0 .and. self%box < 26 )           THROW_HARD('box needs to be larger than 26')
+        if( self%box_crop > 0 .and. self%box_crop < 26 ) THROW_HARD('box_crop needs to be larger than 26')
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
