@@ -138,6 +138,7 @@ contains
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
+        real, parameter :: MULC = 100.
         real(dp) :: sumw, diff, max_diff, best_score, score, cnt, sigma
         integer  :: iref, npix
         pw = 1.0
@@ -183,7 +184,7 @@ contains
                 endif
             enddo
             ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-            pw = max(0.,min(1.,real(1.d0 / sumw))) ! * real(params_glob%nspace_sub)
+            pw = max(0.,min(1.,real(1.d0 / sumw))) * MULC
         endif
     end subroutine calc_ori_weight
 

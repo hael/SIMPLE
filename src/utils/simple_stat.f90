@@ -882,19 +882,26 @@ contains
         integer, intent(in)    :: n
         real,    intent(in)    :: scores(n)
         real,    intent(inout) :: weights(n)
-        real(dp) :: best_score, sumw, diff, diffs(n)
+        real(dp) :: best_score, sumw,  diffs(n), sigma, cnt
         integer  :: i, loc(1)
         loc        = maxloc(scores)
         best_score = real(scores(loc(1)),kind=dp)
-        sumw       = 0.d0
+        sigma      = 0.d0
+        cnt        = 0.d0
         do i = 1,n
             ! the argument to the exponential function is always negative
             diffs(i) = real(scores(i),kind=dp) - best_score
-            ! hence, for the best score the exponent will be 1 and < 1 for all others
+            sigma    = sigma + diffs(i) * diffs(i)
+            cnt      = cnt   + 1.d0
+        end do
+        sigma = sqrt(sigma / (cnt - 1.d0))
+        sumw  = 0.d0
+        do i = 1,n
+            ! for the best score the exponent will be 1 and < 1 for all others
             if( i == loc(1) )then
                 sumw  = sumw + 1.d0
             else if( diffs(i) < 0.d0 )then
-                sumw  = sumw + exp(diff)
+                sumw  = sumw + exp(diffs(i) / sigma)
             endif
         end do
         do i = 1,n
