@@ -972,7 +972,8 @@ contains
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
                     ! smpd/box_crop
-                    if( .not.cline%defined('box_crop') .or. .not.cline%defined('box_crop') )then
+                    if( .not.cline%defined('box_crop') .or. .not.cline%defined('smpd_crop') )then
+                        if( bos%is_opened() ) call bos%close
                         call spproj%read_segment('out', self%projfile)
                         call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
                         call spproj%kill
@@ -1178,6 +1179,9 @@ contains
         else
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
+        endif
+        if( self%box > 0 )then
+            self%msk_crop = self%msk * real(self%box_crop) / real(self%box)
         endif
         ! automasking options
         self%l_filemsk = .false.
