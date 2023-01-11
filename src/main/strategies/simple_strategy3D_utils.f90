@@ -138,7 +138,7 @@ contains
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
-        real(dp) :: sumw, diff, max_diff, best_score, sum_diff, score_t, score, cnt, sigma2
+        real(dp) :: sumw, diff, max_diff, best_score, score, cnt, sigma
         integer  :: iref, npix
         pw = 1.0
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
@@ -155,18 +155,18 @@ contains
         else
             ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
             best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
-            ! calculate the variance around the best score
-            sigma2 = 0.d0
-            cnt    = 0.d0
+            ! calculate spread around best score
+            sigma = 0.d0
+            cnt   = 0.d0
             do iref = 1,s%nrefs
                 if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
                     score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
-                    diff   = score  - best_score
-                    sigma2 = sigma2 + diff * diff
-                    cnt    = cnt    + 1.d0
+                    diff  = score - best_score
+                    sigma = sigma + diff * diff
+                    cnt   = cnt   + 1.d0
                 endif
-            enddo
-            sigma2 = 2. * (sigma2 / (cnt - 1.d0))
+            end do
+            sigma = sqrt(sigma / (cnt - 1.d0))
             ! calculate the weights
             sumw = 0.d0
             do iref = 1,s%nrefs
@@ -178,12 +178,12 @@ contains
                     if( ref == iref )then
                         sumw = sumw + 1.d0
                     else if( diff < 0.d0 )then
-                        sumw = sumw + exp(diff / sigma2)
+                        sumw = sumw + exp(diff / sigma)
                     endif
                 endif
             enddo
             ! this normalization ensures that particles that do not show a distinct peak are down-weighted
-            pw = max(0.,min(1.,real(1.d0 / sumw))) * real(params_glob%nspace_sub)
+            pw = max(0.,min(1.,real(1.d0 / sumw))) ! * real(params_glob%nspace_sub)
         endif
     end subroutine calc_ori_weight
 
