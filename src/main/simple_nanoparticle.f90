@@ -48,7 +48,7 @@ character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'
 &'MAX_NDISPL'//CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//'SEMIAX_MIN'//CSV_DELIM//&
 &'ANISO_X'//CSV_DELIM//'ANISO_Y'//CSV_DELIM//'ANISO_Z'//CSV_DELIM//'RADIAL_STRAIN'
 
-character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
+character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_CN_STD'//CSV_DELIM//'MED_CN_STD'//CSV_DELIM//'SDEV_CN_STD'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
@@ -68,7 +68,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
-character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
+character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CSV_DELIM//'NANISO'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
 &CSV_DELIM//'AVG_CN_GEN'//CSV_DELIM//'MED_CN_GEN'//CSV_DELIM//'SDEV_CN_GEN'//&
@@ -129,6 +129,7 @@ type :: nanoparticle
     type(binimage)        :: img_bin, img_cc         ! binary and connected component images
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
+    integer               :: n_aniso            = 0  ! number of atoms with aniso calculations               NANISO
     integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
     real                  :: smpd               = 0. ! sampling distance
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
@@ -156,7 +157,8 @@ type :: nanoparticle
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
-    real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_cns(CNMIN:CNMAX) = 0.       ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_aniso_cns(CNMIN:CNMAX) = 0. ! # of atoms with aniso calculated per cn_std      NATOMS
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: bondl_stats_cns(CNMIN:CNMAX)
@@ -1280,6 +1282,7 @@ contains
         call fclose(fiso)
         write(logfhandle,*) "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
+        self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
         ! Write test image of adp and report FSC based resolution
         call fit%write(fn_fit)
         call fit_descaled%write(fn_fit_descaled)
@@ -1350,6 +1353,7 @@ contains
                 if( n == 0 ) return
                 ! -- # atoms
                 self%natoms_cns(cn) = real(n)
+                self%natoms_aniso_cns(cn) = count(adp_mask)
                 if( n < 2 ) return
                 ! -- the rest
                 call calc_stats( real(self%atominfo(:)%size),    self%size_stats_cns(cn),          mask=size_mask )
@@ -2705,6 +2709,7 @@ contains
         602 format(F8.4)
         ! -- # atoms
         write(funit,601,advance='no') real(self%n_cc),               CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') real(self%n_aniso),            CSV_DELIM ! NANISO
         ! -- NP diameter
         write(funit,601,advance='no') self%NPdiam,                   CSV_DELIM ! DIAM
         ! -- atom size
@@ -2789,6 +2794,7 @@ contains
         write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD
         ! -- # atoms per cn
         write(funit,601,advance='no') self%natoms_cns(cn),                   CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') self%natoms_aniso_cns(cn),             CSV_DELIM ! NANISO
         ! -- atom size
         write(funit,601,advance='no') self%size_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NVOX
         write(funit,601,advance='no') self%size_stats_cns(cn)%med,           CSV_DELIM ! MED_NVOX
