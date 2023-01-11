@@ -503,14 +503,13 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_commander_project, only: scale_project_commander_distr
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
         integer,               parameter :: MAXITS_STAGE1      = 10
         integer,               parameter :: MAXITS_STAGE1_EXTR = 15
-        character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
+        ! character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
         ! commanders
         type(make_cavgs_commander_distr)    :: xmake_cavgs_distr
         type(make_cavgs_commander)          :: xmake_cavgs
@@ -518,23 +517,20 @@ contains
         type(cluster2D_commander)           :: xcluster2D
         type(pspec_int_rank_commander)      :: xpspec_rank
         type(rank_cavgs_commander)          :: xrank_cavgs
-        type(scale_commander)               :: xscale
-        type(scale_project_commander_distr) :: xscale_proj
         type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
+        type(scale_commander)               :: xscale
         ! command lines
         type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
-        type(cmdline) :: cline_scalerefs, cline_scale
+        type(cmdline) :: cline_scalerefs, cline_calc_pspec_distr
         type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
-        type(cmdline) :: cline_calc_pspec_distr
         ! other variables
         class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
-        type(sp_project)              :: spproj, spproj_sc
-        character(len=:), allocatable :: projfile_sc, orig_projfile
+        type(sp_project)              :: spproj
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real     :: scale, trs_stage2
+        real     :: crop_factor, trs_stage2
         integer  :: last_iter_stage1, last_iter_stage2
-        logical  :: scaling, l_shmem, l_euclid
+        logical  :: l_scaling, l_shmem, l_euclid
         call set_cluster2D_defaults( cline )
         call cline%delete('clip')
         ! set shared-memory flag
@@ -560,7 +556,6 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
-        orig_projfile = trim(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
@@ -590,13 +585,41 @@ contains
             endif
         endif
         ! general options planning
+        l_scaling = .false.
         if( params%l_autoscale )then
+            ! Cropped dimensions
+            crop_factor      = min(1.0, params%smpd / min(params%smpd_targets2D(2),params%lpstop))
+            params%box_crop  = round2even(crop_factor*real(params%box))
+            params%box_crop  = min(params%box, params%box_crop)
+            crop_factor      = min(1.0, real(params%box_crop) / real(params%box))
+            params%smpd_crop = params%smpd / crop_factor
+            params%msk_crop  = params%msk  * crop_factor ! needed ???
+            l_scaling        = params%box_crop < params%box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)') '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ', params%box, '/', params%box_crop
+            endif
+        endif
+        call cline%set('smpd_crop', params%smpd_crop)
+        call cline%set('box_crop',  real(params%box_crop))
+        call cline%set('msk_crop',  real(params%msk_crop))
+        if( l_scaling )then
+            cline_cluster2D_stage1 = cline
+            cline_cluster2D_stage2 = cline
+            ! scale references
+            if( cline%defined('refs') )then
+                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                call cline_scalerefs%set('stk',    trim(params%refs))
+                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('smpd',   params%smpd)
+                call cline_scalerefs%set('newbox', real(params%box_crop))
+                call xscale%execute(cline_scalerefs)
+                call cline_cluster2D_stage1%set('refs',trim(refs_sc))
+            endif
             ! this workflow executes two stages of CLUSTER2D
             ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
-            cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
-            call cline_cluster2D_stage1%set('ptclw','no')
+            call cline_cluster2D_stage1%set('lpstop',params%lpstart)
+            call cline_cluster2D_stage1%set('ptclw', 'no')
             call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
@@ -604,48 +627,11 @@ contains
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
-            ! Scaling
-            call spproj%scale_projfile(params%smpd_targets2D(2), projfile_sc,&
-                &cline_cluster2D_stage1, cline_scale, dir=trim(STKPARTSDIR))
-            call spproj%kill
-            scale   = cline_scale%get_rarg('scale')
-            scaling = basename(projfile_sc) /= basename(orig_projfile)
-            if( scaling )then
-                if( l_euclid )then
-                    ! sigma2 need to be scaled, which will be undone prior
-                    ! to execution of make_cavgs at original sampling
-                    call cline_calc_pspec_distr%set('scale', 1./scale**2)
-                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-                endif
-                call cline_scale%delete('smpd') !!
-                call cline_scale%set('state',1.)
-                call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-                call xscale_proj%execute( cline_scale )
-                ! rename scaled projfile and stash original project file
-                ! such that the scaled project file has the same name as the original and can be followed from the GUI
-                call simple_copy_file(orig_projfile, orig_projfile_bak)
-                call spproj%read_non_data_segments(projfile_sc)
-                call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
-                call spproj%projinfo%set(1,'projfile',orig_projfile)
-                call spproj%write_non_data_segments(projfile_sc)
-                call spproj%kill
-                call simple_rename(projfile_sc,orig_projfile)
-                deallocate(projfile_sc)
-                ! scale references
-                if( cline%defined('refs') )then
-                    call cline_scalerefs%set('stk', trim(params%refs))
-                    refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                    call cline_scalerefs%set('outstk', trim(refs_sc))
-                    call cline_scalerefs%set('smpd', params%smpd)
-                    call cline_scalerefs%set('newbox', cline_scale%get_rarg('newbox'))
-                    call xscale%execute(cline_scalerefs)
-                    call cline_cluster2D_stage1%set('refs',trim(refs_sc))
-                endif
-            else
-                if( l_euclid ) call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+            if( l_euclid )then
+                ! should take place somewhere else!!!!!!!!!!!!!!!!!!!!!
+                call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
             ! execution
-            call cline_cluster2D_stage1%set('projfile', trim(orig_projfile))
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()
@@ -657,9 +643,8 @@ contains
             endif
             last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
             cavgs            = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//params%ext
-            ! Stage 2: refinement stage, down-scaling, no extremal updates, optional incremental
+            ! Stage 2: refinement stage, little extremal updates, optional incremental
             !          learning for acceleration
-            cline_cluster2D_stage2 = cline
             call cline_cluster2D_stage2%set('refs', cavgs)
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
@@ -669,11 +654,10 @@ contains
                 call cline_cluster2D_stage2%set('objfun',      'euclid')
                 call cline_cluster2D_stage2%set('needs_sigma', 'yes')
             endif
-            trs_stage2 = MSK_FRAC * params%mskdiam / (2 * params%smpd_targets2D(2))
+            trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
             trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! execution
-            call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()
@@ -686,30 +670,16 @@ contains
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
             ! Updates project and references
-            if( scaling )then
-                ! shift modulation
-                call spproj_sc%read(orig_projfile)
-                call spproj_sc%os_ptcl2D%mul_shifts(1./scale)
-                call spproj%read(orig_projfile_bak)
-                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                spproj%os_cls2D  = spproj_sc%os_cls2D
-                spproj%os_cls3D  = spproj_sc%os_cls3D
-                call spproj%write(orig_projfile_bak)
-                call spproj%kill()
-                call spproj_sc%kill()
-                call simple_rename(orig_projfile_bak,orig_projfile)
+            if( l_scaling )then
                 if( l_euclid )then
-                    ! adjusts sigma2
-                    call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
+                    ! adjusts sigma2. WATCH OUT FOR CROP EFFECT ON SiGMA2 MAGNITUDE
+                    call scale_group_sigma2_magnitude(last_iter_stage2, 1.0)
                 endif
-                ! clean stacks
-                call simple_rmdir(STKPARTSDIR)
                 ! original scale references
                 cline_make_cavgs = cline ! ncls is transferred here
                 call cline_make_cavgs%delete('autoscale')
                 call cline_make_cavgs%delete('balance')
                 call cline_make_cavgs%set('prg',      'make_cavgs')
-                call cline_make_cavgs%set('projfile', orig_projfile)
                 call cline_make_cavgs%set('nparts',   real(params%nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
                 call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
@@ -739,10 +709,9 @@ contains
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         endif
         ! adding cavgs & FRCs to project
-        params%projfile = trim(orig_projfile)
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
         call spproj%write_segment_inside('out', params%projfile)
         ! clean
         call spproj%kill()
@@ -773,15 +742,18 @@ contains
     end subroutine exec_cluster2D_autoscale
 
     subroutine exec_cluster2D_distr( self, cline )
+        use simple_commander_imgproc, only: scale_commander
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(make_cavgs_commander_distr) :: xmake_cavgs
+        type(scale_commander)            :: xscale
         ! command lines
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_calc_sigma
+        type(cmdline) :: cline_scalerefs
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         character(len=STDLEN)     :: benchfname
@@ -789,7 +761,7 @@ contains
         type(parameters)          :: params
         type(builder)             :: build
         type(qsys_env)            :: qenv
-        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs
+        character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs, refs_sc
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
@@ -851,9 +823,9 @@ contains
         cline_make_cavgs        = cline ! ncls is transferred here
         cline_calc_sigma        = cline
         ! initialise static command line parameters and static job description parameters
-        call cline_cavgassemble%set(     'prg', 'cavgassemble')
-        call cline_make_cavgs%set(       'prg', 'make_cavgs')
-        call cline_calc_sigma%set('prg', 'calc_group_sigmas' ) ! required for local call
+        call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_make_cavgs%set(  'prg', 'make_cavgs')
+        call cline_calc_sigma%set(  'prg', 'calc_group_sigmas') ! required for local call
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -897,11 +869,28 @@ contains
                 else
                     call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
                 endif
-                call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
-                call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
+                if( params%box_crop == params%box )then
+                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
+                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
+                endif
             else
                 call cline_make_cavgs%set('refs', params%refs)
                 call xmake_cavgs%execute(cline_make_cavgs)
+            endif
+            ! scale references to box_crop
+            if( params%box_crop < params%box )then
+                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                call cline_scalerefs%set('stk',    trim(params%refs))
+                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('smpd',   params%smpd)
+                call cline_scalerefs%set('newbox', real(params%box_crop))
+                call xscale%execute(cline_scalerefs)
+                call cline%set('refs',trim(refs_sc))
+                ! to double check  for make_cavgs !!!!!!!!!!!!!!!!!!!!!!!
+                call copy_imgfile(trim(refs_sc), trim(params%refs),      params%smpd_crop, [1,params%ncls])
+                call copy_imgfile(trim(refs_sc), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
+                call copy_imgfile(trim(refs_sc), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
+                !!!!!!!!!!!!!!!!!!!!!!!!11
             endif
         else
             refs = trim(params%refs)

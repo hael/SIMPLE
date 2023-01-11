@@ -3784,6 +3784,7 @@ contains
         call self%projinfo%kill
         call self%jobproc%kill
         call self%compenv%kill
+        call self%bos%close
     end subroutine kill
 
     ! private supporting subroutines / functions
