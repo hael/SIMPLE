@@ -191,6 +191,7 @@ type :: parameters
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
+    integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
     integer :: box_extract
     integer :: boxpd=0
     integer :: class=1             !< cluster identity
@@ -971,15 +972,15 @@ contains
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
-                    ! smpd/box_crop
-                    if( .not.cline%defined('box_crop') .or. .not.cline%defined('smpd_crop') )then
-                        if( bos%is_opened() ) call bos%close
-                        call spproj%read_segment('out', self%projfile)
-                        call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
-                        call spproj%kill
-                        if( .not.cline%defined('box_crop') )  self%box_crop  = box
-                        if( .not.cline%defined('smpd_crop') ) self%smpd_crop = smpd
-                    endif
+                    ! smpd_box/box_crop
+                    ! if( .not.cline%defined('box_crop') .or. .not.cline%defined('smpd_crop') )then
+                    !     if( bos%is_opened() ) call bos%close
+                    !     call spproj%read_segment('out', self%projfile)
+                    !     call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
+                    !     call spproj%kill
+                    !     if( .not.cline%defined('box_crop') )  self%box_crop  = box
+                    !     if( .not.cline%defined('smpd_crop') ) self%smpd_crop = smpd
+                    ! endif
                 endif
             else
                 ! nothing to do for streaming, values set at runtime
@@ -1138,8 +1139,9 @@ contains
 
         !>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
-        self%xdimpd = round2even(self%alpha*real(self%box/2))
-        self%boxpd  = 2*self%xdimpd
+        self%xdimpd     = round2even(self%alpha*real(self%box/2))
+        self%boxpd      = 2*self%xdimpd
+        self%box_croppd = 2*round2even(self%alpha*real(self%box_crop/2))
         ! set derived Fourier related variables
         self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
         self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT

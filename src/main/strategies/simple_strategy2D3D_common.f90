@@ -239,7 +239,6 @@ contains
         class(image), intent(inout) :: img
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        type(ori)       :: oprev
         real            :: x, y, sdev_noise
         logical         :: iseven
         x = build_glob%spproj_field%get(iptcl, 'x')
@@ -289,13 +288,13 @@ contains
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
         integer :: filtsz
-        real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real    :: xyz(3), sharg
+        real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
+        real    :: xyz(3), sharg, crop_factor
         logical :: do_center
-        filtsz = build_glob%img%get_filtsz()
-        do_center = (params_glob%center .eq. 'yes')
+        filtsz = img_out%get_filtsz()
         ! centering only performed if params_glob%center.eq.'yes'
-        if( present(center) ) do_center = do_center .and. center
+        do_center = .false.
+        if( present(center) ) do_center = do_center .and. (params_glob%center .eq. 'yes')
         if( do_center )then
             if( present(xyz_in) )then
                 sharg = arg(xyz_in)
@@ -305,13 +304,14 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk)
+                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
-                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
+                    crop_factor = real(params_glob%box) / real(params_glob%box_crop)
+                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2)*crop_factor)
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
@@ -332,9 +332,9 @@ contains
         call img_in%clip(img_out)
         ! apply mask
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
+            call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         else
-            call img_out%mask(params_glob%msk, 'soft')
+            call img_out%mask(params_glob%msk_crop, 'soft')
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%ref_polarizer%div_by_instrfun(img_out)
