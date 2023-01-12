@@ -32,14 +32,16 @@ type ptcl_record
     integer   :: ind_in_stk = 0    !< index in stack
 end type ptcl_record
 
-integer                        :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
-integer                        :: istart     = 0, iend = 0 !< particle index range
-integer                        :: partsz     = 0           !< size of partition
-integer                        :: ncls       = 0           !< # classes
-integer                        :: filtsz     = 0           !< size of filter function or FSC
-integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
-integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
+integer                        :: ctfflag                   !< ctf flag <yes=1|no=0|flip=2>
+integer                        :: istart      = 0, iend = 0 !< particle index range
+integer                        :: partsz      = 0           !< size of partition
+integer                        :: ncls        = 0           !< # classes
+integer                        :: ldim(3)        = [0,0,0] !< logical dimension of image
+integer                        :: ldim_crop(3)   = [0,0,0] !< logical dimension of cropped image
+integer                        :: ldim_pd(3)     = [0,0,0] !< logical dimension of image, padded
+integer                        :: ldim_croppd(3) = [0,0,0] !< logical dimension of cropped image, padded
 real                           :: smpd       = 0.          !< sampling distance
+real                           :: smpd_crop  = 0.          !< cropped sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
 type(image),       allocatable :: cavgs_even(:)            !< class averages
 type(image),       allocatable :: cavgs_odd(:)             !< -"-
@@ -102,11 +104,12 @@ contains
         l_stream      = (trim(params_glob%stream) .eq. 'yes') .and. params_glob%l_wiener_part
         ! smpd
         smpd          = params_glob%smpd
+        smpd_crop     = params_glob%smpd_crop
         ! set ldims
-        ldim          = [params_glob%box,params_glob%box,1]
+        ldim          = [params_glob%box,  params_glob%box,  1]
         ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
-        ldim_pd(3)    = 1
-        filtsz        = build_glob%img%get_filtsz()
+        ldim_crop     = [params_glob%box_crop,  params_glob%box_crop,  1]
+        ldim_croppd   = [params_glob%box_croppd,params_glob%box_croppd,1]
         ! ML-regularization
         l_ml_reg      = params_glob%l_ml_reg
         ! build arrays
@@ -120,19 +123,19 @@ contains
         endif
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_odd(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_merged(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call cavgs_even(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+            call cavgs_odd(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+            call cavgs_merged(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+            call ctfsqsums_even(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+            call ctfsqsums_odd(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+            call ctfsqsums_merged(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
             if( l_stream )then
-                call cavgs_merged_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-                call cavgs_even_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-                call cavgs_odd_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-                call ctfsqsums_even_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-                call ctfsqsums_odd_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
-                call ctfsqsums_merged_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call cavgs_merged_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+                call cavgs_even_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+                call cavgs_odd_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+                call ctfsqsums_even_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+                call ctfsqsums_odd_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
+                call ctfsqsums_merged_wfilt(icls)%new(ldim_croppd,params_glob%smpd_crop,wthreads=.false.)
             endif
         end do
         !$omp end parallel do
@@ -274,9 +277,9 @@ contains
         integer :: icls
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim_pd,smpd,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim_pd,smpd,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim_pd,smpd,wthreads=.false.)
+            call cavgs_even(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
+            call cavgs_odd(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
+            call cavgs_merged(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
             call cavgs_even(icls)%zero_and_flag_ft
             call cavgs_odd(icls)%zero_and_flag_ft
             call cavgs_merged(icls)%zero_and_flag_ft
@@ -284,7 +287,7 @@ contains
             call ctfsqsums_odd(icls)%zero_and_flag_ft
             call ctfsqsums_merged(icls)%zero_and_flag_ft
             if( l_stream )then
-                call cavgs_merged_wfilt(icls)%new(ldim_pd,smpd,wthreads=.false.)
+                call cavgs_merged_wfilt(icls)%new(ldim_croppd,smpd_crop,wthreads=.false.)
                 call cavgs_even_wfilt(icls)%zero_and_flag_ft
                 call cavgs_odd_wfilt(icls)%zero_and_flag_ft
                 call ctfsqsums_even_wfilt(icls)%zero_and_flag_ft
@@ -334,9 +337,10 @@ contains
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale
-        integer :: batch_iprecs(READBUFFSZ)
-        integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2), sigma2_kfromto(2)
-        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
+        integer :: batch_iprecs(READBUFFSZ), fdims(3), fdims_crop(3), logi_lims_crop(3,2), logi_lims(3,2)
+        integer :: cyc_limsR(2,2), cyc_lims(3,2)
+        integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
+        integer :: iprec, i, sh, iwinsz, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
@@ -361,7 +365,7 @@ contains
             endif
         enddo
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
-        nstks = last_stkind - first_stkind + 1
+        nstks     = last_stkind - first_stkind + 1
         reg_scale = 1.0
         if( l_ml_reg )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
@@ -378,14 +382,20 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-        logi_lims       = cgrid_imgs(1)%loop_lims(2)
-        cyc_lims        = cgrid_imgs(1)%loop_lims(3)
-        nyq             = cgrid_imgs(1)%get_lfny(1)
-        fdims           = cgrid_imgs(1)%get_array_shape()
-        interp_shlim    = nyq + 1
-        cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
-        cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),READBUFFSZ))
+        logi_lims      = cgrid_imgs(1)%loop_lims(2)
+        fdims          = cgrid_imgs(1)%get_array_shape()
+        cyc_lims       = cavgs_merged(1)%loop_lims(3)
+        cyc_limsR(:,1) = cyc_lims(1,:)
+        cyc_limsR(:,2) = cyc_lims(2,:)
+        allocate(tvals(fdims(1),fdims(2),READBUFFSZ))
+        logi_lims_crop = cavgs_merged(1)%loop_lims(2)
+        cyc_lims_crop  = cavgs_merged(1)%loop_lims(3)
+        nyq_crop       = cavgs_merged(1)%get_lfny(1)
+        fdims_crop     = cavgs_merged(1)%get_array_shape()
+        cyc_lims_cropR(:,1) = cyc_lims_crop(1,:)
+        cyc_lims_cropR(:,2) = cyc_lims_crop(2,:)
+        allocate(cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ), rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
+        interp_shlim = nyq_crop + 1
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -444,8 +454,8 @@ contains
                     endif
                     ! ML-regularization
                     if( l_ml_reg )then
-                        do h=logi_lims(1,1),logi_lims(1,2)
-                            do k=logi_lims(2,1),logi_lims(2,2)
+                        do h=logi_lims_crop(1,1),logi_lims_crop(1,2)
+                            do k=logi_lims_crop(2,1),logi_lims_crop(2,2)
                                 sh = nint(hyp(real(h),real(k)))                 ! shell in padded image
                                 if( sh > interp_shlim )cycle
                                 sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
@@ -464,8 +474,8 @@ contains
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
-                    do h=logi_lims(1,1),logi_lims(1,2)
-                        do k=logi_lims(2,1),logi_lims(2,2)
+                    do h = logi_lims_crop(1,1),logi_lims_crop(1,2)
+                        do k = logi_lims_crop(2,1),logi_lims_crop(2,2)
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > interp_shlim )cycle
                             ! Rotation
@@ -500,7 +510,8 @@ contains
                             tval    = tval    + kw * tvals(phys(1),phys(2),i)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
                             ! update with interpolated values
-                            phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                            phys = cavgs_merged(1)%comp_addr_phys(h,k)
+                            ! phys = cgrid_imgs(i)%comp_addr_phys(h,k)
                             cmats(phys(1),phys(2),i) = fcompl + fcompll
                             rhos(phys(1),phys(2),i)  = tval*tval
                         end do
@@ -549,7 +560,7 @@ contains
                         ! Rotation matrix
                         call rotmat2d(-precs(iprec)%e3, mat)
                         ! Interpolation
-                        do h = logi_lims(1,1),radfirstpeak
+                        do h = logi_lims_crop(1,1),radfirstpeak
                             do k = -radfirstpeak,radfirstpeak
                                 sh = nint(hyp(real(h),real(k)))
                                 if( sh > radfirstpeak )cycle
@@ -586,7 +597,7 @@ contains
                                 tval    = tval    + kw * tvals(phys(1),phys(2),i)
                                 if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
                                 ! update with interpolated values
-                                phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                                phys = cavgs_merged(1)%comp_addr_phys(h,k)
                                 cmats(phys(1),phys(2),i) = fcompl + fcompll
                                 rhos(phys(1),phys(2),i)  = tval*tval
                             end do
@@ -708,13 +719,13 @@ contains
                     call cavgs_merged_wfilt(icls)%ifft()
                 endif
             endif
-            call cavgs_even(icls)%clip_inplace(ldim)
-            call cavgs_odd(icls)%clip_inplace(ldim)
-            call cavgs_merged(icls)%clip_inplace(ldim)
+            call cavgs_even(icls)%clip_inplace(ldim_crop)
+            call cavgs_odd(icls)%clip_inplace(ldim_crop)
+            call cavgs_merged(icls)%clip_inplace(ldim_crop)
             if( l_stream )then
-                call cavgs_even_wfilt(icls)%clip_inplace(ldim)
-                call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
-                call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+                call cavgs_even_wfilt(icls)%clip_inplace(ldim_crop)
+                call cavgs_odd_wfilt(icls)%clip_inplace(ldim_crop)
+                call cavgs_merged_wfilt(icls)%clip_inplace(ldim_crop)
             endif
             ! gridding correction
             call cavgs_even(icls)%div(gridcorrection_img)
@@ -737,8 +748,9 @@ contains
         integer,          intent(in) :: which_iter
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
-        integer :: icls, find, find_plate, pop, eo_pop(2)
-        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
+        integer :: eo_pop(2), icls, find, find_plate, pop, filtsz_crop
+        filtsz_crop = cavgs_even(1)%get_filtsz()
+        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz_crop))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
@@ -749,8 +761,8 @@ contains
                 eo_pop = prev_eo_pops(icls,:) + eo_class_pop(icls)
                 pop    = sum(eo_pop)
                 if( pop > 0 )then
-                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+                    call even_imgs(icls)%mask(params_glob%msk_crop, 'soft')
+                    call odd_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                     call even_imgs(icls)%fft()
                     call odd_imgs(icls)%fft()
                     call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -798,16 +810,16 @@ contains
                     call cavgs_merged(icls)%ifft()
                     call cavgs_even(icls)%ifft()
                     call cavgs_odd(icls)%ifft()
-                    call cavgs_even(icls)%clip_inplace(ldim)
-                    call cavgs_odd(icls)%clip_inplace(ldim)
-                    call cavgs_merged(icls)%clip_inplace(ldim)
+                    call cavgs_even(icls)%clip_inplace(ldim_crop)
+                    call cavgs_odd(icls)%clip_inplace(ldim_crop)
+                    call cavgs_merged(icls)%clip_inplace(ldim_crop)
                     if( l_stream )then
                         call cavgs_merged_wfilt(icls)%ifft
                         call cavgs_even_wfilt(icls)%ifft()
                         call cavgs_odd_wfilt(icls)%ifft()
-                        call cavgs_even_wfilt(icls)%clip_inplace(ldim)
-                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
-                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_even_wfilt(icls)%clip_inplace(ldim_crop)
+                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim_crop)
+                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim_crop)
                     endif
                     ! average low-resolution info between eo pairs to keep things in register
                     call cavgs_merged(icls)%fft()
@@ -829,13 +841,13 @@ contains
                         call cavgs_odd_wfilt(icls)%ifft()
                     endif
                 else
-                    call cavgs_even(icls)%clip_inplace(ldim)
-                    call cavgs_odd(icls)%clip_inplace(ldim)
-                    call cavgs_merged(icls)%clip_inplace(ldim)
+                    call cavgs_even(icls)%clip_inplace(ldim_crop)
+                    call cavgs_odd(icls)%clip_inplace(ldim_crop)
+                    call cavgs_merged(icls)%clip_inplace(ldim_crop)
                     if( l_stream )then
-                        call cavgs_even_wfilt(icls)%clip_inplace(ldim)
-                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
-                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+                        call cavgs_even_wfilt(icls)%clip_inplace(ldim_crop)
+                        call cavgs_odd_wfilt(icls)%clip_inplace(ldim_crop)
+                        call cavgs_merged_wfilt(icls)%clip_inplace(ldim_crop)
                     endif
                 endif
             end do
@@ -843,8 +855,8 @@ contains
         else
             !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
             do icls=1,ncls
-                call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+                call even_imgs(icls)%mask(params_glob%msk_crop, 'soft')
+                call odd_imgs(icls)%mask(params_glob%msk_crop, 'soft')
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
                 call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -905,7 +917,7 @@ contains
         ssnr = 0.0
         tau2 = 0.0
         sig2 = 0.0
-        scale = real(ldim(1)) / real(ldim_pd(1))
+        scale = real(ldim_crop(1)) / real(ldim_croppd(1))
         pad_factor = 1.0 / scale**2
         ! SSNR
         do k = 1,sz
@@ -1038,23 +1050,23 @@ contains
         integer        :: icls
         select case(which)
             case('even')
-                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
+                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
                 do icls=1,ncls
-                    call cavgs_even(icls)%new(ldim,smpd,wthreads=.false.)
+                    call cavgs_even(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
                     call stkio_r%read(icls, cavgs_even(icls))
                 end do
                 call stkio_r%close
             case('odd')
-                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
+                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
                 do icls=1,ncls
-                    call cavgs_odd(icls)%new(ldim,smpd,wthreads=.false.)
+                    call cavgs_odd(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
                     call stkio_r%read(icls, cavgs_odd(icls))
                 end do
                 call stkio_r%close
             case('merged')
-                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
+                call stkio_r%open(trim(fname), smpd_crop, 'read', bufsz=ncls)
                 do icls=1,ncls
-                    call cavgs_merged(icls)%new(ldim,smpd,wthreads=.false.)
+                    call cavgs_merged(icls)%new(ldim_crop,smpd_crop,wthreads=.false.)
                     call stkio_r%read(icls, cavgs_merged(icls))
                 end do
                 call stkio_r%close
@@ -1080,10 +1092,10 @@ contains
         allocate(ctowf, source='ctfsqsums_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
-                call stkio(1)%open(cae, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                call stkio(2)%open(cao, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                call stkio(3)%open(cte, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                call stkio(4)%open(cto, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(1)%open(cae, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(2)%open(cao, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(3)%open(cte, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(4)%open(cto, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
                 do icls=1,ncls
                     call stkio(1)%read(icls, cavgs_even(icls))
                     call stkio(2)%read(icls, cavgs_odd(icls))
@@ -1100,10 +1112,10 @@ contains
                             call ctfsqsums_odd_wfilt(icls)%set(ctfsqsums_odd(icls))
                         end do
                     else
-                        call stkio(1)%open(caewf, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                        call stkio(2)%open(caowf, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                        call stkio(3)%open(ctewf, smpd, 'read', bufsz=ncls, is_ft=.true.)
-                        call stkio(4)%open(ctowf, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(1)%open(caewf, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(2)%open(caowf, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(3)%open(ctewf, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(4)%open(ctowf, smpd_crop, 'read', bufsz=ncls, is_ft=.true.)
                         do icls=1,ncls
                             call stkio(1)%read(icls, cavgs_even_wfilt(icls))
                             call stkio(2)%read(icls, cavgs_odd_wfilt(icls))
@@ -1119,10 +1131,10 @@ contains
             case('write')
                 is_ft = cavgs_even(1)%is_ft()
                 ldim_here  = cavgs_even(1)%get_ldim()
-                call stkio(1)%open(cae, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                call stkio(2)%open(cao, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                call stkio(3)%open(cte, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                call stkio(4)%open(cto, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(1)%open(cae, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(2)%open(cao, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(3)%open(cte, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(4)%open(cto, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 do icls=1,ncls
                     call stkio(1)%write(icls, cavgs_even(icls))
                     call stkio(2)%write(icls, cavgs_odd(icls))
@@ -1130,10 +1142,10 @@ contains
                     call stkio(4)%write(icls, ctfsqsums_odd(icls))
                 end do
                 if( l_stream )then
-                    call stkio(1)%open(caewf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                    call stkio(2)%open(caowf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                    call stkio(3)%open(ctewf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
-                    call stkio(4)%open(ctowf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(1)%open(caewf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(2)%open(caowf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(3)%open(ctewf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(4)%open(ctowf, smpd_crop, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                     do icls=1,ncls
                         call stkio(1)%write(icls, cavgs_even_wfilt(icls))
                         call stkio(2)%write(icls, cavgs_odd_wfilt(icls))
@@ -1189,12 +1201,12 @@ contains
         endif
         call init_cavgs_sums
         ! construct image objs for read/sum
-        ldim_here    = ldim_pd
+        ldim_here    = ldim_croppd
         ldim_here(3) = ncls
-        call imgs4read(1)%new(ldim_here, smpd)
-        call imgs4read(2)%new(ldim_here, smpd)
-        call imgs4read(3)%new(ldim_here, smpd)
-        call imgs4read(4)%new(ldim_here, smpd)
+        call imgs4read(1)%new(ldim_here, smpd_crop)
+        call imgs4read(2)%new(ldim_here, smpd_crop)
+        call imgs4read(3)%new(ldim_here, smpd_crop)
+        call imgs4read(4)%new(ldim_here, smpd_crop)
         call imgs4read(1)%set_ft(.true.)
         call imgs4read(2)%set_ft(.true.)
         call imgs4read(3)%set_ft(.true.)
@@ -1331,12 +1343,12 @@ contains
         class(image), intent(inout) :: img
         real    :: center(3),dist(2),pid,sinc,pad_sc
         integer :: i,j
-        call img%new(ldim,smpd)
-        center = real(ldim/2 + 1)
-        pad_sc = 1. / real(ldim_pd(1))
-        do i = 1, ldim(1)
+        call img%new(ldim_crop,smpd_crop)
+        center = real(ldim_crop/2 + 1)
+        pad_sc = 1. / real(ldim_croppd(1))
+        do i = 1, ldim_crop(1)
             dist(1) = pad_sc * (real(i) - center(1))
-            do j = 1, ldim(2)
+            do j = 1, ldim_crop(2)
                 dist(2) = pad_sc * (real(j) - center(2))
                 pid     = PI * sqrt(sum(dist**2.))
                 if( pid < TINY )then
