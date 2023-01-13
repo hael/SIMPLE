@@ -54,9 +54,9 @@ contains
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        states            = build_glob%spproj_field%get_all('state')
-        scores            = build_glob%spproj_field%get_all('corr')
-        updatecnts        = build_glob%spproj_field%get_all('updatecnt')
+        states            = os%get_all('state')
+        scores            = os%get_all('corr')
+        updatecnts        = os%get_all('updatecnt')
         lim_updatecnt     = maxval(updatecnts) - 0.5
         avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
         if( params_glob%l_frac_update )then
@@ -64,7 +64,7 @@ contains
         else
             allocate(mask(size(updatecnts)), source=updatecnts > 0.5            .and. states > 0.5)
         endif
-        pws               = build_glob%spproj_field%get_all('w')
+        pws               = os%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call os%stats('corr',      self%score,     mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)

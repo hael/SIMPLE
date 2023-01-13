@@ -75,8 +75,7 @@ contains
         self%file_header(4) = real(self%nstates)
         self%headsz         = sizeof(self%file_header)
         ! alloc
-        allocate( self%frcs(self%nstates,self%nprojs,self%filtsz) )
-        self%frcs   = 0.0
+        allocate(self%frcs(self%nstates,self%nprojs,self%filtsz), source=0.0)
         self%exists = .true.
     end subroutine new
 
@@ -289,27 +288,10 @@ contains
         real,              intent(in)  :: newsmpd
         integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out
-        real    :: x, d, scale
-        integer :: istate, iproj, sh, l,r
         if( newbox <= self%box4frc_calc ) THROW_HARD('New <= old filter size; downsample')
         call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
-        scale = real(self%filtsz) / real(self_out%filtsz)
-        do istate = 1,self%nstates
-            do iproj = 1,self%nprojs
-                do sh = 1,self_out%filtsz
-                    x = scale*real(sh)
-                    l = max(1, floor(x))
-                    r = min(self%filtsz, ceiling(x))
-                    if( l==r )then
-                        self_out%frcs(istate, iproj,sh) = self%frcs(istate, iproj,l)
-                    else
-                        d = x-real(l)
-                        self_out%frcs(istate, iproj,sh) = (1.-d) * self%frcs(istate, iproj,l) +&
-                                                        &     d  * self%frcs(istate, iproj,r)
-                    endif
-                enddo
-            enddo
-        enddo
+        self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
+        if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
     end subroutine upsample
 
     ! I/O
