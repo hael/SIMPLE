@@ -96,7 +96,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=LONGSTRLEN) :: gainref=''           !< gain reference for movie alignment
-    character(len=LONGSTRLEN) :: import_dir=''       !< dir to import .star files from for import_starproject
+    character(len=LONGSTRLEN) :: import_dir=''        !< dir to import .star files from for import_starproject
     character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt)
     character(len=LONGSTRLEN) :: infile2=''           !< file with inputs(.txt)
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
@@ -155,6 +155,7 @@ type :: parameters
     character(len=STDLEN)     :: fbody=''             !< file body
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
+    character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}

@@ -18,7 +18,7 @@ implicit none
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
-public :: update_chunks, classify_new_chunks, import_chunks_into_pool, update_user_params
+public :: update_chunks, classify_new_chunks, import_chunks_into_pool, update_user_params, copy_optics_groups
 public :: update_path
 
 private
@@ -877,6 +877,156 @@ contains
         endif
         call os%kill
     end subroutine update_user_params
+    
+    !> update optics groups from master projfile. Allows asynchronous assignment.
+    subroutine copy_optics_groups( spproj )
+        type(sp_project), intent(inout) :: spproj
+        integer                         :: nori, spori
+        character(len=:), allocatable   :: intg, bsname
+        write(logfhandle,'(A)')'>>> COPYING OPTICS GROUPS'
+        ! update mics
+        do nori = 1, pool_proj%os_mic%get_noris()
+            if(pool_proj%os_mic%isthere(nori, "intg")) then
+                intg   = trim(pool_proj%os_mic%get_static(nori, "intg"))
+                bsname = trim(get_bsname(intg))
+                spori  = match_field(spproj%os_mic, 'bsname', bsname)
+                if(spori > 0) then
+                    if(spproj%os_mic%isthere(spori, "tiltx")) call pool_proj%os_mic%set(nori, "tiltx", spproj%os_mic%get(spori, "tiltx"))
+                    if(spproj%os_mic%isthere(spori, "tilty")) call pool_proj%os_mic%set(nori, "tilty", spproj%os_mic%get(spori, "tilty"))
+                    if(spproj%os_mic%isthere(spori, "ogid" )) call pool_proj%os_mic%set(nori, "ogid",  spproj%os_mic%get(spori, "ogid" ))
+                end if
+            end if
+        end do
+        pool_proj%os_optics = spproj%os_optics
+        if(allocated(intg))   deallocate(intg)
+        if(allocated(bsname)) deallocate(bsname)
+        
+        contains
+        
+            integer function match_field( sporis, field, matchstr )
+                type(oris),       intent(inout)    :: sporis 
+                character(len=*), intent(in)       :: field, matchstr
+                character(len=:), allocatable      :: fieldstr, teststr
+                integer                            :: nori
+                match_field = 0
+                do nori = 1, sporis%get_noris()
+                    if(sporis%isthere(nori, field)) then
+                        fieldstr = trim(sporis%get_static(nori, field))
+                        teststr  = trim(get_bsname(fieldstr))
+                        if(index(matchstr, teststr) == 1) then
+                            match_field = nori
+                            exit
+                        end if
+                    end if
+                end do
+                if(allocated(fieldstr)) deallocate(fieldstr)
+                if(allocated(teststr))  deallocate(teststr)
+            end function match_field
+            
+            character(len=LONGSTRLEN) function get_bsname(path)
+                character(len=*), intent(in)  :: path
+                character(len=:), allocatable :: filename
+                filename = basename(path)
+                if(index(filename, INTGMOV_SUFFIX) > 0) then
+                    filename = filename(:index(filename, INTGMOV_SUFFIX) - 1)
+                end if
+                if(index(filename, EXTRACT_STK_FBODY) > 0) then
+                    filename = filename(index(filename, EXTRACT_STK_FBODY) + len(EXTRACT_STK_FBODY):)
+                end if
+                if(index(filename, '_fractions') > 0) then
+                    filename = filename(:index(filename, '_fractions') - 1)
+                end if
+                if(index(filename, '_EER') > 0) then
+                    filename = filename(:index(filename, '_EER') - 1)
+                end if
+                get_bsname = trim(adjustl(filename))
+                if(allocated(filename)) deallocate(filename)
+            end function get_bsname
+            
+    end subroutine copy_optics_groups
+
+    !> update optics groups for stks and particles from optics groups assigned to mics
+    subroutine propagate_optics_groups()
+        integer                         :: nori, spori, ptclori
+        real                            :: fromp, top, ogid, stkbox, box
+        character(len=:), allocatable   :: stk, bsname
+        write(logfhandle,'(A)')'>>> PROPAGATING OPTICS GROUPS'
+        ! update stks and ptcls
+        do nori = 1, pool_proj%os_stk%get_noris()
+           if(pool_proj%os_stk%isthere(nori, "stk")) then
+                stk    = trim(pool_proj%os_stk%get_static(nori, "stk"))
+                bsname = trim(get_bsname(stk))
+                spori  = match_field(pool_proj%os_mic, 'intg', bsname)
+                if(spori > 0) then
+                    if(pool_proj%os_mic%isthere(spori, "ogid")) then
+                        ogid  = pool_proj%os_mic%get(spori, "ogid")
+                        fromp = pool_proj%os_stk%get(nori,  "fromp")
+                        top   = pool_proj%os_stk%get(nori,  "top"  )
+                        do ptclori = nint(fromp), nint(top)
+                            call pool_proj%os_ptcl2D%set(ptclori, "ogid", ogid)
+                            call pool_proj%os_ptcl3D%set(ptclori, "ogid", ogid)
+                        end do
+                        call pool_proj%os_stk%set(nori, "ogid", ogid)
+                    end if
+                end if
+            end if
+            if(pool_proj%os_stk%isthere(nori, "box") .and. pool_proj%os_stk%isthere(nori, "ogid")) then
+                ogid   = pool_proj%os_stk%get(nori, 'ogid')
+                stkbox = pool_proj%os_stk%get(nori, 'box')
+                if(ogid > 0.0 .and. stkbox > 0.0) then
+                    box = pool_proj%os_optics%get(nint(ogid), 'box')
+                    if(box == 0.0) then
+                        call pool_proj%os_optics%set(nint(ogid), 'box', stkbox)
+                    end if
+                end if
+            end if
+        end do
+        if(allocated(stk))    deallocate(stk)
+        if(allocated(bsname)) deallocate(bsname)
+        
+        contains
+        
+            integer function match_field( sporis, field, matchstr )
+                type(oris),       intent(inout)    :: sporis 
+                character(len=*), intent(in)       :: field, matchstr
+                character(len=:), allocatable      :: fieldstr, teststr
+                integer                            :: nori
+                match_field = 0
+                do nori = 1, sporis%get_noris()
+                    if(sporis%isthere(nori, field)) then
+                        fieldstr = trim(sporis%get_static(nori, field))
+                        teststr  = trim(get_bsname(fieldstr))
+                        if(index(matchstr, teststr) == 1) then
+                            match_field = nori
+                            exit
+                        end if
+                    end if
+                end do
+                if(allocated(fieldstr)) deallocate(fieldstr)
+                if(allocated(teststr))  deallocate(teststr)
+            end function match_field
+            
+            character(len=LONGSTRLEN) function get_bsname(path)
+                character(len=*), intent(in)  :: path
+                character(len=:), allocatable :: filename
+                filename = basename(path)
+                if(index(filename, INTGMOV_SUFFIX) > 0) then
+                    filename = filename(:index(filename, INTGMOV_SUFFIX) - 1)
+                end if
+                if(index(filename, EXTRACT_STK_FBODY) > 0) then
+                    filename = filename(index(filename, EXTRACT_STK_FBODY) + len(EXTRACT_STK_FBODY):)
+                end if
+                if(index(filename, '_fractions') > 0) then
+                    filename = filename(:index(filename, '_fractions') - 1)
+                end if
+                if(index(filename, '_EER') > 0) then
+                    filename = filename(:index(filename, '_EER') - 1)
+                end if
+                get_bsname = trim(adjustl(filename))
+                if(allocated(filename)) deallocate(filename)
+            end function get_bsname
+            
+    end subroutine propagate_optics_groups
 
     subroutine classify_pool
         use simple_ran_tabu
@@ -1106,6 +1256,7 @@ contains
                 ! automatic pruning performed upon final writing
                 call pool_proj%prune_particles
             endif
+            call propagate_optics_groups
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
             ! preserve down-scaling
@@ -1123,6 +1274,7 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
+            call propagate_optics_groups
             call pool_proj%write(projfile)
             if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
                 ! automatic pruning performed upon final writing
@@ -1135,7 +1287,6 @@ contains
             prev_snapshot_cavgs = trim(cavgsfname)
         endif
         ! classes export
-        if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
         call starproj%export_cls2D(pool_proj)
         call pool_proj%os_cls2D%delete_entry('stk')
     end subroutine write_project_stream2D
@@ -1800,7 +1951,6 @@ contains
         call spproj%add_frcs2os_out(frcsfname, 'frc2D')
         call pool_proj%kill
         ! classes export
-        if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
         call starproj%export_cls2D(spproj)
         call spproj%os_cls2D%delete_entry('stk')
         ! write whole project
