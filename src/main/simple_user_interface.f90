@@ -2163,12 +2163,18 @@ contains
         &'Import project in in star format',&                                   ! descr_short
         &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 0, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
+        import_starproject%gui_submenu_list = "data"
+        import_starproject%advanced = .false.
         ! image input/output
         ! parameter input/output
-        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'dir', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
-        ! alternative inputs
+        call import_starproject%set_input('parm_ios', 1, 'import_dir',  'dir',   'Import directory', 'Directory to import data from. In auto mode should be output from an external job e.g. relion', 'e.g. MotionCorr/job001', .true., '')
+        call import_starproject%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
+        call import_starproject%set_input('parm_ios', 2, 'starfile',    'file',  'Metadata starfile', 'Path to starfile containing micrograph/particle metadata. Only required when not using auto mode', 'e.g. micrographs.star', .false., '')
+        call import_starproject%set_gui_params('parm_ios', 2, submenu="data", advanced=.false.)
+        call import_starproject%set_input('parm_ios', 3, 'import_type', 'multi', 'Import type', 'Type of data contained in starfile (auto|mic|ptcl2D|ptcl3D){auto}. Auto mode (default) will attempt to determine this automatically', '(auto|mic|ptcl2D|ptcl3D){auto}', .false., 'auto')
+        call import_starproject%set_gui_params('parm_ios', 3, submenu="data", advanced=.false.)
         ! <empty>
         ! search controls
         ! <empty>

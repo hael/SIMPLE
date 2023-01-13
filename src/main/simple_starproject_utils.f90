@@ -6,7 +6,7 @@ implicit none
 
 public :: LEN_LINE, LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
 public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
-public :: split_dataline, h_clust
+public :: split_dataline, h_clust, find_separators, get_value_from_ptcls
 public :: VERBOSE_OUTPUT
 private
 #include "simple_local_flags.inc"
@@ -53,6 +53,7 @@ type star_file
     type(star_data)           :: clusters2D
     integer, allocatable      :: opticsmap(:)
     integer, allocatable      :: stkmap(:,:) ! (stkid : z)
+    integer, allocatable      :: stkstates(:)
     integer                   :: stkptclcount
     logical                   :: initialised = .false.
 end type star_file
@@ -279,5 +280,27 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), char(9), 'Class ', i, 'Population ', populations(i)
         enddo
     end subroutine h_clust
-
+    
+    subroutine find_separators(seppos, path)
+        integer, allocatable, intent(inout)   :: seppos(:)
+        character(len=LONGSTRLEN), intent(in) :: path
+        integer                               :: i
+        do i=1, len(path)
+            if(path(i:i) == "/") seppos = [seppos, i]
+        end do
+    end subroutine find_separators
+    
+    real function get_value_from_ptcls(sporis, fromp, top, key)
+        class(oris),      intent(inout) :: sporis
+        character(len=*), intent(in)    :: key
+        integer                         :: fromp, top, iptcl
+        get_value_from_ptcls = 0.0
+        do iptcl = fromp, top
+            if(sporis%isthere(iptcl, key)) then
+                get_value_from_ptcls = sporis%get(iptcl, key)
+                exit
+            end if
+        end do        
+    end function get_value_from_ptcls
+    
 end module simple_starproject_utils

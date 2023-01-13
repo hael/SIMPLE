@@ -319,6 +319,7 @@ contains
         end do
         ! termination
         if( l_cluster2D )then
+            call copy_optics_groups(spproj)
             call terminate_stream2D(.true.)
         else
             call write_project
@@ -337,9 +338,9 @@ contains
             !>  write starfile snapshot
             subroutine write_migrographs_starfile
                 if (spproj%os_mic%get_noris() > 0) then
-                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
                     call starproj%assign_optics(cline, spproj)
                     call starproj%export_mics(cline, spproj)
+                    if(allocated(starproj%tiltinfo)) deallocate(starproj%tiltinfo)
                 end if
             end subroutine write_migrographs_starfile
 
