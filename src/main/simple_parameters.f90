@@ -981,6 +981,8 @@ contains
                     !     if( .not.cline%defined('box_crop') )  self%box_crop  = box
                     !     if( .not.cline%defined('smpd_crop') ) self%smpd_crop = smpd
                     ! endif
+                    if( .not.cline%defined('box_crop') )  self%box_crop  = self%box
+                    if( .not.cline%defined('smpd_crop') ) self%smpd_crop = self%smpd
                 endif
             else
                 ! nothing to do for streaming, values set at runtime
