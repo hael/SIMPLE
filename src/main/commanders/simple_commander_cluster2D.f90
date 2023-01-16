@@ -282,6 +282,20 @@ contains
             call spproj%os_ptcl2D%partition_eo
             call spproj%write_segment_inside(params%oritype,params%projfile)
         endif
+        ! Cropped dimensions
+        scale_factor     = 1.0
+        params%smpd_crop = params%smpd
+        params%box_crop  = params%box
+        params%msk_crop  = params%msk
+        l_scaling        = .false.
+        if( params%l_autoscale .and. params%box >= MINBOX )then
+            call autoscale(params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
+            params%msk_crop = params%msk * scale_factor
+            l_scaling       = params%box_crop < params%box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+            endif
+        endif
         ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
@@ -291,26 +305,9 @@ contains
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
                 call spproj%os_ptcl2D%set_all2single('w', 1.0)
                 call spproj%write_segment_inside(params%oritype)
+                if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale_factor**2)
+                call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
-        endif
-        ! Cropped dimensions
-        l_scaling = .false.
-        if( params%l_autoscale .and. params%box >= MINBOX )then
-            call autoscale( params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor)
-            params%msk_crop = params%msk * scale_factor
-            l_scaling       = params%box_crop < params%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
-            endif
-        else
-            scale_factor     = 1.0
-            params%smpd_crop = params%smpd
-            params%box_crop  = params%box
-            params%msk_crop  = params%msk
-        endif
-        if( l_euclid )then
-            call cline_calc_pspec_distr%set('scale', 1./scale_factor**2) ! check for scale_factor
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
         endif
         ! Clustering command lines & cropping
         cline_cluster2D1 = cline
@@ -322,8 +319,8 @@ contains
         call cline_cluster2D2%set('box_crop',  real(params%box_crop))
         call cline_cluster2D2%set('msk_crop',  real(params%msk_crop))
         ! resolutions limits
-        lp1 = max(2.*params%smpd, max(params%lp,TARGET_LP))
-        lp2 = max(2.*params%smpd, params%lp)
+        lp1 = max(2.*params%smpd_crop, max(params%lp,TARGET_LP))
+        lp2 = max(2.*params%smpd_crop, params%lp)
         call cline_cluster2D1%set('lp',   lp1)
         call cline_cluster2D2%set('lp',   lp2)
         ! first stage
@@ -401,7 +398,7 @@ contains
                 finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
             endif
         endif
-        ! update original project
+        ! update project
         call cline%set('endit',real(last_iter))
         if( l_scaling )then
             call rescale_cavgs(finalcavgs)
@@ -409,20 +406,21 @@ contains
             call rescale_cavgs(cavgs)
             cavgs = add2fbody(finalcavgs,params%ext,'_odd')
             call rescale_cavgs(cavgs)
+            call spproj%read_segment('out', params%projfile)
+            call spproj%read_segment('cls2D', params%projfile)
+            call spproj%read_segment('cls3D', params%projfile)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             call frcs_sc%read(FRCS_FILE)
-            call frcs_sc%upsample(params%smpd_crop, params%box, frcs) ! TO REDO !!!!!!!!!!!!!!!!!!!
+            call frcs_sc%upsample(params%smpd_crop, params%box, frcs)
             call frcs%write(FRCS_FILE)
             call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
             call frcs%kill
             call frcs_sc%kill
-            ! restores original project and deletes backup & scaled
-            call spproj%write(params%projfile)
-        else
-            call spproj%read_segment('out', params%projfile)
-            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
-            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-            call spproj%write_segment_inside('out', params%projfile)
+            call spproj%write_segment_inside('out',   params%projfile)
+            if( l_euclid )then
+                ! adjusts sigma2 for cropping
+                call scale_group_sigma2_magnitude(last_iter, scale_factor**2)
+            endif
         endif
         call spproj%kill
         ! ranking
@@ -458,7 +456,6 @@ contains
             end subroutine rescale_cavgs
 
     end subroutine exec_cleanup2D
-
 
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
@@ -508,7 +505,7 @@ contains
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', params%lpstart
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
         write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
-        smpd_target = min(params%smpd_targets2D(2),params%lpstop)
+        smpd_target = max(2.*params%smpd_crop,min(params%smpd_targets2D(2),params%lpstop))
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! read project file
@@ -532,17 +529,6 @@ contains
             call spproj%os_ptcl2D%partition_eo
             call spproj%write_segment_inside(params%oritype,params%projfile)
         endif
-        ! noise power estimates for objfun = euclid at original sampling
-        l_euclid = .false.
-        if( cline%defined('objfun') )then
-            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
-            if( l_euclid )then
-                cline_calc_pspec_distr  = cline
-                call cline_calc_pspec_distr%delete('scale')
-                call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
-                call spproj%os_ptcl2D%set_all2single('w', 1.0)
-            endif
-        endif
         ! Cropped dimensions
         l_scaling = .false.
         if( params%l_autoscale )then
@@ -557,6 +543,20 @@ contains
             params%smpd_crop = params%smpd
             params%box_crop  = params%box
             params%msk_crop  = params%msk
+        endif
+        ! noise power estimates for objfun = euclid at original sampling
+        l_euclid = .false.
+        if( cline%defined('objfun') )then
+            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+            if( l_euclid )then
+                cline_calc_pspec_distr  = cline
+                call cline_calc_pspec_distr%delete('scale')
+                call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
+                call spproj%os_ptcl2D%set_all2single('w', 1.0)
+                call spproj%write_segment_inside(params%oritype)
+                if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale**2)
+                call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+            endif
         endif
         ! Clustering command lines
         cline_cluster2D_stage1 = cline
@@ -590,10 +590,6 @@ contains
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
         else
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-        endif
-        if( l_euclid )then
-            ! should take place somewhere else!!!!!!!!!!!!!!!!!!!!!
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
         endif
         ! execution
         if( l_shmem )then
@@ -636,8 +632,8 @@ contains
         ! Updates project and references
         if( l_scaling )then
             if( l_euclid )then
-                ! adjusts sigma2. WATCH OUT FOR CROP EFFECT ON SiGMA2 MAGNITUDE
-                call scale_group_sigma2_magnitude(last_iter_stage2, 1.0)
+                ! adjusts sigma2 for cropping
+                call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
             endif
             ! original scale references
             cline_make_cavgs = cline ! ncls is transferred here

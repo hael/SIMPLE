@@ -118,7 +118,6 @@ type :: polarft_corrcalc
     procedure          :: get_nrots
     procedure          :: get_pdim
     procedure          :: get_pftsz
-    procedure          :: get_box
     procedure          :: get_rot
     procedure          :: get_roind
     procedure          :: get_coord
@@ -246,9 +245,9 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
-        self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
-        self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
-        self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
+        self%nrefs = nrefs                                   !< the number of references (logically indexded [1,nrefs])
+        self%pftsz = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%nrots = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -592,12 +591,6 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         get_pftsz = self%pftsz
     end function get_pftsz
-
-    pure function get_box( self ) result( box )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: box
-        box = self%ldim(1)
-    end function get_box
 
     !>  \brief is for getting the continuous in-plane rotation
     !!         corresponding to in-plane rotation index roind

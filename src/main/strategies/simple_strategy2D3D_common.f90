@@ -276,6 +276,10 @@ contains
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_match%div_by_instrfun(img)
         ! return in Fourier space
         call img%fft()
+        ! Fourier cropping scaling
+        if( params_glob%box > params_glob%box_crop )then
+            call img%mul( (real(params_glob%box) / real(params_glob%box_crop))**2 )
+        endif
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
