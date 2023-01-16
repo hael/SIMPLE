@@ -278,7 +278,7 @@ contains
         call img%fft()
         ! Fourier cropping scaling
         if( params_glob%box > params_glob%box_crop )then
-            call img%mul( (real(params_glob%box) / real(params_glob%box_crop))**2 )
+            call img%mul( real(params_glob%box) / real(params_glob%box_crop) )
         endif
     end subroutine prepimg4align
 
