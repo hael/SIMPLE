@@ -336,7 +336,7 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale, pad_scale
         integer :: batch_iprecs(READBUFFSZ), fdims(3), fdims_crop(3), logi_lims_crop(3,2), logi_lims(3,2)
         integer :: cyc_limsR(2,2), cyc_lims(3,2)
         integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
@@ -344,6 +344,7 @@ contains
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
+        logical :: l_pad_scale_correction
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -396,6 +397,9 @@ contains
         cyc_lims_cropR(:,2) = cyc_lims_crop(2,:)
         allocate(cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ), rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
+        ! Padding scale correction
+        l_pad_scale_correction = params_glob%box_crop < params_glob%box
+        pad_scale              = real(ldim_pd(1)) / real(ldim_croppd(1))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -440,6 +444,7 @@ contains
                     tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
                     call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
+                    if( l_pad_scale_correction ) call cgrid_imgs(i)%mul(pad_scale)
                     ! shift
                     call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
                     ! apply CTF to image, stores CTF values
