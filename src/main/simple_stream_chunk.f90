@@ -18,7 +18,6 @@ private
 #include "simple_local_flags.inc"
 
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
-character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 logical,               parameter   :: DEBUG_HERE          = .false.
 
 type stream_chunk
@@ -156,56 +155,35 @@ contains
         class(cmdline),      intent(inout) :: cline_classify
         real,                intent(in)    :: orig_smpd
         integer,             intent(in)    :: orig_box, box
-        type(cmdline)              :: cline_scale
         character(len=XLONGSTRLEN) :: cwd
-        character(len=LONGSTRLEN)  :: projfile_in
+        real    :: scale
         integer :: nptcls_sel
-        logical :: err
         call debug_print('in chunk%exec_classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
-        err = .false.
         call simple_mkdir(self%path)
         call chdir(self%path)
         call simple_getcwd(cwd)
         cwd_glob    = trim(cwd)
-        projfile_in = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
+        self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        ! scaling
-        if( box /= orig_box )then
-            self%projfile_out = trim(PROJNAME_CHUNK)//SCALE_SUFFIX//trim(METADATA_EXT) ! as per scale_project convention
-            call cline_scale%set('prg',        'scale_project_distr')
-            call cline_scale%set('projname',   trim(PROJNAME_CHUNK))
-            call cline_scale%set('projfile',   projfile_in)
-            call cline_scale%set('smpd',       orig_smpd)
-            call cline_scale%set('box',        real(orig_box))
-            call cline_scale%set('newbox',     real(box))
-            if( params_glob%nparts_chunk > 1 ) call cline_scale%set('nparts',real(params_glob%nparts_chunk))
-            call cline_scale%set('nthr',       real(params_glob%nthr))
-            call cline_scale%set('mkdir',      'yes') ! required but not done as it is a simple_private_exec
-            call cline_scale%set('dir_target', '../'//trim(SCALE_DIR))
-            if( cline_classify%defined('walltime') )then
-                call cline_scale%set('walltime',real(params_glob%walltime))
-            endif
-            call self%spproj%update_projinfo(cline_scale)
-            call self%spproj%write(projfile_in)
-            call cline_classify%delete('projname')
-            call cline_classify%set('projfile',self%projfile_out)
-            call self%qenv%exec_simple_prg_in_queue_async(cline_scale, './distr_chunk2D', 'simple_log_chunk2d', cline2=cline_classify )
-        else
-            self%projfile_out = trim(projfile_in)
-            call cline_classify%set('projfile', projfile_in)
-            call cline_classify%set('projname', trim(PROJNAME_CHUNK))
-            call self%spproj%update_projinfo(cline_classify)
-            call self%spproj%write()
-            call self%qenv%exec_simple_prg_in_queue_async(cline_classify, './distr_chunk2D', 'simple_log_chunk2d')
+        if( box < orig_box )then
+            scale = real(box) / real(orig_box)
+            call cline_classify%set('smpd',      orig_smpd)
+            call cline_classify%set('box',       real(orig_box))
+            call cline_classify%set('smpd_crop', orig_smpd / scale)
+            call cline_classify%set('box_crop',  real(box))
         endif
+        call cline_classify%set('projfile', self%projfile_out)
+        call cline_classify%set('projname', trim(PROJNAME_CHUNK))
+        call self%spproj%update_projinfo(cline_classify)
+        call self%spproj%write()
+        call self%qenv%exec_simple_prg_in_queue_async(cline_classify, './distr_chunk2D', 'simple_log_chunk2d')
         call chdir('..')
         call simple_getcwd(cwd_glob)
         ! cleanup
         call self%spproj%kill
-        call cline_scale%kill
         call self%qenv%kill
         ! chunk is now busy
         self%available = .false.
