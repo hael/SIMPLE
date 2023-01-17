@@ -117,7 +117,7 @@ contains
         if( cline%defined('objfun') )then
             l_continue = .false.
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( (trim(cline%get_carg('objfun')).eq.'euclid') .and. .not.l_continue )then
+            if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
                 ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
@@ -247,7 +247,7 @@ contains
                 deallocate(list)
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
-            if( trim(params%objfun) .eq. 'euclid' )then
+            if( trim(params%objfun).eq.'euclid'  .or. trim(params%objfun).eq.'prob')then
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
@@ -310,8 +310,8 @@ contains
                 call cline%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                call cline%set('objfun','euclid')
-                params%objfun   = 'euclid'
+                call cline%set('objfun', trim(cline%get_carg('objfun')))
+                params%objfun   = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .false.
             endif
         else if( vol_defined .and. params%continue .ne. 'yes' )then
@@ -365,7 +365,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -598,13 +598,13 @@ contains
             if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun',    'euclid')
+                call cline%set('objfun', trim(cline%get_carg('objfun')))
                 if(.not.l_griddingset .and. .not.params%l_cartesian )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                call job_descr%set('objfun',    'euclid')
-                call cline_volassemble%set('objfun','euclid')
+                call job_descr%set('objfun', trim(cline%get_carg('objfun')))
+                call cline_volassemble%set('objfun', trim(cline%get_carg('objfun')))
                 if( l_switch2eo )then
                     ! delete resolution limit
                     call cline%delete('lp')
@@ -615,9 +615,13 @@ contains
                 !     call cline%set('ptclw',    'yes')
                 !     call job_descr%set('ptclw','yes')
                 ! endif
-                params%objfun    = 'euclid'
-                params%cc_objfun = OBJFUN_EUCLID
-                l_switch2euclid  = .false.
+                params%objfun = trim(cline%get_carg('objfun'))
+                if( params%objfun .eq. 'euclid' )then
+                    params%cc_objfun = OBJFUN_EUCLID
+                elseif( params%objfun .eq. 'prob' )then
+                    params%cc_objfun = OBJFUN_PROB
+                endif
+                l_switch2euclid = .false.
             endif
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
