@@ -1059,7 +1059,7 @@ contains
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs
+        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun
         logical                    :: converged, l_stream, l_switch2euclid
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
@@ -1142,6 +1142,7 @@ contains
             endif
             ! ML sigmas
             l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
+            orig_objfun     = trim(cline%get_carg('objfun'))
             if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
                 ! we are continuing from an ML iterartion
                 l_switch2euclid = .false.
