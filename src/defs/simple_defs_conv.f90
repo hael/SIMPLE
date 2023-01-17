@@ -13,7 +13,7 @@ real, parameter :: FRACSRCHSPACE_3D    = 99.0
 real, parameter :: FRACSRCHSPACE_FRAC  = 99.0  ! this limit is for when fractional update is on
 real, parameter :: FRACSRCHSPACE_HET   = 99.0
 ! other limits
-real, parameter :: MSK_FRAC            = 0.06
-real, parameter :: MINSHIFT            = 5.0
-real, parameter :: MAXSHIFT            = 6.0
+real, parameter :: MSK_FRAC            = 0.07
+real, parameter :: MINSHIFT            = 6.0
+real, parameter :: MAXSHIFT            = 10.0
 end module simple_defs_conv

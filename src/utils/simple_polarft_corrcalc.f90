@@ -806,8 +806,7 @@ contains
         type(ctfparams) :: ctfparms(nthr_glob)
         type(ctf)       :: tfuns(nthr_glob)
         real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: inv_ldim(3),hinv,kinv
+        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2)), hinv,kinv
         integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
@@ -816,12 +815,11 @@ contains
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
         if(.not. self%with_ctf ) return
-        inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
             do k=self%kfromto(1),self%kfromto(2)
-                hinv = self%polar(irot,k) * inv_ldim(1)
-                kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
+                hinv = self%polar(irot,k) / self%ldim(1)
+                kinv = self%polar(irot+self%nrots,k) / self%ldim(2)
                 spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
                 ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
             end do

@@ -201,6 +201,36 @@ contains
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
 
+    ! subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
+    !     class(cmdline), intent(inout) :: cline
+    !     integer,        intent(in)    :: which_iter
+    !     real,           intent(in)    :: frac_srch_space
+    !     real    :: lplim
+    !     integer :: lpstart_find
+    !     if( params_glob%l_lpset )then
+    !         lplim = params_glob%lp
+    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+    !     else
+    !         if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
+    !             lplim = build_glob%clsfrcs%estimate_lp_for_align()
+    !         else
+    !             if( which_iter < LPLIM1ITERBOUND )then
+    !                 lplim = params_glob%lplims2D(1)
+    !             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+    !                 lplim = params_glob%lplims2D(3)
+    !             else
+    !                 lplim = params_glob%lplims2D(2)
+    !             endif
+    !         endif
+    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+    !         ! to avoid pathological cases, fall-back on lpstart
+    !         lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
+    !         if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
+    !     endif
+    !     ! update low-pas limit in project
+    !     call build_glob%spproj_field%set_all2single('lp',lplim)
+    ! end subroutine set_bp_range2D
+
     subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
@@ -209,7 +239,7 @@ contains
         integer :: lpstart_find
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
         else
             if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
@@ -222,9 +252,9 @@ contains
                     lplim = params_glob%lplims2D(2)
                 endif
             endif
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
             ! to avoid pathological cases, fall-back on lpstart
-            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
+            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box_crop, params_glob%smpd_crop)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
         ! update low-pas limit in project
@@ -314,8 +344,8 @@ contains
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
-                    crop_factor = real(params_glob%box) / real(params_glob%box_crop)
-                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2)*crop_factor)
+                    crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
