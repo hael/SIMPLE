@@ -392,6 +392,7 @@ contains
                 if( sqarg > sqlp ) cycle
                 self%resmsk(h,k) = .true.
                 sh = nint(hyp(real(h),real(k)))
+                if( (sh < params_glob%kfromto(1)) .or. (sh > params_glob%kfromto(2)) ) cycle
                 self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
             end do
         end do
