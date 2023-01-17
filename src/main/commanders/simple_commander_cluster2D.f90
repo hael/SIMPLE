@@ -784,7 +784,7 @@ contains
         type(cmdline) :: cline_calc_sigma
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
-        character(len=STDLEN)     :: benchfname
+        character(len=STDLEN)     :: benchfname, orig_objfun
         ! other variables
         type(parameters)          :: params
         type(builder)             :: build
@@ -807,7 +807,8 @@ contains
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
             if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )then
-                l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
+                orig_objfun = trim(cline%get_carg('objfun'))
+                l_ptclw     = trim(cline%get_carg('ptclw')).eq.'yes'
                 if( cline%defined('needs_sigma') )then
                     if(trim(cline%get_carg('needs_sigma')).eq.'yes')then
                         ! were are already doing ML, no need to switch from cc nor calculate noise power
@@ -993,18 +994,18 @@ contains
             if( l_switch2euclid .and. (iter==iter_switch2euclid) )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun', trim(cline%get_carg('objfun')))
+                call cline%set('objfun', orig_objfun)
                 if(.not.l_griddingset )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                call job_descr%set('objfun', trim(cline%get_carg('objfun')))
-                call cline_cavgassemble%set('objfun', trim(cline%get_carg('objfun')))
+                call job_descr%set('objfun', orig_objfun)
+                call cline_cavgassemble%set('objfun', orig_objfun)
                 if( l_ptclw )then
                     call cline%set('ptclw',    'yes')
                     call job_descr%set('ptclw','yes')
                 endif
-                params%objfun = trim(cline%get_carg('objfun'))
+                params%objfun = orig_objfun
                 if( params%objfun .eq. 'euclid' )then
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
@@ -1171,7 +1172,7 @@ contains
                 call cluster2D_exec( cline, params%startit, converged )
                 ! objfun=euclid
                 if( l_switch2euclid )then
-                    params%objfun    = trim(cline%get_carg('objfun'))
+                    params%objfun    = orig_objfun
                     if( params%objfun .eq. 'euclid' )then
                         params%cc_objfun = OBJFUN_EUCLID
                     elseif( params%objfun .eq. 'prob' )then

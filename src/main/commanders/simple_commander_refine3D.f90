@@ -91,7 +91,7 @@ contains
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:), tmp_iarr(:)
         real,                      allocatable :: res(:), tmp_rarr(:), fsc(:)
-        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, fsc_templ
+        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, fsc_templ, orig_objfun
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
@@ -118,6 +118,7 @@ contains
             l_continue = .false.
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
             if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
+                orig_objfun     = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
                 ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
@@ -310,8 +311,8 @@ contains
                 call cline%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                call cline%set('objfun', trim(cline%get_carg('objfun')))
-                params%objfun   = trim(cline%get_carg('objfun'))
+                call cline%set('objfun', orig_objfun)
+                params%objfun   = orig_objfun
                 l_switch2euclid = .false.
             endif
         else if( vol_defined .and. params%continue .ne. 'yes' )then
@@ -598,13 +599,13 @@ contains
             if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun', trim(cline%get_carg('objfun')))
+                call cline%set('objfun', orig_objfun)
                 if(.not.l_griddingset .and. .not.params%l_cartesian )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                call job_descr%set('objfun', trim(cline%get_carg('objfun')))
-                call cline_volassemble%set('objfun', trim(cline%get_carg('objfun')))
+                call job_descr%set('objfun', orig_objfun)
+                call cline_volassemble%set('objfun', orig_objfun)
                 if( l_switch2eo )then
                     ! delete resolution limit
                     call cline%delete('lp')
@@ -615,7 +616,7 @@ contains
                 !     call cline%set('ptclw',    'yes')
                 !     call job_descr%set('ptclw','yes')
                 ! endif
-                params%objfun = trim(cline%get_carg('objfun'))
+                params%objfun = orig_objfun
                 if( params%objfun .eq. 'euclid' )then
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
@@ -675,6 +676,7 @@ contains
             call refine3D_exec(cline, startit, converged)
         else
             if( trim(params%objfun) == 'euclid'   ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=euclid')
+            if( trim(params%objfun) == 'prob'     ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=prob')
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
             ! take care of automask flag
