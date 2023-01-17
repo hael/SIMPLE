@@ -119,24 +119,24 @@ lims(2,2) =  6.
 call grad_shsrch_obj%new(lims, opt_angle=.true.)
 call grad_shsrch_obj%set_indices(8, 8)
 irot = 0
-cxy  = grad_shsrch_obj%minimize(irot)
-print *, cxy(1), cxy(2:3), irot
-! do i=1,N_PTCLS
-!     corrmax = -1.
-!     do xsh=-2,2
-!         do ysh=-2,2
-!             call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
-!             corr  = maxval(corrs)
+!cxy  = grad_shsrch_obj%minimize(irot)
+!print *, cxy(1), cxy(2:3), irot
+do i=1,N_PTCLS
+    corrmax = -1.
+    do xsh=-2,2
+        do ysh=-2,2
+            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
+            corr  = maxval(corrs)
 
-!             print *, 'corr: ', corr, xsh, ysh
+            print *, 'corr: ', corr, xsh, ysh
 
-!             if( corr > corrmax )then
-!                 corrmax = corr
-!                 xbest   = xsh
-!                 ybest   = ysh
-!             endif
-!         end do
-!     end do
-!     print *, xbest, ybest
-! end do
+            if( corr > corrmax )then
+                corrmax = corr
+                xbest   = xsh
+                ybest   = ysh
+            endif
+        end do
+    end do
+    print *, xbest, ybest
+end do
 end program simple_test_shiftsrch
