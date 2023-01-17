@@ -1398,7 +1398,7 @@ contains
             sumsqref  = sum(csq_fast(pft_ref(:,k)))
             euclids   = euclids + exp( -(sumsqptcl + sumsqref - 2. * keuclids(:))/sumsqptcl )
         end do
-        euclids = euclids/(self%kfromto(2) - self%kfromto(1))
+        euclids = euclids/(self%kfromto(2) - self%kfromto(1) + 1)
         call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_prob
 
