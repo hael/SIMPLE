@@ -155,8 +155,6 @@ contains
         else if( params%proj_is_class.eq.'yes' )then
             call build%spproj_field%proj2class
         endif
-        ! shift multiplication
-        if( params%mul > 1. ) call build%spproj_field%mul_shifts(params%mul)
         ! setup weights
         if( trim(params%ptclw).eq.'yes' )then
             ! weights are set at search time, so nothing to do here.
@@ -614,7 +612,7 @@ contains
             call cline_cluster2D_stage2%set('objfun',      'euclid')
             call cline_cluster2D_stage2%set('needs_sigma', 'yes')
         endif
-        trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
+        trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2)) / scale
         trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
         call cline_cluster2D_stage2%set('trs', trs_stage2)
         ! execution
