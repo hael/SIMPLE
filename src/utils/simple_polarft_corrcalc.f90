@@ -158,9 +158,10 @@ type :: polarft_corrcalc
     procedure, private :: calc_corrk_for_rot
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: calc_euclidk_for_rot
-    procedure, private :: gencorrs_cc
     procedure          :: genmaxcorr_comlin
+    procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
+    procedure, private :: gencorrs_prob
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
@@ -1322,6 +1323,8 @@ contains
                 call self%gencorrs_cc(    pft_ref, iptcl, i, cc)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
+            case(OBJFUN_PROB)
+                call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
         end select
     end subroutine gencorrs_1
 
@@ -1341,6 +1344,8 @@ contains
                 call self%gencorrs_cc(    pft_ref, iptcl, i, cc)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
+            case(OBJFUN_PROB)
+                call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
         end select
     end subroutine gencorrs_2
 
@@ -1376,6 +1381,26 @@ contains
         euclids = exp( - euclids/denom )
         call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_euclid
+
+    subroutine gencorrs_prob( self, pft_ref, keuclids, iptcl, i, euclids )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
+        real(sp),    pointer,    intent(inout) :: keuclids(:)
+        integer,                 intent(in)    :: iptcl, i
+        real(sp),                intent(out)   :: euclids(self%nrots)
+        real(sp) :: sumsqref, sumsqptcl
+        integer  :: k
+        call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        euclids(:) = 0.
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            euclids   = euclids + exp( -(sumsqptcl + sumsqref - 2. * keuclids(:))/sumsqptcl )
+        end do
+        euclids = euclids/(self%kfromto(2) - self%kfromto(1))
+        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+    end subroutine gencorrs_prob
 
     real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
