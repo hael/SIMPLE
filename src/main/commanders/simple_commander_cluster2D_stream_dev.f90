@@ -29,7 +29,8 @@ type, extends(commander_base) :: cluster2D_commander_subsets
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
 
-integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
+! integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
+integer,               parameter   :: MINBOXSZ            = 88    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
@@ -223,37 +224,39 @@ contains
         ! auto-scaling
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
         ! scaling (fourier crooping)
-        scale_factor     = 1.0
-        params_glob%smpd_crop = params_glob%smpd
-        params_glob%box_crop  = params_glob%box
+        scale_factor          = 1.0
+        params_glob%smpd_crop = orig_smpd
+        params_glob%box_crop  = orig_box
         params_glob%msk_crop  = params_glob%msk
-        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
-            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, params_glob%box_crop, params_glob%smpd_crop, scale_factor, minbox=MINBOXSZ)
-            params_glob%msk_crop = params_glob%msk * scale_factor
-            l_scaling       = params_glob%box_crop < params_glob%box
+        if( l_scaling .and. orig_box >= MINBOXSZ )then
+            call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < orig_box
             if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',params_glob%box_crop
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
+                params_glob%smpd_crop = smpd
+                params_glob%box_crop  = box
+                params_glob%msk_crop  = params_glob%msk * scale_factor
             endif
         endif
         boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
         ! Crooping-related command lines update
-        call cline_cluster2D_chunk%set('smpd_crop', params_glob%smpd_crop)
-        call cline_cluster2D_chunk%set('box_crop',  real(params_glob%box_crop))
-        call cline_cluster2D_chunk%set('msk_crop',  real(params_glob%msk_crop))
-        call cline_cluster2D_chunk%set('box',       real(params_glob%box))
-        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
-        call cline_cluster2D_pool%set('smpd_crop',  params_glob%smpd_crop)
-        call cline_cluster2D_pool%set('box_crop',   real(params_glob%box_crop))
-        call cline_cluster2D_pool%set('msk_crop',   real(params_glob%msk_crop))
-        call cline_cluster2D_pool%set('box',        real(params_glob%box))
-        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
+        call cline_cluster2D_chunk%set('smpd_crop', smpd)
+        call cline_cluster2D_chunk%set('box_crop',  real(box))
+        call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
+        call cline_cluster2D_chunk%set('box',       real(orig_box))
+        call cline_cluster2D_chunk%set('smpd',      orig_smpd)
+        call cline_cluster2D_pool%set('smpd_crop',  smpd)
+        call cline_cluster2D_pool%set('box_crop',   real(box))
+        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
+        call cline_cluster2D_pool%set('box',        real(orig_box))
+        call cline_cluster2D_pool%set('smpd',       orig_smpd)
         ! resolution-related updates to command-lines
-        lp_greedy     = max(lp_greedy,    2.0*params_glob%smpd_crop)
-        lpstart_stoch = max(lpstart_stoch,2.0*params_glob%smpd_crop)
+        lp_greedy     = max(lp_greedy,    2.0*smpd)
+        lpstart_stoch = max(lpstart_stoch,2.0*smpd)
         if( cline%defined('lpstop2D') )then
-            params_glob%lpstop2D = max(2.0*params_glob%smpd_crop,params_glob%lpstop2D)
+            params_glob%lpstop2D = max(2.0*smpd,params_glob%lpstop2D)
         else
-            params_glob%lpstop2D = 2.0*params_glob%smpd_crop
+            params_glob%lpstop2D = 2.0*smpd
         endif
         call cline_cluster2D_chunk%set('lp', lp_greedy)
         if( l_greedy )then
@@ -1428,7 +1431,7 @@ contains
         orig_projfile = trim(params%projfile)
         call cline%set('mkdir','no')
         ! init
-        l_scaling      = params%autoscale .eq. 'yes'
+        l_scaling         = params%autoscale .eq. 'yes'
         max_ncls          = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
         nptcls_per_chunk  = params%nptcls_per_cls*params%ncls_start         ! # of particles in each chunk
         ncls_glob         = 0
@@ -1437,6 +1440,25 @@ contains
         if( cline%defined('lp') ) lp_greedy = params%lp
         lpstart_stoch     = lp_greedy
         prev_snapshot_cavgs = ''
+        ! scaling (fourier crooping)
+        scale_factor     = 1.0
+        orig_smpd        = params%smpd
+        orig_box         = params%box
+        mskdiam          = params%mskdiam
+        params%smpd_crop = orig_smpd
+        params%box_crop  = orig_box
+        params%msk_crop  = params%msk
+        if( l_scaling .and. orig_box >= MINBOXSZ )then
+            call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < orig_box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
+                params%smpd_crop = smpd
+                params%box_crop  = box
+                params%msk_crop  = params%msk * scale_factor
+            endif
+        endif
+        boxpd = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters
         ! init command-lines
         call cline%delete('lp')
         call cline%delete('refine')
@@ -1457,7 +1479,7 @@ contains
         call cline_cluster2D_chunk%delete('projname')
         call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('autoscale', 'no') !!!!!!!!!!!!!!!!!!!!!!!!111
+        call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
@@ -1470,7 +1492,7 @@ contains
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
-        call cline_cluster2D_pool%set('autoscale', 'no') !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
@@ -1483,6 +1505,17 @@ contains
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
+        ! Crooping-related command lines update
+        call cline_cluster2D_chunk%set('smpd_crop', smpd)
+        call cline_cluster2D_chunk%set('box_crop',  real(box))
+        call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
+        call cline_cluster2D_chunk%set('box',       real(orig_box))
+        call cline_cluster2D_chunk%set('smpd',      orig_smpd)
+        call cline_cluster2D_pool%set('smpd_crop',  smpd)
+        call cline_cluster2D_pool%set('box_crop',   real(box))
+        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
+        call cline_cluster2D_pool%set('box',        real(orig_box))
+        call cline_cluster2D_pool%set('smpd',       orig_smpd)
         ! read strictly required fields project
         call spproj%read_non_data_segments(params%projfile)
         call spproj%read_segment('mic',   params%projfile)
@@ -1536,38 +1569,13 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
-        ! scaling (fourier crooping)
-        scale_factor     = 1.0
-        params%smpd_crop = params%smpd
-        params%box_crop  = params%box
-        params%msk_crop  = params%msk
-        if( l_scaling .and. params%box >= MINBOXSZ )then
-            call autoscale(params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOXSZ)
-            params%msk_crop = params%msk * scale_factor
-            l_scaling       = params%box_crop < params%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
-            endif
-        endif
-        boxpd = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters
-        ! Crooping-related command lines update
-        call cline_cluster2D_chunk%set('smpd_crop', params%smpd_crop)
-        call cline_cluster2D_chunk%set('box_crop',  real(params%box_crop))
-        call cline_cluster2D_chunk%set('msk_crop',  real(params%msk_crop))
-        call cline_cluster2D_chunk%set('box',       real(params%box))
-        call cline_cluster2D_chunk%set('smpd',      params%smpd)
-        call cline_cluster2D_pool%set('smpd_crop',  params%smpd_crop)
-        call cline_cluster2D_pool%set('box_crop',   real(params%box_crop))
-        call cline_cluster2D_pool%set('msk_crop',   real(params%msk_crop))
-        call cline_cluster2D_pool%set('box',        real(params%box))
-        call cline_cluster2D_pool%set('smpd',       params%smpd)
         ! resolution-related updates to command-lines
-        lp_greedy     = max(lp_greedy,    2.0*params%smpd_crop)
-        lpstart_stoch = max(lpstart_stoch,2.0*params%smpd_crop)
+        lp_greedy     = max(lp_greedy,    2.0*smpd)
+        lpstart_stoch = max(lpstart_stoch,2.0*smpd)
         if( cline%defined('lpstop2D') )then
-            params%lpstop2D = max(2.0*params%smpd_crop,params%lpstop2D)
+            params%lpstop2D = max(2.0*smpd,params%lpstop2D)
         else
-            params%lpstop2D = 2.0*params%smpd_crop
+            params%lpstop2D = 2.0*smpd
         endif
         call cline_cluster2D_chunk%set('lp', lp_greedy)
         if( l_greedy )then

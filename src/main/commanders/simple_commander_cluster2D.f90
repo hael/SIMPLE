@@ -1,15 +1,16 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D
 include 'simple_lib.f08'
-use simple_builder,          only: builder, build_glob
-use simple_cmdline,          only: cmdline
-use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters, params_glob
-use simple_sp_project,       only: sp_project
-use simple_qsys_env,         only: qsys_env
-use simple_image,            only: image
-use simple_stack_io,         only: stack_io
-use simple_starproject,      only: starproject
+use simple_builder,           only: builder, build_glob
+use simple_cmdline,           only: cmdline
+use simple_commander_base,    only: commander_base
+use simple_parameters,        only: parameters, params_glob
+use simple_sp_project,        only: sp_project
+use simple_qsys_env,          only: qsys_env
+use simple_image,             only: image
+use simple_stack_io,          only: stack_io
+use simple_starproject,       only: starproject
+use simple_commander_imgproc, only: scale_commander
 use simple_euclid_sigma2
 use simple_commander_euclid
 use simple_qsys_funs
@@ -198,7 +199,6 @@ contains
     end subroutine exec_make_cavgs
 
     subroutine exec_cleanup2D( self, cline )
-        use simple_commander_imgproc, only: scale_commander
         use simple_class_frcs,        only: class_frcs
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -288,9 +288,9 @@ contains
         l_scaling        = .false.
         if( params%l_autoscale .and. params%box >= MINBOX )then
             call autoscale(params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
-            params%msk_crop = params%msk * scale_factor
             l_scaling       = params%box_crop < params%box
             if( l_scaling )then
+                params%msk_crop = params%msk * scale_factor
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
         endif
@@ -456,7 +456,7 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
+        use simple_commander_imgproc, only: pspec_int_rank_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
@@ -529,18 +529,17 @@ contains
         endif
         ! Cropped dimensions
         l_scaling = .false.
+        scale     = 1.0
+        params%smpd_crop = params%smpd
+        params%box_crop  = params%box
+        params%msk_crop  = params%msk
         if( params%l_autoscale )then
             call autoscale( params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale)
-            params%msk_crop = params%msk * scale
             l_scaling       = params%box_crop < params%box
             if( l_scaling )then
+                params%msk_crop = params%msk * scale
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
-        else
-            scale            = 1.0
-            params%smpd_crop = params%smpd
-            params%box_crop  = params%box
-            params%msk_crop  = params%msk
         endif
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
@@ -686,7 +685,6 @@ contains
     end subroutine exec_cluster2D_autoscale
 
     subroutine exec_cluster2D_distr( self, cline )
-        use simple_commander_imgproc, only: scale_commander
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
@@ -829,12 +827,9 @@ contains
                 call cline_scalerefs%set('smpd',   params%smpd)
                 call cline_scalerefs%set('newbox', real(params%box_crop))
                 call xscale%execute(cline_scalerefs)
-                call cline%set('refs',trim(refs_sc))
-                ! to double check  for make_cavgs !!!!!!!!!!!!!!!!!!!!!!!
-                call copy_imgfile(trim(refs_sc), trim(params%refs),      params%smpd_crop, [1,params%ncls])
-                call copy_imgfile(trim(refs_sc), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
-                call copy_imgfile(trim(refs_sc), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
-                !!!!!!!!!!!!!!!!!!!!!!!!11
+                call simple_rename(refs_sc, params%refs)
+                call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
+                call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
             endif
         else
             refs = trim(params%refs)
@@ -983,11 +978,12 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(make_cavgs_commander)        :: xmake_cavgs
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
-        type(cmdline)              :: cline_make_cavgs
+        type(scale_commander)             :: xscale
+        type(cmdline)              :: cline_make_cavgs, cline_scalerefs
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs
+        character(len=LONGSTRLEN)  :: finalcavgs, refs_sc
         logical                    :: converged, l_stream, l_switch2euclid
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
@@ -1050,8 +1046,18 @@ contains
                     else
                         call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
                     endif
-                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
-                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
+                    ! scale references to box_crop
+                    if( params%box_crop < params%box )then
+                        refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                        call cline_scalerefs%set('stk',    trim(params%refs))
+                        call cline_scalerefs%set('outstk', trim(refs_sc))
+                        call cline_scalerefs%set('smpd',   params%smpd)
+                        call cline_scalerefs%set('newbox', real(params%box_crop))
+                        call xscale%execute(cline_scalerefs)
+                        call simple_rename(refs_sc, params%refs)
+                    endif
+                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd_crop, [1,params%ncls])
+                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd_crop, [1,params%ncls])
                 else
                     call cline_make_cavgs%set('refs', params%refs)
                     call xmake_cavgs%execute(cline_make_cavgs)
