@@ -1478,7 +1478,7 @@ contains
         real(sp),                intent(out)   :: euclids(self%nrots)
         real(sp) :: sumsqref, sumsqptcl
         integer  :: k
-        ! call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        call self%weight_ref_ptcl(pft_ref, i, iptcl)
         euclids(:) = 0.
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
@@ -1487,7 +1487,7 @@ contains
             euclids   = euclids + exp( -(sumsqptcl + sumsqref - 2. * keuclids(:))/sumsqptcl )
         end do
         euclids = euclids/(self%kfromto(2) - self%kfromto(1) + 1)
-        ! call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_prob
 
     real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
@@ -1543,9 +1543,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl, i, irot
-        ! call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        call self%weight_ref_ptcl(pft_ref, i, iptcl)
         gencorr_prob_for_rot = self%calc_prob_for_rot(pft_ref, iptcl, i, irot)
-        ! call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end function gencorr_prob_for_rot
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
@@ -1601,9 +1601,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref_8(:,:)
         integer,                 intent(in)    :: iptcl, i, irot
-        ! call self%weight_ref_ptcl(pft_ref_8, i, iptcl)
+        call self%weight_ref_ptcl(pft_ref_8, i, iptcl)
         gencorr_prob_for_rot_8 = self%calc_prob_for_rot_8(pft_ref_8, iptcl, i, irot)
-        ! call self%deweight_ref_ptcl(pft_ref_8, i, iptcl)
+        call self%deweight_ref_ptcl(pft_ref_8, i, iptcl)
     end function gencorr_prob_for_rot_8
 
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
@@ -1689,7 +1689,7 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         real(dp) :: diffsq, denom, gradsq
         integer  :: k
-        ! call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        call self%weight_ref_ptcl(pft_ref, i, iptcl)
         denom       = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
         f           = self%calc_prob_for_rot_8(pft_ref, iptcl, i, irot)
         grad        = 0._dp
@@ -1707,7 +1707,7 @@ contains
             denom   = sum(csq_fast(self%pfts_ptcls(:,k,i)))
             grad(2) = grad(2) - diffsq * 2._dp * gradsq/denom
         end do
-        ! call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorr_prob_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
