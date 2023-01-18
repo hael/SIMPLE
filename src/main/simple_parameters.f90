@@ -1322,7 +1322,7 @@ contains
                 self%l_needs_sigma = .true.
                 self%l_incrreslim  = .true.
             case(OBJFUN_PROB)
-                self%l_needs_sigma = .true.
+                self%l_needs_sigma = .false.
                 self%l_incrreslim  = .true.
             case(OBJFUN_CC)
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
