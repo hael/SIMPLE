@@ -936,9 +936,9 @@ contains
         complex(dp),    pointer, intent(inout) :: shmat_8(:,:)
         integer     :: k
         ! first shell, analytic
-        self%heap_vars(ithr)%argvec       = self%argtransf(:self%pftsz,  self%kfromto(1)) * shift_8(1) +&
-                                            & self%argtransf(self%pftsz+1:,self%kfromto(1)) * shift_8(2)
-        shmat_8(:,self%kfromto(1)) = dcmplx(dcos(self%heap_vars(ithr)%argvec), dsin(self%heap_vars(ithr)%argvec))
+        self%heap_vars(ithr)%argvec = self%argtransf(:self%pftsz,  self%kfromto(1)) * shift_8(1) +&
+                                    & self%argtransf(self%pftsz+1:,self%kfromto(1)) * shift_8(2)
+        shmat_8(:,self%kfromto(1))  = dcmplx(dcos(self%heap_vars(ithr)%argvec), dsin(self%heap_vars(ithr)%argvec))
         ! one shell to the next
         self%heap_vars(ithr)%argvec = self%argtransf_shellone(:self%pftsz)   * shift_8(1) +&
                                     & self%argtransf_shellone(self%pftsz+1:) * shift_8(2)
@@ -1043,8 +1043,8 @@ contains
         else if( irot == self%pftsz + 1 )then
             tmp = sum( pft_ref(:,self%kfromto(1):self%kfromto(2)) * self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,self%kfromto(1):self%kfromto(2))          *        self%pfts_ptcls(rot:self%pftsz,self%kfromto(1):self%kfromto(2),i))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,self%kfromto(1):self%kfromto(2)) * conjg( self%pfts_ptcls( 1:rot-1,      self%kfromto(1):self%kfromto(2),i)))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,self%kfromto(1):self%kfromto(2)) *        self%pfts_ptcls(rot:self%pftsz,self%kfromto(1):self%kfromto(2),i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      self%kfromto(1):self%kfromto(2)) * conjg( self%pfts_ptcls(  1:rot-1,     self%kfromto(1):self%kfromto(2),i)))
         end if
         corr = real(tmp)
     end function calc_corr_for_rot
@@ -1071,7 +1071,7 @@ contains
             tmp = sum( pft_ref(:,self%kfromto(1):self%kfromto(2)) * self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),i) )
         else
             tmp =       sum( pft_ref(               1:self%pftsz-rot+1,self%kfromto(1):self%kfromto(2)) *        self%pfts_ptcls(rot:self%pftsz,self%kfromto(1):self%kfromto(2),i))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      self%kfromto(1):self%kfromto(2)) * conjg( self%pfts_ptcls( 1:rot-1,      self%kfromto(1):self%kfromto(2),i)))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      self%kfromto(1):self%kfromto(2)) * conjg( self%pfts_ptcls(  1:rot-1,     self%kfromto(1):self%kfromto(2),i)))
         end if
         corr = real(tmp, kind=dp)
     end function calc_corr_for_rot_8
@@ -1095,11 +1095,11 @@ contains
                     T1(k,j) = real(sum( pft_dref(:,k,j) * conjg(self%pfts_ptcls(:,k,i))), kind=dp)
                 else if( irot <= self%pftsz ) then
                     T1(k,j) =           real(sum( pft_dref(               1:self%pftsz-rot+1,k,j) * conjg(self%pfts_ptcls(rot:self%pftsz,k,i))), kind=dp)
-                    T1(k,j) = T1(k,j) + real(sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       self%pfts_ptcls(  1:rot-1,     k,i)), kind=dp)
+                    T1(k,j) = T1(k,j) + real(sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       self%pfts_ptcls(  1:rot-1,     k,i)),  kind=dp)
                 else if( irot == self%pftsz + 1 ) then
                     T1(k,j) = real(sum( pft_dref(:,k,j) * self%pfts_ptcls(:,k,i) ), kind=dp)
                 else
-                    T1(k,j) =           real(sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       self%pfts_ptcls(rot:self%pftsz,k,i)), kind=dp)
+                    T1(k,j) =           real(sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       self%pfts_ptcls(rot:self%pftsz,k,i)),   kind=dp)
                     T1(k,j) = T1(k,j) + real(sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) * conjg(self%pfts_ptcls(  1:rot-1,     k,i)) ), kind=dp)
                 end if
                 T2(k,j) = real(sum( pft_dref(:,k,j) * conjg(pft_ref(:,k))), kind=dp)
@@ -1111,8 +1111,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, i, irot
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer     :: rot, k
-        real(sp)    :: euclid, tmp
+        integer  :: rot, k
+        real(sp) :: euclid, tmp
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1123,13 +1123,13 @@ contains
             if( irot == 1 )then
                 tmp =       sum(csq_fast(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
             else if( irot <= self%pftsz )then
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
             else if( irot == self%pftsz + 1 )then
                 tmp = sum(csq_fast(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
             else
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
             end if
             euclid = euclid + tmp
         end do
@@ -1139,8 +1139,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, i, irot
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer     :: rot, k
-        real(sp)    :: euclid_prob, tmp, denom
+        integer  :: rot, k
+        real(sp) :: euclid_prob, tmp, denom
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1152,13 +1152,13 @@ contains
             if( irot == 1 )then
                 tmp =       sum(csq_fast(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
             else if( irot <= self%pftsz )then
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
             else if( irot == self%pftsz + 1 )then
                 tmp = sum(csq_fast(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
             else
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
             end if
             euclid_prob = euclid_prob + exp( -tmp/denom )
         end do
@@ -1180,13 +1180,13 @@ contains
             if( irot == 1 )then
                 tmp =       sum(csq_fast(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
             else if( irot <= self%pftsz )then
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
             else if( irot == self%pftsz + 1 )then
                 tmp = sum(csq_fast(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
             else
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
             end if
             euclid = euclid + tmp
         end do
@@ -1209,13 +1209,13 @@ contains
             if( irot == 1 )then
                 tmp =       sum(csq_fast(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
             else if( irot <= self%pftsz )then
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
             else if( irot == self%pftsz + 1 )then
                 tmp = sum(csq_fast(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
             else
-                tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
+                tmp =       sum(csq_fast(pft_ref(               1:self%pftsz-rot+1, k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
+                tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,       k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
             end if
             euclid_prob = euclid_prob + exp( -tmp/denom )
         end do
@@ -1243,8 +1243,8 @@ contains
         else if (irot == self%pftsz + 1) then
             tmp = sum( pft_ref(:,k) * self%pfts_ptcls(:,k,i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,k)          *        self%pfts_ptcls(rot:self%pftsz,k,i))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,k) * conjg( self%pfts_ptcls(1:rot-1,k,i) ))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,k) *        self%pfts_ptcls(rot:self%pftsz,k,i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      k) * conjg( self%pfts_ptcls(  1:rot-1,     k,i) ))
         end if
         corr = real(tmp)
     end function calc_corrk_for_rot
@@ -1271,8 +1271,8 @@ contains
         else if (irot == self%pftsz + 1) then
             tmp = sum( pft_ref(:,k) * self%pfts_ptcls(:,k,i) )
         else
-            tmp =       sum( pft_ref(1:self%pftsz-rot+1,k)          *        self%pfts_ptcls(rot:self%pftsz,k,i))
-            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,k) * conjg( self%pfts_ptcls(1:rot-1,k,i) ))
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,k) *        self%pfts_ptcls(rot:self%pftsz,k,i))
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      k) * conjg( self%pfts_ptcls(  1:rot-1,     k,i) ))
         end if
         corr = real(tmp)
     end function calc_corrk_for_rot_8
@@ -1394,8 +1394,8 @@ contains
             sqsum_i = sum(csq_fast(pft_ref_i(i,self%kfromto(1):self%kfromto(2))))
             do j = 1, self%pftsz
                 sqsum_j = sum(csq_fast(pft_ref_j(j,self%kfromto(1):self%kfromto(2))))
-                cc      = sum( real(pft_ref_i(i,self%kfromto(1):self%kfromto(2)) *&
-                                pft_ref_j(j,self%kfromto(1):self%kfromto(2))) ) / sqrt(sqsum_i * sqsum_j)
+                cc      = sum(    real(pft_ref_i(i,self%kfromto(1):self%kfromto(2)) *&
+                                       pft_ref_j(j,self%kfromto(1):self%kfromto(2))) ) / sqrt(sqsum_i * sqsum_j)
                 if( cc > cc_max ) cc_max = cc
             end do
         end do
