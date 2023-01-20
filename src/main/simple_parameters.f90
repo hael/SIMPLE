@@ -213,7 +213,6 @@ type :: parameters
     integer :: iptcl=1
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
-    integer :: kfromto_discrete(2)
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
@@ -1241,8 +1240,6 @@ contains
         if( cline%defined('hp') ) self%kfromto(1) = max(1,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
         self%lp                  = max(self%fny,self%lp)            ! lowpass limit
-        self%kfromto_discrete(1) = self%kfromto(1)
-        self%kfromto_discrete(2) = int(self%dstep/self%lp_discrete) ! low-pass Fourier index set according to lp_discrete
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
