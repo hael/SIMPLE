@@ -40,6 +40,7 @@ integer                        :: ldim(3)        = [0,0,0] !< logical dimension 
 integer                        :: ldim_crop(3)   = [0,0,0] !< logical dimension of cropped image
 integer                        :: ldim_pd(3)     = [0,0,0] !< logical dimension of image, padded
 integer                        :: ldim_croppd(3) = [0,0,0] !< logical dimension of cropped image, padded
+real                           :: pad_scale      = 1.0
 real                           :: smpd       = 0.          !< sampling distance
 real                           :: smpd_crop  = 0.          !< cropped sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
@@ -107,9 +108,19 @@ contains
         smpd_crop     = params_glob%smpd_crop
         ! set ldims
         ldim          = [params_glob%box,  params_glob%box,  1]
-        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_crop     = [params_glob%box_crop,  params_glob%box_crop,  1]
         ldim_croppd   = [params_glob%box_croppd,params_glob%box_croppd,1]
+        if( params_glob%boxpd > params_glob%box_croppd )then
+            ! when the references are generated downscaled,
+            ! images at original scale do not always need to be padded
+            ldim_pd(1) = max(params_glob%box,params_glob%box_croppd)
+            ldim_pd(2) = ldim_pd(1)
+            ldim_pd(3) = 1
+            pad_scale  = real(params_glob%box) / real(params_glob%boxpd)
+        else
+            ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
+            pad_scale  = 1.0
+        endif
         ! ML-regularization
         l_ml_reg      = params_glob%l_ml_reg
         ! build arrays
@@ -336,7 +347,7 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale, pad_scale
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale!, pad_scale
         integer :: batch_iprecs(READBUFFSZ), fdims(3), fdims_crop(3), logi_lims_crop(3,2), logi_lims(3,2)
         integer :: cyc_limsR(2,2), cyc_lims(3,2)
         integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
@@ -398,8 +409,9 @@ contains
         allocate(cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ), rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
         ! Padding scale correction
-        l_pad_scale_correction = params_glob%box_crop < params_glob%box
-        pad_scale              = real(ldim_pd(1)) / real(ldim_croppd(1))
+        l_pad_scale_correction = .false.
+        ! l_pad_scale_correction = params_glob%box_crop < params_glob%box
+        ! pad_scale              = real(ldim_pd(1)) / real(ldim_croppd(1))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -484,7 +496,7 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > interp_shlim )cycle
                             ! Rotation
-                            loc        = matmul(real([h,k]),mat)
+                            loc        = pad_scale * matmul(real([h,k]),mat)
                             win_corner = floor(loc) ! bottom left corner
                             dist       = loc - real(win_corner)
                             ! Bi-linear interpolation
@@ -571,7 +583,7 @@ contains
                                 if( sh > radfirstpeak )cycle
                                 if( sh > interp_shlim )cycle
                                 ! Rotation
-                                loc        = matmul(real([h,k]),mat)
+                                loc        = pad_scale * matmul(real([h,k]),mat)
                                 win_corner = floor(loc) ! bottom left corner
                                 dist       = loc - real(win_corner)
                                 ! Bi-linear interpolation

@@ -352,6 +352,7 @@ contains
     procedure          :: fft_noshift
     ! DESTRUCTOR
     procedure :: kill
+    procedure :: kill_thread_safe_tmp_imgs
 end type image
 
 interface image
@@ -2714,16 +2715,20 @@ contains
         integer :: ithr
         ! get thread index
         ithr = omp_get_thread_num() + 1
-        ! copy rmat
-        thread_safe_tmp_imgs(ithr)%rmat = self%rmat
-        thread_safe_tmp_imgs(ithr)%ft   = .false.
-        call thread_safe_tmp_imgs(ithr)%fft()
-        call thread_safe_tmp_imgs(ithr)%bp(0., lp)
-        call thread_safe_tmp_imgs(ithr)%ifft()
-        call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
-        where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
-        call thread_safe_tmp_imgs(ithr)%norm_bin
-        call thread_safe_tmp_imgs(ithr)%masscen(xyz)
+        if( all(self%ldim == thread_safe_tmp_imgs(ithr)%ldim) )then
+            ! copy rmat
+            thread_safe_tmp_imgs(ithr)%rmat = self%rmat
+            thread_safe_tmp_imgs(ithr)%ft   = .false.
+            call thread_safe_tmp_imgs(ithr)%fft()
+            call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+            call thread_safe_tmp_imgs(ithr)%ifft()
+            call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+            where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
+            call thread_safe_tmp_imgs(ithr)%norm_bin
+            call thread_safe_tmp_imgs(ithr)%masscen(xyz)
+        else
+            THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
+        endif
     end function calc_shiftcen_serial
 
     !>  \brief bin_inv inverts a binary image
@@ -7341,5 +7346,17 @@ contains
             self%existence = .false.
         endif
     end subroutine kill
+
+    subroutine kill_thread_safe_tmp_imgs( self )
+        class(image), intent(in) :: self
+        integer :: i, sz, ldim(3)
+        logical :: do_allocate
+        if( allocated(thread_safe_tmp_imgs) )then
+            do i=1,size(thread_safe_tmp_imgs)
+                call thread_safe_tmp_imgs(i)%kill
+            end do
+            deallocate(thread_safe_tmp_imgs)
+        endif
+    end subroutine kill_thread_safe_tmp_imgs
 
 end module simple_image

@@ -402,6 +402,7 @@ contains
         ! prepare the polarizer images
         call build_glob%ref_polarizer%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))
+        call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -446,6 +447,7 @@ contains
         !$omp end parallel do
         ! CLEANUP
         deallocate(match_imgs)
+        call cavgs_merged(1)%kill_thread_safe_tmp_imgs
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher

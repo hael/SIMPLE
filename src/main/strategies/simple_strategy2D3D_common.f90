@@ -270,7 +270,6 @@ contains
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise
-        logical         :: iseven
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
         ! CTF parameters
@@ -325,10 +324,10 @@ contains
         real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
         real    :: xyz(3), sharg, crop_factor
         logical :: do_center
-        filtsz = img_out%get_filtsz()
+        filtsz = img_in%get_filtsz()
+        do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
-        do_center = .false.
-        if( present(center) ) do_center = do_center .and. (params_glob%center .eq. 'yes')
+        if( present(center) ) do_center = do_center .and. center
         if( do_center )then
             if( present(xyz_in) )then
                 sharg = arg(xyz_in)
