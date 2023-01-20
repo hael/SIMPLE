@@ -290,7 +290,7 @@ contains
             call autoscale(params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
             l_scaling       = params%box_crop < params%box
             if( l_scaling )then
-                params%msk_crop = params%msk * scale_factor
+                params%msk_crop = round2even(params%msk * scale_factor)
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
         endif
@@ -534,10 +534,10 @@ contains
         params%box_crop  = params%box
         params%msk_crop  = params%msk
         if( params%l_autoscale )then
-            call autoscale( params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale)
-            l_scaling       = params%box_crop < params%box
+            call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale)
+            l_scaling = params%box_crop < params%box
             if( l_scaling )then
-                params%msk_crop = params%msk * scale
+                params%msk_crop = round2even(params%msk * scale)
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
         endif

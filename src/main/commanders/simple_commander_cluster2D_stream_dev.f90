@@ -235,7 +235,7 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
                 params_glob%smpd_crop = smpd
                 params_glob%box_crop  = box
-                params_glob%msk_crop  = params_glob%msk * scale_factor
+                params_glob%msk_crop  = round2even(params_glob%msk * scale_factor)
             endif
         endif
         boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
@@ -1455,7 +1455,7 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
                 params%smpd_crop = smpd
                 params%box_crop  = box
-                params%msk_crop  = params%msk * scale_factor
+                params%msk_crop  = round2even(params%msk * scale_factor)
             endif
         endif
         boxpd = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters

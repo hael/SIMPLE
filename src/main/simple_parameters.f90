@@ -1185,7 +1185,7 @@ contains
             self%msk     = msk_default
         endif
         if( self%box > 0 )then
-            self%msk_crop = self%msk * real(self%box_crop) / real(self%box)
+            self%msk_crop = round2even(self%msk * real(self%box_crop) / real(self%box))
         endif
         ! automasking options
         self%l_filemsk = .false.

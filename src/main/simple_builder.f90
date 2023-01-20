@@ -270,7 +270,6 @@ contains
             call self%img%new(      [params%box,params%box,1],params%smpd,       wthreads=.false.)
             call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             call self%img_copy%new( [params%box,params%box,1],params%smpd,  wthreads=.false.)
-            call self%img%construct_thread_safe_tmp_imgs(params%nthr) ! for thread safety in the image class
             call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new(  [params%boxpd,params%boxpd,1],params%smpd)
