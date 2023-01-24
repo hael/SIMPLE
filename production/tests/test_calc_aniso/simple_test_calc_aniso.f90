@@ -1,25 +1,32 @@
-program simple_test_calc_aniso_shell
+! This program tests the Anisotropic Displacement Parameter (ADP) measurements in atoms_stats.
+! Ellipsoidal connected components are generated from the atomic centers in the PDB file
+! input via the command-line. Maps of the generated ellipsoids are passed into atoms_stats.
+! The fits from atoms_stats are passed back into atoms_stats to check the consistency of 
+! ADP calculations.  An integer number of threads for atoms_stats are also input via the 
+! command-line. Results can be found in the files test_calc_aniso_results.csv and
+! consistency_test/consistency_test_calc_aniso_results.csv.
+! Author: Henry Wietfeldt
+program simple_test_calc_aniso
     include 'simple_lib.f08'
     use simple_cmdline,            only: cmdline
-    use simple_builder,            only: builder
-    use simple_parameters,         only: parameters, params_glob
+    !use simple_builder,            only: builder
+    use simple_parameters,         only: params_glob
     use simple_commander_atoms,    only: atoms_stats_commander
     use simple_image,              only: image
     use simple_binimage,           only: binimage
     use simple_atoms,              only: atoms
     implicit none
 
-    type (cmdline)              :: cline, cline_atoms_stats, cline_atoms_stats_ccheck
-    type (parameters)           :: p
+    type (cmdline)              :: cline_atoms_stats
     type(binimage)              :: simcc, fitcc
     type(image)                 :: simvol, fitvol
     type(atoms)                 :: simatoms
-    type(atoms_stats_commander) :: xatoms_stats, xatoms_stats_ccheck
+    type(atoms_stats_commander) :: xatoms_stats
     real, parameter             :: smpd=0.358, min_axis=0.38, max_axis=1.00
     real, allocatable           :: ellipsoids(:,:), centers(:,:), rmat(:,:,:), sim_aniso(:,:,:)
     real(kind=8)                :: eigenvecs(3,3), eigenvecs_inv(3,3), fit_egnvecs(3,3), fit_egnvals(3), &
                                    &twice_fit_evecs(3,3), twice_fit_evals(3), xyzdisp(3), fit_xyzdisp(3), twice_fit_xyzdisp(3)
-    real                        :: u, v, w, lhs, axes_error(3), angular_error(3), step
+    real                        :: u, v, w, axes_error(3), angular_error(3), step
     integer, parameter          :: ldim(3)=(/160,160,160/), window=30
     integer, allocatable        :: imat(:,:,:), nvox(:), fit_nvox(:)
     integer                     :: i, j, k, cc, fu_fit, fu_twice_fit, fu_results, natoms, icenter(3), errflg, nthr, &
@@ -27,7 +34,7 @@ program simple_test_calc_aniso_shell
     logical, parameter          :: check_consistency = .true.
     character(len=256)          :: pdbin, nthrChar
     character(*), parameter     :: cc_out='sim_cc.mrc', vol_out='sim_vol.mrc', aniso_pdb='sim_aniso', &
-        &fn_results='test_calc_aniso_shell_results.csv', fn_fit='aniso_bfac_field.pdb', &
+        &fn_results='test_calc_aniso_results.csv', fn_fit='aniso_bfac_field.pdb', &
         &aniso_fmt='(a28,6i7,a10)', fn_fitcc='fit_cc.mrc', fn_fitvol='fit_vol.mrc', &
         &consistency_dir='test_consistency/'
 
@@ -45,7 +52,7 @@ program simple_test_calc_aniso_shell
     &//CSV_DELIM//'XTRUTH'//CSV_DELIM//'YTRUTH'//CSV_DELIM//'ZTRUTH'
 
     if( command_argument_count() /= 2 )then
-        write(logfhandle,'(a)') 'Usage: simple_test_calc_aniso_shell file.pdb nthr'
+        write(logfhandle,'(a)') 'Usage: simple_test_calc_aniso file.pdb nthr'
         write(logfhandle,'(a)') 'file.pdb contains the input atomic elements and coordinates.'
         write(logfhandle,'(a)') 'nthr [integer] for atoms_stats'
         stop
@@ -230,7 +237,7 @@ program simple_test_calc_aniso_shell
         call fclose(fu_twice_fit)
         call fclose(fu_results)
     end if
-    write(logfhandle,'(a)') '****SIMPLE_TEST_CALC_ANISO_SHELL COMPLETE****'
+    write(logfhandle,'(a)') '****SIMPLE_TEST_CALC_ANISO COMPLETE****'
 
     contains
 
@@ -396,4 +403,4 @@ program simple_test_calc_aniso_shell
             end do
         end function get_xyzdisp
 
-end program simple_test_calc_aniso_shell
+end program simple_test_calc_aniso
