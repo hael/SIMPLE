@@ -32,6 +32,7 @@ private
 
 type(polarft_corrcalc)       :: pftcc
 type(euclid_sigma2)          :: eucl_sigma
+type(image),     allocatable :: ptcl_match_imgs(:)
 logical,         allocatable :: ptcl_mask(:)
 integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
@@ -53,7 +54,7 @@ contains
         type(ori)         :: orientation
         real    :: frac_srch_space, snhc_sz, frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
-        integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
+        integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch, ithr
         logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
         logical :: l_snhc, l_greedy, l_stream, l_np_cls_defined
         if( L_BENCH_GLOB )then
@@ -186,6 +187,10 @@ contains
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
+        allocate(ptcl_match_imgs(params_glob%nthr))
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+        enddo
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! STOCHASTIC IMAGE ALIGNMENT
@@ -269,7 +274,10 @@ contains
         do iptcl_batch = 1,batchsz_max
             nullify(strategy2Dsrch(iptcl_batch)%ptr)
         end do
-        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_mask)
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%kill
+        enddo
+        deallocate(strategy2Dsrch,pinds,strategy2Dspecs,batches,ptcl_mask,ptcl_match_imgs)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
@@ -362,17 +370,18 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
-        integer :: iptcl_batch, iptcl
+        integer :: iptcl_batch, iptcl, ithr
         call read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch)&
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
         !$omp schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -400,7 +409,7 @@ contains
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
         ! prepare the polarizer images
-        call build_glob%ref_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))
         call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -427,18 +436,18 @@ contains
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, iseven=.true., center=do_center, xyz_in=xyz)
-                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(cavgs_odd(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
-                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)  ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
                     call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, iseven=.false., center=do_center, xyz_in=xyz)
-                    call build_glob%ref_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                    call build_glob%img_crop_polarizer%polarize(pftcc, match_imgs(icls), icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
                 call match_imgs(icls)%kill

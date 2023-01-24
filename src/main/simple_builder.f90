@@ -29,7 +29,7 @@ type :: builder
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
     type(polarizer)                     :: img_match              !< polarizer for particles
-    type(polarizer)                     :: ref_polarizer          !< polarizer for references
+    type(polarizer)                     :: img_crop_polarizer     !< polarizer for cropped image
     type(image)                         :: img_pad                !< -"-
     type(image)                         :: img_tmp                !< -"-
     type(image)                         :: img_copy               !< -"-
@@ -47,6 +47,7 @@ type :: builder
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
+    logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
@@ -287,12 +288,14 @@ contains
         endif
         if( params%box_crop > 0 )then
             ! build image objects
-            call self%ref_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
+            call self%img_crop_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
             if( ddo3d )then
                 call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd)
                 call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd)
                 call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd)
             endif
+            call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
+            call mskimg%kill
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -314,8 +317,8 @@ contains
             call self%img%kill
             call self%img_match%kill_polarizer
             call self%img_match%kill
-            call self%ref_polarizer%kill_polarizer
-            call self%ref_polarizer%kill
+            call self%img_crop_polarizer%kill_polarizer
+            call self%img_crop_polarizer%kill
             call self%img_copy%kill
             call self%img_tmp%kill
             call self%img_pad%kill
@@ -327,6 +330,7 @@ contains
             if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
             if( allocated(self%fsc)           ) deallocate(self%fsc)
             if( allocated(self%lmsk)          ) deallocate(self%lmsk)
+            if( allocated(self%lmsk_crop)     ) deallocate(self%lmsk_crop)
             if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif

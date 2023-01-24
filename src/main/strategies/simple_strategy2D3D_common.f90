@@ -201,36 +201,6 @@ contains
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
 
-    ! subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
-    !     class(cmdline), intent(inout) :: cline
-    !     integer,        intent(in)    :: which_iter
-    !     real,           intent(in)    :: frac_srch_space
-    !     real    :: lplim
-    !     integer :: lpstart_find
-    !     if( params_glob%l_lpset )then
-    !         lplim = params_glob%lp
-    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
-    !     else
-    !         if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
-    !             lplim = build_glob%clsfrcs%estimate_lp_for_align()
-    !         else
-    !             if( which_iter < LPLIM1ITERBOUND )then
-    !                 lplim = params_glob%lplims2D(1)
-    !             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-    !                 lplim = params_glob%lplims2D(3)
-    !             else
-    !                 lplim = params_glob%lplims2D(2)
-    !             endif
-    !         endif
-    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
-    !         ! to avoid pathological cases, fall-back on lpstart
-    !         lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
-    !         if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-    !     endif
-    !     ! update low-pas limit in project
-    !     call build_glob%spproj_field%set_all2single('lp',lplim)
-    ! end subroutine set_bp_range2D
-
     subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
@@ -263,52 +233,58 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img )
+    subroutine prepimg4align( iptcl, img, img_out )
         use simple_ctf,       only: ctf
-        integer,      intent(in)    :: iptcl
-        class(image), intent(inout) :: img
+        integer,                intent(in)    :: iptcl
+        class(image),           intent(inout) :: img
+        class(image), optional, intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: x, y, sdev_noise
-        x = build_glob%spproj_field%get(iptcl, 'x')
-        y = build_glob%spproj_field%get(iptcl, 'y')
-        ! CTF parameters
-        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-        ! normalise
-        call img%noise_norm(build_glob%lmsk, sdev_noise)
-        ! move to Fourier space
+        real            :: x, y, sdev_noise, crop_factor
+        ! Fourier cropping
         call img%fft()
-        ! Shift image to rotational origin & phase-flipping
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img%shift2Dserial([-x,-y])
+        call img%clip(img_out)
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        ! Back to real space
+        call img_out%ifft
+        ! Normalise
+        call img_out%noise_norm(build_glob%lmsk_crop, sdev_noise)
+        ! Shift image to rotational origin
+        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
+            call img_out%fft
+            call img_out%shift2Dserial([-x,-y])
+        endif
+        ! Phase-flipping
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
-                ! all good
-            case(CTFFLAG_YES) ! phase flip
-                tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img, 'flip', ctfparms)
+                ! nothing to do
+            case(CTFFLAG_YES)
+                call img_out%fft
+                ctfparms      = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                ctfparms%smpd = ctfparms%smpd / crop_factor
+                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(img_out, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
-        ! back to real-space
-        call img%ifft()
-        ! soft-edged mask
+        ! Back to real space
+        call img_out%ifft
+        ! Soft-edged mask
         if( params_glob%l_focusmsk )then
-            call img%mask(params_glob%focusmsk, 'soft')
+            call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
         else
             if( params_glob%l_needs_sigma )then
-                call img%mask(params_glob%msk, 'softavg')
+                call img_out%mask(params_glob%msk_crop, 'softavg')
             else
-                call img%mask(params_glob%msk, 'soft')
+                call img_out%mask(params_glob%msk_crop, 'soft')
             endif
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%img_match%div_by_instrfun(img)
-        ! return in Fourier space
-        call img%fft()
-        ! Fourier cropping scaling
-        if( params_glob%box > params_glob%box_crop )then
-            call img%mul( real(params_glob%box) / real(params_glob%box_crop) )
-        endif
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
+        ! return to Fourier space
+        call img_out%fft()
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -325,8 +301,8 @@ contains
         real    :: xyz(3), sharg, crop_factor
         logical :: do_center
         filtsz = img_in%get_filtsz()
-        do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
+        do_center = (params_glob%center .eq. 'yes')
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
             if( present(xyz_in) )then
@@ -370,7 +346,7 @@ contains
             call img_out%mask(params_glob%msk_crop, 'soft')
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%ref_polarizer%div_by_instrfun(img_out)
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
