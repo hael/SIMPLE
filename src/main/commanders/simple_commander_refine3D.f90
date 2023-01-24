@@ -1,7 +1,7 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
-use simple_builder,          only: builder
+use simple_builder,          only: builder, build_glob
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
 use simple_parameters,       only: parameters
@@ -312,7 +312,7 @@ contains
                 call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline%set('objfun', orig_objfun)
-                params%objfun   = orig_objfun
+                params%objfun   = trim(orig_objfun)
                 l_switch2euclid = .false.
             endif
         else if( vol_defined .and. params%continue .ne. 'yes' )then
@@ -660,12 +660,14 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)         :: params
-        type(builder)            :: build
-        integer                  :: startit, i, state
-        character(len=STDLEN)    :: str_state, fsc_file, vol, vol_iter
-        logical                  :: converged, l_automsk
-        real                     :: corr, corr_prev
+        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
+        type(parameters)                  :: params
+        type(builder)                     :: build
+        type(cmdline)                     :: cline_calc_sigma
+        character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter
+        integer                           :: startit, i, state
+        real                              :: corr, corr_prev
+        logical                           :: converged, l_automsk, l_sigma
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         l_automsk = params%l_automsk
         startit = 1
@@ -675,22 +677,31 @@ contains
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
         else
-            if( trim(params%objfun) == 'euclid'   ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=euclid')
             if( trim(params%objfun) == 'prob'     ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=prob')
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
+            ! objfun=euclid|prob
+            l_sigma = .false.
+            if( (trim(params%objfun).eq.'euclid') .or. (params%objfun.eq.'prob') )then
+                ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
+                l_sigma                = .true.
+                call cline%set('needs_sigma','yes')
+                params%l_needs_sigma   = .true.
+                cline_calc_sigma       = cline
+            endif
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
             if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
             params%startit     = startit
+            params%which_iter  = params%startit
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
             corr               = -1.
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
-                write(logfhandle,'(A,I6)')'>>> ITERATION ', params%startit
+                write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
-                if( params%refine .eq. 'snhc' .and. params%startit > 1 )then
+                if( params%refine .eq. 'snhc' .and. params%which_iter > 1 )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
                     corr      = build%spproj_field%get_avg('corr')
@@ -700,7 +711,7 @@ contains
                 params%extr_iter = params%extr_iter + 1
                 ! to control the masking behaviour in simple_strategy2D3D_common :: norm_struct_facts
                 if( l_automsk )then
-                    if( mod(params%startit,AUTOMSK_FREQ) == 0 .or. i == 1 )then
+                    if( mod(params%which_iter,AUTOMSK_FREQ) == 0 .or. i == 1 )then
                         call cline%set('automsk', trim(params%automsk))
                         params%l_automsk = .true.
                     else
@@ -708,12 +719,16 @@ contains
                         params%l_automsk = .false.
                     endif
                 endif
+                if( l_sigma )then
+                    call cline_calc_sigma%set('which_iter',real(i))
+                    call xcalc_group_sigmas%execute(cline_calc_sigma)
+                endif
                 ! in strategy3D_matcher:
-                call refine3D_exec(cline, params%startit, converged)
+                call refine3D_exec(cline, params%which_iter, converged)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
-                    call cline%set('endit', real(params%startit))
+                    call cline%set('endit', real(params%which_iter))
                     ! update project with the new orientations
                     call build%spproj%write_segment_inside(params%oritype)
                     call del_file(params%outfile)
@@ -739,7 +754,7 @@ contains
                     exit
                 endif
                 ! update iteration counter
-                params%startit = params%startit + 1
+                params%which_iter = params%which_iter + 1
             end do
             ! put back automsk flag if needed
             if( l_automsk ) call cline%set('automsk', trim(params%automsk))
