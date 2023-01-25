@@ -185,7 +185,7 @@ type :: parameters
     character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 1)
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 2, OBJFUN_TEST = 3)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
@@ -1297,6 +1297,8 @@ contains
                 self%cc_objfun = OBJFUN_EUCLID
             case('prob')
                 self%cc_objfun = OBJFUN_PROB
+            case('test')
+                self%cc_objfun = OBJFUN_TEST
             case DEFAULT
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')

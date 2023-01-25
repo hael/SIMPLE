@@ -165,6 +165,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
     procedure, private :: gencorrs_prob
+    procedure, private :: gencorrs_test
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
@@ -198,6 +199,7 @@ type :: polarft_corrcalc
     generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
     generic,   private :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
+    procedure, private :: normalize_ref_ptcl, denormalize_ref_ptcl
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -1415,6 +1417,8 @@ contains
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
                 call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
+            case(OBJFUN_TEST)
+                call self%gencorrs_test(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
         end select
     end subroutine gencorrs_1
 
@@ -1436,6 +1440,8 @@ contains
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
                 call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
+            case(OBJFUN_TEST)
+                call self%gencorrs_test(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
         end select
     end subroutine gencorrs_2
 
@@ -1493,6 +1499,30 @@ contains
         euclids = euclids/(self%kfromto(2) - self%kfromto(1) + 1)
         call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_prob
+
+    subroutine gencorrs_test( self, pft_ref, keuclids, iptcl, i, euclids )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
+        real(sp),    pointer,    intent(inout) :: keuclids(:)
+        integer,                 intent(in)    :: iptcl, i
+        real(sp),                intent(out)   :: euclids(self%nrots)
+        real(sp) :: sumsqref, sumsqptcl
+        real(dp) :: denom, ref_norm, ptcl_norm
+        integer  :: k
+        call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        call self%normalize_ref_ptcl( pft_ref, i, ref_norm, ptcl_norm )
+        euclids(:) = 0.
+        denom      = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
+            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            euclids   = euclids + (sumsqptcl + sumsqref - 2. * keuclids(:))
+        end do
+        euclids = exp( - euclids/denom )
+        call self%denormalize_ref_ptcl( pft_ref, i, ref_norm, ptcl_norm )
+        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+    end subroutine gencorrs_test
 
     real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2036,6 +2066,36 @@ contains
             self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
         end do
     end subroutine deweight_ref_ptcl_dp
+
+    subroutine normalize_ref_ptcl( self, pft_ref, i, ref_norm, ptcl_norm )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
+        integer,                 intent(in)    :: i
+        real(dp),                intent(inout) :: ref_norm, ptcl_norm
+        integer :: k
+        ref_norm  = sum(csq_fast(pft_ref(:, self%kfromto(1):self%kfromto(2))))
+        ptcl_norm = sum(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)))
+        pft_ref                = pft_ref                / ref_norm
+        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) / ptcl_norm
+        do k=self%kfromto(1),self%kfromto(2)
+            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / ptcl_norm
+            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / ptcl_norm
+        enddo
+    end subroutine normalize_ref_ptcl
+
+    subroutine denormalize_ref_ptcl( self, pft_ref, i, ref_norm, ptcl_norm )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
+        integer,                 intent(in)    :: i
+        real(dp),                intent(in)    :: ref_norm, ptcl_norm
+        integer :: k
+        pft_ref                = pft_ref                * ref_norm
+        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * ptcl_norm
+        do k=self%kfromto(1),self%kfromto(2)
+            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re * ptcl_norm
+            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im * ptcl_norm
+        enddo
+    end subroutine denormalize_ref_ptcl
 
     ! DESTRUCTOR
 
