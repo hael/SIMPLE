@@ -1257,7 +1257,7 @@ contains
             mask    = .false.
             cc_mask = .true.
         end do
-        write(logfhandle,*) "ADP Tossed: ", count(self%atominfo(:)%tossADP)
+        write(logfhandle,'(a,i5)') "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
         call img_cc_scaled%write_bimg(fn_img_cc_scaled)
@@ -1413,9 +1413,9 @@ contains
     ! from the scaled CC map (imat_scaled) and the mask of border voxels in the scaled CC map (border).  
     ! The border voxels of cc are fit with an ellipsoid using an algebraic least squares fit
     ! (i.e. finding the best fit parameters B1,...,B6 for the function B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1).  
-    ! Reports the best fit ellipsoid semi-axes and the Anisotropic Displacement in the x,y, and z directions 
-    ! as a fraction of the theoretical atomic radius.  Also reports a 3x3 anisotropic displacement matrix for writing
-    ! an ANISOU PDB file to visualize ellipsoids in Chimera. Author: Henry Wietfeldt
+    ! Reports the best fit ellipsoid semi-axes and the Anisotropic Displacement in the x,y, and z directions in Angstroms.
+    ! Also reports a 3x3 anisotropic displacement matrix for writing an ANISOU PDB file to visualize ellipsoids in Chimera.
+    ! Author: Henry Wietfeldt
     subroutine calc_aniso( self, cc, imat_scaled, border)
         class(nanoparticle), intent(inout)  :: self
         integer, intent(in)                 :: cc
@@ -1524,9 +1524,8 @@ contains
         end do
         call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
         if (errflg /= 0) then
-            ! The above call to matinv is prone to numerical errors. 
-            ! Find the approximate inverse by setting all very small numbers to 0 and if that doesn't work,
-            ! try adding a small constant.  One of these two tricks should usually work
+            ! The above call to matinv is prone to numerical errors if some matrix elements are very small. 
+            ! Find the approximate inverse by setting all very small numbers to 0.
             tmpeigenvecs = eigenvecs
             do j=1,3
                 do i=1,3
@@ -1535,12 +1534,10 @@ contains
             end do
             call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
             if (errflg /= 0) then
-                tmpeigenvecs = tmpeigenvecs + 0.00001
-                call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
-                if (errflg /= 0) then
-                    print *, "ERROR in XYZ displ calculations at cc: ", cc
-                    print *, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
-                end if
+                write(logfhandle, '(a,3f10.5,a,3f10.5,a,3f10.5)') "Numerical error taking inverse of eigenvectors: ", &
+                    &eigenvecs(:,1), ", ", eigenvecs(:,2), ", ", eigenvecs(:,3)
+                write(logfhandle, '(a, i5)') "Tossing ADP Calculations of cc: ", cc
+                self%atominfo(cc)%tossADP = .true.
             end if
         end if
         aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
