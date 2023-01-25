@@ -1516,19 +1516,20 @@ contains
         real(sp) :: sumsqref, sumsqptcl
         real(dp) :: denom, ref_norm, ptcl_norm
         integer  :: k
-        call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        !call self%weight_ref_ptcl(pft_ref, i, iptcl)
         call self%normalize_ref_ptcl( pft_ref, i, ref_norm, ptcl_norm )
         euclids(:) = 0.
-        denom      = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
+        ! denom      = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
             sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq_fast(pft_ref(:,k)))
             euclids   = euclids + (sumsqptcl + sumsqref - 2. * keuclids(:))
         end do
-        euclids = exp( - euclids/denom )
+        ! euclids = exp( - euclids/denom )
+        euclids = exp( - euclids )
         call self%denormalize_ref_ptcl( pft_ref, i, ref_norm, ptcl_norm )
-        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        !call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_test
 
     real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
@@ -1596,12 +1597,13 @@ contains
         complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl, i, irot
         real(dp) :: denom, ref_norm, ptcl_norm
-        call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        ! call self%weight_ref_ptcl(pft_ref, i, iptcl)
         call self%normalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
-        denom                = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
-        gencorr_test_for_rot = exp( - self%calc_euclid_for_rot(pft_ref, iptcl, i, irot)/denom )
+        ! denom                = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
+        ! gencorr_test_for_rot = exp( - self%calc_euclid_for_rot(pft_ref, iptcl, i, irot)/denom )
+        gencorr_test_for_rot = exp( - self%calc_euclid_for_rot(pft_ref, iptcl, i, irot) )
         call self%denormalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
-        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        ! call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end function gencorr_test_for_rot
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
@@ -1669,12 +1671,13 @@ contains
         complex(dp), pointer,    intent(inout) :: pft_ref_8(:,:)
         integer,                 intent(in)    :: iptcl, i, irot
         real(dp) :: denom, ref_norm, ptcl_norm
-        call self%weight_ref_ptcl(pft_ref_8, i, iptcl)
+        ! call self%weight_ref_ptcl(pft_ref_8, i, iptcl)
         call self%normalize_ref_ptcl(pft_ref_8, i, ref_norm, ptcl_norm)
-        denom                  = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
-        gencorr_test_for_rot_8 = dexp( - self%calc_euclid_for_rot_8(pft_ref_8, iptcl, i, irot)/denom )
+        ! denom                  = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
+        ! gencorr_test_for_rot_8 = dexp( - self%calc_euclid_for_rot_8(pft_ref_8, iptcl, i, irot)/denom )
+        gencorr_test_for_rot_8 = dexp( - self%calc_euclid_for_rot_8(pft_ref_8, iptcl, i, irot) )
         call self%denormalize_ref_ptcl(pft_ref_8, i, ref_norm, ptcl_norm)
-        call self%deweight_ref_ptcl(pft_ref_8, i, iptcl)
+        ! call self%deweight_ref_ptcl(pft_ref_8, i, iptcl)
     end function gencorr_test_for_rot_8
 
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
@@ -1788,9 +1791,9 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         real(dp) :: diffsq, denom, ref_norm, ptcl_norm
         integer  :: k
-        call self%weight_ref_ptcl(pft_ref, i, iptcl)
+        ! call self%weight_ref_ptcl(pft_ref, i, iptcl)
         call self%normalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
-        denom       = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
+        ! denom       = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
         f           = self%calc_euclid_for_rot_8(pft_ref, iptcl, i, irot)
         grad        = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
@@ -1803,10 +1806,12 @@ contains
             diffsq  = real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)))) - self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot)
             grad(2) = grad(2) + diffsq
         end do
-        f    = dexp( -f/denom )
-        grad = -f * 2._dp * grad/denom
+        ! f    = dexp( -f/denom )
+        ! grad = -f * 2._dp * grad/denom
+        f    = dexp( -f )
+        grad = -f * 2._dp * grad
         call self%denormalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
-        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
+        ! call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorr_test_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -2050,13 +2055,16 @@ contains
         real(sp),                intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer  :: i, ithr, k
+        real(dp) :: ref_norm, ptcl_norm
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat(ithr, shvec, shmat)
         pft_ref = pft_ref * shmat
+        ! if( params_glob%cc_objfun == OBJFUN_TEST ) call self%normalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
         do k = self%kfromto(1), self%kfromto(2)
             sigma_contrib(k) = 0.5 * self%calc_euclidk_for_rot(pft_ref, i, k, irot) / real(self%pftsz)
         end do
+        ! if( params_glob%cc_objfun == OBJFUN_TEST ) call self%denormalize_ref_ptcl(pft_ref, i, ref_norm, ptcl_norm)
     end subroutine gencorr_sigma_contrib
 
     !< updating sigma for this particle/reference pair
@@ -2151,8 +2159,8 @@ contains
         integer,                 intent(in)    :: i
         real(dp),                intent(inout) :: ref_norm, ptcl_norm
         integer :: k
-        ref_norm  = sum(csq_fast(pft_ref(:, self%kfromto(1):self%kfromto(2))))
-        ptcl_norm = sum(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)))
+        ref_norm  = sqrt(sum(real(csq_fast(pft_ref(        :, self%kfromto(1):self%kfromto(2))),   kind=dp)))
+        ptcl_norm = sqrt(sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), kind=dp)))
         pft_ref                = pft_ref                / ref_norm
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) / ptcl_norm
         do k=self%kfromto(1),self%kfromto(2)
@@ -2167,8 +2175,8 @@ contains
         integer,                 intent(in)    :: i
         real(dp),                intent(inout) :: ref_norm, ptcl_norm
         integer :: k
-        ref_norm  = sum(csq_fast(pft_ref(:, self%kfromto(1):self%kfromto(2))))
-        ptcl_norm = sum(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)))
+        ref_norm  = dsqrt(sum(real(csq_fast(pft_ref(        :, self%kfromto(1):self%kfromto(2))),   kind=dp)))
+        ptcl_norm = dsqrt(sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), kind=dp)))
         pft_ref                = pft_ref                / ref_norm
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) / ptcl_norm
         do k=self%kfromto(1),self%kfromto(2)

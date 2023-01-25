@@ -1323,6 +1323,9 @@ contains
             case(OBJFUN_PROB)
                 self%l_needs_sigma = .true.
                 self%l_incrreslim  = .true.
+            case(OBJFUN_TEST)
+                self%l_needs_sigma = .true.
+                self%l_incrreslim  = .true.
             case(OBJFUN_CC)
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
         end select
@@ -1338,7 +1341,7 @@ contains
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
-            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID .or. self%cc_objfun==OBJFUN_PROB)
+            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID .or. self%cc_objfun==OBJFUN_PROB .or. self%cc_objfun==OBJFUN_TEST)
         endif
         if( self%l_nonuniform ) self%l_ml_reg = .false.
         ! resolution limit
