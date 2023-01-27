@@ -71,21 +71,21 @@ contains
         class(image),          intent(in)    :: img
         real,                  intent(inout) :: medians(self%i_rad_max)
         real(kind=c_float), pointer :: rmat(:,:,:)=>null() !< image pixels in img
-        integer :: i, j, i_rad
+        integer :: npix_per_ring(self%i_rad_max), i, j, i_rad
         call img%get_rmat_ptr(rmat)
-        self%npix_per_ring = 0
+        npix_per_ring = 0
         do j = 1,self%ldim(2)
             do i = 1,self%ldim(1)
                 ! find integer radius
                 i_rad = nint(hyp(self%cis(i),self%cjs(j)))
                 ! update number of pixels per ring
-                self%npix_per_ring(i_rad) = self%npix_per_ring(i_rad) + 1
+                npix_per_ring(i_rad) = npix_per_ring(i_rad) + 1
                 ! extract pixel value
-                self%ring_vals(i_rad,self%npix_per_ring(i_rad)) = rmat(i,j,1)
+                self%ring_vals(i_rad,npix_per_ring(i_rad)) = rmat(i,j,1)
             end do
         end do
         do i_rad = 1,self%i_rad_max
-            medians(i_rad) = median_nocopy(self%ring_vals(i_rad,:self%npix_per_ring(i_rad)))
+            medians(i_rad) = median_nocopy(self%ring_vals(i_rad,:npix_per_ring(i_rad)))
         end do
     end subroutine calc_radial_medians
 
