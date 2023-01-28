@@ -852,7 +852,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 r = nint(hyp(real(h),real(k)))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
-                w = sqrt( self%pxls_p_shell(r) / 2. / self%sigma2_noise(r, iptcl) )
+                w = sqrt( self%pxls_p_shell(r) / self%pxls_p_shell(r) / 2. / self%sigma2_noise(r, iptcl) )
                 self%cur_refs( h,k,ithr) = w * self%cur_refs( h,k,ithr)
                 self%cur_ptcls(h,k,ithr) = w * self%cur_ptcls(h,k,ithr)
             enddo
@@ -870,7 +870,7 @@ contains
                 if( .not. self%resmsk(h,k) ) cycle
                 r = nint(hyp(real(h),real(k)))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
-                w = sqrt( self%pxls_p_shell(r) / 2. / self%sigma2_noise(r, iptcl) )
+                w = sqrt( self%pxls_p_shell(r) / self%pxls_p_shell(r) / 2. / self%sigma2_noise(r, iptcl) )
                 self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
                 self%cur_ptcls(h,k,ithr) = self%cur_ptcls(h,k,ithr)/w
             enddo
