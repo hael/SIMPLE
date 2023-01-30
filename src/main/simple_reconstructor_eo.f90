@@ -23,7 +23,8 @@ type :: reconstructor_eo
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: smpd, msk, fny, pad_correction=1.
-    integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
+    integer             :: box=0, boxpd=0
+    integer             :: nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
     logical             :: exists     = .false.
@@ -78,29 +79,36 @@ contains
         ! set constants
         neg = .false.
         if( params_glob%neg .eq. 'yes' ) neg = .true.
-        self%box        = params_glob%box
-        self%smpd       = params_glob%smpd
+        self%box        = params_glob%box_crop
+        self%smpd       = params_glob%smpd_crop
+        self%fny        = 2.*self%smpd
         self%nstates    = params_glob%nstates
-        self%fny        = params_glob%fny
         self%ext        = params_glob%ext
         self%numlen     = params_glob%numlen
-        self%msk        = params_glob%msk
+        self%msk        = params_glob%msk_crop
         self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
-        self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
+        if( params_glob%boxpd > params_glob%box_croppd )then
+            self%boxpd = max(params_glob%box,params_glob%box_croppd)
+            ! pad_scale  = real(params_glob%box) / real(params_glob%boxpd)
+        else
+            self%boxpd = params_glob%boxpd
+            ! pad_scale  = 1.0
+        endif
+        self%pad_correction = (real(self%boxpd)/real(params_glob%box))**3. * real(params_glob%box)
         ! create composites
         if( self%automsk )then
-            call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
+            call self%envmask%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],self%smpd)
             call self%envmask%read(params_glob%mskfile)
         endif
-        call self%even%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
+        call self%even%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
         call self%even%alloc_rho( spproj)
         call self%even%set_ft(.true.)
-        call self%odd%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
+        call self%odd%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
-        call self%eosum%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
+        call self%eosum%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
         call self%eosum%alloc_rho( spproj, expand=.false.)
         ! set existence
         self%exists = .true.

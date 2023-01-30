@@ -396,7 +396,7 @@ contains
         logical :: has_been_searched
         do_center = .true.
         ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
@@ -406,7 +406,8 @@ contains
             return
         endif
         call build_glob%vol%read(volfname)
-        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk)
+        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
+        xyz = real(params_glob%box) / real(params_glob%box_crop)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -425,17 +426,17 @@ contains
         character(len=*), intent(in) :: fname_odd
         type(image)    :: mskvol
         ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
         call build_glob%vol%read(fname_even)
-        call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol_odd%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
         call build_glob%vol_odd%read(fname_odd)
         if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
             if( params_glob%l_filemsk )then
                 call mskvol%read(params_glob%mskfile)
             else
                 mskvol = 1.0
-                call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
+                call mskvol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
             call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
@@ -488,7 +489,7 @@ contains
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
             call mskvol%read(params_glob%mskfile)
             call vol_ptr%zero_env_background(mskvol)
             call vol_ptr%mul(mskvol)
@@ -496,9 +497,9 @@ contains
         else
             ! circular masking
             if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
+                call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             else
-                call vol_ptr%mask(params_glob%msk, 'soft')
+                call vol_ptr%mask(params_glob%msk_crop, 'soft')
             endif
         endif
         ! gridding prep
@@ -601,9 +602,9 @@ contains
         logical               :: which_iter_present
         which_iter_present = present(which_iter)
         ! init
-        ldim = [params_glob%box,params_glob%box,params_glob%box]
-        call build_glob%vol%new(ldim,params_glob%smpd)
-        call build_glob%vol2%new(ldim,params_glob%smpd)
+        ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
+        call build_glob%vol%new(ldim,params_glob%smpd_crop)
+        call build_glob%vol2%new(ldim,params_glob%smpd_crop)
         res0143s = 0.
         res05s   = 0.
         ! cycle through states
@@ -715,7 +716,7 @@ contains
                         params_glob%mskfile = mskfile
                     endif
                     if( params_glob%l_filemsk )then
-                        call envmsk%new(ldim, params_glob%smpd)
+                        call envmsk%new(ldim, params_glob%smpd_crop)
                         call envmsk%read(params_glob%mskfile)
                     endif
                     call build_glob%vol%zero_background
@@ -726,7 +727,7 @@ contains
                     endif
                     call envmsk%kill
                 else
-                    call build_glob%vol%mask(params_glob%msk, 'soft')
+                    call build_glob%vol%mask(params_glob%msk_crop, 'soft')
                 endif
                 ! write
                 call build_glob%vol%write(pprocvol)
