@@ -26,7 +26,6 @@ type, extends(image) :: projector
     integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
     integer               :: wdim      = 0           !< dimension of K-B window
-    integer               :: wdim_cubd = 0           !< dimension of K-B window
     integer               :: iwinsz    = 0           !< integer half-window size
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
@@ -88,7 +87,6 @@ contains
         self%kbwin         = kbinterpol(KBWINSZ, alpha)
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         self%wdim          = self%kbwin%get_wdim()
-        self%wdim_cubd     = self%wdim**3
         lims               = transpose(self%loop_lims(3))
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
@@ -97,7 +95,7 @@ contains
         l_norm4proj = .false.
         if( present(norm4proj) ) l_norm4proj = norm4proj
         factor = 1.
-        if( l_norm4proj ) factor = real(params_glob%box)**3 / real(params_glob%box)**2
+        if( l_norm4proj ) factor = real(params_glob%box_crop)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
