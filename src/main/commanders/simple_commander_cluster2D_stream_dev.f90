@@ -60,6 +60,7 @@ logical,                   allocatable :: spprojs_mask_glob(:) ! micrographs fro
 character(len=LONGSTRLEN), allocatable :: imported_stks(:)
 character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=:),          allocatable :: orig_projfile
+real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0.
 integer                                :: origproj_time, n_spprojs_glob = 0
 logical                                :: initiated = .false.
 ! Global parameters to avoid conflict with preprocess_stream
@@ -652,7 +653,6 @@ contains
         type(class_frcs)      :: frcs
         integer, allocatable  :: pops(:)
         character(len=STDLEN) :: fname
-        real    :: corr, frac, mi_class
         integer :: i, it, jptcl, iptcl, istk
         if( .not.pool_available )return
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
@@ -663,11 +663,11 @@ contains
             call os%read(fname)
             it = nint(os%get(1,'ITERATION'))
             if( it == pool_iter )then
-                mi_class = os%get(1,'CLASS_OVERLAP')
-                frac     = os%get(1,'SEARCH_SPACE_SCANNED')
-                corr     = os%get(1,'SCORE')
+                conv_mi_class = os%get(1,'CLASS_OVERLAP')
+                conv_frac     = os%get(1,'SEARCH_SPACE_SCANNED')
+                conv_score    = os%get(1,'SCORE')
                 write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&
-                    &'; CLASS OVERLAP: ',mi_class,'; SEARCH SPACE SCANNED: ',frac,'; SCORE: ',corr
+                    &'; CLASS OVERLAP: ',conv_mi_class,'; SEARCH SPACE SCANNED: ',conv_frac,'; SCORE: ',conv_score
             endif
             call os%kill
         endif
@@ -1570,7 +1570,7 @@ contains
         logical,                   allocatable :: pool_stk_mask(:)
         integer :: ichunk, istk, imic, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top, nsplit
         integer :: maxits, pool_nstks, iptcl, jptcl, jstk, nchunks_imported, tot_nchunks_imported
-        logical :: all_chunks_submitted, all_chunks_imported, l_once
+        logical :: all_chunks_submitted, all_chunks_imported, l_once, l_converged
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',      30.0)
         if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
@@ -1684,6 +1684,7 @@ contains
             nsplit = floor(real(spproj%os_ptcl2D%get_noris())/real(nptcls_per_chunk))
             call spproj%split_stk(nsplit, dir=PATH_PARENT)
             call spproj%os_ptcl3D%kill
+            nstks = nsplit
         endif
         ! directory structure & temporary project handling
         projfile4gui   = trim(orig_projfile)
@@ -1815,7 +1816,7 @@ contains
         write(logfhandle,'(A)')'>>> CHUNKS MAP: '
         do ichunk = 1,ntot_chunks
             nptcls = sum(stk_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
-            write(logfhandle,'(A,I6,A,I6,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_nptcls)
+            write(logfhandle,'(A,I8,A,I8,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_nptcls)
         enddo
         ! Infinite loop
         allocate(completed_fnames(nstks))
@@ -1824,7 +1825,8 @@ contains
         tot_nchunks_imported = 0  ! Total # of chunks that are completed and imported into pool
         all_chunks_submitted = .false.
         all_chunks_imported  = .false.
-        l_once = .true.
+        l_once      = .true.
+        l_converged = .false.
         do
             ! sequential chunk prep
             if( .not.all_chunks_submitted )then
@@ -1859,25 +1861,30 @@ contains
             call update_pool_status
             call update_pool
             call reject_from_pool
-            if( pool_iter /= maxits )then
-                ! keep going
+            if( l_converged )then
+                if( pool_available ) exit
+            else
+                l_converged = .false.
                 if( all_chunks_imported )then
                     if( l_once )then
-                        maxits = pool_iter + 2*STREAM_SRCHLIM ! for convergence
+                        ! setting default maximum number of iterations
+                        maxits = pool_iter + 2*STREAM_SRCHLIM
                         l_once = .false.
                         write(logfhandle,'(A)')'>>> ALL CHUNKS HAVE CONVERGED'
-                        write(logfhandle,'(A,I6)')'>>> TERMINATING AT END OF ITERATION: ',maxits
+                        write(logfhandle,'(A,I6)')'>>> TERMINATING NO LATER THAN ITERATION: ',maxits
+                    endif
+                    if( pool_available )then
+                        ! convergence assessment
+                        l_converged = (pool_iter >= maxits)&
+                            &.or. ((conv_mi_class > OVERLAP_2D_FRAC) .and. (conv_frac > FRACSRCHSPACE_2D))
                     endif
                 else
                     call import_chunks_into_pool(.true., nchunks_imported)
                     tot_nchunks_imported = tot_nchunks_imported + nchunks_imported
                     all_chunks_imported  = tot_nchunks_imported == ntot_chunks
                 endif
-                if( pool_iter /= maxits ) call classify_pool
+                if( .not.l_converged ) call classify_pool
                 if( .not.all_chunks_submitted ) call sleep(WAITTIME)
-            else
-                ! converged
-                if( pool_available ) exit
             endif
         end do
         ! Termination
