@@ -290,9 +290,9 @@ contains
             ! build image objects
             call self%img_crop_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
             if( ddo3d )then
-                call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd)
-                call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd)
-                call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd)
+                call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             endif
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill

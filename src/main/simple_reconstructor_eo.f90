@@ -99,7 +99,7 @@ contains
         self%pad_correction = (real(self%boxpd)/real(params_glob%box))**3. * real(params_glob%box)
         ! create composites
         if( self%automsk )then
-            call self%envmask%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],self%smpd)
+            call self%envmask%new([self%box,self%box,self%box],self%smpd)
             call self%envmask%read(params_glob%mskfile)
         endif
         call self%even%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
