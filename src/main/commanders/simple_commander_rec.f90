@@ -117,11 +117,11 @@ contains
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
                 fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
+                call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box_crop)
                 if( trim(params%oritype).eq.'cls3D' )then
-                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol_cavg')
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd_crop, state, 'vol_cavg')
                 else
-                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd_crop, state, 'vol')
                 endif
             enddo
             call build%spproj%write_segment_inside('out',params%projfile)

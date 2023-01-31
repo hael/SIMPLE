@@ -17,10 +17,13 @@ type :: fplane
     complex, allocatable, public :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
-    integer,              public :: frlims(3,2), frlims_exp(2,2) !< Redundant Fourier limits
-    integer,              public :: ldim(3)       = 0            !< dimensions of original image
+    integer,              public :: frlims(3,2)                  !< Redundant Fourier limits
+    integer,              public :: ldim(3)       = 0            !< dimensions of cropped image
+    integer,              public :: frlims_crop(3,2)             !< Redundant Fourier cropped limits
+    integer,              public :: ldim_crop(3)  = 0            !< dimensions of original image
     real,                 public :: shconst(3)    = 0.           !< memoized constants for origin shifting
     integer,              public :: nyq           = 0            !< Nyqvist Fourier index
+    integer,              public :: nyq_crop      = 0            !< cropped Nyqvist Fourier index
     logical                      :: exists        = .false.      !< Volta phaseplate images or not
   contains
     ! CONSTRUCTOR
@@ -40,6 +43,7 @@ contains
     subroutine new( self, img )
         class(fplane),     intent(inout) :: self
         class(image),      intent(in)    :: img
+        type(image)      :: tmp_crop_img
         integer          :: h, k
         call self%kill
         ! fourier limits & dimensions
@@ -47,6 +51,12 @@ contains
         self%ldim    = img%get_ldim()
         self%nyq     = img%get_lfny(1)
         self%shconst = img%get_shconst()
+        ! cropped Fourier limits & dimensions
+        call tmp_crop_img%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+        self%frlims_crop  = tmp_crop_img%loop_lims(3)
+        self%ldim_crop    = tmp_crop_img%get_ldim()
+        self%nyq_crop     = tmp_crop_img%get_lfny(1)
+        call tmp_crop_img%kill
         ! allocations
         allocate(self%cmplx_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)),&
                 &self%ctfsq_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)))
@@ -97,10 +107,10 @@ contains
         if( l_serial )then
             ! for some reason the openmp parallel construct is not deactivated when nested
             ! in debug mode so single_threaded execution is optional
-            do h = self%frlims(1,1),self%frlims(1,2)
-                do k = self%frlims(2,1),self%frlims(2,2)
+            do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
+                do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
                     sh = nint(sqrt(real(h*h + k*k)))
-                    if( sh > self%nyq )then
+                    if( sh > self%nyq_crop )then
                         c = cmplx(0.,0.)
                         tvalsq = 0.
                     else
@@ -135,10 +145,10 @@ contains
         else
             !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
             !$omp private(h,k,sh,c,tval,tvalsq,inv,sqSpatFreq)
-            do h = self%frlims(1,1),self%frlims(1,2)
-                do k = self%frlims(2,1),self%frlims(2,2)
+            do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
+                do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
                     sh = nint(sqrt(real(h*h + k*k)))
-                    if( sh > self%nyq )then
+                    if( sh > self%nyq_crop )then
                         c = cmplx(0.,0.)
                         tvalsq = 0.
                     else
