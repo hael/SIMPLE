@@ -11,8 +11,8 @@ private
 
 type radial_medians
     private
-    integer              :: ldim(3) = 0, i_rad_max = 0, maxpix = 0
-    real,    allocatable :: cis(:), cjs(:), ring_vals(:,:)
+    integer              :: ldim(3) = 0, i_rad_max = 0, max_npix_per_ring = 0
+    real,    allocatable :: cis(:), cjs(:)
     integer, allocatable :: npix_per_ring(:)
     logical              :: exists = .false.
   contains
@@ -51,12 +51,12 @@ contains
             do i = 1,self%ldim(1)
                 ! find integer radius
                 i_rad = nint(hyp(self%cis(i),self%cjs(j)))
+                if( i_rad < 1 ) cycle
                 ! update number of pixels per ring
                 self%npix_per_ring(i_rad) = self%npix_per_ring(i_rad) + 1
             end do
         end do
-        self%maxpix = maxval(self%npix_per_ring)
-        allocate(self%ring_vals(self%i_rad_max,self%maxpix), source=0.) ! heap array for threading?
+        self%max_npix_per_ring = maxval(self%npix_per_ring)
         self%exists = .true.
     end subroutine new
 
@@ -72,30 +72,32 @@ contains
         real,                  intent(inout) :: medians(self%i_rad_max)
         real(kind=c_float), pointer :: rmat(:,:,:)=>null() !< image pixels in img
         integer :: npix_per_ring(self%i_rad_max), i, j, i_rad
+        real    :: ring_vals(self%i_rad_max,self%max_npix_per_ring)
         call img%get_rmat_ptr(rmat)
         npix_per_ring = 0
         do j = 1,self%ldim(2)
             do i = 1,self%ldim(1)
                 ! find integer radius
                 i_rad = nint(hyp(self%cis(i),self%cjs(j)))
+                if( i_rad < 1 ) cycle
                 ! update number of pixels per ring
                 npix_per_ring(i_rad) = npix_per_ring(i_rad) + 1
                 ! extract pixel value
-                self%ring_vals(i_rad,npix_per_ring(i_rad)) = rmat(i,j,1)
+                ring_vals(i_rad,npix_per_ring(i_rad)) = rmat(i,j,1)
             end do
         end do
         do i_rad = 1,self%i_rad_max
-            medians(i_rad) = median_nocopy(self%ring_vals(i_rad,:npix_per_ring(i_rad)))
+            medians(i_rad) = median_nocopy(ring_vals(i_rad,:npix_per_ring(i_rad)))
         end do
     end subroutine calc_radial_medians
 
     subroutine kill( self )
         class(radial_medians), intent(inout) :: self
         if( self%exists )then
-            self%ldim      = 0
-            self%i_rad_max = 0
-            self%maxpix    = 0
-            deallocate(self%cis, self%cjs, self%ring_vals, self%npix_per_ring)
+            self%ldim              = 0
+            self%i_rad_max         = 0
+            self%max_npix_per_ring = 0
+            deallocate(self%cis, self%cjs, self%npix_per_ring)
         endif
     end subroutine kill
 
