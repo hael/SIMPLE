@@ -17,12 +17,10 @@ type :: fplane
     complex, allocatable, public :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
-    integer,              public :: frlims(3,2)                  !< Redundant Fourier limits
     integer,              public :: ldim(3)       = 0            !< dimensions of cropped image
     integer,              public :: frlims_crop(3,2)             !< Redundant Fourier cropped limits
     integer,              public :: ldim_crop(3)  = 0            !< dimensions of original image
     real,                 public :: shconst(3)    = 0.           !< memoized constants for origin shifting
-    integer,              public :: nyq           = 0            !< Nyqvist Fourier index
     integer,              public :: nyq_crop      = 0            !< cropped Nyqvist Fourier index
     logical                      :: exists        = .false.      !< Volta phaseplate images or not
   contains
@@ -46,10 +44,9 @@ contains
         type(image)      :: tmp_crop_img
         integer          :: h, k
         call self%kill
-        ! fourier limits & dimensions
-        self%frlims  = img%loop_lims(3)
+        ! Original image dimension
         self%ldim    = img%get_ldim()
-        self%nyq     = img%get_lfny(1)
+        ! shift is performed with the original image dimensions
         self%shconst = img%get_shconst()
         ! cropped Fourier limits & dimensions
         call tmp_crop_img%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
@@ -58,15 +55,15 @@ contains
         self%nyq_crop     = tmp_crop_img%get_lfny(1)
         call tmp_crop_img%kill
         ! allocations
-        allocate(self%cmplx_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)),&
-                &self%ctfsq_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)))
+        allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
+                &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)))
         self%cmplx_plane = cmplx(0.,0.)
         self%ctfsq_plane = 0.
         ! CTF pre-calculations
-        allocate(self%ctf_ang(self%frlims(1,1):self%frlims(1,2), self%frlims(2,1):self%frlims(2,2)), source=0.)
+        allocate(self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)), source=0.)
         ! !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k) proc_bind(close)
-        do k=self%frlims(2,1),self%frlims(2,2)
-            do h=self%frlims(1,1),self%frlims(1,2)
+        do k=self%frlims_crop(2,1),self%frlims_crop(2,2)
+            do h=self%frlims_crop(1,1),self%frlims_crop(1,2)
                 self%ctf_ang(h,k) = atan2(real(k), real(h))
             enddo
         enddo
