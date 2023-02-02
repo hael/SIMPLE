@@ -16,7 +16,6 @@ type :: cartft_corrcalc
     type(projector),               pointer     :: vol_even => null(), vol_odd => null() ! prepared e/o vols
     real,                          pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
     integer                                    :: nptcls     = 1         !< # particles in partition (logically indexded [fromp,top])
-    integer                                    :: filtsz     = 0         !< Nyqvist limit
     integer                                    :: pfromto(2) = 0         !< particle index range
     integer                                    :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                                    :: lims(2,2)  = 0         !< resolution mask limits
@@ -124,7 +123,6 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%filtsz       = fdim(params_glob%box) - 1
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
@@ -216,8 +214,6 @@ contains
             write(logfhandle,*) 'self%ldim: ', self%ldim
             THROW_HARD ('only even logical dims supported; new')
         endif
-        ! set constants
-        self%filtsz = fdim(params_glob%box) - 1
         self%nptcls = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
@@ -296,6 +292,7 @@ contains
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
         if( .not. all(self%ldim .eq. ldim) )then
+        ! if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
             THROW_HARD('inconsistent image dimensions, input vs class internal')
         endif
         do h = self%lims(1,1),self%lims(1,2)
@@ -319,6 +316,7 @@ contains
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
         if( .not. all(self%ldim .eq. ldim) )then
+        ! if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
             THROW_HARD('inconsistent image dimensions, input vs class internal')
         endif
         do h = self%lims(1,1),self%lims(1,2)
