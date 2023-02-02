@@ -235,9 +235,9 @@ contains
     !!          serial routine
     subroutine prepimg4align( iptcl, img, img_out )
         use simple_ctf,       only: ctf
-        integer,                intent(in)    :: iptcl
-        class(image),           intent(inout) :: img
-        class(image), optional, intent(inout) :: img_out
+        integer,      intent(in)    :: iptcl
+        class(image), intent(inout) :: img
+        class(image), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y, sdev_noise, crop_factor
@@ -393,8 +393,9 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
+        real    :: crop_factor
         logical :: has_been_searched
-        do_center = .true.
+        do_center   = .true.
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
         ! centering
@@ -407,7 +408,6 @@ contains
         endif
         call build_glob%vol%read(volfname)
         xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
-        xyz = real(params_glob%box) / real(params_glob%box_crop)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -416,7 +416,10 @@ contains
         endif
         ! map back to particle oritentations
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
+        if( has_been_searched )then
+            crop_factor = real(params_glob%box) / real(params_glob%box_crop)
+            call build_glob%spproj_field%map3dshift22d(-xyz(:)*crop_factor, state=s)
+        endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
@@ -460,7 +463,7 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        real    :: filter(build_glob%vol%get_filtsz()), frc(build_glob%vol%get_filtsz())
         integer :: iref, filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
@@ -472,7 +475,7 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()
+        filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
             ! no filtering
         else if( params_glob%l_nonuniform )then

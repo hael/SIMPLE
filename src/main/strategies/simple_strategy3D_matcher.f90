@@ -37,6 +37,7 @@ logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(cartft_corrcalc),  target :: cftcc
+type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 type(sym)                      :: c1_symop
@@ -172,6 +173,10 @@ contains
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
         if( pftcc%exists() )call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
+        allocate(ptcl_match_imgs(params_glob%nthr))
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+        enddo
 
         ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
@@ -331,6 +336,10 @@ contains
         call orientation%kill
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%kill
+        enddo
+        deallocate(ptcl_match_imgs)
 
         ! OUTPUT ORIENTATIONS
         select case(trim(params_glob%refine))
@@ -473,20 +482,21 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl
+        integer :: iptcl_batch, iptcl, ithr
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
         call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_match%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! set Cartesian
-            call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
+            call cftcc%set_ptcl(iptcl, ptcl_match_imgs(ithr))
             ! e/o flags
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
             call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
