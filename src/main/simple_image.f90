@@ -112,7 +112,9 @@ contains
     procedure          :: rmat_associated
     procedure          :: cmat_associated
     procedure          :: is_wthreads
-    procedure          :: serialize
+    procedure, private :: serialize_1
+    procedure, private :: serialize_2
+    generic            :: serialize => serialize_1, serialize_2
     procedure          :: unserialize
     procedure          :: winserialize
     procedure          :: zero2one
@@ -202,7 +204,8 @@ contains
     procedure          :: nbackground
     procedure, private :: binarize_1
     procedure, private :: binarize_2
-    generic            :: binarize => binarize_1, binarize_2
+    procedure, private :: binarize_3
+    generic            :: binarize => binarize_1, binarize_2, binarize_3
     procedure          :: cendist
     procedure          :: masscen
     procedure          :: calc_shiftcen
@@ -844,7 +847,7 @@ contains
     !>  window_slim  extracts a particle image from a box as defined by EMAN 1.9
     subroutine window_slim( self_in, coord, box, self_out, outside )
         class(image), intent(in)    :: self_in
-        integer,      intent(in)    :: coord(2), box !< boxwidth filter size
+        integer,      intent(in)    :: coord(2), box
         class(image), intent(inout) :: self_out
         logical,      intent(out)   :: outside
         integer :: fromc(2), toc(2)
@@ -1686,7 +1689,13 @@ contains
         is = self%wthreads
     end function is_wthreads
 
-    function serialize( self, l_msk )result( pcavec )
+    function serialize_1( self ) result( vec )
+        class(image), intent(in) :: self
+        real, allocatable :: vec(:)
+        vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+    end function serialize_1
+
+    function serialize_2( self, l_msk )result( pcavec )
         class(image), intent(in) :: self
         logical,      intent(in) :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable :: pcavec(:)
@@ -1704,7 +1713,7 @@ contains
                 end do
             end do
         end do
-    end function serialize
+    end function serialize_2
 
     subroutine unserialize( self, l_msk, pcavec )
         class(image),      intent(inout) :: self
@@ -2590,7 +2599,7 @@ contains
         class(image), optional, intent(inout) :: self_out
         integer :: n_foreground
         n_foreground = count(self_in%rmat > thres)
-        if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!; binarize_1')
+        if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!')
         if( self_in%ft ) THROW_HARD('only for real images; bin_1')
         if( present(self_out) )then
             if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; binarize_1')
@@ -2614,7 +2623,7 @@ contains
         real, allocatable :: forsort(:)
         real    :: thres
         integer :: npixtot
-        if( self%ft ) THROW_HARD('only for real images; bin_2')
+        if( self%ft ) THROW_HARD('only for real images')
         npixtot = product(self%ldim)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
@@ -2622,6 +2631,18 @@ contains
         call self%binarize_1( thres )
         deallocate( forsort )
     end subroutine binarize_2
+
+    subroutine binarize_3( self, thres, mask )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: thres
+        logical,      intent(inout) :: mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        if( self%ft ) THROW_HARD('only for real images')
+        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= thres )
+            mask = .true.
+        elsewhere
+            mask = .false.
+        end where
+    end subroutine binarize_3
 
     !>  \brief cendist produces an image with square distance from the centre of the image
     subroutine cendist( self )

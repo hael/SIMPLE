@@ -8,7 +8,7 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, stdev
+public :: moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, stdev, std_mean_diff
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
@@ -516,6 +516,12 @@ contains
         var = (SumSQR - avg*avg)/(n-1)
         stdev = sqrt(var)
     end function stdev
+
+    ! a value below 0.1 is considered a “small” difference
+    pure real function std_mean_diff( avg1, avg2, sig1, sig2 )
+        real, intent(in) :: avg1, avg2, sig1, sig2
+        std_mean_diff = abs(avg1 - avg2) / sqrt(0.5 * (sig1**2. + sig2**2.))
+    end function std_mean_diff
 
     !>  \brief  is for calculating variable statistics
     subroutine calc_stats( arr, statvars, mask )
