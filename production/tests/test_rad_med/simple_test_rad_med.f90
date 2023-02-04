@@ -9,6 +9,7 @@ implicit none
 integer, parameter   :: BOX  = 256
 real,    parameter   :: SMPD = 1.0, SIG = 40.
 type(image)          :: img
+type(stats_struct)   :: stats
 type(radial_medians) :: rad_med
 real, allocatable    :: medians(:)
 integer :: irad
@@ -19,7 +20,7 @@ call img%vis
 
 call rad_med%new([BOX,BOX,1])
 allocate(medians(rad_med%get_rad_max()), source=0.)
-call rad_med%calc_radial_medians(img, medians)
+call rad_med%calc_radial_medians(img, stats, medians)
 do irad = 1,rad_med%get_rad_max()
     print *, irad, medians(irad)
 end do

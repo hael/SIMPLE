@@ -3661,7 +3661,7 @@ contains
         character(len=*), intent(in)    :: which
         real, allocatable     :: pixels(:), wfvals(:)
         integer               :: n, i, j, k, cnt, npix
-        real                  :: rn, wfun(-winsz:winsz), norm
+        real                  :: rn, wfun(-winsz:winsz), norm, avg, sdev
         type(winfuns)         :: fwin
         character(len=STDLEN) :: wstr
         type(image)           :: img_filt
@@ -3742,11 +3742,12 @@ contains
                 end do
                 !$omp end parallel do
             case('stdev')
-                !$omp parallel do collapse(2) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                !$omp parallel do collapse(2) default(shared) private(i,j,k,pixels,avg,sdev) schedule(static) proc_bind(close)
                 do i=1,self%ldim(1)
                     do j=1,self%ldim(2)
                         pixels = self%win2arr(i, j, 1, winsz)
-                        img_filt%rmat(i,j,1) = stdev(pixels)
+                        call avg_sdev(pixels, avg, sdev)
+                        img_filt%rmat(i,j,1) = sdev
                     end do
                 end do
                 !$omp end parallel do
@@ -3794,12 +3795,13 @@ contains
                 end do
                 !$omp end parallel do
             case('stdev')
-                !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels) schedule(static) proc_bind(close)
+                !$omp parallel do collapse(3) default(shared) private(i,j,k,pixels,avg,sdev) schedule(static) proc_bind(close)
                 do i=1,self%ldim(1)
                     do j=1,self%ldim(2)
                         do k=1,self%ldim(3)
                             pixels = self%win2arr(i, j, k, winsz)
-                            img_filt%rmat(i,j,k) = stdev(pixels)
+                            call avg_sdev(pixels, avg, sdev)
+                            img_filt%rmat(i,j,k) = sdev
                         end do
                     end do
                 end do
