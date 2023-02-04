@@ -66,15 +66,18 @@ contains
         i_rad_max = self%i_rad_max
     end function get_rad_max
 
-    subroutine calc_radial_medians( self, img, medians )
+    subroutine calc_radial_medians( self, img, stats, medians )
         class(radial_medians), intent(inout) :: self
         class(image),          intent(in)    :: img
+        type(stats_struct),    intent(inout) :: stats
         real,                  intent(inout) :: medians(self%i_rad_max)
         real(kind=c_float), pointer :: rmat(:,:,:)=>null() !< image pixels in img
         integer :: npix_per_ring(self%i_rad_max), i, j, i_rad
-        real    :: ring_vals(self%i_rad_max,self%max_npix_per_ring)
+        real    :: ring_vals(self%i_rad_max,self%max_npix_per_ring), var
+        logical :: mask(self%i_rad_max,self%max_npix_per_ring), err
         call img%get_rmat_ptr(rmat)
         npix_per_ring = 0
+        mask          = .false.
         do j = 1,self%ldim(2)
             do i = 1,self%ldim(1)
                 ! find integer radius
@@ -84,8 +87,13 @@ contains
                 npix_per_ring(i_rad) = npix_per_ring(i_rad) + 1
                 ! extract pixel value
                 ring_vals(i_rad,npix_per_ring(i_rad)) = rmat(i,j,1)
+                ! update mask
+                mask(i_rad,npix_per_ring(i_rad)) = .true.
             end do
         end do
+        ! overall stats
+        call avg_sdev(ring_vals, stats%avg, stats%sdev, mask)
+        ! ring medians
         do i_rad = 1,self%i_rad_max
             medians(i_rad) = median_nocopy(ring_vals(i_rad,:npix_per_ring(i_rad)))
         end do

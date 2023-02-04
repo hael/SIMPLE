@@ -2,14 +2,15 @@ module simple_picker_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image, only: image
+use simple_image,          only: image
+use simple_radial_medians, only: radial_medians
 implicit none
 
 public :: picker_utils
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SMPD_TARGET1 = 4.0, SMPD_TARGET2 = 2.0, LAMBDA = 5.
+real,    parameter :: SMPD_TARGET1 = 4.0, SMPD_TARGET2 = 2.0, LAMBDA1 = 5., LAMBDA2 = 3.
 integer, parameter :: OFFSET  = 3
 logical, parameter :: L_WRITE = .true.
 
@@ -20,18 +21,23 @@ type picker_utils
     real                     :: smpd_raw    = 0., smpd_shrink1    = 0., smpd_shrink2    = 0.
     integer                  :: nboxes1 = 0, nboxes2 = 0, nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0
     type(image)              :: mic_shrink1, mic_shrink2
+    type(stats_struct)       :: stats_ptcl, stats_bg
+    type(radial_medians)     :: radmeds_obj1, radmeds_obj2
     type(image), pointer     :: mic_raw => null()
     type(image), allocatable :: boximgs1(:), boximgs2(:)
+    real,        allocatable :: avg_sdev1(:,:), avg_sdev2(:,:), radmeds1(:,:), radmeds2(:,:)
     integer,     allocatable :: positions1(:,:)
-    logical                  :: pos_set = .false.
+    logical,     allocatable :: is_ptcl1(:), is_ptcl2(:)
   contains
     procedure          :: set_mics
-    procedure          :: bin_mic_shrink1
+    procedure          :: calc_fgbgstats_mic_shrink1
     procedure, private :: set_positions_1
     procedure, private :: set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
     procedure, private :: set_pos_priv
-    procedure, private :: extract_boximgs1
+    procedure          :: extract_boximgs1
+    procedure          :: calc_radmeds1
+    procedure          :: classify_ptcls1
 end type picker_utils
 
 contains
@@ -84,37 +90,35 @@ contains
     !     real :: minv = 0.
     ! end type stats_struct
 
-    subroutine bin_mic_shrink1( self, bp_lp )
+    subroutine calc_fgbgstats_mic_shrink1( self, bp_lp )
         use simple_segmentation
         use simple_tvfilter, only: tvfilter
-        class(picker_utils), intent(in) :: self
-        real,                intent(in) :: bp_lp(2) !< high- and low-pass limits in A
-        real, allocatable  :: vec(:), vec2(:)
+        class(picker_utils), intent(inout) :: self
+        real,                intent(in)    :: bp_lp(2) !< high- and low-pass limits in A
+        real, allocatable  :: vec(:)
         type(tvfilter)     :: tvf
-        type(image)        :: img, img_copy
-        type(stats_struct) :: stats_ptcl, stats_bg
-        logical            :: lmsk(self%ldim_shrink1(1),self%ldim_shrink1(2),1)
+        type(image)        :: img_copy
         real :: t
-        call img%copy(self%mic_shrink1) ! remplace with copy_fast in optimized code (pre-construct)
-        call img%fft
-        call img%bp(bp_lp(1),bp_lp(2))
+        call self%mic_shrink1%fft
+        call self%mic_shrink1%bp(bp_lp(1),bp_lp(2))
         call tvf%new()
-        call tvf%apply_filter(img, LAMBDA)
+        call tvf%apply_filter(self%mic_shrink1, LAMBDA1)
         call tvf%kill
-        call img%ifft
-        call img%write('tv_mic.mrc')
-        vec = img%serialize()
-        call otsu(size(vec), vec, t)
-        call img_copy%copy(img)
-        call img_copy%binarize(t)
-        call img_copy%write('otsu_mic.mrc')
+        call self%mic_shrink1%ifft
+        if( L_WRITE ) call self%mic_shrink1%write('tv_mic.mrc')
         vec = self%mic_shrink1%serialize()
-        call calc_stats(vec, stats_bg,   mask=vec >= t) ! background stats, assuming black particle density
-        call calc_stats(vec, stats_ptcl, mask=vec <  t) ! particle   stats, assuming black particle density
+        call otsu(size(vec), vec, t)
+        if( L_WRITE )then
+            call img_copy%copy(self%mic_shrink1)
+            call img_copy%binarize(t)
+            call img_copy%write('otsu_mic.mrc')
+        endif
+        call calc_stats(vec, self%stats_bg,   mask=vec >= t) ! background stats, assuming black particle density
+        call calc_stats(vec, self%stats_ptcl, mask=vec <  t) ! particle   stats, assuming black particle density
 
-        print *, 'background #pix/avg/sdev ', count(vec >= t), stats_bg%avg,   stats_bg%sdev
-        print *, 'particle   #pix/avg/sdev ', count(vec <  t), stats_ptcl%avg, stats_ptcl%sdev
-        print *, 'std_mean_diff ', std_mean_diff(stats_bg%avg, stats_ptcl%avg, stats_bg%sdev, stats_ptcl%sdev)
+        print *, 'background #pix/avg/sdev ', count(vec >= t), self%stats_bg%avg,   self%stats_bg%sdev
+        print *, 'particle   #pix/avg/sdev ', count(vec <  t), self%stats_ptcl%avg, self%stats_ptcl%sdev
+        print *, 'std_mean_diff ', std_mean_diff(self%stats_bg%avg, self%stats_ptcl%avg, self%stats_bg%sdev, self%stats_ptcl%sdev)
 
         ! results from filtered
         ! background #pix/avg/sdev       435326  0.964909315       7.91966170E-03
@@ -122,13 +126,12 @@ contains
         ! std_mean_diff    2.24531102
 
         ! results from raw
-        ! background #pix/avg/sdev       368903  0.995647132       3.23507152E-02
-        ! particle   #pix/avg/sdev       328097  0.910767972       3.42143402E-02
-        ! std_mean_diff    2.54926300
-        
-        call img%kill
+        ! background #pix/avg/sdev       435326  0.971406519       4.82148230E-02
+        ! particle   #pix/avg/sdev       261674  0.929549515       5.25608510E-02
+        ! std_mean_diff   0.829925179
+
         call img_copy%kill
-    end subroutine bin_mic_shrink1
+    end subroutine calc_fgbgstats_mic_shrink1
 
     subroutine set_positions_1( self, maxdiam )
         class(picker_utils), intent(inout) :: self
@@ -165,6 +168,9 @@ contains
     subroutine set_pos_priv( self )
         class(picker_utils), intent(inout) :: self
         integer :: xind, yind
+        ! make radial medians objects
+        call self%radmeds_obj1%new(self%ldim_box1)
+        call self%radmeds_obj2%new(self%ldim_box2)
         ! set # pixels in x/y for both box sizes
         self%nx1 = self%ldim_shrink1(1) - self%ldim_box1(1)
         self%ny1 = self%ldim_shrink1(2) - self%ldim_box1(2)
@@ -187,14 +193,13 @@ contains
                 self%positions1(self%nboxes1,:) = [xind,yind]
             end do
         end do
-        self%pos_set = .true.
     end subroutine set_pos_priv
 
     subroutine extract_boximgs1( self )
         class(picker_utils), intent(inout) :: self
         integer :: ibox
         logical :: outside
-        if( .not. self%pos_set ) THROW_HARD('positions need to be set before constructing boximgs1')
+        if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before constructing boximgs1')
         if( allocated(self%boximgs1) )then
             do ibox = 1,self%nboxes1
                 call self%boximgs1(ibox)%kill
@@ -207,7 +212,77 @@ contains
             call self%boximgs1(ibox)%new(self%ldim_box1, SMPD_TARGET1)
             call self%mic_shrink1%window_slim(self%positions1(ibox,:), self%ldim_box1(1), self%boximgs1(ibox), outside)
         end do
-        !$omp end parallel do   
+        !$omp end parallel do
     end subroutine extract_boximgs1
+
+    subroutine calc_radmeds1( self )
+        class(picker_utils), intent(inout) :: self
+        type(stats_struct) :: stats
+        integer :: ibox
+        if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before caluclating radial medians')
+        if( .not. allocated(self%boximgs1)   ) THROW_HARD('boximgs1 need to be extracted before caluclating radial medians')
+        if( allocated(self%avg_sdev1) ) deallocate(self%avg_sdev1)
+        if( allocated(self%radmeds1)  ) deallocate(self%radmeds1)
+        allocate(self%avg_sdev1(self%nboxes1,2), self%radmeds1(self%nboxes1,self%radmeds_obj1%get_rad_max()), source=0.)
+        !$omp parallel do schedule(static) default(shared) private(ibox,stats) proc_bind(close)
+        do ibox = 1,self%nboxes1
+            call self%radmeds_obj1%calc_radial_medians(self%boximgs1(ibox), stats, self%radmeds1(ibox,:))
+            self%avg_sdev1(ibox,1) = stats%avg
+            self%avg_sdev1(ibox,2) = stats%sdev
+        end do
+        !$omp end parallel do
+    end subroutine calc_radmeds1
+
+    subroutine classify_ptcls1( self )
+        class(picker_utils), intent(inout) :: self
+        integer :: ibox, nptcls
+        real    :: smd_ptcl, smd_bg
+        if( .not. allocated(self%avg_sdev1) ) THROW_HARD('avg_sdev1 needs to be set (through calc_radmeds1) before call to classify_ptcls1')
+        if( allocated(self%is_ptcl1) ) deallocate(self%is_ptcl1)
+        allocate( self%is_ptcl1(self%nboxes1), source=.false.)
+        do ibox = 1,self%nboxes1
+            smd_ptcl = std_mean_diff(self%avg_sdev1(ibox,1), self%stats_ptcl%avg, self%avg_sdev1(ibox,2), self%stats_ptcl%sdev)
+            smd_bg   = std_mean_diff(self%avg_sdev1(ibox,1), self%stats_bg%avg,   self%avg_sdev1(ibox,2), self%stats_bg%sdev)
+            if( smd_ptcl < smd_bg ) self%is_ptcl1(ibox) = .true.
+        end do
+        nptcls = count(self%is_ptcl1)
+        print *, 'found ', nptcls, ' particles among ', self%nboxes1, ' positions, % ', 100. * (real(nptcls) / real(self%nboxes1))
+        if( L_WRITE )then
+            call write_boximgs(self%nboxes1,       self%is_ptcl1, self%boximgs1, 'classified_as_ptcls.mrcs' )
+            call write_boximgs(self%nboxes1, .not. self%is_ptcl1, self%boximgs1, 'classified_as_bg.mrcs' )
+        endif
+    end subroutine classify_ptcls1
+
+    ! utilities
+
+    subroutine write_boximgs( n, mask, boximgs, fname )
+        integer,          intent(in)    :: n
+        logical,          intent(in)    :: mask(n)
+        class(image),     intent(inout) :: boximgs(n)
+        character(len=*), intent(in)    :: fname
+        integer :: ibox, cnt
+        cnt = 0
+        do ibox = 1,n
+            if( mask(ibox) )then
+                cnt = cnt + 1
+                call boximgs(ibox)%write(fname, cnt)
+            endif
+        end do
+    end subroutine write_boximgs
+
+    subroutine write_boxfile( n, coordinates, box, mask, fname )
+        integer,          intent(in) :: n, coordinates(n,2), box
+        logical,          intent(in) :: mask(n)
+        character(len=*), intent(in) :: fname
+        integer :: funit, ibox, iostat
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fileiochk('simple_picker_utils; write_boxfile ', iostat)
+        do ibox = 1,n
+            if( mask(ibox) )then
+                write(funit,'(I7,I7,I7,I7,I7)') coordinates(1,ibox), coordinates(2,ibox), box, box, -3
+            endif
+        end do
+        call fclose(funit)
+    end subroutine write_boxfile
 
 end module simple_picker_utils

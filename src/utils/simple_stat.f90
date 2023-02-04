@@ -8,13 +8,19 @@ use simple_srch_sort_loc
 use simple_is_check_assert
 implicit none
 
-public :: moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, stdev, std_mean_diff
+public :: avg_sdev, moment, moment_serial, pearsn, normalize, normalize_sigm, normalize_minmax, std_mean_diff
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8
 private
 #include "simple_local_flags.inc"
+
+interface avg_sdev
+    module procedure avg_sdev_1
+    module procedure avg_sdev_2
+    module procedure avg_sdev_3
+end interface avg_sdev
 
 interface moment
     module procedure moment_1
@@ -45,6 +51,84 @@ end interface
 real, parameter :: NNET_CONST = exp(1.)-1.
 
 contains
+
+    subroutine avg_sdev_1( vec, avg, sdev, mask )
+        real,              intent(in)    :: vec(:)
+        real,              intent(inout) :: avg, sdev
+        logical, optional, intent(in)    :: mask(:)
+        logical :: present_mask
+        integer :: n
+        real    :: rn
+        present_mask = present(mask)
+        if( present_mask )then
+            n = count(mask)
+        else
+            n = size(vec)
+        endif
+        avg  = 0.
+        sdev = 0.
+        if( n < 2 ) return
+        rn   = real(n)
+        if( present_mask )then
+            avg  = sum(vec, mask=mask) / rn
+            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        else
+            avg  = sum(vec) / rn
+            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+        endif
+    end subroutine avg_sdev_1
+
+    subroutine avg_sdev_2( vec, avg, sdev, mask )
+        real,              intent(in)    :: vec(:,:)
+        real,              intent(inout) :: avg, sdev
+        logical, optional, intent(in)    :: mask(:,:)
+        logical :: present_mask
+        integer :: n
+        real    :: rn
+        present_mask = present(mask)
+        if( present_mask )then
+            n = count(mask)
+        else
+            n = size(vec)
+        endif
+        avg  = 0.
+        sdev = 0.
+        if( n < 2 ) return
+        rn   = real(n)
+        if( present_mask )then
+            avg  = sum(vec, mask=mask) / rn
+            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        else
+            avg  = sum(vec) / rn
+            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+        endif
+    end subroutine avg_sdev_2
+
+    subroutine avg_sdev_3( vec, avg, sdev, mask )
+        real,              intent(in)    :: vec(:,:,:)
+        real,              intent(inout) :: avg, sdev
+        logical, optional, intent(in)    :: mask(:,:,:)
+        logical :: present_mask
+        integer :: n
+        real    :: rn
+        present_mask = present(mask)
+        if( present_mask )then
+            n = count(mask)
+        else
+            n = size(vec)
+        endif
+        avg  = 0.
+        sdev = 0.
+        if( n < 2 ) return
+        rn   = real(n)
+        if( present_mask )then
+            avg  = sum(vec, mask=mask) / rn
+            sdev = sqrt(sum((vec - avg)**2., mask=mask) / (rn - 1.))
+        else
+            avg  = sum(vec) / rn
+            sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
+        endif
+    end subroutine avg_sdev_3
 
     subroutine moment_1( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
@@ -505,17 +589,6 @@ contains
         delta = smax - smin
         arr   = (arr - smin)/delta
     end subroutine normalize_minmax
-
-    function stdev (a)
-        real, intent(in) :: a(:)
-        real    :: stdev, avg, SumSQR, var, n
-        n= real(size(a))
-        if(n < 2) return
-        avg = sum(a)/n
-        SumSQR = sum(sqrt(a))/n
-        var = (SumSQR - avg*avg)/(n-1)
-        stdev = sqrt(var)
-    end function stdev
 
     ! a value below 0.1 is considered a “small” difference
     pure real function std_mean_diff( avg1, avg2, sig1, sig2 )
