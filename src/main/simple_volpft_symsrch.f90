@@ -16,7 +16,7 @@ integer, parameter :: NBEST = 10
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
-    class(optimizer), pointer :: nlopt => null()    !< optimizer object
+    class(optimizer), pointer :: opt_obj => null()  !< optimizer object
 end type opt4openMP
 
 type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, symmetry axes
@@ -75,7 +75,7 @@ contains
             ! point to costfun
             call opt_symaxes(ithr)%ospec%set_costfun(volpft_symsrch_costfun)
             ! generate optimizer object with the factory
-            call ofac%new(opt_symaxes(ithr)%ospec, opt_symaxes(ithr)%nlopt)
+            call ofac%new(opt_symaxes(ithr)%ospec, opt_symaxes(ithr)%opt_obj)
         end do
         ! create global symaxis
         call saxis_glob%new(is_ptcl=.false.)
@@ -148,7 +148,7 @@ contains
         do iloc=1,istop
             ithr = omp_get_thread_num() + 1
             opt_symaxes(ithr)%ospec%x = cand_axes%get_euler(order(iloc))
-            call opt_symaxes(ithr)%nlopt%minimize(opt_symaxes(ithr)%ospec, fun_self, cost)
+            call opt_symaxes(ithr)%opt_obj%minimize(opt_symaxes(ithr)%ospec, fun_self, cost)
             call cand_axes%set_euler(order(iloc), opt_symaxes(ithr)%ospec%x)
             call cand_axes%set(order(iloc), 'corr', -cost)
         end do
@@ -205,9 +205,9 @@ contains
         if( allocated(opt_symaxes) )then
             do ithr=1,size(opt_symaxes)
                 call opt_symaxes(ithr)%ospec%kill
-                if( associated(opt_symaxes(ithr)%nlopt) )then
-                    call opt_symaxes(ithr)%nlopt%kill
-                    nullify(opt_symaxes(ithr)%nlopt)
+                if( associated(opt_symaxes(ithr)%opt_obj) )then
+                    call opt_symaxes(ithr)%opt_obj%kill
+                    nullify(opt_symaxes(ithr)%opt_obj)
                 endif
             end do
             deallocate(opt_symaxes)
