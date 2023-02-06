@@ -19,7 +19,7 @@ real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost
 type :: ftexp_shsrch
     private
     type(opt_spec), public      :: ospec                     !< optimizer specification object
-    class(optimizer),   pointer :: nlopt        => null()    !< pointer to nonlinear optimizer
+    class(optimizer),   pointer :: opt_obj      => null()    !< pointer to nonlinear optimizer
     class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
     class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
     complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
@@ -82,11 +82,11 @@ contains
         call self%ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
         call self%ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
         ! generate optimizer object with the factory
-        if( associated(self%nlopt) )then
-            call self%nlopt%kill
-            deallocate(self%nlopt)
+        if( associated(self%opt_obj) )then
+            call self%opt_obj%kill
+            deallocate(self%opt_obj)
         end if
-        call ofac%new(self%ospec, self%nlopt)
+        call ofac%new(self%ospec, self%opt_obj)
         self%existence = .true.
     end subroutine ftexp_shsrch_new
 
@@ -113,7 +113,7 @@ contains
         call self%set_dims_and_alloc()
         call self%calc_tmp_cmat12()
         ! set initial solution to previous shift
-        call self%nlopt%minimize(self%ospec, self, cxy(1))
+        call self%opt_obj%minimize(self%ospec, self, cxy(1))
         call self%reference%corr_normalize(self%particle, cxy(1))
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = self%ospec%x ! shift
@@ -129,9 +129,9 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         if ( self%existence ) then
             call self%ospec%kill
-            if( associated( self%nlopt ) )then
-                call self%nlopt%kill
-                nullify(self%nlopt)
+            if( associated( self%opt_obj ) )then
+                call self%opt_obj%kill
+                nullify(self%opt_obj)
             end if
             if ( associated( self%reference ) ) self%reference => null()
             if ( associated( self%particle )  ) self%particle  => null()

@@ -15,7 +15,7 @@ real(dp), parameter :: init_range = 2.0_dp  ! range for random initialization (n
 type :: cftcc_shsrch_grad
     private
     type(opt_spec)            :: ospec                 !< optimizer specification object
-    class(optimizer), pointer :: nlopt       =>null()  !< optimizer object
+    class(optimizer), pointer :: opt_obj     =>null()  !< optimizer object
     integer                   :: particle    = 0       !< particle index
     integer                   :: maxits      = 100     !< max # iterations
     logical                   :: shbarr      = .true.  !< shift barrier constraint or not
@@ -49,7 +49,7 @@ contains
         call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
-        call opt_fact%new(self%ospec, self%nlopt)
+        call opt_fact%new(self%ospec, self%opt_obj)
         ! set costfun pointers
         self%ospec%costfun_8    => c_grad_shsrch_costfun
         self%ospec%gcostfun_8   => c_grad_shsrch_gcostfun
@@ -140,7 +140,7 @@ contains
             self%ospec%x   = real(init_xy)
         endif
         ! shift search
-        call self%nlopt%minimize(self%ospec, self, lowest_cost)
+        call self%opt_obj%minimize(self%ospec, self, lowest_cost)
         cxy(1)    = - real(lowest_cost) ! correlation
         cxy(2:)   =   self%ospec%x      ! shift
         nevals(1) = self%ospec%nevals
@@ -149,10 +149,10 @@ contains
 
     subroutine c_grad_shsrch_kill( self )
         class(cftcc_shsrch_grad), intent(inout) :: self
-        if( associated(self%nlopt) )then
+        if( associated(self%opt_obj) )then
             call self%ospec%kill
-            call self%nlopt%kill
-            nullify(self%nlopt)
+            call self%opt_obj%kill
+            nullify(self%opt_obj)
         end if
     end subroutine c_grad_shsrch_kill
 

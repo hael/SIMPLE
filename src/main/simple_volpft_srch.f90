@@ -17,8 +17,8 @@ integer, parameter :: NBEST   = 10
 integer, parameter :: ANGSTEP = 7
 
 type opt4openMP
-    type(opt_spec)            :: ospec           !< optimizer specification object
-    class(optimizer), pointer :: nlopt => null() !< optimizer object
+    type(opt_spec)            :: ospec             !< optimizer specification object
+    class(optimizer), pointer :: opt_obj => null() !< optimizer object
 end type opt4openMP
 
 type(volpft_corrcalc)         :: vpftcc                  !< corr calculator
@@ -59,7 +59,7 @@ contains
             ! point to costfun
             call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun)
             ! generate optimizer object with the factory
-            call ofac%new(opt_eul(ithr)%ospec, opt_eul(ithr)%nlopt)
+            call ofac%new(opt_eul(ithr)%ospec, opt_eul(ithr)%opt_obj)
         end do
         ! create global ori
         call e_glob%new(is_ptcl=.false.)
@@ -154,7 +154,7 @@ contains
             ithr = omp_get_thread_num() + 1
             opt_eul(ithr)%ospec%x = cand_oris%get_euler(order(iloc))
             prev_cost = -cand_oris%get(order(iloc),'corr')
-            call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
+            call opt_eul(ithr)%opt_obj%minimize(opt_eul(ithr)%ospec, fun_self, cost)
             if( cost < prev_cost )then
               call cand_oris%set_euler(order(iloc), opt_eul(ithr)%ospec%x)
               call cand_oris%set(order(iloc), 'corr', -cost)
@@ -191,7 +191,7 @@ contains
             opt_eul(ithr)%ospec%limits = lims_eul
         endif
         prev_cost = -vpftcc%corr(euler2m(opt_eul(ithr)%ospec%x(:)), shvec_glob)
-        call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
+        call opt_eul(ithr)%opt_obj%minimize(opt_eul(ithr)%ospec, fun_self, cost)
         if(cost < prev_cost) then
           call orientation_best%set_euler(opt_eul(ithr)%ospec%x)
           call orientation_best%set('corr', -cost)
@@ -220,9 +220,9 @@ contains
         if( allocated(opt_eul) )then
             do ithr=1,size(opt_eul)
                 call opt_eul(ithr)%ospec%kill
-                if( associated(opt_eul(ithr)%nlopt) )then
-                    call opt_eul(ithr)%nlopt%kill
-                    nullify(opt_eul(ithr)%nlopt)
+                if( associated(opt_eul(ithr)%opt_obj) )then
+                    call opt_eul(ithr)%opt_obj%kill
+                    nullify(opt_eul(ithr)%opt_obj)
                 endif
             end do
             deallocate(opt_eul)
