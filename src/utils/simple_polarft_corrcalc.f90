@@ -2179,9 +2179,10 @@ contains
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(sp) :: w
+        real(sp) :: w, c
+        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = sqrt(2*PI*k / params_glob%box / params_glob%smpd / real(self%pftsz) / (2. * self%sigma2_noise(k,iptcl)))
+            w                         = sqrt( c * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
             self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
@@ -2194,9 +2195,10 @@ contains
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(dp) :: w
+        real(dp) :: w, c
+        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = dsqrt(2*PI*k / params_glob%box / params_glob%smpd / real(self%pftsz, dp) / (2.0_dp * self%sigma2_noise(k,iptcl)))
+            w                         = dsqrt( c * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
             self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
