@@ -93,21 +93,6 @@ contains
         end do
     end subroutine bounds_from_mask3D
 
-    !>  \brief  generates a binary mask from a logical one
-    function logical2bin( mask ) result( matrix )
-        logical, intent(in) :: mask(:,:,:)
-        real, allocatable   :: matrix(:,:,:)
-        integer      :: s(3), i, j
-        s = shape(mask)
-        if(allocated(matrix)) deallocate(matrix)
-        allocate(matrix(s(1),s(2),1), source = 0.)
-        do i = 1, s(1)
-            do j = 1, s(2)
-                if(mask(i,j,1)) matrix(i,j,1)=1.
-            enddo
-        enddo
-    end function logical2bin
-
     ! This function takes in input arraya and gives as output arrayb
     ! which is the same as array, but with NO repetition in the elements.
     subroutine elim_dup(arraya, arrayb)

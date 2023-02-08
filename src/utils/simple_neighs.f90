@@ -29,8 +29,9 @@ contains
         integer, intent(inout) :: neigh_8(3,8)
         integer, intent(out)   :: nsz
         integer :: i, j
-        i = px(1)
-        j = px(2) ! 2-dim matrix asssumed
+        i       = px(1)
+        j       = px(2) ! 2-dim matrix asssumed
+        neigh_8 = 0
         if ( i-1 < 1 .and. j-1 < 1 ) then
             neigh_8(1:3,1) = [i+1,j,1]
             neigh_8(1:3,2) = [i+1,j+1,1]
@@ -99,9 +100,9 @@ contains
         integer, intent(in)    :: ldim(3), imat(ldim(1),ldim(2),ldim(3)), px(3)
         integer, intent(inout) :: neigh_8(9), nsz
         integer :: i, j
-        i = px(1)
-        j = px(2) ! 2-dim matrix assumed
-        ! identify neighborhood
+        i       = px(1)
+        j       = px(2) ! 2-dim matrix asssumed
+        neigh_8 = 0
         if( i-1 < 1 .and. j-1 < 1 )then                  ! NW corner
             neigh_8(1) = imat(i+1,j,1)
             neigh_8(2) = imat(i+1,j+1,1)
@@ -181,9 +182,9 @@ contains
         real,    intent(inout) :: neigh_8(9)
         integer, intent(out)   :: nsz
         integer :: i, j
-        i = px(1)
-        j = px(2) ! 2-dim matrix assumed
-        ! identify neighborhood
+        i       = px(1)
+        j       = px(2) ! 2-dim matrix asssumed
+        neigh_8 = 0.
         if( i-1 < 1 .and. j-1 < 1 )then                  ! NW corner
             neigh_8(1) = rmat(i+1,j,1)
             neigh_8(2) = rmat(i+1,j+1,1)
@@ -264,12 +265,13 @@ contains
         integer, intent(inout) :: neigh_8(27), nsz
         integer :: i, j, k
         logical :: i_ok, j_ok, k_ok
-        i = px(1)
-        j = px(2)
-        k = px(3)
-        i_ok = (i-1 > 0 .and. i+1 <= ldim(1))
-        j_ok = (j-1 > 0 .and. j+1 <= ldim(2))
-        k_ok = (k-1 > 0 .and. k+1 <= ldim(3))
+        i       = px(1)
+        j       = px(2)
+        k       = px(3)
+        i_ok    = (i-1 > 0 .and. i+1 <= ldim(1))
+        j_ok    = (j-1 > 0 .and. j+1 <= ldim(2))
+        k_ok    = (k-1 > 0 .and. k+1 <= ldim(3))
+        neigh_8 = 0
         if( i-1 < 1 .and. j-1 < 1 .and. k-1 < 1 )then
             neigh_8(1) = imat(i+1,j,k)
             neigh_8(2) = imat(i+1,j+1,k)
@@ -712,12 +714,13 @@ contains
         integer, intent(out) :: nsz
         integer :: i, j, k
         logical :: i_ok, j_ok, k_ok
-        i = px(1)
-        j = px(2)
-        k = px(3)
-        i_ok = (i-1 > 0 .and. i+1 <= ldim(1))
-        j_ok = (j-1 > 0 .and. j+1 <= ldim(2))
-        k_ok = (k-1 > 0 .and. k+1 <= ldim(3))
+        i       = px(1)
+        j       = px(2)
+        k       = px(3)
+        i_ok    = (i-1 > 0 .and. i+1 <= ldim(1))
+        j_ok    = (j-1 > 0 .and. j+1 <= ldim(2))
+        k_ok    = (k-1 > 0 .and. k+1 <= ldim(3))
+        neigh_8 = 0.
         if( i-1 < 1 .and. j-1 < 1 .and. k-1 < 1 )then
             neigh_8(1) = rmat(i+1,j,k)
             neigh_8(2) = rmat(i+1,j+1,k)
@@ -1157,9 +1160,10 @@ contains
         integer, intent(inout) :: neigh_4(3,6)
         integer, intent(out)   :: nsz
         integer :: i, j, k
-        i = px(1)
-        j = px(2)
-        k = px(3)
+        i       = px(1)
+        j       = px(2)
+        k       = px(3)
+        neigh_4 = 0
         if( i == 1 .and. j == 1 .and. k == 1) then
             neigh_4(1:3,1) = [i,j,k+1]
             neigh_4(1:3,2) = [i,j+1,k]
@@ -1233,9 +1237,10 @@ contains
         integer, intent(in)    :: ldim(3), imat(ldim(1),ldim(2),ldim(3)), px(3)
         integer, intent(inout) :: neigh_4(6), nsz
         integer :: i, j, k
-        i = px(1)
-        j = px(2)
-        k = px(3)
+        i       = px(1)
+        j       = px(2)
+        k       = px(3)
+        neigh_4 = 0
         if(i+1<ldim(1) .and. i-1>0 .and. j+1<ldim(2) .and. j-1>0 .and. k+1<ldim(3) .and. k-1>0) then
             neigh_4(1) = imat(i,j,k+1)
             neigh_4(2) = imat(i,j,k-1)
