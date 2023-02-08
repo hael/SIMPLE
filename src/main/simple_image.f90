@@ -214,6 +214,7 @@ contains
     procedure          :: remove_edge
     procedure          :: one_at_edge
     procedure          :: bin2logical
+    procedure          :: logical2bin
     procedure          :: collage
     ! FILTERS
     procedure          :: acf
@@ -244,6 +245,7 @@ contains
     procedure          :: NLmean3D
     ! CALCULATORS
     procedure          :: minmax
+    procedure          :: fg_bg_ratio
     procedure          :: rmsd
     procedure, private :: stats_1
     procedure, private :: stats_2
@@ -256,6 +258,7 @@ contains
     procedure          :: loop_lims
     procedure          :: calc_gradient
     procedure          :: gradient
+    procedure          :: detect_peaks
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: corr
@@ -2781,6 +2784,14 @@ contains
         end where
     end function bin2logical
 
+    !>  \brief  generates a binary image from a logical mask
+    subroutine logical2bin( self, mask )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        self%rmat = 0.
+        where(mask) self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+    end subroutine logical2bin
+
     ! performs left/right collage of input images, un-modified on output
     subroutine collage( self1, self2, img_out )
         class(image), intent(inout) :: self1, self2, img_out
@@ -4086,6 +4097,25 @@ contains
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
 
+    function fg_bg_ratio( self, mask ) result( r )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real    :: smin, smax, delta, r, a_fg, a_bg
+        integer :: n_fg, n_bg
+        ! minmax normalize
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        delta = smax - smin
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)/delta
+        ! calculate ratio
+        n_fg = count(mask)
+        n_bg = product(self%ldim) - n_fg
+        a_fg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=      mask) / real(n_fg)
+        a_bg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. mask) / real(n_bg)
+        r    = a_fg / a_bg
+    end function fg_bg_ratio
+
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
     subroutine rmsd( self, dev, mean )
@@ -4353,6 +4383,24 @@ contains
         if(present(Dz))   Dz   = Ddz
         if(present(grad)) grad = sqrt(Ddc**2 + Ddr**2 + Ddz**2)
     end subroutine gradient
+
+    subroutine detect_peaks( self, is_peak )
+        use simple_neighs, only: neigh_8
+        class(image), intent(in)    :: self
+        logical,      intent(inout) :: is_peak(1:self%ldim(1),1:self%ldim(2),1)
+        integer :: i, j, neigh_sz
+        real    :: neigh(9)
+        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
+        is_peak = .false.
+        !$omp parallel do schedule(static) default(shared) private(i,j,neigh,neigh_sz) proc_bind(close) collapse(2)
+        do i = 1,self%ldim(1)
+            do j = 1,self%ldim(2)
+                call neigh_8(self%ldim, self%rmat(:self%ldim(1),:self%ldim(2),:1), [i,j,1], neigh, neigh_sz)
+                if( all(self%rmat(i,j,1) >= neigh(:neigh_sz)) ) is_peak(i,j,1) = .true.
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine detect_peaks
 
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys1(self,logi) result(phys)
