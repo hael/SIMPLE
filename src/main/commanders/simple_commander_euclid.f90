@@ -54,38 +54,42 @@ character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
 contains
 
     subroutine exec_calc_pspec_distr( self, cline )
+        use simple_sp_project, only: sp_project
         class(calc_pspec_commander_distr), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! command lines
-        type(cmdline)    :: cline_calc_pspec
-        type(cmdline)    :: cline_calc_pspec_assemble
+        type(cmdline)        :: cline_calc_pspec
+        type(cmdline)        :: cline_calc_pspec_assemble
         ! other variables
-        type(parameters) :: params
-        type(builder)    :: build
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        logical          :: fall_over
+        class(oris), pointer :: spproj_field => NULL()
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
+        type(qsys_env)       :: qenv
+        type(chash)          :: job_descr
+        logical              :: fall_over
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('projfile') )then
             THROW_HARD('Missing project file entry; exec_calc_pspec_distr')
         endif
         ! init
-        call build%init_params_and_build_spproj(cline, params)
-        call build%spproj%update_projinfo(cline)
-        call build%spproj%write_segment_inside('projinfo')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
             case('ptcl2D','ptcl3D')
-                fall_over = build%spproj%get_nptcls() == 0
+                fall_over = spproj%get_nptcls() == 0
             case DEFAULT
                 write(logfhandle,*)'Unsupported ORITYPE; simple_commander_euclid :: exec_refine3D_distr'
         end select
+        call spproj%ptr2oritype(params%projfile, spproj_field)
         if( fall_over )then
             THROW_HARD('no particles found! :exec_refine3D_distr')
         endif
-        if( build%spproj_field%get_nevenodd() == 0 )then
+        if( spproj_field%get_nevenodd() == 0 )then
             THROW_HARD('no even/odd flag found! :calc_pspec_distr')
         endif
         ! set mkdir to no (to avoid nested directory structure)
@@ -104,6 +108,7 @@ contains
         ! assemble
         call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
         ! end gracefully
+        call spproj%kill
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
     end subroutine exec_calc_pspec_distr
