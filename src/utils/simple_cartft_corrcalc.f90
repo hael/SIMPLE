@@ -83,8 +83,6 @@ type :: cartft_corrcalc
     procedure          :: update_sigma
     procedure, private :: weight_ref_ptcl
     procedure, private :: deweight_ref_ptcl
-    procedure, private :: cont_weight_ref_ptcl
-    procedure, private :: cont_deweight_ref_ptcl
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -755,7 +753,7 @@ contains
         real    :: euclid, denom
         complex :: diff, ptcl_comp
         integer :: h, k
-        call self%cont_weight_ref_ptcl( ithr, iptcl )
+        call self%weight_ref_ptcl( ithr, iptcl )
         denom  = 0.
         euclid = 0.
         do k = self%lims(2,1),self%lims(2,2)
@@ -768,7 +766,7 @@ contains
             end do
         end do
         corr = exp( - euclid/denom )
-        call self%cont_deweight_ref_ptcl( ithr, iptcl )
+        call self%deweight_ref_ptcl( ithr, iptcl )
     end subroutine correlate_test_1
 
     subroutine correlate_test_2( self, ithr, iptcl, corr, grad )
@@ -778,7 +776,7 @@ contains
         real(dp) :: euclid, denom, corr_8, grad_8(2)
         complex  :: diff, ptcl_comp, ref_comp
         integer  :: h, k
-        call self%cont_weight_ref_ptcl( ithr, iptcl )
+        call self%weight_ref_ptcl( ithr, iptcl )
         denom  = 0._dp
         euclid = 0._dp
         grad_8 = 0._dp
@@ -798,7 +796,7 @@ contains
         corr_8 = dexp( - euclid/denom )
         corr   = corr_8
         grad   = - corr_8/denom*grad_8
-        call self%cont_deweight_ref_ptcl( ithr, iptcl )
+        call self%deweight_ref_ptcl( ithr, iptcl )
     end subroutine correlate_test_2
 
     !< project and shift search (shc-based)
@@ -942,44 +940,6 @@ contains
             enddo
         enddo
     end subroutine deweight_ref_ptcl
-
-    subroutine cont_weight_ref_ptcl( self, ithr, iptcl )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        integer :: r, h, k
-        real    :: w, c
-        if( .not. associated(self%sigma2_noise) ) return
-        c = 2. * PI / params_glob%box / params_glob%smpd / 2.
-        do k = self%lims(2,1), self%lims(2,2)
-            do h = self%lims(1,1), self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                r = nint(hyp(real(h),real(k)))
-                if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
-                w = sqrt( c * r / self%pxls_p_shell(r) / self%sigma2_noise(r, iptcl) )
-                self%cur_refs( h,k,ithr) = w * self%cur_refs( h,k,ithr)
-                self%cur_ptcls(h,k,ithr) = w * self%cur_ptcls(h,k,ithr)
-            enddo
-        enddo
-    end subroutine cont_weight_ref_ptcl
-
-    subroutine cont_deweight_ref_ptcl( self, ithr, iptcl )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        integer :: r, h, k
-        real    :: w, c
-        if( .not. associated(self%sigma2_noise) ) return
-        c = 2. * PI / params_glob%box / params_glob%smpd / 2.
-        do k = self%lims(2,1), self%lims(2,2)
-            do h = self%lims(1,1), self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                r = nint(hyp(real(h),real(k)))
-                if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
-                w = sqrt( c * r / self%pxls_p_shell(r) / self%sigma2_noise(r, iptcl) )
-                self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w
-                self%cur_ptcls(h,k,ithr) = self%cur_ptcls(h,k,ithr)/w
-            enddo
-        enddo
-    end subroutine cont_deweight_ref_ptcl
 
     ! DESTRUCTOR
 
