@@ -1437,7 +1437,7 @@ contains
             endif
             ! normalization
             call cavg_imgs(cnt)%norm_noise(l_msk, sdev_noise)
-            if( DEBUG ) call cavg_imgs(cnt)%write('3_norm_noisealized.mrc', cnt)
+            if( DEBUG ) call cavg_imgs(cnt)%write('3_noise_normalized.mrc', cnt)
             ! mask
             call cavg_imgs(cnt)%mask(params%msk, 'soft')
             if( DEBUG ) call cavg_imgs(cnt)%write('4_masked.mrc', cnt)
