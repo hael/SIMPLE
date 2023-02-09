@@ -227,7 +227,7 @@ contains
             changes = 0
             ! find closest
             do i=1,ndat
-                loc = minloc((means-dat(i))**2.0)
+                loc = minloc(abs(means-dat(i)))
                 if( labels(i) /= loc(1) ) changes = changes + 1
                 labels(i) = loc(1)
             end do
@@ -244,6 +244,47 @@ contains
         end do
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
+
+    !>   implements the sortmeans algorithm for binary peak detection
+    subroutine peakmeans( dat, maxits, means )
+        real,                 intent(in)  :: dat(:)    !< array for input
+        integer,              intent(in)  :: maxits    !< limit sort
+        real,                 intent(out) :: means(2)  !< array for output
+        logical, allocatable :: mask(:)
+        integer, allocatable :: labels(:)
+        real,    allocatable :: dat_sorted(:)
+        integer :: ncls, ndat, i, j, loc(1), changes
+        ncls = 2
+        ndat = size(dat)
+        allocate( mask(ndat), labels(ndat) )
+        ! biased initialization for peak detection
+        dat_sorted = dat
+        call hpsort(dat_sorted)
+        means(1) = sum(dat_sorted(1:ndat/2)) / real(ndat/2) ! average of half of data set (low, non-peak region)
+        means(2) = dat_sorted(ndat)                         ! highest peak value 
+        ! the kmeans step
+        labels = 1
+        do j = 1,maxits
+            changes = 0
+            ! find closest
+            do i = 1,ndat
+                loc = minloc(abs(means-dat(i)))
+                if( labels(i) /= loc(1) ) changes = changes + 1
+                labels(i) = loc(1)
+            end do
+            ! update means
+            do i=1,ncls
+                where( labels == i )
+                    mask = .true.
+                else where
+                    mask = .false.
+                end where
+                means(i) = sum(dat, mask=mask)/real(count(mask))
+            end do
+            if( changes == 0 ) exit
+        end do
+        deallocate(dat_sorted, mask, labels)
+    end subroutine peakmeans
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_1d( vec, thresh, labels, centroids, populations )

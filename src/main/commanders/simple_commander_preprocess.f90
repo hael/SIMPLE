@@ -1940,7 +1940,7 @@ contains
                         call micrograph%window(nint(ptcl_pos), params%box, build%img, noutside)
                         if( params%pcontrast .eq. 'black' ) call build%img%neg()
                         call build%img%subtr_backgr_ramp(build%lmsk)
-                        call build%img%noise_norm(build%lmsk, sdev_noise)
+                        call build%img%norm_noise(build%lmsk, sdev_noise)
                         ! keep track of stats
                         call build%img%stats(meanv, sddevv, maxv, minv, errout=l_err)
                         if( .not.l_err )then
@@ -2357,7 +2357,7 @@ contains
                         call micrograph%window(new_pos, params%box, img, noutside)
                         if( params%pcontrast .eq. 'black' ) call img%neg()
                         call img%subtr_backgr_ramp(pmsk)
-                        call img%noise_norm(pmsk, sdev_noise)
+                        call img%norm_noise(pmsk, sdev_noise)
                         call stkio_w%write(nptcls, img)
                         ! keep track of stats
                         call img%stats(meanv, sddevv, maxv, minv, errout=l_err)

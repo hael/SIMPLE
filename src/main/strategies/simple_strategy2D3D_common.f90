@@ -247,7 +247,7 @@ contains
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
-        call img%noise_norm(build_glob%lmsk, sdev_noise)
+        call img%norm_noise(build_glob%lmsk, sdev_noise)
         ! move to Fourier space
         call img%fft()
         ! Shift image to rotational origin & phase-flipping
@@ -553,7 +553,7 @@ contains
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
                 if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
+                call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
