@@ -4,6 +4,7 @@ module simple_picker_utils
 include 'simple_lib.f08'
 use simple_image,          only: image
 use simple_radial_medians, only: radial_medians
+use simple_segmentation
 implicit none
 
 public :: picker_utils
@@ -11,7 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
-integer, parameter :: OFFSET  = 3
+integer, parameter :: OFFSET  = 3, MAXKMIT  = 20
 logical, parameter :: L_WRITE = .true.
 
 type picker_utils
@@ -23,10 +24,9 @@ type picker_utils
     integer                  :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
     type(image)              :: mic_shrink1, mic_shrink2
     type(stats_struct)       :: stats_ptcl, stats_bg
-    type(radial_medians)     :: radmeds_obj1, radmeds_obj2
     type(image), pointer     :: mic_raw => null()
     type(image), allocatable :: boximgs1(:), boximgs2(:)
-    real,        allocatable :: avg_sdev1(:,:), avg_sdev2(:,:), radmeds1(:,:), radmeds2(:,:)
+    real,        allocatable :: avg_sdev1(:,:), avg_sdev2(:,:)
     integer,     allocatable :: positions1(:,:), inds_offset(:,:)
     logical,     allocatable :: is_ptcl1(:), is_ptcl2(:), is_peak(:,:,:)
   contains
@@ -36,12 +36,10 @@ type picker_utils
     procedure, private :: set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
     procedure, private :: set_pos_priv
+    procedure          :: mask_high_var_regions
     procedure          :: gauconv_mic_shrink1
-    procedure          :: detect_peaks
     procedure          :: extract_boximgs1
-    procedure          :: analyze_fg_bg_ratios
-    procedure          :: calc_radmeds1
-    procedure          :: analyze_radmeds
+    procedure          :: analyze_boximgs1
 end type picker_utils
 
 contains
@@ -136,9 +134,6 @@ contains
     subroutine set_pos_priv( self )
         class(picker_utils), intent(inout) :: self
         integer :: xind, yind
-        ! make radial medians objects
-        call self%radmeds_obj1%new(self%ldim_box1)
-        call self%radmeds_obj2%new(self%ldim_box2)
         ! set # pixels in x/y for both box sizes
         self%nx1 = self%ldim_shrink1(1) - self%ldim_box1(1)
         self%ny1 = self%ldim_shrink1(2) - self%ldim_box1(2)
@@ -176,6 +171,36 @@ contains
         end do
     end subroutine set_pos_priv
 
+    subroutine mask_high_var_regions( self, maxdiam )
+        class(picker_utils), intent(inout) :: self
+        real,                intent(in)    :: maxdiam
+        type(image) :: img, img2
+        real        :: pix_rad, sig
+        pix_rad = (maxdiam / 2.) / SMPD_SHRINK1 
+        sig     = pix_rad / GAUSIG
+        call img%new(self%ldim_shrink1, SMPD_SHRINK1)
+        call sauvola(self%mic_shrink1, OFFSET, img)
+        if( L_WRITE ) call img%write('sauvola_raw.mrc')
+        call otsu_img(img)
+        if( L_WRITE ) call img%write('sauvola_raw_otsu.mrc')
+        
+
+        call img2%new(self%ldim_shrink1, SMPD_SHRINK1)
+        call img2%gauimg2D(sig, sig)
+        call img2%fft
+        call img%fft
+        call img%mul(img2)
+        call img%ifft
+        call img%norm_minmax
+        if( L_WRITE ) call img%write('mask_high_var.mrc')
+        call self%mic_shrink1%norm_minmax
+        call self%mic_shrink1%mul(img)
+        if( L_WRITE ) call self%mic_shrink1%write('mic_shrink1_masked.mrc')
+        
+
+
+    end subroutine mask_high_var_regions
+
     subroutine gauconv_mic_shrink1( self, maxdiam )
         class(picker_utils), intent(inout) :: self
         real,                intent(in)    :: maxdiam
@@ -189,49 +214,18 @@ contains
         call self%mic_shrink1%fft
         call self%mic_shrink1%mul(img)
         call self%mic_shrink1%ifft
+        if( L_WRITE )then
+            call self%mic_shrink1%write('gauconv_mic_shrink1.mrc')
+            call img%zero_and_unflag_ft
+            call sauvola(self%mic_shrink1, OFFSET, img)
+            call img%write('sauvola.mrc')
+            call img%real_space_filter(OFFSET * 3, 'average')
+            call img%write('sauvola_rfilt.mrc')
+            call otsu_img(img)
+            call img%write('sauvola_otsu.mrc')
+        endif
         call img%kill
-        if( L_WRITE ) call self%mic_shrink1%write('gauconv_mic_shrink1.mrc')
     end subroutine gauconv_mic_shrink1
-
-    subroutine detect_peaks( self, maxdiam )
-        class(picker_utils), intent(inout) :: self
-        real,                intent(in)    :: maxdiam
-        type(image) :: img
-        integer     :: xind, yind, boxo2, eman_coord(2)
-        if( allocated(self%is_peak) ) deallocate(self%is_peak)
-        allocate(self%is_peak(self%ldim_shrink1(1),self%ldim_shrink1(2),1), source=.false.)
-        call self%mic_shrink1%detect_peaks(self%is_peak)
-        if( L_WRITE )then
-            call img%new(self%ldim_shrink1, SMPD_SHRINK1)
-            call img%logical2bin(self%is_peak)
-            call img%write('peak_binimg.mrc')
-            call img%kill
-        endif
-        self%nboxes1 = count(self%is_peak)
-
-        print *, 'nboxes1 ', self%nboxes1
-
-        ! allocate and set positions1
-        call self%set_box_ldims(maxdiam)
-        if( allocated(self%positions1) ) deallocate(self%positions1)
-        allocate(self%positions1(self%nboxes1,2), source=0)
-        boxo2        = self%ldim_box1(1) / 2
-        self%nboxes1 = 0
-        do xind = 1,self%ldim_shrink1(1)
-            do yind = 1,self%ldim_shrink1(2)
-                if( self%is_peak(xind,yind,1) )then
-                    self%nboxes1 = self%nboxes1 + 1
-                    eman_coord(1) = max(1,xind - boxo2)
-                    eman_coord(2) = max(1,yind - boxo2)
-                    self%positions1(self%nboxes1,:) = eman_coord
-                endif
-            end do
-        end do
-        if( L_WRITE )then
-            call self%extract_boximgs1
-            call write_boximgs(int(self%nboxes1), self%boximgs1, 'peak_particles.mrcs' )
-        endif
-    end subroutine detect_peaks
 
     subroutine extract_boximgs1( self )
         class(picker_utils), intent(inout) :: self
@@ -253,135 +247,79 @@ contains
         !$omp end parallel do
     end subroutine extract_boximgs1
 
-    subroutine calc_radmeds1( self )
-        class(picker_utils), intent(inout) :: self
-        type(stats_struct) :: stats
-        integer :: ibox
-        if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before caluclating radial medians')
-        if( .not. allocated(self%boximgs1)   ) THROW_HARD('boximgs1 need to be extracted before caluclating radial medians')
-        if( allocated(self%avg_sdev1) ) deallocate(self%avg_sdev1)
-        if( allocated(self%radmeds1)  ) deallocate(self%radmeds1)
-        allocate(self%avg_sdev1(self%nboxes1,2), self%radmeds1(self%nboxes1,self%radmeds_obj1%get_rad_max()), source=0.)
-        !$omp parallel do schedule(static) default(shared) private(ibox,stats) proc_bind(close)
-        do ibox = 1,self%nboxes1
-            call self%radmeds_obj1%calc_radial_medians(self%boximgs1(ibox), stats, self%radmeds1(ibox,:))
-            self%avg_sdev1(ibox,1) = stats%avg
-            self%avg_sdev1(ibox,2) = stats%sdev
-        end do
-        !$omp end parallel do
-    end subroutine calc_radmeds1
-
-    subroutine analyze_fg_bg_ratios( self, moldiam )
-        use simple_neighs, only: neigh_8
-        class(picker_utils), intent(inout) :: self
-        real,                intent(in)    :: moldiam
-        integer, allocatable :: positions_tmp(:,:)
-        logical, allocatable :: lmsk(:,:,:)
-        type(image) :: img
-        real        :: pix_rad, ratios(self%nx_offset,self%ny_offset,1)
-        real        :: neigh(9)
-        integer     :: ioff, joff, neigh_sz, npeaks, cnt, npix
-        ! make a foreground mask
-        pix_rad = (moldiam / 2.) / SMPD_SHRINK1
-        call img%disc(self%ldim_box1, SMPD_SHRINK1, pix_rad, lmsk, npix)
-        if( allocated(self%is_peak) ) deallocate(self%is_peak)
-        allocate( self%is_peak(self%nx_offset,self%ny_offset,1), source=.false. )
-        ! calculate ratios
-        !$omp parallel default(shared) private(ioff,joff,neigh,neigh_sz) proc_bind(close)
-        !$omp do schedule(static) collapse(2)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ratios(ioff,joff,1) = self%boximgs1(self%inds_offset(ioff,joff))%fg_bg_ratio(lmsk)
-            end do
-        end do
-        !$omp end do nowait
-        ! detect peaks
-        !$omp do schedule(static) collapse(2)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                call neigh_8([self%nx_offset,self%ny_offset,1], ratios, [ioff,joff,1], neigh, neigh_sz)
-                if( all(ratios(ioff,joff,1) >= neigh(:neigh_sz)) ) self%is_peak(ioff,joff,1) = .true.
-            end do
-        end do
-        !$omp end do nowait
-        !$omp end parallel
-        npeaks = count(self%is_peak)
-
-        print *, 'npoints ', self%nx_offset * self%ny_offset
-        print *, 'npeaks  ', npeaks
-
-        ! update positions1
-        allocate(positions_tmp(npeaks,2), source=0)
-        cnt = 0
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                if( self%is_peak(ioff,joff,1) )then
-                    cnt = cnt + 1
-                    positions_tmp(cnt,:) = self%positions1(self%inds_offset(ioff,joff),:)
-                endif
-            end do
-        end do
-        deallocate(self%positions1)
-        self%nboxes1 = npeaks
-        allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
-        deallocate(positions_tmp)
-        if( L_WRITE )then
-            call self%extract_boximgs1
-            call write_boximgs(int(self%nboxes1), self%boximgs1, 'peak_particles.mrcs' )
-        endif
-    end subroutine analyze_fg_bg_ratios
-
-    subroutine analyze_radmeds( self, maxdiam )
-        use simple_neighs, only: neigh_8
+    subroutine analyze_boximgs1( self, maxdiam )
         class(picker_utils), intent(inout) :: self
         real,                intent(in)    :: maxdiam
         integer, allocatable :: positions_tmp(:,:)
-        type(stats_struct) :: stats
+        real,    allocatable :: tmp(:)
+        type(stats_struct)   :: stats
+        real        :: box_scores(self%nx_offset,self%ny_offset,1), t, sxx
+        logical     :: is_peak(self%nx_offset,self%ny_offset,1)
+        integer     :: ioff, joff, npeaks, cnt
         type(image) :: img
-        real        :: pix_rad, sig, radmeds_gau(self%radmeds_obj1%get_rad_max()), corrs(self%nx_offset,self%ny_offset,1)
-        real        :: neigh(9)
-        integer     :: ioff, joff, neigh_sz, npeaks, cnt
-        if( .not. allocated(self%radmeds1) ) THROW_HARD('need radmeds1 (provided by calc_radmeds1) in analyze_radmeds')
-        ! make Gaussian reference
+        real        :: pix_rad, sig, med, means(2), score_max, score_avg
         pix_rad = (maxdiam / 2.) / SMPD_SHRINK1 
         sig     = pix_rad / GAUSIG
         call img%new(self%ldim_box1, SMPD_SHRINK1)
         call img%gauimg2D(sig, sig)
+        call img%prenorm4real_corr(sxx)
         ! call img%vis
-        call self%radmeds_obj1%calc_radial_medians(img, stats, radmeds_gau)
-        call img%kill
-        if( allocated(self%is_peak) ) deallocate(self%is_peak)
-        allocate( self%is_peak(self%nx_offset,self%ny_offset,1), source=.false. )
-        ! calculate correlations
-        !$omp parallel default(shared) private(ioff,joff,neigh,neigh_sz) proc_bind(close)
-        !$omp do schedule(static) collapse(2)
+        ! calculate box_scores
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff) proc_bind(close)
+        !$omp 
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
-                corrs(ioff,joff,1) = pearsn_serial(radmeds_gau, self%radmeds1(self%inds_offset(ioff,joff),:))
+                box_scores(ioff,joff,1) = img%real_corr_prenorm(self%boximgs1(self%inds_offset(ioff,joff)), sxx)
             end do
         end do
-        !$omp end do nowait
-        ! detect peaks
-        !$omp do schedule(static) collapse(2)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                call neigh_8([self%nx_offset,self%ny_offset,1], corrs, [ioff,joff,1], neigh, neigh_sz)
-                if( all(corrs(ioff,joff,1) >= neigh(:neigh_sz)) ) self%is_peak(ioff,joff,1) = .true.
-            end do
-        end do
-        !$omp end do nowait
-        !$omp end parallel
-        npeaks = count(self%is_peak)
+        !$omp end parallel do
+        
 
+        tmp       = pack(box_scores, mask=.true.)
+        score_max = maxval(tmp)
+        score_avg = sum(tmp) / real(self%nx_offset * self%ny_offset)
+        npeaks    = count(abs(tmp - score_max) < abs(tmp - score_avg))
+
+        print *, 'npeaks ', npeaks
+        stop
+
+
+
+
+
+        allocate(positions_tmp(npeaks,2), source=0)
+
+
+
+
+
+        is_peak = .false.
+        do ioff = 1,self%nx_offset
+            do joff = 1,self%ny_offset
+                if( box_scores(ioff,joff,1) >= t ) is_peak(ioff,joff,1) = .true.
+            end do
+        end do
+        npeaks = count(is_peak)
         print *, 'npoints ', self%nx_offset * self%ny_offset
         print *, 'npeaks  ', npeaks
 
+        
+        tmp = pack(box_scores, mask=is_peak)
+        call calc_stats(tmp, stats)
+        print *, ''
+        print *, 'corr peak stats'
+        print *, 'avg  ', stats%avg
+        print *, 'sdev ', stats%sdev
+        print *, 'med  ', stats%med
+        print *, 'minv ', stats%minv
+        print *, 'maxv ', stats%maxv
+
         ! update positions1
-        allocate(positions_tmp(npeaks,2), source=0)
+        
         cnt = 0
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
-                if( self%is_peak(ioff,joff,1) )then
+                if( is_peak(ioff,joff,1) )then
                     cnt = cnt + 1
                     positions_tmp(cnt,:) = self%positions1(self%inds_offset(ioff,joff),:)
                 endif
@@ -395,7 +333,7 @@ contains
             call self%extract_boximgs1
             call write_boximgs(int(self%nboxes1), self%boximgs1, 'peak_particles.mrcs' )
         endif
-    end subroutine analyze_radmeds
+    end subroutine analyze_boximgs1
 
     ! utilities
 

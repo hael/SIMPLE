@@ -429,7 +429,7 @@ contains
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
-                    call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
+                    call read_imgs(i)%norm_noise_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! shift
                     call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
                     ! apply CTF to image, stores CTF values

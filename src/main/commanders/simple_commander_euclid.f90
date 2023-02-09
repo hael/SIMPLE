@@ -159,7 +159,7 @@ contains
                 imatch = iptcl - batchlims(1) + 1
                 if( .not. mask(imatch) ) cycle
                 ! normalize
-                call build%imgbatch(imatch)%noise_norm(build%lmsk, sdev_noise)
+                call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
                 !  mask
                 if( params%l_focusmsk )then
                     call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')

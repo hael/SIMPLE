@@ -313,7 +313,7 @@ contains
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
-            call img%noise_norm(lmsk, sdev_noise)
+            call img%norm_noise(lmsk, sdev_noise)
             call stkio_w%write(i, img)
         end do
         call stkio_r%close
