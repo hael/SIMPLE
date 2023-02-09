@@ -723,7 +723,7 @@ contains
                 call build_glob%vol%write(pprocvol)
             endif
         end do
-        if( .not. params_glob%l_distr_exec )then
+        if((.not.params_glob%l_distr_exec) .and. (.not.params_glob%l_lpset))then
             ! set the resolution limit according to the worst resolved model
             params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,maxval(res0143s)))
         endif
