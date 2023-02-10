@@ -1261,15 +1261,15 @@ contains
             ! maximum grey level intensity across the connected component
             self%atominfo(cc)%max_int = maxval(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             ! average grey level intensity across the connected component
-            self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
-            self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
+            !self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            !self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
             ! Lattice displacement magnitudes ( |center - expected center| ) and max neighboring lattice displ
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! Isotropic B-factors
-            call calc_isotropic_disp_sphere(cc)
+            call calc_isotropic_disp_sphere(cc, a)
             !call iso_shell_profile(cc)
             ! calculate anisotropic displacement parameters.  
             call self%calc_aniso(cc, imat_cc_scaled, border)
@@ -1340,6 +1340,166 @@ contains
 
         contains
 
+            subroutine calc_isotropic_disp_sphere(cc, a0)
+                integer, intent(in)     :: cc
+                real, intent(in)        :: a0(3)
+                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, vars(3), var, fit_rad, A, beta, prob, prob_tot, prob_sum_sq, corr,&
+                                &sum_int_out, max_int_out
+                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
+                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+
+
+                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
+                ! by avoiding having to iterate over the entire scaled images for each connected component.
+                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
+                center = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 3) / self%smpd
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1))
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2))
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3))
+
+                fit_rad = 0.4 * (sum(a0)/3) / self%smpd
+                ! First iteration: calculate the minimum intensity within the sphere
+                ! If min_int is negative, then we'll added |min_int| to all intensities
+                ! so that all probabilities are >= 0
+                min_int = self%atominfo(cc)%max_int
+                max_int = 0
+                peak = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_raw(i, j, k) < min_int) then
+                                    min_int = rmat_raw(i, j, k)
+                                else if (rmat_raw(i, j, k) > max_int) then
+                                    max_int = rmat_raw(i, j, k)
+                                    peak = (/i, j, k/)
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                !if (min_int > 0) then
+                !    min_int = 0 ! No correction needed
+                !end if
+                min_int = 0.
+
+                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
+                ! equal to the voxel intensity divided by the total scaled connected component intensity.
+                count0 = 0
+                count = 0
+                sum_int = 0
+                mu = 0.
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                if (rmat_raw(i, j, k) + abs(min_int) > 0) then
+                                    count = count + 1
+                                    sum_int = sum_int + rmat_raw(i, j, k) + abs(min_int)
+                                    mu(1) = mu(1) + i * (rmat_raw(i, j, k) + abs(min_int))
+                                    mu(2) = mu(2) + j * (rmat_raw(i, j, k) + abs(min_int))
+                                    mu(3) = mu(3) + k * (rmat_raw(i, j, k) + abs(min_int))
+                                else
+                                    count0 = count0 + 1
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                mu = mu / sum_int  ! Normalization
+
+                ! Third iteration: Calculate the variance sigma
+                vars = 0.
+                var = 0.
+                prob_sum_sq = 0
+                do k=klo, khi
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
+                                prob = (rmat_raw(i, j, k)+abs(min_int)) / sum_int
+                                if (prob > 0.) then
+                                    prob_sum_sq = prob_sum_sq + prob**2
+                                    ! Diagonal terms are variance
+                                    var = var + prob * norm_2([i,j,k] - mu)**2
+                                    !vars(1) = vars(1) + prob * (i - mu(1))**2
+                                    !vars(2) = vars(2) + prob * (j - mu(2))**2
+                                    !vars(3) = vars(3) + prob * (k - mu(3))**2
+                                end if
+                            end if
+                        end do
+                    end do
+                end do
+                ! Fill in redundant entries
+                !var = sum(vars) / 3
+                var = var / (1 - prob_sum_sq) ! For unbiased estimator
+
+                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
+                A = 0.
+                count_fit = 0
+                sum_int_out = 0.
+                max_int_out = 0.
+                center = self%atominfo(cc)%center(:)
+                maxrad  = (self%theoretical_radius * 6) / self%smpd
+                ilo = max(nint(center(1) - maxrad), 1)
+                ihi = min(nint(center(1) + maxrad), self%ldim(1))
+                jlo = max(nint(center(2) - maxrad), 1)
+                jhi = min(nint(center(2) + maxrad), self%ldim(2))
+                klo = max(nint(center(3) - maxrad), 1)
+                khi = min(nint(center(3) + maxrad), self%ldim(3))
+                fit_rad = fit_rad
+                beta = 0.
+                ! Find normalization coefficient
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
+                                A = A + exp(beta)
+                                count_fit = count_fit + 1
+                            end if
+                        end do
+                    end do
+                end do
+                A = 1. / A
+                ! Normalize based on A
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
+                                call fit_isotropic%set_rmat_at(i, j, k, A * exp(beta) * sum_int)
+                                if (A * exp(beta) * sum_int > max_int_out) max_int_out = A * exp(beta) * sum_int
+                                sum_int_out = sum_int_out + fit_isotropic%get_rmat_at(i,j,k)
+                            end if
+                        end do
+                    end do
+                end do
+
+                ! Calculate correlation between fit and orignal map within the fit radius
+                fit_mask = .false.
+                do k=klo, khi 
+                    do j=jlo, jhi
+                        do i=ilo, ihi
+                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                                fit_mask(i,j,k) = .true.
+                            end if
+                        end do
+                    end do
+                end do
+                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
+                
+                self%atominfo(cc)%isobfac = sqrt(var) * self%smpd
+                self%atominfo(cc)%isocorr = corr
+
+                write(fiso, '(2i8, 4f10.5, 8f10.5)') cc, count, sum_int_out, sum_int, max_int_out, self%atominfo(cc)%max_int, corr, fit_rad*self%smpd, &
+                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var), 1-prob_sum_sq
+            end subroutine calc_isotropic_disp_sphere
+
             subroutine iso_shell_profile(cc)
                 integer, intent(in)    :: cc
                 real, allocatable      :: shell_avgs(:), shell_stds(:)
@@ -1359,7 +1519,7 @@ contains
                 jhi = min(nint(center(2) + maxrad), self%ldim(2))
                 klo = max(nint(center(3) - maxrad), 1)
                 khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = (self%theoretical_radius) / self%smpd
+                fit_rad = (4.0*2/5) / self%smpd
 
                 ! Setup avg and std data structures for each shell
                 step = 1. / nshells
@@ -1377,8 +1537,10 @@ contains
                                 dist = euclid(1.*[i,j,k], center) / fit_rad
                                 if (dist > (n-1)*step .and. dist < n*step) then
                                     shell_counts(n) = shell_counts(n) + 1
-                                    shell_avgs(n) = shell_avgs(n) + rmat_raw(i,j,k)
-                                    sum_int = sum_int + rmat_raw(i,j,k)
+                                    if (rmat_raw(i,j,k) > 0.) then
+                                        shell_avgs(n) = shell_avgs(n) + rmat_raw(i,j,k)
+                                        sum_int = sum_int + rmat_raw(i,j,k)
+                                    end if
                                     count = count + 1
                                 end if
                             end do
@@ -1394,6 +1556,7 @@ contains
                         end if
                     end if
                 end do
+                min_int = 0.
                 shell_avgs = shell_avgs + abs(min_int) ! To avoid negative probabilities
                 sum_shells = sum(shell_avgs)
 
@@ -1453,167 +1616,15 @@ contains
                 self%atominfo(cc)%isocorr = corr
 
                 ! Output shell radius and statistics in CSV File
-                write(fiso, '(2i8, 3f10.5, 8f10.3)') cc, count, sum_int_out, sum_int, min_int, corr, fit_rad*self%smpd, &
-                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
+                write(fiso, '(i8, f10.5, 10f10.5)') cc, min_int, shell_avgs
 
             end subroutine iso_shell_profile
-
-            subroutine calc_isotropic_disp_sphere(cc)
-                integer, intent(in)     :: cc
-                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, vars(3), var, fit_rad, A, beta, prob, prob_tot, prob_sum_sq, corr,&
-                                &sum_int_out
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
-                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-
-
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 3) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-
-                fit_rad = (self%theoretical_radius) / self%smpd
-                ! First iteration: calculate the minimum intensity within the sphere
-                ! If min_int is negative, then we'll added |min_int| to all intensities
-                ! so that all probabilities are >= 0
-                min_int = self%atominfo(cc)%max_int
-                max_int = 0
-                peak = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_raw(i, j, k) < min_int) then
-                                    min_int = rmat_raw(i, j, k)
-                                else if (rmat_raw(i, j, k) > max_int) then
-                                    max_int = rmat_raw(i, j, k)
-                                    peak = (/i, j, k/)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                if (min_int > 0) then
-                    min_int = 0 ! No correction needed
-                end if
-
-                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                count0 = 0
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_raw(i, j, k) + abs(min_int) > 0) then
-                                    count = count + 1
-                                    sum_int = sum_int + rmat_raw(i, j, k) + abs(min_int)
-                                    mu(1) = mu(1) + i * (rmat_raw(i, j, k) + abs(min_int))
-                                    mu(2) = mu(2) + j * (rmat_raw(i, j, k) + abs(min_int))
-                                    mu(3) = mu(3) + k * (rmat_raw(i, j, k) + abs(min_int))
-                                else
-                                    count0 = count0 + 1
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Third iteration: Calculate the variance sigma
-                vars = 0.
-                var = 0.
-                prob_sum_sq = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                prob = (rmat_raw(i, j, k)+abs(min_int)) / sum_int
-                                prob_sum_sq = prob_sum_sq + prob**2
-                                ! Diagonal terms are variance
-                                var = var + prob * norm_2([i,j,k] - mu)**2
-                                !vars(1) = vars(1) + prob * (i - mu(1))**2
-                                !vars(2) = vars(2) + prob * (j - mu(2))**2
-                                !vars(3) = vars(3) + prob * (k - mu(3))**2
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fill in redundant entries
-                !var = sum(vars) / 3
-                var = var / (1 - prob_sum_sq) ! For unbiased estimator
-
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                prob_tot = 0.
-                count_fit = 0
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 6) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = fit_rad
-                beta = 0.
-                A = 1.0 / sqrt((2*pi)**3 * var)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
-                                prob = A * exp(beta)
-                                prob_tot = prob_tot + prob
-                                count_fit = count_fit + 1
-                                call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int+min_int)
-                            end if
-                        end do
-                    end do
-                end do
-                ! Renormalize based on prob_tot
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
-                                sum_int_out = sum_int_out + fit_isotropic%get_rmat_at(i,j,k)
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Calculate correlation between fit and orignal map within the fit radius
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
-                
-                self%atominfo(cc)%isobfac = sqrt(var) * self%smpd
-                self%atominfo(cc)%isocorr = corr
-
-                write(fiso, '(2i8, 3f10.5, 8f10.3)') cc, count, sum_int_out, sum_int, min_int, corr, fit_rad*self%smpd, &
-                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
-            end subroutine calc_isotropic_disp_sphere
 
             subroutine calc_zscore( arr )
                 real, intent(inout) :: arr(:)
                 arr = (arr - self%map_stats%avg) / self%map_stats%sdev
+                print *, "RMAT AVG: ", self%map_stats%avg
+                print *, "RMAT SDEV ", self%map_stats%sdev
             end subroutine calc_zscore
 
             subroutine calc_cn_stats( cn )
