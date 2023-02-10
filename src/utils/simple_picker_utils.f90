@@ -20,7 +20,7 @@ type picker_utils
     integer                  :: ldim_raw(3) = 0 , ldim_shrink1(3) = 0 , ldim_shrink2(3) = 0
     integer                  :: ldim_box(3) = 0 , ldim_box1(3)    = 0 , ldim_box2(3)    = 0
     real                     :: smpd_raw    = 0., smpd_shrink1    = 0., smpd_shrink2    = 0.
-    integer(dp)              :: nboxes1 = 0, nboxes2 = 0
+    integer(dp)              :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0
     integer                  :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
     type(image)              :: mic_shrink1, mic_shrink2
     type(stats_struct)       :: stats_ptcl, stats_bg
@@ -38,7 +38,7 @@ type picker_utils
     procedure, private :: set_pos_priv
     procedure          :: mask_high_var_regions
     procedure          :: gauconv_mic_shrink1
-    procedure          :: extract_boximgs1
+    procedure, private :: extract_boximgs1
     procedure          :: analyze_boximgs1
 end type picker_utils
 
@@ -150,6 +150,13 @@ contains
                 self%ny_offset = self%ny_offset + 1
             end do
         end do
+        ! count # boxes, upper bound
+        self%nboxes_ub = 0
+        do xind = 0,self%nx1,3 * OFFSET
+            do yind = 0,self%ny1,3 * OFFSET
+                self%nboxes_ub   = self%nboxes_ub + 1
+            end do
+        end do
         ! allocate and set positions1 
         if( allocated(self%positions1) ) deallocate(self%positions1)
         allocate(self%positions1(self%nboxes1,2), source=0)
@@ -254,10 +261,10 @@ contains
         real,    allocatable :: tmp(:)
         type(stats_struct)   :: stats
         real        :: box_scores(self%nx_offset,self%ny_offset,1), t, sxx
-        logical     :: is_peak(self%nx_offset,self%ny_offset,1)
-        integer     :: ioff, joff, npeaks, cnt
+        logical     :: is_peak(self%nx_offset,self%ny_offset,1), outside
+        integer     :: ioff, joff, npeaks, cnt, ibox
         type(image) :: img
-        real        :: pix_rad, sig, med, means(2), score_max, score_avg
+        real        :: pix_rad, sig
         pix_rad = (maxdiam / 2.) / SMPD_SHRINK1 
         sig     = pix_rad / GAUSIG
         call img%new(self%ldim_box1, SMPD_SHRINK1)
@@ -265,34 +272,32 @@ contains
         call img%prenorm4real_corr(sxx)
         ! call img%vis
         ! calculate box_scores
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff) proc_bind(close)
-        !$omp 
+        if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before constructing boximgs1')
+        if( allocated(self%boximgs1) )then
+            do ibox = 1,self%nboxes1
+                call self%boximgs1(ibox)%kill
+            end do
+            deallocate(self%boximgs1)
+        endif
+        allocate(self%boximgs1(self%nboxes1))
+        !$omp parallel default(shared) private(ibox,outside,ioff,joff) proc_bind(close)
+        !$omp do schedule(static)
+        do ibox = 1,self%nboxes1
+            call self%boximgs1(ibox)%new(self%ldim_box1, SMPD_SHRINK1)
+            call self%mic_shrink1%window_slim(self%positions1(ibox,:), self%ldim_box1(1), self%boximgs1(ibox), outside)
+        end do
+        !$omp end do nowait
+        !$omp do schedule(static) collapse(2)
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
                 box_scores(ioff,joff,1) = img%real_corr_prenorm(self%boximgs1(self%inds_offset(ioff,joff)), sxx)
             end do
         end do
-        !$omp end parallel do
-        
-
-        tmp       = pack(box_scores, mask=.true.)
-        score_max = maxval(tmp)
-        score_avg = sum(tmp) / real(self%nx_offset * self%ny_offset)
-        npeaks    = count(abs(tmp - score_max) < abs(tmp - score_avg))
-
-        print *, 'npeaks ', npeaks
-        stop
-
-
-
-
-
-        allocate(positions_tmp(npeaks,2), source=0)
-
-
-
-
-
+        !$omp end do nowait
+        !$omp end parallel
+        tmp = pack(box_scores, mask=.true.)
+        call detect_peak_thres(self%nx_offset * self%ny_offset, int(self%nboxes_ub), tmp, t)
+        deallocate(tmp)
         is_peak = .false.
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
@@ -300,22 +305,12 @@ contains
             end do
         end do
         npeaks = count(is_peak)
+
         print *, 'npoints ', self%nx_offset * self%ny_offset
         print *, 'npeaks  ', npeaks
 
-        
-        tmp = pack(box_scores, mask=is_peak)
-        call calc_stats(tmp, stats)
-        print *, ''
-        print *, 'corr peak stats'
-        print *, 'avg  ', stats%avg
-        print *, 'sdev ', stats%sdev
-        print *, 'med  ', stats%med
-        print *, 'minv ', stats%minv
-        print *, 'maxv ', stats%maxv
-
         ! update positions1
-        
+        allocate(positions_tmp(npeaks,2), source=0)
         cnt = 0
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
