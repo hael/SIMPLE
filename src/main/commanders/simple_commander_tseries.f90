@@ -1020,8 +1020,13 @@ contains
             call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(CCS,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(SPLITTED, iter_dir//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
+            if( params%l_needs_sigma )then
+                call simple_copy_file(trim(SIGMA2_GROUP_FBODY)//trim(int2str(endit))//'.star',&
+                    &iter_dir//trim(SIGMA2_GROUP_FBODY)//int2str_pad(i,3)//'.star')
+            endif
             ! clean
             call exec_cmdline('rm -f recvol_state01_iter* *part*')
+            if( params%l_needs_sigma ) call exec_cmdline('rm -f '//trim(SIGMA2_GROUP_FBODY)//'*.star')
             call del_file(ATOMS)
             call del_file(BINARY)
             call del_file(CCS)
@@ -1063,6 +1068,7 @@ contains
             call cline_refine3D_cavgs%set('maxits',                1.)
             call cline_refine3D_cavgs%set('projfile', params%projfile)
             call cline_refine3D_cavgs%set('oritype',          'cls3D')
+            call cline_refine3D_cavgs%set('objfun',              'cc')
             call cline_refine3D_cavgs%set('lp',                   1.5)
             call cline_refine3D_cavgs%set('silence_fsc',        'yes')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared

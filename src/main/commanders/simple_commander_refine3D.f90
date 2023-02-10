@@ -663,13 +663,14 @@ contains
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
+        type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
         type(parameters)                  :: params
         type(builder)                     :: build
-        type(cmdline)                     :: cline_calc_sigma
-        character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter
+        type(cmdline)                     :: cline_calc_sigma, cline_calc_pspec_distr
+        character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter, orig_objfun
         integer                           :: startit, i, state
         real                              :: corr, corr_prev
-        logical                           :: converged, l_automsk, l_sigma
+        logical                           :: converged, l_automsk, l_sigma, l_switch2euclid
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         l_automsk = params%l_automsk
         startit = 1
@@ -681,15 +682,30 @@ contains
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
-            ! objfun=euclid|prob
-            l_sigma = .false.
-            if( (trim(params%objfun).eq.'euclid') .or. (params%objfun.eq.'prob') .or. (params%objfun.eq.'test') )then
-                ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
-                l_sigma                = .true.
+            ! objfun=euclid|prob|test
+            orig_objfun     = trim(params%objfun)
+            l_sigma         = .false.
+            l_switch2euclid = .false.
+            select case(trim(orig_objfun))
+            case('euclid','prob','test')
+                l_sigma = .true.
                 call cline%set('needs_sigma','yes')
-                params%l_needs_sigma   = .true.
-                cline_calc_sigma       = cline
-            endif
+                params%l_needs_sigma = .true.
+                cline_calc_sigma     = cline
+                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
+                    ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
+                else
+                    ! sigma2 not provided & are calculated
+                    params%objfun    = 'cc'
+                    params%cc_objfun = OBJFUN_CC
+                    cline_calc_pspec_distr = cline
+                    call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
+                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+                    l_switch2euclid = .true.
+                endif
+            case('cc')
+                ! nothing to do
+            end select
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
             if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
@@ -756,6 +772,19 @@ contains
                 endif
                 ! update iteration counter
                 params%which_iter = params%which_iter + 1
+                ! whether to switch objective function
+                if( l_switch2euclid )then
+                    params%objfun = trim(orig_objfun)
+                    select case(trim(params%objfun))
+                    case('euclid')
+                        params%cc_objfun = OBJFUN_EUCLID
+                    case('prob')
+                        params%cc_objfun = OBJFUN_PROB
+                    case('test')
+                        params%cc_objfun = OBJFUN_TEST
+                    end select
+                    l_switch2euclid = .false.
+                endif
             end do
             ! put back automsk flag if needed
             if( l_automsk ) call cline%set('automsk', trim(params%automsk))
