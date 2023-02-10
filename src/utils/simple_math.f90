@@ -245,6 +245,27 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
 
+    subroutine detect_peak_thres( n, n_ub, x, t )
+        integer, intent(in)    :: n, n_ub
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t
+        real, allocatable  :: arr(:)
+        real    :: ts(2), smd, y
+        integer :: narr, i
+        ts(1) = -huge(y)
+        do
+            narr = count(x >= ts(1))
+            if( narr < n_ub )then
+                t = ts(1)
+                return
+            endif
+            arr  = pack(x, mask=x >= ts(1))
+            call otsu(narr, arr, ts(2))
+            ts(1) = ts(2)
+            deallocate(arr)
+        end do
+    end subroutine detect_peak_thres
+
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_1d( vec, thresh, labels, centroids, populations )
         real,    intent(in)  :: vec(:)       ! input vector
