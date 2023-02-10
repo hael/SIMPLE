@@ -23,12 +23,10 @@ type picker_utils
     integer(dp)              :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0
     integer                  :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
     type(image)              :: mic_shrink1, mic_shrink2
-    type(stats_struct)       :: stats_ptcl, stats_bg
     type(image), pointer     :: mic_raw => null()
     type(image), allocatable :: boximgs1(:), boximgs2(:)
-    real,        allocatable :: avg_sdev1(:,:), avg_sdev2(:,:)
     integer,     allocatable :: positions1(:,:), inds_offset(:,:)
-    logical,     allocatable :: is_ptcl1(:), is_ptcl2(:), is_peak(:,:,:)
+    logical,     allocatable :: is_peak(:,:,:)
   contains
     procedure          :: set_mics
     procedure, private :: set_box_ldims
@@ -36,7 +34,6 @@ type picker_utils
     procedure, private :: set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
     procedure, private :: set_pos_priv
-    procedure          :: mask_high_var_regions
     procedure          :: gauconv_mic_shrink1
     procedure, private :: extract_boximgs1
     procedure          :: analyze_boximgs1
@@ -178,36 +175,6 @@ contains
         end do
     end subroutine set_pos_priv
 
-    subroutine mask_high_var_regions( self, maxdiam )
-        class(picker_utils), intent(inout) :: self
-        real,                intent(in)    :: maxdiam
-        type(image) :: img, img2
-        real        :: pix_rad, sig
-        pix_rad = (maxdiam / 2.) / SMPD_SHRINK1 
-        sig     = pix_rad / GAUSIG
-        call img%new(self%ldim_shrink1, SMPD_SHRINK1)
-        call sauvola(self%mic_shrink1, OFFSET, img)
-        if( L_WRITE ) call img%write('sauvola_raw.mrc')
-        call otsu_img(img)
-        if( L_WRITE ) call img%write('sauvola_raw_otsu.mrc')
-        
-
-        call img2%new(self%ldim_shrink1, SMPD_SHRINK1)
-        call img2%gauimg2D(sig, sig)
-        call img2%fft
-        call img%fft
-        call img%mul(img2)
-        call img%ifft
-        call img%norm_minmax
-        if( L_WRITE ) call img%write('mask_high_var.mrc')
-        call self%mic_shrink1%norm_minmax
-        call self%mic_shrink1%mul(img)
-        if( L_WRITE ) call self%mic_shrink1%write('mic_shrink1_masked.mrc')
-        
-
-
-    end subroutine mask_high_var_regions
-
     subroutine gauconv_mic_shrink1( self, maxdiam )
         class(picker_utils), intent(inout) :: self
         real,                intent(in)    :: maxdiam
@@ -259,7 +226,6 @@ contains
         real,                intent(in)    :: maxdiam
         integer, allocatable :: positions_tmp(:,:)
         real,    allocatable :: tmp(:)
-        type(stats_struct)   :: stats
         real        :: box_scores(self%nx_offset,self%ny_offset,1), t, sxx
         logical     :: is_peak(self%nx_offset,self%ny_offset,1), outside
         integer     :: ioff, joff, npeaks, cnt, ibox
