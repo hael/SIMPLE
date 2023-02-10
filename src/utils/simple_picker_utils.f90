@@ -228,8 +228,8 @@ contains
         real,    allocatable :: tmp(:)
         real        :: box_scores(self%nx_offset,self%ny_offset,1), t, sxx
         logical     :: is_peak(self%nx_offset,self%ny_offset,1), outside
-        integer     :: ioff, joff, npeaks, cnt, ibox
-        type(image) :: img
+        integer     :: ioff, joff, npeaks, cnt, ithr
+        type(image) :: img, boximgs_heap(nthr_glob)
         real        :: pix_rad, sig
         pix_rad = (maxdiam / 2.) / SMPD_SHRINK1 
         sig     = pix_rad / GAUSIG
@@ -239,28 +239,19 @@ contains
         ! call img%vis
         ! calculate box_scores
         if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before constructing boximgs1')
-        if( allocated(self%boximgs1) )then
-            do ibox = 1,self%nboxes1
-                call self%boximgs1(ibox)%kill
-            end do
-            deallocate(self%boximgs1)
-        endif
-        allocate(self%boximgs1(self%nboxes1))
-        !$omp parallel default(shared) private(ibox,outside,ioff,joff) proc_bind(close)
-        !$omp do schedule(static)
-        do ibox = 1,self%nboxes1
-            call self%boximgs1(ibox)%new(self%ldim_box1, SMPD_SHRINK1)
-            call self%mic_shrink1%window_slim(self%positions1(ibox,:), self%ldim_box1(1), self%boximgs1(ibox), outside)
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
-        !$omp end do nowait
-        !$omp do schedule(static) collapse(2)
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside) proc_bind(close)
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
-                box_scores(ioff,joff,1) = img%real_corr_prenorm(self%boximgs1(self%inds_offset(ioff,joff)), sxx)
+                ithr = omp_get_thread_num() + 1
+                call self%mic_shrink1%window_slim(self%positions1(self%inds_offset(ioff,joff),:),&
+                &self%ldim_box1(1), boximgs_heap(ithr), outside)
+                box_scores(ioff,joff,1) = img%real_corr_prenorm(boximgs_heap(ithr), sxx)
             end do
         end do
-        !$omp end do nowait
-        !$omp end parallel
+        !$omp end parallel do
         tmp = pack(box_scores, mask=.true.)
         call detect_peak_thres(self%nx_offset * self%ny_offset, int(self%nboxes_ub), tmp, t)
         deallocate(tmp)
