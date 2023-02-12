@@ -245,6 +245,7 @@ contains
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
+        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
