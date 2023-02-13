@@ -28,7 +28,6 @@ type :: builder
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
-    type(polarizer)                     :: img_match              !< polarizer for particles
     type(polarizer)                     :: img_crop_polarizer     !< polarizer for cropped image
     type(image)                         :: img_pad                !< -"-
     type(image)                         :: img_tmp                !< -"-
@@ -269,7 +268,6 @@ contains
         if( params%box > 0 )then
             ! build image objects
             call self%img%new(      [params%box,params%box,1],params%smpd,       wthreads=.false.)
-            call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             call self%img_copy%new( [params%box,params%box,1],params%smpd,  wthreads=.false.)
             call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
@@ -315,8 +313,6 @@ contains
             call self%spproj%kill
             call self%eulspace%kill
             call self%img%kill
-            call self%img_match%kill_polarizer
-            call self%img_match%kill
             call self%img_crop_polarizer%kill_polarizer
             call self%img_crop_polarizer%kill
             call self%img_copy%kill

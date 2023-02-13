@@ -185,7 +185,6 @@ contains
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
-        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
         allocate(ptcl_match_imgs(params_glob%nthr))
         do ithr = 1,params_glob%nthr
