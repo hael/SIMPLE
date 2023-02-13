@@ -245,7 +245,7 @@ contains
     procedure          :: NLmean3D
     ! CALCULATORS
     procedure          :: minmax
-    procedure          :: box_score
+    procedure          :: avg_loc_sdev
     procedure          :: rmsd
     procedure, private :: stats_1
     procedure, private :: stats_2
@@ -4097,58 +4097,27 @@ contains
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
 
-    function box_score( self ) result( score )
-        class(image), intent(in)    :: self
-        real    :: xspix, yspix, ci, dist, score, norm, smin, smax, delta
-        real    :: xproj(self%ldim(1)), yproj(self%ldim(1)), xcen, ycen
-        integer :: i
-        logical :: xhas_peak, yhas_peak
-        if( self%ldim(3) /= 1            ) THROW_HARD('only for 2D images')
-        if( self%ldim(1) /= self%ldim(2) ) THROW_HARD('only for square images')
-        ! minmax normalize
-        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),1))
-        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),1))
-        delta = smax - smin
-        self%rmat(:self%ldim(1),:self%ldim(2),1) = (self%rmat(:self%ldim(1),:self%ldim(2),1) - smin)/delta
-        ! project in x/y
-        xproj     = sum(self%rmat(:self%ldim(1),:self%ldim(2),1), dim=1)
-        yproj     = sum(self%rmat(:self%ldim(1),:self%ldim(2),1), dim=2)
-        ! look for peaks
-        xhas_peak = .false.
-        yhas_peak = .false.
-        do i = 2,self%ldim(1)-1
-            if( xproj(i) > xproj(i-1) .and. xproj(i) > xproj(i+1) ) xhas_peak = .true.
-            if( yproj(i) > yproj(i-1) .and. yproj(i) > yproj(i+1) ) yhas_peak = .true.
-        end do
-        if( xhas_peak .and. yhas_peak )then
-            ! calculate mass centers in x/y
-            xspix = 0.
-            yspix = 0.
-            xcen  = 0.
-            ycen  = 0.
-            ci    = -real(self%ldim(1) / 2)
-            do i = 1,self%ldim(1)
-                xcen  = xcen  + xproj(i) * ci
-                xspix = xspix + xproj(i)
-                ycen  = ycen  + yproj(i) * ci
-                yspix = yspix + yproj(i)
-                ci    = ci + 1.
+    function avg_loc_sdev( self, winsz ) result( asdev )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: winsz
+        real    :: avgs(self%ldim(1),self%ldim(2)), sdevs(self%ldim(1),self%ldim(2)), asdev
+        integer :: i, j, ir(2), jr(2), isz, jsz, npix
+        if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
+        do i = 1,self%ldim(1)
+            ir(1) = max(1,            i - winsz)
+            ir(2) = min(self%ldim(1), i + winsz)
+            isz   = ir(2) - ir(1) + 1
+            do j = 1,self%ldim(2)
+                jr(1)      = max(1,            j - winsz)
+                jr(2)      = min(self%ldim(2), j + winsz)
+                jsz        = jr(2) - jr(1) + 1
+                npix       = isz * jsz
+                avgs(i,j)  = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                sdevs(i,j) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avgs(i,j))**2.0) / real(npix - 1))
             end do
-            xcen = xcen / xspix
-            ycen = ycen / yspix
-            ! distance metric for 
-            ! (1) how well do the center of mass peaks agree and 
-            ! (2) how well do the center of mass peaks agree with the center of the box
-            dist = abs(xcen - ycen) + abs(xcen) / 2. + abs(ycen) / 2.
-            ! convert to normalized score
-            norm  = real(self%ldim(1) / 2)
-            score = (norm - dist) / norm
-            ! assume box = 50 & xcen/ycen = 0 => score = 1
-            ! assume box = 50 & xcen/ycen = 5 => score = 0.8
-        else
-            score = 0.
-        endif
-    end function box_score
+        end do
+        asdev = sum(sdevs) / real(self%ldim(1) * self%ldim(2))
+    end function avg_loc_sdev
 
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
