@@ -29,5 +29,6 @@ call putils%set_positions
 call putils%analyze_boximgs1
 call putils%distance_filter
 call putils%refine_positions
+call putils%remove_outliers
 
 end program simple_test_picker_utils

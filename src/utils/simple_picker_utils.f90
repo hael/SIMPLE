@@ -13,7 +13,7 @@ private
 
 real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
 integer, parameter :: OFFSET       = 3, OFFSET_UB = 2 * OFFSET
-real,    parameter :: DIST_THRES   = real(OFFSET_UB)
+real,    parameter :: DIST_THRES   = real(OFFSET_UB), NDEV = 2.5
 logical, parameter :: L_WRITE = .true.
 
 type picker_utils
@@ -43,6 +43,7 @@ type picker_utils
     procedure          :: analyze_boximgs1
     procedure          :: distance_filter
     procedure          :: refine_positions
+    procedure          :: remove_outliers
 end type picker_utils
 
 contains
@@ -319,6 +320,9 @@ contains
             call self%extract_boximgs1
             call write_boximgs(int(self%nboxes1), self%boximgs1, 'ptcls_before_distfilt.mrcs' )
         endif
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
     end subroutine analyze_boximgs1
 
     subroutine distance_filter( self )
@@ -382,8 +386,8 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
         end do
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
-        !$omp parallel do schedule(static) default(shared)&
-        !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
         do ibox= 1,self%nboxes2
             rpos      = real(self%positions2(ibox,:))
             xrange(1) = max(0,        nint(rpos(1) - factor))
@@ -408,7 +412,63 @@ contains
             call self%extract_boximgs2
             call write_boximgs(int(self%nboxes2), self%boximgs2, 'ptcls_refined.mrcs' )
         endif
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
     end subroutine refine_positions
+
+    subroutine remove_outliers( self )
+        class(picker_utils), intent(inout) :: self
+        integer, allocatable :: positions_tmp(:,:)
+        type(image) :: boximgs_heap(nthr_glob)
+        integer     :: ibox, xind, yind, ithr, npeaks, cnt
+        logical     :: outside
+        real        :: factor, loc_sdevs(self%nboxes2), avg, sdev, t
+        if( .not. allocated(self%positions2) ) THROW_HARD('positions2 need to be set')
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
+        end do
+        factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(ibox,ithr,xind,yind,outside)
+        do ibox = 1,self%nboxes2
+            ithr            = omp_get_thread_num() + 1
+            xind            = self%positions2(ibox,1)
+            yind            = self%positions2(ibox,2)
+            call self%mic_shrink2%window_slim([xind,yind], self%ldim_box2(1), boximgs_heap(ithr), outside)
+            loc_sdevs(ibox) = boximgs_heap(ithr)%avg_loc_sdev(nint(factor))
+        end do
+        !$omp end parallel do
+        call avg_sdev(loc_sdevs, avg, sdev)
+        ! write(logfhandle,'(a,1x,I5)') '# positions after 1.0 sigma outlier removal: ', count(loc_sdevs < avg + 1.0 * sdev)
+        ! write(logfhandle,'(a,1x,I5)') '# positions after 1.5 sigma outlier removal: ', count(loc_sdevs < avg + 1.5 * sdev)
+        ! write(logfhandle,'(a,1x,I5)') '# positions after 2.0 sigma outlier removal: ', count(loc_sdevs < avg + 2.0 * sdev)
+        ! write(logfhandle,'(a,1x,I5)') '# positions after 2.5 sigma outlier removal: ', count(loc_sdevs < avg + 2.5 * sdev)
+        ! write(logfhandle,'(a,1x,I5)') '# positions after 3.0 sigma outlier removal: ', count(loc_sdevs < avg + 3.0 * sdev)
+        t = avg + NDEV * sdev
+        npeaks = count(loc_sdevs < t)
+        write(logfhandle,'(a,1x,I5)') '# positions after     outlier removal: ', npeaks
+        ! update positions2
+        allocate(positions_tmp(npeaks,2), source=0)
+        cnt = 0
+        do ibox = 1,self%nboxes2
+            if( loc_sdevs(ibox) < t )then
+                cnt = cnt + 1
+                positions_tmp(cnt,:) = self%positions2(ibox,:)
+            endif
+        end do
+        deallocate(self%positions2)
+        self%nboxes2 = npeaks
+        allocate(self%positions2(self%nboxes2,2), source=positions_tmp)
+        deallocate(positions_tmp)
+        if( L_WRITE )then
+            call self%extract_boximgs2
+            call write_boximgs(int(self%nboxes2), self%boximgs2, 'ptcls_final.mrcs' )
+        endif
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
+    end subroutine remove_outliers
 
     ! utilities
 
