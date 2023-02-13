@@ -343,8 +343,8 @@ contains
         allocate(cls_mask(ncls_here), source=.true.)
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, cls_mask, ndev)
         ncls_rejected = count(.not.cls_mask)
-        if( ncls_rejected == 0 .or. ncls_rejected == ncls_here )then
-            ! nothing to do
+        if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls_here,nint(real(ncls_here)*FRAC_SKIP_REJECTION)) )then
+            ! no or too many classes to reject
         else
             call self%spproj%read_segment('ptcl2D',projfile)
             ! rejects particles 2D

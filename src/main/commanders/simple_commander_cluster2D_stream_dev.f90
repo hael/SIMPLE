@@ -712,7 +712,7 @@ contains
         type(image)          :: img
         logical, allocatable :: cls_mask(:)
         real                 :: ndev_here
-        integer              :: nptcls_rejected, ncls_rejected, iptcl
+        integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
         if( .not.pool_available )return
         ! rejection frequency
@@ -724,7 +724,8 @@ contains
         ! correlation & resolution
         ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,cls_mask,ndev_here)
-        if( count(cls_mask) > 1 .and. count(cls_mask) < ncls_glob )then
+        ncls2reject = count(cls_mask)
+        if( ncls2reject > 1 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
             do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
