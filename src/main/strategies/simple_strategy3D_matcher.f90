@@ -171,7 +171,6 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
-        if( pftcc%exists() )call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
         allocate(ptcl_match_imgs(params_glob%nthr))
         do ithr = 1,params_glob%nthr
@@ -424,6 +423,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -494,7 +494,7 @@ contains
             ! prep
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! set Cartesian
             call cftcc%set_ptcl(iptcl, ptcl_match_imgs(ithr))
             ! e/o flags
