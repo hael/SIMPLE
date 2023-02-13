@@ -909,6 +909,7 @@ contains
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
+        if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',  'global')
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
@@ -960,8 +961,11 @@ contains
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
-        ! read the project file and check that there are no state=0s in the ptcl2D & ptcl3D fields
+        ! read the project file
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        ! sanity checks
         rstates = spproj%os_ptcl2D%get_all('state')
         fall_over = .false.
         if( any(rstates < 0.5 ) ) fall_over = .true.
