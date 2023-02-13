@@ -43,7 +43,6 @@ type :: cartft_corrcalc
     procedure          :: set_ref
     procedure          :: set_eo
     ! GETTERS
-    procedure          :: get_box
     procedure          :: exists
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
@@ -291,18 +290,17 @@ contains
         integer :: ldim(3), h, k, phys1, phys2
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
-        if( .not. all(self%ldim .eq. ldim) )then
-        ! if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
+        if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
             THROW_HARD('inconsistent image dimensions, input vs class internal')
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 if( h .ge. 0 )then
                     phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
+                    phys2 = k + 1 + merge(params_glob%box_crop, 0, k < 0)
                 else
                     phys1 = -h + 1
-                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+                    phys2 = -k + 1 + MERGE(params_glob%box_crop,0, -k < 0)
                 endif
                 self%particles(h,k,self%pinds(iptcl)) = img%get_cmat_at(phys1, phys2, 1)
             end do
@@ -315,18 +313,17 @@ contains
         integer :: ldim(3), h, k, ithr, phys1, phys2
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
-        if( .not. all(self%ldim .eq. ldim) )then
-        ! if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
+        if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
             THROW_HARD('inconsistent image dimensions, input vs class internal')
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 if( h .ge. 0 )then
                     phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
+                    phys2 = k + 1 + merge(params_glob%box_crop, 0, k < 0)
                 else
                     phys1 = -h + 1
-                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+                    phys2 = -k + 1 + MERGE(params_glob%box_crop,0, -k < 0)
                 endif
                 self%references(h,k,1) = img%get_cmat_at(phys1, phys2, 1)
             end do
@@ -344,12 +341,6 @@ contains
     end subroutine set_eo
 
     ! GETTERS
-
-    pure function get_box( self ) result( box )
-        class(cartft_corrcalc), intent(in) :: self
-        integer :: box
-        box = self%ldim(1)
-    end function get_box
 
     logical function exists( self )
         class(cartft_corrcalc), intent(in) :: self
