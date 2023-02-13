@@ -324,6 +324,7 @@ contains
     generic            :: pad_mirr => pad_mirr_1, pad_mirr_2
     procedure          :: clip
     procedure          :: clip_inplace
+    procedure          :: read_and_crop
     procedure          :: scale_pixels
     procedure          :: mirror
     procedure          :: norm
@@ -6589,7 +6590,7 @@ contains
                     end do
                 endif
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
+                call self_out%set_smpd(self_in%smpd*ratio) ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.
             else
                 starts = (self_in%ldim-self_out%ldim)/2+1
@@ -6614,6 +6615,30 @@ contains
         call self%copy(tmp)
         call tmp%kill()
     end subroutine clip_inplace
+
+    subroutine read_and_crop( self, volfname, box, smpd, box_crop, smpd_crop )
+        class(image),     intent(inout) :: self
+        character(len=*), intent(in)    :: volfname
+        integer,          intent(in)    :: box, box_crop
+        real,             intent(in)    :: smpd, smpd_crop
+        real    :: crop_factor, smpd_here
+        integer :: ldim(3), ifoo
+        crop_factor = real(box) / real(box_crop)
+        call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
+        if( all(ldim == box) )then
+            call self%new([box,box,box],smpd)
+            call self%read(volfname)
+            call self%fft
+            call self%clip_inplace([box_crop,box_crop,box_crop])
+            call self%mul(crop_factor**3)
+            call self%ifft
+        elseif( all(ldim == box_crop) )then
+            call self%new([box_crop,box_crop,box_crop],smpd_crop)
+            call self%read(volfname)
+        else
+            THROW_HARD('Erroneous volume dimensions; read_and_crop')
+        endif
+    end subroutine read_and_crop
 
     ! This subroutine rescales the pixel intensities to a new input range.
     subroutine scale_pixels(self, new_range, ssc, oold_range)

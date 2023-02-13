@@ -894,17 +894,17 @@ contains
         if( self%stk .eq. '' .and. cline%defined('vol_even') )then
             call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
             self%box      = self%ldim(1)
-            self%box_crop = self%box
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         else if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box      = self%ldim(1)
-            self%box_crop = self%box
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
         ! no stack given, no vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
             self%box      = self%ldim(1)
-            self%box_crop = self%box
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
@@ -953,9 +953,7 @@ contains
                     call spproj%get_imginfo_from_osout(smpd, box, nptcls)
                     call spproj%kill
                     if( .not.cline%defined('smpd'))     self%smpd      = smpd
-                    if( .not.cline%defined('smpd_crop'))self%smpd_crop = smpd
                     if( .not.cline%defined('box'))      self%box       = box
-                    if( .not.cline%defined('box_crop')) self%box_crop  = box
                     if( .not.cline%defined('nptcls'))   self%nptcls    = nptcls
                 else
                     call bos%open(trim(self%projfile)) ! projfile opened here
@@ -972,17 +970,15 @@ contains
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
-                    ! smpd_box/box_crop
-                    ! if( .not.cline%defined('box_crop') .or. .not.cline%defined('smpd_crop') )then
-                    !     if( bos%is_opened() ) call bos%close
-                    !     call spproj%read_segment('out', self%projfile)
-                    !     call spproj%get_imgdims_from_osout(self%spproj_iseg, smpd, box)
-                    !     call spproj%kill
-                    !     if( .not.cline%defined('box_crop') )  self%box_crop  = box
-                    !     if( .not.cline%defined('smpd_crop') ) self%smpd_crop = smpd
-                    ! endif
-                    if( .not.cline%defined('box_crop') )  self%box_crop  = self%box
-                    if( .not.cline%defined('smpd_crop') ) self%smpd_crop = self%smpd
+                endif
+                ! smpd_crop/box_crop
+                if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
+                if( .not.cline%defined('smpd_crop') )then
+                    if( cline%defined('box_crop') )then
+                        self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
+                    else
+                        self%smpd_crop = self%smpd
+                    endif
                 endif
             else
                 ! nothing to do for streaming, values set at runtime

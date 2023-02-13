@@ -104,13 +104,13 @@ contains
             call self%envmask%read(params_glob%mskfile)
         endif
         call self%even%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
-        call self%even%alloc_rho( spproj)
+        call self%even%alloc_rho(spproj)
         call self%even%set_ft(.true.)
         call self%odd%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
         call self%eosum%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
-        call self%eosum%alloc_rho( spproj, expand=.false.)
+        call self%eosum%alloc_rho(spproj, expand=.false.)
         ! set existence
         self%exists = .true.
     end subroutine new
