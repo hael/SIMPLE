@@ -13,7 +13,7 @@ private
 logical, parameter :: INI_W_DISCR_SRCH = .false.
 
 type(opt_spec)        :: ospec           !< optimizer specification object
-type(opt_simplex)     :: nlopt           !< optimizer object
+type(opt_simplex)     :: opt_obj         !< optimizer object
 integer               :: nrestarts = 3   !< simplex restarts (randomized bounds)
 real                  :: hp, lp          !< srch ctrl params
 real                  :: lims(3,2)       !< variable bounds
@@ -37,7 +37,7 @@ contains
         call ospec%specify('simplex', 3, ftol=1e-4,&
             &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=100)
         call ospec%set_costfun(vol_shsrch_costfun)
-        call nlopt%new(ospec)
+        call opt_obj%new(ospec)
     end subroutine vol_srch_init
 
     function vol_shsrch_costfun( fun_self, vec, D ) result( cost )
@@ -84,7 +84,7 @@ contains
         ! refinement with simplex
         ospec%x   = shvec_best ! assumed that vol is shifted to previous centre
         cost_init = vol_shsrch_costfun(fun_self, ospec%x, ospec%ndim)
-        call nlopt%minimize(ospec, fun_self, cost)
+        call opt_obj%minimize(ospec, fun_self, cost)
         if( cost < cost_init )then
             cxyz(1)  = -cost    ! correlation
             cxyz(2:) =  ospec%x ! shift

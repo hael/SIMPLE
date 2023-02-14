@@ -148,7 +148,7 @@ contains
         real                      :: ww(self%nframes)
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
-        class(optimizer), pointer :: nlopt
+        class(optimizer), pointer :: opt_obj
         real(dp)                  :: x_dp(self%nframes)
         real                      :: x   (self%nframes)
         real                      :: opt_lims(self%nframes,2)
@@ -164,7 +164,7 @@ contains
         end if
         opt_lims(:,1) = 0.
         opt_lims(:,2) = 1.
-        nlopt => null()
+        opt_obj => null()
         if( .not. self%existence )then
             THROW_HARD('not instantiated; simple_opt_image_weights: align')
         end if
@@ -174,7 +174,7 @@ contains
             ftol   = 1e-7,   gtol  = 1e-7, &
             factr  = 1.0d+5, pgtol = 1.0d-7, &
             limits = opt_lims) !ftol=self%ftol, gtol=self%gtol,  default values for now
-        call ofac%new(ospec, nlopt)
+        call ofac%new(ospec, opt_obj)
         call ospec%set_costfun_8(opt_image_weights_cost_wrapper)
         call ospec%set_gcostfun_8(opt_image_weights_gcost_wrapper)
         call ospec%set_fdfcostfun_8(opt_image_weights_fdf_wrapper)
@@ -183,7 +183,7 @@ contains
             ! if w_init present, then only one minimization
             ospec%x   = w_init(1:self%nframes) / sum(w_init(1:self%nframes))
             ospec%x_8 = real(ospec%x, dp)
-            call nlopt%minimize(ospec, self, lowest_cost)
+            call opt_obj%minimize(ospec, self, lowest_cost)
             lowest_vec = ospec%x / sum(ospec%x)
         else
             ! if w_init not present, then Nrestarts minimizations with random initial conditions
@@ -193,7 +193,7 @@ contains
                 x_dp = real(x, dp)
                 ospec%x   = x
                 ospec%x_8 = x_dp
-                call nlopt%minimize(ospec, self, lowest_cost)
+                call opt_obj%minimize(ospec, self, lowest_cost)
                 if (lowest_cost < lowest_val) then
                     lowest_val = lowest_cost
                     lowest_vec = ospec%x
@@ -202,8 +202,8 @@ contains
         end if
         self%weights = lowest_vec / sum(ospec%x)
         ! cleanup
-        call nlopt%kill
-        deallocate(nlopt)
+        call opt_obj%kill
+        deallocate(opt_obj)
     end subroutine calc_opt_weights
 
     function get_weights( self ) result( res )

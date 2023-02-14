@@ -155,7 +155,7 @@ contains
         class(motion_align_poly2), intent(inout) :: self
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
-        class(optimizer), pointer :: nlopt
+        class(optimizer), pointer :: opt_obj
         real(dp) :: ini_shifts_dp(self%nxpatch,self%nypatch,self%nframes,2), shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real(dp) :: prev_shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real     :: ini_shifts(self%nxpatch,self%nypatch,self%nframes,2)
@@ -237,17 +237,17 @@ contains
                 call ospec%set_costfun_8(poly_refine_f_wrapper)
                 call ospec%set_gcostfun_8(poly_refine_df_wrapper)
                 call ospec%set_fdfcostfun_8(poly_refine_fdf_wrapper)
-                call ofac%new(ospec, nlopt)
+                call ofac%new(ospec, opt_obj)
                 ospec%x_8(:POLYDIM)   = self%poly_coeffs(:,1)
                 ospec%x_8(POLYDIM+1:) = self%poly_coeffs(:,2)
                 ospec%x = real(ospec%x_8)
                 ! minimization
-                call nlopt%minimize(ospec, self, lowest_cost)
+                call opt_obj%minimize(ospec, self, lowest_cost)
                 ! report solution
                 self%poly_coeffs(:,1) = ospec%x_8(:POLYDIM  )
                 self%poly_coeffs(:,2) = ospec%x_8(POLYDIM+1:)
-                call nlopt%kill
-                nullify(nlopt)
+                call opt_obj%kill
+                nullify(opt_obj)
             end subroutine minimize
 
             real function calc_rmsd( sh1, sh2 )

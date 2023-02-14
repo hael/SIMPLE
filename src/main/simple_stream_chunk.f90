@@ -284,9 +284,9 @@ contains
                 self%it  = it
                 mi_class = os%get(1,'CLASS_OVERLAP')
                 frac     = os%get(1,'SEARCH_SPACE_SCANNED')
-                corr     = os%get(1,'CORRELATION')
+                corr     = os%get(1,'SCORE')
                 write(logfhandle,'(A,I6,A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> CHUNK ',self%id,' ITERATION ',self%it,&
-                    &'; CLASS OVERLAP: ',mi_class,'; SEARCH SPACE SCANNED: ',frac,'; CORRELATION: ',corr
+                    &'; CLASS OVERLAP: ',mi_class,'; SEARCH SPACE SCANNED: ',frac,'; SCORE: ',corr
             endif
             call os%kill
         endif

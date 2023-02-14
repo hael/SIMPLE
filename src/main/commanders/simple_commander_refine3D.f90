@@ -117,7 +117,7 @@ contains
         if( cline%defined('objfun') )then
             l_continue = .false.
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
+            if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' .or. trim(cline%get_carg('objfun')).eq.'test') .and. .not.l_continue )then
                 orig_objfun     = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
@@ -248,7 +248,7 @@ contains
                 deallocate(list)
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
-            if( trim(params%objfun).eq.'euclid'  .or. trim(params%objfun).eq.'prob')then
+            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. trim(params%objfun).eq.'test' )then
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
@@ -366,7 +366,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. trim(params%objfun).eq.'test' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -621,6 +621,8 @@ contains
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
                     params%cc_objfun = OBJFUN_PROB
+                elseif( params%objfun .eq. 'test' )then
+                    params%cc_objfun = OBJFUN_TEST
                 endif
                 l_switch2euclid = .false.
             endif
@@ -677,12 +679,11 @@ contains
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
         else
-            if( trim(params%objfun) == 'prob'     ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=prob')
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
             ! objfun=euclid|prob
             l_sigma = .false.
-            if( (trim(params%objfun).eq.'euclid') .or. (params%objfun.eq.'prob') )then
+            if( (trim(params%objfun).eq.'euclid') .or. (params%objfun.eq.'prob') .or. (params%objfun.eq.'test') )then
                 ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
                 l_sigma                = .true.
                 call cline%set('needs_sigma','yes')

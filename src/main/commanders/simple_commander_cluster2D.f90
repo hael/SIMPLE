@@ -297,7 +297,7 @@ contains
         ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
+            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' .or. trim(cline%get_carg('objfun')).eq.'test' )
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
@@ -544,7 +544,7 @@ contains
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
+            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' .or. trim(cline%get_carg('objfun')).eq.'test' )
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%delete('scale')
@@ -720,7 +720,7 @@ contains
         l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
-            if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' .or. trim(cline%get_carg('objfun')).eq.'test' )then
                 orig_objfun = trim(cline%get_carg('objfun'))
                 l_ptclw     = trim(cline%get_carg('ptclw')).eq.'yes'
                 if( cline%defined('needs_sigma') )then
@@ -864,7 +864,7 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
             ! noise power
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid )then
+            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. trim(params%objfun).eq.'test' .or. l_switch2euclid )then
                 call cline_calc_sigma%set('which_iter',real(params%which_iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -938,6 +938,8 @@ contains
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
                     params%cc_objfun = OBJFUN_PROB
+                elseif( params%objfun .eq. 'test' )then
+                    params%cc_objfun = OBJFUN_TEST
                 endif
                 l_switch2euclid = .false.
             endif
@@ -1080,7 +1082,7 @@ contains
                 params%extr_iter = params%startit - 1
             endif
             ! ML sigmas
-            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
+            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB .or. params%cc_objfun.eq.OBJFUN_TEST )
             orig_objfun     = trim(cline%get_carg('objfun'))
             if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
                 ! we are continuing from an ML iterartion
@@ -1117,6 +1119,8 @@ contains
                         params%cc_objfun = OBJFUN_EUCLID
                     elseif( params%objfun .eq. 'prob' )then
                         params%cc_objfun = OBJFUN_PROB
+                    elseif( params%objfun .eq. 'test' )then
+                        params%cc_objfun = OBJFUN_TEST
                     endif
                     l_switch2euclid  = .false.
                 endif

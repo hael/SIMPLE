@@ -93,6 +93,7 @@ type :: ori
     procedure          :: ori2chash
     procedure          :: chash2ori
     procedure          :: get_ctfvars
+    procedure          :: get_axis_angle
     procedure          :: set_ctfvars
     procedure          :: get_keys
     ! PRINTING & I/O
@@ -1038,6 +1039,31 @@ contains
         ctfvars%angast  = self%get('angast')
         ctfvars%phshift = self%get('phshift')
     end function get_ctfvars
+
+    subroutine get_axis_angle( self, vec, angle )
+        class(ori), intent(in)  :: self
+        real,       intent(out) :: vec(3), angle
+        real :: c1, c2, c3, s1, s2, s3, denom, euls(3), c1c2, s1s2
+        euls   = self%get_euler()
+        c1     = cos(euls(2)/2.)
+        c2     = cos(euls(3)/2.)
+        c3     = cos(euls(1)/2.)
+        s1     = sin(euls(2)/2.)
+        s2     = sin(euls(3)/2.)
+        s3     = sin(euls(1)/2.)
+        c1c2   = c1*c2
+        s1s2   = s1*s2
+        vec(1) =  c1c2*s3 +  s1s2*c3
+        vec(2) = s1*c2*c3 + c1*s2*s3
+        vec(3) = c1*s2*c3 - s1*c2*s3
+        angle  = 2 * acos(c1c2*c3 - s1s2*s3)
+        denom  = norm2(vec)
+        if( denom < TINY )then
+            vec = [1., 0., 0.]
+        else
+            vec = vec/denom
+        endif
+    end subroutine get_axis_angle
 
     subroutine set_ctfvars( self, ctfvars )
         class(ori),       intent(inout) :: self
