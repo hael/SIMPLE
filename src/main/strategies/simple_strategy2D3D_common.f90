@@ -248,7 +248,7 @@ contains
         ! Back to real space
         call img_out%ifft
         ! Normalise
-        call img_out%noise_norm(build_glob%lmsk_crop, sdev_noise)
+        call img_out%norm_noise(build_glob%lmsk_crop, sdev_noise)
         ! Shift image to rotational origin
         x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
         y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
@@ -563,7 +563,7 @@ contains
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
                 if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
-                call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
+                call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
@@ -734,6 +734,7 @@ contains
             endif
         end do
         if((.not.params_glob%l_distr_exec) .and. (.not.params_glob%l_lpset))then
+            ! set the resolution limit according to the worst resolved model
             params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,maxval(res0143s)))
         endif
         call build_glob%vol2%kill

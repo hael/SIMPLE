@@ -517,7 +517,6 @@ contains
             end do
             !$omp end parallel do
         endif
-        call img%set_rmat(rmat, .false.)
     end subroutine sauvola
 
 end module simple_segmentation
