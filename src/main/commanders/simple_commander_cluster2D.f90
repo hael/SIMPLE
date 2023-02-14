@@ -990,7 +990,7 @@ contains
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs, refs_sc
+        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc
         logical                    :: converged, l_stream, l_switch2euclid
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
