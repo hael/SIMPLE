@@ -28,6 +28,7 @@ contains
         if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
+        if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         call set_automask2D_defaults( cline )
     end subroutine set_cluster2D_defaults
 

@@ -1370,7 +1370,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 6, 4, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 5, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         cleanup2D%gui_submenu_list = "search,mask,filter"
         cleanup2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1406,6 +1406,8 @@ contains
         call cleanup2D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
+        call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
+        call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         call cleanup2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
