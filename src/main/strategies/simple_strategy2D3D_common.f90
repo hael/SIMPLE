@@ -340,8 +340,8 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
+            call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
         else
             call img_out%mask(params_glob%msk_crop, 'soft')
         endif
@@ -496,8 +496,8 @@ contains
             call mskvol%kill
         else
             ! circular masking
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
+            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
+                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
             else
                 call vol_ptr%mask(params_glob%msk_crop, 'soft')
             endif

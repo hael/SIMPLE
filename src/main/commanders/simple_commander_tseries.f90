@@ -904,7 +904,7 @@ contains
         if( .not. cline%defined('hp')            ) call cline%set('hp',              3.0)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
-        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
+        if( .not. cline%defined('refine')        ) call cline%set('refine',      'neigh')
         if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no')
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
@@ -953,7 +953,7 @@ contains
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
-        if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
+        if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o

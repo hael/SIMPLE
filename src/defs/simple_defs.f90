@@ -72,7 +72,7 @@ end enum
 ! Objective function type
 enum, bind(c)
     enumerator :: ENUM_OBJFUN= -1
-    enumerator :: OBJFUN_CC = 0, OBJFUN_EUCLID = 1
+    enumerator :: OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 2
 end enum
 
 ! type for CTF parameters

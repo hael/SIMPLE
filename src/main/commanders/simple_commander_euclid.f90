@@ -105,7 +105,6 @@ contains
         call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
         ! end gracefully
         call qsys_cleanup
-        call build%spproj%kill
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
     end subroutine exec_calc_pspec_distr
 
@@ -284,7 +283,11 @@ contains
             end do
         end do
         ! write group sigmas to starfile
-        starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1.star'
+        if( cline%defined('which_iter') )then
+            starfile_fname = trim(SIGMA2_GROUP_FBODY)//int2str(params%which_iter)//'.star'
+        else
+            starfile_fname = trim(SIGMA2_GROUP_FBODY)//'1.star'
+        endif
         call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
         ! update sigmas in binfiles to match averages
         do iptcl = 1,nptcls

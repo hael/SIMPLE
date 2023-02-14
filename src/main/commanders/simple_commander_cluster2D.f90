@@ -297,7 +297,7 @@ contains
         ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
@@ -339,7 +339,7 @@ contains
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
         if( l_euclid )then
-            call cline_cluster2D2%set('objfun', 'euclid')
+            call cline_cluster2D2%set('objfun', trim(cline%get_carg('objfun')))
             call cline_cluster2D2%set('needs_sigma', 'yes')
         else
             call cline_cluster2D1%set('objfun', 'cc')
@@ -544,7 +544,7 @@ contains
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
+            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%delete('scale')
@@ -698,7 +698,7 @@ contains
         type(cmdline) :: cline_scalerefs
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
-        character(len=STDLEN)     :: benchfname
+        character(len=STDLEN)     :: benchfname, orig_objfun
         ! other variables
         type(parameters)          :: params
         type(builder)             :: build
@@ -720,8 +720,9 @@ contains
         l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
-            if( trim(cline%get_carg('objfun')).eq.'euclid' )then
-                l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
+            if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )then
+                orig_objfun = trim(cline%get_carg('objfun'))
+                l_ptclw     = trim(cline%get_carg('ptclw')).eq.'yes'
                 if( cline%defined('needs_sigma') )then
                     if(trim(cline%get_carg('needs_sigma')).eq.'yes')then
                         ! were are already doing ML, no need to switch from cc nor calculate noise power
@@ -863,7 +864,7 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
             ! noise power
-            if( trim(params%objfun).eq.'euclid' .or. l_switch2euclid )then
+            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid )then
                 call cline_calc_sigma%set('which_iter',real(params%which_iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -921,20 +922,24 @@ contains
             if( l_switch2euclid .and. (iter==iter_switch2euclid) )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun',    'euclid')
+                call cline%set('objfun', orig_objfun)
                 if(.not.l_griddingset )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
-                call job_descr%set('objfun',    'euclid')
-                call cline_cavgassemble%set('objfun','euclid')
+                call job_descr%set('objfun', orig_objfun)
+                call cline_cavgassemble%set('objfun', orig_objfun)
                 if( l_ptclw )then
                     call cline%set('ptclw',    'yes')
                     call job_descr%set('ptclw','yes')
                 endif
-                params%objfun    = 'euclid'
-                params%cc_objfun = OBJFUN_EUCLID
-                l_switch2euclid  = .false.
+                params%objfun = orig_objfun
+                if( params%objfun .eq. 'euclid' )then
+                    params%cc_objfun = OBJFUN_EUCLID
+                elseif( params%objfun .eq. 'prob' )then
+                    params%cc_objfun = OBJFUN_PROB
+                endif
+                l_switch2euclid = .false.
             endif
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
@@ -1075,7 +1080,8 @@ contains
                 params%extr_iter = params%startit - 1
             endif
             ! ML sigmas
-            l_switch2euclid = params%cc_objfun.eq.OBJFUN_EUCLID
+            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
+            orig_objfun     = trim(cline%get_carg('objfun'))
             if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
                 ! we are continuing from an ML iterartion
                 l_switch2euclid = .false.
@@ -1106,8 +1112,12 @@ contains
                 call cluster2D_exec( cline, params%startit, converged )
                 ! objfun=euclid
                 if( l_switch2euclid )then
-                    params%objfun    = 'euclid'
-                    params%cc_objfun = OBJFUN_EUCLID
+                    params%objfun    = orig_objfun
+                    if( params%objfun .eq. 'euclid' )then
+                        params%cc_objfun = OBJFUN_EUCLID
+                    elseif( params%objfun .eq. 'prob' )then
+                        params%cc_objfun = OBJFUN_PROB
+                    endif
                     l_switch2euclid  = .false.
                 endif
                 ! cooling of the randomization rate
