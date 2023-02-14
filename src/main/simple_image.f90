@@ -208,6 +208,7 @@ contains
     generic            :: binarize => binarize_1, binarize_2, binarize_3
     procedure          :: cendist
     procedure          :: masscen
+    procedure          :: box_cen_arg
     procedure          :: calc_shiftcen
     procedure          :: calc_shiftcen_serial
     procedure          :: bin_inv
@@ -2706,6 +2707,18 @@ contains
         xyz = xyz / spix
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
+
+    function box_cen_arg( self, tmp ) result( a )
+        class(image), intent(in)    :: self
+        class(image), intent(inout) :: tmp
+        real :: a, xyz(3)
+        call tmp%copy_fast(self)
+        call tmp%norm_minmax
+        where(tmp%rmat < TINY) tmp%rmat=0.
+        call tmp%mask(real(self%ldim(1))/2., 'hard')
+        call tmp%masscen(xyz)
+        a = arg(xyz(:2))
+    end function box_cen_arg
 
     !>  \brief is for estimating the center of an image based on center of mass
     function calc_shiftcen( self, lp, msk ) result( xyz )

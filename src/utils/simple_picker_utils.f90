@@ -2,9 +2,7 @@ module simple_picker_utils
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,          only: image
-use simple_radial_medians, only: radial_medians
-use simple_segmentation
+use simple_image, only: image
 implicit none
 
 public :: picker_utils
@@ -12,27 +10,29 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
-integer, parameter :: OFFSET       = 3, OFFSET_UB = 2 * OFFSET
+integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
 real,    parameter :: DIST_THRES   = real(OFFSET_UB), NDEV = 2.5
 logical, parameter :: L_WRITE = .true.
 
 type picker_utils
     private
-    integer                  :: ldim_raw(3) = 0 , ldim_shrink1(3) = 0 , ldim_shrink2(3) = 0
-    integer                  :: ldim_box(3) = 0 , ldim_box1(3)    = 0 , ldim_box2(3)    = 0
-    real                     :: smpd_raw    = 0., smpd_shrink1    = 0., smpd_shrink2    = 0.
-    real                     :: maxdiam = 0., sig_shrink1 = 0., sig_shrink2 = 0., sxx_shrink1 = 0.
-    real                     :: sxx_shrink2 = 0.
-    integer(dp)              :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0
-    integer                  :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
-    type(image)              :: mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
-    type(image), pointer     :: mic_raw => null()
-    type(image), allocatable :: boximgs1(:), boximgs2(:)
-    integer,     allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
-    real,        allocatable :: box_scores1(:)
+    integer                       :: ldim_raw(3) = 0 , ldim_shrink1(3) = 0 , ldim_shrink2(3) = 0
+    integer                       :: ldim_box(3) = 0 , ldim_box1(3)    = 0 , ldim_box2(3)    = 0
+    real                          :: smpd_raw    = 0., smpd_shrink1    = 0., smpd_shrink2    = 0.
+    real                          :: maxdiam = 0., sig_shrink1 = 0., sig_shrink2 = 0., sxx_shrink1 = 0.
+    real                          :: sxx_shrink2 = 0.
+    integer                       :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0
+    integer                       :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
+    type(image)                   :: mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
+    type(image),      pointer     :: mic_raw => null()
+    type(image),      allocatable :: boximgs1(:), boximgs2(:)
+    integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
+    real,             allocatable :: box_scores1(:)
+    character(len=:), allocatable :: fbody
     logical                  :: exists = .false.
   contains
     procedure          :: new
+    procedure          :: exec_gaupicker
     procedure, private :: set_positions_1
     procedure, private :: set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
@@ -41,20 +41,24 @@ type picker_utils
     procedure, private :: extract_boximgs1
     procedure, private :: extract_boximgs2
     procedure          :: analyze_boximgs1
+    procedure          :: center_filter
     procedure          :: distance_filter
     procedure          :: refine_positions
     procedure          :: remove_outliers
+    procedure          :: kill
 end type picker_utils
 
 contains
 
-    subroutine new( self, mic, smpd, maxdiam, bp_lp )
+    subroutine new( self, mic, smpd, moldiam, pcontrast, fbody, bp_lp )
         class(picker_utils),  intent(inout) :: self
         class(image), target, intent(in)    :: mic
         real,                 intent(in)    :: smpd     !< sampling distance in A
-        real,                 intent(in)    :: maxdiam  !< maximum diameter in A
+        real,                 intent(in)    :: moldiam  !< maximum diameter in A
+        character(len=*),     intent(in)    :: pcontrast, fbody
         real, optional,       intent(in)    :: bp_lp(2) !< high- and low-pass limits in A
         real :: scale1, scale2, pixrad_shrink1, pixrad_shrink2
+        if( self%exists ) call self%kill
         ! set raw micrograph info
         self%ldim_raw = mic%get_ldim()
         if( self%ldim_raw(3) /= 1 ) THROW_HARD('Only for 2D images')
@@ -70,7 +74,7 @@ contains
         self%ldim_shrink2(2) = round2even(real(self%ldim_raw(2)) * scale2)
         self%ldim_shrink2(3) = 1
         ! set logical dimensions of boxes
-        self%maxdiam         = maxdiam
+        self%maxdiam         = moldiam + moldiam * 0.111
         self%ldim_box(1)     = round2even(self%maxdiam / self%smpd_raw)
         self%ldim_box(2)     = self%ldim_box(1)
         self%ldim_box(3)     = 1
@@ -96,6 +100,8 @@ contains
         call self%imgau_shrink2%gauimg2D(self%sig_shrink2, self%sig_shrink2)
         call self%imgau_shrink1%prenorm4real_corr(self%sxx_shrink1)
         call self%imgau_shrink2%prenorm4real_corr(self%sxx_shrink2)
+        ! set fbody
+        allocate(self%fbody, source=adjustl(trim(fbody)))
         ! shrink micrograph
         call self%mic_shrink1%new(self%ldim_shrink1, SMPD_SHRINK1)
         call self%mic_shrink2%new(self%ldim_shrink2, SMPD_SHRINK2)
@@ -108,19 +114,67 @@ contains
             call self%mic_shrink1%bp(bp_lp(1),bp_lp(2))
             call self%mic_shrink2%bp(bp_lp(1),bp_lp(2))
         endif
-        ! flip contrast (assuming black particle contrast on input)
-        call self%mic_shrink1%mul(-1.)
-        call self%mic_shrink2%mul(-1.)
+        select case(trim(pcontrast))
+            case('black')
+                ! flip contrast (assuming black particle contrast on input)
+                call self%mic_shrink1%mul(-1.)
+                call self%mic_shrink2%mul(-1.)
+            case('white')
+                ! nothing to do
+            case DEFAULT
+                THROW_HARD('uknown pcontrast parameter, use (black|white)')
+        end select
         ! back to real-space
         call self%mic_raw%ifft
         call self%mic_shrink1%ifft
         call self%mic_shrink2%ifft
-        if( L_WRITE )then
-            call self%mic_shrink1%write('mic_shrink1.mrc')
-            call self%mic_shrink2%write('mic_shrink2.mrc')
-        endif
+        ! if( L_WRITE )then
+        !     call self%mic_shrink1%write('mic_shrink1.mrc')
+        !     call self%mic_shrink2%write('mic_shrink2.mrc')
+        ! endif
         self%exists = .true.
     end subroutine new
+
+    subroutine exec_gaupicker( self, micimg, smpd, moldiam, pcontrast, micname, boxname_out, nptcls, dir_out )
+        class(picker_utils),        intent(inout) :: self
+        class(image),               intent(in)    :: micimg
+        real,                       intent(in)    :: smpd, moldiam
+        character(len=*),           intent(in)    :: pcontrast, micname
+        character(len=LONGSTRLEN),  intent(out)   :: boxname_out
+        integer,                    intent(out)   :: nptcls
+        character(len=*), optional, intent(in)    :: dir_out
+        character(len=:), allocatable :: ext, fbody
+        character(len=LONGSTRLEN)     :: boxname
+        real    :: shrink2
+        integer :: box, i
+        ext   = fname2ext(trim(micname))
+        fbody = get_fbody(basename(trim(micname)), ext)
+        if( present(dir_out) ) fbody = trim(dir_out)//trim(fbody)
+        call self%new(micimg, smpd, moldiam, pcontrast, fbody)
+        call self%gauconv_mics
+        call self%set_positions
+        call self%analyze_boximgs1
+        call self%center_filter
+        call self%distance_filter
+        call self%refine_positions
+        call self%remove_outliers
+        ! box file
+        boxname = basename(fname_new_ext(micname,'box'))
+        if( present(dir_out) ) boxname = trim(dir_out)//trim(boxname)
+        ! # ptcls
+        nptcls          = self%nboxes2
+        ! bring back coordinates to original sampling
+        shrink2         = SMPD_SHRINK2 / self%smpd_raw
+        self%positions2 = nint(shrink2 * real(self%positions2))
+        ! write coordinates
+        box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
+        call self%extract_boximgs2(box)
+        call write_boximgs(self%nboxes2, self%boximgs2, self%fbody//'_raw.mrcs')
+        call write_boxfile(self%nboxes2, self%positions2, box, boxname)
+        call make_relativepath(CWD_GLOB, boxname, boxname_out) ! returns absolute path
+        ! destruct
+        call self%kill
+    end subroutine exec_gaupicker
 
     subroutine set_positions_1( self )
         class(picker_utils), intent(inout) :: self
@@ -200,16 +254,16 @@ contains
         call self%mic_shrink1%fft
         call self%mic_shrink1%mul(img)
         call self%mic_shrink1%ifft
-        if( L_WRITE )then
-            call self%mic_shrink1%write('gauconv_mic_shrink1.mrc')
-            call img%zero_and_unflag_ft
-            call sauvola(self%mic_shrink1, OFFSET, img)
-            call img%write('sauvola.mrc')
-            call img%real_space_filter(OFFSET * 3, 'average')
-            call img%write('sauvola_rfilt.mrc')
-            call otsu_img(img)
-            call img%write('sauvola_otsu.mrc')
-        endif
+        ! if( L_WRITE )then
+            ! call self%mic_shrink1%write('gauconv_mic_shrink1.mrc')
+            ! call img%zero_and_unflag_ft
+            ! call sauvola(self%mic_shrink1, OFFSET, img)
+            ! call img%write('sauvola.mrc')
+            ! call img%real_space_filter(OFFSET * 3, 'average')
+            ! call img%write('sauvola_rfilt.mrc')
+            ! call otsu_img(img)
+            ! call img%write('sauvola_otsu.mrc')
+        ! endif
         ! denoise mic_shrink2
         call img%new(self%ldim_shrink2, SMPD_SHRINK2)
         call img%gauimg2D(self%sig_shrink2,self%sig_shrink2)
@@ -217,9 +271,9 @@ contains
         call self%mic_shrink2%fft
         call self%mic_shrink2%mul(img)
         call self%mic_shrink2%ifft
-        if( L_WRITE )then
-            call self%mic_shrink2%write('gauconv_mic_shrink2.mrc')
-        endif
+        ! if( L_WRITE )then
+        !     call self%mic_shrink2%write('gauconv_mic_shrink2.mrc')
+        ! endif
         call img%kill
     end subroutine gauconv_mics
 
@@ -243,10 +297,13 @@ contains
         !$omp end parallel do
     end subroutine extract_boximgs1
 
-    subroutine extract_boximgs2( self )
-        class(picker_utils), intent(inout) :: self
-        integer :: ibox
+    subroutine extract_boximgs2( self, box_in )
+        class(picker_utils), target, intent(inout) :: self
+        integer, optional,           intent(in)    :: box_in
+        type(image), pointer :: mic_ptr => null()
+        integer :: ibox, ldim(3), noutside
         logical :: outside
+        real    :: smpd
         if( .not. allocated(self%positions2) ) THROW_HARD('positions need to be set before constructing boximgs2')
         if( allocated(self%boximgs2) )then
             do ibox = 1,self%nboxes2
@@ -255,12 +312,27 @@ contains
             deallocate(self%boximgs2)
         endif
         allocate(self%boximgs2(self%nboxes2))
-        !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
-        do ibox = 1,self%nboxes2
-            call self%boximgs2(ibox)%new(self%ldim_box2, SMPD_SHRINK2)
-            call self%mic_shrink2%window_slim(self%positions2(ibox,:), self%ldim_box2(1), self%boximgs2(ibox), outside)
-        end do
-        !$omp end parallel do
+        if( present(box_in) )then
+            ldim    =  [box_in,box_in,1]
+            smpd    =  self%smpd_raw
+            mic_ptr => self%mic_raw
+            !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
+            do ibox = 1,self%nboxes2
+                call self%boximgs2(ibox)%new(ldim, smpd)
+                call mic_ptr%window(self%positions2(ibox,:), ldim(1), self%boximgs2(ibox), noutside)
+            end do
+            !$omp end parallel do
+        else
+            ldim    =  self%ldim_box2
+            smpd    =  SMPD_SHRINK2
+            mic_ptr => self%mic_shrink2
+            !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
+            do ibox = 1,self%nboxes2
+                call self%boximgs2(ibox)%new(ldim, smpd)
+                call mic_ptr%window_slim(self%positions2(ibox,:), ldim(1), self%boximgs2(ibox), outside)
+            end do
+            !$omp end parallel do
+        endif
     end subroutine extract_boximgs2
 
     subroutine analyze_boximgs1( self )
@@ -316,14 +388,54 @@ contains
         self%nboxes1 = npeaks
         allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
         deallocate(positions_tmp)
+        call self%extract_boximgs1
         if( L_WRITE )then
-            call self%extract_boximgs1
-            call write_boximgs(int(self%nboxes1), self%boximgs1, 'ptcls_before_distfilt.mrcs' )
+            call write_boximgs(int(self%nboxes1), self%boximgs1, self%fbody//'_before_filters.mrcs')
         endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
     end subroutine analyze_boximgs1
+
+    subroutine center_filter( self )
+        class(picker_utils), intent(inout) :: self
+        integer, allocatable :: positions_tmp(:,:)
+        real,    allocatable :: box_scores1_tmp(:)
+        type(image) :: boximgs_heap(nthr_glob)
+        integer     :: ibox, ithr, npeaks, cnt
+        real        :: scores(self%nboxes1)
+        logical     :: mask(self%nboxes1)
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
+        end do
+        !$omp parallel do schedule(static) default(shared) private(ibox) proc_bind(close)
+        do ibox = 1,self%nboxes1
+            ithr  = omp_get_thread_num() + 1
+            scores(ibox) = self%boximgs1(ibox)%box_cen_arg(boximgs_heap(ithr))
+        end do
+        !$omp end parallel do
+        mask   = scores(:) <= real(OFFSET)
+        npeaks = count(mask)
+        write(logfhandle,'(a,1x,I5)') '# positions before center   filtering: ', self%nboxes1
+        write(logfhandle,'(a,1x,I5)') '# positions after  center   filtering: ', npeaks
+       ! update positions1 and box_scores1
+        allocate(positions_tmp(npeaks,2), box_scores1_tmp(npeaks))
+        positions_tmp   = 0
+        box_scores1_tmp = 0.
+        cnt             = 0
+        do ibox = 1,self%nboxes1
+            if( mask(ibox) )then
+                cnt = cnt + 1
+                positions_tmp(cnt,:) = self%positions1(ibox,:)
+                box_scores1_tmp(cnt) = self%box_scores1(ibox)
+            endif
+        end do
+        deallocate(self%positions1, self%box_scores1)
+        self%nboxes1 = npeaks
+        allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
+        allocate(self%box_scores1(self%nboxes1),  source=box_scores1_tmp)
+        deallocate(positions_tmp, box_scores1_tmp)
+    end subroutine center_filter
 
     subroutine distance_filter( self )
         class(picker_utils), intent(inout) :: self
@@ -367,10 +479,6 @@ contains
         allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
         allocate(self%box_scores1(self%nboxes1),  source=box_scores1_tmp)
         deallocate(positions_tmp, box_scores1_tmp)
-        if( L_WRITE )then
-            call self%extract_boximgs1
-            call write_boximgs(int(self%nboxes1), self%boximgs1, 'ptcls_after_distfilt.mrcs' )
-        endif
     end subroutine distance_filter
 
     subroutine refine_positions( self )
@@ -408,10 +516,6 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( L_WRITE )then
-            call self%extract_boximgs2
-            call write_boximgs(int(self%nboxes2), self%boximgs2, 'ptcls_refined.mrcs' )
-        endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
@@ -447,7 +551,7 @@ contains
         ! write(logfhandle,'(a,1x,I5)') '# positions after 3.0 sigma outlier removal: ', count(loc_sdevs < avg + 3.0 * sdev)
         t = avg + NDEV * sdev
         npeaks = count(loc_sdevs < t)
-        write(logfhandle,'(a,1x,I5)') '# positions after     outlier removal: ', npeaks
+        write(logfhandle,'(a,1x,I5)') '# positions after  outlier    removal: ', npeaks
         ! update positions2
         allocate(positions_tmp(npeaks,2), source=0)
         cnt = 0
@@ -463,12 +567,41 @@ contains
         deallocate(positions_tmp)
         if( L_WRITE )then
             call self%extract_boximgs2
-            call write_boximgs(int(self%nboxes2), self%boximgs2, 'ptcls_final.mrcs' )
+            call write_boximgs(int(self%nboxes2), self%boximgs2, self%fbody//'_after_filters.mrcs')
         endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
     end subroutine remove_outliers
+
+    subroutine kill( self )
+        class(picker_utils), intent(inout) :: self
+        integer :: i
+        if( self%exists )then
+            call self%mic_shrink1%kill
+            call self%mic_shrink2%kill
+            call self%imgau_shrink1%kill
+            call self%imgau_shrink2%kill
+            self%mic_raw => null()
+            if( allocated(self%boximgs1) )then
+                do i = 1,size(self%boximgs1)
+                    call self%boximgs1(i)%kill
+                end do
+                deallocate(self%boximgs1)
+            endif
+            if( allocated(self%boximgs2) )then
+                do i = 1,size(self%boximgs2)
+                    call self%boximgs2(i)%kill
+                end do
+                deallocate(self%boximgs2)
+            endif
+            if( allocated(self%positions1)  ) deallocate(self%positions1)
+            if( allocated(self%positions2)  ) deallocate(self%positions2)
+            if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
+            if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
+            if( allocated(self%fbody)       ) deallocate(self%fbody)
+        endif
+    end subroutine kill
 
     ! utilities
 
@@ -478,6 +611,9 @@ contains
         character(len=*),  intent(in)    :: fname
         logical, optional, intent(in)    :: mask(n)
         integer :: ibox, cnt
+
+        print *, 'boximgs file: ', trim(fname)
+
         if( present(mask) )then
             cnt = 0
             do ibox = 1,n
@@ -493,17 +629,14 @@ contains
         endif
     end subroutine write_boximgs
 
-    subroutine write_boxfile( n, coordinates, box, mask, fname )
+    subroutine write_boxfile( n, coordinates, box, fname )
         integer,          intent(in) :: n, coordinates(n,2), box
-        logical,          intent(in) :: mask(n)
         character(len=*), intent(in) :: fname
         integer :: funit, ibox, iostat
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
         call fileiochk('simple_picker_utils; write_boxfile ', iostat)
         do ibox = 1,n
-            if( mask(ibox) )then
-                write(funit,'(I7,I7,I7,I7,I7)') coordinates(1,ibox), coordinates(2,ibox), box, box, -3
-            endif
+            write(funit,'(I7,I7,I7,I7,I7)') coordinates(ibox,1), coordinates(ibox,2), box, box, -3
         end do
         call fclose(funit)
     end subroutine write_boxfile

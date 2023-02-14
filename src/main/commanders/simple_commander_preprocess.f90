@@ -1436,16 +1436,20 @@ contains
         call cline%set('numlen', real(params%numlen))
         ! more sanity checks
         templates_provided = cline%defined('refs') .or. cline%defined('vol1')
-        if( .not.templates_provided ) THROW_HARD('Need to references or volume as input')
+        if( .not.templates_provided )then
+            if( .not.cline%defined('moldiam') ) THROW_HARD('Need molecular diameter in A (moldiam) as input for reference-free pick')
+        endif
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepares picking references
         cline_make_pickrefs = cline
-        call cline_make_pickrefs%set('prg','make_pickrefs')
-        call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-        call cline%set('refs', trim(PICKREFS)//params%ext)
-        call cline%delete('vol1')
-        write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        if( templates_provided )then
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call cline%set('refs', trim(PICKREFS)//params%ext)
+            call cline%delete('vol1')
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
