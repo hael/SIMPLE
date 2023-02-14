@@ -2849,8 +2849,8 @@ contains
         &'pick', &                                                         ! name
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
-        &'simple_exec',&                                             ! executable
-        &2, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                   ! executable
+        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2863,6 +2863,8 @@ contains
         call pick%set_gui_params('parm_ios', 1, submenu="picking")
         call pick%set_input('parm_ios', 2, pcontrast)
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
+        call pick%set_input('parm_ios', 3, moldiam)
+        call pick%set_gui_params('parm_ios', 3, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3315,8 +3317,7 @@ contains
         ! parameter input/output
         call print_magic_boxes%set_input('parm_ios', 1, smpd)
         call print_magic_boxes%set_input('parm_ios', 2, box)
-        call print_magic_boxes%set_input('parm_ios', 3, 'moldiam', 'num', 'Molecular diameter', 'Molecular diameter(in pixels)',&
-        'give # pixels of diameter', .false., 140.)
+        call print_magic_boxes%set_input('parm_ios', 3, moldiam)
         ! alternative inputs
         ! <empty>
         ! search controls
