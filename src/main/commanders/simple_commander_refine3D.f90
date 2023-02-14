@@ -696,6 +696,11 @@ contains
                     ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
                 else
                     ! sigma2 not provided & are calculated
+                    if( build%spproj_field%get_nevenodd() == 0 )then
+                        ! make sure we have e/o partitioning prior to calc_pspec_distr
+                        call build%spproj_field%partition_eo
+                        call build%spproj%write_segment_inside(params%oritype)
+                    endif
                     params%objfun    = 'cc'
                     params%cc_objfun = OBJFUN_CC
                     cline_calc_pspec_distr = cline
