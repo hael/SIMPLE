@@ -59,7 +59,7 @@ contains
         endif
         ! correlation
         corr = s3D%proj_space_corrs(s%ithr,ref)
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID .and. params_glob%cc_objfun /= OBJFUN_PROB )then
             if( corr < 0. ) corr = 0.
         end if
         call build_glob%spproj_field%set(s%iptcl, 'corr', corr)
@@ -127,7 +127,7 @@ contains
             endif
             call s%opeaks%set_state(ipeak, state)
             corr = s3D%proj_space_corrs(s%ithr,refs(ipeak))
-            if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+            if( params_glob%cc_objfun /= OBJFUN_EUCLID .and. params_glob%cc_objfun /= OBJFUN_PROB )then
                 if( corr < 0. ) corr = 0.
             end if
             call s%opeaks%set(ipeak, 'corr', corr)
@@ -142,7 +142,7 @@ contains
         real(dp) :: sumw, diff, max_diff, best_score, score, cnt, sigma
         integer  :: iref, npix
         pw = 1.0
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID .and. params_glob%cc_objfun /= OBJFUN_PROB )then
             npix      = pftcc_glob%get_npix()
             max_diff = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
             sumw      = 0.

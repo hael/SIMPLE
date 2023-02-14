@@ -185,7 +185,7 @@ type :: parameters
     character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 1)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
@@ -214,7 +214,6 @@ type :: parameters
     integer :: iptcl=1
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
-    integer :: kfromto_discrete(2)
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
@@ -1266,8 +1265,6 @@ contains
         if( cline%defined('hp') ) self%kfromto(1) = max(1,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
         self%lp                  = max(self%fny,self%lp)            ! lowpass limit
-        self%kfromto_discrete(1) = self%kfromto(1)
-        self%kfromto_discrete(2) = int(self%dstep/self%lp_discrete) ! low-pass Fourier index set according to lp_discrete
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
@@ -1323,6 +1320,8 @@ contains
                 self%cc_objfun = OBJFUN_CC
             case('euclid')
                 self%cc_objfun = OBJFUN_EUCLID
+            case('prob')
+                self%cc_objfun = OBJFUN_PROB
             case DEFAULT
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')
@@ -1344,6 +1343,9 @@ contains
             case(OBJFUN_EUCLID)
                 self%l_needs_sigma = .true.
                 self%l_incrreslim  = .true.
+            case(OBJFUN_PROB)
+                self%l_needs_sigma = .true.
+                self%l_incrreslim  = .true.
             case(OBJFUN_CC)
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
         end select
@@ -1359,7 +1361,7 @@ contains
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
-            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID)
+            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID .or. self%cc_objfun==OBJFUN_PROB)
         endif
         if( self%l_nonuniform ) self%l_ml_reg = .false.
         ! resolution limit

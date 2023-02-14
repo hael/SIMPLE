@@ -9,10 +9,10 @@ use simple_sym
 use simple_ori
 implicit none
 character(len=:),   allocatable :: cmd
-integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 500, N_ITERS_SHC = 100
+integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 500, N_ITERS_SHC = 100, INPL_ITERS = 100
 type(cmdline)           :: cline
 type(parameters)        :: p
-integer                 :: ifoo, rc, iptcl, iter, isample, cnt, j
+integer                 :: ifoo, rc, iptcl, iter, isample, cnt, j, iinpl
 type(projector)         :: vol_proj
 type(sym)               :: pgrpsyms
 type(ori)               :: o, o_truth, o_best, o_init, o_ret_1, o_ret_2, o_ret_3
@@ -105,11 +105,19 @@ do iter = 1, N_ITERS_SHC
     o = o_best
     do isample = 1, N_SAMPLES
         call pgrpsyms%rnd_euler(o)
-        call o%rnd_inpl
         corr = cftcc%project_and_correlate(iptcl, o)
         if( corr > corr_best )then
             corr_best = corr
             o_best    = o
+            ! greedy w.r.t e3
+            do iinpl = 1, INPL_ITERS
+                call o%rnd_inpl
+                corr = cftcc%project_and_correlate(iptcl, o)
+                if( corr > corr_best )then
+                    corr_best = corr
+                    o_best    = o
+                endif
+            enddo
             print *, 'iter = ', iter, '; corr best = ', corr_best
             exit            ! SHC
         endif
@@ -127,8 +135,11 @@ call vol_proj%fproject(o_init, o_proj)
 call o_proj%ifft()
 call o_proj%write('TEST_PTCL_INIT.mrc', 1)
 ! killing
+call o_ret_1%kill
+call o_ret_2%kill
 call vol_proj%kill
 call o%kill
 call o_truth%kill
+call o_best%kill
 call o_proj%kill
 end program simple_test_cont_inplane

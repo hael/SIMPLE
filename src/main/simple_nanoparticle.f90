@@ -22,6 +22,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 integer,          parameter :: NPARAMS_ADP         = 6       ! min # voxels for ADP calc. = # params in cov.
+integer,          parameter :: SCALE_FAC           = 4       ! scale factor for ADP calc
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
@@ -214,6 +215,7 @@ type :: nanoparticle
     procedure          :: fillin_atominfo
     procedure, private :: masscen
     procedure, private :: calc_longest_atm_dist
+    procedure, private :: calc_aniso
     procedure, private :: lattice_displ_analysis
     ! visualization and output
     procedure          :: simulate_atoms
@@ -1131,20 +1133,18 @@ contains
     subroutine fillin_atominfo( self, a0 )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        type(image)          :: simatms, img_scaled, fit, fit_descaled, fit_isotropic
+        type(image)          :: simatms
         type(binimage)       :: img_cc_scaled
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), lattice_displ(:,:)
-        real,    pointer     :: rmat_raw(:,:,:), rmat_scaled(:, :, :)
+        real,    pointer     :: rmat_raw(:,:,:)
         integer, allocatable :: imat_cc(:,:,:), imat_cc_scaled(:,:,:), neigh_4_pixs(:)
         character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:), displ_neighbor(:), border(:,:,:)
         logical, parameter   :: test_fit = .true.
         real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
-        integer :: i, j, k, cc, cn, n, m, l, x, y, z, funit, fiso, ios, scale_fac = 4, adp_tossed, nsz
-        character(*), parameter :: fn_scaled="scaledVol.mrc", fn_muA="adp_info.txt", fn_fit="fit.mrc", &
-                    &fn_fit_descaled="fit_descaled.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_iso='iso_disp.txt', &
-                    &fn_img_cc_scaled="cc_map_scaled.mrc"
+        integer :: i, j, k, cc, cn, n, m, l, x, y, z, ios, nsz, funit
+        character(*), parameter :: fn_img_cc_scaled="cc_map_scaled.mrc", fn_muA="adp_info.txt"
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1181,38 +1181,18 @@ contains
         call self%img_raw%get_rmat_ptr(rmat_raw)
         call self%img_cc%get_imat(imat_cc)
 
-        ! Create scaled image for anisotropic displacement calculations
-        call img_scaled%new(scale_fac*self%img_raw%get_ldim(), 1.0/scale_fac*self%img_raw%get_smpd())
-        call img_scaled%fft()
-        call self%img_raw%fft()
-        call self%img_raw%pad(img_scaled)
-        call img_scaled%ifft()
-        call self%img_raw%ifft()
-        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: VOLUME SCALED BY ", scale_fac**3
-        call img_scaled%get_rmat_ptr(rmat_scaled)
-        ! For testing
-        call img_scaled%write(fn_scaled) 
-        !fit = image(ldim=scale_fac*self%ldim, smpd=self%smpd/scale_fac)
-        !fit_descaled = image(ldim=self%ldim, smpd=self%smpd)
-        call fit%new(scale_fac*self%img_raw%get_ldim(), 1.0/scale_fac*self%img_raw%get_smpd())
-        call fit_descaled%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
-        call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
-        call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
-        write(funit, '(i8)') self%n_cc
-        call fopen(fiso, FILE=trim(fn_iso), STATUS='REPLACE', action='WRITE')
-
-        ! Create scaled CC map from unscale CC map (i,j,k)->(x,y,z)
-        call img_cc_scaled%new_bimg(scale_fac*self%ldim, self%smpd / scale_fac)
-        allocate(imat_cc_scaled(scale_fac*self%ldim(1), scale_fac*self%ldim(2), scale_fac*self%ldim(3)), source=0)
+        ! Create scaled CC map from unscale CC map (i,j,k)->(x,y,z) for aniso calculations
+        call img_cc_scaled%new_bimg(SCALE_FAC*self%ldim, self%smpd / SCALE_FAC)
+        allocate(imat_cc_scaled(SCALE_FAC*self%ldim(1), SCALE_FAC*self%ldim(2), SCALE_FAC*self%ldim(3)), source=0)
         do k=1, self%ldim(3)
             do j=1, self%ldim(2)
                 do i=1, self%ldim(1)
-                    do n=0, scale_fac-1
-                        x = i*scale_fac - n
-                        do m=0, scale_fac-1 
-                            y = j*scale_fac - m
-                            do l=0, scale_fac-1
-                                z=k*scale_fac - l
+                    do n=0, SCALE_FAC-1
+                        x = i*SCALE_FAC - n
+                        do m=0, SCALE_FAC-1 
+                            y = j*SCALE_FAC - m
+                            do l=0, SCALE_FAC-1
+                                z=k*SCALE_FAC - l
                                 imat_cc_scaled(x,y,z) = imat_cc(i,j,k)
                             end do
                         end do
@@ -1221,16 +1201,16 @@ contains
             end do
         end do
         call img_cc_scaled%set_imat(imat_cc_scaled)
-        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: CC MAP SCALED BY ", scale_fac**3
+        write(logfhandle, '(A, i3)') "ADP CALCULATIONS: CC MAP SCALED BY ", SCALE_FAC**3
 
         ! Find the surfaces of each atom (We assume atomic surfaces don't overlap)
-        allocate(border(scale_fac*self%ldim(1), scale_fac*self%ldim(2), scale_fac*self%ldim(3)), source=.false.)
+        allocate(border(SCALE_FAC*self%ldim(1), SCALE_FAC*self%ldim(2), SCALE_FAC*self%ldim(3)), source=.false.)
         allocate(neigh_4_pixs(6),  source=0) ! There are 6 neighbors since we don't count diagonals
-        do k=1, scale_fac*self%ldim(3)
-            do j=1, scale_fac*self%ldim(2)
-                do i=1, scale_fac*self%ldim(1)
+        do k=1, SCALE_FAC*self%ldim(3)
+            do j=1, SCALE_FAC*self%ldim(2)
+                do i=1, SCALE_FAC*self%ldim(1)
                     if(imat_cc_scaled(i,j,k) /= 0) then
-                        call neigh_4_3D(scale_fac*self%ldim, imat_cc_scaled, [i,j,k], neigh_4_pixs, nsz)
+                        call neigh_4_3D(SCALE_FAC*self%ldim, imat_cc_scaled, [i,j,k], neigh_4_pixs, nsz)
                         if(any(neigh_4_pixs(:nsz)<1)) border(i,j,k) = .true.
                     endif
                 enddo
@@ -1238,6 +1218,7 @@ contains
         enddo
         deallocate(neigh_4_pixs)
         write(logfhandle, '(A, i3)') "ADP CALCULATIONS: IDENTIFIED ATOMIC BORDERS"
+        call fopen(funit, FILE=trim(fn_muA), STATUS='REPLACE', action='WRITE')
 
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
@@ -1262,9 +1243,7 @@ contains
             ! Lattice displacement magnitudes ( |center - expected center| ) and max neighboring lattice displ
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! calculate anisotropic displacement parameters.  
-            ! Ignore CCs with fewer pixels than independent covariance parameters (6)
-            !call calc_isotropic_disp_lsq(cc)
-            call calc_aniso_shell_6param(cc)
+            call self%calc_aniso(cc, imat_cc_scaled, border)
 
             ! set strain values
             self%atominfo(cc)%exx_strain    = strain_array(cc,1)
@@ -1278,21 +1257,12 @@ contains
             mask    = .false.
             cc_mask = .true.
         end do
-        call fclose(funit)
-        call fclose(fiso)
         write(logfhandle,*) "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
         self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
-        ! Write test image of adp and report FSC based resolution
-        call fit%write(fn_fit)
-        call fit_descaled%write(fn_fit_descaled)
-        call fit_isotropic%write(fn_fit_isotropic)
         call img_cc_scaled%write_bimg(fn_img_cc_scaled)
-
-        ! Calculate correlation of isotropic fit to input map
-
-
         call fclose(funit)
+
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
@@ -1323,13 +1293,10 @@ contains
         call self%write_centers('max_int_in_bfac_field',    'max_int')
         call self%write_centers('cn_std_in_bfac_field',     'cn_std')
         call self%write_centers('doa_in_bfac_field',        'doa')
-        call self%write_centers_aniso('aniso_bfac_field', scale_fac)
+        call self%write_centers_aniso('aniso_bfac_field')
         ! destruct
         deallocate(mask, cc_mask, imat_cc, imat_cc_scaled, tmpcens, strain_array, centers_A, border, &
             &lattice_displ)
-        call fit%kill
-        call fit_descaled%kill
-        call fit_isotropic%kill
         call img_cc_scaled%kill_bimg
         call simatms%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
@@ -1403,970 +1370,6 @@ contains
                 call simatms%kill
                 call atoms_obj%kill
             end subroutine write_cn_atoms
-
-            subroutine calc_aniso_shell(cc)
-                integer, intent(in)     :: cc
-                real(kind=8), allocatable   :: uvw(:,:), ones(:)
-                real(kind=8)                :: beta(3), A(3,3), A_inv(3,3), Y(3), matavg
-                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
-                               &eigenvecs_inv(3,3), fit_rad, u, v, w, aniso(3,3), theta
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
-                logical, parameter      :: boundScalingAdj = .true.
-
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the unscaled image, so i, j, k are in unscaled coordinates
-                center_scaled = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
-                ilo = max(nint(center_scaled(1) - maxrad), 1)
-                ihi = min(nint(center_scaled(1) + maxrad), scale_fac*self%ldim(1))
-                jlo = max(nint(center_scaled(2) - maxrad), 1)
-                jhi = min(nint(center_scaled(2) + maxrad), scale_fac*self%ldim(2))
-                klo = max(nint(center_scaled(3) - maxrad), 1)
-                khi = min(nint(center_scaled(3) + maxrad), scale_fac*self%ldim(3))
-                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
-
-                ! Calculate the unweighted center of mass of the connected component.
-                size_scaled = self%atominfo(cc)%size * (scale_fac**3)
-                com = 0.
-                n = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc) then
-                                n = n + 1
-                                com(1) = com(1) + i
-                                com(2) = com(2) + j
-                                com(3) = com(3) + k
-                            end if
-                        end do
-                    end do
-                end do
-                com = com / size_scaled
-                !com = 1.*nint(com)
-                !write (funit, '(i7, 9f10.3)') cc, com(:), center_scaled(:)
-
-                ! Compute the inertia tensor of the connected component. (x,y,z) are scaled coordinates
-                inertia_t = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            !if (imat_cc_scaled(i,j,k) == cc) then
-                            if (imat_cc_scaled(i,j,k) == cc) then
-                                inertia_t(1,1) = inertia_t(1,1) + ((j-com(2))**2 + (k-com(3))**2)
-                                inertia_t(2,2) = inertia_t(2,2) + ((i-com(1))**2 + (k-com(3))**2)
-                                inertia_t(3,3) = inertia_t(3,3) + ((i-com(1))**2 + (j-com(2))**2)
-                                inertia_t(1,2) = inertia_t(1,2) - (i-com(1))*(j-com(2))
-                                inertia_t(1,3) = inertia_t(1,3) - (i-com(1))*(k-com(3))
-                                inertia_t(2,3) = inertia_t(2,3) - (j-com(2))*(k-com(3))
-                            end if
-                        end do
-                    end do
-                end do
-                ! The inertia tensor is symmetric
-                inertia_t(2,1) = inertia_t(1,2)
-                inertia_t(3,1) = inertia_t(1,3)
-                inertia_t(3,2) = inertia_t(2,3)
-                inertia_t = inertia_t / size_scaled
-                
-                ! Calculate principal axes of CC.
-                call jacobi(inertia_t, 3, 3, eigenvals, eigenvecs, ifoo)
-                !call eigsrt(eigenvals, eigenvecs, 3, 3)
-
-                write (funit, '(i7, 12f10.3)') cc, eigenvals(:), eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
-                !write(funit, '(3i7, 9f10.3)') cc, size_scaled, n, self%atominfo(cc)%center(:), center_scaled(:), com(:)
-                !write(funit, '(7i7, 9f10.3)') cc, ilo, ihi, jlo, jhi, klo, khi
-
-                ! Find the number of border voxels in the cc
-                nborder = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                                nborder = nborder + 1
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Extract the border voxel positions in the principal basis (in unscaled Angstroms)
-                !allocate(uvw(nborder, 3), source=0.0_dp)
-                A = 0.0_dp
-                Y = 0.0_dp
-                !nborder = 1
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                                u = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 1)) * self%smpd / scale_fac
-                                v = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 2)) * self%smpd / scale_fac
-                                w = dot_product((/i-com(1),j-com(2),k-com(3)/), eigenvecs(:, 3)) * self%smpd / scale_fac
-                                !uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
-                                !print *, nborder, uvw(nborder, 1), uvw(nborder, 2), uvw(nborder, 3)
-                                A(1,1) = A(1,1) + 2*u**4
-                                A(2,2) = A(2,2) + 2*v**4
-                                A(3,3) = A(3,3) + 2*w**4
-                                A(1,2) = A(1,2) + (u**2)*(v**2)
-                                A(1,3) = A(1,3) + (u**2)*(w**2)
-                                A(2,3) = A(2,3) + (v**2)*(w**2)
-                                Y(1) = Y(1) + u**2
-                                Y(2) = Y(2) + v**2
-                                Y(3) = Y(3) + w**2
-                            end if
-                        end do
-                    end do
-                end do
-                ! The A matrix is symmetric
-                A(2,1) = A(1,2)
-                A(3,1) = A(1,3)
-                A(3,2) = A(2,3)
-                ! Elements of A tend to be large.  Normalize to make matinv easier on the computer
-                matavg = sum(A)/size(A)
-                A = A / matavg
-                Y = Y / matavg
-                
-                ! Fit scaled surface with ellipse by solving the least squares regression uvw*beta=ones
-                ! This minimizes the square error in B1*u^2 + B2*v^2 + B3*w^2 = f(B1,B2,B3,u,v,w) = 1
-                !allocate(ones(nborder), source=1.0_dp)
-                !call qr_solve(nborder, 3, uvw, ones, beta)
-                !write (funit, '(1i7, 15f10.3)') cc, A(1,:), A(2,:), A(3,:), Y(:)
-                call matinv(A, A_inv, 3, errflg)
-                !write (funit, '(1i7, 12f10.3)') cc, A_inv(1,:), A_inv(2,:), A_inv(3,:)
-                beta = matmul(A_inv, Y)
-                write (funit, '(3i7, 3f10.3)') cc, n, nborder, beta
-                ! Fill in the 3x3 aniso matrix with the semi-axes
-                aniso = 0.
-                aniso(1,1) = 1./sqrt(beta(1))
-                aniso(2,2) = 1./sqrt(beta(2))
-                aniso(3,3) = 1./sqrt(beta(3))
-                ! Boundary scaling correction
-                if (boundScalingAdj) then
-                    do i=1,3
-                        ! Find x,y,z unit vector closest to eigenvector
-                        theta = dot_product(eigenvecs(:,i), (/1.,0.,0./))
-                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,1.,0./)))
-                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,0.,1./)))
-                        aniso(i,i) = aniso(i,i) - 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
-                    end do
-                end if
-                ! ANISOU format uses the squared values
-                write (funit, '(i7, 9f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
-                aniso = aniso**2
-                call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
-                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! (u,v,w)->(x,y,z)
-                write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
-                write (funit, '(a)') ''
-
-            end subroutine calc_aniso_shell
-
-            subroutine calc_aniso_shell_6param(cc)
-                integer, intent(in)     :: cc
-                real(kind=8), allocatable   :: A(:,:), AT(:,:), ones(:)
-                real(kind=8)                :: beta(6), ATA(6,6), ATA_inv(6,6), matavg, B(3,3), eigenvals(3), eigenvecs(3,3),&
-                                               &eigenvecs_inv(3,3), aniso(3,3), aniso_sq(3,3)
-                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), fit_rad, u, v, w, theta
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
-
-                ! To avoid overfitting, must have more voxels in the unscaled CC than fitting params
-                if (self%atominfo(cc)%size <= NPARAMS_ADP) then
-                    self%atominfo(cc)%tossADP = .true.
-                    return
-                end if
-
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the unscaled image, so i, j, k are in unscaled coordinates
-                center_scaled = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
-                ilo = max(nint(center_scaled(1) - maxrad), 1)
-                ihi = min(nint(center_scaled(1) + maxrad), scale_fac*self%ldim(1))
-                jlo = max(nint(center_scaled(2) - maxrad), 1)
-                jhi = min(nint(center_scaled(2) + maxrad), scale_fac*self%ldim(2))
-                klo = max(nint(center_scaled(3) - maxrad), 1)
-                khi = min(nint(center_scaled(3) + maxrad), scale_fac*self%ldim(3))
-                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
-
-                ! Calculate the unweighted center of mass of the connected component.
-                size_scaled = self%atominfo(cc)%size * (scale_fac**3)
-                com = 0.
-                n = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc) then
-                                n = n + 1
-                                com(1) = com(1) + i
-                                com(2) = com(2) + j
-                                com(3) = com(3) + k
-                            end if
-                        end do
-                    end do
-                end do
-                com = com / size_scaled
-                !com = 1.*nint(com)
-
-                ! Find the number of border voxels in the scaled cc
-                nborder = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                                nborder = nborder + 1
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Extract the border voxel positions in the principal basis (in unscaled Angstroms)
-                allocate(A(nborder, 6), AT(6, nborder), source=0.0_dp)
-                allocate(ones(nborder), source=1.0_dp)
-                nborder = 1
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (imat_cc_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                                u = (i-com(1)) * self%smpd / scale_fac
-                                v = (j-com(2)) * self%smpd / scale_fac
-                                w = (k-com(3)) * self%smpd / scale_fac
-                                !uvw(nborder, 1:3) = (/u*u,v*v,w*w/)
-                                !print *, nborder, uvw(nborder, 1), uvw(nborder, 2), uvw(nborder, 3)
-                                A(nborder, 1) = u**2
-                                A(nborder, 2) = v**2
-                                A(nborder, 3) = w**2
-                                A(nborder, 4) = 2*u*v
-                                A(nborder, 5) = 2*u*w
-                                A(nborder, 6) = 2*v*w
-                                nborder = nborder + 1
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fiind the least squares solution to A*beta=ones where beta are the fitting params.
-                ! This minimizes the squared error in B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1
-                AT = transpose(A)
-                ATA = matmul(AT, A) 
-                matavg = sum(ATA)/size(ATA) !Normalize ATA to make matinv easier on the computer
-                ATA = ATA / matavg
-                call matinv(ATA, ATA_inv, 6, errflg)
-                beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
-                write (funit, '(3i7, 6f10.3)') cc, nborder, nborder / (scale_fac**3), beta
-                
-                ! Find the principal axes of the ellipsoid
-                B(1,1) = beta(1)
-                B(2,2) = beta(2)
-                B(3,3) = beta(3)
-                B(1,2) = beta(4)
-                B(1,3) = beta(5)
-                B(2,3) = beta(6)
-                B(2,1) = B(1,2)
-                B(3,1) = B(1,3)
-                B(3,2) = B(2,3)
-                ! ORDER GETS SWAPPED
-                call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
-                eigenvals = 1/sqrt(eigenvals) ! Convert eigenvalues to semi-axes
-                call eigsrt(eigenvals, eigenvecs, 3, 3)
-                write (funit, '(i7, 12f10.3)') cc, eigenvals(:), eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
-
-                ! Fill in the aniso matrix
-                aniso = 0.
-                do i=1,3
-                    aniso(i,i) = eigenvals(i) ! aniso(1,1) major semi-axis, aniso(3,3) minor semi-axis
-                    self%atominfo(cc)%semiaxes(i) = aniso(i,i)
-                end do
-                write (funit, '(i7, 6f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
-                call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
-                aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
-                aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
-                do i=1,3
-                    self%atominfo(cc)%aniso_xyz(i) = aniso(i,i)
-                end do
-                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso_sq), eigenvecs_inv) 
-                write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
-                write (funit, '(a)') ''
-            end subroutine calc_aniso_shell_6param
-
-            subroutine calc_isotropic_disp_lsq(cc)
-                integer, intent(in)     :: cc
-                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, var, fit_rad, A, beta, prob, prob_sum_sq, top, bottom, prob_tot, corr
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
-                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
-                center = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 4) / (self%smpd / scale_fac)
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1)*scale_fac)
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2)*scale_fac)
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3)*scale_fac)
-
-                fit_rad = self%atominfo(cc)%diam / 2.0 / (self%smpd / scale_fac)
-                ! First iteration: calculate the minimum intensity within the sphere
-                ! If min_int is negative, then we'll added |min_int| to all intensities
-                ! so that all probabilities are >= 0
-                min_int = self%atominfo(cc)%max_int
-                max_int = 0
-                peak = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_scaled(i, j, k) < min_int) then
-                                    min_int = rmat_scaled(i, j, k)
-                                else if (rmat_scaled(i, j, k) > max_int) then
-                                    max_int = rmat_scaled(i, j, k)
-                                    peak = (/i, j, k/)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                if (min_int > 0) then
-                    min_int = 0 ! No correction needed
-                end if
-
-                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
-                count0 = 0
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
-                                    count = count + 1
-                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
-                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
-                                else
-                                    count0 = count0 + 1
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Third iteration: Calculate the variance sigma using by solving for the variance
-                ! That minimizes the sum of the squares of ln(y_i) = -0.5B|r-mu|^2 where B=1/var
-                ! and y = rmat(r)/peak_intensity.  Minimizing the residual of the log gives an 
-                ! analytical solution, although it's not exact since by taking the log, errors
-                ! aren't scaled uniformly
-                top = 0.0
-                bottom = 0.0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                prob = (rmat_scaled(i,j,k)+abs(min_int))/sum_int
-                                top = top + prob * euclid(1.*(/i, j, k/), 1.*mu)**4
-                                bottom = bottom + prob * log((max_int/sum_int)) * euclid(1.*(/i, j, k/), 1.*mu)**2
-                            end if
-                        end do
-                    end do
-                end do
-                var = -0.5*top/bottom
-
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                count_fit = 0.
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 6) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = fit_rad / scale_fac
-                beta = 0.
-                var = var / scale_fac**2
-                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
-                prob_tot = 0.
-                A = 1.0 / sqrt((2*pi)**3 * var)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), mu)**2/var
-                                prob = A * exp(beta)
-                                if (prob > 0) then
-                                    count_fit = count_fit + 1
-                                    prob_tot = prob_tot + prob
-                                    call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int/scale_fac**3+min_int)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                ! Renormalize based on prob_tot
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Calculate correlation between fit and orignal map within the fit radius
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
-
-                !self%atominfo(cc)%niso = count_fit
-                !self%atominfo(cc)%iso_displ = var
-                !self%atominfo(cc)%iso_corr = corr
-                write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
-                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
-            end subroutine
-
-            subroutine calc_isotropic_disp_sphere(cc)
-                integer, intent(in)     :: cc
-                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, vars(3), var, fit_rad, A, beta, prob, prob_tot, prob_sum_sq, corr
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
-                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-
-
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
-                center = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 6) / (self%smpd / scale_fac)
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1)*scale_fac)
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2)*scale_fac)
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3)*scale_fac)
-
-                fit_rad = self%atominfo(cc)%diam / 1.5 / (self%smpd / scale_fac)
-                ! First iteration: calculate the minimum intensity within the sphere
-                ! If min_int is negative, then we'll added |min_int| to all intensities
-                ! so that all probabilities are >= 0
-                min_int = self%atominfo(cc)%max_int
-                max_int = 0
-                peak = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_scaled(i, j, k) < min_int) then
-                                    min_int = rmat_scaled(i, j, k)
-                                else if (rmat_scaled(i, j, k) > max_int) then
-                                    max_int = rmat_scaled(i, j, k)
-                                    peak = (/i, j, k/)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                if (min_int > 0) then
-                    min_int = 0 ! No correction needed
-                end if
-
-                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
-                count0 = 0
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
-                                    count = count + 1
-                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
-                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
-                                else
-                                    count0 = count0 + 1
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Third iteration: Calculate the variance sigma
-                vars = 0.
-                prob_sum_sq = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                prob = (rmat_scaled(i, j, k)+abs(min_int)) / sum_int
-                                prob_sum_sq = prob_sum_sq + prob**2
-                                ! Diagonal terms are variance
-                                vars(1) = vars(1) + prob * (i - mu(1)) ** 2
-                                vars(2) = vars(2) + prob * (j - mu(2)) ** 2
-                                vars(3) = vars(3) + prob * (k - mu(3)) ** 2
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fill in redundant entries
-                vars = vars / (1 - prob_sum_sq) ! For unbiased estimator
-                var = sum(vars) / 3 ! Average of x,y,z variance.
-
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                prob_tot = 0.
-                count_fit = 0
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 6) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = fit_rad / scale_fac
-                beta = 0.
-                var = var / scale_fac**2
-                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
-                A = 1.0 / sqrt((2*pi)**3 * var)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
-                                prob = A * exp(beta)
-                                prob_tot = prob_tot + prob
-                                count_fit = count_fit + 1
-                                call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int+min_int)
-                            end if
-                        end do
-                    end do
-                end do
-                ! Renormalize based on prob_tot
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Calculate correlation between fit and orignal map within the fit radius
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
-                
-                !self%atominfo(cc)%niso = count_fit
-                !self%atominfo(cc)%iso_displ = var*(self%smpd**2)
-                !self%atominfo(cc)%iso_corr = corr
-                write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
-                    &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
-
-                print *, cc
-            end subroutine
-
-            subroutine calc_anisotropic_disp_sphere(cc)
-                integer, intent(in)     :: cc
-                real        :: sum_int, mu(3), icenter(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
-                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3),&
-                                        &min_int, max_int, fit_rad, prob_tot, prob_sum_sq, corr
-                integer     :: i, j, k, n, x, y, z, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, errflg, nrot, peak(3)
-                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-                
-                
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                ! Iterations are over the scaled image, so i, j, k are in scaled coordinates
-                icenter = self%atominfo(cc)%center(:)*scale_fac - 0.5*(scale_fac-1)
-                maxrad  = (self%theoretical_radius * 3) / (self%smpd / scale_fac)
-                ilo = max(nint(icenter(1) - maxrad), 1)
-                ihi = min(nint(icenter(1) + maxrad), self%ldim(1)*scale_fac)
-                jlo = max(nint(icenter(2) - maxrad), 1)
-                jhi = min(nint(icenter(2) + maxrad), self%ldim(2)*scale_fac)
-                klo = max(nint(icenter(3) - maxrad), 1)
-                khi = min(nint(icenter(3) + maxrad), self%ldim(3)*scale_fac)
-
-                !print *, cc, self%atominfo(cc)%size, self%atominfo(cc)%diam / self%smpd
-                !print *, cc, "Scaled  ", ihi-ilo, jhi-jlo, khi-klo
-                fit_rad = self%atominfo(cc)%diam / 1.5 / (self%smpd / scale_fac)
-
-                ! Zeroth iteration: calculate the minimum intensity within the sphere.
-                ! If min_int is negative, then we'll added |min_int| to all intensities
-                ! so that all probabilities are >= 0
-                min_int = self%atominfo(cc)%max_int
-                max_int = 0
-                peak = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                if (rmat_scaled(i, j, k) < min_int) then
-                                    min_int = rmat_scaled(i, j, k)
-                                else if (rmat_scaled(i, j, k) > max_int) then
-                                    max_int = rmat_scaled(i, j, k)
-                                    peak = (/i, j, k/)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                if (min_int > 0) then
-                    min_int = 0 ! No correction needed
-                end if
-                
-                ! First iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
-                count0 = 0
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
-                                    count = count + 1
-                                    sum_int = sum_int + rmat_scaled(i, j, k) + abs(min_int)
-                                    mu(1) = mu(1) + i * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(2) = mu(2) + j * (rmat_scaled(i, j, k) + abs(min_int))
-                                    mu(3) = mu(3) + k * (rmat_scaled(i, j, k) + abs(min_int))
-                                else
-                                    count0 = count0 + 1
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Second iteration: Calculate the 3x3 covariance matrix sigma
-                prob_sum_sq = 0
-                sigma = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                if (rmat_scaled(i, j, k) + abs(min_int) > 0) then
-                                    prob = (rmat_scaled(i, j, k)+abs(min_int)) / sum_int
-                                    prob_sum_sq = prob_sum_sq + prob**2
-                                    ! Diagonal terms are variance
-                                    sigma(1, 1) = sigma(1, 1) + prob * (i - mu(1)) ** 2
-                                    sigma(2, 2) = sigma(2, 2) + prob * (j - mu(2)) ** 2
-                                    sigma(3, 3) = sigma(3, 3) + prob * (k - mu(3)) ** 2
-                                    ! Off diagonal terms are covariance. The matrix is symmetric.
-                                    sigma(1, 2) = sigma(1, 2) + prob * (i - mu(1)) * (j - mu(2))
-                                    sigma(1, 3) = sigma(1, 3) + prob  * (i - mu(1)) * (k - mu(3))
-                                    sigma(2, 3) = sigma(2, 3) + prob * (j - mu(2)) * (k - mu(3))
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fill in redundant entries
-                sigma(2, 1) = sigma(1, 2)
-                sigma(3, 1) = sigma(1, 3)
-                sigma(3, 2) = sigma(2, 3)
-                sigma = sigma / (1 - prob_sum_sq) ! For unbiased estimator
-
-                ! Degree of anisotropy is w1/w3 where w1 and w3 are the lengths of 
-                ! the minor and major ellipsoid axes, respectively.
-                sigma_copy = sigma
-                call jacobi(sigma_copy, 3, 3, eigenvals, eigenvecs, nrot)
-                call eigsrt(eigenvals, eigenvecs, 3, 3)
-                self%atominfo(cc)%doa = eigenvals(3)/eigenvals(1)
-                self%atominfo(cc)%aniso = sigma
-
-                ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
-                write(funit, '(2i8, f10.3, 3i8, 12f10.3)') cc, count, self%atominfo(cc)%doa, peak(:), mu(:), sigma(1, :),&
-                        &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
-
-                ! Third iteration (for testing): sample the scaled fit at each voxel in scaled space
-                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
-                call matinv(sigma, sigma_inv, 3, errflg)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                displ(1, 1) = i - mu(1)
-                                displ(2, 1) = j - mu(2)
-                                displ(3, 1) = k - mu(3)
-                                displ_T = transpose(displ)
-                                beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
-                                prob = A * exp(beta(1, 1))
-                                if (prob > 0) then
-                                    count_fit = count_fit + 1
-                                    call fit%set_rmat_at(i, j, k, prob*sum_int+min_int)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                prob_tot = 0.
-                count_fit = 0.
-                icenter = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 3) / self%smpd
-                ilo = max(nint(icenter(1) - maxrad), 1)
-                ihi = min(nint(icenter(1) + maxrad), self%ldim(1))
-                jlo = max(nint(icenter(2) - maxrad), 1)
-                jhi = min(nint(icenter(2) + maxrad), self%ldim(2))
-                klo = max(nint(icenter(3) - maxrad), 1)
-                khi = min(nint(icenter(3) + maxrad), self%ldim(3))
-                fit_rad = fit_rad / scale_fac
-                displ = 0.
-                displ_T = 0.
-                beta = 0.
-                sigma_inv = 0.
-                sigma = sigma / scale_fac**2
-                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
-
-                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
-                call matinv(sigma, sigma_inv, 3, errflg)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                displ(1, 1) = i - mu(1)
-                                displ(2, 1) = j - mu(2)
-                                displ(3, 1) = k - mu(3)
-                                displ_T = transpose(displ)
-                                beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
-                                prob = A * exp(beta(1, 1))
-                                if (prob > 0) then
-                                    count_fit = count_fit + 1
-                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int+min_int)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Final Iteration: calculation the correlation between the anisotropic fit and the input
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*icenter) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_descaled%real_corr(self%img_raw, mask=fit_mask)
-
-                !self%atominfo(cc)%aniso_corr = corr
-
-                !print *, cc, min_int, max_int, self%atominfo(cc)%max_int, fit_rad/self%smpd/sqrt(eigenvals(1)*(self%smpd/scale_fac)**2),&
-                !    &count0, count+count0, count_fit, (1-prob_sum_sq)
-            end subroutine calc_anisotropic_disp_sphere
-
-            ! For a given cc, calculates the anisotropic displacement parameters, 
-            ! which are the 3 variance parameters along the principle axes of the
-            ! connected component when fit with a 3D join Gaussian where the intensity of a voxel is its probability.  
-            ! Ratios of the anisotropic displacement parameters should reveal how the atom moves in different directions.  
-            ! ----CURRENT IMPLEMENTATION IS NOT VALIDATED----
-            subroutine calc_anisotropic_disp_mask(cc)
-                integer, intent(in)     :: cc
-                real        :: sum_int, mu(3), maxrad, sigma(3, 3), sigma_copy(3, 3), sigma_inv(3, 3), &
-                                        &prob, A, beta(1, 1), displ(3, 1), displ_T(1, 3), eigenvals(3), eigenvecs(3, 3)
-                integer     :: i, j, k, x, y, z, n, m, l, ijk(3), ilo, ihi, jlo, jhi, klo, khi, count, errflg, nrot
-                
-                ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
-                ! by avoiding having to iterate over the entire unscaled and scaled images for each connected component.
-                ! The first iteration is over the unscaled image, so here ilo, ihi, etc should be in unscaled coordinates
-                ijk = nint(self%atominfo(cc)%center(:))
-                maxrad  = (self%theoretical_radius * 1.5) / self%smpd
-                ilo = max(ijk(1) - ceiling(maxrad), 1)
-                ihi = min(ijk(1) + ceiling(maxrad), self%ldim(1))
-                jlo = max(ijk(2) - ceiling(maxrad), 1)
-                jhi = min(ijk(2) + ceiling(maxrad), self%ldim(2))
-                klo = max(ijk(3) - ceiling(maxrad), 1)
-                khi = min(ijk(3) + ceiling(maxrad), self%ldim(3))
-                
-                ! First iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                !allocate(mask_scaled(size(rmat_scaled, dim=1), size(rmat_scaled, dim=2), size(rmat_scaled, dim=3)), source = .false.)
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (mask(i, j, k)) then
-                                count = count + scale_fac
-                                do n=0, scale_fac-1
-                                    x = scale_fac*i - n
-                                    do m=0, scale_fac-1
-                                        y = scale_fac*j - m
-                                        do l=0, scale_fac-1
-                                            z = scale_fac*k - l
-                                            if (rmat_scaled(x, y, z) > 0) then
-                                                sum_int = sum_int + rmat_scaled(x, y, z)
-                                                mu(1) = mu(1) + x * rmat_scaled(x, y, z)
-                                                mu(2) = mu(2) + y * rmat_scaled(x, y, z)
-                                                mu(3) = mu(3) + z * rmat_scaled(x, y, z)
-                                            end if
-                                        end do
-                                    end do
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Second iteration: Calculate the 3x3 covariance matrix sigma
-                sigma = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (mask(i, j, k)) then
-                                do n=0, scale_fac-1
-                                    x = scale_fac*i - n
-                                    do m=0, scale_fac-1
-                                        y = scale_fac*j - n
-                                        do l=0, scale_fac-1
-                                            z = scale_fac*k - n
-                                            ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                            if (rmat_scaled(x, y, z) > 0) then
-                                                prob = rmat_scaled(x, y, z) / sum_int
-                                                ! Diagonal terms are variance
-                                                sigma(1, 1) = sigma(1, 1) + prob * (x - mu(1)) ** 2
-                                                sigma(2, 2) = sigma(2, 2) + prob * (y - mu(2)) ** 2
-                                                sigma(3, 3) = sigma(3, 3) + prob * (z - mu(3)) ** 2
-                                                ! Off diagonal terms are covariance. The matrix is symmetric.
-                                                sigma(1, 2) = sigma(1, 2) + prob * (x - mu(1)) * (y - mu(2))
-                                                sigma(1, 3) = sigma(1, 3) + prob  * (x - mu(1)) * (z - mu(3))
-                                                sigma(2, 3) = sigma(2, 3) + prob * (y - mu(2)) * (z - mu(3))
-                                            end if
-                                        end do
-                                    end do
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fill in redundant entries
-                sigma(2, 1) = sigma(1, 2)
-                sigma(3, 1) = sigma(1, 3)
-                sigma(3, 2) = sigma(2, 3)
-                sigma = sigma * self%atominfo(cc)%size * scale_fac / &
-                    &(self%atominfo(cc)%size * scale_fac - 1) ! Apply Bessel's correction bc this is sample covariance
-
-                ! Degree of anisotropy is w1/w3 where w1 and w3 are the lengths of 
-                ! the minor and major ellipsoid axes, respectively.
-                sigma_copy = sigma
-                call jacobi(sigma_copy, 3, 3, eigenvals, eigenvecs, nrot)
-                call eigsrt(eigenvals, eigenvecs, 3, 3)
-                self%atominfo(cc)%doa = eigenvals(3)/eigenvals(1)
-                self%atominfo(cc)%aniso = sigma
-
-                ! Output the anisotropic disp parameters (eigenvalues of fit covariance matrix)
-                write(funit, '(2i8, 13f10.3)') cc, count, self%atominfo(cc)%doa, mu(:), sigma(1, :),&
-                        &sigma(2, 2:3), sigma(3, 3), eigenvals(:)*(self%smpd/scale_fac)**2
-
-                ! Third iteration (for testing): sample the fit at each voxel
-                A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
-                call matinv(sigma, sigma_inv, 3, errflg)
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (mask(i, j, k)) then
-                                do n=0, scale_fac-1
-                                    x = scale_fac*i - n
-                                    do m=0, scale_fac-1
-                                        y = scale_fac*j - n
-                                        do l=0, scale_fac-1
-                                            z = scale_fac*k - n
-                                            displ(1, 1) = x - mu(1)
-                                            displ(2, 1) = y - mu(2)
-                                            displ(3, 1) = z - mu(3)
-                                            displ_T = transpose(displ)
-                                            beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
-                                            prob = A * exp(beta(1, 1))
-                                            call fit%set_rmat_at(x, y, z, prob*sum_int)
-                                        end do
-                                    end do
-                                end do
-                            end if
-                        end do
-                    end do
-                end do
-                
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                displ = 0.
-                displ_T = 0.
-                beta = 0.
-                sigma_inv = 0.
-                sigma = sigma / scale_fac**2
-                mu = (mu + scale_fac - 1) / scale_fac ! Ex: scale_fac = 4 sends pixels (1,2,3,4,5)->(1,1.25,1.5,1.75,2)
-                if (test_fit) then
-                    A = 1.0 / sqrt((2*pi)**3 * det3by3(sigma))
-                    call matinv(sigma, sigma_inv, 3, errflg)
-                    do k=klo, khi
-                        do j=jlo, jhi
-                            do i=ilo, ihi
-                                if (mask(i, j, k)) then
-                                    displ(1, 1) = i - mu(1)
-                                    displ(2, 1) = j - mu(2)
-                                    displ(3, 1) = k - mu(3)
-                                    displ_T = transpose(displ)
-                                    beta = -0.5 * matmul(matmul(displ_T, sigma_inv), displ)
-                                    prob = A * exp(beta(1, 1))
-                                    call fit_descaled%set_rmat_at(i, j, k, prob*sum_int)
-                                end if
-                            end do
-                        end do
-                    end do
-                end if
-            end subroutine calc_anisotropic_disp_mask
-
-            ! Returns the determinant det of a real 3x3 matrix a.
-            pure function det3by3(a) result(det)
-                real, intent(in)    :: a(3, 3)
-                real                :: det
-                det = a(1, 1) * (a(2, 2)*a(3, 3) - a(2, 3)*a(3, 2))
-                det = det - a(1, 2) * (a(2, 1)*a(3, 3) - a(2, 3)*a(3, 1))
-                det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
-            end function det3by3
-
-            ! Returns the determinant det of a real 3x3 matrix a.
-            pure function det3by3_dp(a) result(det)
-                real(kind=8), intent(in)    :: a(3, 3)
-                real(kind=8)                :: det
-                det = a(1, 1) * (a(2, 2)*a(3, 3) - a(2, 3)*a(3, 2))
-                det = det - a(1, 2) * (a(2, 1)*a(3, 3) - a(2, 3)*a(3, 1))
-                det = det + a(1, 3) * (a(2, 1)*a(3, 2) - a(2, 2)*a(3, 1))
-            end function det3by3_dp
-
     end subroutine fillin_atominfo
 
     ! calc the avg of the centers coords
@@ -2405,6 +1408,148 @@ contains
        endif
        deallocate(imat_cc, pos, mask_dist)
     end subroutine calc_longest_atm_dist
+
+    ! For a given connected component cc, calculates the Anisotropic Displacement Parameters
+    ! from the scaled CC map (imat_scaled) and the mask of border voxels in the scaled CC map (border).  
+    ! The border voxels of cc are fit with an ellipsoid using an algebraic least squares fit
+    ! (i.e. finding the best fit parameters B1,...,B6 for the function B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1).  
+    ! Reports the best fit ellipsoid semi-axes and the Anisotropic Displacement in the x,y, and z directions 
+    ! as a fraction of the theoretical atomic radius.  Also reports a 3x3 anisotropic displacement matrix for writing
+    ! an ANISOU PDB file to visualize ellipsoids in Chimera. Author: Henry Wietfeldt
+    subroutine calc_aniso( self, cc, imat_scaled, border)
+        class(nanoparticle), intent(inout)  :: self
+        integer, intent(in)                 :: cc
+        integer, allocatable, intent(in)    :: imat_scaled(:,:,:)
+        logical, allocatable, intent(in)    :: border(:,:,:)
+        real(kind=8), allocatable           :: A(:,:), AT(:,:), ones(:)
+        real(kind=8)        :: beta(6), ATA(6,6), ATA_inv(6,6), matavg, B(3,3), eigenvals(3), eigenvecs(3,3)
+        real(kind=8)        :: eigenvecs_inv(3,3), tmpeigenvecs(3,3), aniso(3,3), aniso_sq(3,3)
+        real                :: center_scaled(3), maxrad, com(3), u, v, w
+        integer             :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, ifoo, nborder, errflg
+
+        ! To avoid overfitting, must have more voxels in the unscaled CC than fitting params
+        if (self%atominfo(cc)%size <= NPARAMS_ADP) then
+            self%atominfo(cc)%tossADP = .true.
+            return
+        end if
+
+        ! Create search window that definitely contains the cc to speed up the iterations
+        ! by avoiding having to iterate over the entire scaled images for each connected component.
+        center_scaled = self%atominfo(cc)%center(:)*SCALE_FAC - 0.5*(SCALE_FAC-1)
+        maxrad  = (self%theoretical_radius * 3) / (self%smpd / SCALE_FAC)
+        ilo = max(nint(center_scaled(1) - maxrad), 1)
+        ihi = min(nint(center_scaled(1) + maxrad), SCALE_FAC*self%ldim(1))
+        jlo = max(nint(center_scaled(2) - maxrad), 1)
+        jhi = min(nint(center_scaled(2) + maxrad), SCALE_FAC*self%ldim(2))
+        klo = max(nint(center_scaled(3) - maxrad), 1)
+        khi = min(nint(center_scaled(3) + maxrad), SCALE_FAC*self%ldim(3))
+
+        ! Calculate the unweighted center of mass of the scaled connected component.
+        com = 0.
+        do k=klo, khi
+            do j=jlo, jhi
+                do i=ilo, ihi
+                    if (imat_scaled(i,j,k) == cc) then
+                        com(1) = com(1) + i
+                        com(2) = com(2) + j
+                        com(3) = com(3) + k
+                    end if
+                end do
+            end do
+        end do
+        com = com / (self%atominfo(cc)%size * (SCALE_FAC**3))
+
+        ! Find the number of border voxels in the scaled cc
+        nborder = 0
+        do k=klo, khi
+            do j=jlo, jhi
+                do i=ilo, ihi
+                    if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                        nborder = nborder + 1
+                    end if
+                end do
+            end do
+        end do
+
+        ! Fill in matrices for the least squares fit, with the center of mass as the origin.
+        allocate(A(nborder, 6), AT(6, nborder), source=0.0_dp)
+        allocate(ones(nborder), source=1.0_dp)
+        nborder = 1
+        do k=klo, khi
+            do j=jlo, jhi
+                do i=ilo, ihi
+                    if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
+                        u = (i-com(1)) * self%smpd / SCALE_FAC
+                        v = (j-com(2)) * self%smpd / SCALE_FAC
+                        w = (k-com(3)) * self%smpd / SCALE_FAC
+                        A(nborder, 1) = u**2
+                        A(nborder, 2) = v**2
+                        A(nborder, 3) = w**2
+                        A(nborder, 4) = 2*u*v
+                        A(nborder, 5) = 2*u*w
+                        A(nborder, 6) = 2*v*w
+                        nborder = nborder + 1
+                    end if
+                end do
+            end do
+        end do
+        ! Find the least squares solution to A*beta=ones where beta are the fitting params.
+        ! This minimizes the squared error in B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1
+        AT = transpose(A)
+        ATA = matmul(AT, A) 
+        matavg = sum(ATA)/size(ATA) !Normalize ATA to make matinv easier on the computer
+        ATA = ATA / matavg
+        call matinv(ATA, ATA_inv, 6, errflg)
+        beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
+        
+        ! Find the principal axes of the ellipsoid
+        B(1,1) = beta(1)
+        B(2,2) = beta(2)
+        B(3,3) = beta(3)
+        B(1,2) = beta(4)
+        B(1,3) = beta(5)
+        B(2,3) = beta(6)
+        B(2,1) = B(1,2)
+        B(3,1) = B(1,3)
+        B(3,2) = B(2,3)
+        call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
+        eigenvals = 1/sqrt(eigenvals) ! Convert eigenvalues to semi-axes
+        call eigsrt(eigenvals, eigenvecs, 3, 3)
+
+        ! Fill in the anisotropic displacement matrix in the principal basis.
+        aniso = 0.
+        do i=1,3
+            aniso(i,i) = eigenvals(i)
+            self%atominfo(cc)%semiaxes(i) = aniso(i,i) / self%theoretical_radius 
+        end do
+        call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+        if (errflg /= 0) then
+            ! The above call to matinv is prone to numerical errors. 
+            ! Find the approximate inverse by setting all very small numbers to 0 and if that doesn't work,
+            ! try adding a small constant.  One of these two tricks should usually work
+            tmpeigenvecs = eigenvecs
+            do j=1,3
+                do i=1,3
+                    if (abs(tmpeigenvecs(i,j)) < 0.00001) tmpeigenvecs(i,j) = 0._dp
+                end do
+            end do
+            call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
+            if (errflg /= 0) then
+                tmpeigenvecs = tmpeigenvecs + 0.00001
+                call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
+                if (errflg /= 0) then
+                    print *, "ERROR in XYZ displ calculations at cc: ", cc
+                    print *, eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
+                end if
+            end if
+        end if
+        aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
+        aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
+        do i=1,3
+            self%atominfo(cc)%aniso_xyz(i) = aniso(i,i) / self%theoretical_radius
+        end do
+        self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso_sq), eigenvecs_inv) 
+    end subroutine calc_aniso
 
     ! For the input cc, model of atomic centers, and lattice displacements |center - expected center|,
     ! finds the maximum lattice displacement of the atoms neighboring the atom cc.
@@ -2580,10 +1725,9 @@ contains
      call centers_pdb%writepdb(fname)
   end subroutine write_centers_2
 
-  subroutine write_centers_aniso( self, fname, scale_fac)
+  subroutine write_centers_aniso( self, fname)
     class(nanoparticle), intent(inout) :: self
     character(len=*),    intent(in)    :: fname
-    integer,          intent(in)       :: scale_fac
     type(atoms) :: centers_pdb
     real        :: aniso(3, 3, self%n_cc)
     integer     :: cc

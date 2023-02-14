@@ -11,7 +11,6 @@ use simple_commander_volops,   only: reproject_commander, symaxis_search_command
 use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
 use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
 use simple_commander_project,  only: scale_project_commander_distr
-use simple_commander_imgproc,  only: scale_commander
 use simple_procimgstk,         only: shift_imgfile
 use simple_image,              only: image
 use simple_builder,            only: builder
@@ -55,13 +54,12 @@ contains
         type(symaxis_search_commander)      :: xsymsrch
         type(reproject_commander)           :: xreproject
         type(postprocess_commander)         :: xpostprocess
-        type(scale_commander)               :: xscale_msk
         ! command lines
         type(cmdline) :: cline_refine3D_snhc, cline_refine3D_init, cline_refine3D_refine
         type(cmdline) :: cline_symsrch
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject, cline_calc_pspec
-        type(cmdline) :: cline_scale1, cline_scale2, cline_scale_msk
+        type(cmdline) :: cline_scale1, cline_scale2
         ! other
         character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         character(len=:), allocatable :: work_projfile
@@ -79,10 +77,10 @@ contains
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
-        character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc
+        character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
         real                  :: smpd_target, lplims(2), orig_smpd, cenlp
         real                  :: scale_factor1, scale_factor2
-        integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3), iter, ipart
+        integer               :: icls, ncavgs, orig_box, box, istk, cnt, iter, ipart
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_euclid
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
@@ -119,7 +117,8 @@ contains
         l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
-        l_euclid = params%cc_objfun == OBJFUN_EUCLID
+        l_euclid    = (params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB)
+        orig_objfun = trim(params%objfun)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -300,7 +299,7 @@ contains
         call cline_refine3D_refine%set('refine', 'neigh')
         call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
         if( l_euclid )then
-            call cline_refine3D_refine%set('objfun',     'euclid')
+            call cline_refine3D_refine%set('objfun',     orig_objfun)
             call cline_refine3D_refine%set('sigma_est',  'global')
             call cline_reconstruct3D%set('sigma_est',    'global')
             call cline_reconstruct3D%set('needs_sigma',  'yes')
@@ -423,7 +422,7 @@ contains
         call cline%set('projfile', trim(work_projfile))
         call cline%set('projname', trim(get_fbody(trim(work_projfile),trim('simple'))))
         call work_proj2%update_projinfo(cline)
-        call work_proj2%write
+        call work_proj2%write(work_projfile)
         ! split
         if( l_lpset )then
             if( l_shmem )then
@@ -457,8 +456,29 @@ contains
         write(logfhandle,'(A)') '>>>'
         iter = iter + 1
         call cline_refine3D_refine%set('startit', real(iter))
-        if( l_shmem ) call rec(cline_refine3D_refine, l_rnd=.false.)
+        if( l_euclid )then
+            ! sigma2 at original sampling
+            cline_calc_pspec = cline
+            call cline_calc_pspec%set('prg',      'calc_pspec' )
+            call cline_calc_pspec%set('projfile', ORIG_work_projfile)
+            call cline_calc_pspec%set('sigma_est','global')
+            call cline_calc_pspec%set('scale',    1./scale_factor2**2)
+            if( l_shmem )then
+                ! TODO in shared memory
+                call cline_calc_pspec%set('which_iter', real(iter))
+                call xcalc_pspec_distr%execute( cline_calc_pspec )
+                call cline_refine3D_refine%set('which_iter', real(iter))
+            else
+                call cline_calc_pspec%set('which_iter', 0.)
+                call xcalc_pspec_distr%execute( cline_calc_pspec )
+                do ipart = 1,params%nparts
+                    call del_file('init_pspec_part'//int2str(ipart)//'.dat')
+                    call del_file('sigma2_noise_part'//int2str(ipart)//'.dat')
+                enddo
+            endif
+        endif
         if( l_shmem )then
+            call rec(cline_refine3D_refine, l_rnd=.false.)
             params_ptr  => params_glob
             params_glob => null()
             call xrefine3D%execute(cline_refine3D_refine)
@@ -468,6 +488,23 @@ contains
             call xrefine3D_distr%execute(cline_refine3D_refine)
         endif
         iter = nint(cline_refine3D_refine%get_rarg('endit'))
+        if( l_euclid )then
+            call cline_reconstruct3D%set('which_iter',real(iter))
+            call scale_group_sigma2_magnitude(iter, scale_factor2**2)
+            if( l_shmem )then
+                ! done
+            else
+                if( do_autoscale )then
+                    sigma2_fname    = trim(SIGMA2_GROUP_FBODY)//'0.star'
+                    sigma2_fname_sc = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//'.star'
+                    call fill_sigma2_before_nyq(sigma2_fname, sigma2_fname_sc)
+                endif
+                do ipart = 1,params%nparts
+                    call del_file('init_pspec_part'//int2str(ipart)//'.dat')
+                    call del_file('sigma2_noise_part'//int2str(ipart)//'.dat')
+                enddo
+            endif
+        endif
         ! updates shifts & deals with final volume
         call work_proj2%read_segment('ptcl3D', work_projfile)
         if( do_autoscale )then
@@ -481,29 +518,6 @@ contains
             call work_proj2%read_segment('ptcl3D', ORIG_work_projfile)
             work_proj2%os_ptcl3D = os
             call work_proj2%write_segment_inside('ptcl3D', ORIG_work_projfile)
-            ! scale sigmas
-            if( l_euclid )then
-                call cline_reconstruct3D%set('which_iter',real(iter))
-                ! delete particle sigma2
-                do ipart = 1,params%nparts
-                    call del_file('init_pspec_part'//int2str(ipart)//'.dat')
-                    call del_file('sigma2_noise_part'//int2str(ipart)//'.dat')
-                enddo
-                ! back-calculating sigma2 beyond scaled nyquist
-                cline_calc_pspec = cline
-                call cline_calc_pspec%set('prg', 'calc_pspec' )
-                call cline_calc_pspec%set('projfile', ORIG_work_projfile)
-                call cline_calc_pspec%set('sigma_est', 'global')
-                if( l_shmem )then
-                    ! todo? YES
-                else
-                    call xcalc_pspec_distr%execute( cline_calc_pspec )
-                endif
-                sigma2_fname    = trim(SIGMA2_GROUP_FBODY)//'1.star'
-                sigma2_fname_sc = trim(SIGMA2_GROUP_FBODY)//trim(int2str(iter))//'.star'
-                call scale_group_sigma2_magnitude(iter, scale_factor2**2)
-                call fill_sigma2_before_nyq(sigma2_fname, sigma2_fname_sc)
-            endif
             ! reconstruction
             if( l_shmem )then
                 params_ptr  => params_glob
