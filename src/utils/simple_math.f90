@@ -788,6 +788,31 @@ contains
 
     ! mathematical functions
 
+    !>   Compute the cross product of 2 3D real vectors
+    function cross( a, b ) result( c )
+        real, intent(in) :: a(3),b(3)
+        real :: c(3)
+        c(1) = a(2) * b(3) - a(3) * b(2)
+        c(2) = a(3) * b(1) - a(1) * b(3)
+        c(3) = a(1) * b(2) - a(2) * b(1)
+    end function cross
+
+    !>   given two points on the sphere, find N sample points on the great circle formed by two points
+    function great_circle_samples( p1, p2, N ) result( points )
+        real,    intent(in) :: p1(3), p2(3)
+        integer, intent(in) :: N
+        real    :: points(3, N), dt, t, u(3), w(3), v(3)
+        integer :: k
+        u  = p1/norm2(p1)
+        w  = cross(p1, p2)
+        v  = cross(u, w/norm2(w))
+        dt = 2.*pi/N
+        do k = 1, N
+            t = (k - 1)*dt
+            points(:, k) = u * cos(t) + v * sin(t)
+        enddo
+    end function great_circle_samples
+
     !>   sinc function
     function sinc( x ) result( r )
         real, intent(in) :: x       !< input (radians)

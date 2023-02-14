@@ -54,9 +54,9 @@ end type ctf_estimate_cost2D
 
 type ctf_estimate_cost4Dcont
     private
-    class(image),     pointer :: pspec => null()    !< reference SQRT( power spectrum ) normalized
-    class(ctfparams), pointer :: parms => null()    !< For microscope characteristics
-    class(optimizer), pointer :: nlopt => null()    !< optimizer object
+    class(image),     pointer :: pspec   => null()  !< reference SQRT( power spectrum ) normalized
+    class(ctfparams), pointer :: parms   => null()  !< For microscope characteristics
+    class(optimizer), pointer :: opt_obj => null()  !< optimizer object
     integer,          pointer :: inds(:,:)          !< Mask indices
     type(opt_spec)            :: ospec              !< optimizer specification object
     real(dp)                  :: kv, cs, fraca, angast, df, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
@@ -157,7 +157,7 @@ contains
         if( self%ndim >= 3 ) optlims(3,:) = deg2rad(optlims(3,:)) ! astigmatism in radians
         call self%ospec%specify('lbfgsb', self%ndim, ftol=1e-1, gtol=1e-3,&
             &limits=optlims, max_step=0.01, maxits=100)
-        call opt_fact%new(self%ospec, self%nlopt)
+        call opt_fact%new(self%ospec, self%opt_obj)
         self%ospec%costfun_8    => f_costfun
         self%ospec%gcostfun_8   => df_costfun
         self%ospec%fdfcostfun_8 => fdf_costfun
@@ -501,7 +501,7 @@ contains
                 self%ospec%x = [parms%dfx,parms%dfy,deg2rad(parms%angast),parms%phshift]
         end select
         self%ospec%x_8 = real(self%ospec%x,dp)
-        call self%nlopt%minimize(self%ospec, self, cost_here)
+        call self%opt_obj%minimize(self%ospec, self, cost_here)
         ! report
         cc = -real(cost_here)
         parms%dfx = self%ospec%x(1)
@@ -538,8 +538,8 @@ contains
         self%pspec => null()
         self%parms => null()
         self%inds  => null()
-        if(associated(self%nlopt)) call self%nlopt%kill
-        self%nlopt => null()
+        if(associated(self%opt_obj)) call self%opt_obj%kill
+        self%opt_obj => null()
     end subroutine kill4Dcont
 
 end module simple_ctf_estimate_cost

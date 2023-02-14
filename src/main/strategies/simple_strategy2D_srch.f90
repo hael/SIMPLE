@@ -116,7 +116,7 @@ contains
         self%best_rot   = prev_roind
         ! calculate previous best corr (treshold for better)
         call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
+        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB .or. params_glob%cc_objfun == OBJFUN_TEST )then
             self%prev_corr  = corrs(prev_roind)
         else
             self%prev_corr  = max(0., corrs(prev_roind))

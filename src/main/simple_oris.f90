@@ -18,7 +18,7 @@ use simple_defs_ori
 use simple_syslib
 implicit none
 
-public :: oris, test_oris, geodesic_opt_ori
+public :: oris, test_oris
 private
 #include "simple_local_flags.inc"
 
@@ -3062,98 +3062,6 @@ contains
         real, parameter :: old_max = 2.*sqrt(2.)
         geodesic_scaled_dist = geodesic_distance(rmat1,rmat2)*(pi/old_max)
     end function geodesic_scaled_dist
-
-    ! finding the "average" orientation using the optimization approach
-    ! geodesic_type: to use either frobdev (0) or trace (1)
-    subroutine geodesic_opt_ori( os, o_avg, weights, geodesic_type)
-        use nlopt_wrap, only: nlopt_opt, nlopt_func, create, destroy
-        use nlopt_enum, only: algorithm_from_string
-        type(ori),           intent(in)    :: os(:)
-        type(ori),           intent(inout) :: o_avg
-        real,                intent(in)    :: weights(:)
-        integer,             intent(in)    :: geodesic_type
-        integer,  parameter :: wp  = kind(0.0d0)
-        real(wp), parameter :: TOL = 0.001_wp     ! tolerance for success
-        type(nlopt_opt)     :: opt
-        type(nlopt_func)    :: fct, fc
-        integer  :: N, stat, j
-        real(wp) :: x(9), lowest_cost, lims(9, 2)
-        real     :: initial_best, total, mat_avg(3,3)
-        N       = size(os)
-        mat_avg = 0.
-        do j = 1, N
-            mat_avg = mat_avg + os(j)%get_mat()
-        enddo
-        mat_avg = mat_avg/N
-        ! bounds
-        lims(1:3,1) = -1
-        lims(1:3,2) = +1
-        lims(4:5,1) = -2
-        lims(4:5,2) = +2
-        lims(  6,1) = -1
-        lims(  6,2) = +1
-        lims(7:8,1) = -2
-        lims(7:8,2) = +2
-        lims(  9,1) = -1
-        lims(  9,2) = +1
-        call create(opt, algorithm_from_string('LN_BOBYQA'), 9)
-        call opt%set_lower_bounds(lims(:,1))
-        call opt%set_upper_bounds(lims(:,2))
-        ! optimization
-        select case(geodesic_type)
-            case(0)
-                fct = nlopt_func(nloptf_frobdev)
-            case(1)
-                fct = nlopt_func(nloptf_trace)
-        end select
-        fc = nlopt_func(nloptf_ineq_constraint)
-        call opt%set_min_objective(fct)
-        ! call opt%add_inequality_constraint(fc, TOL)
-        call opt%set_ftol_rel(TOL)
-        x = [mat_avg]
-        call opt%optimize(x, lowest_cost, stat)
-        mat_avg = reshape(x, (/3, 3/))
-        call o_avg%set_euler(m2euler(mat_avg))
-        call destroy(opt)
-    contains
-        function nloptf_frobdev(x_in, gradient, func_data) result(f)
-            real(wp), intent(in)              :: x_in(:)
-            real(wp), intent(inout), optional :: gradient(:)
-            class(*), intent(in),    optional :: func_data
-            real(wp) :: f
-            integer  :: i
-            real     :: x_mat(3,3)
-            x_mat = real(reshape(x_in, (/3, 3/)))
-            call o_avg%set_euler(m2euler(x_mat))
-            f     = 0.
-            do i = 1, N
-                f = f + weights(i)*geodesic_dist_frobdev(o_avg, os(i))
-            enddo
-        end function nloptf_frobdev
-
-        function nloptf_trace(x_in, gradient, func_data) result(f)
-            real(wp), intent(in)              :: x_in(:)
-            real(wp), intent(inout), optional :: gradient(:)
-            class(*), intent(in),    optional :: func_data
-            real(wp) :: f
-            integer  :: i
-            real     :: x_mat(3,3)
-            x_mat = real(reshape(x_in, (/3, 3/)))
-            call o_avg%set_euler(m2euler(x_mat))
-            f     = 0.
-            do i = 1, N
-                f = f + weights(i)*geodesic_dist_trace(o_avg, os(i))
-            enddo
-        end function nloptf_trace
-
-        function nloptf_ineq_constraint(x_in, gradient, func_data) result(f)
-            real(wp), intent(in)              :: x_in(:)
-            real(wp), intent(inout), optional :: gradient(:)
-            class(*), intent(in),    optional :: func_data
-            real(wp) :: f
-            ! TODO: optimal orientation + shifts that improves the cost value
-        end function nloptf_ineq_constraint
-    end subroutine geodesic_opt_ori
 
     ! UNIT TEST
 

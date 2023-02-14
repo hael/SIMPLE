@@ -498,7 +498,7 @@ contains
               if( is_zero(augmatrix(k,k)) )then
                  flag = .false.
                 do i=k+1,n
-                    if( augmatrix(i,k) > 0. )then
+                    if( abs(augmatrix(i,k)) > 0. )then
                         do j=1,2*n
                             augmatrix(k,j) = augmatrix(k,j)+augmatrix(i,j)
                         end do
@@ -575,10 +575,10 @@ contains
         end do
         ! reduce augmented matrix to upper traingular form
         do k=1,n-1
-              if( is_zero(augmatrix(k,k)) )then
+            if( is_zero(augmatrix(k,k)) )then
                  flag = .false.
                 do i=k+1,n
-                    if( augmatrix(i,k) > 0.d0 )then
+                    if( abs(augmatrix(i,k)) > 0.d0 )then
                         do j=1,2*n
                             augmatrix(k,j) = augmatrix(k,j)+augmatrix(i,j)
                         end do
