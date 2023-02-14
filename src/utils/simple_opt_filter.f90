@@ -12,7 +12,7 @@ public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, u
 private
 
 interface butterworth_filter
-    module procedure butterworth_filter_1, butterworth_filter_2
+    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3
 end interface butterworth_filter
 
 type optfilt2Dvars
@@ -220,6 +220,18 @@ contains
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
     end subroutine butterworth_filter_2
+
+    !< notch filter squeezed between two cut_off frequencies
+    subroutine butterworth_filter_3(c1, c2, cur_fil)
+        integer,      intent(in)    :: c1, c2           ! two cut-off frequencies
+        real,         intent(inout) :: cur_fil(:)
+        integer,      parameter     :: BW_ORDER = 8
+        integer :: freq_val
+        do freq_val = 1, size(cur_fil)
+            cur_fil(freq_val) =        butterworth(real(freq_val-1), BW_ORDER, real(c2)) * &
+                                &( 1 - butterworth(real(freq_val-1), BW_ORDER, real(c1)) )
+        enddo
+    end subroutine butterworth_filter_3
 
     subroutine nonuni_filt2D(odd, even, weights_img, optf2Dvars)
         class(image),        intent(inout) :: odd, even, weights_img

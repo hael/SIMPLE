@@ -15,7 +15,7 @@ integer                       :: k, nyq, nptcls, rc, iptcl, find_stop, find_star
 real                          :: ave, sdev, maxv, minv, med, vec_mean, vec_std
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
-real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:)
+real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:), yest(:)
 integer,          allocatable :: yhist(:)
 real,             pointer     :: rmat_img_noisy(:,:,:), rmat_img_filt(:,:,:)
 if( command_argument_count() < 4 )then
@@ -58,11 +58,13 @@ call find_ldim_nptcls(p%stk, p%ldim, nptcls)
 p%ldim(3) = 1 ! because we operate on stacks
 n_vec     = p%ldim(1)*p%ldim(2)
 n_bin     = int(n_vec/1000.)
+print *, n_vec, n_bin
 call img%new(  p%ldim, p%smpd)
 call noise%new(p%ldim, p%smpd)
 allocate(cur_fil(p%ldim(1)), source=0.)
 allocate(vec_noise(n_vec),   source=0.)
 allocate(xhist(n_bin),       source=0.)
+allocate(yest( n_bin),       source=0.)
 allocate(yhist(n_bin),       source=0)
 find_stop  = calc_fourier_index(p%lpstart,   p%ldim(1), p%smpd)
 find_start = calc_fourier_index(p%lp_lowres, p%ldim(1), p%smpd)
@@ -81,18 +83,28 @@ do iptcl = 1, 1
     call img_noisy%add(noise)
     call img_noisy%write('stk_noisy.mrc', iptcl)
     call img_noisy%get_rmat_ptr(rmat_img_noisy)
-    do find_cur = find_start, find_stop, 5
+    ! find_cur = int((find_start + find_stop)/2.)
+    ! find_cur = int(find_start + 50)
+    do find_cur = find_start + 10, find_stop - 10, 5
         call img_filt%copy(img_noisy)
+        call img_noisy%fft
         call img_filt%fft
-        call butterworth_filter(img_filt, find_cur, cur_fil)
+        call butterworth_filter(find_cur - 5, find_cur + 5, cur_fil)
+        call img_filt%apply_filter(cur_fil)
+        call img_filt%add(img_noisy)
         call img_filt%ifft
-        ! call img_filt%write('stk_filt.mrc', iptcl)
+        call img_noisy%ifft
+        call img_filt%write('stk_filt.mrc', iptcl)
         call img_filt%get_rmat_ptr( rmat_img_filt )
         vec_noise = [rmat_img_noisy] - [rmat_img_filt]
         call create_hist_vector( vec_noise, n_bin, xhist, yhist )
-        call avg_sdev(real(yhist), vec_mean, vec_std)
-        print *, sum( (exp(-real(yhist-vec_mean)**2/2/vec_std**2)/2/pi/vec_std - real(yhist))**2 )
+        yest = real(yhist)
+        call avg_sdev(yest, vec_mean, vec_std)
+        yest = exp(-(yest-vec_mean)**2/2./vec_std**2)/2./pi/vec_std
+        yest = yest*sum(xhist*yhist)/sum(xhist*yest)
+        print *, sum( (yest - real(yhist))**2 )
     enddo
+    ! print *, yhist
     call img%zero_and_unflag_ft
     call img_noisy%zero_and_unflag_ft
     call noise%zero_and_unflag_ft
