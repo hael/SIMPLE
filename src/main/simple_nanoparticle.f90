@@ -36,21 +36,19 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//&
-&CSV_DELIM//'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//&
-CSV_DELIM//'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'ANISO_XX'//CSV_DELIM//'ANISO_YY'//CSV_DELIM//&
-&'ANISO_ZZ'//CSV_DELIM//'ANISO_XY'//CSV_DELIM//'ANISO_YZ'//CSV_DELIM//'ANISO_XZ'//'X'//CSV_DELIM//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//CSV_DELIM//&
+&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//&
+&'SEMIAX_MIN'//CSV_DELIM//'ANISO_X'//CSV_DELIM//'ANISO_Y'//CSV_DELIM//'ANISO_Z'//'X'//CSV_DELIM//&
 &'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//&
 &CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'NISO'//CSV_DELIM//&
-&'ISO_DISPL'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'DOA'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//&
-&'DISPL'//CSV_DELIM//'MAX_NDISPL'//'ANISO_XX'//CSV_DELIM//'ANISO_YY'//CSV_DELIM//'ANISO_ZZ'//&
-&CSV_DELIM//'ANISO_XY'//CSV_DELIM//'ANISO_YZ'//CSV_DELIM//'ANISO_XZ'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DISPL'//CSV_DELIM//&
+&'MAX_NDISPL'//CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//'SEMIAX_MIN'//CSV_DELIM//&
+&'ANISO_X'//CSV_DELIM//'ANISO_Y'//CSV_DELIM//'ANISO_Z'//CSV_DELIM//'RADIAL_STRAIN'
 
-character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
+character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_CN_STD'//CSV_DELIM//'MED_CN_STD'//CSV_DELIM//'SDEV_CN_STD'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
@@ -59,17 +57,18 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
-&CSV_DELIM//'AVG_NISO'//CSV_DELIM//'MED_NISO'//CSV_DELIM//'SDEV_NISO'//&
-&CSV_DELIM//'AVG_ISO_DISPL'//CSV_DELIM//'MED_ISO_DISPL'//CSV_DELIM//'SDEV_ISO_DISPL'//&
-&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
-&CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
-&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
+&CSV_DELIM//'AVG_SEMIAX_MAJ'//CSV_DELIM//'MED_SEMIAX_MAJ'//CSV_DELIM//'SDEV_SEMIAX_MAJ'//&
+&CSV_DELIM//'AVG_SEMIAX_MED'//CSV_DELIM//'MED_SEMIAX_MED'//CSV_DELIM//'SDEV_SEMIAX_MED'//&
+&CSV_DELIM//'AVG_SEMIAX_MIN'//CSV_DELIM//'MED_SEMIAX_MIN'//CSV_DELIM//'SDEV_SEMIAX_MIN'//&
+&CSV_DELIM//'AVG_ANISO_X'//CSV_DELIM//'MED_ANISO_X'//CSV_DELIM//'SDEV_ANISO_X'//&
+&CSV_DELIM//'AVG_ANISO_Y'//CSV_DELIM//'MED_ANISO_Y'//CSV_DELIM//'SDEV_ANISO_Y'//&
+&CSV_DELIM//'AVG_ANISO_Z'//CSV_DELIM//'MED_ANISO_Z'//CSV_DELIM//'SDEV_ANISO_Z'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
-character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
+character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CSV_DELIM//'NANISO'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
 &CSV_DELIM//'AVG_CN_GEN'//CSV_DELIM//'MED_CN_GEN'//CSV_DELIM//'SDEV_CN_GEN'//&
@@ -77,13 +76,14 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
-&CSV_DELIM//'AVG_NISO'//CSV_DELIM//'MED_NISO'//CSV_DELIM//'SDEV_NISO'//&
-&CSV_DELIM//'AVG_ISO_DISPL'//CSV_DELIM//'MED_ISO_DISPL'//CSV_DELIM//'SDEV_ISO_DISPL'//&
-&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
-&CSV_DELIM//'AVG_DOA'//CSV_DELIM//'MED_DOA'//CSV_DELIM//'SDEV_DOA'//&
-&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
+&CSV_DELIM//'AVG_SEMIAX_MAJ'//CSV_DELIM//'MED_SEMIAX_MAJ'//CSV_DELIM//'SDEV_SEMIAX_MAJ'//&
+&CSV_DELIM//'AVG_SEMIAX_MED'//CSV_DELIM//'MED_SEMIAX_MED'//CSV_DELIM//'SDEV_SEMIAX_MED'//&
+&CSV_DELIM//'AVG_SEMIAX_MIN'//CSV_DELIM//'MED_SEMIAX_MIN'//CSV_DELIM//'SDEV_SEMIAX_MIN'//&
+&CSV_DELIM//'AVG_ANISO_X'//CSV_DELIM//'MED_ANISO_X'//CSV_DELIM//'SDEV_ANISO_X'//&
+&CSV_DELIM//'AVG_ANISO_Y'//CSV_DELIM//'MED_ANISO_Y'//CSV_DELIM//'SDEV_ANISO_Y'//&
+&CSV_DELIM//'AVG_ANISO_Z'//CSV_DELIM//'MED_ANISO_Z'//CSV_DELIM//'SDEV_ANISO_Z'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -101,11 +101,8 @@ type :: atom_stats
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
-    real    :: iso_displ         = 0. ! isotropic displacement parameter                            ISO_DISPL
-    real    :: iso_corr          = 0. ! Correlation of atom to isotropic displacement fit           ISO_CORR
-    real    :: aniso(3,3)        = 0. ! Ansisotropic displacement parameter matrix
-    real    :: doa               = 0. ! Degree of anisotropy                                        DOA
-    real    :: aniso_corr        = 0. ! Correlation of atom to anisotropic displacement fit         ISO_CORR
+    real    :: semiaxes(3)       = 0. ! lengths of semiaxes of ellipsoidal fit                      SEMIAX_(MAJ,MED,MIN)
+    real    :: aniso_xyz(3)      = 0. ! anisotropic displacement in x,y,z directions                ANISO_()
     real    :: displ             = 0. ! Lattice displacement                                        DISPL
     real    :: max_ndispl        = 0. ! Maximum lattice displacement of neighboring atoms           NDISPL
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
@@ -118,6 +115,12 @@ type :: atom_stats
     real    :: eyz_strain        = 0. ! -"-                                                         EYZ_STRAIN
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
+
+    ! Auxillary (non-output)
+    real    :: aniso(3,3)        = 0. ! ADP Matrix for ANISOU PDB file                              N/A
+    logical :: tossADP           = .false. ! True if atom inadequate for ADP calculations           N/A
+    real    :: doa               = 0. ! Legacy (will clean up)
+
 end type atom_stats
 
 type :: nanoparticle
@@ -126,8 +129,8 @@ type :: nanoparticle
     type(binimage)        :: img_bin, img_cc         ! binary and connected component images
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
+    integer               :: n_aniso            = 0  ! number of atoms with aniso calculations               NANISO
     integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
-    integer               :: niso               = 0  ! number of atoms (connected components)                NISO
     real                  :: smpd               = 0. ! sampling distance
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
@@ -143,17 +146,19 @@ type :: nanoparticle
     type(stats_struct)    :: avg_int_stats
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
-    type(stats_struct)    :: niso_stats
-    type(stats_struct)    :: iso_displ_stats
-    type(stats_struct)    :: iso_corr_stats
-    type(stats_struct)    :: doa_stats
-    type(stats_struct)    :: aniso_corr_stats
     type(stats_struct)    :: displ_stats
     type(stats_struct)    :: max_ndispl_stats
+    type(stats_struct)    :: semiaxis_maj_stats
+    type(stats_struct)    :: semiaxis_med_stats
+    type(stats_struct)    :: semiaxis_min_stats
+    type(stats_struct)    :: aniso_x_stats
+    type(stats_struct)    :: aniso_y_stats
+    type(stats_struct)    :: aniso_z_stats    
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
-    real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_cns(CNMIN:CNMAX) = 0.       ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_aniso_cns(CNMIN:CNMAX) = 0. ! # of atoms with aniso calculated per cn_std      NATOMS
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: bondl_stats_cns(CNMIN:CNMAX)
@@ -162,11 +167,12 @@ type :: nanoparticle
     type(stats_struct)    :: avg_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: niso_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: iso_displ_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: iso_corr_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: doa_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aniso_corr_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: semiaxis_maj_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: semiaxis_med_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: semiaxis_min_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: aniso_x_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: aniso_y_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: aniso_z_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: displ_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_ndispl_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
@@ -1233,7 +1239,6 @@ contains
         deallocate(neigh_4_pixs)
         write(logfhandle, '(A, i3)') "ADP CALCULATIONS: IDENTIFIED ATOMIC BORDERS"
 
-        adp_tossed = 0
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
             ! index of the connected component
@@ -1259,12 +1264,7 @@ contains
             ! calculate anisotropic displacement parameters.  
             ! Ignore CCs with fewer pixels than independent covariance parameters (6)
             !call calc_isotropic_disp_lsq(cc)
-            if (self%atominfo(cc)%size > NPARAMS_ADP) then
-                call calc_aniso_shell_6param(cc)
-            else
-                self%atominfo(cc)%doa = -1 ! A value of -1 means the DOA for this atom should be ignored
-                adp_tossed = adp_tossed + 1
-            end if
+            call calc_aniso_shell_6param(cc)
 
             ! set strain values
             self%atominfo(cc)%exx_strain    = strain_array(cc,1)
@@ -1280,8 +1280,9 @@ contains
         end do
         call fclose(funit)
         call fclose(fiso)
-        write(logfhandle,*) "ADP Tossed: ", adp_tossed
+        write(logfhandle,*) "ADP Tossed: ", count(self%atominfo(:)%tossADP)
         write(logfhandle, '(A)') '>>> WRITING OUTPUT'
+        self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
         ! Write test image of adp and report FSC based resolution
         call fit%write(fn_fit)
         call fit_descaled%write(fn_fit_descaled)
@@ -1295,7 +1296,6 @@ contains
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
-        call calc_stats(  real(self%atominfo(:)%niso),    self%niso_stats          )
         call calc_stats(  self%atominfo(:)%bondl,         self%bondl_stats         )
         call calc_stats(  self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
         call calc_stats(  self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
@@ -1306,10 +1306,12 @@ contains
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
         call calc_stats(  self%atominfo(:)%displ,         self%displ_stats         )
         call calc_stats(  self%atominfo(:)%max_ndispl,    self%max_ndispl_stats    )
-        call calc_stats(  self%atominfo(:)%iso_displ,     self%iso_displ_stats     )
-        call calc_stats(  self%atominfo(:)%iso_corr,      self%iso_corr_stats      )
-        call calc_stats(  self%atominfo(:)%doa,           self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
-        call calc_stats(  self%atominfo(:)%aniso_corr,    self%doa_stats, mask=self%atominfo%size > NPARAMS_ADP )
+        call calc_stats(  self%atominfo(:)%semiaxes(1),   self%semiaxis_maj_stats, mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%semiaxes(2),   self%semiaxis_med_stats, mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%semiaxes(3),   self%semiaxis_min_stats, mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%aniso_xyz(1),  self%aniso_x_stats, mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%aniso_xyz(2),  self%aniso_y_stats, mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%aniso_xyz(3),  self%aniso_z_stats, mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1342,15 +1344,16 @@ contains
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
                 integer :: cc, n, n_size, n_diam
-                logical :: cn_mask(self%n_cc), size_mask(self%n_cc), doa_mask(self%n_cc)
+                logical :: cn_mask(self%n_cc), size_mask(self%n_cc), adp_mask(self%n_cc)
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
-                doa_mask = self%atominfo(:)%size > NPARAMS_ADP .and. cn_mask
+                adp_mask = (.not. self%atominfo(:)%tossADP) .and. cn_mask
                 n         = count(cn_mask)
                 if( n == 0 ) return
                 ! -- # atoms
                 self%natoms_cns(cn) = real(n)
+                self%natoms_aniso_cns(cn) = count(adp_mask)
                 if( n < 2 ) return
                 ! -- the rest
                 call calc_stats( real(self%atominfo(:)%size),    self%size_stats_cns(cn),          mask=size_mask )
@@ -1360,13 +1363,15 @@ contains
                 call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%iso_displ,     self%iso_displ_stats_cns(cn),     mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%iso_corr,      self%iso_corr_stats_cns(cn),      mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%doa,           self%doa_stats_cns(cn),           mask=doa_mask  )
-                call calc_stats( self%atominfo(:)%aniso_corr,    self%aniso_corr_stats_cns(cn),    mask=doa_mask  )
                 call calc_stats( self%atominfo(:)%displ,         self%displ_stats_cns(cn),         mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_ndispl,    self%max_ndispl_stats_cns(cn),    mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%semiaxes(1),   self%semiaxis_maj_stats_cns(cn),  mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%semiaxes(2),   self%semiaxis_med_stats_cns(cn),  mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%semiaxes(3),   self%semiaxis_min_stats_cns(cn),  mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%aniso_xyz(1),  self%aniso_x_stats_cns(cn),       mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%aniso_xyz(2),  self%aniso_y_stats_cns(cn),       mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%aniso_xyz(3),  self%aniso_z_stats_cns(cn),       mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=adp_mask  )
             end subroutine calc_cn_stats
 
             subroutine write_cn_atoms( cn_std )
@@ -1557,11 +1562,16 @@ contains
             subroutine calc_aniso_shell_6param(cc)
                 integer, intent(in)     :: cc
                 real(kind=8), allocatable   :: A(:,:), AT(:,:), ones(:)
-                real(kind=8)                :: beta(6), ATA(6,6), ATA_inv(6,6), matavg
-                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), eigenvals(3), eigenvecs(3,3), &
-                               &eigenvecs_inv(3,3), fit_rad, u, v, w, B(3,3), aniso(3,3), theta
+                real(kind=8)                :: beta(6), ATA(6,6), ATA_inv(6,6), matavg, B(3,3), eigenvals(3), eigenvecs(3,3),&
+                                               &eigenvecs_inv(3,3), aniso(3,3), aniso_sq(3,3)
+                real        :: center_scaled(3), maxrad, com(3), inertia_t(3, 3), fit_rad, u, v, w, theta
                 integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, size_scaled, ifoo, n, nborder, errflg
-                logical, parameter      :: boundScalingAdj = .false.
+
+                ! To avoid overfitting, must have more voxels in the unscaled CC than fitting params
+                if (self%atominfo(cc)%size <= NPARAMS_ADP) then
+                    self%atominfo(cc)%tossADP = .true.
+                    return
+                end if
 
                 ! Create search window that definitely contains the cc (1.5 * theoretical radius) to speed up the iterations
                 ! by avoiding having to iterate over the entire scaled images for each connected component.
@@ -1595,7 +1605,7 @@ contains
                 com = com / size_scaled
                 !com = 1.*nint(com)
 
-                ! Find the number of border voxels in the cc
+                ! Find the number of border voxels in the scaled cc
                 nborder = 0
                 do k=klo, khi
                     do j=jlo, jhi
@@ -1639,7 +1649,7 @@ contains
                 ATA = ATA / matavg
                 call matinv(ATA, ATA_inv, 6, errflg)
                 beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
-                write (funit, '(2i7, 6f10.3)') cc, nborder, beta
+                write (funit, '(3i7, 6f10.3)') cc, nborder, nborder / (scale_fac**3), beta
                 
                 ! Find the principal axes of the ellipsoid
                 B(1,1) = beta(1)
@@ -1651,29 +1661,27 @@ contains
                 B(2,1) = B(1,2)
                 B(3,1) = B(1,3)
                 B(3,2) = B(2,3)
+                ! ORDER GETS SWAPPED
                 call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
+                eigenvals = 1/sqrt(eigenvals) ! Convert eigenvalues to semi-axes
+                call eigsrt(eigenvals, eigenvecs, 3, 3)
                 write (funit, '(i7, 12f10.3)') cc, eigenvals(:), eigenvecs(:,1), eigenvecs(:,2), eigenvecs(:,3)
 
                 ! Fill in the aniso matrix
                 aniso = 0.
-                aniso(1,1) = 1/sqrt(eigenvals(1))
-                aniso(2,2) = 1/sqrt(eigenvals(2))
-                aniso(3,3) = 1/sqrt(eigenvals(3))
-                if (boundScalingAdj) then
-                    do i=1,3
-                        ! Find x,y,z unit vector closest to eigenvector
-                        theta = dot_product(eigenvecs(:,i), (/1.,0.,0./))
-                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,1.,0./)))
-                        theta = min(theta, dot_product(eigenvecs(:,i), (/0.,0.,1./)))
-                        aniso(i,i) = aniso(i,i) - 0.5*self%smpd*(1.-1./scale_fac)/cos(theta)
-                    end do
-                end if
+                do i=1,3
+                    aniso(i,i) = eigenvals(i) ! aniso(1,1) major semi-axis, aniso(3,3) minor semi-axis
+                    self%atominfo(cc)%semiaxes(i) = aniso(i,i)
+                end do
                 write (funit, '(i7, 6f10.3)') cc, aniso(1,:), aniso(2,2:3), aniso(3,3)
-                aniso = aniso**2   ! ANISOU format uses the squared matrix values
                 call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
-                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
+                aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
+                aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
+                do i=1,3
+                    self%atominfo(cc)%aniso_xyz(i) = aniso(i,i)
+                end do
+                self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso_sq), eigenvecs_inv) 
                 write (funit, '(i7, 9f10.3)') cc, self%atominfo(cc)%aniso(1,:), self%atominfo(cc)%aniso(2,2:3), self%atominfo(cc)%aniso(3,3)
-
                 write (funit, '(a)') ''
             end subroutine calc_aniso_shell_6param
 
@@ -1821,9 +1829,9 @@ contains
                 end do
                 corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
 
-                self%atominfo(cc)%niso = count_fit
-                self%atominfo(cc)%iso_displ = var
-                self%atominfo(cc)%iso_corr = corr
+                !self%atominfo(cc)%niso = count_fit
+                !self%atominfo(cc)%iso_displ = var
+                !self%atominfo(cc)%iso_corr = corr
                 write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
                     &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
             end subroutine
@@ -1973,9 +1981,9 @@ contains
                 end do
                 corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
                 
-                self%atominfo(cc)%niso = count_fit
-                self%atominfo(cc)%iso_displ = var*(self%smpd**2)
-                self%atominfo(cc)%iso_corr = corr
+                !self%atominfo(cc)%niso = count_fit
+                !self%atominfo(cc)%iso_displ = var*(self%smpd**2)
+                !self%atominfo(cc)%iso_corr = corr
                 write(fiso, '(2i8, 6f10.3, 3f10.5, 7f10.3)') cc, count, self%atominfo(cc)%center, mu(:), sum_int, max_int, min_int, corr, fit_rad*self%smpd, &
                     &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var)
 
@@ -2174,7 +2182,7 @@ contains
                 end do
                 corr = fit_descaled%real_corr(self%img_raw, mask=fit_mask)
 
-                self%atominfo(cc)%aniso_corr = corr
+                !self%atominfo(cc)%aniso_corr = corr
 
                 !print *, cc, min_int, max_int, self%atominfo(cc)%max_int, fit_rad/self%smpd/sqrt(eigenvals(1)*(self%smpd/scale_fac)**2),&
                 !    &count0, count+count0, count_fit, (1-prob_sum_sq)
@@ -2666,20 +2674,15 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
-        write(funit,601,advance='no') real(self%atominfo(cc)%niso),             CSV_DELIM ! NISO
-        write(funit,601,advance='no') self%atominfo(cc)%iso_displ,              CSV_DELIM ! ISO_DISPL
-        write(funit,601,advance='no') self%atominfo(cc)%iso_corr,               CSV_DELIM ! ISO_CORR
-        write(funit,601,advance='no') self%atominfo(cc)%doa,                    CSV_DELIM ! DOA
-        write(funit,601,advance='no') self%atominfo(cc)%aniso_corr,             CSV_DELIM ! ANISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%displ,                  CSV_DELIM ! DISPL
         write(funit,601,advance='no') self%atominfo(cc)%max_ndispl,             CSV_DELIM ! MAX_NDISPL
         ! aniso
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(1,1),             CSV_DELIM ! ANISO_XX
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(2,2),             CSV_DELIM ! ANISO_YY
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(3,3),             CSV_DELIM ! ANISO_ZZ
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(1,2),             CSV_DELIM ! ANISO_XY
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(2,3),             CSV_DELIM ! ANISO_YZ
-        write(funit,601,advance='no') self%atominfo(cc)%aniso(3,3),             CSV_DELIM ! ANISO_XZ
+        write(funit,601,advance='no') self%atominfo(cc)%semiaxes(1),            CSV_DELIM ! SEMIAX_MAJ
+        write(funit,601,advance='no') self%atominfo(cc)%semiaxes(2),            CSV_DELIM ! SEMIAX_MED
+        write(funit,601,advance='no') self%atominfo(cc)%semiaxes(3),            CSV_DELIM ! SEMIAX_MIN
+        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(1),           CSV_DELIM ! ANISO_X
+        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(2),           CSV_DELIM ! ANISO_Y
+        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(3),           CSV_DELIM ! ANISO_Z
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -2706,6 +2709,7 @@ contains
         602 format(F8.4)
         ! -- # atoms
         write(funit,601,advance='no') real(self%n_cc),               CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') real(self%n_aniso),            CSV_DELIM ! NANISO
         ! -- NP diameter
         write(funit,601,advance='no') self%NPdiam,                   CSV_DELIM ! DIAM
         ! -- atom size
@@ -2740,26 +2744,6 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
-        ! -- numer of voxels in isotropic displacement calculations
-        write(funit,601,advance='no') self%niso_stats%avg,           CSV_DELIM ! AVG_NISO
-        write(funit,601,advance='no') self%niso_stats%med,           CSV_DELIM ! MED_NISO
-        write(funit,601,advance='no') self%niso_stats%sdev,          CSV_DELIM ! SDEV_NISO
-        ! -- isotropic displacement parameter
-        write(funit,601,advance='no') self%iso_displ_stats%avg,      CSV_DELIM ! AVG_ISO_DISPL
-        write(funit,601,advance='no') self%iso_displ_stats%med,      CSV_DELIM ! MED_ISO_DISPL
-        write(funit,601,advance='no') self%iso_displ_stats%sdev,     CSV_DELIM ! SDEV_ISO_DISPL
-        ! -- isotropic displacement fit correlation
-        write(funit,601,advance='no') self%iso_corr_stats%avg,       CSV_DELIM ! AVG_ISO_CORR
-        write(funit,601,advance='no') self%iso_corr_stats%med,       CSV_DELIM ! MED_ISO_CORR
-        write(funit,601,advance='no') self%iso_corr_stats%sdev,      CSV_DELIM ! SDEV_ISO_CORR
-        ! -- degree of anisotropy
-        write(funit,601,advance='no') self%doa_stats%avg,            CSV_DELIM ! AVG_DOA
-        write(funit,601,advance='no') self%doa_stats%med,            CSV_DELIM ! MED_DOA
-        write(funit,601,advance='no') self%doa_stats%sdev,           CSV_DELIM ! SDEV_DOA
-        ! -- anisotropic displacement fit correlation
-        write(funit,601,advance='no') self%aniso_corr_stats%avg,     CSV_DELIM ! AVG_ANISO_CORR
-        write(funit,601,advance='no') self%aniso_corr_stats%med,     CSV_DELIM ! MED_ANISO_CORR
-        write(funit,601,advance='no') self%aniso_corr_stats%sdev,    CSV_DELIM ! SDEV_ANISO_CORR
         ! -- lattice displacement
         write(funit,601,advance='no') self%displ_stats%avg,          CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%displ_stats%med,          CSV_DELIM ! MED_DOA
@@ -2768,6 +2752,30 @@ contains
         write(funit,601,advance='no') self%max_ndispl_stats%avg,     CSV_DELIM ! AVG_DOA
         write(funit,601,advance='no') self%max_ndispl_stats%med,     CSV_DELIM ! MED_DOA
         write(funit,601,advance='no') self%max_ndispl_stats%sdev,    CSV_DELIM ! SDEV_DOA
+        ! -- Major semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_maj_stats%avg,   CSV_DELIM ! AVG_SEMIAX_MAJ
+        write(funit,601,advance='no') self%semiaxis_maj_stats%med,   CSV_DELIM ! MED_SEMIAX_MAJ
+        write(funit,601,advance='no') self%semiaxis_maj_stats%sdev,  CSV_DELIM ! SDEV_SEMIAX_MAJ
+        ! -- Medium semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_med_stats%avg,   CSV_DELIM ! AVG_SEMIAX_MED
+        write(funit,601,advance='no') self%semiaxis_med_stats%med,   CSV_DELIM ! MED_SEMIAX_MED
+        write(funit,601,advance='no') self%semiaxis_med_stats%sdev,  CSV_DELIM ! SDEV_SEMIAX_MED
+        ! -- Minor semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_min_stats%avg,   CSV_DELIM ! AVG_SEMIAX_MIN
+        write(funit,601,advance='no') self%semiaxis_min_stats%med,   CSV_DELIM ! MED_SEMIAX_MIN
+        write(funit,601,advance='no') self%semiaxis_min_stats%sdev,  CSV_DELIM ! SDEV_SEMIAX_MIN
+        ! -- Anisotropic displacement along x-axis
+        write(funit,601,advance='no') self%aniso_x_stats%avg,        CSV_DELIM ! AVG_ANISO_X
+        write(funit,601,advance='no') self%aniso_x_stats%med,        CSV_DELIM ! MED_ANISO_X
+        write(funit,601,advance='no') self%aniso_x_stats%sdev,      CSV_DELIM ! SDEV_ANISO_X
+        ! -- Anisotropic displacement along y-axis
+        write(funit,601,advance='no') self%aniso_y_stats%avg,        CSV_DELIM ! AVG_ANISO_Y
+        write(funit,601,advance='no') self%aniso_y_stats%med,        CSV_DELIM ! MED_ANISO_Y
+        write(funit,601,advance='no') self%aniso_y_stats%sdev,      CSV_DELIM ! SDEV_ANISO_Y
+        ! -- Anisotropic displacement along z-axis
+        write(funit,601,advance='no') self%aniso_z_stats%avg,        CSV_DELIM ! AVG_ANISO_Z
+        write(funit,601,advance='no') self%aniso_z_stats%med,        CSV_DELIM ! MED_ANISO_Z
+        write(funit,601,advance='no') self%aniso_z_stats%sdev,      CSV_DELIM ! SDEV_ANISO_Z
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -2786,6 +2794,7 @@ contains
         write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD
         ! -- # atoms per cn
         write(funit,601,advance='no') self%natoms_cns(cn),                   CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') self%natoms_aniso_cns(cn),             CSV_DELIM ! NANISO
         ! -- atom size
         write(funit,601,advance='no') self%size_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NVOX
         write(funit,601,advance='no') self%size_stats_cns(cn)%med,           CSV_DELIM ! MED_NVOX
@@ -2814,26 +2823,6 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
-        ! -- numer of voxels in isotropic displacement calculations
-        write(funit,601,advance='no') self%niso_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NISO
-        write(funit,601,advance='no') self%niso_stats_cns(cn)%med,           CSV_DELIM ! MED_NISO
-        write(funit,601,advance='no') self%niso_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_NISO
-        ! -- isotropic displacement parameter
-        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%avg,      CSV_DELIM ! AVG_DOA
-        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%med,      CSV_DELIM ! MED_DOA
-        write(funit,601,advance='no') self%iso_displ_stats_cns(cn)%sdev,     CSV_DELIM ! SDEV_DOA
-        ! -- isotropic displacement fit correlation
-        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%avg,       CSV_DELIM ! AVG_DOA
-        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%med,       CSV_DELIM ! MED_DOA
-        write(funit,601,advance='no') self%iso_corr_stats_cns(cn)%sdev,      CSV_DELIM ! SDEV_DOA
-        ! -- degree of anisotropy
-        write(funit,601,advance='no') self%doa_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOA
-        write(funit,601,advance='no') self%doa_stats_cns(cn)%med,            CSV_DELIM ! MED_DOA
-        write(funit,601,advance='no') self%doa_stats_cns(cn)%sdev,           CSV_DELIM! SDEV_DOA
-        ! -- anisotropic displacement fit correlation
-        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_ANISO_CORR
-        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_ANISO_CORR
-        write(funit,601,advance='no') self%aniso_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_ANISO_CORR
         ! -- lattice displacement
         write(funit,601,advance='no') self%displ_stats_cns(cn)%avg,          CSV_DELIM ! AVG_MAX_NDISPL
         write(funit,601,advance='no') self%displ_stats_cns(cn)%med,          CSV_DELIM ! MED_MAX_NDISPL
@@ -2842,6 +2831,30 @@ contains
         write(funit,601,advance='no') self%max_ndispl_stats_cns(cn)%avg,     CSV_DELIM ! AVG_MAX_NDISPL
         write(funit,601,advance='no') self%max_ndispl_stats_cns(cn)%med,     CSV_DELIM ! MED_MAX_NDISPL
         write(funit,601,advance='no') self%max_ndispl_stats_cns(cn)%sdev,    CSV_DELIM! SDEV_MAX_NDISPL
+        ! -- Major semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_maj_stats_cns(cn)%avg,   CSV_DELIM ! AVG_SEMIAX_MAJ
+        write(funit,601,advance='no') self%semiaxis_maj_stats_cns(cn)%med,   CSV_DELIM ! MED_SEMIAX_MAJ
+        write(funit,601,advance='no') self%semiaxis_maj_stats_cns(cn)%sdev,  CSV_DELIM ! SDEV_SEMIAX_MAJ
+        ! -- Medium semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_med_stats_cns(cn)%avg,   CSV_DELIM ! AVG_SEMIAX_MED
+        write(funit,601,advance='no') self%semiaxis_med_stats_cns(cn)%med,   CSV_DELIM ! MED_SEMIAX_MED
+        write(funit,601,advance='no') self%semiaxis_med_stats_cns(cn)%sdev,  CSV_DELIM ! SDEV_SEMIAX_MED
+        ! -- Minor semi-axis lengths of elliptical fits of CC shell
+        write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%avg,   CSV_DELIM ! AVG_SEMIAX_MIN
+        write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%med,   CSV_DELIM ! MED_SEMIAX_MIN
+        write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%sdev,  CSV_DELIM ! SDEV_SEMIAX_MIN
+        ! -- Anisotropic displacement along x-axis
+        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_X
+        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_X
+        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_X
+        ! -- Anisotropic displacement along y-axis
+        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_Y
+        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_Y
+        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_Y
+        ! -- Anisotropic displacement along z-axis
+        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_Z
+        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_Z
+        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_Z
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN

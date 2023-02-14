@@ -3150,10 +3150,11 @@ contains
             enddo
             ! update stack
             call os_stk%transfer_ori(stk_cnt, self%os_stk, istk)
-            call os_stk%set(istk, 'fromp', real(fromp_glob))
-            call os_stk%set(istk, 'top',   real(top_glob))
-            call os_stk%set(istk, 'nptcls',real(ptcl_cnt))
+            call os_stk%set(stk_cnt, 'fromp', real(fromp_glob))
+            call os_stk%set(stk_cnt, 'top',   real(top_glob))
+            call os_stk%set(stk_cnt, 'nptcls',real(ptcl_cnt))
             ! update micrograph
+            
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
                 call os_mic%set(stk_cnt,'nptcls',real(ptcl_cnt))
