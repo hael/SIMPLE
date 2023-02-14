@@ -214,6 +214,7 @@ contains
     procedure          :: remove_edge
     procedure          :: one_at_edge
     procedure          :: bin2logical
+    procedure          :: logical2bin
     procedure          :: collage
     ! FILTERS
     procedure          :: acf
@@ -244,6 +245,7 @@ contains
     procedure          :: NLmean3D
     ! CALCULATORS
     procedure          :: minmax
+    procedure          :: box_score
     procedure          :: rmsd
     procedure, private :: stats_1
     procedure, private :: stats_2
@@ -304,7 +306,7 @@ contains
     procedure          :: zero_background
     procedure          :: zero_env_background
     procedure          :: pad_fft
-    procedure          :: noise_norm_pad_fft
+    procedure          :: norm_noise_pad_fft
     procedure          :: div_w_instrfun
     procedure          :: salt_n_pepper
     procedure          :: square
@@ -331,11 +333,12 @@ contains
     procedure          :: scale_pixels
     procedure          :: mirror
     procedure          :: norm
+    procedure          :: norm_minmax
+    procedure          :: norm_bin
     procedure, private :: norm4viz
     procedure          :: norm_ext
-    procedure          :: noise_norm
+    procedure          :: norm_noise
     procedure          :: zero_edgeavg
-    procedure          :: norm_bin
     procedure          :: roavg
     procedure          :: rtsq
     procedure          :: rtsq_serial
@@ -2787,6 +2790,14 @@ contains
         end where
     end function bin2logical
 
+    !>  \brief  generates a binary image from a logical mask
+    subroutine logical2bin( self, mask )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        self%rmat = 0.
+        where(mask) self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+    end subroutine logical2bin
+
     ! performs left/right collage of input images, un-modified on output
     subroutine collage( self1, self2, img_out )
         class(image), intent(inout) :: self1, self2, img_out
@@ -4092,6 +4103,59 @@ contains
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
 
+    function box_score( self ) result( score )
+        class(image), intent(in)    :: self
+        real    :: xspix, yspix, ci, dist, score, norm, smin, smax, delta
+        real    :: xproj(self%ldim(1)), yproj(self%ldim(1)), xcen, ycen
+        integer :: i
+        logical :: xhas_peak, yhas_peak
+        if( self%ldim(3) /= 1            ) THROW_HARD('only for 2D images')
+        if( self%ldim(1) /= self%ldim(2) ) THROW_HARD('only for square images')
+        ! minmax normalize
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),1))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),1))
+        delta = smax - smin
+        self%rmat(:self%ldim(1),:self%ldim(2),1) = (self%rmat(:self%ldim(1),:self%ldim(2),1) - smin)/delta
+        ! project in x/y
+        xproj     = sum(self%rmat(:self%ldim(1),:self%ldim(2),1), dim=1)
+        yproj     = sum(self%rmat(:self%ldim(1),:self%ldim(2),1), dim=2)
+        ! look for peaks
+        xhas_peak = .false.
+        yhas_peak = .false.
+        do i = 2,self%ldim(1)-1
+            if( xproj(i) > xproj(i-1) .and. xproj(i) > xproj(i+1) ) xhas_peak = .true.
+            if( yproj(i) > yproj(i-1) .and. yproj(i) > yproj(i+1) ) yhas_peak = .true.
+        end do
+        if( xhas_peak .and. yhas_peak )then
+            ! calculate mass centers in x/y
+            xspix = 0.
+            yspix = 0.
+            xcen  = 0.
+            ycen  = 0.
+            ci    = -real(self%ldim(1) / 2)
+            do i = 1,self%ldim(1)
+                xcen  = xcen  + xproj(i) * ci
+                xspix = xspix + xproj(i)
+                ycen  = ycen  + yproj(i) * ci
+                yspix = yspix + yproj(i)
+                ci    = ci + 1.
+            end do
+            xcen = xcen / xspix
+            ycen = ycen / yspix
+            ! distance metric for 
+            ! (1) how well do the center of mass peaks agree and 
+            ! (2) how well do the center of mass peaks agree with the center of the box
+            dist = abs(xcen - ycen) + abs(xcen) / 2. + abs(ycen) / 2.
+            ! convert to normalized score
+            norm  = real(self%ldim(1) / 2)
+            score = (norm - dist) / norm
+            ! assume box = 50 & xcen/ycen = 0 => score = 1
+            ! assume box = 50 & xcen/ycen = 5 => score = 0.8
+        else
+            score = 0.
+        endif
+    end function box_score
+
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
     subroutine rmsd( self, dev, mean )
@@ -5340,13 +5404,13 @@ contains
         call self_out%fft
     end subroutine pad_fft
 
-    subroutine noise_norm_pad_fft( self, lmsk, self_out )
+    subroutine norm_noise_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         integer :: starts(3), stops(3)
         real    :: sdev_noise
-        call self%noise_norm(lmsk, sdev_noise)
+        call self%norm_noise(lmsk, sdev_noise)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
@@ -5354,7 +5418,7 @@ contains
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         call self_out%fft
-    end subroutine noise_norm_pad_fft
+    end subroutine norm_noise_pad_fft
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
@@ -6728,6 +6792,31 @@ contains
         endif
     end subroutine norm
 
+    subroutine norm_minmax( self  )
+        class(image), intent(inout) :: self
+        real    :: smin, smax, delta
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        delta = smax - smin
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)/delta
+    end subroutine norm_minmax
+
+    !>  \brief  is for [0,1] interval normalization of an image
+    subroutine norm_bin( self )
+        class(image), intent(inout) :: self
+        real                        :: smin, smax
+        if( self%ft ) THROW_HARD('image assumed to be real not FTed; norm_bin')
+        ! find minmax
+        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        ! create [0,1]-normalized image
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)  / (smax-smin)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
+    end subroutine norm_bin
+
     subroutine norm4viz( self  )
         class(image), intent(inout) :: self
         if(self%is_ft())THROW_HARD('real space only; norm4viz')
@@ -6756,7 +6845,7 @@ contains
         if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
-    subroutine noise_norm( self, lmsk, sdev_noise )
+    subroutine norm_noise( self, lmsk, sdev_noise )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         real,         intent(inout) :: sdev_noise
@@ -6773,7 +6862,7 @@ contains
             sdev_noise = sqrt(var)
             if( var > 0. ) self%rmat = self%rmat / sdev_noise
         endif
-    end subroutine noise_norm
+    end subroutine norm_noise
 
     !>  \brief  putting the edge around the image to zero (necessary for avoiding FT artefacts)
     subroutine zero_edgeavg( self )
@@ -6788,21 +6877,6 @@ contains
         edges_ave = edges_sum / real( 2*(self%ldim(1)+self%ldim(2)) )
         if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
     end subroutine zero_edgeavg
-
-    !>  \brief  is for [0,1] interval normalization of an image
-    subroutine norm_bin( self )
-        class(image), intent(inout) :: self
-        real                        :: smin, smax
-        if( self%ft ) THROW_HARD('image assumed to be real not FTed; norm_bin')
-        ! find minmax
-        smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        ! create [0,1]-normalized image
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)  / (smax-smin)
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
-    end subroutine norm_bin
 
     !> \brief roavg  is for creating a rotation average of self
     !! \param angstep angular step

@@ -257,6 +257,7 @@ contains
         ! make and open a stack for the movie frames
         write(logfhandle,'(a)') '>>> GENERATING MOVIE FRAMES'
         call base_image%fft()
+        call base_image%mul(-1.) ! invert contrast
         do i=1,params%nframes
             call progress(i,params%nframes)
             ! shift base image

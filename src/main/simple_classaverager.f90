@@ -453,7 +453,7 @@ contains
                     rhos(:,:,i)  = 0.0
                     tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
-                    call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
+                    call read_imgs(i)%norm_noise_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     if( l_pad_scale_correction ) call cgrid_imgs(i)%mul(pad_scale)
                     ! shift
                     call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
