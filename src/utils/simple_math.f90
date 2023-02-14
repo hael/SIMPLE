@@ -415,6 +415,31 @@ contains
         q = f0+dx0*(c1+dxb*c2+dy0*c5)+dy0*(c3+dyb*c4)
     end function quadri
 
+    subroutine create_hist_vector( x, n, xhist, yhist )
+        real,    intent(in)    :: x(:)         ! data
+        integer, intent(in)    :: n            ! number of intervals
+        real,    intent(inout) :: xhist(0:n-1) ! discretization of the values
+        integer, intent(inout) :: yhist(n)     ! number of occurences
+        integer :: i, j
+        real    :: xmin, xmax, dx
+        xmin  = minval(x)
+        xmax  = maxval(x)
+        xhist = 0.
+        yhist = 0
+        dx    = ( xmax + 1 - xmin )/n
+        do i = 0, n-1
+            xhist(i) = xmin + i*dx
+        end do
+        do i = 1, size(x)
+            j = nint( (x(i) - xmin)/dx )+1
+            if( j <= size(yhist) )then
+                yhist(j) = yhist(j) + 1
+            else
+                yhist(size(yhist)) = yhist(size(yhist)) + 1
+            endif
+        end do
+    end subroutine create_hist_vector
+
     ! Otsu's method
     ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
     ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
@@ -481,34 +506,6 @@ contains
         enddo
         ! rescale in the old range
         thresh = thresh / sc + old_range(1)
-
-    contains
-
-        subroutine create_hist_vector(x,n,xhist,yhist)
-            real,    intent(in)    :: x(:)         ! data
-            integer, intent(in)    :: n            ! number of intervals
-            real,    intent(inout) :: xhist(0:n-1) ! discretization of the values
-            integer, intent(inout) :: yhist(n)     ! number of occurences
-            integer   :: i, j
-            real      :: xmin, xmax, dx
-            xmin  = minval(x)
-            xmax  = maxval(x)
-            xhist = 0.
-            yhist = 0
-            dx=(xmax+1-xmin)/n
-            do i=0,n-1
-                xhist(i)=xmin+i*dx
-            end do
-            do i=1,size(x)
-                j=nint((x(i)-xmin)/dx)+1
-                if(j <= size(yhist)) then
-                    yhist(j)=yhist(j)+1
-                else
-                    yhist(size(yhist)) = yhist(size(yhist)) + 1
-                endif
-            end do
-        end subroutine create_hist_vector
-
     end subroutine otsu_1
 
     ! Otsu's method, see above
