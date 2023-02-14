@@ -238,7 +238,7 @@ contains
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
-        if( .not. cline%defined('objfun')    ) call cline%set('objfun',      'cc')
+        if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -342,7 +342,7 @@ contains
             call cline_cluster2D2%set('objfun', trim(cline%get_carg('objfun')))
             call cline_cluster2D2%set('needs_sigma', 'yes')
         else
-            call cline_cluster2D1%set('objfun', 'cc')
+            call cline_cluster2D2%set('objfun', 'cc')
         endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! scale references
@@ -933,7 +933,7 @@ contains
                     call cline%set('ptclw',    'yes')
                     call job_descr%set('ptclw','yes')
                 endif
-                params%objfun = orig_objfun
+                params%objfun = trim(orig_objfun)
                 if( params%objfun .eq. 'euclid' )then
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
