@@ -257,14 +257,14 @@ contains
             call img_out%shift2Dserial([-x,-y])
         endif
         ! Phase-flipping
+        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! nothing to do
             case(CTFFLAG_YES)
                 call img_out%fft
-                ctfparms      = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                ctfparms%smpd = ctfparms%smpd / crop_factor
-                tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
+                tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 call tfun%apply_serial(img_out, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
