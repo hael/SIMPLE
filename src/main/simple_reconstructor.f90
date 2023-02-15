@@ -255,7 +255,6 @@ contains
         endif
         ! scale & memoize for origin shifting
         scale = real(params_glob%box_croppd) / real(params_glob%box_crop)
-        ! scale = real(params_glob%boxpd) / real(params_glob%box)
         shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&

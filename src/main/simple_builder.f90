@@ -231,7 +231,7 @@ contains
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
-        integer     :: lfny, cyc_lims(3,2), i
+        integer     :: lfny, i
         logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
@@ -272,11 +272,6 @@ contains
             call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new(  [params%boxpd,params%boxpd,1],params%smpd)
-            ! build arrays
-            lfny       = self%img%get_lfny(1)
-            cyc_lims   = self%img_pad%loop_lims(3)
-            allocate( self%fsc(params%nstates,lfny) )
-            self%fsc  = 0.
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
@@ -294,6 +289,9 @@ contains
             endif
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill
+            ! build arrays
+            lfny = self%img_crop_polarizer%get_lfny(1)
+            allocate( self%fsc(params%nstates,lfny), source = 0.0 )
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
