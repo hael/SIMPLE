@@ -566,7 +566,7 @@ contains
                 call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl)
             end do
             !$omp end parallel do
             ! gridding
