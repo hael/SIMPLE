@@ -1163,7 +1163,7 @@ contains
         if( self%scale < 0.00001 ) THROW_HARD('scale out if range, should be > 0; new')
         ! set default msk value
         if( cline%defined('msk') )then
-            THROW_HARD('msk (mask radius in pixels) is depreciated! Use mskdiam (mask diameter in A)')
+            THROW_HARD('msk (mask radius in pixels) is deprecated! Use mskdiam (mask diameter in A)')
         endif
         mskdiam_default = (real(self%box) - COSMSKHALFWIDTH) * self%smpd
         msk_default     = round2even((real(self%box) - COSMSKHALFWIDTH) / 2.)
@@ -1238,7 +1238,7 @@ contains
         ! focused masking
         self%l_focusmsk = .false.
         if( cline%defined('focusmsk') )then
-            THROW_HARD('focusmsk (focused mask radius in pixels) is depreciated! Use focusmskdiam (focused mask diameter in A)')
+            THROW_HARD('focusmsk (focused mask radius in pixels) is deprecated! Use focusmskdiam (focused mask diameter in A)')
         endif
         if( cline%defined('focusmskdiam') )then
             if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmskdiam')
