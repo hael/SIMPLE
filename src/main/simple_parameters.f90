@@ -1693,6 +1693,7 @@ contains
                         call find_ldim_nptcls(self%stk, self%ldim, ifoo)
                         self%ldim(3) = 1
                         self%box     = self%ldim(1)
+                        if( .not.cline%defined('box_crop') ) self%box_crop = self%box
                     endif
                 else
                     write(logfhandle,'(a)')      'simple_parameters :: set_ldim_box_from_stk'

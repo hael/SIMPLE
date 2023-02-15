@@ -17,9 +17,9 @@ type :: fplane
     complex, allocatable, public :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
-    integer,              public :: ldim(3)       = 0            !< dimensions of cropped image
+    integer,              public :: ldim(3)       = 0            !< dimensions of original image
     integer,              public :: frlims_crop(3,2)             !< Redundant Fourier cropped limits
-    integer,              public :: ldim_crop(3)  = 0            !< dimensions of original image
+    integer,              public :: ldim_crop(3)  = 0            !< dimensions of cropped image
     real,                 public :: shconst(3)    = 0.           !< memoized constants for origin shifting
     integer,              public :: nyq_crop      = 0            !< cropped Nyqvist Fourier index
     logical                      :: exists        = .false.      !< Volta phaseplate images or not
