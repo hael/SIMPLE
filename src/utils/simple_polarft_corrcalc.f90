@@ -240,7 +240,7 @@ contains
         call self%kill
         ! set particle index range
         self%pfromto = pfromto
-        ! set band-pass Fourier indexc limits
+        ! set band-pass Fourier index limits
         self%kfromto = kfromto
         ! error check
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
@@ -461,15 +461,15 @@ contains
                     call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
                 end do
             end do
-            endif
-            self%pfts_ptcls   = zero
-            self%sqsums_ptcls = 0.
-            self%iseven       = .true.
-            allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
-            do i = 1,self%nptcls
-                iptcl = pinds(i)
-                self%pinds( iptcl ) = i
-            enddo
+        endif
+        self%pfts_ptcls   = zero
+        self%sqsums_ptcls = 0.
+        self%iseven       = .true.
+        allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+        do i = 1,self%nptcls
+            iptcl = pinds(i)
+            self%pinds( iptcl ) = i
+        enddo
     end subroutine reallocate_ptcls
 
     subroutine set_ref_pft( self, iref, pft, iseven )
