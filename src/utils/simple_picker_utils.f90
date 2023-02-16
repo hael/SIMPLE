@@ -11,6 +11,7 @@ private
 
 real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
 integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
+integer, parameter :: MAXNREFS     = 100
 real,    parameter :: DIST_THRES   = real(OFFSET_UB), NDEV = 2.5
 logical, parameter :: L_WRITE = .true.
 
@@ -21,17 +22,18 @@ type picker_utils
     real                          :: smpd_raw    = 0., smpd_shrink1    = 0., smpd_shrink2    = 0.
     real                          :: maxdiam = 0., sig_shrink1 = 0., sig_shrink2 = 0., sxx_shrink1 = 0.
     real                          :: sxx_shrink2 = 0.
-    integer                       :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0
+    integer                       :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0, nrefs = 1
     integer                       :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
     type(image)                   :: mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
     type(image),      pointer     :: mic_raw => null()
-    type(image),      allocatable :: boximgs1(:), boximgs2(:)
+    type(image),      allocatable :: boximgs1(:), boximgs2(:), boxrefs(:,:)
     integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
-    real,             allocatable :: box_scores1(:)
+    real,             allocatable :: box_scores1(:), sxx_refs(:,:)
     character(len=:), allocatable :: fbody
     logical                  :: exists = .false.
   contains
     procedure          :: new
+    procedure          :: set_refs
     procedure          :: exec_gaupicker
     procedure, private :: set_positions_1
     procedure, private :: set_positions_2
@@ -50,13 +52,12 @@ end type picker_utils
 
 contains
 
-    subroutine new( self, mic, smpd, moldiam, pcontrast, fbody, bp_lp )
+    subroutine new( self, mic, smpd, moldiam, pcontrast, fbody )
         class(picker_utils),  intent(inout) :: self
         class(image), target, intent(in)    :: mic
         real,                 intent(in)    :: smpd     !< sampling distance in A
         real,                 intent(in)    :: moldiam  !< maximum diameter in A
         character(len=*),     intent(in)    :: pcontrast, fbody
-        real, optional,       intent(in)    :: bp_lp(2) !< high- and low-pass limits in A
         real :: scale1, scale2, pixrad_shrink1, pixrad_shrink2
         if( self%exists ) call self%kill
         ! set raw micrograph info
@@ -85,10 +86,10 @@ contains
         self%ldim_box2(2)    = self%ldim_box2(1)
         self%ldim_box2(3)    = 1
         ! set # pixels in x/y for both box sizes
-        self%nx1 = self%ldim_shrink1(1) - self%ldim_box1(1)
-        self%ny1 = self%ldim_shrink1(2) - self%ldim_box1(2)
-        self%nx2 = self%ldim_shrink2(1) - self%ldim_box2(1)
-        self%ny2 = self%ldim_shrink2(2) - self%ldim_box2(2)
+        self%nx1             = self%ldim_shrink1(1) - self%ldim_box1(1)
+        self%ny1             = self%ldim_shrink1(2) - self%ldim_box1(2)
+        self%nx2             = self%ldim_shrink2(1) - self%ldim_box2(1)
+        self%ny2             = self%ldim_shrink2(2) - self%ldim_box2(2)
         ! set Gaussians
         pixrad_shrink1       = (self%maxdiam / 2.) / SMPD_SHRINK1
         pixrad_shrink2       = (self%maxdiam / 2.) / SMPD_SHRINK2
@@ -110,10 +111,6 @@ contains
         call self%mic_raw%fft
         call self%mic_raw%clip(self%mic_shrink1)
         call self%mic_raw%clip(self%mic_shrink2)
-        if( present(bp_lp) )then
-            call self%mic_shrink1%bp(bp_lp(1),bp_lp(2))
-            call self%mic_shrink2%bp(bp_lp(1),bp_lp(2))
-        endif
         select case(trim(pcontrast))
             case('black')
                 ! flip contrast (assuming black particle contrast on input)
@@ -134,6 +131,95 @@ contains
         ! endif
         self%exists = .true.
     end subroutine new
+
+    subroutine set_refs( self, imgs, mskdiam )
+        class(picker_utils), intent(inout) :: self
+        class(image),        intent(inout) :: imgs(:)
+        real,                intent(in)    :: mskdiam
+        type(image) :: img_rot
+        integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
+        real        :: scale1, scale2, mskrad1, mskrad2, pixrad_shrink1, pixrad_shrink2, smpd, ang, rot
+        smpd       = imgs(1)%get_smpd()
+        ldim       = imgs(1)%get_ldim()
+        if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
+        nimgs      = size(imgs)
+        nrots      = nint(real(MAXNREFS) / real(nimgs))
+        self%nrefs = nimgs * nrots
+        ! set shrunken logical dimensions of boxes
+        scale1               = smpd / SMPD_SHRINK1
+        scale2               = smpd / SMPD_SHRINK2
+        self%ldim_box1(1)    = round2even(real(ldim(1)) * scale1)
+        self%ldim_box1(2)    = round2even(real(ldim(2)) * scale1)
+        self%ldim_box1(3)    = 1
+        self%ldim_box2(1)    = round2even(real(ldim(1)) * scale2)
+        self%ldim_box2(2)    = round2even(real(ldim(2)) * scale2)
+        self%ldim_box2(3)    = 1
+        ! set # pixels in x/y for both box sizes
+        self%nx1             = self%ldim_shrink1(1) - self%ldim_box1(1)
+        self%ny1             = self%ldim_shrink1(2) - self%ldim_box1(2)
+        self%nx2             = self%ldim_shrink2(1) - self%ldim_box2(1)
+        self%ny2             = self%ldim_shrink2(2) - self%ldim_box2(2)
+        ! set Gaussians
+        self%maxdiam         = mskdiam
+        pixrad_shrink1       = (self%maxdiam / 2.) / SMPD_SHRINK1
+        pixrad_shrink2       = (self%maxdiam / 2.) / SMPD_SHRINK2
+        self%sig_shrink1     = pixrad_shrink1 / GAUSIG
+        self%sig_shrink2     = pixrad_shrink2 / GAUSIG
+        call self%imgau_shrink1%new(self%ldim_box1, SMPD_SHRINK1)
+        call self%imgau_shrink1%gauimg2D(self%sig_shrink1, self%sig_shrink1)
+        call self%imgau_shrink2%new(self%ldim_box2, SMPD_SHRINK2)
+        call self%imgau_shrink2%gauimg2D(self%sig_shrink2, self%sig_shrink2)
+        call self%imgau_shrink1%prenorm4real_corr(self%sxx_shrink1)
+        call self%imgau_shrink2%prenorm4real_corr(self%sxx_shrink2)
+        call self%imgau_shrink1%fft
+        call self%imgau_shrink2%fft
+        mskrad1 = (mskdiam / SMPD_SHRINK1) / 2.
+        mskrad2 = (mskdiam / SMPD_SHRINK2) / 2.
+        if( allocated(self%boxrefs) )then
+            do iimg = 1,size(self%boxrefs,dim=1)
+                call self%boxrefs(iimg,1)%kill
+                call self%boxrefs(iimg,2)%kill
+            end do
+            deallocate(self%boxrefs)
+        endif
+        if( allocated(self%sxx_refs) ) deallocate(self%sxx_refs)
+        allocate( self%boxrefs(self%nrefs,2), self%sxx_refs(self%nrefs,2) )
+        call img_rot%new(ldim, smpd)
+        ang = 360./real(nrots)
+        cnt = 0
+        do iimg = 1,nimgs
+            rot = 0.
+            do irot = 1,nrots
+                cnt = cnt + 1
+                call imgs(iimg)%rtsq(rot, 0., 0., img_rot)
+                call img_rot%fft
+                call self%boxrefs(cnt,1)%new(self%ldim_box1, SMPD_SHRINK1)
+                call self%boxrefs(cnt,2)%new(self%ldim_box2, SMPD_SHRINK2)
+                call self%boxrefs(cnt,1)%set_ft(.true.)
+                call self%boxrefs(cnt,2)%set_ft(.true.)
+                call img_rot%clip(self%boxrefs(cnt,1))
+                call img_rot%clip(self%boxrefs(cnt,2))
+                ! convolve with Gaussians
+                call self%boxrefs(cnt,1)%mul(self%imgau_shrink1)
+                call self%boxrefs(cnt,2)%mul(self%imgau_shrink2)
+                ! back to real-space
+                call self%boxrefs(cnt,1)%ifft
+                call self%boxrefs(cnt,2)%ifft
+                call self%boxrefs(cnt,1)%mask(mskrad1, 'hard')
+                call self%boxrefs(cnt,2)%mask(mskrad2, 'hard')
+                call self%boxrefs(cnt,1)%prenorm4real_corr(self%sxx_refs(cnt,1))
+                call self%boxrefs(cnt,2)%prenorm4real_corr(self%sxx_refs(cnt,2))
+                if( L_WRITE )then
+                    call self%boxrefs(cnt,1)%write('boxrefs_shrink1.mrc', cnt)
+                    call self%boxrefs(cnt,2)%write('boxrefs_shrink2.mrc', cnt)
+                endif
+                rot = rot + ang
+            end do
+        end do
+        call self%imgau_shrink1%ifft
+        call self%imgau_shrink2%ifft
+        call img_rot%kill
+    end subroutine set_refs
 
     subroutine exec_gaupicker( self, micimg, smpd, moldiam, pcontrast, micname, boxname_out, nptcls, dir_out )
         class(picker_utils),        intent(inout) :: self
@@ -583,24 +669,36 @@ contains
             call self%imgau_shrink1%kill
             call self%imgau_shrink2%kill
             self%mic_raw => null()
-            if( allocated(self%boximgs1) )then
-                do i = 1,size(self%boximgs1)
-                    call self%boximgs1(i)%kill
+            call destruct_imarr(self%boximgs1)
+            call destruct_imarr(self%boximgs2)
+            if( allocated(self%boxrefs) )then
+                do i = 1,size(self%boxrefs, dim=1)
+                    call self%boxrefs(i,1)%kill
+                    call self%boxrefs(i,2)%kill
                 end do
-                deallocate(self%boximgs1)
-            endif
-            if( allocated(self%boximgs2) )then
-                do i = 1,size(self%boximgs2)
-                    call self%boximgs2(i)%kill
-                end do
-                deallocate(self%boximgs2)
+                deallocate(self%boxrefs)
             endif
             if( allocated(self%positions1)  ) deallocate(self%positions1)
             if( allocated(self%positions2)  ) deallocate(self%positions2)
             if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
             if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
+            if( allocated(self%sxx_refs)    ) deallocate(self%sxx_refs)
             if( allocated(self%fbody)       ) deallocate(self%fbody)
         endif
+
+        contains
+
+            subroutine destruct_imarr( imarr )
+                type(image), allocatable, intent(inout) :: imarr(:)
+                integer :: i
+                if( allocated(imarr) )then
+                    do i = 1,size(imarr)
+                        call imarr(i)%kill
+                    end do
+                    deallocate(imarr)
+                endif
+            end subroutine destruct_imarr
+
     end subroutine kill
 
     ! utilities
