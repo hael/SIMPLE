@@ -970,7 +970,7 @@ contains
         call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
+        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob|test){euclid}', '(euclid|cc|prob|test){euclid}', .false., 'euclid')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
