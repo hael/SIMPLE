@@ -12,7 +12,7 @@ type(cmdline)                 :: cline, cline_projection
 type(image)                   :: img, noise, res_map, img_noisy, img_filt
 type(reproject_commander)     :: xreproject
 integer                       :: k, nyq, nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
-real                          :: ave, sdev, maxv, minv, med, vec_mean, vec_std
+real                          :: ave, sdev, maxv, minv, med, noise_mean, noise_std
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:), yest(:)
@@ -87,22 +87,21 @@ do iptcl = 1, 1
     ! find_cur = int(find_start + 50)
     do find_cur = find_start + 10, find_stop - 10, 5
         call img_filt%copy(img_noisy)
-        call img_noisy%fft
         call img_filt%fft
         call butterworth_filter(find_cur - 5, find_cur + 5, cur_fil)
         call img_filt%apply_filter(cur_fil)
-        call img_filt%add(img_noisy)
         call img_filt%ifft
-        call img_noisy%ifft
+        call img_filt%add(img_noisy)
         call img_filt%write('stk_filt.mrc', iptcl)
         call img_filt%get_rmat_ptr( rmat_img_filt )
         vec_noise = [rmat_img_noisy] - [rmat_img_filt]
+        call avg_sdev(vec_noise, noise_mean, noise_std)
         call create_hist_vector( vec_noise, n_bin, xhist, yhist )
         yest = real(yhist)
-        call avg_sdev(yest, vec_mean, vec_std)
-        yest = exp(-(yest-vec_mean)**2/2./vec_std**2)/2./pi/vec_std
-        yest = yest*sum(xhist*yhist)/sum(xhist*yest)
+        yest = exp( -(yest-noise_mean)**2/2./noise_std**2 )/2./pi/noise_std
+        yest = yest * sum(xhist*yhist) / sum(xhist*yest)
         print *, sum( (yest - real(yhist))**2 )
+        call img_filt%zero_and_unflag_ft
     enddo
     ! print *, yhist
     call img%zero_and_unflag_ft
