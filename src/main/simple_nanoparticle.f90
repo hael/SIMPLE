@@ -1261,8 +1261,8 @@ contains
             ! maximum grey level intensity across the connected component
             self%atominfo(cc)%max_int = maxval(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             ! average grey level intensity across the connected component
-            !self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
-            !self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
+            self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
@@ -1270,7 +1270,6 @@ contains
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! Isotropic B-factors
             call calc_isotropic_disp_sphere(cc, a)
-            !call iso_shell_profile(cc)
             ! calculate anisotropic displacement parameters.  
             call self%calc_aniso(cc, imat_cc_scaled, border)
 
@@ -1499,126 +1498,6 @@ contains
                 write(fiso, '(2i8, 4f10.5, 8f10.5)') cc, count, sum_int_out, sum_int, max_int_out, self%atominfo(cc)%max_int, corr, fit_rad*self%smpd, &
                     &var*(self%smpd)**2, sqrt(var)*self%smpd, fit_rad, var, sqrt(var), 1-prob_sum_sq
             end subroutine calc_isotropic_disp_sphere
-
-            subroutine iso_shell_profile(cc)
-                integer, intent(in)    :: cc
-                real, allocatable      :: shell_avgs(:), shell_stds(:)
-                real                   :: center(3), maxrad, step, dist, min_int, sum_int, sum_shells, fit_rad, prob_sumsq, beta, A, prob_tot, corr, prob, var,&
-                                            &sum_int_out
-                integer, allocatable   :: shell_counts(:)
-                integer, parameter     :: nshells = 10
-                integer                :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, n, count
-                logical                :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-
-                ! Create search window.  Identify fit radius
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 3) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = (4.0*2/5) / self%smpd
-
-                ! Setup avg and std data structures for each shell
-                step = 1. / nshells
-                allocate(shell_counts(nshells), source = 0)
-                allocate(shell_avgs(nshells), shell_stds(nshells), source = 0.)
-
-                ! For each shell, calculate avg intensity and min avg of all shells
-                sum_int = 0.
-                count = 0
-                do n=1, nshells
-                    do k=klo, khi
-                        do j=jlo, jhi
-                            do i=ilo, ihi
-                                ! If voxel is inside nth shell
-                                dist = euclid(1.*[i,j,k], center) / fit_rad
-                                if (dist > (n-1)*step .and. dist < n*step) then
-                                    shell_counts(n) = shell_counts(n) + 1
-                                    if (rmat_raw(i,j,k) > 0.) then
-                                        shell_avgs(n) = shell_avgs(n) + rmat_raw(i,j,k)
-                                        sum_int = sum_int + rmat_raw(i,j,k)
-                                    end if
-                                    count = count + 1
-                                end if
-                            end do
-                        end do
-                    end do
-                end do
-                min_int = 0.
-                do n=1, nshells
-                    if (shell_counts(n) /= 0) then
-                        shell_avgs(n) = shell_avgs(n) / shell_counts(n)
-                        if (shell_avgs(n) < min_int) then
-                            min_int = shell_avgs(n)
-                        end if
-                    end if
-                end do
-                min_int = 0.
-                shell_avgs = shell_avgs + abs(min_int) ! To avoid negative probabilities
-                sum_shells = sum(shell_avgs)
-
-                ! Calculate radial variance of the shell intensities
-                var = 0.
-                prob_sumsq = 0.
-                do n=1, nshells
-                    prob = shell_avgs(n) / sum_shells
-                    prob_sumsq = prob_sumsq + prob**2
-                    var = var + prob * (step * (n - 0.5) * fit_rad)**2 
-                end do
-
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                prob_tot = 0.
-                fit_rad = fit_rad
-                beta = 0.
-                A = 1.0 / sqrt((2*pi)**3 * var)
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*center(:))**2/var
-                                prob = A * exp(beta)
-                                prob_tot = prob_tot + prob
-                                call fit_isotropic%set_rmat_at(i, j, k, prob*sum_int+min_int)
-                            end if
-                        end do
-                    end do
-                end do
-                ! Renormalize based on pro_tot
-                sum_int_out = 0.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                call fit_isotropic%set_rmat_at(i, j, k, fit_isotropic%get_rmat_at(i,j,k)/prob_tot)
-                                sum_int_out = sum_int_out + fit_isotropic%get_rmat_at(i,j,k)
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Calculate correlation between fit and orignal map within the fit radius
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
-                
-                self%atominfo(cc)%isobfac = sqrt(var) * self%smpd
-                self%atominfo(cc)%isocorr = corr
-
-                ! Output shell radius and statistics in CSV File
-                write(fiso, '(i8, f10.5, 10f10.5)') cc, min_int, shell_avgs
-
-            end subroutine iso_shell_profile
 
             subroutine calc_zscore( arr )
                 real, intent(inout) :: arr(:)
