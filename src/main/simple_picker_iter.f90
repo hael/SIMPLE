@@ -48,7 +48,7 @@ contains
             call find_ldim_nptcls(moviename_intg, ldim, ifoo)
             call micimg%new(ldim, smpd)
             call micimg%read(moviename_intg)
-            call putils%exec_gaupicker(micimg, smpd, params_glob%moldiam, params_glob%pcontrast, moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
+            call putils%exec_picker(boxfile, nptcls_out, dir_out=dir_out)
             call micimg%kill
         else
             THROW_HARD('Need 2D references or volume or modiam!')

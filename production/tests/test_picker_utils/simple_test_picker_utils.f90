@@ -32,12 +32,11 @@ do iref = 1,nrefs
 end do
 call micimg%new(ldim, SMPD)
 call micimg%read(micname)
-call putils%new(micimg, SMPD, MOLDIAM, 'black', 'test')
-call putils%set_refs(refs, 200.)
-
-! call putils%exec_gaupicker(micimg, SMPD, MOLDIAM, 'black', micname, boxname_out, nptcls)
-
+call putils%new(micname, 'black', SMPD, MOLDIAM)
+! call putils%set_refs(refs, 200.)
+call putils%exec_picker(boxname_out, nptcls)
 ! print *, 'boxname_out ', trim(boxname_out)
 ! print *, 'nptcls      ', nptcls
+call putils%kill
 
 end program simple_test_picker_utils
