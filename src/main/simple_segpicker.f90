@@ -36,7 +36,6 @@ type :: segpicker
     integer :: n_particles           = 0
     integer :: orig_box              = 0
     character(len=3)              :: elongated  = ''   !user inputted particle shape
-    character(len=STDLEN)         :: color      = ''   !color in which to draw on the mic to identify picked particles
     character(len=STDLEN)         :: pickername = ''   !fname
     character(len=STDLEN)         :: fbody      = ''   !fbody
     character(len=LONGSTRLEN)     :: boxname    = ''   !name of the .box file
@@ -90,7 +89,6 @@ contains
         call self%img_cc%new_bimg(self%ldim_shrunken, self%smpd_shrunken)
         self%n_particles = 0
         self%lambda      = 3.
-        self%color       = color
         ! set shape
         self%elongated = eelongated
     end subroutine new
@@ -356,12 +354,6 @@ contains
             endif
         enddo
         close(23)
-        ! Cannot put in the same loop as before otherwise when I extract particles I can see the drawings
-        do n_cc = 1, self%n_particles
-            if(.not. outside(n_cc)) then
-                call self%img%draw_picked(nint(self%particles_coord(n_cc,:)),nint((self%min_rad+self%max_rad)/2.),2, self%color)
-            endif
-        end do
         call imgwin_particle%kill
         if(DOWRITEIMGS) call self%img%write(PATH_HERE//basename(trim(self%fbody))//'_picked_particles.mrc')
     end subroutine output_identified_particle_positions
@@ -418,7 +410,6 @@ contains
         self%ldim_shrunken(:) = 0
         self%n_particles      = 0
         self%orig_box         = 0
-        self%color            = ''
         self%pickername       = ''   !fname
         self%fbody            = ''   !fbody
         self%boxname          = ''

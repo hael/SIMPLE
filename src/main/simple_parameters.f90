@@ -147,7 +147,6 @@ type :: parameters
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: dir_exec=''          !< name of execution directory
     character(len=STDLEN)     :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
-    character(len=STDLEN)     :: draw_color='white'   !< color in which to identify the picked particle
     character(len=STDLEN)     :: executable=''        !< name of executable
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)          :: element ='    '      !< atom kind
@@ -464,7 +463,6 @@ contains
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
-        call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)

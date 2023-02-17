@@ -282,7 +282,6 @@ contains
         call cmd_dict%push('diverse',       'diverse or not flag (yes|no){no}')
         call cmd_dict%push('doclist',       'list of oritabs for different states')
         call cmd_dict%push('doprint',       'whether to print(yes|no){no}')
-        call cmd_dict%push('draw_color',    'color of the cross that identify the picked particle {white|black}')
         call cmd_dict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
         call cmd_dict%push('e1',            'Euler 1 (in degrees){0}')
         call cmd_dict%push('e2',            'Euler 2 (in degrees){0}')
