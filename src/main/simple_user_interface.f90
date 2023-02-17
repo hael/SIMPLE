@@ -237,7 +237,6 @@ type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: ml_reg
-type(simple_input_param) :: ml_reg2D
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: nchunks
@@ -1065,7 +1064,6 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(ml_reg2D,       'ml_reg2D',     'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -1408,7 +1406,7 @@ contains
         call cleanup2D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 5, ml_reg2D)
+        call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
         call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
@@ -1521,7 +1519,7 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 7, ml_reg2D)
+        call cluster2D%set_input('filt_ctrls', 7, ml_reg)
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
