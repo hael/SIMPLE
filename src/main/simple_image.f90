@@ -311,7 +311,6 @@ contains
     procedure          :: div_w_instrfun
     procedure          :: salt_n_pepper
     procedure          :: square
-    procedure          :: draw_picked
     procedure          :: corners
     procedure          :: before_after
     procedure, private :: gauimg_1
@@ -5633,47 +5632,6 @@ contains
         endif
         self%ft = .false.
     end subroutine square
-
-   ! This functions draws a window in self centered in part_coords.
-   ! Required inputs: coordinates of the particle, radius of the particle.
-   ! This function is meant to mark picked particles (visual purpose).
-   subroutine draw_picked(self, part_coords, part_radius, border, color)
-     class(image),               intent(inout)    :: self
-     integer,                    intent(in)       :: part_coords(2)  !coordinates of the picked particle
-     integer,                    intent(in)       :: part_radius
-     integer,          optional, intent(in) :: border                !width of the border of the drawn line
-     character(len=*), optional, intent(in) :: color                 !whether to draw in white or in black
-     character(len=10) :: ccolor
-     integer :: bborder
-     real    :: value             !intensity value of the window
-     integer :: wide              !side width of the window
-     integer :: length            !length of the drawn side
-     bborder = 1
-     if(present(border)) bborder = border
-     ccolor = 'white' !default
-     if(present(color))   ccolor = color
-     if((color=='b') .or. (color=='black')) then
-         value = minval(self%rmat(:,:,:))
-    else if((color=='w') .or. (color=='white')) then
-         value = maxval(self%rmat(:,:,:))
-     else
-         THROW_WARN('Invalid color; draw_picked')
-         value = maxval(self%rmat(:,:,:))
-     endif
-     wide = 4*part_radius
-     length = int(part_radius)
-     if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
-     if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
-     &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
-       write(logfhandle,*) 'The window is out of the border of the image!'
-       return    !Do not throw error, just do not draw
-     endif
-     ! Central cross
-     self%rmat(part_coords(1)-length:part_coords(1)+length, &
-            &  part_coords(2)-int((bborder-1)/2):part_coords(2)+int((bborder-1)/2), 1) = value
-     self%rmat(part_coords(1)-int((bborder-1)/2):part_coords(1)+int((bborder-1)/2), &
-            &  part_coords(2)-length:part_coords(2)+length, 1) = value
-   end subroutine draw_picked
 
     !>  \brief  just a corner filling fun for testing purposes
     !! \param sqrad half width of square
