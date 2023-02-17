@@ -24,18 +24,18 @@ type picker_utils
     real                          :: sxx_shrink2 = 0.
     integer                       :: nboxes1 = 0, nboxes2 = 0, nboxes_ub = 0, nrefs = 1
     integer                       :: nx1 = 0, ny1 = 0, nx2 = 0, ny2 = 0, nx_offset  = 0, ny_offset = 0
-    type(image)                   :: mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
-    type(image),      pointer     :: mic_raw => null()
+    type(image)                   :: mic_raw, mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
     type(image),      allocatable :: boximgs1(:), boximgs2(:), boxrefs(:,:)
     integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
     real,             allocatable :: box_scores1(:), sxx_refs(:,:)
+    character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
     logical                       :: refpick = .false.
     logical                       :: exists  = .false.
   contains
     procedure          :: new
     procedure          :: set_refs
-    procedure          :: exec_gaupicker
+    procedure          :: exec_picker
     procedure, private :: set_positions_1
     procedure, private :: set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
@@ -53,19 +53,25 @@ end type picker_utils
 
 contains
 
-    subroutine new( self, mic, smpd, moldiam, pcontrast, fbody )
+    subroutine new( self, micname, pcontrast, smpd, moldiam )
         class(picker_utils),  intent(inout) :: self
-        class(image), target, intent(in)    :: mic
-        real,                 intent(in)    :: smpd     !< sampling distance in A
-        real,                 intent(in)    :: moldiam  !< maximum diameter in A
-        character(len=*),     intent(in)    :: pcontrast, fbody
-        real :: scale1, scale2, pixrad_shrink1, pixrad_shrink2
+        character(len=*),     intent(in)    :: micname, pcontrast
+        real,                 intent(in)    :: smpd    !< sampling distance in A
+        real,                 intent(in)    :: moldiam !< maximum diameter in A
+        character(len=:), allocatable :: ext
+        real    :: scale1, scale2, pixrad_shrink1, pixrad_shrink2
+        integer :: nframes
         if( self%exists ) call self%kill
         ! set raw micrograph info
-        self%ldim_raw = mic%get_ldim()
-        if( self%ldim_raw(3) /= 1 ) THROW_HARD('Only for 2D images')
+        call find_ldim_nptcls(micname, self%ldim_raw, nframes)
+        if( self%ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
         self%smpd_raw = smpd
-        self%mic_raw  => mic
+        call self%mic_raw%new(self%ldim_raw, self%smpd_raw)
+        call self%mic_raw%read(micname)
+        ! set fbody & boxname
+        ext          = fname2ext(trim(micname))
+        self%fbody   = trim(get_fbody(basename(trim(micname)), ext))
+        self%boxname = basename(fname_new_ext(trim(micname),'box'))
         ! set shrunken logical dimensions
         scale1 = self%smpd_raw / SMPD_SHRINK1
         scale2 = self%smpd_raw / SMPD_SHRINK2
@@ -102,8 +108,6 @@ contains
         call self%imgau_shrink2%gauimg2D(self%sig_shrink2, self%sig_shrink2)
         call self%imgau_shrink1%prenorm4real_corr(self%sxx_shrink1)
         call self%imgau_shrink2%prenorm4real_corr(self%sxx_shrink2)
-        ! set fbody
-        allocate(self%fbody, source=adjustl(trim(fbody)))
         ! shrink micrograph
         call self%mic_shrink1%new(self%ldim_shrink1, SMPD_SHRINK1)
         call self%mic_shrink2%new(self%ldim_shrink2, SMPD_SHRINK2)
@@ -126,10 +130,12 @@ contains
         call self%mic_raw%ifft
         call self%mic_shrink1%ifft
         call self%mic_shrink2%ifft
-        ! if( L_WRITE )then
-        !     call self%mic_shrink1%write('mic_shrink1.mrc')
-        !     call self%mic_shrink2%write('mic_shrink2.mrc')
-        ! endif
+        if( L_WRITE )then
+            call self%mic_shrink1%write('mic_shrink1.mrc')
+            call self%mic_shrink2%write('mic_shrink2.mrc')
+            call self%imgau_shrink1%write('gau_shrink1.mrc')
+            call self%imgau_shrink2%write('gau_shrink2.mrc')
+        endif
         self%exists = .true.
     end subroutine new
 
@@ -223,22 +229,17 @@ contains
         self%refpick = .true.
     end subroutine set_refs
 
-    subroutine exec_gaupicker( self, micimg, smpd, moldiam, pcontrast, micname, boxname_out, nptcls, dir_out )
+    subroutine exec_picker( self, boxname_out, nptcls, dir_out )
         class(picker_utils),        intent(inout) :: self
-        class(image),               intent(in)    :: micimg
-        real,                       intent(in)    :: smpd, moldiam
-        character(len=*),           intent(in)    :: pcontrast, micname
         character(len=LONGSTRLEN),  intent(out)   :: boxname_out
         integer,                    intent(out)   :: nptcls
         character(len=*), optional, intent(in)    :: dir_out
-        character(len=:), allocatable :: ext, fbody
-        character(len=LONGSTRLEN)     :: boxname
         real    :: shrink2
-        integer :: box, i
-        ext   = fname2ext(trim(micname))
-        fbody = get_fbody(basename(trim(micname)), ext)
-        if( present(dir_out) ) fbody = trim(dir_out)//trim(fbody)
-        call self%new(micimg, smpd, moldiam, pcontrast, fbody)
+        integer :: box
+        if( present(dir_out) )then
+            self%fbody   = trim(dir_out)//trim(self%fbody)
+            self%boxname = trim(dir_out)//trim(self%boxname)
+        endif
         call self%gauconv_mics
         call self%set_positions
         call self%analyze_boximgs1
@@ -246,9 +247,6 @@ contains
         call self%distance_filter
         call self%refine_positions
         call self%remove_outliers
-        ! box file
-        boxname = basename(fname_new_ext(micname,'box'))
-        if( present(dir_out) ) boxname = trim(dir_out)//trim(boxname)
         ! # ptcls
         nptcls          = self%nboxes2
         ! bring back coordinates to original sampling
@@ -257,12 +255,10 @@ contains
         ! write coordinates
         box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
         call self%extract_boximgs2(box)
-        call write_boximgs(self%nboxes2, self%boximgs2, self%fbody//'_raw.mrcs')
-        call write_boxfile(self%nboxes2, self%positions2, box, boxname)
-        call make_relativepath(CWD_GLOB, boxname, boxname_out) ! returns absolute path
-        ! destruct
-        call self%kill
-    end subroutine exec_gaupicker
+        call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+        call write_boxfile(self%nboxes2, self%positions2, box, self%boxname)
+        call make_relativepath(CWD_GLOB, self%boxname, boxname_out) ! returns absolute path
+    end subroutine exec_picker
 
     subroutine set_positions_1( self )
         class(picker_utils), intent(inout) :: self
@@ -494,7 +490,7 @@ contains
         deallocate(positions_tmp)
         call self%extract_boximgs1
         if( L_WRITE )then
-            call write_boximgs(int(self%nboxes1), self%boximgs1, self%fbody//'_before_filters.mrcs')
+            call write_boximgs(int(self%nboxes1), self%boximgs1, trim(self%fbody)//'_before_filters.mrcs')
         endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -699,7 +695,7 @@ contains
         deallocate(positions_tmp)
         if( L_WRITE )then
             call self%extract_boximgs2
-            call write_boximgs(int(self%nboxes2), self%boximgs2, self%fbody//'_after_filters.mrcs')
+            call write_boximgs(int(self%nboxes2), self%boximgs2, trim(self%fbody)//'_after_filters.mrcs')
         endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -710,11 +706,11 @@ contains
         class(picker_utils), intent(inout) :: self
         integer :: i
         if( self%exists )then
+            call self%mic_raw%kill
             call self%mic_shrink1%kill
             call self%mic_shrink2%kill
             call self%imgau_shrink1%kill
             call self%imgau_shrink2%kill
-            self%mic_raw => null()
             call destruct_imarr(self%boximgs1)
             call destruct_imarr(self%boximgs2)
             if( allocated(self%boxrefs) )then
