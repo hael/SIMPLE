@@ -1012,8 +1012,6 @@ contains
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
                     params%cc_objfun = OBJFUN_PROB
-                elseif( params%objfun .eq. 'test' )then
-                    params%cc_objfun = OBJFUN_TEST
                 endif
                 l_switch2euclid = .false.
             endif
@@ -1145,7 +1143,7 @@ contains
                 params%extr_iter = params%startit - 1
             endif
             ! ML sigmas
-            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB .or. params%cc_objfun.eq.OBJFUN_TEST )
+            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
             orig_objfun     = trim(cline%get_carg('objfun'))
             if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
                 ! we are continuing from an ML iterartion
@@ -1182,8 +1180,6 @@ contains
                         params%cc_objfun = OBJFUN_EUCLID
                     elseif( params%objfun .eq. 'prob' )then
                         params%cc_objfun = OBJFUN_PROB
-                    elseif( params%objfun .eq. 'test' )then
-                        params%cc_objfun = OBJFUN_TEST
                     endif
                     l_switch2euclid  = .false.
                 endif

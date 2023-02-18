@@ -621,8 +621,6 @@ contains
                     params%cc_objfun = OBJFUN_EUCLID
                 elseif( params%objfun .eq. 'prob' )then
                     params%cc_objfun = OBJFUN_PROB
-                elseif( params%objfun .eq. 'test' )then
-                    params%cc_objfun = OBJFUN_TEST
                 endif
                 l_switch2euclid = .false.
             endif
@@ -785,8 +783,6 @@ contains
                         params%cc_objfun = OBJFUN_EUCLID
                     case('prob')
                         params%cc_objfun = OBJFUN_PROB
-                    case('test')
-                        params%cc_objfun = OBJFUN_TEST
                     end select
                     l_switch2euclid = .false.
                 endif

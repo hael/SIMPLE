@@ -577,8 +577,6 @@ contains
                 call self%correlate_cc(    ithr, iptcl, corr)
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid(ithr, iptcl, corr)
-            case(OBJFUN_TEST)
-                call self%correlate_test(  ithr, iptcl, corr)
         end select
     end function project_and_correlate_1
 
@@ -596,8 +594,6 @@ contains
                 call self%correlate_cc(    ithr, iptcl, corr)
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid(ithr, iptcl, corr)
-            case(OBJFUN_TEST)
-                call self%correlate_test(  ithr, iptcl, corr)
         end select
     end function project_and_correlate_2
 
@@ -613,8 +609,6 @@ contains
                 call self%correlate_cc(     ithr, iptcl, corr )
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid( ithr, iptcl, corr )
-            case(OBJFUN_TEST)
-                call self%correlate_test(   ithr, iptcl, corr )
         end select
     end subroutine corr_shifted_1
 
@@ -631,8 +625,6 @@ contains
                 call self%correlate_cc(     ithr, iptcl, corr, grad )
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid( ithr, iptcl, corr, grad )
-            case(OBJFUN_TEST)
-                call self%correlate_test(   ithr, iptcl, corr, grad )
         end select
     end subroutine corr_shifted_2
 
