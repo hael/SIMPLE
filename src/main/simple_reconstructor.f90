@@ -238,7 +238,7 @@ contains
         type(ori) :: o_sym
         complex   :: comp, oshift
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
-        real      :: vec(3), loc(3), odists(3), dists(3), shconst_here(2), scale, arg, ctfval
+        real      :: vec(3), loc(3), odists(3), dists(3), shconst_here(2), arg, ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3), floc(3), cloc(3)
         if( pwght < TINY )return
@@ -253,8 +253,7 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! scale & memoize for origin shifting
-        scale = real(params_glob%box_croppd) / real(params_glob%box_crop)
+        ! memoize for origin shifting
         shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
@@ -267,7 +266,7 @@ contains
                         if( sh > fpl%nyq_crop ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = scale * matmul(vec, rotmats(isym,:,:))
+                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         floc = floor(loc)
                         cloc = floc + 1
@@ -323,7 +322,7 @@ contains
                         if( sh > fpl%nyq_crop ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = scale * matmul(vec, rotmats(isym,:,:))
+                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
                         ! window
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz

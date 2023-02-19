@@ -341,7 +341,7 @@ contains
         call img_in%clip(img_out)
         ! apply mask
         if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB .or. params_glob%cc_objfun == OBJFUN_TEST )then
-            call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
+            call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         else
             call img_out%mask(params_glob%msk_crop, 'soft')
         endif

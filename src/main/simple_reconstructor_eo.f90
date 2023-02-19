@@ -81,6 +81,7 @@ contains
         neg = .false.
         if( params_glob%neg .eq. 'yes' ) neg = .true.
         self%box        = params_glob%box_crop
+        self%boxpd      = params_glob%box_croppd
         self%smpd       = params_glob%smpd_crop
         self%fny        = 2.*self%smpd
         self%nstates    = params_glob%nstates
@@ -90,12 +91,7 @@ contains
         self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
-        if( params_glob%boxpd > params_glob%box_croppd )then
-            self%boxpd = max(params_glob%box,params_glob%box_croppd)
-        else
-            self%boxpd = params_glob%boxpd
-        endif
-        ! overall magnitude correction
+        ! overall magnitude correction (interpolation padding + downscaling)
         self%mag_correction = real(params_glob%box)                                        ! insertion of 2D slice into 3D
         self%mag_correction = self%mag_correction * (real(self%boxpd) / real(self%box))**3 ! 3D padding factor
         ! create composites
