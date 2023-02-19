@@ -159,6 +159,7 @@ contains
         endif
 
         call prep_ccobjs4align(cline, batchsz_max)
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
         if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
@@ -423,7 +424,6 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
