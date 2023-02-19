@@ -1407,6 +1407,9 @@ contains
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
+        cleanup2D%filt_ctrls(5)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cleanup2D%filt_ctrls(5)%descr_placeholder = '(yes|no){no}'
+        cleanup2D%filt_ctrls(5)%cval_default      = 'no'
         call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
@@ -1520,6 +1523,9 @@ contains
         call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 7, ml_reg)
+        cluster2D%filt_ctrls(7)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cluster2D%filt_ctrls(7)%descr_placeholder = '(yes|no){no}'
+        cluster2D%filt_ctrls(7)%cval_default      = 'no'
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
