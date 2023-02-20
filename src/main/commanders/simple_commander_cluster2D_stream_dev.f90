@@ -29,8 +29,7 @@ type, extends(commander_base) :: cluster2D_commander_subsets
     procedure :: execute      => exec_cluster2D_subsets
 end type cluster2D_commander_subsets
 
-! integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
-integer,               parameter   :: MINBOXSZ            = 88    ! minimum boxsize for scaling
+integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
@@ -1562,16 +1561,16 @@ contains
         if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',      30.0)
         if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('lp')           ) call cline%set('lp',          GREEDY_TARGET_LP)
-        if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',    30.0)
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev',        1.5)
-        if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl2D')
-        if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'partial')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
-        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
-        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
-        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',    'no')
+        if( .not. cline%defined('lp')           ) call cline%set('lp',         GREEDY_TARGET_LP)
+        if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',     30.0)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev',       1.5)
+        if( .not. cline%defined('oritype')      ) call cline%set('oritype',    'ptcl2D')
+        if( .not. cline%defined('wiener')       ) call cline%set('wiener',     'partial')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',    29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk',1.0)
+        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',     2.0)
+        if( .not. cline%defined('numlen')       ) call cline%set('numlen',      5.0)
+        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',  'no')
         call cline%set('ptclw',      'no')
         call seed_rnd
         call params%new(cline)
@@ -1607,7 +1606,7 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
                 params%smpd_crop = smpd
                 params%box_crop  = box
-                params%msk_crop  = round2even(params%msk * scale_factor)
+                params%msk_crop  = params%msk * scale_factor
             endif
         endif
         boxpd = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters

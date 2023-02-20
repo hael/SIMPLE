@@ -73,9 +73,9 @@ contains
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
-        real                  :: smpd_target, lplims(2), orig_smpd, cenlp
+        real                  :: smpd_target, lplims(2), cenlp
         real                  :: scale_factor1, scale_factor2
-        integer               :: icls, ncavgs, orig_box, box, istk, cnt, iter, ipart
+        integer               :: icls, ncavgs, box, istk, cnt, iter, ipart
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_euclid
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
@@ -139,7 +139,7 @@ contains
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         ! retrieve cavgs stack & FRCS info
-        call spproj%get_cavgs_stk(stk, ncavgs, orig_smpd)
+        call spproj%get_cavgs_stk(stk, ncavgs, params%smpd)
         ext = '.'//fname2ext( stk )
         ! e/o
         if( l_lpset )then
@@ -154,8 +154,7 @@ contains
         endif
         stk_even = add2fbody(trim(stk), trim(ext), '_even')
         stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
-        ctfvars%smpd = orig_smpd
-        params%smpd  = orig_smpd
+        ctfvars%smpd = params%smpd
         orig_stk     = stk
         shifted_stk  = basename(add2fbody(stk, ext, '_shifted'))
         if( .not.spproj%os_cls2D%isthere('state') )then
@@ -208,9 +207,7 @@ contains
         ! Cropped dimensions
         do_autoscale  = .false.
         scale_factor1 = 1.0
-        orig_box      = work_proj1%get_box()
-        params%box    = orig_box
-        params%smpd   = orig_smpd
+        params%box    = work_proj1%get_box()
         smpd_target   = max(params%smpd, lplims(2)*LP2SMPDFAC)
         params%smpd_crop = params%smpd
         params%box_crop  = params%box
@@ -219,7 +216,7 @@ contains
             call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale_factor1, minbox=MINBOX)
             do_autoscale = params%box_crop < params%box
             if( do_autoscale )then
-                params%msk_crop = round2even(params%msk * scale_factor1)
+                params%msk_crop = params%msk * scale_factor1
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
         endif
@@ -426,7 +423,7 @@ contains
             call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale_factor2, minbox=MINBOX)
             do_autoscale = params%box_crop < params%box
             if( do_autoscale )then
-                params%msk_crop = round2even(params%msk * scale_factor2)
+                params%msk_crop = params%msk * scale_factor2
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
         endif
@@ -559,7 +556,7 @@ contains
         call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
         ! write alternated stack
-        call img%new([orig_box,orig_box,1], orig_smpd)
+        call img%new([params%box,params%box,1], params%smpd)
         call stkio_r%open(orig_stk,            params%smpd, 'read',                                 bufsz=500)
         call stkio_r2%open('reprojs.mrc',      params%smpd, 'read',                                 bufsz=500)
         call stkio_w%open('cavgs_reprojs.mrc', params%smpd, 'write', box=params%box, is_ft=.false., bufsz=500)
