@@ -784,6 +784,10 @@ contains
                     case('prob')
                         params%cc_objfun = OBJFUN_PROB
                     end select
+                    if( .not.cline%defined('gridding') )then
+                        call cline%set('gridding', 'yes')
+                        params%gridding = 'yes'
+                    endif
                     l_switch2euclid = .false.
                 endif
             end do
