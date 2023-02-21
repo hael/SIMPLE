@@ -198,10 +198,6 @@ type :: polarft_corrcalc
     generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
     generic,   private :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
-    procedure, private :: normalize_ref_ptcl_sp, normalize_ref_ptcl_dp
-    generic,   private :: normalize_ref_ptcl => normalize_ref_ptcl_sp, normalize_ref_ptcl_dp
-    procedure, private :: denormalize_ref_ptcl_sp, denormalize_ref_ptcl_dp
-    generic,   private :: denormalize_ref_ptcl => denormalize_ref_ptcl_sp, denormalize_ref_ptcl_dp
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -2045,66 +2041,6 @@ contains
             self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
         end do
     end subroutine deweight_ref_ptcl_dp
-
-    subroutine normalize_ref_ptcl_sp( self, pft_ref, i, ref_norm, ptcl_norm )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: i
-        real(dp),                intent(inout) :: ref_norm, ptcl_norm
-        integer :: k
-        ref_norm  = sqrt(sum(real(csq_fast(pft_ref(        :, self%kfromto(1):self%kfromto(2))),   kind=dp)))
-        ptcl_norm = sqrt(sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), kind=dp)))
-        pft_ref                = pft_ref                / ref_norm
-        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) / ptcl_norm
-        do k=self%kfromto(1),self%kfromto(2)
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / ptcl_norm
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / ptcl_norm
-        enddo
-    end subroutine normalize_ref_ptcl_sp
-    
-    subroutine normalize_ref_ptcl_dp( self, pft_ref, i, ref_norm, ptcl_norm )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: i
-        real(dp),                intent(inout) :: ref_norm, ptcl_norm
-        integer :: k
-        ref_norm  = dsqrt(sum(real(csq_fast(pft_ref(        :, self%kfromto(1):self%kfromto(2))),   kind=dp)))
-        ptcl_norm = dsqrt(sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), kind=dp)))
-        pft_ref                = pft_ref                / ref_norm
-        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) / ptcl_norm
-        do k=self%kfromto(1),self%kfromto(2)
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / ptcl_norm
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / ptcl_norm
-        enddo
-    end subroutine normalize_ref_ptcl_dp
-
-    subroutine denormalize_ref_ptcl_sp( self, pft_ref, i, ref_norm, ptcl_norm )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: i
-        real(dp),                intent(in)    :: ref_norm, ptcl_norm
-        integer :: k
-        pft_ref                = pft_ref                * ref_norm
-        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * ptcl_norm
-        do k=self%kfromto(1),self%kfromto(2)
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re * ptcl_norm
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im * ptcl_norm
-        enddo
-    end subroutine denormalize_ref_ptcl_sp
-
-    subroutine denormalize_ref_ptcl_dp( self, pft_ref, i, ref_norm, ptcl_norm )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: i
-        real(dp),                intent(in)    :: ref_norm, ptcl_norm
-        integer :: k
-        pft_ref                = pft_ref                * ref_norm
-        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * ptcl_norm
-        do k=self%kfromto(1),self%kfromto(2)
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re * ptcl_norm
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im * ptcl_norm
-        enddo
-    end subroutine denormalize_ref_ptcl_dp
 
     ! DESTRUCTOR
 
