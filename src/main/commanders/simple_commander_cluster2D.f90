@@ -313,10 +313,8 @@ contains
         cline_cluster2D2 = cline
         call cline_cluster2D1%set('smpd_crop', params%smpd_crop)
         call cline_cluster2D1%set('box_crop',  real(params%box_crop))
-        call cline_cluster2D1%set('msk_crop',  real(params%msk_crop))
         call cline_cluster2D2%set('smpd_crop', params%smpd_crop)
         call cline_cluster2D2%set('box_crop',  real(params%box_crop))
-        call cline_cluster2D2%set('msk_crop',  real(params%msk_crop))
         ! resolutions limits
         lp1 = max(2.*params%smpd_crop, max(params%lp,TARGET_LP))
         lp2 = max(2.*params%smpd_crop, params%lp)
@@ -335,7 +333,7 @@ contains
         ! down-scaling for fast execution, greedy optimisation
         call cline_cluster2D2%set('prg', 'cluster2D')
         call cline_cluster2D2%set('autoscale',  'no')
-        call cline_cluster2D2%set('trs',    MINSHIFT)
+        call cline_cluster2D2%set('trs',    MINSHIFT/scale_factor)
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
@@ -561,10 +559,8 @@ contains
         cline_cluster2D_stage2 = cline
         call cline_cluster2D_stage1%set('smpd_crop', params%smpd_crop)
         call cline_cluster2D_stage1%set('box_crop',  real(params%box_crop))
-        call cline_cluster2D_stage1%set('msk_crop',  real(params%msk_crop))
         call cline_cluster2D_stage2%set('smpd_crop', params%smpd_crop)
         call cline_cluster2D_stage2%set('box_crop',  real(params%box_crop))
-        call cline_cluster2D_stage2%set('msk_crop',  real(params%msk_crop))
         if( l_scaling )then
             ! scale references
             if( cline%defined('refs') )then
@@ -612,8 +608,8 @@ contains
             call cline_cluster2D_stage2%set('objfun',      'euclid')
             call cline_cluster2D_stage2%set('needs_sigma', 'yes')
         endif
-        trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2)) / scale
-        trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
+        trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
+        trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2)) / scale
         call cline_cluster2D_stage2%set('trs', trs_stage2)
         ! execution
         if( l_shmem )then

@@ -241,7 +241,6 @@ contains
         call cline_refine3D_snhc%set('projfile',   trim(ORIG_work_projfile))
         call cline_refine3D_snhc%set('box_crop',   real(params%box_crop))
         call cline_refine3D_snhc%set('smpd_crop',  params%smpd_crop)
-        call cline_refine3D_snhc%set('msk_crop',   params%msk_crop)
         call cline_refine3D_snhc%set('prg',        'refine3D')
         call cline_refine3D_snhc%set('refine',     'snhc')
         call cline_refine3D_snhc%set('lp',         lplims(1))
@@ -256,7 +255,6 @@ contains
         call cline_refine3D_init%set('projfile', trim(ORIG_work_projfile))
         call cline_refine3D_init%set('box_crop', real(params%box_crop))
         call cline_refine3D_init%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_init%set('msk_crop', params%msk_crop)
         call cline_refine3D_init%set('refine',   'neigh')
         call cline_refine3D_init%set('lp',       lplims(1))
         call cline_refine3D_init%set('lp_iters', 0.)                   ! low-pass limited resolution, no e/o
@@ -435,7 +433,6 @@ contains
         call cline_refine3D_refine%set('startit',  real(iter))
         call cline_refine3D_refine%set('box_crop', real(params%box_crop))
         call cline_refine3D_refine%set('smpd_crop',params%smpd_crop)
-        call cline_refine3D_refine%set('msk_crop', params%msk_crop)
         if( l_euclid )then
             ! sigma2 at original sampling
             cline_calc_pspec = cline

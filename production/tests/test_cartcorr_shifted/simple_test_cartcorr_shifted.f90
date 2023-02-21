@@ -20,7 +20,7 @@ integer(timer_int_kind) :: t_tot
 real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1
 real                    :: ave, sdev, maxv, minv, noise_lvl, correct_sh(2), corr
 real, allocatable       :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
-if( command_argument_count() < 4 )then
+if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted stk=<particles.ext>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] mskdiam=zz [verbose=<yes|no{no}>]'
     stop
