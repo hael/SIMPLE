@@ -100,7 +100,6 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'scale_imgfile' )
         call stkio_r%open(fname2scale, smpd, 'read')
-        call stkio_w%open(fname, smpd, 'write', box=ldim_new(1))
         call img%new(ldim,smpd,wthreads=.false.)
         call img_scaled%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> SCALING IMAGES'
@@ -127,9 +126,12 @@ contains
                     call img%pad(img_scaled)
                 endif
                 call img_scaled%ifft()
+                if( i == prange(1) )then
+                    smpd_new = img_scaled%get_smpd()
+                    call stkio_w%open(fname, smpd_new, 'write', box=ldim_new(1))
+                endif
                 call stkio_w%write(cnt, img_scaled)
             end do
-            smpd_new = img_scaled%get_smpd()
         endif
         call stkio_r%close
         call stkio_w%close
@@ -232,7 +234,6 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'scale_and_clip_imgfile' )
         call stkio_r%open(fname2scale, smpd, 'read')
-        call stkio_w%open(fname, smpd, 'write', box=ldim_clip(1))
         call img%new(ldim,smpd)
         call img_scaled%new(ldim_new,smpd) ! this sampling distance will be overwritten
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> SCALING IMAGES'
@@ -260,9 +261,12 @@ contains
                 else
                     call img_scaled%pad(img_clip)
                 endif
+                if( i == prange(1) )then
+                    call stkio_w%open(fname, smpd_new, 'write', box=ldim_clip(1))
+                    smpd_new = img_scaled%get_smpd()
+                endif
                 call stkio_w%write(cnt, img_clip)
             end do
-            smpd_new = img_scaled%get_smpd()
         endif
         call stkio_r%close
         call stkio_w%close

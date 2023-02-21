@@ -568,8 +568,6 @@ contains
             if( cline%defined('stk') )then
                 ! 2D
                 call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-                call img%new([params%box,params%box,1],params%smpd)
-                call img2%new([params%box,params%box,1],params%smpd)
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
                     call del_file(params%outstk)
                     ! Rescaling

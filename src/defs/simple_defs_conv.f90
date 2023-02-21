@@ -14,6 +14,6 @@ real, parameter :: FRACSRCHSPACE_FRAC  = 95.0  ! this limit is for when fraction
 real, parameter :: FRACSRCHSPACE_HET   = 99.0
 ! other limits
 real, parameter :: MSK_FRAC            = 0.07
-real, parameter :: MINSHIFT            = 10.0
-real, parameter :: MAXSHIFT            = 12.0
+real, parameter :: MINSHIFT            = 5.0
+real, parameter :: MAXSHIFT            = 6.0
 end module simple_defs_conv
