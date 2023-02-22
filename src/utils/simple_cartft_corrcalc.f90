@@ -68,9 +68,6 @@ type :: cartft_corrcalc
     procedure, private :: correlate_euclid_1
     procedure, private :: correlate_euclid_2
     generic  , private :: correlate_euclid => correlate_euclid_1, correlate_euclid_2
-    procedure, private :: correlate_test_1
-    procedure, private :: correlate_test_2
-    generic  , private :: correlate_test => correlate_test_1, correlate_test_2
     procedure          :: project_and_shift_shc
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
@@ -737,59 +734,6 @@ contains
         grad   = - corr_8/denom*grad_8
         call self%deweight_ref_ptcl( ithr, iptcl )
     end subroutine correlate_euclid_2
-
-    subroutine correlate_test_1( self, ithr, iptcl, corr )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        real,                   intent(out)   :: corr
-        real    :: euclid, denom
-        complex :: diff, ptcl_comp
-        integer :: h, k
-        call self%weight_ref_ptcl( ithr, iptcl )
-        denom  = 0.
-        euclid = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%cur_ptcls(h,k,ithr)
-                diff      = self%cur_refs( h,k,ithr) - ptcl_comp
-                euclid    = euclid + real(diff      * conjg(diff))
-                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp))
-            end do
-        end do
-        corr = exp( - euclid/denom )
-        call self%deweight_ref_ptcl( ithr, iptcl )
-    end subroutine correlate_test_1
-
-    subroutine correlate_test_2( self, ithr, iptcl, corr, grad )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        real,                   intent(out)   :: corr, grad(2)
-        real(dp) :: euclid, denom, corr_8, grad_8(2)
-        complex  :: diff, ptcl_comp, ref_comp
-        integer  :: h, k
-        call self%weight_ref_ptcl( ithr, iptcl )
-        denom  = 0._dp
-        euclid = 0._dp
-        grad_8 = 0._dp
-        do k = self%lims(2,1),self%lims(2,2)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%cur_ptcls(h,k,ithr)
-                ref_comp  = self%cur_refs( h,k,ithr)
-                diff      = ref_comp - ptcl_comp
-                euclid    = euclid + real(diff      * conjg(diff)     , dp)
-                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp), dp)
-                diff      = 2 * self%shconst * imagpart(ptcl_comp * conjg(diff))
-                grad_8(1) = grad_8(1) + real(diff, dp) * real(h, dp)
-                grad_8(2) = grad_8(2) + real(diff, dp) * real(k, dp)
-            end do
-        end do
-        corr_8 = dexp( - euclid/denom )
-        corr   = corr_8
-        grad   = - corr_8/denom*grad_8
-        call self%deweight_ref_ptcl( ithr, iptcl )
-    end subroutine correlate_test_2
 
     !< project and shift search (shc-based)
     subroutine project_and_shift_shc( self, iptcl, o, nsample, trs, shvec, corr_best, nevals )
