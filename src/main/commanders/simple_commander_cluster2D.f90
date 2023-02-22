@@ -550,7 +550,7 @@ contains
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
                 call spproj%os_ptcl2D%set_all2single('w', 1.0)
                 call spproj%write_segment_inside(params%oritype)
-                if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale**2)
+                ! if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale**2)
                 call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
         endif
@@ -627,7 +627,7 @@ contains
         if( l_scaling )then
             if( l_euclid )then
                 ! adjusts sigma2 for cropping
-                call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
+                ! call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
             endif
             ! original scale references
             cline_make_cavgs = cline ! ncls is transferred here
