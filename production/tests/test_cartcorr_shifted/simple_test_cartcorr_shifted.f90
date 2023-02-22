@@ -20,7 +20,7 @@ type(sym)               :: pgrpsyms
 integer                 :: i, noise_n, noise_i, nevals(2), xsh, ysh
 real                    :: cxy(3), lims(2,2)
 real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1, SHMAG=5.0
-integer, parameter      :: NPTCLS = 1
+integer, parameter      :: NPTCLS = 2
 real                    :: ave, sdev, maxv, minv, noise_lvl, correct_sh(2), corr
 real, allocatable       :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 if( command_argument_count() < 4 )then
@@ -47,8 +47,8 @@ call cftcc%assign_sigma2_noise(sigma2_noise)
 call img%new([p%ldim(1), p%ldim(2), 1], p%smpd)
 call pgrpsyms%new('c1')
 call o_truth%new(.true.)
-call pgrpsyms%rnd_euler(o_truth)
 do i = 1,NPTCLS
+    call pgrpsyms%rnd_euler(o_truth)
     call vol%fproject_serial(o_truth, img)
     call img%shift2Dserial([-1.,-1.]) 
     call cftcc%set_ptcl(i, img)
@@ -89,7 +89,7 @@ do noise_i = 1, noise_n
         call img%shift2Dserial(correct_sh)
         call cftcc%set_ptcl(i, img)
         call cftcc_shsrch%set_pind(i)
-        corr = cftcc%project_and_correlate(1, o_truth, [0., 0.])
+        corr = cftcc%project_and_correlate(i, o_truth, [0., 0.])
         cxy  = cftcc_shsrch%minimize(nevals)
         print *, 'iptcl = ', i, ': minimized shift = ', cxy(2:), '; corr = ', cxy(1), '; correct shift = ', correct_sh
     enddo
