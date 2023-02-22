@@ -22,14 +22,13 @@ call simple_getcwd(cwd)
 allocate(CWD_GLOB, source=trim(cwd))
 
 call find_ldim_nptcls(micname, ldim, ifoo)
-call find_ldim_nptcls(boxrefs, ldim_refs, nrefs)
-ldim_refs(3) = 1
-allocate(refs(nrefs))
-do iref = 1,nrefs
-    call refs(iref)%new(ldim_refs, SMPD)
-    call refs(iref)%read(boxrefs, iref)
-    ! call refs(iref)%write('foo.mrc', iref)
-end do
+! call find_ldim_nptcls(boxrefs, ldim_refs, nrefs)
+! ldim_refs(3) = 1
+! allocate(refs(nrefs))
+! do iref = 1,nrefs
+!     call refs(iref)%new(ldim_refs, SMPD)
+!     call refs(iref)%read(boxrefs, iref)
+! end do
 call micimg%new(ldim, SMPD)
 call micimg%read(micname)
 call putils%new(micname, 'black', SMPD, MOLDIAM)

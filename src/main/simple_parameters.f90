@@ -165,6 +165,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
@@ -190,7 +191,7 @@ type :: parameters
     integer :: angstep=5
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
-    integer :: box_crop=0           !< square image size(in pixels), relates to Fourier cropped references
+    integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_extract
     integer :: boxpd=0
     integer :: class=1             !< cluster identity
@@ -348,7 +349,7 @@ type :: parameters
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
-    real    :: ndev=2.0            !< # deviations in one-cluster clustering
+    real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=1.5          !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
     real    :: overlap=0.9         !< required parameters overlap for convergence
@@ -505,6 +506,7 @@ contains
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
+        call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
