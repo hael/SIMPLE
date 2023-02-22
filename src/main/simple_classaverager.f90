@@ -40,7 +40,6 @@ integer                        :: ldim(3)        = [0,0,0] !< logical dimension 
 integer                        :: ldim_crop(3)   = [0,0,0] !< logical dimension of cropped image
 integer                        :: ldim_pd(3)     = [0,0,0] !< logical dimension of image, padded
 integer                        :: ldim_croppd(3) = [0,0,0] !< logical dimension of cropped image, padded
-real                           :: pad_scale      = 1.0
 real                           :: smpd       = 0.          !< sampling distance
 real                           :: smpd_crop  = 0.          !< cropped sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
@@ -110,17 +109,7 @@ contains
         ldim          = [params_glob%box,  params_glob%box,  1]
         ldim_crop     = [params_glob%box_crop,  params_glob%box_crop,  1]
         ldim_croppd   = [params_glob%box_croppd,params_glob%box_croppd,1]
-        if( params_glob%boxpd > params_glob%box_croppd )then
-            ! when the references are generated downscaled,
-            ! images at original scale do not always need to be padded
-            ldim_pd(1) = max(params_glob%box,params_glob%box_croppd)
-            ldim_pd(2) = ldim_pd(1)
-            ldim_pd(3) = 1
-            pad_scale  = real(params_glob%box) / real(params_glob%boxpd)
-        else
-            ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
-            pad_scale  = 1.0
-        endif
+        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ! ML-regularization
         l_ml_reg      = params_glob%l_ml_reg
         ! build arrays
@@ -454,7 +443,6 @@ contains
                     tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
                     call read_imgs(i)%norm_noise_pad_fft(build_glob%lmsk, cgrid_imgs(i))
-                    if( l_pad_scale_correction ) call cgrid_imgs(i)%mul(pad_scale)
                     ! shift
                     call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
                     ! apply CTF to image, stores CTF values
@@ -494,7 +482,7 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > interp_shlim )cycle
                             ! Rotation
-                            loc        = pad_scale * matmul(real([h,k]),mat)
+                            loc        = matmul(real([h,k]),mat)
                             win_corner = floor(loc) ! bottom left corner
                             dist       = loc - real(win_corner)
                             ! Bi-linear interpolation
@@ -581,7 +569,7 @@ contains
                                 if( sh > radfirstpeak )cycle
                                 if( sh > interp_shlim )cycle
                                 ! Rotation
-                                loc        = pad_scale * matmul(real([h,k]),mat)
+                                loc        = matmul(real([h,k]),mat)
                                 win_corner = floor(loc) ! bottom left corner
                                 dist       = loc - real(win_corner)
                                 ! Bi-linear interpolation
