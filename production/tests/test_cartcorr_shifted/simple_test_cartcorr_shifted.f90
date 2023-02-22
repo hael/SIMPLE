@@ -1,56 +1,62 @@
 program simple_test_cartcorr_shifted
 include 'simple_lib.f08'
 use simple_cartft_corrcalc,   only: cartft_corrcalc
-use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_parameters,        only: parameters
 use simple_cmdline,           only: cmdline
 use simple_cftcc_shsrch_grad, only: cftcc_shsrch_grad
+use simple_sym
+use simple_ori
+use simple_projector
 implicit none
 type(cmdline)           :: cline
-type(builder)           :: b
 type(parameters)        :: p
 type(cartft_corrcalc)   :: cftcc
 type(cftcc_shsrch_grad) :: cftcc_shsrch
-type(image)             :: noise_img
-real, parameter         :: SHMAG=5.0
+type(image)             :: noise_img, img
+type(projector)         :: vol
+type(ori)               :: o_truth
+type(sym)               :: pgrpsyms
 integer                 :: i, noise_n, noise_i, nevals(2), xsh, ysh
-real                    :: grad(2), cxy(3), lims(2,2)
-integer(timer_int_kind) :: t_tot
-real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1
+real                    :: cxy(3), lims(2,2)
+real,    parameter      :: NOISE_MIN = .3, NOISE_MAX = .7, NOISE_DEL = 0.1, SHMAG=5.0
+integer, parameter      :: NPTCLS = 1
 real                    :: ave, sdev, maxv, minv, noise_lvl, correct_sh(2), corr
 real, allocatable       :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 if( command_argument_count() < 4 )then
-    write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted stk=<particles.ext>'
+    write(logfhandle,'(a)',advance='no') 'simple_test_cartcorr_shifted vol1=<volume.ext>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] mskdiam=zz [verbose=<yes|no{no}>]'
     stop
 endif
 call cline%parse_oldschool
-call cline%checkvar('stk',     1)
+call cline%checkvar('vol1',    1)
 call cline%checkvar('smpd',    2)
 call cline%checkvar('mskdiam', 3)
 call cline%check
 call p%new(cline)
 p%kfromto(1) = 1
 p%kfromto(2) = p%box/2 - 5
-call b%build_general_tbox(p, cline)
-call cftcc%new_dev([1,p%nptcls])
-allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:p%nptcls), source=1. )
+call vol%new(p%ldim, p%smpd)
+call vol%read(p%vols(1))
+call vol%fft()
+call vol%expand_cmat(1.)
+call vol%ifft()
+call cftcc%new(vol, vol, [1,NPTCLS])
+allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:NPTCLS), source=1. )
 call cftcc%assign_sigma2_noise(sigma2_noise)
-do i = 1,p%nptcls
-    call b%img%read(p%stk, i)
-    call b%img%fft
-    call cftcc%set_ptcl(i, b%img)
-end do
-do i = 1,1
-    call b%img%read(p%stk, i)
-    call b%img%fft
-    call b%img%shift2Dserial([-1.,-1.]) 
-    call cftcc%set_ref(b%img)
+call img%new([p%ldim(1), p%ldim(2), 1], p%smpd)
+call pgrpsyms%new('c1')
+call o_truth%new(.true.)
+call pgrpsyms%rnd_euler(o_truth)
+do i = 1,NPTCLS
+    call vol%fproject_serial(o_truth, img)
+    call img%shift2Dserial([-1.,-1.]) 
+    call cftcc%set_ptcl(i, img)
+    corr = cftcc%project_and_correlate(1, o_truth)
     call srch_shifts(0.5, i)
 end do
 ! corr of different orientations
-do i = 1,p%nptcls
+do i = 1,NPTCLS
     do xsh=-4,4
         do ysh=-4,4
             call cftcc%corr_shifted(i, real([xsh,ysh]), corr)
@@ -65,25 +71,26 @@ lims(2,1) = -6.
 lims(2,2) =  6.
 call cftcc_shsrch%new(lims)
 noise_n  = int((NOISE_MAX - NOISE_MIN)/NOISE_DEL + 1.)
-call noise_img%new(p%ldim, p%smpd)
+call noise_img%new([p%ldim(1), p%ldim(2), 1], p%smpd)
 do noise_i = 1, noise_n
     noise_lvl = NOISE_MIN + (noise_i - 1)*NOISE_DEL
     print *, 'noise = ', noise_lvl
-    do i = 1, p%nptcls
+    do i = 1, NPTCLS
         correct_sh(1) = 2.*(ran3()-0.5) * 5
         correct_sh(2) = 2.*(ran3()-0.5) * 5
-        call b%img%read(p%stk, i)
-        call b%img%mask(p%msk, 'soft')
-        call b%img%stats('foreground', ave, sdev, maxv, minv)
+        call vol%fproject_serial(o_truth, img)
+        call img%ifft
+        call img%mask(p%msk, 'soft')
+        call img%stats('foreground', ave, sdev, maxv, minv)
         call noise_img%gauran(0., noise_lvl * sdev)
         call noise_img%mask(1.5 * p%msk, 'soft')
-        call b%img%add(noise_img)
-        call b%img%write("stk_img_noisy_"//int2str(noise_i)//".mrc", i)
-        call b%img%fft
-        call b%img%shift2Dserial(correct_sh) 
-        call cftcc%set_ref(b%img)
+        call img%add(noise_img)
+        call img%fft
+        call img%shift2Dserial(correct_sh)
+        call cftcc%set_ptcl(i, img)
         call cftcc_shsrch%set_pind(i)
-        cxy = cftcc_shsrch%minimize(nevals)
+        corr = cftcc%project_and_correlate(1, o_truth, [0., 0.])
+        cxy  = cftcc_shsrch%minimize(nevals)
         print *, 'iptcl = ', i, ': minimized shift = ', cxy(2:), '; corr = ', cxy(1), '; correct shift = ', correct_sh
     enddo
 enddo
