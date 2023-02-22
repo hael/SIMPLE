@@ -41,7 +41,6 @@ type :: cartft_corrcalc
     procedure          :: expand_refs
     ! SETTERS
     procedure          :: set_ptcl
-    procedure          :: set_ref
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
@@ -311,32 +310,6 @@ contains
             end do
         end do
     end subroutine set_ptcl
-
-    subroutine set_ref( self, img )
-        class(cartft_corrcalc), intent(inout) :: self   !< this object
-        class(image),           intent(in)    :: img    !< particle image
-        integer :: ldim(3), h, k, ithr, phys1, phys2
-        if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
-        ldim = img%get_ldim()
-        if( .not. all(self%ldim .eq. ldim) )then
-            THROW_HARD('inconsistent image dimensions, input vs class internal')
-        endif
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                if( h .ge. 0 )then
-                    phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
-                else
-                    phys1 = -h + 1
-                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
-                endif
-                self%references(h,k,1) = img%get_cmat_at(phys1, phys2, 1)
-            end do
-        end do
-        do ithr = 2,nthr_glob
-            self%references(:,:,ithr) = self%references(:,:,1)
-        end do
-    end subroutine set_ref
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self

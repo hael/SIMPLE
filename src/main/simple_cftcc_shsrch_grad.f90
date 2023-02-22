@@ -69,6 +69,7 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         real(sp)                :: cost_sp
+        cost = 0._dp
         select type(self)
             class is (cftcc_shsrch_grad)
                 call cftcc_glob%corr_shifted(self%particle, real(vec), cost_sp)
