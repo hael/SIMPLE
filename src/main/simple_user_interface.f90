@@ -2854,7 +2854,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &2, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2869,12 +2869,14 @@ contains
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
         call pick%set_input('parm_ios', 3, moldiam)
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
+        call pick%set_input('parm_ios', 4, 'picker', 'picker', 'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call pick%set_gui_params('parm_ios', 4, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in Angs','Distance filter in Angs{24}', '{24}', .false., 24.)
         call pick%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
-        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}', '{2.5}', .false., 2.5)
         call pick%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         call pick%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
@@ -2967,7 +2969,7 @@ contains
         call preprocess%set_input('srch_ctrls', 4, dfmax)
         call preprocess%set_input('srch_ctrls', 5, astigtol)
         call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking outlier detection', '# of standard deviations threshold for picking oulier detection{2.5}', '{2.5}', .false., 2.5)
         call preprocess%set_input('srch_ctrls', 8, pgrp)
         preprocess%srch_ctrls(8)%required = .false.
         call preprocess%set_input('srch_ctrls', 9, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
