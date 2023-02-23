@@ -149,7 +149,6 @@ type :: polarft_corrcalc
     generic            :: prep_ref4corr => prep_ref4corr_sp, prep_ref4corr_dp
     procedure, private :: gen_shmat
     procedure, private :: gen_shmat_8
-    procedure, private :: calc_corrs_over_k
     procedure, private :: calc_k_corrs
     procedure, private :: calc_corr_for_rot
     procedure, private :: calc_corr_for_rot_8
@@ -966,38 +965,6 @@ contains
         shmat = cmplx(self%heap_vars(ithr)%shmat_8)
     end subroutine gen_shmat
 
-    subroutine calc_corrs_over_k( self, pft_ref, i, corrs_over_k)
-        class(polarft_corrcalc), intent(in)  :: self
-        integer,                 intent(in)  :: i
-        complex(sp),             intent(in)  :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        real,                    intent(out) :: corrs_over_k(self%nrots)
-        integer :: ithr, ik
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! sum up correlations over k-rings
-        corrs_over_k = 0.
-        do ik = self%kfromto(1),self%kfromto(2)
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
-            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,ik)%re
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,ik)%im
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            corrs_over_k = corrs_over_k + real(ik) * self%delta * self%fftdat(ithr)%backtransf
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        corrs_over_k = corrs_over_k  / real(self%nrots * 2)
-    end subroutine calc_corrs_over_k
-
     subroutine calc_k_corrs( self, pft_ref, i, k, kcorrs )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -1413,7 +1380,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc(    pft_ref, iptcl, i, cc)
+                call self%gencorrs_cc(    pft_ref, i, ithr, cc)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
@@ -1434,7 +1401,7 @@ contains
         pft_ref = pft_ref * shmat
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc(    pft_ref, iptcl, i, cc)
+                call self%gencorrs_cc(    pft_ref, i, ithr, cc)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
@@ -1442,15 +1409,39 @@ contains
         end select
     end subroutine gencorrs_2
 
-    subroutine gencorrs_cc( self, pft_ref, iptcl, i, cc )
+    subroutine gencorrs_cc( self, pft_ref, i, ithr, cc )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl, i
+        integer,                 intent(in)    :: i, ithr
         real,                    intent(out)   :: cc(self%nrots)
-        real(sp) :: sqsum_ref
-        sqsum_ref = sum(csq_fast(pft_ref(:, self%kfromto(1):self%kfromto(2))))
-        call self%calc_corrs_over_k(pft_ref, i, cc)
-        cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(i))
+        real(sp) :: sqsum_ref, sqsum_ptcl
+        integer  :: ik
+        sqsum_ref  = 0.
+        sqsum_ptcl = 0.
+        cc         = 0.
+        ! sum up correlations over k-rings
+        do ik = self%kfromto(1),self%kfromto(2)
+            sqsum_ref  = sqsum_ref  + real(ik) * self%delta * sum(csq_fast(pft_ref(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik) * self%delta * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            ! move reference into Fourier Fourier space (particles are memoized)
+            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
+            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
+            ! correlate
+            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,ik)%re
+            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,ik)%im
+            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
+            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
+            ! back transform
+            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
+            ! accumulate corrs
+            cc = cc + real(ik) * self%delta * self%fftdat(ithr)%backtransf
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc = cc / real(self%nrots * 2) / sqrt(sqsum_ref * sqsum_ptcl)
     end subroutine gencorrs_cc
 
     subroutine gencorrs_euclid( self, pft_ref, keuclids, iptcl, i, euclids )
