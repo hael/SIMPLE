@@ -70,6 +70,7 @@ type :: polarft_corrcalc
     integer                          :: ldim(3)    = 0              !< logical dimensions of original cartesian image
     integer                          :: kfromto(2)                  !< band-pass Fourier index limits
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
+    real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
@@ -409,6 +410,8 @@ contains
         self%existence = .true.
         ! set pointer to global instance
         pftcc_glob => self
+        ! voxel-size in the frequency domain
+        self%delta = 1. / params_glob%box / params_glob%smpd
     end subroutine new
 
     ! SETTERS
@@ -1983,10 +1986,9 @@ contains
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(sp) :: w, c
-        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
+        real(sp) :: w
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = sqrt( c * k / self%sigma2_noise(k,iptcl) )
+            w                         = sqrt( self%delta * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = w * pft_ref(:,k)
             self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
             self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
@@ -1999,10 +2001,9 @@ contains
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(dp) :: w, c
-        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
+        real(dp) :: w
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = dsqrt( c * k / self%sigma2_noise(k,iptcl) )
+            w                         = dsqrt( real(self%delta, dp) * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = w * pft_ref(:,k)
             self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
             self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
@@ -2015,10 +2016,9 @@ contains
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(sp) :: w, c
-        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
+        real(sp) :: w
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = sqrt( c * k / self%sigma2_noise(k,iptcl) )
+            w                         = sqrt( self%delta * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
             self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
@@ -2031,10 +2031,9 @@ contains
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i, iptcl
         integer  :: k
-        real(dp) :: w, c
-        c = PI / params_glob%box / params_glob%smpd / real(self%pftsz)
+        real(dp) :: w
         do k=self%kfromto(1),self%kfromto(2)
-            w                         = dsqrt( c * k / self%sigma2_noise(k,iptcl) )
+            w                         = dsqrt( real(self%delta, dp) * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
             self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
