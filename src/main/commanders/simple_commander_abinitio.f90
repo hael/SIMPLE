@@ -439,7 +439,7 @@ contains
             call cline_calc_pspec%set('prg',      'calc_pspec' )
             call cline_calc_pspec%set('projfile', ORIG_work_projfile)
             call cline_calc_pspec%set('sigma_est','global')
-            call cline_calc_pspec%set('scale',    1./scale_factor2**2)
+            ! call cline_calc_pspec%set('scale',    1./scale_factor2**2)
             call cline_calc_pspec%set('box',   real(params%box))
             call cline_calc_pspec%set('smpd',  params%smpd)
             if( l_shmem )then
@@ -469,7 +469,7 @@ contains
         iter = nint(cline_refine3D_refine%get_rarg('endit'))
         if( l_euclid )then
             call cline_reconstruct3D%set('which_iter',real(iter))
-            call scale_group_sigma2_magnitude(iter, scale_factor2**2)
+            ! call scale_group_sigma2_magnitude(iter, scale_factor2**2)
             if( l_shmem )then
                 ! done
             else

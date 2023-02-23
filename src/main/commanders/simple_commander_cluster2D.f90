@@ -304,7 +304,6 @@ contains
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
                 call spproj%os_ptcl2D%set_all2single('w', 1.0)
                 call spproj%write_segment_inside(params%oritype)
-                if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale_factor**2)
                 call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
         endif
@@ -414,10 +413,6 @@ contains
             call frcs%kill
             call frcs_sc%kill
             call spproj%write_segment_inside('out',   params%projfile)
-            if( l_euclid )then
-                ! adjusts sigma2 for cropping
-                call scale_group_sigma2_magnitude(last_iter, scale_factor**2)
-            endif
         endif
         call spproj%kill
         ! ranking
@@ -550,7 +545,6 @@ contains
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
                 call spproj%os_ptcl2D%set_all2single('w', 1.0)
                 call spproj%write_segment_inside(params%oritype)
-                ! if( l_scaling ) call cline_calc_pspec_distr%set('scale', 1./scale**2)
                 call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
             endif
         endif
@@ -625,10 +619,6 @@ contains
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         ! Updates project and references
         if( l_scaling )then
-            if( l_euclid )then
-                ! adjusts sigma2 for cropping
-                ! call scale_group_sigma2_magnitude(last_iter_stage2, scale**2)
-            endif
             ! original scale references
             cline_make_cavgs = cline ! ncls is transferred here
             call cline_make_cavgs%delete('autoscale')
