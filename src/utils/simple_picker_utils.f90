@@ -708,9 +708,9 @@ contains
     subroutine peak_vs_nonpeak_stats( self )
         class(picker_utils), intent(inout) :: self
         integer, allocatable :: positions_backgr(:,:)
-        real,    allocatable :: loc_sdevs_nonpeak(:), scores_nonpeak(:)
+        real,    allocatable :: scores_nonpeak(:)
         type(image) :: boximgs_heap(nthr_glob)
-        real        :: loc_sdevs_peak(self%nboxes2), scores_peak(self%nboxes2), factor
+        real        :: scores_peak(self%nboxes2), factor
         real        :: scores(self%nrefs), pixrad_shrink2, rpos(2)
         logical     :: mask_backgr(0:self%nx2,0:self%ny2), outside
         integer     :: ibox, jbox, off_here, nbackgr, ithr, iref, xrange(2), yrange(2), xind, yind
@@ -756,7 +756,7 @@ contains
         print *, '# backgr boxes: ', nbackgr
 
         ! extract background info
-        allocate(loc_sdevs_nonpeak(nbackgr), scores_nonpeak(nbackgr), source=0.)
+        allocate(scores_nonpeak(nbackgr), source=0.)
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores)
@@ -766,8 +766,7 @@ contains
                 do iref = 1,self%nrefs
                     scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,2))
                 end do
-                scores_nonpeak(ibox)    = maxval(scores)
-                loc_sdevs_nonpeak(ibox) = boximgs_heap(ithr)%avg_loc_sdev(nint(factor))
+                scores_nonpeak(ibox) = maxval(scores)
             end do
             !$omp end parallel do
         else
@@ -776,7 +775,26 @@ contains
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([positions_backgr(ibox,1),positions_backgr(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
                 scores_nonpeak(ibox)    = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
-                loc_sdevs_nonpeak(ibox) = boximgs_heap(ithr)%avg_loc_sdev(nint(factor))
+            end do
+            !$omp end parallel do
+        endif
+        if( self%refpick )then
+            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores)
+            do ibox = 1,self%nboxes2
+                ithr = omp_get_thread_num() + 1
+                call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
+                do iref = 1,self%nrefs
+                    scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,2))
+                end do
+                scores_peak(ibox) = maxval(scores)
+            end do
+            !$omp end parallel do
+        else
+            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside)
+            do ibox = 1,self%nboxes2
+                ithr = omp_get_thread_num() + 1
+                call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
+                scores_nonpeak(ibox) = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
             end do
             !$omp end parallel do
         endif
