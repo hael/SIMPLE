@@ -11,6 +11,7 @@ use simple_stream_chunk,   only: stream_chunk
 use simple_class_frcs,     only: class_frcs
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
+use simple_euclid_sigma2,  only: consolidate_groups, split_sigma2_into_groups
 use simple_qsys_funs
 use simple_commander_cluster2D
 implicit none
@@ -39,6 +40,7 @@ character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
 character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/'
+character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
 integer(timer_int_kind)            :: t
@@ -62,7 +64,8 @@ character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavg
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0.
 integer                                :: origproj_time, n_spprojs_glob = 0
-logical                                :: initiated = .false.
+logical                                :: initiated       = .false.
+logical                                :: l_update_sigmas = .false.
 ! Global parameters to avoid conflict with preprocess_stream
 integer                                :: numlen
 ! GUI-related
@@ -126,6 +129,7 @@ contains
             call find_ldim_nptcls(refs,ldim,ifoo)
             orig_box  = ldim(1)
         endif
+        l_update_sigmas = .false.
         ! pixel size after motion correction
         if( cline%defined('eer_upsampling') )then
             orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
@@ -495,6 +499,9 @@ contains
                 fromp = fromp + nptcls
             enddo
             nptcls_sel = converged_chunks(ichunk)%spproj%os_ptcl2D%get_noris(consider_state=.true.)
+            ! storing sigmas as per stack individual documents
+            if( l_update_sigmas ) call converged_chunks(ichunk)%split_sigmas_into(SIGMAS_DIR)
+            ! display
             write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',nptcls_sel,' PARTICLES FROM CHUNK ',converged_chunks(ichunk)%id,' TO POOL'
             call flush(logfhandle)
             ! transfer classes
@@ -648,12 +655,14 @@ contains
     end subroutine update_pool_status
 
     subroutine update_pool
-        type(sp_project)      :: spproj
-        type(oris)            :: os
-        type(class_frcs)      :: frcs
-        integer, allocatable  :: pops(:)
+        type(sp_project)                       :: spproj
+        type(oris)                             :: os
+        type(class_frcs)                       :: frcs
+        character(len=:),          allocatable :: stack_fname, ext, fbody
+        character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
+        integer,                   allocatable :: pops(:)
         character(len=STDLEN) :: fname
-        integer :: i, it, jptcl, iptcl, istk
+        integer               :: i, it, jptcl, iptcl, istk, nstks
         if( .not.pool_available )return
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         ! iteration info
@@ -679,6 +688,7 @@ contains
             if( .not.allocated(pool_stacks_mask) )then
                 THROW_HARD('Critical ERROR 0') ! first time
             endif
+            ! transfer particles parameters
             call spproj%read_segment('stk',   trim(POOL_DIR)//trim(PROJFILE_POOL))
             call spproj%read_segment('ptcl2D',trim(POOL_DIR)//trim(PROJFILE_POOL))
             i = 0
@@ -694,9 +704,24 @@ contains
                     enddo
                 endif
             enddo
+            ! update classes info
             call pool_proj%os_ptcl2D%get_pops(pops, 'class', consider_w=.false., maxn=ncls_glob)
             pool_proj%os_cls2D = spproj%os_cls2D
             call pool_proj%os_cls2D%set_all('pop', real(pops))
+            ! updates sigmas
+            if( l_update_sigmas )then
+                nstks = spproj%os_stk%get_noris()
+                allocate(sigma_fnames(nstks))
+                do istk = 1,nstks
+                    call spproj%os_stk%getter(istk,'stk',stack_fname)
+                    stack_fname = basename(stack_fname)
+                    ext         = fname2ext(stack_fname)
+                    fbody       = get_fbody(stack_fname, ext)
+                    sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+                enddo
+                call split_sigma2_into_groups(pool_iter, sigma_fnames)
+                deallocate(sigma_fnames)
+            endif
             if( .not.l_greedy )then
                 call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
                 write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
@@ -1031,11 +1056,12 @@ contains
 
     subroutine classify_pool
         use simple_ran_tabu
-        type(ran_tabu)          :: random_generator
-        type(sp_project)        :: spproj
-        logical, parameter      :: L_BENCH = .false.
-        integer, allocatable    :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
-        ! character(len=XLONGSTRLEN) :: cwd
+        logical,                   parameter   :: L_BENCH = .false.
+        type(ran_tabu)                         :: random_generator
+        type(sp_project)                       :: spproj
+        integer,                   allocatable :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
+        character(len=:),          allocatable :: stack_fname, ext, fbody
+        character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
@@ -1132,6 +1158,19 @@ contains
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
         spproj%os_cls2D = pool_proj%os_cls2D
+        ! consolidate sigmas doc
+        if( l_update_sigmas )then
+            allocate(sigma_fnames(nstks2update))
+            do istk = 1,nstks2update
+                call spproj%os_stk%getter(istk,'stk',stack_fname)
+                stack_fname = basename(stack_fname)
+                ext         = fname2ext(stack_fname)
+                fbody       = get_fbody(stack_fname, ext)
+                sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
+            enddo
+            call consolidate_groups(pool_iter, sigma_fnames)
+            deallocate(sigma_fnames)
+        endif
         ! update command line and write project
         if( sum(prev_eo_pops) == 0 )then
             call cline_cluster2D_pool%delete('update_frac')
@@ -1577,19 +1616,23 @@ contains
         if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
         if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('lp')           ) call cline%set('lp',          GREEDY_TARGET_LP)
-        if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',    30.0)
+        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',     30.0)
         if( .not. cline%defined('ndev')         ) call cline%set('ndev',        1.5)
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl2D')
         if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'partial')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
-        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
-        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
-        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',    'no')
-        call cline%set('ptclw',      'no')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',    29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk',1.0)
+        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',     2.0)
+        if( .not. cline%defined('numlen')       ) call cline%set('numlen',      5.0)
+        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',  'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'cc')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',      'no')
+        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',   'group')
+        call cline%set('ptclw',    'no')
         call seed_rnd
         call params%new(cline)
-        l_wfilt = trim(params%wiener) .eq. 'partial'
+        l_wfilt         = trim(params%wiener) .eq. 'partial'
+        l_update_sigmas = params%l_needs_sigma
         ! sanity
         if( .not.file_exists(params%projfile) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exist!')
@@ -1636,6 +1679,7 @@ contains
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
         call cline_cluster2D_chunk%delete('lpstop')
+        call cline_cluster2D_chunk%delete('needs_sigma')
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
@@ -1643,14 +1687,17 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('objfun',    'cc')
         call cline_cluster2D_pool%set('ptclw',     'no')
         call cline_cluster2D_pool%set('extr_iter', 100.)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
-        call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
+        call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
+        if( l_update_sigmas )then
+            ! such that sigmas are not re-calculated
+            call cline_cluster2D_pool%set('needs_sigma','yes')
+        endif
         call cline_cluster2D_pool%delete('lpstop')
         ! read strictly required fields project
         call spproj%read_non_data_segments(params%projfile)
@@ -1697,6 +1744,7 @@ contains
         if( trim(POOL_DIR) /= '' ) call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(dir_preprocess)
+        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
