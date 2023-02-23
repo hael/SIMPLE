@@ -1410,15 +1410,15 @@ contains
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
         integer,                 intent(in)    :: i, ithr
         real,                    intent(out)   :: cc(self%nrots)
-        real(sp) :: sqsum_ref, sqsum_ptcl
+        real(dp) :: sqsum_ref, sqsum_ptcl
         integer  :: ik
-        sqsum_ref  = 0.
-        sqsum_ptcl = 0.
+        sqsum_ref  = 0._dp
+        sqsum_ptcl = 0._dp
         cc         = 0.
         ! sum up correlations over k-rings
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            sqsum_ref  = sqsum_ref  + real(ik, dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
+            sqsum_ptcl = sqsum_ptcl + real(ik, dp) * sum(real(csq_fast(self%pfts_ptcls(:,ik,i)), dp))
             ! move reference into Fourier Fourier space (particles are memoized)
             self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
             self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
@@ -1437,7 +1437,7 @@ contains
             cc = cc + real(ik) * self%fftdat(ithr)%backtransf
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        cc = cc / real(self%nrots * 2) / sqrt(sqsum_ref * sqsum_ptcl)
+        cc = cc / real(self%nrots * 2) / real(dsqrt(sqsum_ref * sqsum_ptcl))
     end subroutine gencorrs_cc
 
     subroutine gencorrs_euclid( self, pft_ref, keuclids, iptcl, i, euclids )
