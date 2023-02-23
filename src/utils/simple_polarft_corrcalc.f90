@@ -168,20 +168,16 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorr_for_rot
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
-    procedure          :: gencorr_cc_for_rot
     procedure          :: gencorr_cc_for_rot_8
     procedure          :: gencorr_cont_grad_cc_for_rot_8
     procedure          :: gencorr_cont_cc_for_rot_8
     procedure          :: gencorr_cont_shift_grad_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
-    procedure          :: gencorr_euclid_for_rot
     procedure          :: gencorr_euclid_for_rot_8
-    procedure          :: gencorr_prob_for_rot
     procedure          :: gencorr_prob_for_rot_8
     procedure          :: gencorr_cont_grad_euclid_for_rot_8
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
@@ -322,7 +318,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(1:self%nptcls,self%kfromto(1):self%kfromto(2)),&
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
                     &self%heap_vars(params_glob%nthr) )
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -373,10 +369,10 @@ contains
         ! thread-safe c-style allocatables for gencorrs, particle memoization
         do i = 1,self%nptcls
             do ik = self%kfromto(1),self%kfromto(2)
-                self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
-                call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
+                self%fftdat_ptcls(ik,i)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                self%fftdat_ptcls(ik,i)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                call c_f_pointer(self%fftdat_ptcls(ik,i)%p_re, self%fftdat_ptcls(ik,i)%re, [self%pftsz])
+                call c_f_pointer(self%fftdat_ptcls(ik,i)%p_im, self%fftdat_ptcls(ik,i)%im, [self%pftsz])
             end do
         end do
         ! FFTW3 wisdoms file
@@ -432,23 +428,23 @@ contains
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
             if( allocated(self%fftdat_ptcls) )then
-                do i = 1, size(self%fftdat_ptcls,dim=1)
+                do i = 1, size(self%fftdat_ptcls,dim=2)
                     do ik = self%kfromto(1),self%kfromto(2)
-                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
-                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
+                        call fftwf_free(self%fftdat_ptcls(ik,i)%p_re)
+                        call fftwf_free(self%fftdat_ptcls(ik,i)%p_im)
                     end do
                 end do
                 deallocate(self%fftdat_ptcls)
             endif
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                         &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
-                        &self%fftdat_ptcls(1:self%nptcls,self%kfromto(1):self%kfromto(2)) )
+                        &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2), 1:self%nptcls) )
             do i = 1,self%nptcls
                 do ik = self%kfromto(1),self%kfromto(2)
-                    self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                    self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
-                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
+                    self%fftdat_ptcls(ik,i)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    self%fftdat_ptcls(ik,i)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    call c_f_pointer(self%fftdat_ptcls(ik,i)%p_re, self%fftdat_ptcls(ik,i)%re, [self%pftsz])
+                    call c_f_pointer(self%fftdat_ptcls(ik,i)%p_im, self%fftdat_ptcls(ik,i)%im, [self%pftsz])
                 end do
             end do
             endif
@@ -790,8 +786,8 @@ contains
             self%fft_carray(ithr)%re = real(self%pfts_ptcls(:,ik,i))
             self%fft_carray(ithr)%im = aimag(self%pfts_ptcls(:,ik,i)) * self%fft_factors
             ! FFT
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fft_carray(ithr)%re, self%fftdat_ptcls(i,ik)%re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fft_carray(ithr)%im, self%fftdat_ptcls(i,ik)%im)
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fft_carray(ithr)%re, self%fftdat_ptcls(ik,i)%re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fft_carray(ithr)%im, self%fftdat_ptcls(ik,i)%im)
         end do
     end subroutine memoize_fft
 
@@ -979,8 +975,8 @@ contains
         call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
         call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
         ! correlate FFTs
-        self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,k)%re
-        self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,k)%im
+        self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(k,i)%re
+        self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(k,i)%im
         self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
             4. * self%fftdat(ithr)%ref_fft_re(1:1 + int(self%pftsz / 2))
         self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
@@ -1429,8 +1425,8 @@ contains
             call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
             call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
             ! correlate
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,ik)%re
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,ik)%im
+            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re
+            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im
             self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
                 4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
             self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
@@ -1487,64 +1483,6 @@ contains
         euclids = euclids/(self%kfromto(2) - self%kfromto(1) + 1)
         call self%deweight_ref_ptcl(pft_ref, i, iptcl)
     end subroutine gencorrs_prob
-
-    real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real    ,                intent(in)    :: shvec(2)
-        integer,                 intent(in)    :: irot
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer              :: ithr, i
-        call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
-        shmat => self%heap_vars(ithr)%shmat
-        call self%gen_shmat(ithr, shvec, shmat)
-        pft_ref = pft_ref * shmat
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                gencorr_for_rot = self%gencorr_cc_for_rot(     pft_ref, iptcl, i, irot )
-            case(OBJFUN_EUCLID)
-                gencorr_for_rot = self%gencorr_euclid_for_rot( pft_ref, iptcl, i, irot)
-            case(OBJFUN_PROB)
-                gencorr_for_rot = self%gencorr_prob_for_rot(   pft_ref, iptcl, i, irot)
-        end select
-    end function gencorr_for_rot
-
-    function gencorr_cc_for_rot( self, pft_ref, iptcl, i, irot ) result( cc )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
-        real(sp) :: cc, sqsum_ref, sqsum_ptcl
-        integer  :: ik
-        sqsum_ref  = 0.
-        sqsum_ptcl = 0.
-        cc         = 0.
-        do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
-            cc         = cc         + real(ik) * self%calc_corrk_for_rot(pft_ref, i, ik, irot)
-        end do
-        cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
-    end function gencorr_cc_for_rot
-
-    real(sp) function gencorr_euclid_for_rot( self, pft_ref, iptcl, i, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
-        real(dp) :: denom
-        call self%weight_ref_ptcl(pft_ref, i, iptcl)
-        denom                  = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
-        gencorr_euclid_for_rot = exp( - self%calc_euclid_for_rot(pft_ref, iptcl, i, irot)/denom )
-        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
-    end function gencorr_euclid_for_rot
-
-    real(sp) function gencorr_prob_for_rot( self, pft_ref, iptcl, i, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer,    intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
-        call self%weight_ref_ptcl(pft_ref, i, iptcl)
-        gencorr_prob_for_rot = self%calc_prob_for_rot(pft_ref, iptcl, i, irot)
-        call self%deweight_ref_ptcl(pft_ref, i, iptcl)
-    end function gencorr_prob_for_rot
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1982,8 +1920,8 @@ contains
             w                         = sqrt( self%delta * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = w * pft_ref(:,k)
             self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im
+            self%fftdat_ptcls(k,i)%re = w * self%fftdat_ptcls(k,i)%re
+            self%fftdat_ptcls(k,i)%im = w * self%fftdat_ptcls(k,i)%im
         end do
     end subroutine weight_ref_ptcl_sp
 
@@ -1997,8 +1935,8 @@ contains
             w                         = dsqrt( real(self%delta, dp) * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = w * pft_ref(:,k)
             self%pfts_ptcls(:,k,i)    = w * self%pfts_ptcls(:,k,i)
-            self%fftdat_ptcls(i,k)%re = w * self%fftdat_ptcls(i,k)%re
-            self%fftdat_ptcls(i,k)%im = w * self%fftdat_ptcls(i,k)%im
+            self%fftdat_ptcls(k,i)%re = w * self%fftdat_ptcls(k,i)%re
+            self%fftdat_ptcls(k,i)%im = w * self%fftdat_ptcls(k,i)%im
         end do
     end subroutine weight_ref_ptcl_dp
 
@@ -2012,8 +1950,8 @@ contains
             w                         = sqrt( self%delta * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re / w
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im / w
         end do
     end subroutine deweight_ref_ptcl_sp
 
@@ -2027,8 +1965,8 @@ contains
             w                         = dsqrt( real(self%delta, dp) * k / self%sigma2_noise(k,iptcl) )
             pft_ref(:,k)              = pft_ref(:,k)              / w
             self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    / w
-            self%fftdat_ptcls(i,k)%re = self%fftdat_ptcls(i,k)%re / w
-            self%fftdat_ptcls(i,k)%im = self%fftdat_ptcls(i,k)%im / w
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re / w
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im / w
         end do
     end subroutine deweight_ref_ptcl_dp
 
@@ -2060,8 +1998,8 @@ contains
             end do
             do i = 1, self%nptcls
                 do ik = self%kfromto(1),self%kfromto(2)
-                    call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
-                    call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
+                    call fftwf_free(self%fftdat_ptcls(ik,i)%p_re)
+                    call fftwf_free(self%fftdat_ptcls(ik,i)%p_im)
                 end do
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
