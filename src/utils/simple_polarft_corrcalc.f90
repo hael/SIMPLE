@@ -1421,8 +1421,8 @@ contains
         cc         = 0.
         ! sum up correlations over k-rings
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik) * self%delta * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik) * self%delta * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
             ! move reference into Fourier Fourier space (particles are memoized)
             self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
             self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
@@ -1438,7 +1438,7 @@ contains
             ! back transform
             call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
             ! accumulate corrs
-            cc = cc + real(ik) * self%delta * self%fftdat(ithr)%backtransf
+            cc = cc + real(ik) * self%fftdat(ithr)%backtransf
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         cc = cc / real(self%nrots * 2) / sqrt(sqsum_ref * sqsum_ptcl)
@@ -1519,9 +1519,9 @@ contains
         sqsum_ptcl = 0.
         cc         = 0.
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik) * self%delta * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik) * self%delta * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
-            cc         = cc         + real(ik) * self%delta * self%calc_corrk_for_rot(pft_ref, i, ik, irot)
+            sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            cc         = cc         + real(ik) * self%calc_corrk_for_rot(pft_ref, i, ik, irot)
         end do
         cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
     end function gencorr_cc_for_rot
@@ -1577,9 +1577,9 @@ contains
         sqsum_ptcl = 0._dp
         cc         = 0._dp
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(pft_ref_8(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
-            cc         = cc         + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref_8, i, ik, irot)
+            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref_8(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            cc         = cc         + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_8, i, ik, irot)
         end do
         cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
     end function gencorr_cc_for_rot_8
@@ -1641,14 +1641,14 @@ contains
         grad        = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
-            f          = f          + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref,     i, ik, irot)
-            grad(1)    = grad(1)    + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
+            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            f          = f          + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref,     i, ik, irot)
+            grad(1)    = grad(1)    + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
         end do
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do ik = self%kfromto(1),self%kfromto(2)
-            grad(2) = grad(2) + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
+            grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
         end do
         f    = f    / sqrt(sqsum_ref*sqsum_ptcl)
         grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
@@ -1742,13 +1742,13 @@ contains
         grad       = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * real(self%delta, dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
-            grad(1)    = grad(1)    + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
+            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
+            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+            grad(1)    = grad(1)    + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
         end do
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do ik = self%kfromto(1),self%kfromto(2)
-            grad(2) = grad(2) + real(ik,kind=dp) * real(self%delta, dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
+            grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
         end do
         grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
     end subroutine gencorr_cc_grad_only_for_rot_8
