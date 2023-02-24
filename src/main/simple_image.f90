@@ -6686,7 +6686,6 @@ contains
             call self%read(volfname)
             call self%fft
             call self%clip_inplace([box_crop,box_crop,box_crop])
-            call self%mul(crop_factor**3)
             call self%ifft
         elseif( all(ldim == box_crop) )then
             call self%new([box_crop,box_crop,box_crop],smpd_crop)
