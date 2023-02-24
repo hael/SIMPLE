@@ -6,7 +6,8 @@ use simple_picker_utils, only: picker_utils
 use simple_image,        only: image
 implicit none
 
-character(len=*), parameter :: micname = '/home/elmlundho/cache/relion_tut/20170629_00021_frameImage_intg.mrc'
+! character(len=*), parameter :: micname = '/home/elmlundho/cache/relion_tut/20170629_00021_frameImage_intg.mrc'
+character(len=*), parameter :: micname = '/Users/elmlundho/Processing/relion_tut/20170629_00021_frameImage_intg.mrc'
 character(len=*), parameter :: boxrefs = '/home/elmlundho/cache/relion_tut/boxrefs.mrc'
 real,             parameter :: SMPD    = 0.885, MOLDIAM = 180.
 type(image)                 :: micimg

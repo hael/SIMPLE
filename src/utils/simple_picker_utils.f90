@@ -710,8 +710,8 @@ contains
         integer, allocatable :: positions_backgr(:,:)
         real,    allocatable :: scores_nonpeak(:)
         type(image) :: boximgs_heap(nthr_glob)
-        real        :: scores_peak(self%nboxes2), factor
-        real        :: scores(self%nrefs), pixrad_shrink2, rpos(2)
+        real        :: scores_peak(self%nboxes2), factor, smd, ksstat, prob
+        real        :: scores(self%nrefs), pixrad_shrink2, rpos(2), a_peak, a_nonpeak, s_peak, s_nonpeak
         logical     :: mask_backgr(0:self%nx2,0:self%ny2), outside
         integer     :: ibox, jbox, off_here, nbackgr, ithr, iref, xrange(2), yrange(2), xind, yind
         if( .not. allocated(self%positions2) ) THROW_HARD('positions2 need to be set')
@@ -752,9 +752,6 @@ contains
                 endif
             end do
         end do
-
-        print *, '# backgr boxes: ', nbackgr
-
         ! extract background info
         allocate(scores_nonpeak(nbackgr), source=0.)
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
@@ -794,10 +791,18 @@ contains
             do ibox = 1,self%nboxes2
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
-                scores_nonpeak(ibox) = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
+                scores_peak(ibox) = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
             end do
             !$omp end parallel do
         endif
+        call avg_sdev(scores_peak,    a_peak,    s_peak)
+        call avg_sdev(scores_nonpeak, a_nonpeak, s_nonpeak)
+        smd = std_mean_diff(a_peak, a_nonpeak, s_peak, s_nonpeak)
+        call kstwo(scores_peak, self%nboxes2, scores_nonpeak, nbackgr, ksstat, prob)
+        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
+        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
+        write(logfhandle,'(a,1x,f4.2)') 'P             = ', prob
+        if( smd < 0.2 .and. prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar' 
     end subroutine peak_vs_nonpeak_stats
 
     subroutine kill( self )
