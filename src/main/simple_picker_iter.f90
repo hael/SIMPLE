@@ -3,6 +3,7 @@ module simple_picker_iter
 include 'simple_lib.f08'
 use simple_picker
 use simple_parameters
+use simple_builder,      only: build_glob
 use simple_picker_utils, only: picker_utils
 use simple_cmdline,      only: cmdline
 use simple_image,        only: image
@@ -34,25 +35,34 @@ contains
         integer            :: ldim(3), ifoo
         if( .not. file_exists(moviename_intg) ) write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
-        if( cline%defined('refs') .or. cline%defined('vol1') )then
-            if( cline%defined('thres') )then
-                call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp,&
+        select case(trim(params_glob%picker))
+            case('old')
+                if( .not. cline%defined('pickrefs') ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
+                if( cline%defined('thres') )then
+                    call init_picker(moviename_intg, params_glob%pickrefs, smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
-            else
-                call init_picker(moviename_intg, params_glob%refs, smpd, lp_in=params_glob%lp, &
-                    &ndev_in=params_glob%ndev, dir_out=dir_out)
-            endif
-            call exec_picker(boxfile, nptcls_out)
-            call kill_picker
-        else if( cline%defined('moldiam') )then
-            call find_ldim_nptcls(moviename_intg, ldim, ifoo)
-            call micimg%new(ldim, smpd)
-            call micimg%read(moviename_intg)
-            call putils%exec_picker(boxfile, nptcls_out, dir_out=dir_out)
-            call micimg%kill
-        else
-            THROW_HARD('Need 2D references or volume or modiam!')
-        endif
+                else
+                    call init_picker(moviename_intg, params_glob%pickrefs, smpd, lp_in=params_glob%lp, &
+                                                  &ndev_in=params_glob%ndev, dir_out=dir_out)
+                endif
+                call exec_picker(boxfile, nptcls_out)
+                call kill_picker
+            case('new')
+                ! read micrograph
+                call find_ldim_nptcls(moviename_intg, ldim, ifoo)
+                call micimg%new(ldim, smpd)
+                call micimg%read(moviename_intg)
+                if( cline%defined('pickrefs') )then
+                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                    call putils%set_refs(build_glob%pickrefs, params_glob%mskdiam)
+                else if( cline%defined('moldiam') )then
+                    ! at least moldiam is required
+                else
+                    THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
+                endif
+                call putils%exec_picker(boxfile, nptcls_out, dir_out=dir_out)
+                call micimg%kill
+        end select
     end subroutine iterate
 
 end module simple_picker_iter

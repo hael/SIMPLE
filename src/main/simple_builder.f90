@@ -36,6 +36,7 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
+    type(image),            allocatable :: pickrefs(:)            !< picking references
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
@@ -232,7 +233,7 @@ contains
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
-        integer     :: lfny, cyc_lims(3,2), i
+        integer     :: lfny, cyc_lims(3,2), i, ldim_refs(3), nrefs, iref
         logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
@@ -291,7 +292,21 @@ contains
             call mskimg%kill
             ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
             self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
-            if( .not. params%l_graphene ) self%l_resmsk = .true.
+            if( .not. params%l_graphene ) self%l_resmsk = .true.            
+        endif
+        ! picking references
+        if( cline%defined('pickrefs') )then
+            if( file_exists(trim(params%pickrefs)) )then
+                call find_ldim_nptcls(trim(params%pickrefs), ldim_refs, nrefs)
+                ldim_refs(3) = 1
+                allocate(self%pickrefs(nrefs))
+                do iref = 1,nrefs
+                    call self%pickrefs(iref)%new(ldim_refs, params%smpd)
+                    call self%pickrefs(iref)%read(trim(params%pickrefs), iref)
+                end do
+            else
+                THROW_HARD('file '//trim(params%pickrefs)//' does not exist')
+            endif
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -304,6 +319,7 @@ contains
 
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self
+        integer :: iref
         if( self%general_tbox_exists )then
             call self%pgrpsyms%kill
             call self%spproj_field%kill
@@ -327,6 +343,12 @@ contains
             if( allocated(self%fsc)           ) deallocate(self%fsc)
             if( allocated(self%lmsk)          ) deallocate(self%lmsk)
             if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
+            if( allocated(self%pickrefs) )then
+                do iref = 1,size(self%pickrefs)
+                    call self%pickrefs(iref)%kill
+                end do
+                deallocate(self%pickrefs)
+            endif
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
