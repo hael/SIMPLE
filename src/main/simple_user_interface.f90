@@ -2768,7 +2768,7 @@ contains
         call nununiform_filter3D%set_input('filt_ctrls', 2, lp_lowres)
         call nununiform_filter3D%set_input('filt_ctrls', 3, nsearch)
         call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call nununiform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call nununiform_filter3D%set_input('mask_ctrls', 2, mskfile)
@@ -2798,7 +2798,7 @@ contains
         call uniform_filter3D%set_input('filt_ctrls', 1, lp_lowres)
         call uniform_filter3D%set_input('filt_ctrls', 2, nsearch)
         call uniform_filter3D%set_input('filt_ctrls', 3, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call uniform_filter3D%set_input('filt_ctrls', 4, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call uniform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call uniform_filter3D%set_input('mask_ctrls', 2, mskfile)
