@@ -2080,7 +2080,7 @@ contains
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
-        call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
+        call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. stk.mrcs',     .false., '')
         call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
         ! search controls
         ! <empty>
@@ -2854,14 +2854,12 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &2, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call pick%set_input('img_ios', 1, 'pickrefs', 'file', 'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call pick%set_gui_params('img_ios', 1, submenu="picking", advanced=.false.)
-        call pick%set_input('img_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
-        call pick%set_gui_params('img_ios', 2, submenu="picking", advanced=.false.)
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_gui_params('parm_ios', 1, submenu="picking")
@@ -2939,12 +2937,11 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
-        call preprocess%set_input('img_ios', 2, 'refs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess%set_input('img_ios', 2, 'pickrefs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  total_dose)
         call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
@@ -3005,14 +3002,13 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &4, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, dir_movies)
         call preprocess_stream%set_input('img_ios', 2, gainref)
-        call preprocess_stream%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess_stream%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
-        call preprocess_stream%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+        call preprocess_stream%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, total_dose)
@@ -3079,7 +3075,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3087,16 +3083,14 @@ contains
         call preprocess_stream_dev%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
         call preprocess_stream_dev%set_gui_params('img_ios', 2, submenu="data", advanced=.false.)
-        call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking*', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="refs" )
-        call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking*', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 4, submenu="picking", advanced=.false., exclusive_group="refs")
-        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+        call preprocess_stream_dev%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
+        call preprocess_stream_dev%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data")
-        call preprocess_stream_dev%set_input('img_ios', 6, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
+        call preprocess_stream_dev%set_gui_params('img_ios', 4, submenu="data")
+        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 6, submenu="data", advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data", advanced=.false.)
         ! parameter input/output
         call preprocess_stream_dev%set_input('parm_ios', 1, total_dose)
         call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)

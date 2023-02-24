@@ -6,10 +6,10 @@ use simple_picker_utils, only: picker_utils
 use simple_image,        only: image
 implicit none
 
-! character(len=*), parameter :: micname = '/home/elmlundho/cache/relion_tut/20170629_00021_frameImage_intg.mrc'
-character(len=*), parameter :: micname = '/Users/elmlundho/Processing/relion_tut/20170629_00021_frameImage_intg.mrc'
+character(len=*), parameter :: micname = '/home/elmlundho/cache/relion_tut/20170629_00021_frameImage_intg.mrc'
+! character(len=*), parameter :: micname = '/Users/elmlundho/Processing/relion_tut/20170629_00021_frameImage_intg.mrc'
 character(len=*), parameter :: boxrefs = '/home/elmlundho/cache/relion_tut/boxrefs.mrc'
-real,             parameter :: SMPD    = 0.885, MOLDIAM = 180.
+real,             parameter :: SMPD    = 0.885, MOLDIAM = 180., MSKDIAM = 200.
 type(image)                 :: micimg
 type(image),    allocatable :: refs(:)
 type(picker_utils)          :: putils
@@ -33,7 +33,7 @@ call find_ldim_nptcls(micname, ldim, ifoo)
 call micimg%new(ldim, SMPD)
 call micimg%read(micname)
 call putils%new(micname, 'black', SMPD, MOLDIAM)
-! call putils%set_refs(refs, 200.)
+! call putils%set_refs(refs, MSKDIAM)
 call putils%exec_picker(boxname_out, nptcls)
 ! print *, 'boxname_out ', trim(boxname_out)
 ! print *, 'nptcls      ', nptcls

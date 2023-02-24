@@ -187,9 +187,6 @@ contains
         if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
         ! extraction
         if( .not. cline%defined('pcontrast')       )  call cline%set('pcontrast',    'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! master parameters
@@ -207,7 +204,7 @@ contains
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! picking
         l_pick = .false.
-        if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
+        if( cline%defined('pickrefs') ) l_pick = .true.
         ! output directories
         output_dir = PATH_HERE
         output_dir_ctf_estimate   = filepath(trim(output_dir), trim(DIR_CTF_ESTIMATE))
@@ -232,8 +229,7 @@ contains
                 call cline_make_pickrefs%set('scale',pickref_scale)
             endif
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('refs', trim(PICKREFS)//params%ext)
-            call cline%delete('vol1')
+            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! movie watcher init
@@ -725,9 +721,6 @@ contains
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -746,7 +739,7 @@ contains
         call qenv%new(params%nparts)
         ! prepares picking references
         l_pick = .false.
-        if( cline%defined('refs') .or. cline%defined('vol1') )then
+        if( cline%defined('pickrefs') )then
             l_pick = .true.
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
@@ -755,8 +748,7 @@ contains
                 call cline_make_pickrefs%set('scale',pickref_scale)
             endif
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('refs', trim(PICKREFS)//params%ext)
-            call cline%delete('vol1')
+            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! prepare job description
@@ -803,17 +795,15 @@ contains
         if( params%scale > 1.01 )then
             THROW_HARD('scale cannot be > 1; exec_preprocess')
         endif
-        l_pick = cline%defined('refs')
+        l_pick       = cline%defined('pickrefs')
         l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nmovies()==0 .and. spproj%get_nintgs()==0 ) THROW_HARD('No movie/micrograph to process!')
         ! output directories & naming
-        output_dir_ctf_estimate   = PATH_HERE
-        output_dir_motion_correct = PATH_HERE
-        if( l_pick )then
-            output_dir_picker  = PATH_HERE
-        endif
+        output_dir_ctf_estimate        = PATH_HERE
+        output_dir_motion_correct      = PATH_HERE
+        if( l_pick ) output_dir_picker = PATH_HERE
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
@@ -1417,9 +1407,6 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         logical :: templates_provided
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast',   'black')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',       'mic')
@@ -1435,7 +1422,7 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! more sanity checks
-        templates_provided = cline%defined('refs') .or. cline%defined('vol1')
+        templates_provided = cline%defined('pickrefs')
         if( .not.templates_provided )then
             if( .not.cline%defined('moldiam') ) THROW_HARD('Need molecular diameter in A (moldiam) as input for reference-free pick')
         endif
@@ -1446,8 +1433,7 @@ contains
         if( templates_provided )then
             call cline_make_pickrefs%set('prg','make_pickrefs')
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('refs', trim(PICKREFS)//params%ext)
-            call cline%delete('vol1')
+            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! prepare job description
@@ -2551,12 +2537,8 @@ contains
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
         integer :: cnt, norefs
         ! error check
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
-            THROW_HARD('One of REFS, VOL1 & PROJFILE must be informed!')
-        endif
+        if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
+        if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
         ! set defaults
         call cline%set('oritype', 'mic')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')
@@ -2566,38 +2548,20 @@ contains
         if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
         ! point-group object
         call pgrpsyms%new(trim(params%pgrp))
-        if( cline%defined('vol1') )then
-            ! find logical dimension & read reference volume
-            call find_ldim_nptcls(params%vols(1), ldim_here, ifoo, smpd=smpd_here)
-            if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the volume (should be in MRC format)')
-            call ref3D%new(ldim_here, smpd_here)
-            call ref3D%read(params%vols(1))
-            call scale_ref(ref3D, params%smpd)
-            ! make projection directions
-            call os%new(NPROJS, is_ptcl=.false.)
-            call pgrpsyms%build_refspiral(os)
-            ! generate reprojections
-            projs  = reproject(ref3D, os)
-            nrots  = nint( real(NREFS)/real(NPROJS) )
-            norefs = NPROJS
-        else if( cline%defined('refs') )then
-            ! read selected cavgs
-            call find_ldim_nptcls(params%refs, ldim_here, ncavgs, smpd=smpd_here)
-            if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
-            ldim_here(3) = 1
-            allocate( projs(ncavgs) )
-            call stkio_r%open(params%refs, params%smpd, 'read', bufsz=ncavgs)
-            do icavg=1,ncavgs
-                call projs(icavg)%new(ldim_here, smpd_here)
-                call stkio_r%read(icavg, projs(icavg))
-                call scale_ref(projs(icavg), params%smpd)
-            end do
-            call stkio_r%close
-            nrots  = nint( real(NREFS)/real(ncavgs) )
-            norefs = ncavgs
-        else
-            THROW_HARD('Missing volume / cavgs for creating picking references!')
-        endif
+        ! read selected cavgs
+        call find_ldim_nptcls(params%pickrefs, ldim_here, ncavgs, smpd=smpd_here)
+        if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
+        ldim_here(3) = 1
+        allocate( projs(ncavgs) )
+        call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
+        do icavg=1,ncavgs
+            call projs(icavg)%new(ldim_here, smpd_here)
+            call stkio_r%read(icavg, projs(icavg))
+            call scale_ref(projs(icavg), params%smpd)
+        end do
+        call stkio_r%close
+        nrots  = nint( real(NREFS)/real(ncavgs) )
+        norefs = ncavgs
         ! expand in in-plane rotation and write to file
         if( nrots > 1 )then
             call ref2D%new([ldim(1),ldim(2),1], params%smpd)
