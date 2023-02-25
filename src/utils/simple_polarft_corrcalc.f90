@@ -10,6 +10,16 @@ public :: polarft_corrcalc, pftcc_glob
 private
 #include "simple_local_flags.inc"
 
+type fftw_cvec
+    type(c_ptr)                            :: p
+    complex(kind=c_float_complex), pointer :: c(:) => null()
+end type fftw_cvec
+
+type fftw_rvec
+    type(c_ptr)                 :: p
+    real(kind=c_float), pointer :: r(:) => null()
+end type fftw_rvec
+
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
 type fftw_carr
@@ -61,7 +71,7 @@ type heap_vars
 end type heap_vars
 
 type :: polarft_corrcalc
-    private
+    ! private
     integer                          :: nptcls     = 1              !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1              !< the number of references (logically indexded [1,nrefs])
     integer                          :: nrots      = 0              !< number of in-plane rotations for one pft (determined by radius of molecule)
@@ -96,6 +106,20 @@ type :: polarft_corrcalc
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
+    
+    type(c_ptr)                  :: plan_fwd1
+    type(c_ptr)                  :: plan_fwd2
+    type(c_ptr)                  :: plan_bwd1
+    type(fftw_cvec), allocatable :: ft_ptcl_ctf(:,:)
+    type(fftw_cvec), allocatable :: ft_ctf2(:,:)
+    type(fftw_cvec), allocatable :: ft_ref_even(:,:)
+    type(fftw_cvec), allocatable :: ft_ref_odd(:,:)
+    type(fftw_cvec), allocatable :: ft_ref2_even(:,:)
+    type(fftw_cvec), allocatable :: ft_ref2_odd(:,:)
+    type(fftw_cvec), allocatable :: cvec1(:)
+    type(fftw_rvec), allocatable :: rvec1(:)
+    real,            allocatable :: var_prods(:)
+
     contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -138,12 +162,13 @@ type :: polarft_corrcalc
     ! MODIFIERS
     procedure          :: shift_ptcl
     ! MEMOIZER
-    procedure, private :: memoize_sqsum_ptcl
+    procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
+    procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
     ! CALCULATORS
-    procedure          :: create_polar_absctfmats
+    procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure, private :: prep_ref4corr_sp
     procedure, private :: prep_ref4corr_dp
     generic            :: prep_ref4corr => prep_ref4corr_sp, prep_ref4corr_dp
@@ -760,7 +785,11 @@ contains
     subroutine memoize_sqsum_ptcl( self, i )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i
-        self%sqsums_ptcls(i) = sum(csq_fast(self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),i)))
+        integer :: ik
+        self%sqsums_ptcls(i) = 0.
+        do ik = self%kfromto(1),self%kfromto(2)
+            self%sqsums_ptcls(i) = self%sqsums_ptcls(i) + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,i)))
+        enddo
     end subroutine memoize_sqsum_ptcl
 
     ! memoize all particles ffts
@@ -789,7 +818,187 @@ contains
             call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fft_carray(ithr)%re, self%fftdat_ptcls(ik,i)%re)
             call fftwf_execute_dft    (self%plan_fwd_2, self%fft_carray(ithr)%im, self%fftdat_ptcls(ik,i)%im)
         end do
+        call self%memoize
     end subroutine memoize_fft
+
+    subroutine memoize( self )
+        class(polarft_corrcalc),       intent(inout) :: self
+        type(fftw_cvec),               allocatable   :: cvecs1(:), cvecs2(:)
+        complex(kind=c_float_complex), pointer       :: cvec1(:),  cvec2(:)
+        type(c_ptr) :: fwd_plan, r2c_plan
+        type(c_ptr) :: p_cvec1
+        real        :: corr, sqsum_ref, sqsum_ptcl
+        integer     :: i, ik, ithr, iref
+        ithr = omp_get_thread_num() + 1
+        allocate(cvecs1(nthr_glob),cvecs2(nthr_glob))
+        allocate(self%rvec1(nthr_glob), self%cvec1(nthr_glob))
+        allocate(self%var_prods(self%nrots))
+        do ithr = 1,nthr_glob
+            cvecs1(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
+            cvecs2(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
+            call c_f_pointer(cvecs1(ithr)%p, cvecs1(ithr)%c, [self%nrots])
+            call c_f_pointer(cvecs2(ithr)%p, cvecs2(ithr)%c, [self%nrots])
+            self%cvec1(ithr)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
+            call c_f_pointer(self%cvec1(ithr)%p, self%cvec1(ithr)%c, [self%pftsz+1])
+            call c_f_pointer(self%cvec1(ithr)%p, self%rvec1(ithr)%r, [self%nrots+2])
+        enddo
+        fwd_plan = fftwf_plan_dft_1d(self%nrots, cvecs1(1)%c, cvecs2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        allocate(self%ft_ptcl_ctf(self%kfromto(1):self%kfromto(2), self%nptcls))
+        allocate(self%ft_ctf2(    self%kfromto(1):self%kfromto(2), self%nptcls))
+        do i = 1,self%nptcls
+            do ik = self%kfromto(1),self%kfromto(2)
+                self%ft_ptcl_ctf(ik,i)%p = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
+                self%ft_ctf2(ik,i)%p     = fftwf_alloc_complex(int(self%pftsz+1, c_size_t))
+                call c_f_pointer(self%ft_ptcl_ctf(ik,i)%p, self%ft_ptcl_ctf(ik,i)%c, [self%pftsz+1])
+                call c_f_pointer(self%ft_ctf2(    ik,i)%p, self%ft_ctf2(    ik,i)%c, [self%pftsz+1])
+            enddo
+        enddo
+        r2c_plan       = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_fwd1 = fftwf_plan_dft_1d(self%nrots, cvecs1(1)%c, cvecs1(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_fwd2 = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_bwd1 = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+
+        do i = 1,self%nptcls
+            do ik = self%kfromto(1),self%kfromto(2)
+                ithr = omp_get_thread_num() + 1
+                ! FT(X.CTF)*
+                if( self%with_ctf )then
+                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,ik,i) * self%ctfmats(:,ik,i)
+                else
+                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,ik,i)
+                endif
+                cvecs1(ithr)%c(self%pftsz+1:self%nrots) = conjg(cvecs1(ithr)%c(1:self%pftsz))
+                call fftwf_execute_dft(fwd_plan, cvecs1(ithr)%c, cvecs2(ithr)%c)                
+                self%ft_ptcl_ctf(ik,i)%c(1:self%pftsz+1) =  conjg(cvecs2(ithr)%c(1:self%pftsz+1))
+                ! FT(CTF2)*
+                if( self%with_ctf )then
+                    self%rvec1(ithr)%r(1:self%pftsz)            = self%ctfmats(:,ik,i)*self%ctfmats(:,ik,i)
+                    self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
+                    call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                    self%ft_ctf2(ik,i)%c = conjg(self%cvec1(ithr)%c)
+                endif
+            enddo
+        enddo
+        
+        allocate(self%ft_ref_even( self%kfromto(1):self%kfromto(2),self%nrefs))
+        allocate(self%ft_ref_odd(  self%kfromto(1):self%kfromto(2),self%nrefs))
+        allocate(self%ft_ref2_even(self%kfromto(1):self%kfromto(2),self%nrefs))
+        allocate(self%ft_ref2_odd( self%kfromto(1):self%kfromto(2),self%nrefs))
+        do iref = 1,self%nrefs
+            do ik = self%kfromto(1),self%kfromto(2)
+                self%ft_ref_even( ik,iref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                self%ft_ref_odd(  ik,iref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                self%ft_ref2_even(ik,iref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                self%ft_ref2_odd( ik,iref)%p = fftwf_alloc_complex(int(self%pftsz+1,c_size_t))
+                call c_f_pointer(self%ft_ref_even( ik,iref)%p, self%ft_ref_even( ik,iref)%c, [self%pftsz+1])
+                call c_f_pointer(self%ft_ref_odd(  ik,iref)%p, self%ft_ref_odd(  ik,iref)%c, [self%pftsz+1])
+                call c_f_pointer(self%ft_ref2_even(ik,iref)%p, self%ft_ref2_even(ik,iref)%c, [self%pftsz+1])
+                call c_f_pointer(self%ft_ref2_odd( ik,iref)%p, self%ft_ref2_odd( ik,iref)%c, [self%pftsz+1])
+            enddo
+        enddo
+        do iref = 1,self%nrefs
+            do ik = self%kfromto(1),self%kfromto(2)
+                ithr = omp_get_thread_num() + 1
+                ! FT(REFeven)
+                cvecs1(ithr)%c(           1:self%pftsz) = self%pfts_refs_even(:,ik,iref)
+                cvecs1(ithr)%c(self%pftsz+1:self%nrots) = conjg(cvecs1(ithr)%c(1:self%pftsz))
+                call fftwf_execute_dft(self%plan_fwd1, cvecs1(ithr)%c, cvecs1(ithr)%c)
+                self%ft_ref_even(ik,iref)%c = cvecs1(ithr)%c(1:self%pftsz+1)
+                ! FT(REFodd)
+                cvecs1(ithr)%c(           1:self%pftsz) = self%pfts_refs_odd(:,ik,iref)
+                cvecs1(ithr)%c(self%pftsz+1:self%nrots) = conjg(cvecs1(ithr)%c(1:self%pftsz))
+                call fftwf_execute_dft(self%plan_fwd1, cvecs1(ithr)%c, cvecs1(ithr)%c)
+                self%ft_ref_odd(ik,iref)%c = cvecs1(ithr)%c(1:self%pftsz+1)
+                ! FT(REF2even)
+                self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_even(:,ik,iref))
+                self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
+                call fftwf_execute_dft_r2c(self%plan_fwd2, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                self%ft_ref2_even(ik,iref)%c = self%cvec1(ithr)%c(1:self%pftsz+1)
+                ! FT(REF2odd)
+                self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_odd(:,ik,iref))
+                self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
+                call fftwf_execute_dft_r2c(self%plan_fwd2, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                self%ft_ref2_odd(ik,iref)%c = self%cvec1(ithr)%c(1:self%pftsz+1)
+            enddo
+        enddo
+        ! clean-up
+        do ithr = 1,nthr_glob
+            call fftwf_free(cvecs1(ithr)%p)
+            call fftwf_free(cvecs2(ithr)%p)
+        enddo
+        deallocate(cvecs1,cvecs2)
+        call fftwf_destroy_plan(r2c_plan)
+        call fftwf_destroy_plan(fwd_plan)
+    end subroutine memoize
+
+    subroutine calc_corr( self, iref, iptcl, corrs )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real,                    intent(out)   :: corrs(self%nrots)
+        integer :: ithr, ik, i
+        logical :: even
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        even = self%iseven(iptcl)
+        ! numerator
+        corrs = 0.0
+        self%var_prods = 0.0
+        do ik = self%kfromto(1),self%kfromto(2)
+            ! FT(REF)
+            if( even )then
+                self%cvec1(ithr)%c = self%ft_ctf2(ik,i)%c * self%ft_ref2_even(ik,iref)%c
+            else
+                self%cvec1(ithr)%c = self%ft_ctf2(ik,i)%c * self%ft_ref2_odd(ik,iref)%c
+            endif
+            ! IFFT(FT(CTF2)* x FT(REF2))
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            self%var_prods = self%var_prods + real(ik) * self%rvec1(ithr)%r(1:self%nrots)
+            ! FT(X.CTF)* x FT(REF)
+            if( even )then
+                self%cvec1(ithr)%c = self%ft_ptcl_ctf(ik,i)%c * self%ft_ref_even(ik,iref)%c
+            else
+                self%cvec1(ithr)%c = self%ft_ptcl_ctf(ik,i)%c * self%ft_ref_odd(ik,iref)%c
+            endif
+            ! IFFT( FT(X.CTF)* x FT(REF) )
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            corrs = corrs + real(ik) * self%rvec1(ithr)%r(1:self%nrots)
+        end do
+        self%var_prods = self%var_prods * (self%sqsums_ptcls(i) * real(2*self%nrots))
+        corrs          = corrs / sqrt(self%var_prods)
+    end subroutine calc_corr
+
+    subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
+        use simple_ctf,        only: ctf
+        class(polarft_corrcalc),   intent(inout) :: self
+        integer,                   intent(in)    :: iptcl
+        real,                      intent(in)    :: smpd, kv, cs, fraca, dfx, dfy, angast
+        type(ctf)       :: tfun
+        real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)        :: inv_ldim(3),hinv,kinv
+        integer         :: i,irot,k,ppfromto(2),ctfmatind
+        if( .not.allocated(self%ctfmats) )then
+            allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
+        endif
+        ! if(.not. self%with_ctf ) return
+        inv_ldim = 1./real(self%ldim)
+        !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
+        do irot=1,self%pftsz
+            do k=self%kfromto(1),self%kfromto(2)
+                hinv = self%polar(irot,k) * inv_ldim(1)
+                kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
+                spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
+                ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
+            end do
+        end do
+        !$omp end parallel do
+        i = self%pinds(iptcl)
+        if( i > 0 )then
+            tfun   = ctf(smpd, kv, cs, fraca)
+            call tfun%init(dfx, dfy, angast)
+            self%ctfmats(:,:,i) = tfun%eval(spaFreqSq_mat(:,:), ang_mat(:,:), 0.0, .not.params_glob%l_wiener_part)
+        endif
+    end subroutine calc_polar_ctf
 
     subroutine setup_npix_per_shell( self )
         class(polarft_corrcalc), intent(inout) :: self
