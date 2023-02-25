@@ -818,7 +818,6 @@ contains
             call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fft_carray(ithr)%re, self%fftdat_ptcls(ik,i)%re)
             call fftwf_execute_dft    (self%plan_fwd_2, self%fft_carray(ithr)%im, self%fftdat_ptcls(ik,i)%im)
         end do
-        call self%memoize
     end subroutine memoize_fft
 
     subroutine memoize( self )
