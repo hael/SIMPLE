@@ -8,8 +8,8 @@ use simple_starfile_wrappers
 implicit none
 
 public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
-public :: split_sigma2_into_groups, consolidate_groups, scale_group_sigma2_magnitude
-public :: fill_sigma2_before_nyq, test_unit
+public :: split_sigma2_into_groups, consolidate_sigma2_groups, scale_group_sigma2_magnitude
+public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
 
@@ -34,7 +34,7 @@ contains
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
-    procedure          :: allocate_ptcls_from_groups
+    procedure          :: allocate_ptcls
     procedure, private :: calc_sigma2_1, calc_sigma2_2
     generic            :: calc_sigma2 => calc_sigma2_1, calc_sigma2_2
     procedure, private :: update_sigma2_1, update_sigma2_2
@@ -122,8 +122,8 @@ contains
         integer                             :: iptcl, igroup, ngroups, eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
         if( associated(cftcc_glob) ) call cftcc_glob%assign_pinds(self%pinds)
+        call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
         if( params_glob%l_sigma_glob )then
-            call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
             ! copy global sigma to particles
             do iptcl = params_glob%fromp, params_glob%top
@@ -131,7 +131,6 @@ contains
                 self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,1,:)
             end do
         else
-            call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
             ! copy group sigmas to particles
             do iptcl = params_glob%fromp, params_glob%top
                 igroup  = nint(os%get(iptcl, 'stkind'))
@@ -141,13 +140,13 @@ contains
         endif
     end subroutine read_groups
 
-    !>  fill particles info with groups
-    subroutine allocate_ptcls_from_groups( self )
+    !>  allocate sigma2_part
+    subroutine allocate_ptcls( self )
         class(euclid_sigma2), intent(inout) :: self
         if( .not.self%exists ) THROW_HARD('euclid_sigma2 has not been instanciated! allocate_ptcls_from_groups')
-        allocate(self%sigma2_part(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
+        allocate(self%sigma2_part(self%kfromto(1):self%kfromto(2),self%fromp:self%top),&
             &source=self%sigma2_noise)
-    end subroutine allocate_ptcls_from_groups
+    end subroutine allocate_ptcls
 
     !>  Calculates and updates sigma2 within search resolution range
     subroutine calc_sigma2_1( self, pftcc, iptcl, o, refkind )
@@ -212,9 +211,13 @@ contains
     end subroutine update_sigma2_2
 
     subroutine write_sigma2( self )
-        class(euclid_sigma2), intent(inout) :: self
-        type(sigma2_binfile)                :: binfile
-        call binfile%new_from_file(self%binfname)
+        class(euclid_sigma2), intent(in) :: self
+        type(sigma2_binfile) :: binfile
+        if( file_exists(self%binfname) )then
+            call binfile%new_from_file(self%binfname)
+        else
+            call binfile%new(self%binfname, self%fromp, self%top, self%kfromto)
+        endif
         call binfile%write(self%sigma2_part)
         call binfile%kill
     end subroutine write_sigma2
@@ -280,7 +283,7 @@ contains
         if( present(fname) )then
             starfile_fname = trim(fname)
         else
-            starfile_fname = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+            starfile_fname = sigma2_star_from_iter(iter)
         endif
         if (.not. file_exists(starfile_fname)) then
             THROW_HARD('euclid_sigma2: read_groups_starfile; file does not exists: ' // starfile_fname)
@@ -338,7 +341,7 @@ contains
         type(euclid_sigma2)           :: euclidsigma2
         character(len=:), allocatable :: fname
         integer                       :: ngroups
-        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        fname  = sigma2_star_from_iter(iter)
         call euclidsigma2%init_from_group_header(fname)
         call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ngroups)
         euclidsigma2%sigma2_groups = euclidsigma2%sigma2_groups * scale
@@ -372,16 +375,15 @@ contains
     end subroutine fill_sigma2_before_nyq
 
     !> Split a sigma2 doc into individual docs
-    subroutine split_sigma2_into_groups( iter, fnames )
-        integer,                                 intent(in) :: iter
+    subroutine split_sigma2_into_groups( fname, fnames )
+        character(len=*),                        intent(in) :: fname
         character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: fname, dir_out
+        character(len=:), allocatable :: dir_out
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups
-        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
         call euclidsigma2%init_from_group_header(fname)
-        call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ngroups)
+        call euclidsigma2%read_groups_starfile(0, euclidsigma2%sigma2_groups, ngroups, fname=fname)
         if( ngroups /= size(fnames) ) THROW_HARD('Inconsistent number of groups & stacks! split_group_sigma2')
         do igroup = 1,ngroups
             allocate(sigma2_group(2,1,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),&
@@ -393,14 +395,13 @@ contains
     end subroutine split_sigma2_into_groups
 
     ! the reverse of split_sigma2_into_groups
-    subroutine consolidate_groups( iter, fnames )
-        integer,                                 intent(in) :: iter
+    subroutine consolidate_sigma2_groups( fname, fnames )
+        character(len=*),                        intent(in) :: fname
         character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: fname, dir_out
+        character(len=:), allocatable :: dir_out
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups, n
-        fname   = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
         call euclidsigma2%init_from_group_header(fnames(1))
         call euclidsigma2%read_groups_starfile(1, euclidsigma2%sigma2_groups, n, fname=fnames(1))
         ngroups = size(fnames)
@@ -414,7 +415,13 @@ contains
         enddo
         call write_groups_starfile(fname, sigma2_group, ngroups)
         deallocate(sigma2_group)
-    end subroutine consolidate_groups
+    end subroutine consolidate_sigma2_groups
+
+    function sigma2_star_from_iter( iter )
+        integer, intent(in) :: iter
+        character(len=:), allocatable :: sigma2_star_from_iter
+        sigma2_star_from_iter = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+    end function sigma2_star_from_iter
 
     ! Destructor
 
@@ -452,12 +459,13 @@ contains
             fnames(igroup) = 'test_'//int2str(igroup)//'.star'
         enddo
         allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
-        fname  = trim(SIGMA2_GROUP_FBODY) // trim(int2str(iter)) // '.star'
+        fname  = sigma2_star_from_iter(iter)
         call write_groups_starfile( fname, sigma2, ngroups )
         call scale_group_sigma2_magnitude( iter, scale )
-        call split_sigma2_into_groups( iter, fnames )
-        call consolidate_groups( 666, fnames)
-        call split_sigma2_into_groups( 666, fnames)
+        call split_sigma2_into_groups( fname, fnames )
+        fname  = sigma2_star_from_iter(666)
+        call consolidate_sigma2_groups( fname, fnames)
+        call split_sigma2_into_groups( fname, fnames)
         do igroup = 1,ngroups
             fname = fnames(igroup)
             if(.not.file_exists(fname))then
@@ -488,11 +496,11 @@ contains
         endif
         deallocate(sigma2)
         allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
-        fname1 = trim(SIGMA2_GROUP_FBODY) // '1.star'
+        fname1 = sigma2_star_from_iter(1)
         call write_groups_starfile( fname1, sigma2, ngroups )
         deallocate(sigma2)
         allocate(sigma2(2,ngroups,kfromto(1):2*kfromto(2)),source=2.0)
-        fname2 = trim(SIGMA2_GROUP_FBODY) // '2.star'
+        fname2 = sigma2_star_from_iter(2)
         call write_groups_starfile( fname2, sigma2, ngroups )
         deallocate(sigma2)
         call fill_sigma2_before_nyq(fname1, fname2)

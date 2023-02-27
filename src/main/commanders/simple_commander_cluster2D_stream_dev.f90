@@ -11,7 +11,7 @@ use simple_stream_chunk,   only: stream_chunk
 use simple_class_frcs,     only: class_frcs
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
-use simple_euclid_sigma2,  only: consolidate_groups, split_sigma2_into_groups
+use simple_euclid_sigma2,  only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
 use simple_qsys_funs
 use simple_commander_cluster2D
 implicit none
@@ -406,7 +406,8 @@ contains
                 call chunks(ichunk)%generate(spprojs_for_chunk, nptcls, 1)
                 deallocate(spprojs_for_chunk)
                 ! execution
-                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd,&
+                    &orig_box, box, l_update_sigmas)
                 ! to avoid cycling through all projects
                 first2import = last2import + 1
             endif
@@ -719,7 +720,7 @@ contains
                     fbody       = get_fbody(stack_fname, ext)
                     sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
                 enddo
-                call split_sigma2_into_groups(pool_iter, sigma_fnames)
+                call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
                 deallocate(sigma_fnames)
             endif
             if( .not.l_greedy )then
@@ -1168,8 +1169,11 @@ contains
                 fbody       = get_fbody(stack_fname, ext)
                 sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
             enddo
-            call consolidate_groups(pool_iter, sigma_fnames)
+            call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
             deallocate(sigma_fnames)
+            do i = 1,params_glob%nparts_pool
+                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+            enddo
         endif
         ! update command line and write project
         if( sum(prev_eo_pops) == 0 )then
@@ -1631,6 +1635,7 @@ contains
         call cline%set('ptclw',    'no')
         call seed_rnd
         call params%new(cline)
+        params%nthr2D   = params%nthr
         l_wfilt         = trim(params%wiener) .eq. 'partial'
         l_update_sigmas = params%l_needs_sigma
         ! sanity
@@ -1667,7 +1672,6 @@ contains
         endif
         call cline_cluster2D_chunk%delete('projfile')
         call cline_cluster2D_chunk%delete('projname')
-        call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
@@ -1675,13 +1679,14 @@ contains
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
-        if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
+        if( l_wfilt )         call cline_cluster2D_chunk%set('wiener',  'partial')
+        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters',real(4))
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
         call cline_cluster2D_chunk%delete('lpstop')
         call cline_cluster2D_chunk%delete('needs_sigma')
         ! pool classification: optional stochastic optimisation, optional match filter
-        ! automated incremental learning, objective function is standard cross-correlation (cc)
+        ! automated incremental learning
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)

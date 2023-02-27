@@ -399,7 +399,7 @@ contains
             call eucl_sigma%new(fname, params_glob%box)
             if( l_stream )then
                 call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-                call eucl_sigma%allocate_ptcls_from_groups
+                call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
                 call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
