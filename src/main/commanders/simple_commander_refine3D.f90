@@ -318,11 +318,6 @@ contains
         else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
             l_projmatch = .true.
-            if( .not. have_oris )then
-                if( str_has_substr(params%refine, 'neigh')) then
-                    THROW_HARD('neigh refinement mode requires input orientations')
-                endif
-            endif
             if( .not.l_lpset )then
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
