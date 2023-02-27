@@ -32,6 +32,7 @@ type :: qsys_env
     procedure :: gen_scripts_and_schedule_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
+    procedure :: exec_simple_prgs_in_queue_async
     procedure :: get_qsys
     procedure :: get_navail_computing_units
     procedure :: kill
@@ -187,27 +188,41 @@ contains
         call job_descr%kill
     end subroutine exec_simple_prg_in_queue
 
-    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, cline2 )
+    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile )
         use simple_cmdline, only: cmdline
         class(qsys_env),            intent(inout) :: self
         class(cmdline),             intent(in)    :: cline
         character(len=*),           intent(in)    :: script_name, outfile
-        class(cmdline), optional,   intent(in)    :: cline2
-        type(chash) :: job_descr, job_descr2
+        type(chash) :: job_descr
         call cline%gen_job_descr(job_descr)
-        if(present(cline2) )then
-            call cline2%gen_job_descr(job_descr2)
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
-            & outfile=outfile, job_descr2=job_descr2)
-        else
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
             & outfile=outfile)
-        endif
         call wait_for_closure(script_name)
         call self%qscripts%submit_script(script_name)
         call job_descr%kill
-        call job_descr2%kill
     end subroutine exec_simple_prg_in_queue_async
+
+    !>  To submit a list of jobs asynchronously
+    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile )
+        use simple_cmdline, only: cmdline
+        class(qsys_env),            intent(inout) :: self
+        type(cmdline), allocatable, intent(in)    :: clines(:)
+        character(len=*),           intent(in)    :: script_name, outfile
+        type(chash), allocatable :: jobs_descr(:)
+        integer :: i, njobs
+        njobs = size(clines)
+        allocate(jobs_descr(njobs))
+        do i = 1,njobs
+            call clines(i)%gen_job_descr(jobs_descr(i))
+        enddo
+        call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
+        call wait_for_closure(script_name)
+        call self%qscripts%submit_script(script_name)
+        do i = 1,njobs
+            call jobs_descr(i)%kill
+        enddo
+        deallocate(jobs_descr)
+    end subroutine exec_simple_prgs_in_queue_async
 
     function get_qsys( self )result( qsys )
         class(qsys_env), intent(in)   :: self

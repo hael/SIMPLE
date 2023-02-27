@@ -847,6 +847,7 @@ contains
         if( l_switch2euclid )then
             iter_switch2euclid = params%startit
             if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+            if( cline%defined('cc_iters') )    iter_switch2euclid = params%cc_iters
         endif
         ! prepare command lines from prototype master
         cline_check_2Dconv      = cline
@@ -854,9 +855,9 @@ contains
         cline_make_cavgs        = cline ! ncls is transferred here
         cline_calc_sigma        = cline
         ! initialise static command line parameters and static job description parameters
-        call cline_cavgassemble%set(     'prg', 'cavgassemble')
-        call cline_make_cavgs%set(       'prg', 'make_cavgs')
-        call cline_calc_sigma%set('prg', 'calc_group_sigmas' ) ! required for local call
+        call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_make_cavgs%set(  'prg', 'make_cavgs')
+        call cline_calc_sigma%set(  'prg', 'calc_group_sigmas')
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -937,10 +938,14 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
-            ! noise power
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid )then
-                call cline_calc_sigma%set('which_iter',real(params%which_iter))
-                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+            ! sigma2 consolidation
+            if( l_stream )then
+                ! is done after alignement
+            else
+                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid)then
+                    call cline_calc_sigma%set('which_iter',real(params%which_iter))
+                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                endif
             endif
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -976,6 +981,13 @@ contains
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
+            if( l_stream )then
+                ! sigma2 consolidation
+                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid )then
+                    call cline_calc_sigma%set('which_iter',real(params%which_iter+1))
+                    call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+                endif
+            endif
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
             frac_srch_space = 0.
@@ -1138,9 +1150,9 @@ contains
             params%outfile = 'algndoc'//METADATA_EXT
             ! variable neighbourhood size
             if( cline%defined('extr_iter') )then
-                params%extr_iter = params%extr_iter - 1
+                params%extr_iter = params%extr_iter
             else
-                params%extr_iter = params%startit - 1
+                params%extr_iter = params%startit
             endif
             ! ML sigmas
             l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )

@@ -67,6 +67,7 @@ contains
         type(qsys_env)       :: qenv
         type(chash)          :: job_descr
         logical              :: fall_over
+        call cline%set('stream','no')
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('projfile') )then
@@ -90,7 +91,8 @@ contains
             THROW_HARD('no particles found! :exec_refine3D_distr')
         endif
         if( spproj_field%get_nevenodd() == 0 )then
-            THROW_HARD('no even/odd flag found! :calc_pspec_distr')
+            call spproj_field%partition_eo
+            call spproj%write_segment_inside(params_glob%oritype, params%projfile)
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -102,13 +104,16 @@ contains
         call cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble' ) ! required for local call
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
-        call cline%gen_job_descr(job_descr)
+        call cline_calc_pspec%gen_job_descr(job_descr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         ! assemble
         call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
         ! end gracefully
         call spproj%kill
+        call cline_calc_pspec%kill
+        call cline_calc_pspec_assemble%kill
+        call qenv%kill
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
     end subroutine exec_calc_pspec_distr
@@ -131,6 +136,7 @@ contains
         integer              :: kfromto(2)
         character(len=:), allocatable :: binfname
         call cline%set('mkdir', 'no')
+        call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! init
@@ -217,6 +223,7 @@ contains
         real,              allocatable   :: group_pspecs(:,:,:),pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
         integer,           allocatable   :: group_weights(:,:)
         call cline%set('mkdir', 'no')
+        call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! set Fourier index range
@@ -382,7 +389,8 @@ contains
                 THROW_HARD('Builder & parameters must be associated for shared memory execution!')
             endif
         else
-            call cline%set('mkdir', 'no')
+            call cline%set('mkdir',  'no')
+            call cline%set('stream', 'no')
             if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         endif

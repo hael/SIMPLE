@@ -100,7 +100,7 @@ contains
         ! make sure the dimensions of inout matrix agree
         if( (lbound(sigma2,2).ne.self%fromp)     .or.(ubound(sigma2,2).ne.self%top).or.&
             (lbound(sigma2,1).ne.self%kfromto(1)).or.(ubound(sigma2,1).ne.self%kfromto(2))) then
-            THROW_WARN('sigma2_binfile: read; dimensions of sigma2 dont agree')
+            THROW_WARN('sigma2_binfile: write; dimensions of sigma2 dont agree')
             write (*,*) 'self%fromp: ',   self%fromp,   ' ; lbound(sigma2,2): ', lbound(sigma2,2)
             write (*,*) 'self%top: ',     self%top,     ' ; ubound(sigma2,2): ', ubound(sigma2,2)
             write (*,*) 'self%kfromto: ', self%kfromto, ' ; size(sigma2,1): ', size(sigma2,1)

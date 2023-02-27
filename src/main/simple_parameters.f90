@@ -195,6 +195,7 @@ type :: parameters
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_extract
     integer :: boxpd=0
+    integer :: cc_iters=1          !< number of iterations with objfun=cc before switching to another objective function
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: cn=8                !< fixed std coord number for atoms in nanos
@@ -594,6 +595,7 @@ contains
         call check_iarg('box',            self%box)
         call check_iarg('box_crop',       self%box_crop)
         call check_iarg('box_extract',    self%box_extract)
+        call check_iarg('cc_iters',       self%cc_iters)
         call check_iarg('clip',           self%clip)
         call check_iarg('cn',             self%cn)
         call check_iarg('cn_max',         self%cn_max)
