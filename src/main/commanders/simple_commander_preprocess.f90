@@ -1407,11 +1407,11 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         logical :: templates_provided
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',         'yes')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast',   'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',       'mic')
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',             2.)
-        if( .not. cline%defined('thres')     ) call cline%set('thres',           24.)
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',           2.)
+        if( .not. cline%defined('thres')     ) call cline%set('thres',         24.)
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
@@ -1426,16 +1426,31 @@ contains
         if( .not.templates_provided )then
             if( .not.cline%defined('moldiam') ) THROW_HARD('Need molecular diameter in A (moldiam) as input for reference-free pick')
         endif
+        select case(trim(params%picker))
+            case('old')
+                if( .not. cline%defined('pickrefs') ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
+            case('new')
+                if( cline%defined('pickrefs') )then
+                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                else if( cline%defined('moldiam') )then
+                    ! at least moldiam is required
+                else
+                    THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
+                endif
+        end select
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
-        ! prepares picking references
-        cline_make_pickrefs = cline
-        if( templates_provided )then
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-        endif
+        select case(trim(params%picker))
+            case('old')
+                ! prepares picking references
+                cline_make_pickrefs = cline
+                if( templates_provided )then
+                    call cline_make_pickrefs%set('prg','make_pickrefs')
+                    call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                    call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                    write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                endif
+        end select
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -1456,7 +1471,7 @@ contains
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
-        type(sp_project)              :: spproj
+        type(builder)                 :: build
         type(picker_iter)             :: piter
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, intg_name, imgkind
@@ -1464,6 +1479,7 @@ contains
         integer :: fromto(2), imic, ntot, nptcls_out, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
+        call build%init_params_and_build_pick_tbox(cline, params)
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
@@ -1480,16 +1496,16 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! read project file
-        call spproj%read(params%projfile)
+        call build%spproj%read(params%projfile)
         ! look for movies
-        if( spproj%get_nintgs() == 0 )then
+        if( build%spproj%get_nintgs() == 0 )then
             THROW_HARD('No integrated micrograph to process!')
         endif
         ! perform picking
         cnt = 0
         do imic=fromto(1),fromto(2)
             cnt   = cnt + 1
-            call spproj%os_mic%get_ori(imic, o)
+            call build%spproj_field%get_ori(imic, o)
             state = 1
             if( o%isthere('state') ) state = nint(o%get('state'))
             if( state == 0 ) cycle
@@ -1498,12 +1514,12 @@ contains
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
                 call piter%iterate(cline, params%smpd, intg_name, boxfile, nptcls_out, output_dir)
-                call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                call build%spproj_field%set_boxfile(imic, boxfile, nptcls=nptcls_out)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
-        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )

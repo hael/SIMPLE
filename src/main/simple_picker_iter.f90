@@ -52,8 +52,9 @@ contains
                 call find_ldim_nptcls(moviename_intg, ldim, ifoo)
                 call micimg%new(ldim, smpd)
                 call micimg%read(moviename_intg)
+                call putils%new(moviename_intg, params_glob%pcontrast, smpd, params_glob%moldiam)
                 if( cline%defined('pickrefs') )then
-                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')  
                     call putils%set_refs(build_glob%pickrefs, params_glob%mskdiam)
                 else if( cline%defined('moldiam') )then
                     ! at least moldiam is required
@@ -61,6 +62,7 @@ contains
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
                 call putils%exec_picker(boxfile, nptcls_out, dir_out=dir_out)
+                call putils%kill
                 call micimg%kill
         end select
     end subroutine iterate
