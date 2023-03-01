@@ -379,7 +379,6 @@ contains
         character(len=*),                        intent(in) :: fname
         character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: dir_out
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups
         call euclidsigma2%init_from_group_header(fname)
@@ -399,7 +398,6 @@ contains
         character(len=*),                        intent(in) :: fname
         character(len=LONGSTRLEN), allocatable,  intent(in) :: fnames(:)
         type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: dir_out
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups, n
         call euclidsigma2%init_from_group_header(fnames(1))
