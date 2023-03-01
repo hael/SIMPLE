@@ -52,8 +52,8 @@ contains
         real,                      allocatable :: states(:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, snhc_sz, frac
-        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
+        real    :: frac_srch_space, snhc_sz
+        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
         logical :: l_snhc, l_greedy, l_np_cls_defined
@@ -393,7 +393,8 @@ contains
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
+        ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -402,7 +403,10 @@ contains
                 call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-                call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                select case(params_glob%cc_objfun)
+                case(OBJFUN_EUCLID,OBJFUN_PROB)
+                    call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                end select
             endif
         endif
         ! prepare the polarizer images
