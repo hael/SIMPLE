@@ -60,6 +60,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
+    character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
@@ -519,6 +520,7 @@ contains
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
