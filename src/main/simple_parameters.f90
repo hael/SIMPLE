@@ -111,6 +111,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: pdbfile2=''          !< PDB file, another one
     character(len=LONGSTRLEN) :: pdbfiles=''          !< list of PDB files
     character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
+    character(len=LONGSTRLEN) :: pickrefs=''          !< picking references
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
@@ -165,6 +166,7 @@ type :: parameters
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
     character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
@@ -184,7 +186,7 @@ type :: parameters
     character(len=:), allocatable  :: last_prev_dir   !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 2, OBJFUN_TEST = 3)
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 2)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
@@ -331,7 +333,6 @@ type :: parameters
     real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_lowres  = 30.    !< optimization(search)-based low-pass limit lower bound
-    real    :: lp_stopres = -1.    !< optimization(search)-based stoping resolution
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
@@ -349,7 +350,7 @@ type :: parameters
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
-    real    :: ndev=2.0            !< # deviations in one-cluster clustering
+    real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=1.5          !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
     real    :: overlap=0.9         !< required parameters overlap for convergence
@@ -507,6 +508,7 @@ contains
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
+        call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
@@ -561,6 +563,7 @@ contains
         call check_file('pdbfile',        self%pdbfile)
         call check_file('pdbfile2',       self%pdbfile2)
         call check_file('pdbfiles',       self%pdbfiles,     'T')
+        call check_file('pickrefs',       self%pickrefs,     notAllowed='T')
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
@@ -712,7 +715,6 @@ contains
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_discrete',    self%lp_discrete)
         call check_rarg('lp_lowres',      self%lp_lowres)
-        call check_rarg('lp_stopres',     self%lp_stopres)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
@@ -1320,8 +1322,6 @@ contains
                 self%cc_objfun = OBJFUN_EUCLID
             case('prob')
                 self%cc_objfun = OBJFUN_PROB
-            case('test')
-                self%cc_objfun = OBJFUN_TEST
             case DEFAULT
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')
@@ -1346,9 +1346,6 @@ contains
             case(OBJFUN_PROB)
                 self%l_needs_sigma = .true.
                 self%l_incrreslim  = .true.
-            case(OBJFUN_TEST)
-                self%l_needs_sigma = .true.
-                self%l_incrreslim  = .true.
             case(OBJFUN_CC)
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
         end select
@@ -1364,7 +1361,7 @@ contains
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
-            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID .or. self%cc_objfun==OBJFUN_PROB .or. self%cc_objfun==OBJFUN_TEST)
+            self%l_ml_reg = self%l_needs_sigma .or. (self%cc_objfun==OBJFUN_EUCLID .or. self%cc_objfun==OBJFUN_PROB)
         endif
         if( self%l_nonuniform ) self%l_ml_reg = .false.
         ! resolution limit

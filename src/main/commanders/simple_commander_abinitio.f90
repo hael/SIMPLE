@@ -107,7 +107,7 @@ contains
         l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
-        l_euclid    = (params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB .or. params%cc_objfun == OBJFUN_TEST)
+        l_euclid    = (params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB)
         orig_objfun = trim(params%objfun)
         call cline%delete('autoscale')
         ! set mkdir to no (to avoid nested directory structure)
@@ -509,7 +509,7 @@ contains
             call work_proj2%write_segment_inside('out',ORIG_work_projfile)
             call xpostprocess%execute(cline_postprocess)
         else
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//ext
+            vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
             call vol%new([params%box,params%box,params%box],params%smpd)
             call vol%read(vol_iter)
             call vol%mirror('x')

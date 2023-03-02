@@ -38,6 +38,7 @@ integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
+logical                      :: l_stream = .false.
 
 contains
 
@@ -56,7 +57,7 @@ contains
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch, ithr
         logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
-        logical :: l_snhc, l_greedy, l_stream, l_np_cls_defined
+        logical :: l_snhc, l_greedy, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -404,9 +405,14 @@ contains
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
+            if( l_stream )then
+                call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%allocate_ptcls_from_groups
+            else
+                call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+                call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+            endif
+        endif
         ! prepare the polarizer images
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))

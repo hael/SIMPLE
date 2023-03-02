@@ -36,6 +36,7 @@ contains
     procedure :: generate
     procedure :: exec_classify
     procedure :: read
+    procedure :: split_sigmas_into
     procedure :: remove_folder
     procedure :: display_iter
     procedure :: reject
@@ -239,6 +240,26 @@ contains
             end subroutine average_into
 
     end subroutine read
+
+    ! split sigmas into individually named per stack documents
+    subroutine split_sigmas_into( self, folder )
+        use simple_euclid_sigma2, only: split_sigma2_into_groups
+        class(stream_chunk),        intent(in) :: self
+        character(len=*),           intent(in) :: folder
+        character(len=LONGSTRLEN), allocatable :: stks(:)
+        character(len=:),          allocatable :: ext, fbody, fname
+        integer :: i
+        allocate(stks(self%nmics))
+        do i = 1, self%nmics
+            fname   = basename(self%orig_stks(i))
+            ext     = fname2ext(fname)
+            fbody   = get_fbody(fname, ext)
+            ! scaled suffix taken into account
+            stks(i) = trim(folder)//'/'//trim(fbody)//trim(SCALE_SUFFIX)//'.star'
+        enddo
+        call split_sigma2_into_groups(self%it, stks)
+        deallocate(stks)
+    end subroutine split_sigmas_into
 
     subroutine remove_folder( self )
         class(stream_chunk), intent(inout) :: self

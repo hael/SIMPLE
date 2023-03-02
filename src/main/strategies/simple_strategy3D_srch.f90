@@ -157,7 +157,7 @@ contains
         endif
         ! prep corr
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB .or. params_glob%cc_objfun == OBJFUN_TEST )then
+        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
             corr = maxval(corrs)
         else
             corr = max(0.,maxval(corrs))

@@ -40,7 +40,6 @@ type :: cartft_corrcalc
     procedure          :: expand_refs
     ! SETTERS
     procedure          :: set_ptcl
-    procedure          :: set_ref
     procedure          :: set_eo
     ! GETTERS
     procedure          :: exists
@@ -66,9 +65,6 @@ type :: cartft_corrcalc
     procedure, private :: correlate_euclid_1
     procedure, private :: correlate_euclid_2
     generic  , private :: correlate_euclid => correlate_euclid_1, correlate_euclid_2
-    procedure, private :: correlate_test_1
-    procedure, private :: correlate_test_2
-    generic  , private :: correlate_test => correlate_test_1, correlate_test_2
     procedure          :: project_and_shift_shc
     procedure, private :: corr_shifted_1
     procedure, private :: corr_shifted_2
@@ -310,32 +306,6 @@ contains
         end do
     end subroutine set_ptcl
 
-    subroutine set_ref( self, img )
-        class(cartft_corrcalc), intent(inout) :: self   !< this object
-        class(image),           intent(in)    :: img    !< particle image
-        integer :: ldim(3), h, k, ithr, phys1, phys2
-        if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
-        ldim = img%get_ldim()
-        if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
-            THROW_HARD('inconsistent image dimensions, input vs class internal')
-        endif
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                if( h .ge. 0 )then
-                    phys1 = h + 1
-                    phys2 = k + 1 + merge(params_glob%box_crop, 0, k < 0)
-                else
-                    phys1 = -h + 1
-                    phys2 = -k + 1 + MERGE(params_glob%box_crop,0, -k < 0)
-                endif
-                self%references(h,k,1) = img%get_cmat_at(phys1, phys2, 1)
-            end do
-        end do
-        do ithr = 2,nthr_glob
-            self%references(:,:,ithr) = self%references(:,:,1)
-        end do
-    end subroutine set_ref
-
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iptcl
@@ -566,8 +536,6 @@ contains
                 call self%correlate_cc(    ithr, iptcl, corr)
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid(ithr, iptcl, corr)
-            case(OBJFUN_TEST)
-                call self%correlate_test(  ithr, iptcl, corr)
         end select
     end function project_and_correlate_1
 
@@ -585,8 +553,6 @@ contains
                 call self%correlate_cc(    ithr, iptcl, corr)
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid(ithr, iptcl, corr)
-            case(OBJFUN_TEST)
-                call self%correlate_test(  ithr, iptcl, corr)
         end select
     end function project_and_correlate_2
 
@@ -602,8 +568,6 @@ contains
                 call self%correlate_cc(     ithr, iptcl, corr )
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid( ithr, iptcl, corr )
-            case(OBJFUN_TEST)
-                call self%correlate_test(   ithr, iptcl, corr )
         end select
     end subroutine corr_shifted_1
 
@@ -620,8 +584,6 @@ contains
                 call self%correlate_cc(     ithr, iptcl, corr, grad )
             case(OBJFUN_EUCLID)
                 call self%correlate_euclid( ithr, iptcl, corr, grad )
-            case(OBJFUN_TEST)
-                call self%correlate_test(   ithr, iptcl, corr, grad )
         end select
     end subroutine corr_shifted_2
 
@@ -734,59 +696,6 @@ contains
         grad   = - corr_8/denom*grad_8
         call self%deweight_ref_ptcl( ithr, iptcl )
     end subroutine correlate_euclid_2
-
-    subroutine correlate_test_1( self, ithr, iptcl, corr )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        real,                   intent(out)   :: corr
-        real    :: euclid, denom
-        complex :: diff, ptcl_comp
-        integer :: h, k
-        call self%weight_ref_ptcl( ithr, iptcl )
-        denom  = 0.
-        euclid = 0.
-        do k = self%lims(2,1),self%lims(2,2)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%cur_ptcls(h,k,ithr)
-                diff      = self%cur_refs( h,k,ithr) - ptcl_comp
-                euclid    = euclid + real(diff      * conjg(diff))
-                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp))
-            end do
-        end do
-        corr = exp( - euclid/denom )
-        call self%deweight_ref_ptcl( ithr, iptcl )
-    end subroutine correlate_test_1
-
-    subroutine correlate_test_2( self, ithr, iptcl, corr, grad )
-        class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: ithr, iptcl
-        real,                   intent(out)   :: corr, grad(2)
-        real(dp) :: euclid, denom, corr_8, grad_8(2)
-        complex  :: diff, ptcl_comp, ref_comp
-        integer  :: h, k
-        call self%weight_ref_ptcl( ithr, iptcl )
-        denom  = 0._dp
-        euclid = 0._dp
-        grad_8 = 0._dp
-        do k = self%lims(2,1),self%lims(2,2)
-            do h = self%lims(1,1),self%lims(1,2)
-                if( .not. self%resmsk(h,k) ) cycle
-                ptcl_comp = self%cur_ptcls(h,k,ithr)
-                ref_comp  = self%cur_refs( h,k,ithr)
-                diff      = ref_comp - ptcl_comp
-                euclid    = euclid + real(diff      * conjg(diff)     , dp)
-                denom     = denom  + real(ptcl_comp * conjg(ptcl_comp), dp)
-                diff      = 2 * self%shconst * imagpart(ptcl_comp * conjg(diff))
-                grad_8(1) = grad_8(1) + real(diff, dp) * real(h, dp)
-                grad_8(2) = grad_8(2) + real(diff, dp) * real(k, dp)
-            end do
-        end do
-        corr_8 = dexp( - euclid/denom )
-        corr   = corr_8
-        grad   = - corr_8/denom*grad_8
-        call self%deweight_ref_ptcl( ithr, iptcl )
-    end subroutine correlate_test_2
 
     !< project and shift search (shc-based)
     subroutine project_and_shift_shc( self, iptcl, o, nsample, trs, shvec, corr_best, nevals )
