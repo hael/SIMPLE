@@ -237,7 +237,6 @@ type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: ml_reg
-type(simple_input_param) :: ml_reg2D
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: nchunks
@@ -970,7 +969,7 @@ contains
         call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
+        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob|test){euclid}', '(euclid|cc|prob|test){euclid}', .false., 'euclid')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
@@ -1065,7 +1064,6 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call set_param(ml_reg2D,       'ml_reg2D',     'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -1408,7 +1406,7 @@ contains
         call cleanup2D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 5, ml_reg2D)
+        call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
         call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
@@ -1521,7 +1519,7 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 7, ml_reg2D)
+        call cluster2D%set_input('filt_ctrls', 7, ml_reg)
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
@@ -2849,8 +2847,8 @@ contains
         &'pick', &                                                         ! name
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
-        &'simple_exec',&                                             ! executable
-        &2, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                   ! executable
+        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2863,6 +2861,8 @@ contains
         call pick%set_gui_params('parm_ios', 1, submenu="picking")
         call pick%set_input('parm_ios', 2, pcontrast)
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
+        call pick%set_input('parm_ios', 3, moldiam)
+        call pick%set_gui_params('parm_ios', 3, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3315,8 +3315,7 @@ contains
         ! parameter input/output
         call print_magic_boxes%set_input('parm_ios', 1, smpd)
         call print_magic_boxes%set_input('parm_ios', 2, box)
-        call print_magic_boxes%set_input('parm_ios', 3, 'moldiam', 'num', 'Molecular diameter', 'Molecular diameter(in pixels)',&
-        'give # pixels of diameter', .false., 140.)
+        call print_magic_boxes%set_input('parm_ios', 3, moldiam)
         ! alternative inputs
         ! <empty>
         ! search controls
