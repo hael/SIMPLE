@@ -303,7 +303,9 @@ contains
             if( chunks(ichunk)%has_converged() )then
                 call chunks(ichunk)%display_iter
                 ! rejection
-                call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
+                if( trim(params_glob%reject_cls).eq.'yes' )then
+                    call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
+                endif
                 ! updates list of chunks to import
                 if( allocated(converged_chunks) )then
                     converged_chunks = [converged_chunks(:), chunks(ichunk)]
@@ -717,7 +719,8 @@ contains
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
-        if( .not.pool_available )return
+        if( .not.pool_available ) return
+        if( trim(params_glob%reject_cls).ne.'yes' ) return
         ! rejection frequency
         if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
@@ -1644,9 +1647,10 @@ contains
         if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',     2.0)
         if( .not. cline%defined('numlen')       ) call cline%set('numlen',      5.0)
         if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',  'no')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'cc')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',      'no')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',   'group')
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',  'no')
         if( cline%defined('lpstop') ) call cline%set('lpstop2D', cline%get_rarg('lpstop'))
         call cline%set('nthr2D', cline%get_rarg('nthr'))
         call cline%set('ptclw',  'no')
