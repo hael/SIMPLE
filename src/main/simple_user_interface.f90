@@ -969,7 +969,7 @@ contains
         call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
-        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob|test){euclid}', '(euclid|cc|prob|test){euclid}', .false., 'euclid')
+        call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
@@ -1407,6 +1407,9 @@ contains
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
+        cleanup2D%filt_ctrls(5)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cleanup2D%filt_ctrls(5)%descr_placeholder = '(yes|no){no}'
+        cleanup2D%filt_ctrls(5)%cval_default      = 'no'
         call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
@@ -1520,6 +1523,9 @@ contains
         call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 7, ml_reg)
+        cluster2D%filt_ctrls(7)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cluster2D%filt_ctrls(7)%descr_placeholder = '(yes|no){no}'
+        cluster2D%filt_ctrls(7)%cval_default      = 'no'
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
@@ -2074,7 +2080,7 @@ contains
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
-        call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
+        call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. stk.mrcs',     .false., '')
         call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
         ! search controls
         ! <empty>
@@ -2762,7 +2768,7 @@ contains
         call nununiform_filter3D%set_input('filt_ctrls', 2, lp_lowres)
         call nununiform_filter3D%set_input('filt_ctrls', 3, nsearch)
         call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call nununiform_filter3D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call nununiform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call nununiform_filter3D%set_input('mask_ctrls', 2, mskfile)
@@ -2792,7 +2798,7 @@ contains
         call uniform_filter3D%set_input('filt_ctrls', 1, lp_lowres)
         call uniform_filter3D%set_input('filt_ctrls', 2, nsearch)
         call uniform_filter3D%set_input('filt_ctrls', 3, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call uniform_filter3D%set_input('filt_ctrls', 4, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call uniform_filter3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call uniform_filter3D%set_input('mask_ctrls', 1, mskdiam)
         call uniform_filter3D%set_input('mask_ctrls', 2, mskfile)
@@ -2848,14 +2854,12 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call pick%set_input('img_ios', 1, 'pickrefs', 'file', 'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         call pick%set_gui_params('img_ios', 1, submenu="picking", advanced=.false.)
-        call pick%set_input('img_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
-        call pick%set_gui_params('img_ios', 2, submenu="picking", advanced=.false.)
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_gui_params('parm_ios', 1, submenu="picking")
@@ -2863,12 +2867,14 @@ contains
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
         call pick%set_input('parm_ios', 3, moldiam)
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
+        call pick%set_input('parm_ios', 4, 'picker', 'picker', 'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call pick%set_gui_params('parm_ios', 4, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in Angs','Distance filter in Angs{24}', '{24}', .false., 24.)
         call pick%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
-        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}', '{2.5}', .false., 2.5)
         call pick%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         call pick%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
@@ -2931,12 +2937,11 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
-        call preprocess%set_input('img_ios', 2, 'refs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess%set_input('img_ios', 2, 'pickrefs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  total_dose)
         call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
@@ -2961,7 +2966,7 @@ contains
         call preprocess%set_input('srch_ctrls', 4, dfmax)
         call preprocess%set_input('srch_ctrls', 5, astigtol)
         call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking outlier detection', '# of standard deviations threshold for picking oulier detection{2.5}', '{2.5}', .false., 2.5)
         call preprocess%set_input('srch_ctrls', 8, pgrp)
         preprocess%srch_ctrls(8)%required = .false.
         call preprocess%set_input('srch_ctrls', 9, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
@@ -2997,14 +3002,13 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &4, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, dir_movies)
         call preprocess_stream%set_input('img_ios', 2, gainref)
-        call preprocess_stream%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess_stream%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
-        call preprocess_stream%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+        call preprocess_stream%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, total_dose)
@@ -3071,7 +3075,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3079,16 +3083,14 @@ contains
         call preprocess_stream_dev%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
         call preprocess_stream_dev%set_gui_params('img_ios', 2, submenu="data", advanced=.false.)
-        call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking*', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="refs" )
-        call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking*', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 4, submenu="picking", advanced=.false., exclusive_group="refs")
-        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+        call preprocess_stream_dev%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
+        call preprocess_stream_dev%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data")
-        call preprocess_stream_dev%set_input('img_ios', 6, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
+        call preprocess_stream_dev%set_gui_params('img_ios', 4, submenu="data")
+        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '')
-        call preprocess_stream_dev%set_gui_params('img_ios', 6, submenu="data", advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data", advanced=.false.)
         ! parameter input/output
         call preprocess_stream_dev%set_input('parm_ios', 1, total_dose)
         call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
