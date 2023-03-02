@@ -1605,7 +1605,7 @@ contains
         integer  :: ik
         sqsum_ref  = 0._dp
         sqsum_ptcl = 0._dp
-        cc         = 0.
+        cc         = 0._dp
         ! sum up correlations over k-rings
         do ik = self%kfromto(1),self%kfromto(2)
             sqsum_ref  = sqsum_ref  + real(ik, dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
@@ -1637,16 +1637,15 @@ contains
         real(dp),    pointer,    intent(inout) :: keuclids(:)
         integer,                 intent(in)    :: iptcl, i
         real(sp),                intent(out)   :: euclids(self%nrots)
-        real(sp) :: sumsqref, sumsqptcl
-        real(dp) :: denom
+        real(dp) :: denom, sumsqref, sumsqptcl
         integer  :: k
         call self%weight_ref_ptcl(pft_ref, i, iptcl)
         euclids(:) = 0.
         denom      = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
-            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
+            sumsqref  = sum(real(csq_fast(pft_ref(:,k)), dp))
             euclids   = euclids + real(sumsqptcl + sumsqref - 2. * keuclids(:))
         end do
         euclids = real(dexp( - euclids/denom ))
@@ -1659,16 +1658,15 @@ contains
         real(dp),    pointer,    intent(inout) :: keuclids(:)
         integer,                 intent(in)    :: iptcl, i
         real(sp),                intent(out)   :: euclids(self%nrots)
-        real(sp) :: sumsqref, sumsqptcl
-        real(dp) :: denom
+        real(dp) :: denom, sumsqref, sumsqptcl
         integer  :: k
         call self%weight_ref_ptcl(pft_ref, i, iptcl)
         euclids(:) = 0.
         denom      = sum(real(csq_fast(self%pfts_ptcls(:, self%kfromto(1):self%kfromto(2),i)), dp))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
-            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            sumsqref  = sum(csq_fast(pft_ref(:,k)))
+            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
+            sumsqref  = sum(real(csq_fast(pft_ref(:,k)), dp))
             euclids   = euclids + real(dexp( -(sumsqptcl + sumsqref - 2. * keuclids(:))/denom ))
         end do
         euclids = euclids/real(self%kfromto(2) - self%kfromto(1) + 1)
