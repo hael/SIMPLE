@@ -226,70 +226,11 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box_crop, params_glob%smpd_crop)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-            lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
+            lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box_crop, params_glob%smpd_crop)
         endif
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
-
-    ! THIS WORKS
-    ! !>  \brief  prepares one particle image for alignment
-    ! !!          serial routine
-    ! subroutine prepimg4align( iptcl, img, img_out )
-    !     use simple_ctf, only: ctf
-    !     integer,      intent(in)    :: iptcl
-    !     class(image), intent(inout) :: img
-    !     class(image), intent(inout) :: img_out
-    !     type(ctf)       :: tfun
-    !     type(ctfparams) :: ctfparms
-    !     real            :: x, y, sdev_noise, crop_factor
-    !     ! Fourier cropping
-    !     call img%fft()
-    !     call img%clip(img_out)
-    !     crop_factor = real(params_glob%box_crop) / real(params_glob%box)
-    !     ! Back to real space
-    !     call img_out%ifft
-    !     ! Normalise
-    !     call img_out%norm_noise(build_glob%lmsk_crop, sdev_noise)
-    !     ! Shift image to rotational origin
-    !     x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
-    !     y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
-    !     if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
-    !         call img_out%fft
-    !         call img_out%shift2Dserial([-x,-y])
-    !     endif
-    !     ! Phase-flipping
-    !     ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-    !     select case(ctfparms%ctfflag)
-    !         case(CTFFLAG_NO, CTFFLAG_FLIP)
-    !             ! nothing to do
-    !         case(CTFFLAG_YES)
-    !             call img_out%fft
-    !             ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
-    !             tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-    !             call tfun%apply_serial(img_out, 'flip', ctfparms)
-    !         case DEFAULT
-    !             THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
-    !     end select
-    !     ! Back to real space
-    !     call img_out%ifft
-    !     ! Soft-edged mask
-    !     if( params_glob%l_focusmsk )then
-    !         call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
-    !     else
-    !         if( params_glob%l_needs_sigma )then
-    !             call img_out%mask(params_glob%msk_crop, 'softavg')
-    !         else
-    !             call img_out%mask(params_glob%msk_crop, 'soft')
-    !         endif
-    !     endif
-    !     ! gridding prep
-    !     if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
-    !     ! return to Fourier space
-    !     call img_out%fft()
-    !     ! Fourier magnitude scaling
-    !     call img_out%mul(crop_factor)
-    ! end subroutine prepimg4align
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
