@@ -60,6 +60,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
+    character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
@@ -196,6 +197,7 @@ type :: parameters
     integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
     integer :: box_extract
     integer :: boxpd=0
+    integer :: cc_iters=1          !< number of iterations with objfun=cc before switching to another objective function
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: cn=8                !< fixed std coord number for atoms in nanos
@@ -219,6 +221,7 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
+    integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
     integer :: nchunks=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
@@ -519,6 +522,7 @@ contains
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('real_filter',    self%real_filter)
+        call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -596,6 +600,7 @@ contains
         call check_iarg('box',            self%box)
         call check_iarg('box_crop',       self%box_crop)
         call check_iarg('box_extract',    self%box_extract)
+        call check_iarg('cc_iters',       self%cc_iters)
         call check_iarg('clip',           self%clip)
         call check_iarg('cn',             self%cn)
         call check_iarg('cn_max',         self%cn_max)
@@ -614,6 +619,7 @@ contains
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
+        call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)
         call check_iarg('ncls',           self%ncls)

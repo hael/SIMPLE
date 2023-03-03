@@ -51,6 +51,7 @@ type :: builder
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
+    logical, private                    :: pick_tbox_exists       = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
     logical, private                    :: rec_tbox_exists        = .false.
     logical, private                    :: eo_rec_tbox_exists     = .false.
@@ -63,12 +64,15 @@ type :: builder
     procedure                           :: init_params_spproj_tbox2D
     procedure                           :: init_params_and_build_spproj
     procedure                           :: init_params_and_build_general_tbox
+    procedure                           :: init_params_and_build_pick_tbox
     procedure                           :: init_params_and_build_strategy2D_tbox
     procedure                           :: init_params_and_build_strategy3D_tbox
     ! LOW-LEVEL BUILDERS
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
+    procedure                           :: build_pick_tbox
+    procedure                           :: kill_pick_tbox
     procedure                           :: build_rec_eo_tbox
     procedure, private                  :: kill_rec_eo_tbox
     procedure                           :: build_strategy3D_tbox
@@ -145,6 +149,16 @@ contains
         call self%build_general_tbox(params, cline, do3d=do3d)
         build_glob => self
     end subroutine init_params_and_build_general_tbox
+
+    subroutine init_params_and_build_pick_tbox( self, cline, params )
+        class(builder), target, intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        class(parameters),      intent(inout) :: params
+        call params%new(cline)
+        call self%build_spproj(params, cline)
+        call self%build_pick_tbox(params, cline)
+        build_glob => self
+    end subroutine init_params_and_build_pick_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params, wthreads )
         class(builder),    target, intent(inout) :: self
@@ -232,7 +246,7 @@ contains
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
-        integer     :: lfny, i, ldim_refs(3), nrefs, iref
+        integer     :: lfny, i
         logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
@@ -294,20 +308,6 @@ contains
             lfny = self%img_crop_polarizer%get_lfny(1)
             allocate( self%fsc(params%nstates,lfny), source = 0.0 )
         endif
-        ! picking references
-        if( cline%defined('pickrefs') )then
-            if( file_exists(trim(params%pickrefs)) )then
-                call find_ldim_nptcls(trim(params%pickrefs), ldim_refs, nrefs)
-                ldim_refs(3) = 1
-                allocate(self%pickrefs(nrefs))
-                do iref = 1,nrefs
-                    call self%pickrefs(iref)%new(ldim_refs, params%smpd)
-                    call self%pickrefs(iref)%read(trim(params%pickrefs), iref)
-                end do
-            else
-                THROW_HARD('file '//trim(params%pickrefs)//' does not exist')
-            endif
-        endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
@@ -351,6 +351,41 @@ contains
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
+
+    subroutine build_pick_tbox( self, params, cline )
+        class(builder), target, intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(cmdline),         intent(inout) :: cline
+        integer :: ldim_refs(3), nrefs, iref
+        ! picking references
+        if( cline%defined('pickrefs') )then
+            if( file_exists(trim(params%pickrefs)) )then
+                call find_ldim_nptcls(trim(params%pickrefs), ldim_refs, nrefs)
+                ldim_refs(3) = 1
+                allocate(self%pickrefs(nrefs))
+                do iref = 1,nrefs
+                    call self%pickrefs(iref)%new(ldim_refs, params%smpd)
+                    call self%pickrefs(iref)%read(trim(params%pickrefs), iref)
+                end do
+            else
+                THROW_HARD('file '//trim(params%pickrefs)//' does not exist')
+            endif
+        endif
+    end subroutine build_pick_tbox
+
+     subroutine kill_pick_tbox( self )
+        class(builder), intent(inout)  :: self
+        integer :: iref
+        if( self%pick_tbox_exists )then
+            if( allocated(self%pickrefs) )then
+                do iref = 1,size(self%pickrefs)
+                    call self%pickrefs(iref)%kill
+                end do
+                deallocate(self%pickrefs)
+            endif
+            self%pick_tbox_exists = .false.
+        endif
+    end subroutine kill_pick_tbox
 
     subroutine build_rec_eo_tbox( self, params )
         class(builder), target, intent(inout) :: self

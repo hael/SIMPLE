@@ -323,10 +323,12 @@ contains
         ! down-scaling for fast execution, greedy optimisation, no incremental learning, no centering
         call cline_cluster2D1%set('prg', 'cluster2D')
         call cline_cluster2D1%set('maxits',   MINITS)
+        call cline_cluster2D1%set('minits',   MINITS)
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
         call cline_cluster2D1%set('objfun',     'cc')
+        if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation
@@ -337,8 +339,8 @@ contains
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
         if( l_euclid )then
-            call cline_cluster2D2%set('objfun', trim(cline%get_carg('objfun')))
-            call cline_cluster2D2%set('needs_sigma', 'yes')
+            call cline_cluster2D2%set('objfun',   trim(cline%get_carg('objfun')))
+            call cline_cluster2D2%set('cc_iters', 0.)
         else
             call cline_cluster2D2%set('objfun', 'cc')
         endif
@@ -576,8 +578,10 @@ contains
         if( params%l_frac_update )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+            if( l_euclid ) call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1_EXTR))
         else
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            if( l_euclid ) call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
         endif
         ! execution
         if( l_shmem )then
@@ -599,8 +603,8 @@ contains
             call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         endif
         if( l_euclid )then
-            call cline_cluster2D_stage2%set('objfun',      'euclid')
-            call cline_cluster2D_stage2%set('needs_sigma', 'yes')
+            call cline_cluster2D_stage2%set('objfun',   trim(cline%get_carg('objfun')))
+            call cline_cluster2D_stage2%set('cc_iters', 0.)
         endif
         trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
         trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2)) / scale
@@ -694,7 +698,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset
+        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset, l_converged
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -703,32 +707,43 @@ contains
             l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
-        ! objfun=euclid logics, part 1
+        ! objective functions part 1
         l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
             if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )then
-                orig_objfun = trim(cline%get_carg('objfun'))
-                l_ptclw     = trim(cline%get_carg('ptclw')).eq.'yes'
-                if( cline%defined('needs_sigma') )then
-                    if(trim(cline%get_carg('needs_sigma')).eq.'yes')then
-                        ! were are already doing ML, no need to switch from cc nor calculate noise power
-                        if( .not.l_griddingset ) call cline%set('gridding','yes')
-                    else
-                        l_switch2euclid = .true.
-                        call cline%set('objfun','cc')
-                        call cline%set('needs_sigma','yes')
-                    endif
-                else
-                    l_switch2euclid = .true.
-                    call cline%set('objfun','cc')
-                    call cline%set('needs_sigma','yes')
-                endif
+                orig_objfun     = trim(cline%get_carg('objfun'))
+                l_ptclw         = trim(cline%get_carg('ptclw')).eq.'yes'
+                l_switch2euclid = .true.
             endif
         endif
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
+        ! objective functions part 2: scheduling
+        iter_switch2euclid = -1
+        if( l_switch2euclid )then
+            if( params%cc_iters < 1 )then
+                ! already performing euclidian-based optimization, no switch
+                iter_switch2euclid = params%startit
+                l_switch2euclid    = .false.
+                if( .not.l_griddingset ) call cline%set('gridding','yes')
+            else
+                ! switching objective function from cc_iters+1
+                call cline%set('objfun','cc')
+                params%cc_objfun   = OBJFUN_CC
+                params%objfun      = 'cc'
+                iter_switch2euclid = params%startit
+                if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
+                params%l_needs_sigma = .false.
+                params%needs_sigma   = 'no'
+            endif
+        else
+            ! Correlation only, but sigma2 calculated from iter_switch2euclid
+            params%l_needs_sigma = .false.
+            params%needs_sigma   = 'no'
+            if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
+        endif
         ! sanity check
         if( build%spproj%get_nptcls() == 0 )then
             THROW_HARD('no particles found! exec_cluster2D_distr')
@@ -741,12 +756,6 @@ contains
         call cline%gen_job_descr(job_descr)
         ! splitting
         call build%spproj%split_stk(params%nparts)
-        ! objfun=euclid logics, part 2
-        iter_switch2euclid = -1
-        if( l_switch2euclid )then
-            iter_switch2euclid = params%startit
-            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
-        endif
         ! prepare command lines from prototype master
         cline_check_2Dconv      = cline
         cline_cavgassemble      = cline
@@ -755,7 +764,7 @@ contains
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_make_cavgs%set(  'prg', 'make_cavgs')
-        call cline_calc_sigma%set(  'prg', 'calc_group_sigmas') ! required for local call
+        call cline_calc_sigma%set(  'prg', 'calc_group_sigmas')
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs'//params%ext
@@ -850,15 +859,17 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
             write(logfhandle,'(A)')   '>>>'
-            ! noise power
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' .or. l_switch2euclid )then
-                call cline_calc_sigma%set('which_iter',real(params%which_iter))
-                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
-            endif
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
             call cline%set('extr_iter', real(params%extr_iter))
+            ! objfun function part 3: activate sigma2 calculation
+            if( iter==iter_switch2euclid )then
+                call cline%set('needs_sigma','yes')
+                call job_descr%set('needs_sigma','yes')
+                params%needs_sigma   = 'yes'
+                params%l_needs_sigma = .true.
+            endif
             ! updates
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', trim(int2str(iter)))
@@ -889,6 +900,11 @@ contains
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
+            ! objfun=euclid, part 4: sigma2 consolidation
+            if( params%l_needs_sigma )then
+                call cline_calc_sigma%set('which_iter',real(params%which_iter+1))
+                call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+            endif
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
             frac_srch_space = 0.
@@ -901,11 +917,13 @@ contains
                     call job_descr%set('trs', trim(str) )
                 endif
             endif
-            if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==params%maxits )then
-                if( cline_check_2Dconv%get_carg('converged').eq.'yes' )call cline%set('converged','yes')
+            l_converged = (iter >= params%minits) .and. (cline_check_2Dconv%get_carg('converged').eq.'yes')
+            if( l_converged .or. iter==params%maxits ) then
                 exit
+            else
+                call cline_check_2Dconv%delete('converged')
             endif
-            ! objfun=euclid, part 3: actual switch
+            ! objfun=euclid, part 5:  actual switch
             if( l_switch2euclid .and. (iter==iter_switch2euclid) )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
@@ -976,8 +994,8 @@ contains
         type(builder), target      :: build
         type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc
-        logical                    :: converged, l_stream, l_switch2euclid
-        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
+        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid
+        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1062,50 +1080,69 @@ contains
             params%outfile = 'algndoc'//METADATA_EXT
             ! variable neighbourhood size
             if( cline%defined('extr_iter') )then
-                params%extr_iter = params%extr_iter - 1
+                ! all good
             else
-                params%extr_iter = params%startit - 1
+                params%extr_iter = params%startit
             endif
-            ! ML sigmas
+            ! objective functions
             l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
             orig_objfun     = trim(cline%get_carg('objfun'))
-            if( cline%defined('needs_sigma') .and. params%l_needs_sigma )then
-                ! we are continuing from an ML iterartion
-                l_switch2euclid = .false.
-            endif
+            l_griddingset   = cline%defined('gridding')
+            iter_switch2euclid = -1
             if( l_switch2euclid )then
-                call cline%set('objfun','cc')
-                params%objfun        = 'cc'
-                params%cc_objfun     = OBJFUN_CC
-                params%l_needs_sigma = .true.
-            endif
-            if( params%l_needs_sigma )then
-                params%needs_sigma = 'yes'
-                call cline%set('gridding','yes')
-                call cline%set('needs_sigma', 'yes')
+                if( params%cc_iters < 1 )then
+                    ! already performing euclidian-based optimization, no switch
+                    if( .not.file_exists(sigma2_star_from_iter(params%startit)) )then
+                        THROW_HARD('Sigma2 file does not exists: '//sigma2_star_from_iter(params%startit))
+                    endif
+                    iter_switch2euclid = params%startit
+                    l_switch2euclid    = .false.
+                    if( .not.l_griddingset ) call cline%set('gridding','yes')
+                else
+                    ! switching objective function from cc_iters+1
+                    call cline%set('objfun','cc')
+                    params%cc_objfun   = OBJFUN_CC
+                    params%objfun      = 'cc'
+                    iter_switch2euclid = params%startit
+                    if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
+                    params%l_needs_sigma = .false.
+                    params%needs_sigma   = 'no'
+                endif
+            else
+                ! Correlation only, but sigma2 calculated from iter_switch2euclid
+                params%l_needs_sigma = .false.
+                params%needs_sigma   = 'no'
+                if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
             endif
             ! initialise progress monitor
             if(.not. l_stream) call progressfile_init()
+            ! Main loop
             do i = 1, params%maxits
                 params%which_iter = params%startit
-                ! sigmas2
-                if( params%l_needs_sigma )then
-                    call xcalc_group_sigmas%execute(cline)
-                endif
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
                 write(logfhandle,'(A)')   '>>>'
                 call cline%set('which_iter', real(params%which_iter))
+                if( params%which_iter == iter_switch2euclid )then
+                    call cline%set('needs_sigma','yes')
+                    params%needs_sigma   = 'yes'
+                    params%l_needs_sigma = .true.
+                endif
                 call cluster2D_exec( cline, params%startit, converged )
-                ! objfun=euclid
-                if( l_switch2euclid )then
-                    params%objfun    = orig_objfun
+                ! objective functions
+                if( params%l_needs_sigma )then
+                    params%which_iter = params%which_iter + 1
+                    call xcalc_group_sigmas%execute(cline)
+                    params%which_iter = params%which_iter - 1
+                endif
+                if( l_switch2euclid .and. params%which_iter==iter_switch2euclid )then
+                    params%objfun = trim(orig_objfun)
                     if( params%objfun .eq. 'euclid' )then
                         params%cc_objfun = OBJFUN_EUCLID
-                    elseif( params%objfun .eq. 'prob' )then
+                    else if( params%objfun .eq. 'prob' )then
                         params%cc_objfun = OBJFUN_PROB
                     endif
-                    l_switch2euclid  = .false.
+                    l_switch2euclid = .false.
                 endif
                 ! cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
@@ -1113,7 +1150,9 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
                 ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
-                if( converged .or. i == params%maxits )then
+                ! exit condition
+                converged = converged .and. (i >= params%minits)
+                if( converged .or. i >= params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
                     call cline%set('endit', real(params%startit))
@@ -1127,11 +1166,6 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
-            if( params%l_needs_sigma .and. (i > 1) )then
-                params%which_iter = params%which_iter + 1
-                call xcalc_group_sigmas%execute(cline)
-                params%which_iter = params%which_iter - 1
-            endif
             ! end gracefully
             call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')

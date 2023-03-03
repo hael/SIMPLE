@@ -50,10 +50,8 @@ type qsys_ctrl
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
     procedure          :: generate_array_script
-    procedure, private :: generate_script_1
-    procedure, private :: generate_script_2
-    procedure, private :: generate_script_3
-    generic            :: generate_script => generate_script_2, generate_script_3
+    procedure, private :: generate_script_1, generate_script_2, generate_script_3, generate_script_4
+    generic            :: generate_script => generate_script_2, generate_script_3, generate_script_4
     ! SUBMISSION TO QSYS
     procedure          :: submit_scripts
     procedure          :: submit_script
@@ -370,14 +368,13 @@ contains
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
-    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, job_descr2, exit_code_fname )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(in)    :: job_descr
-        class(chash),               intent(in)    :: q_descr
-        character(len=*),           intent(in)    :: exec_bin, script_name
-        character(len=*), optional, intent(in)    :: outfile
-        class(chash),     optional, intent(in)    :: job_descr2
-        character(len=*), optional, intent(in)    :: exit_code_fname
+    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, exit_code_fname )
+        class(qsys_ctrl),           intent(in) :: self
+        class(chash),               intent(in) :: job_descr
+        class(chash),               intent(in) :: q_descr
+        character(len=*),           intent(in) :: exec_bin, script_name
+        character(len=*), optional, intent(in) :: outfile
+        character(len=*), optional, intent(in) :: exit_code_fname
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
@@ -394,14 +391,7 @@ contains
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         ! compose the command line
-        if( present(job_descr2) )then
-            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
-            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
-            write(funit,'(a)') ''
-            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr2%chash2str())
-        else
-            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
-        endif
+        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
         ! direct output
         if( present(outfile) )then
             ! unique output
@@ -429,6 +419,53 @@ contains
             end if
         endif
     end subroutine generate_script_2
+
+        !>  \brief  public script generator for single jobs
+    subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile )
+        class(qsys_ctrl),           intent(in) :: self
+        type(chash),  allocatable,  intent(in) :: jobs_descr(:)
+        class(chash),               intent(in) :: q_descr
+        character(len=*),           intent(in) :: exec_bin, script_name, outfile
+        character(len=512) :: io_msg
+        integer :: ios, funit, i, njobs
+        call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '//&
+            &trim(script_name)//' ; '//trim(io_msg),ios )
+        ! need to specify shell
+        write(funit,'(a)') '#!/bin/bash'
+        ! write (run-time polymorphic) instructions to the qsys
+        if( q_descr%get('qsys_name').ne.'local' )then
+            call self%myqsys%write_instr(q_descr, fhandle=funit)
+        else
+            call self%myqsys%write_instr(jobs_descr(1), fhandle=funit)
+        endif
+        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') ''
+        ! compose the command line
+        njobs = size(jobs_descr)
+        if( njobs > 1 )then
+            do i = 1,njobs-1
+                write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(jobs_descr(i)%chash2str())
+                write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+                write(funit,'(a)') ''
+            enddo
+        endif
+        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(jobs_descr(njobs)%chash2str())
+        write(funit,'(a)') ' > '//trim(outfile)//' '//STDERR2STDOUT
+        ! exit shell when done
+        write(funit,'(a)') ''
+        write(funit,'(a)') 'exit'
+        call fclose(funit)
+        call wait_for_closure(script_name)
+        if( trim(q_descr%get('qsys_name')).eq.'local' )then
+            ios=simple_chmod(trim(script_name),'+x')
+            if( ios .ne. 0 )then
+                write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_4; Error'
+                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
+                stop
+            end if
+        endif
+    end subroutine generate_script_4
 
     subroutine generate_script_3( self, cline, q_descr, script_name, prgoutput )
         class(qsys_ctrl), intent(inout) :: self

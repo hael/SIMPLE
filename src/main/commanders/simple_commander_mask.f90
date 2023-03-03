@@ -145,6 +145,7 @@ contains
         type(parameters) :: params
         type(masker)     :: mskvol
         character(len=:), allocatable :: fname_out
+        if(.not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
