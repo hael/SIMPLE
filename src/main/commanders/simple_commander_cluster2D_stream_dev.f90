@@ -11,7 +11,7 @@ use simple_stream_chunk,   only: stream_chunk
 use simple_class_frcs,     only: class_frcs
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
-use simple_euclid_sigma2,  only: consolidate_groups, split_sigma2_into_groups
+use simple_euclid_sigma2,  only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
 use simple_qsys_funs
 use simple_commander_cluster2D
 implicit none
@@ -32,6 +32,7 @@ end type cluster2D_commander_subsets
 
 integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
+real,                  parameter   :: CHUNK_MINITS        = 6.0
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
@@ -61,10 +62,9 @@ logical,                   allocatable :: spprojs_mask_glob(:) ! micrographs fro
 character(len=LONGSTRLEN), allocatable :: imported_stks(:)
 character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=:),          allocatable :: orig_projfile
-real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0.
+real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
 integer                                :: origproj_time, n_spprojs_glob = 0
 logical                                :: initiated       = .false.
-logical                                :: l_update_sigmas = .false.
 ! Global parameters to avoid conflict with preprocess_stream
 integer                                :: numlen
 ! GUI-related
@@ -76,6 +76,7 @@ integer               :: orig_box, box, boxpd
 real                  :: lp_greedy, lpstart_stoch                   ! resolution limits
 integer               :: max_ncls, nptcls_per_chunk, ncls_glob
 logical               :: l_wfilt, l_scaling, l_greedy
+logical               :: l_update_sigmas = .false.
 
 contains
 
@@ -184,6 +185,7 @@ contains
         call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_chunk%set('lp_lowres', real(params_glob%lp_lowres))
+        call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -227,7 +229,7 @@ contains
         call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
         ! auto-scaling
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
-        ! scaling (fourier crooping)
+        ! scaling (fourier cropping)
         scale_factor          = 1.0
         params_glob%smpd_crop = orig_smpd
         params_glob%box_crop  = orig_box
@@ -254,34 +256,8 @@ contains
         call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
         call cline_cluster2D_pool%set('box',        real(orig_box))
         call cline_cluster2D_pool%set('smpd',       orig_smpd)
-        ! resolution-related updates to command-lines
-        lp_greedy     = max(lp_greedy,    2.0*smpd)
-        lpstart_stoch = max(lpstart_stoch,2.0*smpd)
-        if( cline%defined('lpstop2D') )then
-            params_glob%lpstop2D = max(2.0*smpd,params_glob%lpstop2D)
-        else
-            params_glob%lpstop2D = 2.0*smpd
-        endif
-        call cline_cluster2D_chunk%set('lp', lp_greedy)
-        if( l_greedy )then
-            call cline_cluster2D_chunk%set('maxits', 10.)
-            call cline_cluster2D_chunk%set('refine', 'greedy')
-        else
-            call cline_cluster2D_chunk%set('refine',    'snhc')
-            call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
-            call cline_cluster2D_chunk%set('maxits',    12.)
-        endif
-        write(logfhandle,'(A,F5.1)')     '>>> CHUNK         LOW-PASS LIMIT (IN A) TO: ', lp_greedy
-        if( l_greedy )then
-            call cline_cluster2D_pool%set('refine', 'greedy')
-            call cline_cluster2D_pool%set('lp',     lp_greedy)
-            write(logfhandle,'(A,F5.1)') '>>> POOL          LOW-PASS LIMIT (IN A) TO: ', lp_greedy
-        else
-            call cline_cluster2D_pool%set('lpstart', lpstart_stoch)
-            call cline_cluster2D_pool%set('lpstop',  params_glob%lpstop2D)
-            write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
-        endif
-        write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params_glob%lpstop2D
+        ! updates command-lines with resolution limits
+        call set_resolution_limits( cline )
         ! module variables
         n_spprojs_glob = 0
         if( allocated(spprojs_mask_glob) ) deallocate(spprojs_mask_glob)
@@ -326,7 +302,9 @@ contains
             if( chunks(ichunk)%has_converged() )then
                 call chunks(ichunk)%display_iter
                 ! rejection
-                call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
+                if( trim(params_glob%reject_cls).eq.'yes' )then
+                    call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
+                endif
                 ! updates list of chunks to import
                 if( allocated(converged_chunks) )then
                     converged_chunks = [converged_chunks(:), chunks(ichunk)]
@@ -405,7 +383,8 @@ contains
                 call chunks(ichunk)%generate(spprojs_for_chunk, nptcls, 1)
                 deallocate(spprojs_for_chunk)
                 ! execution
-                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd,&
+                    &orig_box, box, l_update_sigmas)
                 ! to avoid cycling through all projects
                 first2import = last2import + 1
             endif
@@ -718,12 +697,13 @@ contains
                     fbody       = get_fbody(stack_fname, ext)
                     sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
                 enddo
-                call split_sigma2_into_groups(pool_iter, sigma_fnames)
+                call split_sigma2_into_groups(sigma2_star_from_iter(pool_iter+1), sigma_fnames)
                 deallocate(sigma_fnames)
             endif
             if( .not.l_greedy )then
                 call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
-                write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
+                current_resolution = frcs%estimate_lp_for_align()
+                write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution
                 call frcs%kill
             endif
             ! for gui
@@ -738,7 +718,8 @@ contains
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
-        if( .not.pool_available )return
+        if( .not.pool_available ) return
+        if( trim(params_glob%reject_cls).ne.'yes' ) return
         ! rejection frequency
         if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
@@ -972,8 +953,8 @@ contains
 
     !> update optics groups for stks and particles from optics groups assigned to mics
     subroutine propagate_optics_groups()
-        integer                         :: nori, spori, ptclori
-        real                            :: fromp, top, ogid, stkbox, box
+        integer                         :: nori, spori, ptclori, box
+        real                            :: fromp, top, ogid, stkbox
         character(len=:), allocatable   :: stk, bsname
         write(logfhandle,'(A)')'>>> PROPAGATING OPTICS GROUPS'
         ! update stks and ptcls
@@ -999,8 +980,8 @@ contains
                 ogid   = pool_proj%os_stk%get(nori, 'ogid')
                 stkbox = pool_proj%os_stk%get(nori, 'box')
                 if(ogid > 0.0 .and. stkbox > 0.0) then
-                    box = pool_proj%os_optics%get(nint(ogid), 'box')
-                    if(box == 0.0) then
+                    box = nint(pool_proj%os_optics%get(nint(ogid), 'box'))
+                    if(box == 0) then
                         call pool_proj%os_optics%set(nint(ogid), 'box', stkbox)
                     end if
                 end if
@@ -1167,8 +1148,11 @@ contains
                 fbody       = get_fbody(stack_fname, ext)
                 sigma_fnames(istk) = trim(SIGMAS_DIR)//'/'//trim(fbody)//'.star'
             enddo
-            call consolidate_groups(pool_iter, sigma_fnames)
+            call consolidate_sigma2_groups(sigma2_star_from_iter(pool_iter), sigma_fnames)
             deallocate(sigma_fnames)
+            do i = 1,params_glob%nparts_pool
+                call del_file(SIGMA2_FBODY//int2str_pad(i,numlen)//'.dat')
+            enddo
         endif
         ! update command line and write project
         if( sum(prev_eo_pops) == 0 )then
@@ -1340,6 +1324,7 @@ contains
             call rank_cavgs
         endif
         ! cleanup
+        call simple_rmdir(SIGMAS_DIR)
         if( .not.debug_here )then
             ! call qsys_cleanup
             ! call simple_rmdir(POOL_DIR)
@@ -1352,10 +1337,15 @@ contains
     subroutine rank_cavgs
         type(rank_cavgs_commander) :: xrank_cavgs
         type(cmdline)              :: cline_rank_cavgs
-        character(len=STDLEN)      :: refs_ranked
+        character(len=STDLEN)      :: refs_ranked, stk
         refs_ranked = add2fbody(refs_glob, params_glob%ext ,'_ranked')
         call cline_rank_cavgs%set('projfile', orig_projfile)
-        call cline_rank_cavgs%set('stk',      trim(POOL_DIR)//refs_glob)
+        if( l_wfilt )then
+            stk = trim(POOL_DIR)//add2fbody(refs_glob,params_glob%ext,trim(WFILT_SUFFIX))
+        else
+            stk = trim(POOL_DIR)//trim(refs_glob)
+        endif
+        call cline_rank_cavgs%set('stk', stk)
         call cline_rank_cavgs%set('outstk',   trim(refs_ranked))
         call xrank_cavgs%execute(cline_rank_cavgs)
         call cline_rank_cavgs%kill
@@ -1566,6 +1556,38 @@ contains
         endif
     end subroutine tidy_2Dstream_iter
 
+    ! resolution-related updates to command-lines
+    subroutine set_resolution_limits( master_cline )
+        type(cmdline), intent(in) :: master_cline
+        lp_greedy     = max(lp_greedy,    2.0*smpd)
+        lpstart_stoch = max(lpstart_stoch,2.0*smpd)
+        if( master_cline%defined('lpstop2D') )then
+            params_glob%lpstop2D = max(2.0*smpd,params_glob%lpstop2D)
+        else
+            params_glob%lpstop2D = 2.0*smpd
+        endif
+        call cline_cluster2D_chunk%set('lp', lp_greedy)
+        if( l_greedy )then
+            call cline_cluster2D_chunk%set('maxits', 10.)
+            call cline_cluster2D_chunk%set('refine', 'greedy')
+        else
+            call cline_cluster2D_chunk%set('refine',    'snhc')
+            call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
+            call cline_cluster2D_chunk%set('maxits',    12.)
+        endif
+        write(logfhandle,'(A,F5.1)')     '>>> CHUNK         LOW-PASS LIMIT (IN A) TO: ', lp_greedy
+        if( l_greedy )then
+            call cline_cluster2D_pool%set('refine', 'greedy')
+            call cline_cluster2D_pool%set('lp',     lp_greedy)
+            write(logfhandle,'(A,F5.1)') '>>> POOL          LOW-PASS LIMIT (IN A) TO: ', lp_greedy
+        else
+            call cline_cluster2D_pool%set('lpstart', lpstart_stoch)
+            call cline_cluster2D_pool%set('lpstop',  params_glob%lpstop2D)
+            write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
+        endif
+        write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params_glob%lpstop2D
+    end subroutine set_resolution_limits
+
     subroutine debug_print( string )
         character(len=*), intent(in) :: string
         if( DEBUG_HERE )then
@@ -1610,10 +1632,13 @@ contains
         if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',     2.0)
         if( .not. cline%defined('numlen')       ) call cline%set('numlen',      5.0)
         if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',  'no')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'cc')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',      'no')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',   'group')
-        call cline%set('ptclw',    'no')
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',  'no')
+        if( cline%defined('lpstop') ) call cline%set('lpstop2D', cline%get_rarg('lpstop'))
+        call cline%set('nthr2D', cline%get_rarg('nthr'))
+        call cline%set('ptclw',  'no')
         call seed_rnd
         call params%new(cline)
         l_wfilt         = trim(params%wiener) .eq. 'partial'
@@ -1671,7 +1696,6 @@ contains
         endif
         call cline_cluster2D_chunk%delete('projfile')
         call cline_cluster2D_chunk%delete('projname')
-        call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
@@ -1679,13 +1703,14 @@ contains
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
-        if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
+        call cline_cluster2D_chunk%set('minits', CHUNK_MINITS)
+        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
+        if( l_wfilt )         call cline_cluster2D_chunk%set('wiener',  'partial')
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
         call cline_cluster2D_chunk%delete('lpstop')
-        call cline_cluster2D_chunk%delete('needs_sigma')
         ! pool classification: optional stochastic optimisation, optional match filter
-        ! automated incremental learning, objective function is standard cross-correlation (cc)
+        ! automated incremental learning
         call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
         call cline_cluster2D_pool%set('autoscale', 'no')
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
@@ -1698,10 +1723,7 @@ contains
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
-        if( l_update_sigmas )then
-            ! such that sigmas are not re-calculated
-            call cline_cluster2D_pool%set('needs_sigma','yes')
-        endif
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call cline_cluster2D_pool%delete('lpstop')
         ! Crooping-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', smpd)
@@ -1769,34 +1791,8 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
-        ! resolution-related updates to command-lines
-        lp_greedy     = max(lp_greedy,    2.0*smpd)
-        lpstart_stoch = max(lpstart_stoch,2.0*smpd)
-        if( cline%defined('lpstop2D') )then
-            params%lpstop2D = max(2.0*smpd,params%lpstop2D)
-        else
-            params%lpstop2D = 2.0*smpd
-        endif
-        call cline_cluster2D_chunk%set('lp', lp_greedy)
-        if( l_greedy )then
-            call cline_cluster2D_chunk%set('maxits', 10.)
-            call cline_cluster2D_chunk%set('refine', 'greedy')
-        else
-            call cline_cluster2D_chunk%set('refine',    'snhc')
-            call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
-            call cline_cluster2D_chunk%set('maxits',    12.)
-        endif
-        write(logfhandle,'(A,F5.1)')     '>>> CHUNK         LOW-PASS LIMIT (IN A) TO: ', lp_greedy
-        if( l_greedy )then
-            call cline_cluster2D_pool%set('refine', 'greedy')
-            call cline_cluster2D_pool%set('lp',     lp_greedy)
-            write(logfhandle,'(A,F5.1)') '>>> POOL          LOW-PASS LIMIT (IN A) TO: ', lp_greedy
-        else
-            call cline_cluster2D_pool%set('lpstart', lpstart_stoch)
-            call cline_cluster2D_pool%set('lpstop',  params%lpstop2D)
-            write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
-        endif
-        write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params%lpstop2D
+        ! updates command-lines with resolution limits
+        call set_resolution_limits( cline )
         ! initialize chunks
         allocate(chunks(params%nchunks))
         do ichunk = 1,params%nchunks
@@ -1830,9 +1826,9 @@ contains
             endif
         enddo
         nptcls_tot = sum(stk_nptcls)
-        write(logfhandle,'(A,I6)')'>>> # OF STACKS   : ', nstks
-        write(logfhandle,'(A,I6)')'>>> # OF PARTICLES: ', nptcls_tot
-        write(logfhandle,'(A,I6)')'>>> # OF CHUNKS   : ', ntot_chunks
+        write(logfhandle,'(A,I8)')'>>> # OF STACKS   : ', nstks
+        write(logfhandle,'(A,I8)')'>>> # OF PARTICLES: ', nptcls_tot
+        write(logfhandle,'(A,I8)')'>>> # OF CHUNKS   : ', ntot_chunks
         ! chunks/stacks map
         allocate(chunks_map(ntot_chunks,2))
         cnt    = 0

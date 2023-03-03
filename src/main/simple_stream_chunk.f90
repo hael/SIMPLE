@@ -151,14 +151,17 @@ contains
         call debug_print('end chunk%generate '//int2str(self%id))
     end subroutine generate
 
-    subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box )
+    subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )
         class(stream_chunk), intent(inout) :: self
         class(cmdline),      intent(inout) :: cline_classify
         real,                intent(in)    :: orig_smpd
         integer,             intent(in)    :: orig_box, box
+        logical,             intent(in)    :: calc_pspec
+        type(cmdline), allocatable :: clines(:)
+        type(cmdline)              :: cline_pspec
         character(len=XLONGSTRLEN) :: cwd
-        real    :: scale
-        integer :: nptcls_sel
+        real                       :: scale
+        integer                    :: nptcls_sel, nclines, i
         call debug_print('in chunk%exec_classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -169,6 +172,19 @@ contains
         self%projfile_out = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         call simple_mkdir(STDERROUT_DIR)
         nptcls_sel = self%spproj%os_ptcl2D%get_noris(consider_state=.true.)
+        nclines = 1
+        if( calc_pspec ) nclines = nclines + 1
+        allocate(clines(nclines))
+        ! noise estimates
+        if( calc_pspec )then
+            call cline_pspec%set('prg',     'calc_pspec_distr')
+            call cline_pspec%set('projfile', self%projfile_out)
+            call cline_pspec%set('nthr',     real(params_glob%nthr2D))
+            call cline_pspec%set('mkdir',    'yes')
+            call cline_pspec%set('nparts',   1.)
+            if( params_glob%nparts_chunk > 1 ) call cline_pspec%set('nparts',real(params_glob%nparts_chunk))
+            clines(1) = cline_pspec
+        endif
         if( box < orig_box )then
             scale = real(box) / real(orig_box)
             call cline_classify%set('smpd',      orig_smpd)
@@ -180,11 +196,19 @@ contains
         call cline_classify%set('projname', trim(PROJNAME_CHUNK))
         call self%spproj%update_projinfo(cline_classify)
         call self%spproj%write()
-        call self%qenv%exec_simple_prg_in_queue_async(cline_classify, './distr_chunk2D', 'simple_log_chunk2d')
+        ! 2D classification
+        clines(nclines) = cline_classify
+        ! submission
+        call self%qenv%exec_simple_prgs_in_queue_async(clines, './distr_chunk2D', 'simple_log_chunk2d')
         call chdir('..')
         call simple_getcwd(cwd_glob)
         ! cleanup
         call self%spproj%kill
+        call cline_pspec%kill
+        do i = 1,nclines
+            call clines(i)%kill
+        enddo
+        deallocate(clines)
         call self%qenv%kill
         ! chunk is now busy
         self%available = .false.
@@ -243,7 +267,7 @@ contains
 
     ! split sigmas into individually named per stack documents
     subroutine split_sigmas_into( self, folder )
-        use simple_euclid_sigma2, only: split_sigma2_into_groups
+        use simple_euclid_sigma2, only: split_sigma2_into_groups, sigma2_star_from_iter
         class(stream_chunk),        intent(in) :: self
         character(len=*),           intent(in) :: folder
         character(len=LONGSTRLEN), allocatable :: stks(:)
@@ -254,10 +278,10 @@ contains
             fname   = basename(self%orig_stks(i))
             ext     = fname2ext(fname)
             fbody   = get_fbody(fname, ext)
-            ! scaled suffix taken into account
-            stks(i) = trim(folder)//'/'//trim(fbody)//trim(SCALE_SUFFIX)//'.star'
+            stks(i) = trim(folder)//'/'//trim(fbody)//'.star'
         enddo
-        call split_sigma2_into_groups(self%it, stks)
+        fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
+        call split_sigma2_into_groups(fname, stks)
         deallocate(stks)
     end subroutine split_sigmas_into
 

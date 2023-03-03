@@ -271,7 +271,7 @@ contains
             ! classify chunks
             call debug_print('chunk section global iter '//int2str(iter))
             do ichunk = 1,params%nchunks
-                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box, .false.)
             enddo
             ! deal with chunk completion, rejection, reset
             do ichunk = 1,params%nchunks

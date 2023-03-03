@@ -277,6 +277,7 @@ type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
+type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
@@ -970,6 +971,7 @@ contains
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(euclid|cc|prob){euclid}', '(euclid|cc|prob){euclid}', .false., 'euclid')
+        call set_param(reject_cls,    'reject_cls',    'binary', 'Whether to reject class averages', 'Whether to automatically reject 2D clusters and associated particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
@@ -1631,7 +1633,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 7, 5, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 8, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1653,6 +1655,7 @@ contains
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
         call cluster2D_subsets%set_input('srch_ctrls', 6, lpthres)
         call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call cluster2D_subsets%set_input('srch_ctrls', 8, objfun)
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -1661,6 +1664,7 @@ contains
         call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
         call cluster2D_subsets%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D_subsets%set_input('filt_ctrls', 6,  reject_cls)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls

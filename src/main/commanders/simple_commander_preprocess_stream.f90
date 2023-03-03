@@ -101,6 +101,7 @@ contains
         if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
         if( .not. cline%defined('nchunks'))      call cline%set('nchunks',        2.0)
         if( .not. cline%defined('prune'))        call cline%set('prune',         'no')
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',  'yes')
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency

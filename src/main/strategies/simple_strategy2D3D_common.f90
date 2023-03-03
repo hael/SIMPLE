@@ -226,6 +226,7 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box_crop, params_glob%smpd_crop)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
+            lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
         endif
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
