@@ -313,6 +313,7 @@ contains
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
         call cline_cluster2D1%set('objfun',     'cc')
+        call cline_cluster2D1%set('ml_reg','no')
         if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
         call cline_cluster2D1%delete('update_frac')
         ! second stage
@@ -603,6 +604,7 @@ contains
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw','no')
             call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
+            call cline_cluster2D_stage1%set('ml_reg','no')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -800,7 +802,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset, l_converged
+        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset, l_converged, l_ml_reg
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -823,6 +825,7 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
         ! objective functions part 2: scheduling
+        l_ml_reg = params%l_ml_reg
         iter_switch2euclid = -1
         if( l_switch2euclid )then
             if( params%cc_iters < 1 )then
@@ -833,17 +836,23 @@ contains
             else
                 ! switching objective function from cc_iters+1
                 call cline%set('objfun','cc')
+                call cline%set('ml_reg','no')
                 params%cc_objfun   = OBJFUN_CC
                 params%objfun      = 'cc'
                 iter_switch2euclid = params%startit
                 if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
                 params%l_needs_sigma = .false.
                 params%needs_sigma   = 'no'
+                params%ml_reg        = 'no'
+                params%l_ml_reg      = .false.
             endif
         else
             ! Correlation only, but sigma2 calculated from iter_switch2euclid
             params%l_needs_sigma = .false.
             params%needs_sigma   = 'no'
+            params%ml_reg        = 'no'
+            params%l_ml_reg      = .false.
+            call cline%set('ml_reg','no')
             if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
         endif
         ! sanity check
@@ -1033,6 +1042,12 @@ contains
                     params%cc_objfun = OBJFUN_PROB
                 endif
                 l_switch2euclid = .false.
+                if( l_ml_reg )then
+                    call cline%set('ml_reg',     'yes')
+                    call job_descr%set('ml_reg', 'yes')
+                    params%ml_reg   = 'yes'
+                    params%l_ml_reg = .true.
+                endif
             endif
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
@@ -1082,7 +1097,7 @@ contains
         type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid
-        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset
+        logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1165,6 +1180,7 @@ contains
             l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
             orig_objfun     = trim(cline%get_carg('objfun'))
             l_griddingset   = cline%defined('gridding')
+            l_ml_reg        = params%l_ml_reg
             iter_switch2euclid = -1
             if( l_switch2euclid )then
                 if( params%cc_iters < 1 )then
@@ -1178,18 +1194,24 @@ contains
                 else
                     ! switching objective function from cc_iters+1
                     call cline%set('objfun','cc')
+                    call cline%set('ml_reg','no')
                     params%cc_objfun   = OBJFUN_CC
                     params%objfun      = 'cc'
                     iter_switch2euclid = params%startit
                     if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
                     params%l_needs_sigma = .false.
                     params%needs_sigma   = 'no'
+                    params%ml_reg        = 'no'
+                    params%l_ml_reg      = .false.
                 endif
             else
                 ! Correlation only, but sigma2 calculated from iter_switch2euclid
                 params%l_needs_sigma = .false.
                 params%needs_sigma   = 'no'
                 if( cline%defined('cc_iters') ) iter_switch2euclid = params%cc_iters
+                call cline%set('ml_reg','no')
+                params%ml_reg        = 'no'
+                params%l_ml_reg      = .false.
             endif
             ! initialise progress monitor
             if(.not. l_stream) call progressfile_init()
@@ -1220,6 +1242,11 @@ contains
                         params%cc_objfun = OBJFUN_PROB
                     endif
                     l_switch2euclid = .false.
+                    if( l_ml_reg )then
+                        call cline%set('ml_reg','yes')
+                        params%ml_reg        = 'yes'
+                        params%l_ml_reg      = .true.
+                    endif
                 endif
                 ! cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
