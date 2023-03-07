@@ -39,7 +39,7 @@ contains
         integer,                   intent(in)    :: ithr
         integer   :: iref, isample, loc(1), iproj, ipeak
         real      :: inpl_corrs(self%s%nrots)
-        logical   :: lnns(params_glob%nspace), early_exit
+        logical   :: lnns(params_glob%nspace)
         type(ori) :: o
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -47,7 +47,7 @@ contains
             ! prep
             call self%s%prep4srch
             ! initialize, ctd
-            early_exit        = .false.
+            self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             ! search
             do isample=1,self%s%nrefs_sub
@@ -57,20 +57,14 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                     ! update nbetter to keep track of how many improving solutions we have identified
-                    if( inpl_corrs(loc(1)) > self%s%prev_corr ) early_exit = .true.
+                    ! update nbetter to keep track of how many improving solutions we have identified
+                    if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs_eval + 1
+                    ! exit condition
+                    if( self%s%nbetter > 0 .and. self%s%nrefs_eval >= self%s%npeaks ) exit
                 endif
-                ! exit condition
-                if( early_exit ) exit
             end do
-            if( early_exit )then
-                call self%s%inpl_srch ! search shifts
-                ! prepare weights and orientations
-                call self%oris_assign
-                return
-            endif
             ! prepare peak orientations
             call extract_peak_oris(self%s)
             ! construct multi-neighborhood search space from subspace peaks
