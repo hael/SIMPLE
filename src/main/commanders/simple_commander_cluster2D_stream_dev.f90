@@ -629,7 +629,10 @@ contains
     subroutine update_pool_status
         if( .not.pool_available )then
             pool_available = file_exists(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
-            if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            ! if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            if( pool_available .and. (pool_iter >= 1) )then
+                refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            endif
         endif
     end subroutine update_pool_status
 
@@ -1342,7 +1345,6 @@ contains
         call simple_rmdir(SIGMAS_DIR)
         if( .not.debug_here )then
             ! call qsys_cleanup
-            ! call simple_rmdir(POOL_DIR)
         endif
     end subroutine terminate_stream2D
 
