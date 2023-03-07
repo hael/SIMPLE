@@ -3662,7 +3662,7 @@ contains
         call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 9, objfun)
-        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|neigh|cont|inpl|proj|cluster|clustersym){shc}', '(snhc|shc|neigh|cont|inpl|proj|cluster|clustersym){shc}', .false., 'shc')
+        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh){shc}', '(snhc|shc|neigh|shc_neigh){shc}', .false., 'shc')
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations prior to e/o refinement', '# of iterations after which low-pass limited alignment is switched to e/o(0:never){1}',&
         &'# iterations prior to e/o refinement{1}', .false., 1.)
