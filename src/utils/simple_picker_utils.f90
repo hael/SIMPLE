@@ -31,6 +31,7 @@ type picker_utils
     character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
     logical                       :: refpick = .false.
+    logical                       :: hybrid  = .false.
     logical                       :: exists  = .false.
   contains
     procedure          :: new
@@ -144,19 +145,22 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine set_refs( self, imgs, mskdiam )
+    subroutine set_refs( self, imgs, mskdiam, hybrid )
         class(picker_utils), intent(inout) :: self
         class(image),        intent(inout) :: imgs(:)
         real,                intent(in)    :: mskdiam
+        logical, optional,   intent(in)    :: hybrid
         type(image) :: img_rot
         integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
         real        :: scale1, scale2, mskrad1, mskrad2, pixrad_shrink1, pixrad_shrink2, smpd, ang, rot
-        smpd       = imgs(1)%get_smpd()
-        ldim       = imgs(1)%get_ldim()
+        self%hybrid = .false.
+        if( present(hybrid) ) self%hybrid = hybrid
+        smpd        = imgs(1)%get_smpd()
+        ldim        = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
-        nimgs      = size(imgs)
-        nrots      = nint(real(MAXNREFS) / real(nimgs))
-        self%nrefs = nimgs * nrots
+        nimgs       = size(imgs)
+        nrots       = nint(real(MAXNREFS) / real(nimgs))
+        self%nrefs  = nimgs * nrots
         ! set shrunken logical dimensions of boxes
         scale1               = smpd / SMPD_SHRINK1
         scale2               = smpd / SMPD_SHRINK2
@@ -438,7 +442,7 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
-        if( self%refpick )then
+        if( self%refpick .and. .not. self%hybrid )then
             !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
