@@ -174,7 +174,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
