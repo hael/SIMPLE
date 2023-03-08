@@ -269,7 +269,7 @@ contains
             if( cline%defined(trim(vol)) )then
                 vol_defined = .true.
                 call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                if( ldim(1) /= params%box )then
+                if( ldim(1) /= params%box_crop )then
                     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
                 endif
             endif
@@ -449,19 +449,19 @@ contains
                             fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                             call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                             ! generate FSC pdf
-                            res = get_resarr(params%box, params%smpd)
+                            res = get_resarr(params%box_crop, params%smpd_crop)
                             fsc = file2rarr(fsc_file)
                             if( str_has_substr(params%refine,'snhc') )then
                                 fsc_templ = 'fsc_state'//trim(str_state)
                             else
                                 fsc_templ = 'fsc_state'//trim(str_state)//'_iter'//trim(str_iter)
                             endif
-                            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
+                            call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ)
                             ! add state volume to os_out
                             if( trim(params%oritype).eq.'cls3D' )then
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
+                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
                             else
-                                call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol')
+                                call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
                             endif
                             ! updates cmdlines & job description
                             vol = 'vol'//trim(int2str(state))
@@ -750,7 +750,7 @@ contains
                     do state = 1, params%nstates
                         str_state = int2str_pad(state,2)
                         fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                        call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                        call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
                         ! add state volume to os_out
                         vol = trim(VOL_FBODY)//trim(str_state)//params%ext
                         if( params%refine .eq. 'snhc' )then
@@ -759,9 +759,9 @@ contains
                             vol_iter = trim(vol)
                         endif
                         if( trim(params%oritype).eq.'cls3D' )then
-                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
                         else
-                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol')
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
                         endif! volume mask, one for all states
                     end do
                     if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
@@ -802,25 +802,24 @@ contains
         type(builder)     :: build
         type(convergence) :: conv
         real, allocatable :: maplp(:)
-        integer           :: istate, loc(1)
+        integer           :: istate
         logical           :: converged, update_res
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         update_res = .false.
-        allocate( maplp(params%nstates))
-        maplp = 0.
+        allocate( maplp(params%nstates), source=0.)
         do istate=1,params%nstates
             if( build%spproj_field%get_pop( istate, 'state' ) == 0 )cycle ! empty state
             params%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
             if( file_exists(params%fsc) )then
                 build%fsc(istate,:) = file2rarr(params%fsc)
-                maplp(istate)   = max(build%img%get_lp(get_lplim_at_corr(build%fsc(istate,:),params%lplim_crit)),2.*params%smpd)
+                maplp(istate) = calc_lowpass_lim(get_lplim_at_corr(build%fsc(istate,:),params%lplim_crit), params_glob%box_crop, params_glob%smpd_crop)
+                maplp(istate) = max(maplp(istate), 2.*params%smpd_crop)
             else
                 THROW_HARD('tried to check the fsc file: '//trim(params%fsc)//' but it does not exist!')
             endif
         enddo
-        loc     = maxloc( maplp )
-        params%state = loc(1)                ! state with worst low-pass
+        params%state = maxloc(maplp, dim=1)  ! state with worst low-pass
         params%lp    = maplp( params%state ) ! worst lp
         params%fsc   = 'fsc_state'//int2str_pad(params%state,2)//'.bin'
         deallocate(maplp)

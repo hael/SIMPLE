@@ -549,9 +549,9 @@ contains
                 endif
                 ! updates os_out
                 if(params%oritype.eq.'cls3D')then
-                    call spproj%add_vol2os_out(vol, params%smpd, s, 'vol_cavg')
+                    call spproj%add_vol2os_out(vol, params%smpd_crop, s, 'vol_cavg')
                 else
-                    call spproj_master%add_vol2os_out(vol, params%smpd, s, 'vol')
+                    call spproj_master%add_vol2os_out(vol, params%smpd_crop, s, 'vol')
                 endif
                 call spproj_master%add_fsc2os_out(fsc, s, params%box)
                 call spproj_master%add_frcs2os_out(filepath(dirs(s),FRCS_FILE),'frc3D')
