@@ -2017,7 +2017,7 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &1, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         extract%gui_submenu_list = "extract"
         extract%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2044,6 +2044,7 @@ contains
         ! <empty>
         ! computer controls
         call extract%set_input('comp_ctrls', 1, nparts)
+        call extract%set_input('comp_ctrls', 2, nthr)
     end subroutine new_extract
 
     subroutine new_export_starproject

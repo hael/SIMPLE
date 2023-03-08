@@ -410,7 +410,7 @@ contains
             ldim    =  [box_in,box_in,1]
             smpd    =  self%smpd_raw
             mic_ptr => self%mic_raw
-            !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
+            !$omp parallel do schedule(static) default(shared) private(ibox,noutside) proc_bind(close)
             do ibox = 1,self%nboxes2
                 call self%boximgs2(ibox)%new(ldim, smpd)
                 call mic_ptr%window(self%positions2(ibox,:), ldim(1), self%boximgs2(ibox), noutside)
