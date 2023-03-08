@@ -482,7 +482,7 @@ contains
                 enddo
             endif
         endif
-        ! updates shifts & deals with final volume
+        ! deals with final volume
         if( do_autoscale )then
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'

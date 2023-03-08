@@ -107,7 +107,7 @@ contains
         type(masker)     :: mskvol, sphere
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
-        integer :: state, box, fsc_box, mskfile_box, ldim(3), flims(3,2)
+        integer :: state, box, fsc_box, mskfile_box, ldim(3)
         logical :: has_fsc, has_mskfile
         ! set defaults
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
@@ -578,7 +578,6 @@ contains
         real               :: shvec(3), scale, smpd
         integer            :: ldim(3)
         integer, parameter :: MAXBOX = 128
-        character(len=:), allocatable :: fbody
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
@@ -625,7 +624,6 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters)      :: params
         type(builder)         :: build
-        character(len=STDLEN) :: fbody
         character(len=3)      :: pgrp
         real                  :: shvec(3), scale, smpd
         integer               :: ldim(3)
@@ -646,6 +644,8 @@ contains
             smpd         = build%vol%get_smpd()
             params%msk   = round2even(scale * params%msk)
             params%width = scale * params%width
+        else
+            smpd         = build%vol%get_smpd()
         endif
         ! low-pass limit safety
         params%lp = max(2. * smpd, params%lp)
