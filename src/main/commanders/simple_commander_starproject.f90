@@ -147,7 +147,7 @@ contains
             end if
         end if
         if(allocated(starproj%starfile%stkstates)) call spproj%report_state2stk(starproj%starfile%stkstates)
-        call spproj%prune_particles()
+        if(spproj%get_nstks() > 0) call spproj%prune_particles()
         call spproj%update_projinfo(cline)
         call spproj%update_compenv(cline)
         call spproj%write(basename(params%projfile))
@@ -166,6 +166,9 @@ contains
         call starproj%set_verbose
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
+        end if
+        if(.not. cline%defined("beamtilt")) then
+            call cline%set('beamtilt', 'yes')
         end if
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -203,6 +206,9 @@ contains
         call starproj%set_verbose
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
+        end if
+        if(.not. cline%defined("beamtilt")) then
+            call cline%set('beamtilt', 'yes')
         end if
         call params%new(cline)
         if(cline%get_rarg("tilt_thres") == 0) then

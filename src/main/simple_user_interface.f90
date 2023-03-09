@@ -1123,7 +1123,7 @@ contains
         &'Assign optics groups',&                                               ! descr_short
         &'is a program to assign optics groups',&                               ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -1135,6 +1135,8 @@ contains
         & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '')
         call assign_optics_groups%set_input('parm_ios', 4, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        call assign_optics_groups%set_input('parm_ios', 5, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
+        &'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){yes}', .false., 'yes')
         ! alternative inputs
         ! <empty>
         ! search controls
