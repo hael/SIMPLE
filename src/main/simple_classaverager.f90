@@ -171,7 +171,7 @@ contains
             precs(cnt)%eo      = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
             precs(cnt)%pw      = spproj%os_ptcl2D%get(iptcl,'w')
             ctfvars(ithr)      = spproj%get_ctfparams('ptcl2D',iptcl)
-            precs(cnt)%tfun    = ctf(params_glob%smpd, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
+            precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
             precs(cnt)%dfx     = ctfvars(ithr)%dfx
             precs(cnt)%dfy     = ctfvars(ithr)%dfy
             precs(cnt)%angast  = ctfvars(ithr)%angast
@@ -331,20 +331,18 @@ contains
         type(kbinterpol)              :: kbwin
         type(stack_io)                :: stkio_r
         type(image_ptr)               :: pcmat(nthr_glob), prhomat(nthr_glob)
-        type(image),      allocatable :: cgrid_imgs(:), read_imgs(:)
+        type(image),      allocatable :: cgrid_imgs(:), read_imgs(:), cgrid_imgs_crop(:)
         character(len=:), allocatable :: stk_fname
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale
-        integer :: batch_iprecs(READBUFFSZ), fdims(3), fdims_crop(3), logi_lims_crop(3,2), logi_lims(3,2)
-        integer :: cyc_limsR(2,2), cyc_lims(3,2)
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale, crop_scale
+        integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
         integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
         integer :: iprec, i, sh, iwinsz, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
-        logical :: l_pad_scale_correction
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -373,32 +371,27 @@ contains
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
             reg_scale         = real(ldim(1)) / real(ldim_pd(1))
         endif
+        crop_scale = real(ldim_croppd(1)) / real(ldim_pd(1))
         ! Objects allocations
-        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
+        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ), cgrid_imgs_crop(READBUFFSZ))
         !$omp parallel default(shared) proc_bind(close) private(i)
         !$omp do schedule(static)
         do i = 1,READBUFFSZ
             call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
+            call cgrid_imgs_crop(i)%new(ldim_croppd, params_glob%smpd_crop, wthreads=.false.)
         enddo
         !$omp end do
         !$omp end parallel
-        logi_lims      = cgrid_imgs(1)%loop_lims(2)
-        fdims          = cgrid_imgs(1)%get_array_shape()
-        cyc_lims       = cavgs_merged(1)%loop_lims(3)
-        cyc_limsR(:,1) = cyc_lims(1,:)
-        cyc_limsR(:,2) = cyc_lims(2,:)
-        allocate(tvals(fdims(1),fdims(2),READBUFFSZ))
-        logi_lims_crop = cavgs_merged(1)%loop_lims(2)
-        cyc_lims_crop  = cavgs_merged(1)%loop_lims(3)
-        nyq_crop       = cavgs_merged(1)%get_lfny(1)
-        fdims_crop     = cavgs_merged(1)%get_array_shape()
+        logi_lims_crop = cgrid_imgs_crop(1)%loop_lims(2)
+        cyc_lims_crop  = cgrid_imgs_crop(1)%loop_lims(3)
+        nyq_crop       = cgrid_imgs_crop(1)%get_lfny(1)
+        fdims_crop     = cgrid_imgs_crop(1)%get_array_shape()
         cyc_lims_cropR(:,1) = cyc_lims_crop(1,:)
         cyc_lims_cropR(:,2) = cyc_lims_crop(2,:)
-        allocate(cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ), rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
+        allocate(tvals(fdims_crop(1),fdims_crop(2),READBUFFSZ),cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ),&
+        &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
-        ! Padding scale correction
-        l_pad_scale_correction = params_glob%boxpd > params_glob%box_croppd
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -443,16 +436,18 @@ contains
                     tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
                     call read_imgs(i)%norm_noise_pad_fft(build_glob%lmsk, cgrid_imgs(i))
+                    ! Fourier cropping
+                    call cgrid_imgs(i)%clip(cgrid_imgs_crop(i))
                     ! shift
-                    call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
+                    call cgrid_imgs_crop(i)%shift2Dserial(-precs(iprec)%shift*crop_scale)
                     ! apply CTF to image, stores CTF values
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
                     if( l_stream )then
-                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs_crop(i), ctfflag, logi_lims_crop, fdims_crop(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .false.)
                     else
-                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs_crop(i), ctfflag, logi_lims_crop, fdims_crop(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
                     endif
                     ! ML-regularization
@@ -463,12 +458,12 @@ contains
                                 if( sh > interp_shlim )cycle
                                 sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
                                 if( sh > sigma2_kfromto(2) ) cycle
-                                phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                                phys = cgrid_imgs_crop(i)%comp_addr_phys(h,k)
                                 if( sh >= sigma2_kfromto(1) )then
-                                    call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
+                                    call cgrid_imgs_crop(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
                                     tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
                                 else
-                                    call cgrid_imgs(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
+                                    call cgrid_imgs_crop(i)%mul_cmat_at(  phys(1),phys(2),1, 1./eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
                                     tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
                                 endif
                             enddo
@@ -486,35 +481,34 @@ contains
                             win_corner = floor(loc) ! bottom left corner
                             dist       = loc - real(win_corner)
                             ! Bi-linear interpolation
-                            l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
-                            ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
-                            m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
-                            mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                            l     = cyci_1d(cyc_lims_cropR(:,1), win_corner(1))
+                            ll    = cyci_1d(cyc_lims_cropR(:,1), win_corner(1)+1)
+                            m     = cyci_1d(cyc_lims_cropR(:,2), win_corner(2))
+                            mm    = cyci_1d(cyc_lims_cropR(:,2), win_corner(2)+1)
                             ! l, bottom left corner
-                            phys   = cgrid_imgs(i)%comp_addr_phys(l,m)
+                            phys   = cgrid_imgs_crop(i)%comp_addr_phys(l,m)
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                            fcompl = kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            fcompl = kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                             tval   = kw * tvals(phys(1),phys(2),i)
                             ! l, bottom right corner
-                            phys   = cgrid_imgs(i)%comp_addr_phys(l,mm)
+                            phys   = cgrid_imgs_crop(i)%comp_addr_phys(l,mm)
                             kw     = (1.-dist(1))*dist(2)
-                            fcompl = fcompl + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            fcompl = fcompl + kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                             tval   = tval   + kw * tvals(phys(1),phys(2),i)
                             if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
                             ! ll, upper left corner
-                            phys    = cgrid_imgs(i)%comp_addr_phys(ll,m)
+                            phys    = cgrid_imgs_crop(i)%comp_addr_phys(ll,m)
                             kw      = dist(1)*(1.-dist(2))
-                            fcompll =         kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            fcompll =         kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                             tval    = tval  + kw * tvals(phys(1),phys(2),i)
                             ! ll, upper right corner
-                            phys    = cgrid_imgs(i)%comp_addr_phys(ll,mm)
+                            phys    = cgrid_imgs_crop(i)%comp_addr_phys(ll,mm)
                             kw      = dist(1)*dist(2)
-                            fcompll = fcompll + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            fcompll = fcompll + kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                             tval    = tval    + kw * tvals(phys(1),phys(2),i)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
                             ! update with interpolated values
-                            phys = cavgs_merged(1)%comp_addr_phys(h,k)
-                            ! phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                            phys = cgrid_imgs_crop(i)%comp_addr_phys(h,k)
                             cmats(phys(1),phys(2),i) = fcompl + fcompll
                             rhos(phys(1),phys(2),i)  = tval*tval
                         end do
@@ -556,9 +550,9 @@ contains
                         ! apply CTF to image, stores CTF values
                         add_phshift = 0.
                         if( phaseplate ) add_phshift = precs(iprec)%phshift
-                        call precs(iprec)%tfun%eval_and_apply_before_first_zero(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        call precs(iprec)%tfun%eval_and_apply_before_first_zero(cgrid_imgs_crop(i), ctfflag, logi_lims_crop, fdims_crop(1:2), tvals(:,:,i), &
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxspafreqsq)
-                        radfirstpeak = ceiling( sqrt(maxspafreqsq) * real(ldim_pd(1)) )
+                        radfirstpeak = ceiling( sqrt(maxspafreqsq) * real(ldim_croppd(1)) )
                         radfirstpeak = min( max(radfirstpeak,0), interp_shlim)
                         ! Rotation matrix
                         call rotmat2d(-precs(iprec)%e3, mat)
@@ -573,34 +567,34 @@ contains
                                 win_corner = floor(loc) ! bottom left corner
                                 dist       = loc - real(win_corner)
                                 ! Bi-linear interpolation
-                                l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
-                                ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
-                                m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
-                                mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                                l     = cyci_1d(cyc_lims_cropR(:,1), win_corner(1))
+                                ll    = cyci_1d(cyc_lims_cropR(:,1), win_corner(1)+1)
+                                m     = cyci_1d(cyc_lims_cropR(:,2), win_corner(2))
+                                mm    = cyci_1d(cyc_lims_cropR(:,2), win_corner(2)+1)
                                 ! l, bottom left corner
-                                phys   = cgrid_imgs(i)%comp_addr_phys(l,m)
+                                phys   = cgrid_imgs_crop(i)%comp_addr_phys(l,m)
                                 kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                                fcompl = kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                fcompl = kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                                 tval   = kw * tvals(phys(1),phys(2),i)
                                 ! l, bottom right corner
-                                phys   = cgrid_imgs(i)%comp_addr_phys(l,mm)
+                                phys   = cgrid_imgs_crop(i)%comp_addr_phys(l,mm)
                                 kw     = (1.-dist(1))*dist(2)
-                                fcompl = fcompl + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                fcompl = fcompl + kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                                 tval   = tval   + kw * tvals(phys(1),phys(2),i)
                                 if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
                                 ! ll, upper left corner
-                                phys    = cgrid_imgs(i)%comp_addr_phys(ll,m)
+                                phys    = cgrid_imgs_crop(i)%comp_addr_phys(ll,m)
                                 kw      = dist(1)*(1.-dist(2))
-                                fcompll =         kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                fcompll =         kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                                 tval    = tval  + kw * tvals(phys(1),phys(2),i)
                                 ! ll, upper right corner
-                                phys    = cgrid_imgs(i)%comp_addr_phys(ll,mm)
+                                phys    = cgrid_imgs_crop(i)%comp_addr_phys(ll,mm)
                                 kw      = dist(1)*dist(2)
-                                fcompll = fcompll + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                fcompll = fcompll + kw * cgrid_imgs_crop(i)%get_cmat_at(phys(1), phys(2),1)
                                 tval    = tval    + kw * tvals(phys(1),phys(2),i)
                                 if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
                                 ! update with interpolated values
-                                phys = cavgs_merged(1)%comp_addr_phys(h,k)
+                                phys = cgrid_imgs_crop(i)%comp_addr_phys(h,k)
                                 cmats(phys(1),phys(2),i) = fcompl + fcompll
                                 rhos(phys(1),phys(2),i)  = tval*tval
                             end do
@@ -640,8 +634,9 @@ contains
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
             call cgrid_imgs(i)%kill
+            call cgrid_imgs_crop(i)%kill
         enddo
-        deallocate(read_imgs,cgrid_imgs)
+        deallocate(read_imgs,cgrid_imgs,cgrid_imgs_crop)
     end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums
