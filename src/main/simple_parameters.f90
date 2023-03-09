@@ -20,6 +20,7 @@ type :: parameters
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
+    character(len=3)          :: beamtilt='yes'       !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
