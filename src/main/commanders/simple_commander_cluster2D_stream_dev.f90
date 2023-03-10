@@ -1942,8 +1942,8 @@ contains
         pool_nstks = pool_proj%os_stk%get_noris()
         allocate(pool_stacks(pool_nstks), pool_stk_mask(pool_nstks))
         do istk = 1,pool_nstks
-            call spproj%os_stk%getter(istk,'stk',fname)
-            pool_stacks(istk) = basename(fname)  ! same as imported_stks ??
+            call pool_proj%os_stk%getter(istk,'stk',fname)
+            pool_stacks(istk) = basename(fname)
         enddo
         pool_stk_mask = .true.
         do istk = 1,nstks
