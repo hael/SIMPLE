@@ -158,10 +158,14 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! prep corr
-        call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
+            corr = maxval(corrs)
+        elseif( params_glob%cc_objfun == OBJFUN_PROB )then
+            call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs, s3D%srch_order)
             corr = maxval(corrs)
         else
+            call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
             corr = max(0.,maxval(corrs))
         endif
         self%prev_corr = corr
