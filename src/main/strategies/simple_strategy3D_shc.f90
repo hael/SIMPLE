@@ -47,40 +47,41 @@ contains
             ! initialize, ctd
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            if( params_glob%cc_objfun == OBJFUN_PROB )then
-                call random_seed
-                do isample=1,self%s%nrefs
-                    iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
-                    if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                        ! identify the top scoring in-plane angle
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, s3D%srch_order)
-                        loc = maxloc(inpl_corrs)
-                        call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                        ! update nbetter to keep track of how many improving solutions we have identified
-                        if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
-                        ! keep track of how many references we are evaluating
-                        self%s%nrefs_eval = self%s%nrefs_eval + 1
-                    end if
-                    ! exit condition
-                    if( self%s%nbetter > 0 ) exit
-                end do
-            else
-                do isample=1,self%s%nrefs
-                    iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
-                    if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                        ! identify the top scoring in-plane angle
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                        loc = maxloc(inpl_corrs)
-                        call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                        ! update nbetter to keep track of how many improving solutions we have identified
-                        if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
-                        ! keep track of how many references we are evaluating
-                        self%s%nrefs_eval = self%s%nrefs_eval + 1
-                    end if
-                    ! exit condition
-                    if( self%s%nbetter > 0 ) exit
-                end do
-            endif
+            select case(params_glob%cc_objfun)
+                case(OBJFUN_PROB)
+                    call random_seed
+                    do isample=1,self%s%nrefs
+                        iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
+                        if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
+                            ! identify the top scoring in-plane angle
+                            call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, s3D%srch_order)
+                            loc = maxloc(inpl_corrs)
+                            call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                            ! update nbetter to keep track of how many improving solutions we have identified
+                            if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                            ! keep track of how many references we are evaluating
+                            self%s%nrefs_eval = self%s%nrefs_eval + 1
+                        end if
+                        ! exit condition
+                        if( self%s%nbetter > 0 ) exit
+                    end do
+                case DEFAULT
+                    do isample=1,self%s%nrefs
+                        iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
+                        if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
+                            ! identify the top scoring in-plane angle
+                            call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                            loc = maxloc(inpl_corrs)
+                            call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                            ! update nbetter to keep track of how many improving solutions we have identified
+                            if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                            ! keep track of how many references we are evaluating
+                            self%s%nrefs_eval = self%s%nrefs_eval + 1
+                        end if
+                        ! exit condition
+                        if( self%s%nbetter > 0 ) exit
+                    end do
+            end select
             call self%s%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
