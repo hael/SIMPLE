@@ -188,7 +188,11 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
-        call nonuni_filt3D(odd, even, mskvol)
+        if( cline%defined('lpstop') )then
+            call nonuni_filt3D(odd, even, mskvol, params%lpstop)
+        else
+            call nonuni_filt3D(odd, even, mskvol)
+        endif
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
             call even%mul(mskvol)

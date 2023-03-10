@@ -186,7 +186,7 @@ contains
         call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
-        call cline_cluster2D_chunk%set('lp_lowres', real(params_glob%lp_lowres))
+        call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
@@ -206,7 +206,7 @@ contains
         call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
-        call cline_cluster2D_pool%set('lp_lowres',real(params_glob%lp_lowres))
+        call cline_cluster2D_pool%set('lpstart_nonuni',real(params_glob%lpstart_nonuni))
         if( cline%defined('cenlp') )then
             rarg = cline%get_rarg('cenlp')
             call cline_cluster2D_pool%set('cenlp', rarg)
