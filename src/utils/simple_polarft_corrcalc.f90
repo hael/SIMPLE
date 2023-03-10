@@ -1616,17 +1616,17 @@ contains
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
-                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                cc = 0.
+                call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs_tmp, iptcl, i, cc)
+                self%heap_vars(ithr)%kcorrs = N_SAMPLES * cc
                 do k = 1, N_SAMPLES
                     call random_number(u)
                     isample  = floor(1 + size(srch_order, 2)*u)
                     iref_tmp = srch_order(ithr, isample)
                     call self%prep_ref4corr(iref_tmp, iptcl, pft_ref, i, ithr)
-                    call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs_tmp)
-                    cc = cc + real(self%heap_vars(ithr)%kcorrs - self%heap_vars(ithr)%kcorrs_tmp)
+                    call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs_tmp, iptcl, i, cc)
+                    self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs - cc
                 enddo
-                cc = cc/real(N_SAMPLES + 1)
+                cc = self%heap_vars(ithr)%kcorrs/real(N_SAMPLES + 1)
         end select
     end subroutine gencorrs_3
 
