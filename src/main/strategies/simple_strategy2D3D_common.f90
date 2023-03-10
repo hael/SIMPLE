@@ -417,7 +417,7 @@ contains
         call build_glob%vol%read(fname_even)
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
-        if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
+        if( params_glob%l_nonuniform )then
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             if( params_glob%l_filemsk )then
                 call mskvol%read(params_glob%mskfile)
@@ -426,7 +426,16 @@ contains
                 call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
-            call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            if( params_glob%l_lpset )then ! nanocrystal refinement
+                if( cline%defined('lpstop') )then
+                    ! lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement
+                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
+                else
+                    THROW_HARD('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
+                endif
+            else
+                call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            endif
             ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft
