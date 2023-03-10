@@ -905,10 +905,12 @@ contains
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
         if( .not. cline%defined('refine')        ) call cline%set('refine',      'neigh')
-        if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no')
+        if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no') ! nonuniform filter does not seem to work
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
+        if( .not. cline%defined('objfun')        ) call cline%set('objfun',     'euclid') ! best objfun as determined by valid_corr
+        if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',  'global')
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
