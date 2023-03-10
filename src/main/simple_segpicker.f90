@@ -1,6 +1,6 @@
 module simple_segpicker
 include 'simple_lib.f08'
-use simple_image,      only : image
+use simple_image,      only: image
 use simple_binimage,   only: binimage
 use simple_parameters, only: params_glob
 implicit none

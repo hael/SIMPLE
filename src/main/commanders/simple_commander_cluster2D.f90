@@ -1036,11 +1036,12 @@ contains
                     call job_descr%set('ptclw','yes')
                 endif
                 params%objfun = trim(orig_objfun)
-                if( params%objfun .eq. 'euclid' )then
-                    params%cc_objfun = OBJFUN_EUCLID
-                elseif( params%objfun .eq. 'prob' )then
-                    params%cc_objfun = OBJFUN_PROB
-                endif
+                select case(trim(params%objfun))
+                    case('euclid')
+                        params%cc_objfun = OBJFUN_EUCLID
+                    case('prob')
+                        params%cc_objfun = OBJFUN_PROB
+                end select
                 l_switch2euclid = .false.
                 if( l_ml_reg )then
                     call cline%set('ml_reg',     'yes')
@@ -1177,7 +1178,12 @@ contains
                 params%extr_iter = params%startit
             endif
             ! objective functions
-            l_switch2euclid = ( params%cc_objfun.eq.OBJFUN_EUCLID .or. params%cc_objfun.eq.OBJFUN_PROB )
+            select case(params%cc_objfun)
+                case(OBJFUN_EUCLID,OBJFUN_PROB)
+                    l_switch2euclid = .true.
+                case DEFAULT
+                    l_switch2euclid = .false.
+            end select
             orig_objfun     = trim(cline%get_carg('objfun'))
             l_griddingset   = cline%defined('gridding')
             l_ml_reg        = params%l_ml_reg
@@ -1236,11 +1242,12 @@ contains
                 endif
                 if( l_switch2euclid .and. params%which_iter==iter_switch2euclid )then
                     params%objfun = trim(orig_objfun)
-                    if( params%objfun .eq. 'euclid' )then
-                        params%cc_objfun = OBJFUN_EUCLID
-                    else if( params%objfun .eq. 'prob' )then
-                        params%cc_objfun = OBJFUN_PROB
-                    endif
+                    select case(trim(params%objfun))
+                        case('euclid')
+                            params%cc_objfun = OBJFUN_EUCLID
+                        case('prob' )
+                            params%cc_objfun = OBJFUN_PROB
+                    end select
                     l_switch2euclid = .false.
                     if( l_ml_reg )then
                         call cline%set('ml_reg','yes')

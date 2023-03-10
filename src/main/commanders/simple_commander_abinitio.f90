@@ -117,7 +117,12 @@ contains
         l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
-        l_euclid    = (params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB)
+        select case(params%cc_objfun)
+            case(OBJFUN_EUCLID,OBJFUN_PROB)
+                l_euclid = .true.
+            case DEFAULT
+                l_euclid = .false.
+        end select
         orig_objfun = trim(params%objfun)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
