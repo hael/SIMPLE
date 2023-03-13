@@ -95,6 +95,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
+        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')

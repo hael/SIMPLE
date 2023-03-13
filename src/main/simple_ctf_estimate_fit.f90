@@ -1346,6 +1346,11 @@ contains
         real, allocatable                      :: res(:)
         real                                   :: phshift, start_freq, end_freq, mean_ice_band1, mean_ctf_peak1
         integer                                :: cnt, start_find, end_find, ctf_max, ice_max
+        if( 2.*self%smpd > ICE_BAND1 )then
+            ! no ice to be detected
+            self%icefrac = 0.
+            return
+        endif
         ! init
         phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
         tfun    = ctf(self%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
@@ -1369,8 +1374,8 @@ contains
         ctf_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1
         ! find index of pspec max amplitude at ideal ice peak location += 10 frequencies
         call get_find_at_crit(size(res), res, ICE_BAND1, ice_max)
-        start_find = ice_max - 10
-        end_find   = ice_max + 10
+        start_find = max(1,          ice_max - 10)
+        end_find   = min(self%box/2, ice_max + 10)
         ice_max    = maxloc(self%roavg_spec1d(start_find:end_find),DIM=1) + start_find - 1
         ! mean peaks +- 1 frequency (so long as positive to account for very sharp peaks)
         mean_ctf_peak1 = mean_positive_amps(ctf_max, 1)
