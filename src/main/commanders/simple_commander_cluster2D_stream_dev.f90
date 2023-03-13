@@ -628,7 +628,10 @@ contains
     subroutine update_pool_status
         if( .not.pool_available )then
             pool_available = file_exists(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
-            if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            ! if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            if( pool_available .and. (pool_iter >= 1) )then
+                refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            endif
         endif
     end subroutine update_pool_status
 
@@ -1327,7 +1330,6 @@ contains
         call simple_rmdir(SIGMAS_DIR)
         if( .not.debug_here )then
             ! call qsys_cleanup
-            ! call simple_rmdir(POOL_DIR)
         endif
     end subroutine terminate_stream2D
 
@@ -1926,8 +1928,8 @@ contains
         pool_nstks = pool_proj%os_stk%get_noris()
         allocate(pool_stacks(pool_nstks), pool_stk_mask(pool_nstks))
         do istk = 1,pool_nstks
-            call spproj%os_stk%getter(istk,'stk',fname)
-            pool_stacks(istk) = basename(fname)  ! same as imported_stks ??
+            call pool_proj%os_stk%getter(istk,'stk',fname)
+            pool_stacks(istk) = basename(fname)
         enddo
         pool_stk_mask = .true.
         do istk = 1,nstks

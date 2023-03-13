@@ -81,12 +81,18 @@ contains
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
-            nrefs_tot  = s%nnn * neff_states
-            if( s%nnn > 1 )then
-                nrefs_eval = s%nrefs_eval
-            else
-                nrefs_eval = nrefs_tot  ! the case of global srch
-            endif
+            select case(trim(s%refine))
+                case('shc_neigh')
+                    nrefs_tot  = s%nprojs_sub * neff_states
+                    nrefs_eval = s%nrefs_eval
+                case DEFAULT
+                    nrefs_tot  = s%nnn * neff_states
+                    if( s%nnn > 1 )then
+                        nrefs_eval = s%nrefs_eval
+                    else
+                        nrefs_eval = nrefs_tot  ! the case of global srch
+                    endif
+            end select
         else if( s%l_greedy )then
             nrefs_tot  = s%nprojs * neff_states
             nrefs_eval = nrefs_tot

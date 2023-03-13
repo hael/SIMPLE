@@ -294,8 +294,13 @@ contains
                             if(index(entrystr, ':mrc') > 0) then ! relion ctf names!
                                 entrystr = trim(adjustl(entrystr(:index(entrystr, ':mrc') - 1)))
                             end if
-                            call make_relativepath(cwd, trim(adjustl(self%starfile%rootdir)) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
-                            entrystr = trim(adjustl(abspath))
+                            if(file_exists(trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)))) then
+                                call make_relativepath(cwd, trim(adjustl(stemname(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
+                                entrystr = trim(adjustl(abspath))
+                            else
+                                call make_relativepath(cwd, trim(adjustl(self%starfile%rootdir)) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
+                                entrystr = trim(adjustl(abspath))
+                            end if
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
                     else if(stardata%flags(flagsindex)%int) then
@@ -811,13 +816,16 @@ contains
 
     ! tilt
 
-    subroutine assign_initial_tiltgroups(self)
+    subroutine assign_initial_tiltgroups(self, beamtilt)
         class(starproject),      intent(inout) :: self
         character(len=LONGSTRLEN), allocatable :: epugroups(:)
         character(len=LONGSTRLEN)              :: eputilt
         integer                                :: i, epugroupid
+        logical, intent(in)                    :: beamtilt
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
-        if(index(self%tiltinfo(1)%basename, 'FoilHole') == 0) then
+        if(.not. beamtilt) then
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), 'beamtilts not being used. assigning single initial beamtilt group'
+        else if(index(self%tiltinfo(1)%basename, 'FoilHole') == 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), 'no EPU filenames detected. assigning single initial beamtilt group'
             ! already assigned initialtiltgroupid=1 in initialisation
         else
@@ -916,6 +924,11 @@ contains
         real                                   :: ogid, box, stkbox
         character(len=LONGSTRLEN)              :: ogname
         character(len=XLONGSTRLEN)             :: cwd
+        logical                                :: beamtilt
+        beamtilt  = .true.
+        if(cline%get_carg('beamtilt') .eq. 'no') then
+            beamtilt = .false.
+        end if
         allocate(self%tiltinfo(0))
         if(spproj%os_mic%get_noris() > 0) then
             call self%get_image_basename(spproj%os_mic, 'intg')
@@ -923,7 +936,7 @@ contains
         if(spproj%os_stk%get_noris() > 0) then
             call self%get_image_basename(spproj%os_stk, 'stk')
         end if
-        call self%assign_initial_tiltgroups()
+        call self%assign_initial_tiltgroups(beamtilt)
         if(cline%get_carg("xmldir") .ne. '') then
             if(.not. index(cline%get_carg("xmldir"), "/") == 1) then
                 call simple_getcwd(cwd)
