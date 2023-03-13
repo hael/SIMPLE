@@ -410,11 +410,12 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: nonuni_filt3D
+        use simple_opt_filter, only: nonuni_filt3D, butterworth_filter
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image)    :: mskvol
+        type(image) :: mskvol
+        real        :: filter(build_glob%img%get_filtsz())
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(fname_even)
@@ -434,7 +435,13 @@ contains
                     ! lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement
                     call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
                 else
-                    THROW_HARD('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
+                    ! applying uniform Butterworth filter at the cut-off frequency = lp
+                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+                    call build_glob%vol%fft
+                    call build_glob%vol_odd%fft
+                    call build_glob%vol%apply_filter(filter)
+                    call build_glob%vol_odd%apply_filter(filter)
+                    THROW_WARN('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
                 endif
             else
                 call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
@@ -478,7 +485,7 @@ contains
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else if( params_glob%l_lpset )then
-            ! applying Butterworth filter at the cut-off frequency = lpstop
+            ! applying Butterworth filter at the cut-off frequency = lp
             call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
             call vol_ptr%apply_filter(filter)
         else
