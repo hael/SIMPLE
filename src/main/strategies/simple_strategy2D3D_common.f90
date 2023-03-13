@@ -213,6 +213,9 @@ contains
         else
             if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
+                if( trim(params_glob%stream).eq.'yes' )then
+                    if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
+                endif
             else
                 if( which_iter < LPLIM1ITERBOUND )then
                     lplim = params_glob%lplims2D(1)
