@@ -469,9 +469,6 @@ contains
                             call cline%set(vol, vol_iter)
                             if( params%keepvol.ne.'no' )then
                                 call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
-                                ! keeping odd/even vols
-                                call simple_copy_file(vol_odd, trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//'_odd' //params%ext)
-                                call simple_copy_file(vol_even,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//'_even'//params%ext)
                             endif
                         endif
                     enddo

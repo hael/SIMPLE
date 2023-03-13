@@ -543,7 +543,7 @@ contains
                     !$omp parallel default(shared) proc_bind(close)&
                     !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,maxspafreqsq,radfirstpeak)
                     !$omp do schedule(static)
-                        do i = 1,nptcls_in_batch
+                    do i = 1,nptcls_in_batch
                         iprec = batch_iprecs(i)
                         if( iprec == 0 ) cycle
                         if( precs(iprec)%pind == 0 ) cycle
@@ -554,6 +554,24 @@ contains
                         & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxspafreqsq)
                         radfirstpeak = ceiling( sqrt(maxspafreqsq) * real(ldim_croppd(1)) )
                         radfirstpeak = min( max(radfirstpeak,0), interp_shlim)
+                        ! ML-regularization
+                        if( l_ml_reg )then
+                            do h = logi_lims_crop(1,1),radfirstpeak
+                                do k = -radfirstpeak,radfirstpeak
+                                    sh = nint(hyp(real(h),real(k)))
+                                    if( sh > radfirstpeak )cycle
+                                    if( sh > interp_shlim )cycle
+                                    sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))
+                                    if( sh > sigma2_kfromto(2) ) cycle
+                                    phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                                    if( sh >= sigma2_kfromto(1) )then
+                                        tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(sh,precs(iprec)%pind))
+                                    else
+                                        tvals(phys(1),phys(2),i) = tvals(phys(1),phys(2),i) / sqrt(eucl_sigma2_glob%sigma2_noise(1,precs(iprec)%pind))
+                                    endif
+                                enddo
+                            enddo
+                        endif
                         ! Rotation matrix
                         call rotmat2d(-precs(iprec)%e3, mat)
                         ! Interpolation

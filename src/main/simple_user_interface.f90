@@ -1123,7 +1123,7 @@ contains
         &'Assign optics groups',&                                               ! descr_short
         &'is a program to assign optics groups',&                               ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -1135,6 +1135,8 @@ contains
         & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '')
         call assign_optics_groups%set_input('parm_ios', 4, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        call assign_optics_groups%set_input('parm_ios', 5, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
+        &'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){yes}', .false., 'yes')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2017,7 +2019,7 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &1, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         extract%gui_submenu_list = "extract"
         extract%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2044,6 +2046,7 @@ contains
         ! <empty>
         ! computer controls
         call extract%set_input('comp_ctrls', 1, nparts)
+        call extract%set_input('comp_ctrls', 2, nthr)
     end subroutine new_extract
 
     subroutine new_export_starproject
@@ -3662,7 +3665,7 @@ contains
         call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 9, objfun)
-        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|neigh|cont|inpl|proj|cluster|clustersym){shc}', '(snhc|shc|neigh|cont|inpl|proj|cluster|clustersym){shc}', .false., 'shc')
+        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh){shc}', '(snhc|shc|neigh|shc_neigh){shc}', .false., 'shc')
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations prior to e/o refinement', '# of iterations after which low-pass limited alignment is switched to e/o(0:never){1}',&
         &'# iterations prior to e/o refinement{1}', .false., 1.)

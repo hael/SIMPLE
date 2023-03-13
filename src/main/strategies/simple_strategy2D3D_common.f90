@@ -449,7 +449,8 @@ contains
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
-        use simple_projector,        only: projector
+        use simple_projector,  only: projector
+        use simple_opt_filter, only: butterworth_filter
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
@@ -458,7 +459,7 @@ contains
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
         real    :: filter(build_glob%vol%get_filtsz()), frc(build_glob%vol%get_filtsz())
-        integer :: iref, filtsz
+        integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -470,10 +471,14 @@ contains
         endif
         ! Volume filtering
         filtsz = build_glob%vol%get_filtsz()
-        if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
+        if( params_glob%l_ml_reg )then
             ! no filtering
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
+        else if( params_glob%l_lpset )then
+            ! applying Butterworth filter at the cut-off frequency = lpstop
+            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+            call vol_ptr%apply_filter(filter)
         else
             call vol_ptr%fft()
             if( any(build_glob%fsc(s,:) > 0.143) )then

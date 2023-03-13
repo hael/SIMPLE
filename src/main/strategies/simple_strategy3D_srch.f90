@@ -22,6 +22,7 @@ type strategy3D_spec
 end type strategy3D_spec
 
 type strategy3D_srch
+    character(len=:), allocatable :: refine              !< 3D refinement flag
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
@@ -94,6 +95,7 @@ contains
         self%nsym          = build_glob%pgrpsyms%get_nsym()
         self%doshift       = params_glob%l_doshift
         self%l_neigh       = params_glob%l_neigh
+        self%refine        = trim(params_glob%refine)
         self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
         self%l_ptclw       = trim(params_glob%ptclw).eq.'yes'
         lims(:,1)          = -params_glob%trs
