@@ -49,7 +49,6 @@ contains
             self%s%nrefs_eval = 0
             select case(params_glob%cc_objfun)
                 case(OBJFUN_PROB)
-                    call random_seed
                     do isample=1,self%s%nrefs
                         iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
                         if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
