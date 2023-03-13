@@ -1629,7 +1629,7 @@ contains
         type(oris)                             :: os_mic
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:), tmp_fnames(:), pool_stacks(:)
         character(len=:),          allocatable :: one_projfile, one_projname, fname, stack_fname, orig_stack_fname
-        character(len=:),          allocatable :: frcsfname, src
+        character(len=:),          allocatable :: frcsfname, src, ext
         integer,                   allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         logical,                   allocatable :: pool_stk_mask(:)
         integer :: ichunk, istk, imic, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top, nsplit
@@ -1951,7 +1951,10 @@ contains
             call spproj%os_stk%getter(istk,'stk',fname)
             orig_stack_fname = basename(fname)
             stack_fname = trim(orig_stack_fname)
-            if( do_autoscale ) stack_fname = add2fbody(orig_stack_fname,params%ext,SCALE_SUFFIX)
+            if( do_autoscale )then
+                ext = '.'//trim(fname2ext(orig_stack_fname))
+                stack_fname = add2fbody(orig_stack_fname,ext,SCALE_SUFFIX)
+            endif
             do jstk = 1,pool_nstks
                 if( pool_stk_mask(jstk) )then
                     if( trim(stack_fname) == pool_stacks(jstk) )then
@@ -1962,7 +1965,7 @@ contains
                             call spproj%os_ptcl2D%transfer_ori(iptcl, pool_proj%os_ptcl2D, jptcl)
                             jptcl = jptcl+1
                         enddo
-                        pool_stk_mask(jstk) = .false. ! to be excluded from now
+                        pool_stk_mask(jstk) = .false. ! to be excluded from now on
                     endif
                 endif
             enddo

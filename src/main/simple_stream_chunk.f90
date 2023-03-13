@@ -31,6 +31,7 @@ type stream_chunk
     integer                                :: nmics
     integer                                :: nptcls
     logical                                :: converged = .false.
+    logical                                :: autoscale = .false.
     logical                                :: available = .true.
 contains
     procedure :: init
@@ -180,7 +181,8 @@ contains
         if( box /= orig_box ) nclines = nclines + 1
         allocate(clines(nclines))
         ! scaling
-        if( box /= orig_box )then
+        self%autoscale = (box /= orig_box)
+        if( self%autoscale )then
             self%projfile_out = trim(PROJNAME_CHUNK)//SCALE_SUFFIX//trim(METADATA_EXT) ! as per scale_project convention
             call cline_scale%set('prg',        'scale_project_distr')
             call cline_scale%set('projname',   trim(PROJNAME_CHUNK))
@@ -299,8 +301,12 @@ contains
             fname   = basename(self%orig_stks(i))
             ext     = fname2ext(fname)
             fbody   = get_fbody(fname, ext)
-            ! scaled suffix taken into account
-            stks(i) = trim(folder)//'/'//trim(fbody)//trim(SCALE_SUFFIX)//'.star'
+            if( self%autoscale )then
+                ! scaled suffix taken into account
+                stks(i) = trim(folder)//'/'//trim(fbody)//trim(SCALE_SUFFIX)//'.star'
+            else
+                stks(i) = trim(folder)//'/'//trim(fbody)//'.star'
+            endif
         enddo
         fname = trim(self%path)//trim(sigma2_star_from_iter(self%it))
         call split_sigma2_into_groups(fname, stks)
@@ -450,6 +456,7 @@ contains
         self%path      = ''
         self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
+        self%autoscale = .false.
         self%converged = .false.
         self%available = .false.
     end subroutine kill
