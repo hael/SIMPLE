@@ -89,9 +89,6 @@ contains
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
         ! 2D classification
         if( .not. cline%defined('lpthres')    ) call cline%set('lpthres',        30.0)
         if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)
@@ -133,8 +130,7 @@ contains
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         call spproj%write(micspproj_fname)
         ! picking
-        l_pick = .false.
-        if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
+        l_pick = cline%defined('pickrefs')
         ! output directories
         output_dir = trim(PATH_HERE)//trim(dir_preprocess)
         call simple_mkdir(output_dir)
@@ -164,8 +160,7 @@ contains
                 call cline_make_pickrefs%set('scale',pickref_scale)
             endif
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('refs', '../'//trim(PICKREFS)//trim(params%ext))
-            call cline%delete('vol1')
+            call cline%set('pickrefs', '../'//trim(PICKREFS)//trim(params%ext))
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             call qsys_cleanup
         endif
