@@ -1617,7 +1617,7 @@ contains
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs_tmp, iptcl, i, cc)
-                self%heap_vars(ithr)%kcorrs = (N_SAMPLES + 1) * cc
+                self%heap_vars(ithr)%kcorrs = N_SAMPLES * cc
                 do k = 1, N_SAMPLES
                     call random_number(u)
                     isample  = floor(1 + size(srch_order, 2)*u)
@@ -1626,7 +1626,7 @@ contains
                     call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs_tmp, iptcl, i, cc)
                     self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs - cc
                 enddo
-                cc = self%heap_vars(ithr)%kcorrs/real(N_SAMPLES + 1)
+                cc = self%heap_vars(ithr)%kcorrs/real(N_SAMPLES)
         end select
     end subroutine gencorrs_3
 
