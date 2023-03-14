@@ -18,7 +18,7 @@ type :: fplane
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
     integer,              public :: ldim(3)       = 0            !< dimensions of original image
-    integer,              public :: frlims_crop(3,2)             !< Redundant Fourier cropped limits
+    integer,              public :: frlims_crop(3,2) = 0         !< Redundant Fourier cropped limits
     integer,              public :: ldim_crop(3)  = 0            !< dimensions of cropped image
     real,                 public :: shconst(3)    = 0.           !< memoized constants for origin shifting
     integer,              public :: nyq_crop      = 0            !< cropped Nyqvist Fourier index
@@ -39,35 +39,33 @@ contains
     ! CONSTRUCTORS
 
     subroutine new( self, img )
+        use simple_ftiter, only: ftiter
         class(fplane),     intent(inout) :: self
         class(image),      intent(in)    :: img
-        type(image)      :: tmp_crop_img
-        integer          :: h, k
+        type(ftiter) :: fiterator
+        integer      :: h, k
         call self%kill
         ! Original image dimension
         self%ldim    = img%get_ldim()
-        ! shift is performed with the original image dimensions
+        ! shift is with respect to the original image dimensions
         self%shconst = img%get_shconst()
         ! cropped Fourier limits & dimensions
-        call tmp_crop_img%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
-        self%frlims_crop  = tmp_crop_img%loop_lims(3)
-        self%ldim_crop    = tmp_crop_img%get_ldim()
-        self%nyq_crop     = tmp_crop_img%get_lfny(1)
-        call tmp_crop_img%kill
+        self%ldim_crop    = [params_glob%box_crop, params_glob%box_crop, 1]
+        call fiterator%new(self%ldim_crop, params_glob%smpd_crop)
+        self%frlims_crop  = fiterator%loop_lims(3)
+        self%nyq_crop     = fiterator%get_lfny(1)
         ! allocations
         allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
-                &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)))
+                &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
+                self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)))
         self%cmplx_plane = cmplx(0.,0.)
         self%ctfsq_plane = 0.
         ! CTF pre-calculations
-        allocate(self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)), source=0.)
-        ! !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k) proc_bind(close)
         do k=self%frlims_crop(2,1),self%frlims_crop(2,2)
             do h=self%frlims_crop(1,1),self%frlims_crop(1,2)
                 self%ctf_ang(h,k) = atan2(real(k), real(h))
             enddo
         enddo
-        ! !$omp end parallel do
         self%exists = .true.
     end subroutine new
 

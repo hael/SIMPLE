@@ -269,7 +269,7 @@ contains
             if( cline%defined(trim(vol)) )then
                 vol_defined = .true.
                 call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                if( ldim(1) /= params%box_crop )then
+                if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
                     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
                 endif
             endif
