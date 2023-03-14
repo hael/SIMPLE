@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D
+public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D, exponential_reg
 private
 
 interface butterworth_filter
@@ -551,12 +551,11 @@ contains
         type(image_ptr) :: pdiff_odd, pdiff_even, pweights, pmask
         type(c_ptr)     :: plan_fwd, plan_bwd
         integer         :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
-        integer         :: cutoff_find, best_ind_even, best_ind_odd, filtsz
+        integer         :: cutoff_find, best_ind_even, best_ind_odd
         real            :: rad, find_stepsz, smpd, cur_cost_odd, cur_cost_even
         real            :: best_cost_odd, best_cost_even
         logical         :: present_cuofindeo, present_mskimg
         ldim              = odd%get_ldim()
-        filtsz            = odd%get_filtsz()
         box               = ldim(1)
         fsc_fname         = trim(params_glob%fsc)
         smpd              = params_glob%smpd
@@ -817,5 +816,30 @@ contains
             call optf2Dvars(iptcl)%odd_filt%kill
         enddo
     end subroutine uni_filt2D_sub
+
+    ! generating and applying the exponential regularization
+    subroutine exponential_reg( vol, lambda, eps )
+        class(image),           intent(inout) :: vol
+        real,         optional, intent(in)    :: lambda, eps
+        type(image_ptr) :: pvol
+        integer         :: k, l, m, box, ldim(3)
+        real            :: lambda_here, eps_here
+        ldim = vol%get_ldim()
+        box  = ldim(1)
+        call vol%get_mat_ptrs(pvol)
+        lambda_here = 1.
+        eps_here    = 0.01
+        if( present(lambda) ) lambda_here = lambda
+        if( present(eps   ) ) eps_here    = eps
+        !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(static) proc_bind(close)
+        do m = 1, ldim(3)
+            do l = 1, ldim(2)
+                do k = 1,ldim(1)
+                    pvol%rmat(k,l,m) = pvol%rmat(k,l,m) + eps_here * lambda_here**2 * exp( - lambda_here * pvol%rmat(k,l,m) )
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine exponential_reg
 
 end module simple_opt_filter

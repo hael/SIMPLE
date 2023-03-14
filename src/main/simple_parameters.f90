@@ -176,6 +176,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
+    character(len=STDLEN)     :: ref_reg='none'       !< reference regularizer type (none|exp){none}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -401,6 +402,7 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_ref_reg      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -523,6 +525,7 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
+        call check_carg('ref_reg',        self%ref_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -1340,6 +1343,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
+        ! reference regularization
+        self%l_ref_reg = .not.( trim(self%ref_reg).eq.'none' )
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
