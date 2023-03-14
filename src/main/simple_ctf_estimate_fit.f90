@@ -403,6 +403,7 @@ contains
         type(ctfparams),         intent(inout) :: parms
         class(image),  optional, intent(inout) :: spec
         logical,       optional, intent(in)    :: nano
+        real    :: freslims1d(2)
         logical :: l_nano
         if( BENCH ) self%t_tot = tic()
         l_nano = .false.
@@ -437,7 +438,9 @@ contains
         if( BENCH ) self%rt_stats = toc(self%t)
         ! calculate ice stats
         if( BENCH ) self%t = tic()
+        freslims1d = self%freslims1d ! needs to be preserved for visualization
         call self%calc_icefrac
+        self%freslims1d = freslims1d
         if( BENCH ) self%rt_icefrac = toc(self%t)
         ! output
         parms%dfx          = self%parms%dfx
@@ -552,11 +555,15 @@ contains
     end subroutine norm_pspec
 
     !>  \brief  Generates and normalize 1D rotational average spectrum
-    subroutine gen_roavspec1d( self )
+    subroutine gen_roavspec1d( self, center )
         class(ctf_estimate_fit), intent(inout) :: self
+        logical,       optional, intent(in)    :: center
         real, pointer :: prmat(:,:,:)
         real          :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
         integer       :: i,j,h,k, mh,mk, sh, shlim, n
+        logical       :: center_here
+        center_here = .true.
+        if( present(center) ) center_here = center
         call self%pspec%get_rmat_ptr(prmat)
         ! spectrum 1D
         self%roavg_spec1d = 0.
@@ -577,8 +584,12 @@ contains
         where( cnt > 0 ) self%roavg_spec1d = self%roavg_spec1d / real(cnt)
         ! pre_normalization
         n    = count(self%resmsk1D(self%freslims1d(1):self%freslims1d(2)))
-        avg  = sum(self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2)),&
-                &mask=self%resmsk1D(self%freslims1d(1):self%freslims1d(2))) / real(n)
+        if( center_here )then
+            avg = sum(self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2)),&
+                    &mask=self%resmsk1D(self%freslims1d(1):self%freslims1d(2))) / real(n)
+        else
+            avg = 0.
+        endif
         sdev = sum((self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2))-avg)**2.,&
                 &mask=self%resmsk1D(self%freslims1d(1):self%freslims1d(2)))
         sdev = sqrt(sdev / real(n))
@@ -1340,6 +1351,8 @@ contains
 
     end subroutine calc_ctfres
 
+    ! Calculate ice fraction score
+    ! self%freslims1d, self%roavg_spec1d, self%resmsk1D are modified on output
     subroutine calc_icefrac( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf)                              :: tfun
@@ -1365,7 +1378,7 @@ contains
         do cnt = self%freslims1d(1),self%freslims1d(2)
             self%resmsk1D(cnt) = .true.
         enddo
-        call self%gen_roavspec1d
+        call self%gen_roavspec1d(.false.)
         ! find index of pspec max amplitude between 1st and second zero
         start_freq = sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))
         end_freq   = sqrt(tfun%SpaFreqSqAtNthZero(2,phshift,deg2rad(self%parms%angast)))
@@ -1385,7 +1398,7 @@ contains
         self%icefrac = mean_ice_band1 / mean_ctf_peak1
         ! clean up
         if(allocated(res)) deallocate(res)
-        
+
         contains
         
             real function mean_positive_amps(peak, width)
