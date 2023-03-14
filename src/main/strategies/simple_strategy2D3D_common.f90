@@ -477,7 +477,7 @@ contains
             ! filtering done in read_and_filter_refvols
         else if( params_glob%l_lpset )then
             ! applying Butterworth filter at the cut-off frequency = lpstop
-            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
             call vol_ptr%apply_filter(filter)
         else
             call vol_ptr%fft()
