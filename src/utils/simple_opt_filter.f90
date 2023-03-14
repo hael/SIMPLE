@@ -835,7 +835,7 @@ contains
         do m = 1, ldim(3)
             do l = 1, ldim(2)
                 do k = 1,ldim(1)
-                    pvol%rmat(k,l,m) = pvol%rmat(k,l,m) + eps_here * lambda_here**2 * exp( - lambda_here * pvol%rmat(k,l,m) )
+                    pvol%rmat(k,l,m) = pvol%rmat(k,l,m) - eps_here * lambda_here**2 * exp( - lambda_here * pvol%rmat(k,l,m) )
                 enddo
             enddo
         enddo
