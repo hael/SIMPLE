@@ -459,7 +459,7 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,  only: projector
-        use simple_opt_filter, only: butterworth_filter
+        use simple_opt_filter, only: butterworth_filter, exponential_reg
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
@@ -484,6 +484,8 @@ contains
             ! no filtering
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
+        else if( params_glob%l_ref_reg )then
+            call exponential_reg( vol_ptr, lambda = 2., eps = 0.1 )
         else if( params_glob%l_lpset )then
             ! applying Butterworth filter at the cut-off frequency = lp
             call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
