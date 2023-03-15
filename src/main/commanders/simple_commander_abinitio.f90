@@ -524,6 +524,7 @@ contains
             work_proj2%os_ptcl3D = os
             call work_proj2%write_segment_inside('ptcl3D', ORIG_work_projfile)
             ! reconstruction
+            call cline_reconstruct3D%set('ml_reg', 'no')
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()
