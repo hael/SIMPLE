@@ -1629,8 +1629,8 @@ contains
                 enddo
                 iter_here = MAX_ITER/2 + 1
                 if( present(which_iter) ) iter_here = which_iter
-                eps = (min(iter_here, MAX_ITER + 1) - 1.)/real(MAX_ITER)
-                cc  = eps * self%heap_vars(ithr)%kcorrs_tmp + (1. - eps) * sum(cc) / real(N_SAMPLES) / self%nrots
+                eps = (min(iter_here, MAX_ITER + 1) - 1.)/real(MAX_ITER)/2.
+                cc  = (0.5 + eps) * self%heap_vars(ithr)%kcorrs_tmp + (0.5 - eps) * sum(cc) / real(N_SAMPLES) / self%nrots
         end select
     end subroutine gencorrs_3
 
