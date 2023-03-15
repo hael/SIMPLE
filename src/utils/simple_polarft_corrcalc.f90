@@ -1624,11 +1624,9 @@ contains
                     iref_tmp = srch_order(ithr, isample)
                     call self%prep_ref4corr(iref_tmp, iptcl, pft_ref, i, ithr)
                     call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                    cc = cc + (self%heap_vars(ithr)%kcorrs_tmp - self%heap_vars(ithr)%kcorrs)
+                    cc = cc + self%heap_vars(ithr)%kcorrs
                 enddo
-                call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
-                call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                cc = self%heap_vars(ithr)%kcorrs + sum(cc) / real(N_SAMPLES) / self%nrots
+                cc = self%heap_vars(ithr)%kcorrs_tmp - sum(cc) / real(N_SAMPLES) / self%nrots
         end select
     end subroutine gencorrs_3
 
