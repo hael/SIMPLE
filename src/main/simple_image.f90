@@ -6643,16 +6643,21 @@ contains
         call tmp%kill()
     end subroutine clip_inplace
 
-    subroutine read_and_crop( self, volfname, box, smpd, box_crop, smpd_crop )
-        class(image),     intent(inout) :: self
-        character(len=*), intent(in)    :: volfname
-        integer,          intent(in)    :: box, box_crop
-        real,             intent(in)    :: smpd, smpd_crop
+    subroutine read_and_crop( self, volfname, box, smpd, box_crop, smpd_crop, ismask )
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: volfname
+        integer,           intent(in)    :: box, box_crop
+        real,              intent(in)    :: smpd, smpd_crop
+        logical, optional, intent(in)    :: ismask
         real    :: crop_factor, smpd_here
         integer :: ldim(3), ifoo
+        logical :: l_mask
+        l_mask = .false.
+        if( present(ismask) ) l_mask = ismask
         crop_factor = real(box) / real(box_crop)
         call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
         if( box == box_crop )then
+            ! read
             if( all(ldim == box) )then
                 call self%new([box,box,box],smpd)
                 call self%read(volfname)
@@ -6661,12 +6666,18 @@ contains
             endif
         else
             if( all(ldim == box) )then
+                ! read & crop
                 call self%new([box,box,box],smpd)
                 call self%read(volfname)
                 call self%fft
                 call self%clip_inplace([box_crop,box_crop,box_crop])
                 call self%ifft
+                if( l_mask )then
+                    where( self%rmat < TINY ) self%rmat = 0.0
+                    where( self%rmat > 1.0 )  self%rmat = 1.0
+                endif
             elseif( all(ldim == box_crop) )then
+                ! read
                 call self%new([box_crop,box_crop,box_crop],smpd_crop)
                 call self%read(volfname)
             else

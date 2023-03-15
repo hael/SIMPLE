@@ -429,7 +429,8 @@ contains
         call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
             if( params_glob%l_filemsk )then
-                call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+                call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
+                    &params_glob%box_crop, params_glob%smpd_crop, ismask=.true.)
             else
                 call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
                 mskvol = 1.0
