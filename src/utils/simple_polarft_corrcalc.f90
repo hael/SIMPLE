@@ -1599,15 +1599,16 @@ contains
         end select
     end subroutine gencorrs_2
     
-    subroutine gencorrs_3( self, iref, iptcl, cc, srch_order )
+    subroutine gencorrs_3( self, iref, iptcl, cc, srch_order, which_iter )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
         integer,                 intent(in)    :: srch_order(:,:)
-        integer,                 parameter     :: N_SAMPLES = 6
+        integer, optional,       intent(in)    :: which_iter
+        integer,                 parameter     :: N_SAMPLES = 6, MAX_ITER = 20
         complex(sp), pointer :: pft_ref(:,:)
-        integer :: i, ithr, k, iref_tmp, isample
-        real    :: u
+        integer :: i, ithr, k, iref_tmp, isample, iter_here
+        real    :: u, eps
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
@@ -1626,7 +1627,10 @@ contains
                     call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
                     cc = cc + self%heap_vars(ithr)%kcorrs
                 enddo
-                cc = self%heap_vars(ithr)%kcorrs_tmp - sum(cc) / real(N_SAMPLES) / self%nrots
+                iter_here = MAX_ITER/2 + 1
+                if( present(which_iter) ) iter_here = which_iter
+                eps = (min(iter_here, MAX_ITER + 1) - 1.)/real(MAX_ITER)
+                cc  = eps * self%heap_vars(ithr)%kcorrs_tmp + (1. - eps) * sum(cc) / real(N_SAMPLES) / self%nrots
         end select
     end subroutine gencorrs_3
 
