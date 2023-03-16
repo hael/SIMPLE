@@ -2874,7 +2874,7 @@ contains
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
         call pick%set_input('parm_ios', 3, moldiam)
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
-        call pick%set_input('parm_ios', 4, 'picker', 'picker', 'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call pick%set_input('parm_ios', 4, 'picker', 'multi', 'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
         call pick%set_gui_params('parm_ios', 4, submenu="picking")
         ! alternative inputs
         ! <empty>
