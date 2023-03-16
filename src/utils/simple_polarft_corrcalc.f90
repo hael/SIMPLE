@@ -59,7 +59,6 @@ type heap_vars
     real(dp),    pointer :: argvec(:)          => null()
     complex(sp), pointer :: shmat(:,:)         => null()
     real(dp),    pointer :: kcorrs(:)          => null()
-    real(dp),    pointer :: kcorrs_tmp(:)      => null()
     complex(dp), pointer :: pft_ref_8(:,:)     => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
     complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
@@ -361,7 +360,6 @@ contains
                 &self%heap_vars(ithr)%shvec(self%pftsz),&
                 &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%kcorrs(self%nrots),&
-                &self%heap_vars(ithr)%kcorrs_tmp(self%nrots),&
                 &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
@@ -2240,7 +2238,7 @@ contains
                     &self%heap_vars(ithr)%pft_dref,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%corrs_over_k,&
-                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,self%heap_vars(ithr)%kcorrs_tmp,&
+                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%argmat_8,&
