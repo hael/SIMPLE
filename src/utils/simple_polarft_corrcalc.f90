@@ -91,6 +91,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
+    complex(sp),         allocatable :: pfts_avg_even(:,:)          !< 2D complex matrix of average polar reference (pftsz,nk), even
+    complex(sp),         allocatable :: pfts_avg_odd(:,:)           !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -129,6 +131,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
+    procedure          :: calc_avg_ref
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
@@ -189,13 +192,11 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot_8
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
-    procedure, private :: gencorrs_cc_tmp
     procedure, private :: gencorrs_euclid
     procedure, private :: gencorrs_prob
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
-    procedure, private :: gencorrs_3
-    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
+    generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -342,6 +343,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%pfts_avg_even(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%pfts_avg_odd( self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -519,6 +522,32 @@ contains
             self%pfts_refs_odd(irot,k,iref)  = comp
         endif
     end subroutine set_ref_fcomp
+
+    subroutine calc_avg_ref( self, iseven )
+        class(polarft_corrcalc), intent(inout) :: self
+        logical,                 intent(in)    :: iseven
+        integer, parameter :: MAX_REG_ITERS = 30
+        integer :: n_samples, k, isample
+        real    :: u
+        n_samples = max(MAX_REG_ITERS - params_glob%which_iter + 1, 0) * self%nrefs / MAX_REG_ITERS
+        if( iseven )then
+            self%pfts_avg_even = 0.
+            do k = 1, n_samples
+                call random_number(u)
+                isample  = floor(1 + self%nrefs*u)
+                self%pfts_avg_even = self%pfts_avg_even + self%pfts_refs_even(:,:,isample)
+            enddo
+            self%pfts_avg_even = self%pfts_avg_even / self%nrefs
+        else
+            self%pfts_avg_odd = 0.
+            do k = 1, n_samples
+                call random_number(u)
+                isample  = floor(1 + self%nrefs*u)
+                self%pfts_avg_odd = self%pfts_avg_odd + self%pfts_refs_odd(:,:,isample)
+            enddo
+            self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs
+        endif
+    end subroutine
 
     subroutine set_dref_fcomp( self, iref, irot, k, dcomp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1565,12 +1594,42 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
-        integer :: i, ithr
+        integer :: i, ithr, k
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
+                if( params_glob%l_obj_reg )then
+                    if( self%iseven(i) )then
+                        do k=self%kfromto(1),self%kfromto(2)
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_even(:,k)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_even(:,k))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_even(:,k))
+                        enddo
+                    else
+                        do k=self%kfromto(1),self%kfromto(2)
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_odd(:,k)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_odd(:,k))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_odd(:,k))
+                        enddo
+                    endif
+                endif
                 call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
                 cc = real(self%heap_vars(ithr)%kcorrs)
+                if( params_glob%l_obj_reg )then
+                    if( self%iseven(i) )then
+                        do k=self%kfromto(1),self%kfromto(2)
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_even(:,k)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_even(:,k))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_even(:,k))
+                        enddo
+                    else
+                        do k=self%kfromto(1),self%kfromto(2)
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_odd(:,k)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_odd(:,k))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_odd(:,k))
+                        enddo
+                    endif
+                endif
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
             case(OBJFUN_PROB)
@@ -1600,70 +1659,6 @@ contains
         end select
     end subroutine gencorrs_2
     
-    subroutine gencorrs_3( self, iref, iptcl, cc, srch_order )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        integer,                 intent(in)    :: srch_order(:,:)
-        integer,                 parameter     :: N_SAMPLES = 6
-        complex(sp), pointer :: pft_ref(:,:)
-        integer :: i, ithr, k, iref_tmp, isample
-        real    :: u
-        call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gencorrs_cc_tmp(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs_tmp)
-                cc = 0.
-                do k = 1, N_SAMPLES
-                    call random_number(u)
-                    isample  = floor(1 + size(srch_order, 2)*u)
-                    iref_tmp = srch_order(ithr, isample)
-                    call self%prep_ref4corr(iref_tmp, iptcl, pft_ref, i, ithr)
-                    call self%gencorrs_cc_tmp(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                    cc = cc + self%heap_vars(ithr)%kcorrs
-                enddo
-                cc  = self%heap_vars(ithr)%kcorrs_tmp - sum(cc) / real(N_SAMPLES) / self%nrots
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
-            case(OBJFUN_PROB)
-                call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
-        end select
-    end subroutine gencorrs_3
-
-    ! cc with no particle normalization
-    subroutine gencorrs_cc_tmp( self, pft_ref, i, ithr, cc )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
-        integer,                 intent(in)    :: i, ithr
-        real(dp),                intent(out)   :: cc(self%nrots)
-        real(dp) :: sqsum_ref
-        integer  :: ik
-        sqsum_ref = 0._dp
-        cc        = 0._dp
-        ! sum up correlations over k-rings
-        do ik = self%kfromto(1),self%kfromto(2)
-            sqsum_ref = sqsum_ref  + real(ik, dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
-            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            cc = cc + real(ik, dp) * real(self%fftdat(ithr)%backtransf, dp)
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        cc = cc / real(self%nrots * 2, dp) / dsqrt(sqsum_ref)
-    end subroutine gencorrs_cc_tmp
-
     subroutine gencorrs_cc( self, pft_ref, i, ithr, cc )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
@@ -2260,7 +2255,7 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
+            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf, self%pfts_avg_even, self%pfts_avg_odd,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)

@@ -46,27 +46,15 @@ contains
             call self%s%prep4srch
             self%s%nbetter = 0
             ! search
-            if( params_glob%l_obj_reg )then
-                do isample=1,self%spec%szsn
-                    iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, s3D%srch_order)
-                    ! identify the top scoring in-plane angle
-                    loc = maxloc(inpl_corrs)
-                    ! stash
-                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                end do
-            else
-                do isample=1,self%spec%szsn
-                    iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    ! identify the top scoring in-plane angle
-                    loc = maxloc(inpl_corrs)
-                    ! stash
-                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                end do
-            endif
+            do isample=1,self%spec%szsn
+                iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
+                ! calculate in-plane correlations
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                ! identify the top scoring in-plane angle
+                loc = maxloc(inpl_corrs)
+                ! stash
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+            end do
             self%s%nrefs_eval = self%spec%szsn
             ! output
             call self%oris_assign
