@@ -1941,8 +1941,39 @@ contains
         ! Termination
         call terminate_stream2D(.false.)
         deallocate(tmp_fnames,completed_fnames,stk_all_nptcls,stk_nptcls,chunks_map)
-        ! updates particles 2D field
-        master_spproj%os_ptcl2D = pool_proj%os_ptcl2D
+        ! maps stacks & gathering particles parameters
+        ! only 2D parameters are transferred, everything else untouched
+        pool_nstks = pool_proj%os_stk%get_noris()
+        allocate(pool_stacks(pool_nstks), pool_stk_mask(pool_nstks))
+        do istk = 1,pool_nstks
+            call pool_proj%os_stk%getter(istk,'stk',fname)
+            pool_stacks(istk) = basename(fname)
+        enddo
+        pool_stk_mask = .true.
+        do istk = 1,nstks
+            if( (master_spproj%os_stk%get_state(istk)==0) .or. (nint(master_spproj%os_stk%get(istk,'nptcls'))==0) )cycle
+            call master_spproj%os_stk%getter(istk,'stk',fname)
+            orig_stack_fname = basename(fname)
+            stack_fname = trim(orig_stack_fname)
+            if( do_autoscale )then
+                ext = '.'//trim(fname2ext(orig_stack_fname))
+                stack_fname = add2fbody(orig_stack_fname,ext,SCALE_SUFFIX)
+            endif
+            do jstk = 1,pool_nstks
+                if( pool_stk_mask(jstk) )then
+                    if( trim(stack_fname) == pool_stacks(jstk) )then
+                        fromp  = nint(master_spproj%os_stk%get(istk,'fromp'))
+                        top    = nint(master_spproj%os_stk%get(istk,'top'))
+                        jptcl  = nint(pool_proj%os_stk%get(jstk,'fromp'))
+                        do iptcl = fromp,top
+                            call master_spproj%os_ptcl2D%transfer_2Dparams(iptcl, pool_proj%os_ptcl2D, jptcl)
+                            jptcl = jptcl+1
+                        enddo
+                        pool_stk_mask(jstk) = .false. ! to be excluded from now on
+                    endif
+                endif
+            enddo
+        enddo
         ! rescale class-averages & parameters
         refs_glob = trim(POOL_DIR)//trim(refs_glob)
         frcsfname = trim(POOL_DIR)//trim(FRCS_FILE)
