@@ -49,30 +49,29 @@ contains
             call self%s%prep4srch
             ! search
             corrs = -1.
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_PROB)
-                    do isample=1,self%s%nrefs
-                        iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
-                        if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                            ! identify the top scoring in-plane angle
-                            call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, s3D%srch_order)
-                            loc = maxloc(inpl_corrs)
-                            call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                            corrs(iref) = inpl_corrs(loc(1))
-                        endif
-                    end do
-                case DEFAULT
-                    do isample=1,self%s%nrefs
-                        iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
-                        if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                            ! identify the top scoring in-plane angle
-                            call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                            loc = maxloc(inpl_corrs)
-                            call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                            corrs(iref) = inpl_corrs(loc(1))
-                        endif
-                    end do
-            end select
+            if( params_glob%l_obj_reg )then
+                do isample=1,self%s%nrefs
+                    iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
+                    if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                        ! identify the top scoring in-plane angle
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, s3D%srch_order)
+                        loc = maxloc(inpl_corrs)
+                        call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                        corrs(iref) = inpl_corrs(loc(1))
+                    endif
+                end do
+            else
+                do isample=1,self%s%nrefs
+                    iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
+                    if( s3D%state_exists(s3D%proj_space_state(iref)) )then
+                        ! identify the top scoring in-plane angle
+                        call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                        loc = maxloc(inpl_corrs)
+                        call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
+                        corrs(iref) = inpl_corrs(loc(1))
+                    endif
+                end do
+            endif
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! take care of the in-planes
