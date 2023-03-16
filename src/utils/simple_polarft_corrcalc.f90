@@ -528,6 +528,7 @@ contains
         integer :: n_samples, k, isample
         real    :: u
         n_samples = max(MAX_REG_ITERS - params_glob%which_iter + 1, 0) * self%nrefs / MAX_REG_ITERS
+        call seed_rnd
         if( iseven )then
             self%pfts_avg_even = 0.
             do k = 1, n_samples
