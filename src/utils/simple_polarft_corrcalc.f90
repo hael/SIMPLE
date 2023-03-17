@@ -525,26 +525,30 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         logical,                 intent(in)    :: iseven
         integer, parameter :: MAX_REG_ITERS = 30
-        integer :: n_samples, k, isample
+        integer :: n_samples, k, j, isample
         real    :: u
         n_samples = max(MAX_REG_ITERS - params_glob%which_iter + 1, 0) * self%nrefs / MAX_REG_ITERS
         call seed_rnd
         if( iseven )then
             self%pfts_avg_even = 0.
-            do k = 1, n_samples
+            do j = 1, n_samples
                 call random_number(u)
                 isample  = floor(1 + self%nrefs*u)
-                self%pfts_avg_even = self%pfts_avg_even + self%pfts_refs_even(:,:,isample)
+                do k = self%kfromto(1), self%kfromto(2)
+                    self%pfts_avg_even(:,k) = self%pfts_avg_even(:,k) + sum(self%pfts_refs_even(:,k,isample))
+                enddo
             enddo
-            self%pfts_avg_even = self%pfts_avg_even / self%nrefs
+            self%pfts_avg_even = self%pfts_avg_even / self%nrefs / self%nrots
         else
             self%pfts_avg_odd = 0.
-            do k = 1, n_samples
+            do j = 1, n_samples
                 call random_number(u)
                 isample  = floor(1 + self%nrefs*u)
-                self%pfts_avg_odd = self%pfts_avg_odd + self%pfts_refs_odd(:,:,isample)
+                do k = self%kfromto(1), self%kfromto(2)
+                    self%pfts_avg_odd(:,k) = self%pfts_avg_odd(:,k) + sum(self%pfts_refs_odd(:,k,isample))
+                enddo
             enddo
-            self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs
+            self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs / self%nrots
         endif
     end subroutine
 
