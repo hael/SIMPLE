@@ -1396,6 +1396,7 @@ contains
         ! adjust ice mean if thon rings in ice band. Assume damping of 1st peak / 2.
         if( self%ctfres < 3.8 .and. mean_ice_band1 > (mean_ctf_peak1 / 2) ) mean_ice_band1 = mean_ice_band1 - (mean_ctf_peak1 / 2)
         self%icefrac = mean_ice_band1 / mean_ctf_peak1
+        if(isnan(self%icefrac)) self%icefrac = 10.0 ! Made high as likely an issue with micrograph
         ! clean up
         if(allocated(res)) deallocate(res)
 

@@ -9,6 +9,7 @@ use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
+use simple_starproject,      only: starproject
 use simple_commander_euclid
 use simple_qsys_funs
 implicit none
@@ -82,10 +83,11 @@ contains
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
         ! other variables
-        type(parameters) :: params
-        type(builder)    :: build
-        type(qsys_env)   :: qenv, qenv_cls3D
-        type(chash)      :: job_descr, job_descr_cavgs
+        type(parameters)    :: params
+        type(builder)       :: build
+        type(qsys_env)      :: qenv, qenv_cls3D
+        type(chash)         :: job_descr, job_descr_cavgs
+        type(starproject)   :: starproj
         character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
@@ -617,6 +619,8 @@ contains
                 end select
                 l_switch2euclid = .false.
             endif
+            ! write per iteration star file
+            call starproj%export_iter3D(build%spproj, params%nstates,  params%which_iter)
             if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
                 benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
