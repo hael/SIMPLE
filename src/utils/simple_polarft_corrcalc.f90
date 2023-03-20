@@ -90,8 +90,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(sp),         allocatable :: pfts_avg_even(:,:)          !< 2D complex matrix of average polar reference (pftsz,nk), even
-    complex(sp),         allocatable :: pfts_avg_odd(:,:)           !< -"-, odd
+    complex(sp),         allocatable :: pfts_avg_even(:,:,:)          !< 3D complex matrix of average polar reference (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_avg_odd(:,:,:)           !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -130,7 +130,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
-    procedure          :: calc_avg_ref
+    procedure          :: calc_ptcl_reg
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
@@ -342,8 +342,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%pfts_avg_even(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%pfts_avg_odd( self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                    &self%pfts_avg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%pfts_avg_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -521,36 +521,46 @@ contains
         endif
     end subroutine set_ref_fcomp
 
-    subroutine calc_avg_ref( self, iseven )
+    subroutine calc_ptcl_reg( self, iseven )
         class(polarft_corrcalc), intent(inout) :: self
         logical,                 intent(in)    :: iseven
         integer, parameter :: MAX_REG_ITERS = 30
-        integer :: n_samples, k, j, isample
+        integer :: n_samples, k, j, isample, iref
         real    :: u
         n_samples = max(MAX_REG_ITERS - params_glob%which_iter + 1, 0) * self%nrefs / MAX_REG_ITERS
         call seed_rnd
         if( iseven )then
             self%pfts_avg_even = 0.
-            do j = 1, n_samples
-                call random_number(u)
-                isample  = floor(1 + self%nrefs*u)
-                do k = self%kfromto(1), self%kfromto(2)
-                    self%pfts_avg_even(:,k) = self%pfts_avg_even(:,k) + sum(self%pfts_refs_even(:,k,isample))
+            !$omp parallel do collapse(2) default(shared) private(iref,j,u,isample,k) schedule(static) proc_bind(close)
+            do iref = 1, self%nrefs
+                ! neighborhood distribution round iref should be here
+                do j = 1, n_samples
+                    call random_number(u)
+                    isample  = floor(1 + self%nrefs*u)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        self%pfts_avg_even(:,k,iref) = self%pfts_avg_even(:,k,iref) + sum(self%pfts_refs_even(:,k,isample))
+                    enddo
                 enddo
             enddo
+            !$omp end parallel do
             self%pfts_avg_even = self%pfts_avg_even / self%nrefs / self%nrots
         else
             self%pfts_avg_odd = 0.
-            do j = 1, n_samples
-                call random_number(u)
-                isample  = floor(1 + self%nrefs*u)
-                do k = self%kfromto(1), self%kfromto(2)
-                    self%pfts_avg_odd(:,k) = self%pfts_avg_odd(:,k) + sum(self%pfts_refs_odd(:,k,isample))
+            !$omp parallel do collapse(2) default(shared) private(iref,j,u,isample,k) schedule(static) proc_bind(close)
+            do iref = 1, self%nrefs
+                ! neighborhood distribution round iref should be here
+                do j = 1, n_samples
+                    call random_number(u)
+                    isample  = floor(1 + self%nrefs*u)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        self%pfts_avg_odd(:,k,iref) = self%pfts_avg_odd(:,k,iref) + sum(self%pfts_refs_odd(:,k,isample))
+                    enddo
                 enddo
             enddo
+            !$omp end parallel do
             self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs / self%nrots
         endif
-    end subroutine
+    end subroutine calc_ptcl_reg
 
     subroutine set_dref_fcomp( self, iref, irot, k, dcomp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1604,15 +1614,15 @@ contains
                 if( params_glob%l_obj_reg )then
                     if( self%iseven(i) )then
                         do k=self%kfromto(1),self%kfromto(2)
-                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_even(:,k)
-                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_even(:,k))
-                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_even(:,k))
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_even(:,k,iref)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_even(:,k,iref))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_even(:,k,iref))
                         enddo
                     else
                         do k=self%kfromto(1),self%kfromto(2)
-                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_odd(:,k)
-                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_odd(:,k))
-                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_odd(:,k))
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_odd(:,k,iref)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_odd(:,k,iref))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_odd(:,k,iref))
                         enddo
                     endif
                 endif
@@ -1621,15 +1631,15 @@ contains
                 if( params_glob%l_obj_reg )then
                     if( self%iseven(i) )then
                         do k=self%kfromto(1),self%kfromto(2)
-                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_even(:,k)
-                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_even(:,k))
-                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_even(:,k))
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_even(:,k,iref)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_even(:,k,iref))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_even(:,k,iref))
                         enddo
                     else
                         do k=self%kfromto(1),self%kfromto(2)
-                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          self%pfts_avg_odd(:,k)
-                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(self%pfts_avg_odd(:,k))
-                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(self%pfts_avg_odd(:,k))
+                            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          self%pfts_avg_odd(:,k,iref)
+                            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(self%pfts_avg_odd(:,k,iref))
+                            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(self%pfts_avg_odd(:,k,iref))
                         enddo
                     endif
                 endif
