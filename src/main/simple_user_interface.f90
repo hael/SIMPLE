@@ -1375,7 +1375,7 @@ contains
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
         &0, 0, 0, 6, 5, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
-        cleanup2D%gui_submenu_list = "search,mask,filter"
+        cleanup2D%gui_submenu_list = "search,mask,filter,compute"
         cleanup2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1421,8 +1421,10 @@ contains
         cleanup2D%mask_ctrls(1)%required = .false.
         ! computer controls
         call cleanup2D%set_input('comp_ctrls', 1, nparts)
+        call cleanup2D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         cleanup2D%comp_ctrls(1)%required = .false.
         call cleanup2D%set_input('comp_ctrls', 2, nthr)
+        call cleanup2D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_cleanup2D
 
     subroutine new_center2D_nano
@@ -1472,7 +1474,7 @@ contains
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
         &1, 0, 0, 10, 7, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
-        cluster2D%gui_submenu_list = "search,mask,filter"
+        cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1536,8 +1538,10 @@ contains
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
+        call cluster2D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         cluster2D%comp_ctrls(1)%required = .false.
         call cluster2D%set_input('comp_ctrls', 2, nthr)
+        call cluster2D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_cluster2D
 
     subroutine new_cluster2D_nano
@@ -2020,7 +2024,7 @@ contains
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                  ! executable
         &1, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
-        extract%gui_submenu_list = "extract"
+        extract%gui_submenu_list = "extract,compute"
         extract%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2046,7 +2050,9 @@ contains
         ! <empty>
         ! computer controls
         call extract%set_input('comp_ctrls', 1, nparts)
+        call extract%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         call extract%set_input('comp_ctrls', 2, nthr)
+        call extract%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_extract
 
     subroutine new_export_starproject
@@ -2260,7 +2266,9 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                         ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 6, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 6, 2, 2, .true.)  
+        initial_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
+        initial_3Dmodel%advanced = .false.                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2271,31 +2279,46 @@ contains
         ! search controls
         call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call initial_3Dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
         call initial_3Dmodel%set_input('srch_ctrls', 2, frac)
+        call initial_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model")
         call initial_3Dmodel%set_input('srch_ctrls', 3, pgrp)
+        call initial_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="model", advanced=.false.)
         call initial_3Dmodel%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
+        call initial_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model")
         call initial_3Dmodel%set_input('srch_ctrls', 5, 'pgrp_start','str', 'Initial point-group symmetry',&
         &'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
+        call initial_3Dmodel%set_gui_params('srch_ctrls', 5, submenu="model")
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 2, submenu="filter")
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
             &'low-pass limit in Angstroms', .false., 0.)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 3, submenu="filter")
         call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 4, submenu="filter")
         call initial_3Dmodel%set_input('filt_ctrls', 5, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
             & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 5, submenu="filter")
         call initial_3Dmodel%set_input('filt_ctrls', 6, nonuniform)
+        call initial_3Dmodel%set_gui_params('filt_ctrls', 6, submenu="filter")
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
+        call initial_3Dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         call initial_3Dmodel%set_input('mask_ctrls', 2, automsk)
+        call initial_3Dmodel%set_gui_params('mask_ctrls', 2, submenu="mask")
         ! computer controls
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
+        call initial_3Dmodel%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         initial_3Dmodel%comp_ctrls(1)%required = .false.
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
+        call initial_3Dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_initial_3Dmodel
 
     subroutine new_import_boxes
@@ -2862,7 +2885,8 @@ contains
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
         &1, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
-        pick%gui_submenu_list = "picking"
+        pick%gui_submenu_list = "picking,compute"
+        pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'pickrefs', 'file', 'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
@@ -2893,7 +2917,9 @@ contains
         ! <empty>
         ! computer controls
         call pick%set_input('comp_ctrls', 1, nparts)
+        call pick%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         call pick%set_input('comp_ctrls', 2, nthr)
+        call pick%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_pick
 
     subroutine new_postprocess
@@ -3083,7 +3109,7 @@ contains
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
         &5, 15, 0, 22, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
-        preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
+        preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
@@ -3225,31 +3251,31 @@ contains
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
         call preprocess_stream_dev%set_input('comp_ctrls', 1, nchunks)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 1, advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         preprocess_stream_dev%comp_ctrls(1)%required = .false.
         call preprocess_stream_dev%set_input('comp_ctrls', 2, nparts_chunk)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 2, advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
         call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts_pool)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 3, advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 3, submenu="compute", advanced=.false.)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 4, advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 4, submenu="compute", advanced=.false.)
         preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
         call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 5, advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 5, submenu="compute", advanced=.false.)
         preprocess_stream_dev%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
         preprocess_stream_dev%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
         call preprocess_stream_dev%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
         &'# of threads for per', .true., 1.)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 6)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 6, submenu="compute")
         call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 7)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 7, submenu="compute")
         call preprocess_stream_dev%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node',&
         &'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000.)
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 8)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 8, submenu="compute")
         call preprocess_stream_dev%set_input('comp_ctrls', 9, 'qsys_partition2D','str', 'Name of SLURM/PBS partition for 2D classification',&
         &'Name of target partition of distributed computer system (SLURM/PBS) dedicated to 2D classification', 'parttion name', .false., '')
-        call preprocess_stream_dev%set_gui_params('comp_ctrls', 9)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 9, submenu="compute")
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights
@@ -3644,7 +3670,9 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 13, 13, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 13, 13, 4, 2, .true.)   
+        refine3D%gui_submenu_list = "search,filter,mask,compute"
+        refine3D%advanced = .false.                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3655,48 +3683,80 @@ contains
         ! <empty>
         ! search controls
         call refine3D%set_input('srch_ctrls', 1, nspace)
+        call refine3D%set_gui_params('srch_ctrls', 1, submenu="search")
         call refine3D%set_input('srch_ctrls', 2, trs)
+        call refine3D%set_gui_params('srch_ctrls', 2, submenu="search")
         call refine3D%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call refine3D%set_gui_params('srch_ctrls', 3, submenu="search")
         call refine3D%set_input('srch_ctrls', 4, maxits)
+        call refine3D%set_gui_params('srch_ctrls', 4, submenu="search")
         call refine3D%set_input('srch_ctrls', 5, update_frac)
+        call refine3D%set_gui_params('srch_ctrls', 5, submenu="search")
         call refine3D%set_input('srch_ctrls', 6, frac)
+        call refine3D%set_gui_params('srch_ctrls', 6, submenu="search")
         call refine3D%set_input('srch_ctrls', 7, pgrp)
+        call refine3D%set_gui_params('srch_ctrls', 7, submenu="search", advanced=.false.)
         call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
+        call refine3D%set_gui_params('srch_ctrls', 8, submenu="search")
         call refine3D%set_input('srch_ctrls', 9, objfun)
+        call refine3D%set_gui_params('srch_ctrls', 9, submenu="search")
         call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh){shc}', '(snhc|shc|neigh|shc_neigh){shc}', .false., 'shc')
+        call refine3D%set_gui_params('srch_ctrls', 10, submenu="search")
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D%set_gui_params('srch_ctrls', 11, submenu="search")
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations prior to e/o refinement', '# of iterations after which low-pass limited alignment is switched to e/o(0:never){1}',&
         &'# iterations prior to e/o refinement{1}', .false., 1.)
+        call refine3D%set_gui_params('srch_ctrls', 12, submenu="search")
         call refine3D%set_input('srch_ctrls', 13, sigma_est)
+        call refine3D%set_gui_params('srch_ctrls', 13, submenu="search")
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
+        call refine3D%set_gui_params('filt_ctrls', 1, submenu="filter")
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call refine3D%set_gui_params('filt_ctrls', 2, submenu="filter")
         call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
+        call refine3D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
+        call refine3D%set_gui_params('filt_ctrls', 4, submenu="filter")
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
+        call refine3D%set_gui_params('filt_ctrls', 5, submenu="filter")
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
+        call refine3D%set_gui_params('filt_ctrls', 6, submenu="filter")
         call refine3D%set_input('filt_ctrls', 7, ptclw)
+        call refine3D%set_gui_params('filt_ctrls', 7, submenu="filter")
         call refine3D%set_input('filt_ctrls', 8, envfsc)
+        call refine3D%set_gui_params('filt_ctrls', 8, submenu="filter")
         call refine3D%set_input('filt_ctrls', 9, nonuniform)
+        call refine3D%set_gui_params('filt_ctrls', 9, submenu="filter")
         call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
+        call refine3D%set_gui_params('filt_ctrls', 10, submenu="filter")
         call refine3D%set_input('filt_ctrls', 11, wiener)
+        call refine3D%set_gui_params('filt_ctrls', 11, submenu="filter")
         call refine3D%set_input('filt_ctrls', 12, ml_reg)
+        call refine3D%set_gui_params('filt_ctrls', 12, submenu="filter")
         call refine3D%set_input('filt_ctrls', 13, combine_eo)
+        call refine3D%set_gui_params('filt_ctrls', 13, submenu="filter")
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
+        call refine3D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         call refine3D%set_input('mask_ctrls', 2, mskfile)
+        call refine3D%set_gui_params('mask_ctrls', 2, submenu="mask")
         call refine3D%set_input('mask_ctrls', 3, focusmskdiam)
+        call refine3D%set_gui_params('mask_ctrls', 3, submenu="mask")
         call refine3D%set_input('mask_ctrls', 4, automsk)
+        call refine3D%set_gui_params('mask_ctrls', 4, submenu="mask")
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
+        call refine3D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         refine3D%comp_ctrls(1)%required = .false.
         call refine3D%set_input('comp_ctrls', 2, nthr)
+        call refine3D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_refine3D
 
     subroutine new_refine3D_nano
