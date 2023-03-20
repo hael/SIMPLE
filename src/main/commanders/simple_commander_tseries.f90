@@ -620,7 +620,7 @@ contains
         call cline%set('autoscale',           'no')
         call cline%set('refine',          'greedy')
         call cline%set('tseries',            'yes')
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
         if( .not. cline%defined('hp')             ) call cline%set('hp',               3.)
         if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
         if( .not. cline%defined('ncls')           ) call cline%set('ncls',            20.)
@@ -722,7 +722,7 @@ contains
                 THROW_HARD('Unsupported refinement mode!')
         end select
         if( .not. cline%defined('center')         ) call cline%set('center',       'yes')
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'no')
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
         if( .not. cline%defined('hp')             ) call cline%set('hp',             3.0)
@@ -899,7 +899,7 @@ contains
         call cline%set('dir_exec', 'refine3D_nano')
         ! dynamic parameters
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
         if( .not. cline%defined('keepvol')        ) call cline%set('keepvol',       'yes')
         if( .not. cline%defined('hp')             ) call cline%set('hp',              3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',              1.0)
