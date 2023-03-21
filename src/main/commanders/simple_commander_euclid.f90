@@ -119,51 +119,52 @@ contains
     end subroutine exec_calc_pspec_distr
 
     subroutine exec_calc_pspec( self, cline )
-        use simple_parameters,          only: params_glob
-        use simple_strategy2D3D_common, only: prepimgbatch, read_imgbatch
+        use simple_strategy2D3D_common, only: prepimgbatch, read_imgbatch, killimgbatch
         class(calc_pspec_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)     :: params
-        type(image)          :: sum_img
-        type(builder)        :: build
-        complex, pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
-        real,    allocatable :: pspecs(:,:), pspec(:)
-        logical, allocatable :: mask(:)
-        real                 :: sdev_noise
-        integer              :: batchlims(2),iptcl,iptcl_batch,imatch,nyq,nptcls_part,batchsz_max
-        real, allocatable    :: sigma2(:,:)
-        type(sigma2_binfile) :: binfile
-        integer              :: kfromto(2)
+        type(parameters)              :: params
+        type(image)                   :: sum_img
+        type(builder)                 :: build
+        type(sigma2_binfile)          :: binfile
+        complex, pointer              :: cmat(:,:,:), cmat_sum(:,:,:)
+        integer, allocatable          :: pinds(:), states(:)
+        real,    allocatable          :: pspec(:), sigma2(:,:)
         character(len=:), allocatable :: binfname
+        real    :: sdev_noise
+        integer :: batchlims(2),kfromto(2)
+        integer :: i,iptcl,imatch,nyq,nptcls_part,nptcls_part_sel,batchsz_max,nbatch
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! init
-        nptcls_part = params%top-params%fromp+1
         nyq         = build%img%get_nyq()
-        batchsz_max = 10 * nthr_glob
-        allocate(mask(batchsz_max),source=.false.)
-        allocate(pspecs(nyq,nptcls_part),source=0.)
+        batchsz_max = 50 * nthr_glob
+        ! indices of particles with state=1
+        states          = nint(build%spproj_field%get_all('state',[params%fromp,params%top]))
+        nptcls_part_sel = count(states>0)
+        nptcls_part     = size(states)
+        allocate(pinds(nptcls_part_sel),source=0)
+        imatch = 0
+        do i = 1,nptcls_part
+            if( states(i) > 0 )then
+                imatch = imatch + 1
+                pinds(imatch) = params%fromp+i-1
+            endif
+        enddo
+        allocate(sigma2(nyq,params%fromp:params%top),pspec(nyq),source=0.)
         call prepimgbatch(batchsz_max)
         call sum_img%new([params%box,params%box,1],params%smpd)
         call sum_img%zero_and_flag_ft
         call sum_img%get_cmat_ptr(cmat_sum)
-        do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
-            batchlims = [iptcl_batch, min(params_glob%top,iptcl_batch + batchsz_max - 1)]
-            ! mask
-            do iptcl = batchlims(1),batchlims(2)
-                imatch = iptcl - batchlims(1) + 1
-                mask(imatch) = .not. (build%spproj_field%get_state(iptcl) == 0)
-            enddo
-            ! read
-            call read_imgbatch( batchlims )
-            ! preprocess
+        do i = 1,nptcls_part_sel,batchsz_max
+            batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
+            nbatch    = batchlims(2) - batchlims(1) + 1
+            call read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
             !$omp schedule(static) proc_bind(close)
-            do iptcl=batchlims(1),batchlims(2)
-                imatch = iptcl - batchlims(1) + 1
-                if( .not. mask(imatch) ) cycle
+            do imatch = 1,nbatch
+                iptcl = pinds(batchlims(1)+imatch-1)
                 ! normalize
                 call build%imgbatch(imatch)%norm_noise(build%lmsk, sdev_noise)
                 !  mask
@@ -172,16 +173,14 @@ contains
                 else
                     call build%imgbatch(imatch)%mask(params%msk, 'softavg')
                 endif
-                call build%imgbatch(imatch)%fft
                 ! power spectrum
-                call build%imgbatch(imatch)%spectrum('power',pspec,norm=.true.)
-                pspecs(:,iptcl-params_glob%fromp+1) = pspec / 2.0
+                call build%imgbatch(imatch)%fft
+                call build%imgbatch(imatch)%power_spectrum(pspec)
+                sigma2(:,iptcl) = pspec / 2.0
             end do
             !$omp end parallel do
             ! global average
-            do iptcl=batchlims(1),batchlims(2)
-                imatch = iptcl - batchlims(1) + 1
-                if( .not. mask(imatch) ) cycle
+            do imatch = 1,nbatch
                 call build%imgbatch(imatch)%get_cmat_ptr(cmat)
                 !$omp workshare
                 cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
@@ -193,10 +192,6 @@ contains
         kfromto(1) = 1
         kfromto(2) = nyq
         binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
-        allocate(sigma2(nyq,params%fromp:params%top))
-        do iptcl = params%fromp, params%top
-            sigma2(:,iptcl) = pspecs(:,iptcl-params%fromp+1)
-        end do
         ! taking account scaling of images
         if( cline%defined('scale') .and. abs(params%scale-1.0) > 0.01 )then
             !$omp workshare
@@ -205,6 +200,8 @@ contains
         endif
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
+        call killimgbatch
+        call binfile%kill
         ! end gracefully
         call qsys_job_finished('simple_commander_euclid :: exec_calc_pspec')
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)

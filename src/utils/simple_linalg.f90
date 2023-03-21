@@ -47,6 +47,10 @@ end interface vabs
 
 ! trigonometry
 
+interface hyp
+    module procedure hyp_1, hyp_2, hyp_3, hyp_4
+end interface hyp
+
 interface myacos
     module procedure myacos_sp, myacos_dp
 end interface myacos
@@ -1363,17 +1367,25 @@ contains
         deg = (rad/DPI)*180.d0
     end function rad2deg_2
 
-    !>    is for calculating the radius
-    pure function hyp( x1, x2, x3 ) result( h )
+    real pure function hyp_1( x1, x2 )
         real, intent(in) :: x1, x2
-        real, intent(in), optional :: x3
-        real :: h
-        if( present(x3) )then
-            h = sqrt(x1**2.+x2**2.+x3**2.)
-        else
-            h = sqrt(x1**2.+x2**2.)
-        endif
-    end function hyp
+        hyp_1 = sqrt(x1*x1 + x2*x2)
+    end function hyp_1
+
+    real pure function hyp_2( x1, x2, x3 )
+        real, intent(in) :: x1, x2, x3
+        hyp_2 = sqrt(x1*x1 + x2*x2 + x3*x3)
+    end function hyp_2
+
+    real pure function hyp_3( x1, x2 )
+        integer, intent(in) :: x1, x2
+        hyp_3 = sqrt(real(x1*x1 + x2*x2))
+    end function hyp_3
+
+    real pure function hyp_4( x1, x2, x3 )
+        integer, intent(in) :: x1, x2, x3
+        hyp_4 = sqrt(real(x1*x1 + x2*x2 + x3*x3))
+    end function hyp_4
 
     !>   calculates the euclidean distance between two vectors of dimension _n_
     pure function euclid( vec1, vec2 ) result( dist )
