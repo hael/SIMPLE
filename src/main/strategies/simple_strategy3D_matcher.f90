@@ -197,6 +197,7 @@ contains
             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
             call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
             call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
+            if( params_glob%l_obj_reg ) call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
