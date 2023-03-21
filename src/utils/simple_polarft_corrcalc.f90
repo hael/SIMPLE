@@ -536,7 +536,7 @@ contains
             self%pfts_avg_even = 0.
             !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
             do iref = 1, self%nrefs
-                sqsum_refs(iref) = sum(sum(self%pfts_refs_even(:,:,j), 2), 1)
+                sqsum_refs(iref) = sum(sum(self%pfts_refs_even(:,:,iref), 2), 1)
             enddo
             !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(iref,j,k) schedule(static) proc_bind(close)
@@ -554,7 +554,7 @@ contains
             self%pfts_avg_odd = 0.
             !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
             do iref = 1, self%nrefs
-                sqsum_refs(iref) = sum(sum(self%pfts_refs_odd(:,:,j), 2), 1)
+                sqsum_refs(iref) = sum(sum(self%pfts_refs_odd(:,:,iref), 2), 1)
             enddo
             !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(iref,j,k) schedule(static) proc_bind(close)
@@ -2280,15 +2280,15 @@ contains
         i = self%pinds(iptcl)
         if( self%iseven(i) )then
             do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_even(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_even(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
             enddo
         else
             do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_odd(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_odd(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
             enddo
         endif
     end subroutine reg_ptcl
@@ -2301,15 +2301,15 @@ contains
         i = self%pinds(iptcl)
         if( self%iseven(i) )then
             do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_even(:,k,iref) *self%prob_cache(i)*self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_even(:,k,iref))*self%prob_cache(i)*self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_even(:,k,iref))*self%prob_cache(i)*self%sqsums_ptcls(i)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_even(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
             enddo
         else
             do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_odd(:,k,iref) *self%prob_cache(i)*self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_odd(:,k,iref))*self%prob_cache(i)*self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))*self%prob_cache(i)*self%sqsums_ptcls(i)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_odd(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
             enddo
         endif
     end subroutine dereg_ptcl
