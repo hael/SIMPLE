@@ -2276,42 +2276,40 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         real,                    parameter     :: reg_eps = 0.1
-        integer :: k, i
-        i = self%pinds(iptcl)
+        integer     :: k, i
+        complex(sp) :: reg_term(self%pftsz, self%kfromto(1):self%kfromto(2))
+        i        = self%pinds(iptcl)
+        reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
-            do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_even(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-            enddo
+            reg_term = reg_term * self%pfts_avg_even(:,:,iref)
         else
-            do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_odd(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-            enddo
+            reg_term = reg_term * self%pfts_avg_odd( :,:,iref)
         endif
+        do k=self%kfromto(1),self%kfromto(2)
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          reg_term(:,k)
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(reg_term(:,k))
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(reg_term(:,k))
+        enddo
     end subroutine reg_ptcl
 
     subroutine dereg_ptcl( self, iptcl, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         real,                    parameter     :: reg_eps = 0.1
-        integer :: k, i
-        i = self%pinds(iptcl)
+        integer     :: k, i
+        complex(sp) :: reg_term(self%pftsz, self%kfromto(1):self%kfromto(2))
+        i        = self%pinds(iptcl)
+        reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
-            do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_even(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_even(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-            enddo
+            reg_term = reg_term * self%pfts_avg_even(:,:,iref)
         else
-            do k=self%kfromto(1),self%kfromto(2)
-                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_odd(:,k,iref) /self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))/self%prob_cache(i)/self%sqsums_ptcls(i)
-            enddo
+            reg_term = reg_term * self%pfts_avg_odd( :,:,iref)
         endif
+        do k=self%kfromto(1),self%kfromto(2)
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          reg_term(:,k)
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(reg_term(:,k))
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(reg_term(:,k))
+        enddo
     end subroutine dereg_ptcl
 
     ! DESTRUCTOR
