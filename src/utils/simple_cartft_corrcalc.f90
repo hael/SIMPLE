@@ -364,7 +364,7 @@ contains
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 self%resmsk(h,k) = .true.
-                sh = nint(hyp(real(h),real(k)))
+                sh = nint(hyp(h,k))
                 if( (sh < params_glob%kfromto(1)) .or. (sh > params_glob%kfromto(2)) ) cycle
                 self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
             end do
@@ -796,7 +796,7 @@ contains
         do k = self%lims(2,1), self%lims(2,2)
             do h = self%lims(1,1), self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                r = nint(hyp(real(h),real(k)))
+                r = nint(hyp(h,k))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 sigma_contrib(r) = sigma_contrib(r) + csq_fast(self%cur_refs(h,k,ithr) - self%cur_ptcls(h,k,ithr))
             end do
@@ -823,7 +823,7 @@ contains
         do k = self%lims(2,1), self%lims(2,2)
             do h = self%lims(1,1), self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                r = nint(hyp(real(h),real(k)))
+                r = nint(hyp(h,k))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 w = sqrt( 0.5 * r / self%pxls_p_shell(r) / self%sigma2_noise(r, iptcl) )
                 self%cur_refs( h,k,ithr) = w * self%cur_refs( h,k,ithr)
@@ -841,7 +841,7 @@ contains
         do k = self%lims(2,1), self%lims(2,2)
             do h = self%lims(1,1), self%lims(1,2)
                 if( .not. self%resmsk(h,k) ) cycle
-                r = nint(hyp(real(h),real(k)))
+                r = nint(hyp(h,k))
                 if( r < params_glob%kfromto(1) .or. r > params_glob%kfromto(2) ) cycle
                 w = sqrt( 0.5 * r / self%pxls_p_shell(r) / self%sigma2_noise(r, iptcl) )
                 self%cur_refs( h,k,ithr) = self%cur_refs( h,k,ithr)/w

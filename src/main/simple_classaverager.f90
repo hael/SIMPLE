@@ -446,7 +446,7 @@ contains
                     if( l_ml_reg )then
                         do h=logi_lims(1,1),logi_lims(1,2)
                             do k=logi_lims(2,1),logi_lims(2,2)
-                                sh = nint(hyp(real(h),real(k)))                 ! shell in padded image
+                                sh = nint(hyp(h,k))                             ! shell in padded image
                                 if( sh > interp_shlim )cycle
                                 sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))  ! shell at original scale
                                 if( sh > sigma2_kfromto(2) ) cycle
@@ -466,7 +466,7 @@ contains
                     ! Interpolation
                     do h=logi_lims(1,1),logi_lims(1,2)
                         do k=logi_lims(2,1),logi_lims(2,2)
-                            sh = nint(hyp(real(h),real(k)))
+                            sh = nint(hyp(h,k))
                             if( sh > interp_shlim )cycle
                             ! Rotation
                             loc        = matmul(real([h,k]),mat)
@@ -550,7 +550,7 @@ contains
                         if( l_ml_reg )then
                             do h = logi_lims(1,1),radfirstpeak
                                 do k = -radfirstpeak,radfirstpeak
-                                    sh = nint(hyp(real(h),real(k)))
+                                    sh = nint(hyp(h,k))
                                     if( sh > radfirstpeak )cycle
                                     if( sh > interp_shlim )cycle
                                     sh = nint(reg_scale*sqrt(real(h*h)+real(k*k)))
@@ -569,7 +569,7 @@ contains
                         ! Interpolation
                         do h = logi_lims(1,1),radfirstpeak
                             do k = -radfirstpeak,radfirstpeak
-                                sh = nint(hyp(real(h),real(k)))
+                                sh = nint(hyp(h,k))
                                 if( sh > radfirstpeak )cycle
                                 if( sh > interp_shlim )cycle
                                 ! Rotation

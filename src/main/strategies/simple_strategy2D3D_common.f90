@@ -82,7 +82,6 @@ contains
                     call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
                 endif
             end do
-            call stkio_r%close
         else
             do iptcl=fromptop(1),fromptop(2)
                 ind_in_batch = iptcl - fromptop(1) + 1
@@ -95,8 +94,8 @@ contains
                 endif
                 call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
             end do
-            call stkio_r%close
         endif
+        call stkio_r%close
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( n, pinds, batchlims )

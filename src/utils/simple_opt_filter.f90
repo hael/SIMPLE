@@ -118,7 +118,7 @@ contains
         call weights_img%zero_and_unflag_ft()
         do m = -params_glob%smooth_ext, params_glob%smooth_ext
             do n = -params_glob%smooth_ext, params_glob%smooth_ext
-                val = -hyp(real(m), real(n))/(params_glob%smooth_ext + 1) + 1.
+                val = -hyp(m,n) / (params_glob%smooth_ext + 1) + 1.
                 if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
             enddo
         enddo
@@ -469,7 +469,7 @@ contains
         do k = -smooth_ext, smooth_ext
             do l = -smooth_ext, smooth_ext
                 do m = -smooth_ext, smooth_ext
-                    rad = hyp(real(k), real(l), real(m))
+                    rad = hyp(k,l,m)
                     val = -rad/(smooth_ext + 1) + 1.
                     if( val > 0 ) call weights_img%set_rmat_at(box/2+k+1, box/2+l+1, box/2+m+1, val)
                 enddo
