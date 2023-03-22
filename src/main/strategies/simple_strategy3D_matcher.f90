@@ -197,7 +197,11 @@ contains
             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
             call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
             call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
-            if( params_glob%l_obj_reg ) call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
+            if( params_glob%l_obj_reg )then
+                call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
+                call pftcc%memoize_ptcl_reg(pinds(batch_start:batch_end), .true.)
+                call pftcc%memoize_ptcl_reg(pinds(batch_start:batch_end), .false.)
+            endif
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -461,10 +465,6 @@ contains
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
-        if( params_glob%l_obj_reg )then
-            call pftcc%calc_ptcl_reg(.true.)
-            call pftcc%calc_ptcl_reg(.false.)
-        endif
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
     end subroutine prep_ccobjs4align
 
