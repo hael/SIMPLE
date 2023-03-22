@@ -91,8 +91,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(sp),         allocatable :: pfts_avg_even(:,:,:,:)      !< 3D complex matrix of average polar reference (nrefs,pftsz,nk), even
-    complex(sp),         allocatable :: pfts_avg_odd(:,:,:,:)       !< -"-, odd
+    complex(sp),         allocatable :: pfts_avg_even(:,:,:)        !< 3D complex matrix of average polar reference (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_avg_odd(:,:,:)         !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -345,8 +345,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%pfts_avg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
-                    &self%pfts_avg_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
+                    &self%pfts_avg_even(self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
+                    &self%pfts_avg_odd( self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -969,7 +969,7 @@ contains
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
                     do k = self%kfromto(1), self%kfromto(2)
-                        self%pfts_avg_even(:,k,iref,i) = self%pfts_avg_even(:,k,iref,i) + sum(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
+                        self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) + sum(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
                     enddo
                 enddo
             enddo
@@ -992,7 +992,7 @@ contains
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
                     do k = self%kfromto(1), self%kfromto(2)
-                        self%pfts_avg_odd(:,k,iref,i) = self%pfts_avg_odd(:,k,iref,i) + sum(self%pfts_refs_odd(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
+                        self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) + sum(self%pfts_refs_odd(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
                     enddo
                 enddo
             enddo
@@ -2290,18 +2290,18 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         real,                    parameter     :: reg_eps = 0.1
         integer     :: k, i
-        complex(sp) :: reg_term(self%pftsz, self%kfromto(1):self%kfromto(2))
+        complex(sp) :: reg_term(self%kfromto(1):self%kfromto(2))
         i        = self%pinds(iptcl)
         reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
-            reg_term = reg_term * self%pfts_avg_even(:,:,iref,i)
+            reg_term = reg_term * self%pfts_avg_even(:,iref,i)
         else
-            reg_term = reg_term * self%pfts_avg_odd( :,:,iref,i)
+            reg_term = reg_term * self%pfts_avg_odd( :,iref,i)
         endif
         do k=self%kfromto(1),self%kfromto(2)
-            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          reg_term(:,k)
-            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(reg_term(:,k))
-            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(reg_term(:,k))
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    +          reg_term(k)
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + realpart(reg_term(k))
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + imagpart(reg_term(k))
         enddo
     end subroutine reg_ptcl
 
@@ -2310,18 +2310,18 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         real,                    parameter     :: reg_eps = 0.1
         integer     :: k, i
-        complex(sp) :: reg_term(self%pftsz, self%kfromto(1):self%kfromto(2))
+        complex(sp) :: reg_term(self%kfromto(1):self%kfromto(2))
         i        = self%pinds(iptcl)
         reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
-            reg_term = reg_term * self%pfts_avg_even(:,:,iref,i)
+            reg_term = reg_term * self%pfts_avg_even(:,iref,i)
         else
-            reg_term = reg_term * self%pfts_avg_odd( :,:,iref,i)
+            reg_term = reg_term * self%pfts_avg_odd( :,iref,i)
         endif
         do k=self%kfromto(1),self%kfromto(2)
-            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          reg_term(:,k)
-            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(reg_term(:,k))
-            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(reg_term(:,k))
+            self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    -          reg_term(k)
+            self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - realpart(reg_term(k))
+            self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - imagpart(reg_term(k))
         enddo
     end subroutine dereg_ptcl
 
