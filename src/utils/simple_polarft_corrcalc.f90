@@ -967,8 +967,8 @@ contains
             sqsum_refs = sqrt(sqsum_refs)
             !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
-                do k = self%kfromto(1), self%kfromto(2)
-                    do iref = 1, self%nrefs
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
                         self%pfts_avg_even(:,k,iref,i) = self%pfts_avg_even(:,k,iref,i) + sum(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
                     enddo
                 enddo
@@ -990,8 +990,8 @@ contains
             sqsum_refs = sqrt(sqsum_refs)
             !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
-                do k = self%kfromto(1), self%kfromto(2)
-                    do iref = 1, self%nrefs
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
                         self%pfts_avg_odd(:,k,iref,i) = self%pfts_avg_odd(:,k,iref,i) + sum(self%pfts_refs_odd(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
                     enddo
                 enddo
