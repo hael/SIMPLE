@@ -967,7 +967,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        corrs = corrs / self%nrefs / self%nrots
+        corrs = corrs / self%nrots
         !$omp parallel do collapse(3) default(shared) private(i, iref, k, cnt) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
