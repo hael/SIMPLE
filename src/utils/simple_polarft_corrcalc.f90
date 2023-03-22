@@ -971,14 +971,14 @@ contains
         !$omp parallel do collapse(3) default(shared) private(i, iref, k, cnt) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
+                cnt = 0
                 do k = 1, self%nrefs
-                    cnt = 0
                     if( self%reg_dist(iref, k) )then
                         self%prob_cache(iref, i) = self%prob_cache(iref, i) + corrs(k, i)
                         cnt = cnt + 1
                     endif
-                    self%prob_cache(iref, i) = self%prob_cache(iref, i) / cnt
                 enddo
+                self%prob_cache(iref, i) = self%prob_cache(iref, i) / cnt
             enddo
         enddo
         params_glob%l_obj_reg = .true.
