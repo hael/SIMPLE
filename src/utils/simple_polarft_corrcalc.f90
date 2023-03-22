@@ -82,12 +82,13 @@ type :: polarft_corrcalc
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
+    logical,             allocatable :: reg_dist(:,:)               !< SO(2) distribution matrix (nrefs, nrefs)
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),            allocatable :: prob_cache(:)               !< caching particle probability
+    real(sp),            allocatable :: prob_cache(:,:)             !< caching particle probability
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -173,6 +174,7 @@ type :: polarft_corrcalc
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
     ! CALCULATORS
+    procedure          :: build_reg_dist
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure, private :: prep_ref4corr_sp
     procedure, private :: prep_ref4corr_dp
@@ -351,8 +353,8 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2), 1:self%nptcls),&
-                    &self%heap_vars(params_glob%nthr),self%prob_cache(1:self%nptcls) )
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%reg_dist(self%nrefs, self%nrefs),&
+                    &self%heap_vars(params_glob%nthr),self%prob_cache(1:self%nrefs,1:self%nptcls) )
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -377,6 +379,7 @@ contains
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
         self%prob_cache     = 1.
+        self%reg_dist       = .true.
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -472,7 +475,7 @@ contains
                 deallocate(self%fftdat_ptcls)
             endif
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                        &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),self%prob_cache(1:self%nptcls),&
+                        &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),self%prob_cache(1:self%nrefs,1:self%nptcls),&
                         &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2), 1:self%nptcls) )
             do i = 1,self%nptcls
                 do ik = self%kfromto(1),self%kfromto(2)
@@ -922,12 +925,36 @@ contains
         call fftwf_destroy_plan(fwd_plan)
     end subroutine memoize
 
+    ! build the distribution matrix
+    subroutine build_reg_dist( self, eulspace )
+        use simple_oris
+        class(polarft_corrcalc), intent(inout) :: self
+        type(oris),              intent(in)    :: eulspace
+        real,                    parameter     :: ARC_THRES = 30 * pi / 180.
+        integer :: iref1, iref2
+        real    :: euls1(3), euls2(3), x1(3), x2(3), dist
+        self%reg_dist = .false.
+        do iref1 = 1, self%nrefs
+            euls1 = eulspace%get_euler(iref1) * pi / 180.
+            x1    = [sin(euls1(1)) * cos(euls1(2)), sin(euls1(1)) * sin(euls1(2)), cos(euls1(2))]
+            do iref2 = iref1, self%nrefs
+                euls2 = eulspace%get_euler(iref2) * pi / 180.
+                x2    = [sin(euls2(1)) * cos(euls2(2)), sin(euls2(1)) * sin(euls2(2)), cos(euls2(2))]
+                dist  = sqrt(sum((x2 - x1)**2))
+                if( dist < ARC_THRES )then
+                    self%reg_dist(iref1, iref2) = .true.
+                    self%reg_dist(iref2, iref1) = .true.
+                endif
+            enddo
+        enddo
+    end subroutine build_reg_dist
+
     ! memoize all particle-ref cost values
     subroutine memoize_ptcl_prob( self, glob_pinds )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        real(sp) :: cc(self%nrots)
-        integer  :: i, iref, iptcl
+        real(sp) :: cc(self%nrots), corrs(self%nrefs, self%nptcls)
+        integer  :: i, iref, iptcl, k, cnt
         ! memoize particle FFTs in parallel
         params_glob%l_obj_reg = .false.
         self%prob_cache       = 0.
@@ -936,11 +963,24 @@ contains
             do iref = 1, self%nrefs
                 iptcl = glob_pinds(i)
                 call self%gencorrs( iref, iptcl, cc )
-                self%prob_cache(i) = self%prob_cache(i) + sum(cc)
+                corrs(iref, i) = sum(cc)
             enddo
         enddo
         !$omp end parallel do
-        self%prob_cache       = self%prob_cache / self%nrefs / self%nrots
+        corrs = corrs / self%nrefs / self%nrots
+        !$omp parallel do collapse(3) default(shared) private(i, iref, k, cnt) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do iref = 1, self%nrefs
+                do k = 1, self%nrefs
+                    cnt = 0
+                    if( self%reg_dist(iref, k) )then
+                        self%prob_cache(iref, i) = self%prob_cache(iref, i) + corrs(k, i)
+                        cnt = cnt + 1
+                    endif
+                    self%prob_cache(iref, i) = self%prob_cache(iref, i) / cnt
+                enddo
+            enddo
+        enddo
         params_glob%l_obj_reg = .true.
     end subroutine memoize_ptcl_prob
 
@@ -2292,7 +2332,7 @@ contains
         integer     :: k, i
         complex(sp) :: reg_term(self%kfromto(1):self%kfromto(2))
         i        = self%pinds(iptcl)
-        reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
+        reg_term = reg_eps / self%prob_cache(iref, i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
             reg_term = reg_term * self%pfts_avg_even(:,iref,i)
         else
@@ -2312,7 +2352,7 @@ contains
         integer     :: k, i
         complex(sp) :: reg_term(self%kfromto(1):self%kfromto(2))
         i        = self%pinds(iptcl)
-        reg_term = reg_eps / self%prob_cache(i) / self%sqsums_ptcls(i)
+        reg_term = reg_eps / self%prob_cache(iref, i) / self%sqsums_ptcls(i)
         if( self%iseven(i) )then
             reg_term = reg_term * self%pfts_avg_even(:,iref,i)
         else
