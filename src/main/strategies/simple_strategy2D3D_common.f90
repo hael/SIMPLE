@@ -492,7 +492,6 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
-        if( params_glob%l_ref_reg .and. trim(params_glob%ref_reg).eq.'exp' ) call exponential_reg( vol_ptr, lambda = 2., eps = 0.1 )
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking

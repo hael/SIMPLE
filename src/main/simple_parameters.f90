@@ -62,6 +62,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
+    character(len=3)          :: ref_reg='no'         !< apply objective regularizer to the reference(yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -177,7 +178,6 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: ref_reg='none'       !< reference regularizer type (none|exp){none}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -1347,7 +1347,7 @@ contains
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
         ! reference regularization
-        self%l_ref_reg = .not.( trim(self%ref_reg).eq.'none' )
+        self%l_ref_reg = trim(self%ref_reg).eq.'yes'
         ! objective regularization
         self%l_obj_reg = trim(self%obj_reg).eq.'yes'
         ! ML regularization

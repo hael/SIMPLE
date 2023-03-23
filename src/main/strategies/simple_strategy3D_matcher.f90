@@ -198,10 +198,14 @@ contains
             call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
             call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             if( params_glob%l_obj_reg )then
-                call pftcc%build_reg_dist(build_glob%eulspace)
+                call pftcc%build_ref_ref_dist(build_glob%eulspace)
                 call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
-                call pftcc%memoize_ptcl_reg( pinds(batch_start:batch_end), .true.)
-                call pftcc%memoize_ptcl_reg( pinds(batch_start:batch_end), .false.)
+                call pftcc%memoize_ptcl_reg(.true.)
+                call pftcc%memoize_ptcl_reg(.false.)
+            endif
+            if( params_glob%l_ref_reg )then
+                call pftcc%build_ptcl_ref_dist(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
+                call pftcc%memoize_ref_reg
             endif
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
