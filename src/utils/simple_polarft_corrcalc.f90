@@ -954,7 +954,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         real(sp) :: cc(self%nrots), corrs(self%nrefs, self%nptcls)
-        integer  :: i, iref, iptcl, k, cnt
+        integer  :: i, iref, iptcl, iref2, cnt
         ! memoize particle FFTs in parallel
         params_glob%l_obj_reg = .false.
         self%prob_cache       = 0.
@@ -968,13 +968,13 @@ contains
         enddo
         !$omp end parallel do
         corrs = corrs / self%nrots
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k, cnt) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, iref2, cnt) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
                 cnt = 0
-                do k = 1, self%nrefs
-                    if( self%reg_dist(iref, k) )then
-                        self%prob_cache(iref, i) = self%prob_cache(iref, i) + corrs(k, i)
+                do iref2 = 1, self%nrefs
+                    if( self%reg_dist(iref, iref2) )then
+                        self%prob_cache(iref, i) = self%prob_cache(iref, i) + corrs(iref2, i)
                         cnt = cnt + 1
                     endif
                 enddo
@@ -989,58 +989,69 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         logical,                 intent(in)    :: iseven
-        real(sp)    :: sqsum_refs(self%nrefs, self%nptcls)
-        complex(sp) :: pft_ref_ctf(self%pftsz)
-        integer     :: i, iref, k
+        real(sp) :: sqsum_refs(self%nrefs, self%nptcls)
+        integer  :: i, iref, k, iref2, cnt
         ! memoize particle FFTs in parallel
         if( iseven )then
             sqsum_refs         = 0.
             self%pfts_avg_even = 0.
-            !$omp parallel do collapse(3) default(shared) private(i, iref, k, pft_ref_ctf) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                do iref = 1, self%nrefs
-                    do k = self%kfromto(1), self%kfromto(2)
-                        pft_ref_ctf                  = self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)
-                        sqsum_refs(iref, i)          = sqsum_refs(iref, i) + sum(csq_fast(pft_ref_ctf))
-                        self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) + sum(pft_ref_ctf)
-                    enddo        
-                enddo
-            enddo
-            !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
-                    do k = self%kfromto(1), self%kfromto(2)
-                        self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) / sqrt(sqsum_refs(iref,i))
+                    do k = self%kfromto(1),self%kfromto(2)
+                        sqsum_refs(iref, i) = sqsum_refs(iref, i) + sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-            self%pfts_avg_even = self%pfts_avg_even / self%nrefs / self%nrots
+            sqsum_refs = sqrt(sqsum_refs)
+            !$omp parallel do collapse(3) default(shared) private(i, iref, k, iref2, cnt) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
+                        cnt = 0
+                        do iref2 = 1, self%nrefs
+                            if( self%reg_dist(iref, iref2) )then
+                                self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) + sum(self%pfts_refs_even(:,k,iref2) * self%ctfmats(:,k,i) / sqsum_refs(iref2,i))
+                                cnt = cnt + 1
+                            endif
+                        enddo
+                        self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) / cnt
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            self%pfts_avg_even = self%pfts_avg_even / self%nrots
         else
             sqsum_refs        = 0.
             self%pfts_avg_odd = 0.
-            !$omp parallel do collapse(3) default(shared) private(i, iref, k, pft_ref_ctf) proc_bind(close) schedule(static)
-            do i = 1, self%nptcls
-                do iref = 1, self%nrefs
-                    do k = self%kfromto(1), self%kfromto(2)
-                        pft_ref_ctf                 = self%pfts_refs_odd(:,k,iref) * self%ctfmats(:,k,i)
-                        sqsum_refs(iref, i)         = sqsum_refs(iref, i) + sum(csq_fast(pft_ref_ctf))
-                        self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i)  + sum(pft_ref_ctf)
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
-                    do k = self%kfromto(1), self%kfromto(2)
-                        self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) / sqrt(sqsum_refs(iref,i))
+                    do k = self%kfromto(1),self%kfromto(2)
+                        sqsum_refs(iref, i) = sqsum_refs(iref, i) + sum(csq_fast(self%pfts_refs_odd(:,k,iref) * self%ctfmats(:,k,i)))
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-            self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs / self%nrots
+            sqsum_refs = sqrt(sqsum_refs)
+            !$omp parallel do collapse(3) default(shared) private(i, iref, k, iref2, cnt) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
+                        cnt = 0
+                        do iref2 = 1, self%nrefs
+                            if( self%reg_dist(iref, iref2) )then
+                                self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) + sum(self%pfts_refs_odd(:,k,iref2) * self%ctfmats(:,k,i) / sqsum_refs(iref2,i))
+                                cnt = cnt + 1
+                            endif
+                        enddo
+                        self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) / cnt
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            self%pfts_avg_odd = self%pfts_avg_odd / self%nrots
         endif
     end subroutine memoize_ptcl_reg
 
