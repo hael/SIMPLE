@@ -1120,7 +1120,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i, iref, k
         self%refs_reg = 0.
-        !$omp parallel do collapse(2) default(shared) private(i, iref) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 if( self%ptcl_ref_dist(i, iref) )then
@@ -2469,7 +2469,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl, iref
-        real,                    parameter     :: reg_eps = 0.1
+        real,                    parameter     :: reg_eps = 0.5
         integer :: k, i
         i = self%pinds(iptcl)
         do k=self%kfromto(1),self%kfromto(2)
@@ -2481,7 +2481,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl, iref
-        real,                    parameter     :: reg_eps = 0.1
+        real,                    parameter     :: reg_eps = 0.5
         integer :: k, i
         i = self%pinds(iptcl)
         do k=self%kfromto(1),self%kfromto(2)
