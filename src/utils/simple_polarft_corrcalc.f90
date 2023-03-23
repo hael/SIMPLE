@@ -94,6 +94,7 @@ type :: polarft_corrcalc
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_avg_even(:,:,:)        !< 3D complex matrix of average polar reference (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_avg_odd(:,:,:)         !< -"-, odd
+    complex(sp),         allocatable :: pfts_avg_ctf(:,:,:)         !< -"-, caching pfts_avg * ctf
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -349,6 +350,7 @@ contains
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_avg_even(self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
                     &self%pfts_avg_odd( self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
+                    &self%pfts_avg_ctf( self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -936,10 +938,10 @@ contains
         self%reg_dist = .false.
         do iref1 = 1, self%nrefs
             euls1 = eulspace%get_euler(iref1) * pi / 180.
-            x1    = [sin(euls1(1)) * cos(euls1(2)), sin(euls1(1)) * sin(euls1(2)), cos(euls1(2))]
+            x1    = [sin(euls1(2)) * cos(euls1(1)), sin(euls1(2)) * sin(euls1(1)), cos(euls1(2))]
             do iref2 = iref1, self%nrefs
                 euls2 = eulspace%get_euler(iref2) * pi / 180.
-                x2    = [sin(euls2(1)) * cos(euls2(2)), sin(euls2(1)) * sin(euls2(2)), cos(euls2(2))]
+                x2    = [sin(euls2(2)) * cos(euls2(1)), sin(euls2(2)) * sin(euls2(1)), cos(euls2(2))]
                 dist  = sqrt(sum((x2 - x1)**2))
                 if( dist < ARC_THRES )then
                     self%reg_dist(iref1, iref2) = .true.
@@ -1005,6 +1007,15 @@ contains
             enddo
             !$omp end parallel do
             sqsum_refs = sqrt(sqsum_refs)
+            !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
+                        self%pfts_avg_ctf(k,iref,i) = sum(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(i, iref, k, iref2, cnt) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
@@ -1012,7 +1023,7 @@ contains
                         cnt = 0
                         do iref2 = 1, self%nrefs
                             if( self%reg_dist(iref, iref2) )then
-                                self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) + sum(self%pfts_refs_even(:,k,iref2) * self%ctfmats(:,k,i) / sqsum_refs(iref2,i))
+                                self%pfts_avg_even(k,iref,i) = self%pfts_avg_even(k,iref,i) + self%pfts_avg_ctf(k,iref2,i)
                                 cnt = cnt + 1
                             endif
                         enddo
@@ -1035,6 +1046,15 @@ contains
             enddo
             !$omp end parallel do
             sqsum_refs = sqrt(sqsum_refs)
+            !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                do iref = 1, self%nrefs
+                    do k = self%kfromto(1), self%kfromto(2)
+                        self%pfts_avg_ctf(k,iref,i) = sum(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i) / sqsum_refs(iref,i))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
             !$omp parallel do collapse(3) default(shared) private(i, iref, k, iref2, cnt) proc_bind(close) schedule(static)
             do i = 1, self%nptcls
                 do iref = 1, self%nrefs
@@ -1042,7 +1062,7 @@ contains
                         cnt = 0
                         do iref2 = 1, self%nrefs
                             if( self%reg_dist(iref, iref2) )then
-                                self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) + sum(self%pfts_refs_odd(:,k,iref2) * self%ctfmats(:,k,i) / sqsum_refs(iref2,i))
+                                self%pfts_avg_odd(k,iref,i) = self%pfts_avg_odd(k,iref,i) + self%pfts_avg_ctf(k,iref2,i)
                                 cnt = cnt + 1
                             endif
                         enddo
@@ -2413,7 +2433,7 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf, self%pfts_avg_even, self%pfts_avg_odd,&
+            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf, self%pfts_avg_even, self%pfts_avg_odd, self%pfts_avg_ctf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%prob_cache)
