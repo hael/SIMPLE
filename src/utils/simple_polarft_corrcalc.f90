@@ -944,10 +944,10 @@ contains
         use simple_oris
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
-        real,                    parameter     :: ARC_THRES = 30 * pi / 180.
         integer :: iref1, iref2
-        real    :: euls1(3), euls2(3), x1(3), x2(3), dist
+        real    :: euls1(3), euls2(3), x1(3), x2(3), dist, thres
         self%ref_ref_dist = .false.
+        thres             = params_glob%arc_thres * pi / 180.
         do iref1 = 1, self%nrefs
             euls1 = eulspace%get_euler(iref1) * pi / 180.
             x1    = [sin(euls1(2)) * cos(euls1(1)), sin(euls1(2)) * sin(euls1(1)), cos(euls1(2))]
@@ -955,7 +955,7 @@ contains
                 euls2 = eulspace%get_euler(iref2) * pi / 180.
                 x2    = [sin(euls2(2)) * cos(euls2(1)), sin(euls2(2)) * sin(euls2(1)), cos(euls2(2))]
                 dist  = sqrt(sum((x2 - x1)**2))
-                if( dist < ARC_THRES )then
+                if( dist < thres )then
                     self%ref_ref_dist(iref1, iref2) = .true.
                     self%ref_ref_dist(iref2, iref1) = .true.
                 endif
@@ -971,12 +971,12 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        real,                    parameter     :: ARC_THRES = 30 * pi / 180.
         integer   :: iref, iptcl, i
-        real      :: euls_ref(3), euls_ptcl(3), x_ref(3), x_ptcl(3), dist
+        real      :: euls_ref(3), euls_ptcl(3), x_ref(3), x_ptcl(3), dist, thres
         type(ori) :: o
         self%ptcl_ref_dist = .false.
         self%dist_cnt      = 0
+        thres              = params_glob%arc_thres * pi / 180.
         do iref = 1, self%nrefs
             euls_ref = eulspace%get_euler(iref) * pi / 180.
             x_ref    = [sin(euls_ref(2)) * cos(euls_ref(1)), sin(euls_ref(2)) * sin(euls_ref(1)), cos(euls_ref(2))]
@@ -986,7 +986,7 @@ contains
                 euls_ptcl = o%get_euler() * pi / 180.
                 x_ptcl    = [sin(euls_ptcl(2)) * cos(euls_ptcl(1)), sin(euls_ptcl(2)) * sin(euls_ptcl(1)), cos(euls_ptcl(2))]
                 dist      = sqrt(sum((x_ptcl - x_ref)**2))
-                if( dist < ARC_THRES )then
+                if( dist < thres )then
                     self%ptcl_ref_dist(i, iref) = .true.
                     self%dist_cnt(iref)         = self%dist_cnt(iref) + 1
                 endif
