@@ -1160,7 +1160,7 @@ contains
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
                 iptcl = glob_pinds(i)
-                call self%gencorrs_cc_prob( iref, iptcl, cc )
+                call self%gencorrs_cc_prob( iptcl, iref, cc )
                 corrs(iref, i) = sum(cc)
             enddo
         enddo
