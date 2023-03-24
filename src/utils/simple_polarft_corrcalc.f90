@@ -1155,9 +1155,7 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         real(sp) :: cc(self%nrots), corrs(self%nrefs, self%nptcls)
         integer  :: i, iref, iptcl
-        ! memoize particle FFTs in parallel
-        params_glob%l_ref_reg = .false.
-        self%prob_cache       = 0.
+        self%ref_prob_cache = 0.
         !$omp parallel do collapse(2) default(shared) private(i, iref, cc, iptcl) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
@@ -1176,7 +1174,6 @@ contains
                 endif
             enddo
         enddo
-        params_glob%l_ref_reg = .true.
     end subroutine memoize_ref_prob
 
     ! memoize all reference reg terms
