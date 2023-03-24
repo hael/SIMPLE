@@ -300,15 +300,15 @@ contains
     end subroutine run_cn_analysis
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
-    subroutine strain_analysis( element, model, a, strain_array, modelU)
+    subroutine strain_analysis( element, model, a, strain_array)
         character(len=2), intent(in)    :: element
         real,             intent(in)    :: model(:,:)
         real,             intent(inout) :: a(3) ! fitted lattice parameter
-        real,             intent(inout) :: strain_array(:,:), modelU(:,:)
+        real,             intent(inout) :: strain_array(:,:)
         real,    parameter   :: H     = 2.      ! for weighted KDE differentiation
         integer, parameter   :: NITER = 30
         integer, allocatable :: modelCstart(:)
-        real,    allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU_spherical(:,:)
+        real,    allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), modelU_spherical(:,:)
         real,    allocatable :: eXX(:), eYY(:), eZZ(:), eXY(:), eYZ(:), eXZ(:), list_displacement(:,:)
         real,    allocatable :: list_eXX(:,:), list_eYY(:,:), list_eZZ(:,:), list_eXY(:,:), list_eYZ(:,:), list_eXZ(:,:)
         real,    allocatable :: list_eRR(:,:), list_Ux(:,:), list_Uy(:,:), list_Uz(:,:)
@@ -401,7 +401,7 @@ contains
         uvwN0(1,1) = atm_a/2.
         uvwN0(2,2) = atm_a/2.
         uvwN0(3,3) = atm_a/2.
-        allocate( modelFromABC(natoms,3), modelC(natoms,3), modelCS(natoms,3) )
+        allocate( modelFromABC(natoms,3), modelC(natoms,3), modelCS(natoms,3), modelU(natoms,3) )
         ! use perfect Pt FCC lattice and remove bad points
         modelFromABC = matmul(transpose(nint(abc)), uvwN0) ! create real positions from the fit; centered at the center atom
         do iatom = 1, natoms
