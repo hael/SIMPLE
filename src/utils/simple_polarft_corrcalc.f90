@@ -91,6 +91,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),            allocatable :: prob_cache(:,:)             !< caching particle probability
+    real(sp),            allocatable :: ref_prob_cache(:)           !< caching ref probability
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -174,6 +175,7 @@ type :: polarft_corrcalc
     procedure, private :: memoize_fft
     procedure          :: memoize_ptcl_prob
     procedure          :: memoize_ptcl_reg
+    procedure          :: memoize_ref_prob
     procedure          :: memoize_ref_reg
     procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
@@ -201,6 +203,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot_8
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
+    procedure, private :: gencorrs_cc_prob
     procedure, private :: gencorrs_euclid
     procedure, private :: gencorrs_prob
     procedure, private :: gencorrs_1
@@ -363,7 +366,7 @@ contains
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%ref_ref_dist(self%nrefs, self%nrefs),&
-                    &self%heap_vars(params_glob%nthr),self%prob_cache(1:self%nrefs,1:self%nptcls),&
+                    &self%heap_vars(params_glob%nthr),self%prob_cache(1:self%nrefs,1:self%nptcls),self%ref_prob_cache(1:self%nrefs),&
                     &self%dist_cnt(self%nrefs),self%ptcl_ref_dist(self%nptcls,self%nrefs),&
                     &self%refs_reg(self%kfromto(1):self%kfromto(2),self%nrefs,self%nptcls) )
         local_stat=0
@@ -1115,6 +1118,67 @@ contains
         endif
     end subroutine memoize_ptcl_reg
 
+    subroutine gencorrs_cc_prob( self, iptcl, iref, cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, iref
+        real(sp),                intent(out)   :: cc(self%nrots)
+        complex(sp),             pointer       :: pft_ref(:,:)
+        integer :: ik, i, ithr
+        call self%prep_ref4corr(iref, iptcl, pft_ref, ithr)
+        i  = self%pinds(iptcl)
+        cc = 0._dp
+        ! sum up correlations over k-rings
+        do ik = self%kfromto(1),self%kfromto(2)
+            ! move reference into Fourier Fourier space (particles are memoized)
+            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
+            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
+            ! correlate
+            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re
+            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im
+            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
+            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
+            ! back transform
+            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
+            ! accumulate corrs
+            cc = cc + real(ik, dp) * real(self%fftdat(ithr)%backtransf, dp)
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc = cc / real(self%nrots * 2, dp)
+    end subroutine gencorrs_cc_prob
+
+    subroutine memoize_ref_prob( self, glob_pinds )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: glob_pinds(self%nptcls)
+        real(sp) :: cc(self%nrots), corrs(self%nrefs, self%nptcls)
+        integer  :: i, iref, iptcl
+        ! memoize particle FFTs in parallel
+        params_glob%l_ref_reg = .false.
+        self%prob_cache       = 0.
+        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, iptcl) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do iref = 1, self%nrefs
+                iptcl = glob_pinds(i)
+                call self%gencorrs_cc_prob( iref, iptcl, cc )
+                corrs(iref, i) = sum(cc)
+            enddo
+        enddo
+        !$omp end parallel do
+        corrs = corrs / self%nrots
+        !$omp parallel do collapse(2) default(shared) private(i, iref) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%nptcls
+                if( self%ptcl_ref_dist(i, iref) )then
+                    self%ref_prob_cache(iref) = self%ref_prob_cache(iref) + corrs(iref, i)/self%dist_cnt(iref)
+                endif
+            enddo
+        enddo
+        params_glob%l_ref_reg = .true.
+    end subroutine memoize_ref_prob
+
     ! memoize all reference reg terms
     subroutine memoize_ref_reg( self )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1126,7 +1190,7 @@ contains
                 if( self%ptcl_ref_dist(i, iref) )then
                     do k = self%kfromto(1), self%kfromto(2)
                         self%refs_reg(k,iref,i) = self%refs_reg(k,iref,i) +&
-                            &sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i) / self%sqsums_ptcls(i))
+                            &sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
                     enddo
                     self%refs_reg(:,iref,i) = self%refs_reg(:,iref,i) / self%dist_cnt(iref)
                 endif
@@ -2473,7 +2537,7 @@ contains
         integer :: k, i
         i = self%pinds(iptcl)
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref,i), dp)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref,i)/self%ref_prob_cache(iref), dp)
         enddo
     end subroutine reg_ref_dp
 
@@ -2485,7 +2549,7 @@ contains
         integer :: k, i
         i = self%pinds(iptcl)
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref,i)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref,i)/self%ref_prob_cache(iref)
         enddo
     end subroutine reg_ref_sp
 
@@ -2527,7 +2591,7 @@ contains
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%prob_cache,&
-                &self%ref_ref_dist, self%ptcl_ref_dist, self%refs_reg)
+                &self%ref_prob_cache, self%ref_ref_dist, self%ptcl_ref_dist, self%refs_reg)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

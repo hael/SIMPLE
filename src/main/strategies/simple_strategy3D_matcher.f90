@@ -205,6 +205,7 @@ contains
             endif
             if( params_glob%l_ref_reg )then
                 call pftcc%build_ptcl_ref_dist(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
+                call pftcc%memoize_ref_prob(pinds(batch_start:batch_end))
                 call pftcc%memoize_ref_reg
             endif
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
