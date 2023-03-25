@@ -986,7 +986,7 @@ contains
         self%ptcl_dist     = .false.
         self%ptcl_dist_cnt = 0
         thres              = params_glob%arc_thres * pi / 180.
-        !$omp parallel do collapse(2) default(shared) private(i1, i2, euls_1, euls_2, x1, x2, dist) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i1, i2, o1, o2, euls_1, euls_2, x1, x2, dist) proc_bind(close) schedule(static)
         do i1 = 1, self%nptcls
             do i2 = 1, self%nptcls
                 call ptcl_eulspace%get_ori(glob_pinds(i1), o1)
@@ -1029,7 +1029,7 @@ contains
             do i = 1, self%nptcls
                 do i2 = 1, self%nptcls
                     if( self%ptcl_dist(i, i2) )then
-                        self%prob_cache(i, iref) = self%prob_cache(iref, i) + corrs(iref, i2)/self%ptcl_dist_cnt(i2)
+                        self%prob_cache(i, iref) = self%prob_cache(i, iref) + corrs(iref, i2)/self%ptcl_dist_cnt(i2)
                     endif
                 enddo
             enddo
@@ -1058,7 +1058,7 @@ contains
         !$omp end parallel do
         sqsum_refs = sqrt(sqsum_refs)
         self%ptcl_reg = 0.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k, i2) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(3) default(shared) private(i, iref, k, i2) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 do i2 = 1, self%nptcls
@@ -1067,7 +1067,7 @@ contains
                             self%ptcl_reg(k,iref,i) = self%ptcl_reg(k,iref,i) +&
                                 &sum(self%pfts_ptcls(:,k,i2) * self%ctfmats(:,k,i2)) / sqsum_refs(iref, i2) / self%sqsums_ptcls(i2)
                         enddo
-                        self%ptcl_reg(:,iref,i2) = self%ptcl_reg(:,iref,i2) / self%ptcl_dist_cnt(i)
+                        self%ptcl_reg(:,iref,i) = self%ptcl_reg(:,iref,i) / self%ptcl_dist_cnt(i)
                     endif
                 enddo
             enddo
