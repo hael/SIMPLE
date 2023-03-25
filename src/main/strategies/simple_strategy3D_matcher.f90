@@ -198,10 +198,9 @@ contains
             call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
             call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             if( params_glob%l_obj_reg )then
-                call pftcc%build_ref_ref_dist(build_glob%eulspace)
+                call pftcc%build_ptcl_dist(build_glob%eulspace, pinds(batch_start:batch_end))
                 call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
-                call pftcc%memoize_ptcl_reg(.true.)
-                call pftcc%memoize_ptcl_reg(.false.)
+                call pftcc%memoize_ptcl_reg
             endif
             if( params_glob%l_ref_reg )then
                 call pftcc%build_ptcl_ref_dist(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
