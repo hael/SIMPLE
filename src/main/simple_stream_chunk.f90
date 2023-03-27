@@ -30,6 +30,7 @@ type stream_chunk
     integer                                :: nmics
     integer                                :: nptcls
     logical                                :: converged = .false.
+    logical                                :: autoscale = .false.
     logical                                :: available = .true.
 contains
     procedure :: init
@@ -428,6 +429,7 @@ contains
         self%path      = ''
         self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
+        self%autoscale = .false.
         self%converged = .false.
         self%available = .false.
     end subroutine kill

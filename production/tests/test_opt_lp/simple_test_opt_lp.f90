@@ -67,7 +67,7 @@ allocate(xhist(n_bin),       source=0.)
 allocate(yest( n_bin),       source=0.)
 allocate(yhist(n_bin),       source=0)
 find_stop  = calc_fourier_index(p%lpstart,   p%ldim(1), p%smpd)
-find_start = calc_fourier_index(p%lp_lowres, p%ldim(1), p%smpd)
+find_start = calc_fourier_index(p%lpstart_nonuni, p%ldim(1), p%smpd)
 do iptcl = 1, 1
     write(*, *) 'Particle # ', iptcl
     cur_fil = 0.

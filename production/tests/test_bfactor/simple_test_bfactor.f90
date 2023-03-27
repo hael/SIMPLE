@@ -46,9 +46,9 @@ program simple_test_bfactor
         &'ISOCORR'//CSV_DELIM//'ANISO_CORR'
     character(*), parameter :: HEADTEST2 = 'INDEX'//CSV_DELIM//'MAJSAX_IN'//&
         &CSV_DELIM//'MEDSAX_IN'//CSV_DELIM//'MINSAX_IN'//CSV_DELIM//'AZIMUTH_IN'//&
-        &'POLAR_INT'//CSV_DELIM//'BFAC_OUT'//CSV_DELIM//'MAJSAX_OUT'//CSV_DELIM//&
+        &CSV_DELIM//'POLAR_IN'//CSV_DELIM//'BFAC_OUT'//CSV_DELIM//'MAJSAX_OUT'//CSV_DELIM//&
         &'MEDSAX_OUT'//CSV_DELIM//'MINSAX_OUT'//CSV_DELIM//'AZIMUTH_OUT'//CSV_DELIM//&
-        &'POLAR_OUT'//CSV_DELIM//'ISOCORR'//CSV_DELIM//'ANISO_CORR'
+        &'POLAR_OUT'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'
 
 
     if( command_argument_count() /= 3 )then

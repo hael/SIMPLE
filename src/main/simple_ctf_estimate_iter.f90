@@ -69,6 +69,7 @@ contains
             call make_relativepath(CWD_GLOB,docname,rel_fname)
             call orientation%set('ctfdoc', rel_fname)
         endif
+        ! diagnostic image
         call ctffit%write_diagnostic(fname_diag)
         call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
         ! reporting

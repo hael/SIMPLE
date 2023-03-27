@@ -609,11 +609,12 @@ contains
                 !     call job_descr%set('ptclw','yes')
                 ! endif
                 params%objfun = orig_objfun
-                if( params%objfun .eq. 'euclid' )then
-                    params%cc_objfun = OBJFUN_EUCLID
-                elseif( params%objfun .eq. 'prob' )then
-                    params%cc_objfun = OBJFUN_PROB
-                endif
+                select case(trim(params%objfun))
+                    case('euclid')
+                        params%cc_objfun = OBJFUN_EUCLID
+                    case('prob')
+                        params%cc_objfun = OBJFUN_PROB
+                end select
                 l_switch2euclid = .false.
             endif
             if( L_BENCH_GLOB )then
@@ -771,10 +772,10 @@ contains
                 if( l_switch2euclid )then
                     params%objfun = trim(orig_objfun)
                     select case(trim(params%objfun))
-                    case('euclid')
-                        params%cc_objfun = OBJFUN_EUCLID
-                    case('prob')
-                        params%cc_objfun = OBJFUN_PROB
+                        case('euclid')
+                            params%cc_objfun = OBJFUN_EUCLID
+                        case('prob')
+                            params%cc_objfun = OBJFUN_PROB
                     end select
                     if( .not.cline%defined('gridding') )then
                         call cline%set('gridding', 'yes')

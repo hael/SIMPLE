@@ -158,12 +158,17 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! prep corr
-        call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
-            corr = maxval(corrs)
-        else
-            corr = max(0.,maxval(corrs))
-        endif
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_EUCLID)
+                call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
+                corr = maxval(corrs)
+            case(OBJFUN_PROB)
+                call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs, s3D%srch_order)
+                corr = maxval(corrs)
+            case DEFAULT
+                call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
+                corr = max(0.,maxval(corrs))
+        end select
         self%prev_corr = corr
         call o_prev%kill
     end subroutine prep4srch

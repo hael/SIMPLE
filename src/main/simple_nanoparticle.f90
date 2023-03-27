@@ -22,7 +22,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 integer,          parameter :: NPARAMS_ADP         = 6       ! min # voxels for ADP calc. = # params in cov.
-integer,          parameter :: SCALE_FAC           = 4       ! scale factor for ADP calc
+integer,          parameter :: SCALE_FAC           = 1       ! scale factor for ADP calc
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
@@ -38,20 +38,18 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//CSV_DELIM//&
-&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'BFAC'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'//&
-&CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//&
-&'SEMIAX_MIN'//CSV_DELIM//'ANISO_X'//CSV_DELIM//'ANISO_Y'//CSV_DELIM//'ANISO_Z'//'X'//CSV_DELIM//&
-&'AZIMUTH'//CSV_DELIM//'POLAR'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//&
-&'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//&
-&'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+&'DISPL'//CSV_DELIM//'MAX_NDISPL'//CSV_DELIM//'BFAC'//CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//&
+&'SEMIAX_MED'//CSV_DELIM//'SEMIAX_MIN'//CSV_DELIM//'AZIMUTH'//CSV_DELIM//'POLAR'&
+&//CSV_DELIM//'DOI'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//'X'//CSV_DELIM&
+&//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//&
+&CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'DISPL'//CSV_DELIM//&
-&'MAX_NDISPL'//CSV_DELIM//'BFAC'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//&
-&'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//'SEMIAX_MIN'//CSV_DELIM//&
-&'ANISO_X'//CSV_DELIM//'ANISO_Y'//CSV_DELIM//'ANISO_Z'//CSV_DELIM//'AZIMUTH'//CSV_DELIM//'POLAR'//&
-&CSV_DELIM//'RADIAL_STRAIN'
+&'MAX_NDISPL'//CSV_DELIM//'BFAC'//CSV_DELIM//'SEMIAX_MAJ'//CSV_DELIM//'SEMIAX_MED'//CSV_DELIM//&
+&'SEMIAX_MIN'//CSV_DELIM//'AZIMUTH'//CSV_DELIM//'POLAR'//CSV_DELIM//'DOI'//CSV_DELIM//'ISO_CORR'&
+&//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -65,17 +63,14 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CS
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_BFAC'//CSV_DELIM//'MED_BFAC'//CSV_DELIM//'SDEV_BFAC'//&
-&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
-&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
-&CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
 &CSV_DELIM//'AVG_SEMIAX_MAJ'//CSV_DELIM//'MED_SEMIAX_MAJ'//CSV_DELIM//'SDEV_SEMIAX_MAJ'//&
 &CSV_DELIM//'AVG_SEMIAX_MED'//CSV_DELIM//'MED_SEMIAX_MED'//CSV_DELIM//'SDEV_SEMIAX_MED'//&
 &CSV_DELIM//'AVG_SEMIAX_MIN'//CSV_DELIM//'MED_SEMIAX_MIN'//CSV_DELIM//'SDEV_SEMIAX_MIN'//&
-&CSV_DELIM//'AVG_ANISO_X'//CSV_DELIM//'MED_ANISO_X'//CSV_DELIM//'SDEV_ANISO_X'//&
-&CSV_DELIM//'AVG_ANISO_Y'//CSV_DELIM//'MED_ANISO_Y'//CSV_DELIM//'SDEV_ANISO_Y'//&
-&CSV_DELIM//'AVG_ANISO_Z'//CSV_DELIM//'MED_ANISO_Z'//CSV_DELIM//'SDEV_ANISO_Z'//&
 &CSV_DELIM//'AVG_AZIMUTH'//CSV_DELIM//'MED_AZIMUTH'//CSV_DELIM//'SDEV_AZIMUTH'//&
 &CSV_DELIM//'AVG_POLAR'//CSV_DELIM//'MED_POLAR'//CSV_DELIM//'SDEV_POLAR'//&
+&CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
+&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
+&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -90,17 +85,14 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CS
 &CSV_DELIM//'AVG_DISPL'//CSV_DELIM//'MED_DISPL'//CSV_DELIM//'SDEV_DISPL'//&
 &CSV_DELIM//'AVG_MAX_NDISPL'//CSV_DELIM//'MED_MAX_NDISPL'//CSV_DELIM//'SDEV_MAX_NDISPL'//&
 &CSV_DELIM//'AVG_BFAC'//CSV_DELIM//'MED_BFAC'//CSV_DELIM//'SDEV_BFAC'//&
-&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
-&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
-&CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
 &CSV_DELIM//'AVG_SEMIAX_MAJ'//CSV_DELIM//'MED_SEMIAX_MAJ'//CSV_DELIM//'SDEV_SEMIAX_MAJ'//&
 &CSV_DELIM//'AVG_SEMIAX_MED'//CSV_DELIM//'MED_SEMIAX_MED'//CSV_DELIM//'SDEV_SEMIAX_MED'//&
 &CSV_DELIM//'AVG_SEMIAX_MIN'//CSV_DELIM//'MED_SEMIAX_MIN'//CSV_DELIM//'SDEV_SEMIAX_MIN'//&
-&CSV_DELIM//'AVG_ANISO_X'//CSV_DELIM//'MED_ANISO_X'//CSV_DELIM//'SDEV_ANISO_X'//&
-&CSV_DELIM//'AVG_ANISO_Y'//CSV_DELIM//'MED_ANISO_Y'//CSV_DELIM//'SDEV_ANISO_Y'//&
-&CSV_DELIM//'AVG_ANISO_Z'//CSV_DELIM//'MED_ANISO_Z'//CSV_DELIM//'SDEV_ANISO_Z'//&
 &CSV_DELIM//'AVG_AZIMUTH'//CSV_DELIM//'MED_AZIMUTH'//CSV_DELIM//'SDEV_AZIMUTH'//&
 &CSV_DELIM//'AVG_POLAR'//CSV_DELIM//'MED_POLAR'//CSV_DELIM//'SDEV_POLAR'//&
+&CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
+&CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
+&CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -119,14 +111,12 @@ type :: atom_stats
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: isobfac           = 0. ! isotropic B-Factor                                          BFAC
-    real    :: isocorr           = 0. ! Correlation of isotropic B-Factor fit to input map          ISO_CORR
-    real    :: anisocorr         = 0. ! Correlation of anisotropic B-Factor fit to input map        ANISO_CORR
-    real    :: doi               = 0. ! degree of isotropy (only accurate for CN & NP averages)     DOI
     real    :: semiaxes(3)       = 0. ! lengths of semiaxes of ellipsoidal fit                      SEMIAX_(MAJ,MED,MIN)
-    real    :: aniso_xyz(3)      = 0. ! anisotropic displacement in x,y,z directions                ANISO_(X,Y,Z)
-    real    :: aniso_111         = 0. ! anisotropic displacement in (1,1,1) direction               ANISO_111
     real    :: azimuth           = 0. ! Azimuthal angle of major semi-axis [0,Pi)                   AZIMUTH
     real    :: polar             = 0. ! Polar angle of major semi-axis [0, Pi)                      POLAR
+    real    :: doi               = 0. ! degree of isotropy (only accurate for CN & NP averages)     DOI
+    real    :: isocorr           = 0. ! Correlation of isotropic B-Factor fit to input map          ISO_CORR
+    real    :: anisocorr         = 0. ! Correlation of anisotropic B-Factor fit to input map        ANISO_CORR
     real    :: displ             = 0. ! Lattice displacement                                        DISPL
     real    :: max_ndispl        = 0. ! Maximum lattice displacement of neighboring atoms           NDISPL
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
@@ -158,6 +148,7 @@ type :: nanoparticle
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
     real                  :: theoretical_radius = 0. ! theoretical atom radius in A
+    real                  :: base_isotropic
     ! GLOBAL NP STATS
     type(stats_struct)    :: map_stats
     ! -- the rest
@@ -172,18 +163,14 @@ type :: nanoparticle
     type(stats_struct)    :: displ_stats
     type(stats_struct)    :: max_ndispl_stats
     type(stats_struct)    :: isobfac_stats
-    type(stats_struct)    :: isocorr_stats
-    type(stats_struct)    :: anisocorr_stats
-    type(stats_struct)    :: doi_stats
     type(stats_struct)    :: semiaxis_maj_stats
     type(stats_struct)    :: semiaxis_med_stats
     type(stats_struct)    :: semiaxis_min_stats
-    type(stats_struct)    :: aniso_x_stats
-    type(stats_struct)    :: aniso_y_stats
-    type(stats_struct)    :: aniso_z_stats
-    type(stats_struct)    :: aniso_111_stats
     type(stats_struct)    :: azimuth_stats
     type(stats_struct)    :: polar_stats
+    type(stats_struct)    :: isocorr_stats
+    type(stats_struct)    :: anisocorr_stats
+    type(stats_struct)    :: doi_stats
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
@@ -198,18 +185,14 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: isobfac_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: isocorr_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: anisocorr_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: doi_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: semiaxis_maj_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: semiaxis_med_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: semiaxis_min_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aniso_x_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aniso_y_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aniso_z_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aniso_111_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: azimuth_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: polar_stats_cns(CNMIN:CNMAX)    
+    type(stats_struct)    :: polar_stats_cns(CNMIN:CNMAX) 
+    type(stats_struct)    :: doi_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: isocorr_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: anisocorr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: displ_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_ndispl_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
@@ -251,7 +234,8 @@ type :: nanoparticle
     procedure          :: fillin_atominfo
     procedure, private :: masscen
     procedure, private :: calc_longest_atm_dist
-    procedure, private :: calc_aniso
+    procedure, private :: calc_isotropic_disp
+    procedure, private :: calc_anisotropic_disp
     procedure, private :: lattice_displ_analysis
     ! visualization and output
     procedure          :: simulate_atoms
@@ -1178,7 +1162,7 @@ contains
         character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:), displ_neighbor(:), border(:,:,:)
         logical, parameter   :: test_fit = .true.
-        real    :: tmp_diam, a(3), res_fsc05, res_fsc0143
+        real    :: tmp_diam, a(3), res_fsc05, res_fsc0143, base_isotropic
         integer :: i, j, k, cc, cn, n, m, l, x, y, z, ios, nsz, funit, fiso
         character(*), parameter :: fn_img_cc_scaled="cc_map_scaled.mrc", fn_muA="adp_info.txt"
         character(*), parameter :: fn_scaled="scaledVol.mrc", fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
@@ -1219,6 +1203,8 @@ contains
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%img_raw%get_rmat_ptr(rmat_raw)
         call self%img_cc%get_imat(imat_cc)
+        self%base_isotropic = no_motion_variance(self%element, self%smpd) * self%smpd**2
+        print *, "BASELINE ISOTROPIC BFACTOR", self%base_isotropic
 
         call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fit_anisotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
@@ -1286,8 +1272,10 @@ contains
             ! Lattice displacement magnitudes ( |center - expected center| ) and max neighboring lattice displ
             call self%lattice_displ_analysis(cc, centers_A, a, lattice_displ)
             ! Isotropic B-factors
-            call calc_isotropic_disp_lsq(cc, a)
-            call calc_anisotropic_disp_lsq(cc, a)
+            !call calc_isotropic_disp_lsq(cc, a)
+            call self%calc_isotropic_disp(cc, a, fiso, rmat_raw, fit_isotropic)
+            !call calc_anisotropic_disp_lsq(cc, a)
+            call self%calc_anisotropic_disp(cc, a, funit, rmat_raw, fit_anisotropic)
             ! calculate anisotropic displacement parameters.  
             !call self%calc_aniso(cc, imat_cc_scaled, border)
 
@@ -1326,18 +1314,14 @@ contains
         call calc_stats(  self%atominfo(:)%displ,         self%displ_stats         )
         call calc_stats(  self%atominfo(:)%max_ndispl,    self%max_ndispl_stats    )
         call calc_stats(  self%atominfo(:)%isobfac,       self%isobfac_stats       )
-        call calc_stats(  self%atominfo(:)%isocorr,       self%isocorr_stats       )
-        call calc_stats(  self%atominfo(:)%anisocorr,     self%anisocorr_stats,     mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%doi,           self%doi_stats,           mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%semiaxes(1),   self%semiaxis_maj_stats,  mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%semiaxes(2),   self%semiaxis_med_stats,  mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%semiaxes(3),   self%semiaxis_min_stats,  mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%aniso_xyz(1),  self%aniso_x_stats,       mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%aniso_xyz(2),  self%aniso_y_stats,       mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%aniso_xyz(3),  self%aniso_z_stats,       mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%aniso_111,     self%aniso_111_stats,     mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%azimuth,       self%azimuth_stats,       mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%polar,         self%polar_stats,         mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%doi,           self%doi_stats,           mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%isocorr,       self%isocorr_stats       )
+        call calc_stats(  self%atominfo(:)%anisocorr,     self%anisocorr_stats,     mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1349,6 +1333,7 @@ contains
         call self%write_centers('max_int_in_bfac_field',    'max_int')
         call self%write_centers('cn_std_in_bfac_field',     'cn_std')
         call self%write_centers('isobfac_in_bfac_field',    'isobfac')
+        call self%write_centers('doi_in_bfac_field',        'doi')
         call self%write_centers_aniso('aniso_bfac_field')
         ! destruct
         deallocate(mask, cc_mask, imat_cc, imat_cc_scaled, tmpcens, strain_array, centers_A, border, &
@@ -1359,168 +1344,6 @@ contains
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
         contains
-
-            subroutine calc_isotropic_disp_sphere(cc, a0)
-                integer, intent(in)     :: cc
-                real, intent(in)        :: a0(3)
-                real        :: sum_int, mu(3), center(3), maxrad, max_int, min_int, vars(3), var, fit_rad, A, beta, prob, prob_tot, prob_sum_sq, corr,&
-                                &sum_int_out, max_int_out
-                integer     :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, count, count0, count_fit, peak(3)
-                logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
-
-
-                ! Create search window that contains the sphere of fit radius to speed up the iterations
-                ! by avoiding having to iterate over the entire scaled images for each connected component.
-                center = self%atominfo(cc)%center(:)
-                maxrad  = 0.5*(sum(a0)/3) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-
-                fit_rad = 0.4 * (sum(a0)/3) / self%smpd
-                ! First iteration: calculate the minimum intensity within the sphere
-                ! If min_int is negative, then we'll added |min_int| to all intensities
-                ! so that all probabilities are >= 0
-                min_int = self%atominfo(cc)%max_int
-                max_int = 0
-                peak = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_raw(i, j, k) < min_int) then
-                                    min_int = rmat_raw(i, j, k)
-                                else if (rmat_raw(i, j, k) > max_int) then
-                                    max_int = rmat_raw(i, j, k)
-                                    peak = (/i, j, k/)
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                !if (min_int > 0) then
-                !    min_int = 0 ! No correction needed
-                !end if
-                min_int = 0.
-
-                ! Second iteration: calculate the mean position mu in the scaled connected component, where each voxel has a probability
-                ! equal to the voxel intensity divided by the total scaled connected component intensity.
-                count0 = 0
-                count = 0
-                sum_int = 0
-                mu = 0.
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                if (rmat_raw(i, j, k) + abs(min_int) > 0) then
-                                    count = count + 1
-                                    sum_int = sum_int + rmat_raw(i, j, k) + abs(min_int)
-                                    mu(1) = mu(1) + i * (rmat_raw(i, j, k) + abs(min_int))
-                                    mu(2) = mu(2) + j * (rmat_raw(i, j, k) + abs(min_int))
-                                    mu(3) = mu(3) + k * (rmat_raw(i, j, k) + abs(min_int))
-                                else
-                                    count0 = count0 + 1
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                mu = mu / sum_int  ! Normalization
-
-                ! Third iteration: Calculate the variance sigma
-                vars = 0.
-                var = 0.
-                prob_sum_sq = 0
-                prob_tot = 0
-                do k=klo, khi
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                ! The problem is that rmat can be negative.  Sln: use 0 for any negative value
-                                prob = (rmat_raw(i, j, k)+abs(min_int)) / sum_int
-                                if (prob > 0.) then
-                                    prob_sum_sq = prob_sum_sq + prob**2
-                                    ! Diagonal terms are variance
-                                    var = var + prob * norm_2([i,j,k] - mu)**2
-                                    !vars(1) = vars(1) + prob * (i - mu(1))**2
-                                    !vars(2) = vars(2) + prob * (j - mu(2))**2
-                                    !vars(3) = vars(3) + prob * (k - mu(3))**2
-                                    prob_tot = prob_tot + prob
-                                end if
-                            end if
-                        end do
-                    end do
-                end do
-                ! Fill in redundant entries
-                !var = sum(vars) / 3
-                print *, cc, prob_tot
-                var = var / 3 / (1 - prob_sum_sq) ! For unbiased estimator
-
-                ! Fourth iteration (for testing): sample the unscaled fit at each voxel in unscaled space
-                A = 0.
-                count_fit = 0
-                sum_int_out = 0.
-                max_int_out = 0.
-                center = self%atominfo(cc)%center(:)
-                maxrad  = (self%theoretical_radius * 6) / self%smpd
-                ilo = max(nint(center(1) - maxrad), 1)
-                ihi = min(nint(center(1) + maxrad), self%ldim(1))
-                jlo = max(nint(center(2) - maxrad), 1)
-                jhi = min(nint(center(2) + maxrad), self%ldim(2))
-                klo = max(nint(center(3) - maxrad), 1)
-                khi = min(nint(center(3) + maxrad), self%ldim(3))
-                fit_rad = fit_rad
-                beta = 0.
-                ! Find normalization coefficient
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
-                                A = A + exp(beta)
-                                count_fit = count_fit + 1
-                            end if
-                        end do
-                    end do
-                end do
-                A = 1. / A
-                ! Normalize based on A
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                beta = -0.5 * euclid(1.*(/i, j, k/), 1.*mu(:))**2/var
-                                call fit_isotropic%set_rmat_at(i, j, k, A * exp(beta) * sum_int)
-                                if (A * exp(beta) * sum_int > max_int_out) max_int_out = A * exp(beta) * sum_int
-                                sum_int_out = sum_int_out + fit_isotropic%get_rmat_at(i,j,k)
-                            end if
-                        end do
-                    end do
-                end do
-
-                ! Calculate correlation between fit and orignal map within the fit radius
-                fit_mask = .false.
-                do k=klo, khi 
-                    do j=jlo, jhi
-                        do i=ilo, ihi
-                            if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
-                                fit_mask(i,j,k) = .true.
-                            end if
-                        end do
-                    end do
-                end do
-                corr = fit_isotropic%real_corr(self%img_raw, mask=fit_mask)
-                print *, cc, 'iso: ', corr
-                
-                self%atominfo(cc)%isobfac = sqrt(var) * self%smpd
-                self%atominfo(cc)%isocorr = corr
-
-                write(fiso, '(2i8, 6f10.5)') cc, count, sum_int_out, sum_int, max_int_out, self%atominfo(cc)%max_int, corr, sqrt(var) * self%smpd
-            end subroutine calc_isotropic_disp_sphere
 
             subroutine calc_isotropic_disp_lsq(cc, a0)
                 integer, intent(in)     :: cc
@@ -1541,7 +1364,7 @@ contains
                 klo = max(nint(center(3) - maxrad), 1)
                 khi = min(nint(center(3) + maxrad), self%ldim(3))
 
-                fit_rad = 0.4 * (sum(a0)/3) / self%smpd
+                fit_rad = 0.75 * (sum(a0)/3)/(2.*sqrt(2.))/self%smpd
 
                 ! Second iteration: Calculate the best fit params B
                 ! Solution: B = ((X^T)WX)^-1((X^T)WY)
@@ -1579,7 +1402,7 @@ contains
                     do j=jlo, jhi
                         do i=ilo, ihi
                             r = euclid(1.*(/i, j, k/), 1.*center) 
-                            if (r < fit_rad) then
+                            if (r < (sum(a0)/3)/(2.*sqrt(2.))/self%smpd) then
                                 fit_mask(i,j,k) = .true.
                                 int =  A * exp(-0.5 * r**2 / var)
                                 call fit_isotropic%set_rmat_at(i, j, k, int)
@@ -1621,7 +1444,7 @@ contains
                 klo = max(nint(center(3) - maxrad), 1)
                 khi = min(nint(center(3) + maxrad), self%ldim(3))
 
-                fit_rad = 0.4 * (sum(a0)/3) / self%smpd
+                fit_rad = 0.75 * (sum(a0)/3)/(2.*sqrt(2.))/self%smpd
 
                 ! First iteration: Get nvoxels within sphere of fitting
                 nvoxels = 0
@@ -1688,7 +1511,7 @@ contains
                     do j=jlo, jhi   
                         do i=ilo, ihi
                             rvec(:3,1) = 1.*(/i, j, k/) - center
-                            if (norm_2(rvec(:3,1)) < fit_rad) then
+                            if (norm_2(rvec(:3,1)) < (sum(a0)/3)/(2.*sqrt(2.))/self%smpd) then
                                 fit_mask(i,j,k) = .true.
                                 beta = matmul(matmul(transpose(rvec),cov_inv),rvec)
                                 int =  A * exp(-0.5 * beta(1,1))
@@ -1710,6 +1533,7 @@ contains
                 self%atominfo(cc)%aniso = cov
                 call jacobi(cov, 3, 3, eigenvals, eigenvecs, nrot)
                 call eigsrt(eigenvals, eigenvecs, 3, 3)
+                if (any(eigenvals <= 0.)) self%atominfo(cc)%tossADP = .true.
                 self%atominfo(cc)%semiaxes(:3) = sqrt(eigenvals(:3)) * self%smpd
                 self%atominfo(cc)%doi = sqrt(eigenvals(3)/eigenvals(1))
 
@@ -1733,6 +1557,14 @@ contains
                     self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)) + PI
                 else
                     self%atominfo(cc)%polar = PI / 2
+                end if
+
+                if (self%atominfo(cc)%tossADP) then
+                    self%atominfo(cc)%semiaxes = 0.
+                    self%atominfo(cc)%anisocorr = 0.
+                    self%atominfo(cc)%azimuth = 0.
+                    self%atominfo(cc)%polar = 0.
+                    self%atominfo(cc)%doi = 0.
                 end if
 
                 write(funit, '(2i8, 8f10.5)') cc, nvoxels, max_int_out, self%atominfo(cc)%max_int, corr, self%atominfo(cc)%semiaxes(:3), self%atominfo(cc)%azimuth, self%atominfo(cc)%polar
@@ -1776,13 +1608,12 @@ contains
                 call calc_stats( self%atominfo(:)%semiaxes(1),   self%semiaxis_maj_stats_cns(cn),  mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%semiaxes(2),   self%semiaxis_med_stats_cns(cn),  mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%semiaxes(3),   self%semiaxis_min_stats_cns(cn),  mask=adp_mask  )
-                call calc_stats( self%atominfo(:)%aniso_xyz(1),  self%aniso_x_stats_cns(cn),       mask=adp_mask  )
-                call calc_stats( self%atominfo(:)%aniso_xyz(2),  self%aniso_y_stats_cns(cn),       mask=adp_mask  )
-                call calc_stats( self%atominfo(:)%aniso_xyz(3),  self%aniso_z_stats_cns(cn),       mask=adp_mask  )
-                call calc_stats( self%atominfo(:)%aniso_111,     self%aniso_111_stats_cns(cn),     mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%azimuth,       self%azimuth_stats_cns(cn),       mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%polar,         self%polar_stats_cns(cn),         mask=adp_mask  )
-                call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%doi,           self%doi_stats_cns(cn),           mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%isocorr,       self%isocorr_stats_cns(cn),       mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%anisocorr,     self%anisocorr_stats_cns(cn),     mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
             end subroutine calc_cn_stats
 
             subroutine write_cn_atoms( cn_std )
@@ -1853,150 +1684,208 @@ contains
        deallocate(imat_cc, pos, mask_dist)
     end subroutine calc_longest_atm_dist
 
-    ! For a given connected component cc, calculates the Anisotropic Displacement Parameters
-    ! from the scaled CC map (imat_scaled) and the mask of border voxels in the scaled CC map (border).  
-    ! The border voxels of cc are fit with an ellipsoid using an algebraic least squares fit
-    ! (i.e. finding the best fit parameters B1,...,B6 for the function B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1).  
-    ! Reports the best fit ellipsoid semi-axes and the Anisotropic Displacement in the x,y, and z directions in Angstroms.
-    ! Also reports a 3x3 anisotropic displacement matrix for writing an ANISOU PDB file to visualize ellipsoids in Chimera.
-    ! Author: Henry Wietfeldt
-    subroutine calc_aniso( self, cc, imat_scaled, border)
+
+    subroutine calc_isotropic_disp(self, cc, a0, funit, rmat, fit)
         class(nanoparticle), intent(inout)  :: self
-        integer, intent(in)                 :: cc
-        integer, allocatable, intent(in)    :: imat_scaled(:,:,:)
-        logical, allocatable, intent(in)    :: border(:,:,:)
-        real(kind=8), allocatable           :: A(:,:), AT(:,:), ones(:)
-        real(kind=8)        :: beta(6), ATA(6,6), ATA_inv(6,6), matavg, B(3,3), eigenvals(3), eigenvecs(3,3)
-        real(kind=8)        :: eigenvecs_inv(3,3), tmpeigenvecs(3,3), aniso(3,3), aniso_sq(3,3), majvector(3)
-        real                :: center_scaled(3), maxrad, com(3), u, v, w
-        integer             :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, ifoo, nborder, errflg
+        class(image), intent(inout)         :: fit
+        integer, intent(in)                 :: cc, funit
+        real, intent(in)                    :: a0(3) ! Lattice params
+        real, pointer, intent(in)           :: rmat(:,:,:)
+        real        :: output_rad, fit_rad, center(3), maxrad, r, var, A, int, max_int_out
+        real        :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
+        integer     :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, errflg
+        logical     :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
 
-        ! To avoid overfitting, must have more voxels in the unscaled CC than fitting params
-        if (self%atominfo(cc)%size <= NPARAMS_ADP) then
-            self%atominfo(cc)%tossADP = .true.
-            return
+        output_rad = (sum(a0)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
+        fit_rad = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+
+        ! Create search window containing sphere of fit rad to speed up loops.
+        center = self%atominfo(cc)%center(:)
+        maxrad  = 0.5*(sum(a0)/3) / self%smpd
+        ilo = max(nint(center(1) - maxrad), 1)
+        ihi = min(nint(center(1) + maxrad), self%ldim(1))
+        jlo = max(nint(center(2) - maxrad), 1)
+        jhi = min(nint(center(2) + maxrad), self%ldim(2))
+        klo = max(nint(center(3) - maxrad), 1)
+        khi = min(nint(center(3) + maxrad), self%ldim(3))
+
+        ! Linear least squares to calculate the best fit params B
+        ! Solution: B = ((X^T)WX)^-1((X^T)WY)
+        XTWX = 0.
+        XTWX_inv = 0.
+        XTWY = 0.
+        do k=klo, khi
+            do j=jlo, jhi
+                do i=ilo, ihi
+                    r = euclid(1.*(/i, j, k/), 1.*center)
+                    if (r < fit_rad) then
+                        int = rmat(i,j,k)
+                        if (int > 0) then
+                            XTWX(1,1) = XTWX(1,1) + int
+                            XTWX(1,2) = XTWX(1,2) + r**2 * int
+                            XTWX(2,2) = XTWX(2,2) + r**4 * int
+                            XTWY(1,1) = XTWY(1,1) + int * log(int)
+                            XTWY(2,1) = XTWY(2,1) + r**2 * int * log(int)
+                        end if
+                    end if
+                end do
+            end do
+        end do
+        XTWX(2,1) = XTWX(1,2)
+        call matinv(XTWX, XTWX_inv, 2, errflg)
+        B = matmul(XTWX_inv, XTWY)
+        A = exp(B(1,1)) ! Best fit peak
+        var = -0.5 / B(2,1) ! Best fit variance
+
+        ! Sample fit for goodness of fit and visualization
+        max_int_out = 0.
+        fit_mask = .false.
+        do k=klo, khi 
+            do j=jlo, jhi
+                do i=ilo, ihi
+                    r = euclid(1.*(/i, j, k/), 1.*center) 
+                    if (r < output_rad) then
+                        fit_mask(i,j,k) = .true.
+                        int =  A * exp(-0.5 * r**2 / var)
+                        call fit%set_rmat_at(i, j, k, int)
+                        if (int > max_int_out) then
+                            max_int_out = int
+                        end if
+                    end if
+                end do
+            end do
+        end do
+        self%atominfo(cc)%isocorr = fit%real_corr(self%img_raw, mask=fit_mask)
+        self%atominfo(cc)%isobfac = var * self%smpd**2 - self%base_isotropic
+        if (self%atominfo(cc)%isobfac < 0.) then
+            self%atominfo(cc)%isobfac = 0.
+        else
+            self%atominfo(cc)%isobfac = sqrt(self%atominfo(cc)%isobfac)
         end if
 
-        ! Create search window that definitely contains the cc to speed up the iterations
-        ! by avoiding having to iterate over the entire scaled images for each connected component.
-        center_scaled = self%atominfo(cc)%center(:)*SCALE_FAC - 0.5*(SCALE_FAC-1)
-        maxrad  = (self%theoretical_radius * 3) / (self%smpd / SCALE_FAC)
-        ilo = max(nint(center_scaled(1) - maxrad), 1)
-        ihi = min(nint(center_scaled(1) + maxrad), SCALE_FAC*self%ldim(1))
-        jlo = max(nint(center_scaled(2) - maxrad), 1)
-        jhi = min(nint(center_scaled(2) + maxrad), SCALE_FAC*self%ldim(2))
-        klo = max(nint(center_scaled(3) - maxrad), 1)
-        khi = min(nint(center_scaled(3) + maxrad), SCALE_FAC*self%ldim(3))
 
-        ! Calculate the unweighted center of mass of the scaled connected component.
-        com = 0.
+        write(funit, '(i8, 4f10.5)') cc, max_int_out, self%atominfo(cc)%max_int, self%atominfo(cc)%isocorr,&
+            & sqrt(var) * self%smpd
+
+    end subroutine calc_isotropic_disp
+
+    subroutine calc_anisotropic_disp(self, cc, a0, funit, rmat, fit)
+        class(nanoparticle), intent(inout)  :: self
+        class(image), intent(inout)         :: fit
+        integer, intent(in)                 :: cc, funit
+        real, intent(in)                    :: a0(3) ! Lattice params
+        real, pointer, intent(in)           :: rmat(:,:,:)
+        real, allocatable                   :: X(:,:), XTW(:,:), Y(:,:)
+        real    :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
+        real    :: rvec(3,1), beta(1,1), eigenvals(3), eigenvecs(3,3), majvector(3)
+        real    :: output_rad, fit_rad, center(3), maxrad, r(3), int, A, max_int_out, corr
+        integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
+        logical :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+
+        output_rad = (sum(a0)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
+        fit_rad = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+
+        ! Create search window containing sphere of fit rad to speed up loops.
+        center = self%atominfo(cc)%center(:)
+        maxrad  = 0.5*(sum(a0)/3) / self%smpd
+        ilo = max(nint(center(1) - maxrad), 1)
+        ihi = min(nint(center(1) + maxrad), self%ldim(1))
+        jlo = max(nint(center(2) - maxrad), 1)
+        jhi = min(nint(center(2) + maxrad), self%ldim(2))
+        klo = max(nint(center(3) - maxrad), 1)
+        khi = min(nint(center(3) + maxrad), self%ldim(3))
+
+        ! Get nvoxels within sphere of fitting
+        nvoxels = 0
         do k=klo, khi
             do j=jlo, jhi
                 do i=ilo, ihi
-                    if (imat_scaled(i,j,k) == cc) then
-                        com(1) = com(1) + i
-                        com(2) = com(2) + j
-                        com(3) = com(3) + k
+                    if (euclid(1.*(/i, j, k/), 1.*center) < fit_rad) then
+                        nvoxels = nvoxels + 1
                     end if
                 end do
             end do
         end do
-        com = com / (self%atominfo(cc)%size * (SCALE_FAC**3))
+        allocate(X(nvoxels, 7), XTW(7, nvoxels), Y(nvoxels,1), source = 0.)
 
-        ! Find the number of border voxels in the scaled cc
-        nborder = 0
+        ! Linear least squares to calculate the best fit params B
+        ! Solution: B = ((X^T)WX)^-1((X^T)WY)
+        XTWX = 0.
+        XTWX_inv = 0.
+        XTWY = 0.
+        n = 1
+        X(:nvoxels,1) = 1.
         do k=klo, khi
             do j=jlo, jhi
                 do i=ilo, ihi
-                    if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                        nborder = nborder + 1
+                    r = 1.*(/i, j, k/) - center
+                    if (norm_2(r) < fit_rad) then
+                        int = rmat(i,j,k)
+                        if (int > 0) then
+                            X(n,2:4)  = r(1:3)**2
+                            X(n,5)    = r(1)*r(2)
+                            X(n,6)    = r(1)*r(3)
+                            X(n,7)    = r(2)*r(3)
+                            XTW(:7,n) = int*X(n,:7)
+                            Y(n,1)    = log(int)
+                            n = n + 1
+                        end if
                     end if
                 end do
             end do
         end do
+        XTWX = matmul(XTW, X)
+        XTWY = matmul(XTW, Y)
+        deallocate(X,XTW,Y)
+        call matinv(XTWX, XTWX_inv, 7, errflg)
+        B = matmul(XTWX_inv, XTWY)
+        A = exp(B(1,1)) ! Best fit peak
+        ! Generate covariance matrix
+        cov_inv(1,1) = -2. * B(2,1)
+        cov_inv(2,2) = -2. * B(3,1)
+        cov_inv(3,3) = -2. * B(4,1)
+        cov_inv(1,2) = -1. * B(5,1)
+        cov_inv(1,3) = -1. * B(6,1)
+        cov_inv(2,3) = -1. * B(7,1)
+        cov_inv(2,1) = cov_inv(1,2)
+        cov_inv(3,1) = cov_inv(1,3)
+        cov_inv(3,2) = cov_inv(2,3)
+        call matinv(cov_inv, cov, 3, errflg)
 
-        ! Fill in matrices for the least squares fit, with the center of mass as the origin.
-        allocate(A(nborder, 6), AT(6, nborder), source=0.0_dp)
-        allocate(ones(nborder), source=1.0_dp)
-        nborder = 1
-        do k=klo, khi
-            do j=jlo, jhi
+        ! Sample fit for goodness of fit and visualization
+        max_int_out = 0.
+        fit_mask = .false.
+        do k=klo, khi 
+            do j=jlo, jhi   
                 do i=ilo, ihi
-                    if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
-                        u = (i-com(1)) * self%smpd / SCALE_FAC
-                        v = (j-com(2)) * self%smpd / SCALE_FAC
-                        w = (k-com(3)) * self%smpd / SCALE_FAC
-                        A(nborder, 1) = u**2
-                        A(nborder, 2) = v**2
-                        A(nborder, 3) = w**2
-                        A(nborder, 4) = 2*u*v
-                        A(nborder, 5) = 2*u*w
-                        A(nborder, 6) = 2*v*w
-                        nborder = nborder + 1
+                    rvec(:3,1) = 1.*(/i, j, k/) - center
+                    if (norm_2(rvec(:3,1)) < output_rad) then
+                        fit_mask(i,j,k) = .true.
+                        beta = matmul(matmul(transpose(rvec),cov_inv),rvec)
+                        int =  A * exp(-0.5 * beta(1,1))
+                        call fit%set_rmat_at(i, j, k, int)
+                        if (int > max_int_out) then
+                            max_int_out = int
+                        end if
                     end if
                 end do
             end do
         end do
-        ! Find the least squares solution to A*beta=ones where beta are the fitting params.
-        ! This minimizes the squared error in B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1
-        AT = transpose(A)
-        ATA = matmul(AT, A) 
-        matavg = sum(ATA)/size(ATA) !Normalize ATA to make matinv easier on the computer
-        ATA = ATA / matavg
-        call matinv(ATA, ATA_inv, 6, errflg)
-        beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
-        
-        ! Find the principal axes of the ellipsoid
-        B(1,1) = beta(1)
-        B(2,2) = beta(2)
-        B(3,3) = beta(3)
-        B(1,2) = beta(4)
-        B(1,3) = beta(5)
-        B(2,3) = beta(6)
-        B(2,1) = B(1,2)
-        B(3,1) = B(1,3)
-        B(3,2) = B(2,3)
-        call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
-        eigenvals = 1/sqrt(eigenvals) ! Convert eigenvalues to semi-axes
+        corr = fit%real_corr(self%img_raw, mask=fit_mask)
+        self%atominfo(cc)%anisocorr = corr 
+        if (corr < self%atominfo(cc)%isocorr) then
+            print *, cc, corr, self%atominfo(cc)%isocorr
+        end if
+
+        ! Calculate semiaxis values and orientation of major semiaxis
+        self%atominfo(cc)%aniso = cov
+        call jacobi(cov, 3, 3, eigenvals, eigenvecs, nrot)
         call eigsrt(eigenvals, eigenvecs, 3, 3)
-        write(*, '(i4, 3f8.2)') cc, eigenvecs(:,1)
-
-        ! Fill in the anisotropic displacement matrix in the principal basis.
-        aniso = 0.
-        do i=1,3
-            aniso(i,i) = eigenvals(i)
-            self%atominfo(cc)%semiaxes(i) = aniso(i,i) / self%theoretical_radius 
-        end do
-        self%atominfo(cc)%doi = aniso(3,3) / aniso(1,1)
-
-        ! Convert to x,y,z basis
-        call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
-        if (errflg /= 0) then
-            ! The above call to matinv is prone to numerical errors if some matrix elements are very small. 
-            ! Find the approximate inverse by setting all very small numbers to 0.
-            tmpeigenvecs = eigenvecs
-            do j=1,3
-                do i=1,3
-                    if (abs(tmpeigenvecs(i,j)) < 0.00001) tmpeigenvecs(i,j) = 0._dp
-                end do
-            end do
-            call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
-            if (errflg /= 0) then
-                write(logfhandle, '(a,3f10.5,a,3f10.5,a,3f10.5)') "Numerical error taking inverse of eigenvectors: ", &
-                    &eigenvecs(:,1), ", ", eigenvecs(:,2), ", ", eigenvecs(:,3)
-                write(logfhandle, '(a, i5)') "Tossing ADP Calculations of cc: ", cc
-                self%atominfo(cc)%tossADP = .true.
-            end if
-        end if
-        aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
-        aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
-        do i=1,3
-            self%atominfo(cc)%aniso_xyz(i) = aniso(i,i) / self%theoretical_radius
-        end do
-        self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso_sq), eigenvecs_inv) 
+        if (any(eigenvals <= 0.)) self%atominfo(cc)%tossADP = .true.
+        self%atominfo(cc)%semiaxes(:3) = sqrt(eigenvals(:3)) * self%smpd
+        self%atominfo(cc)%doi = sqrt(eigenvals(3)/eigenvals(1))
 
         ! Find azimuthal and polar angles of the major semi-axis
-        ! First check if CC is spherical
         majvector = eigenvecs(:,1)
         ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
         if (majvector(2) < 0.) then
@@ -2022,18 +1911,200 @@ contains
         self%atominfo(cc)%polar = self%atominfo(cc)%polar * 180 / PI
         write(*, '(i4, 2f8.2)') cc, self%atominfo(cc)%azimuth, self%atominfo(cc)%polar
 
-        ! Convert to basis w/ 1/sqrt(3)*<1,1,1> as eigenvector.
-        eigenvecs(:3,1) = 1./sqrt(3.) * [1., 1., 1.]
-        eigenvecs(:3,1) = 1./sqrt(2.) * [1., 1., 0.]
-        eigenvecs(:3,1) = sqrt(2./3.) * [1., 0.5, -1.]
-        call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
-        aniso = matmul(matmul(eigenvecs_inv, aniso), eigenvecs) ! x,y,z basis -> new basis
-        self%atominfo(cc)%aniso_111 = aniso(1,1) / self%theoretical_radius
-        ! write(*, '(i4, 3f8.5)') cc, self%atominfo(cc)%semiaxes
-        ! write(*, '(i4, 3f8.5)') cc, aniso(1,1) / self%theoretical_radius, aniso(2,2) / self%theoretical_radius, aniso(3,3) / self%theoretical_radius
+        if (self%atominfo(cc)%tossADP) then
+            self%atominfo(cc)%semiaxes = 0.
+            self%atominfo(cc)%anisocorr = 0.
+            self%atominfo(cc)%azimuth = 0.
+            self%atominfo(cc)%polar = 0.
+            self%atominfo(cc)%doi = 0.
+        end if
+
+        write(funit, '(2i8, 8f10.5)') cc, nvoxels, max_int_out, self%atominfo(cc)%max_int, corr, self%atominfo(cc)%semiaxes(:3), self%atominfo(cc)%azimuth, self%atominfo(cc)%polar
+
+    end subroutine calc_anisotropic_disp
 
 
-    end subroutine calc_aniso
+    ! ! For a given connected component cc, calculates the Anisotropic Displacement Parameters
+    ! ! from the scaled CC map (imat_scaled) and the mask of border voxels in the scaled CC map (border).  
+    ! ! The border voxels of cc are fit with an ellipsoid using an algebraic least squares fit
+    ! ! (i.e. finding the best fit parameters B1,...,B6 for the function B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1).  
+    ! ! Reports the best fit ellipsoid semi-axes and the Anisotropic Displacement in the x,y, and z directions in Angstroms.
+    ! ! Also reports a 3x3 anisotropic displacement matrix for writing an ANISOU PDB file to visualize ellipsoids in Chimera.
+    ! ! Author: Henry Wietfeldt
+    ! subroutine calc_aniso( self, cc, imat_scaled, border)
+    !     class(nanoparticle), intent(inout)  :: self
+    !     integer, intent(in)                 :: cc
+    !     integer, allocatable, intent(in)    :: imat_scaled(:,:,:)
+    !     logical, allocatable, intent(in)    :: border(:,:,:)
+    !     real(kind=8), allocatable           :: A(:,:), AT(:,:), ones(:)
+    !     real(kind=8)        :: beta(6), ATA(6,6), ATA_inv(6,6), matavg, B(3,3), eigenvals(3), eigenvecs(3,3)
+    !     real(kind=8)        :: eigenvecs_inv(3,3), tmpeigenvecs(3,3), aniso(3,3), aniso_sq(3,3), majvector(3)
+    !     real                :: center_scaled(3), maxrad, com(3), u, v, w
+    !     integer             :: i, j, k, ilo, ihi, jlo, jhi, klo, khi, ifoo, nborder, errflg
+
+    !     ! To avoid overfitting, must have more voxels in the unscaled CC than fitting params
+    !     if (self%atominfo(cc)%size <= NPARAMS_ADP) then
+    !         self%atominfo(cc)%tossADP = .true.
+    !         return
+    !     end if
+
+    !     ! Create search window that definitely contains the cc to speed up the iterations
+    !     ! by avoiding having to iterate over the entire scaled images for each connected component.
+    !     center_scaled = self%atominfo(cc)%center(:)*SCALE_FAC - 0.5*(SCALE_FAC-1)
+    !     maxrad  = (self%theoretical_radius * 3) / (self%smpd / SCALE_FAC)
+    !     ilo = max(nint(center_scaled(1) - maxrad), 1)
+    !     ihi = min(nint(center_scaled(1) + maxrad), SCALE_FAC*self%ldim(1))
+    !     jlo = max(nint(center_scaled(2) - maxrad), 1)
+    !     jhi = min(nint(center_scaled(2) + maxrad), SCALE_FAC*self%ldim(2))
+    !     klo = max(nint(center_scaled(3) - maxrad), 1)
+    !     khi = min(nint(center_scaled(3) + maxrad), SCALE_FAC*self%ldim(3))
+
+    !     ! Calculate the unweighted center of mass of the scaled connected component.
+    !     com = 0.
+    !     do k=klo, khi
+    !         do j=jlo, jhi
+    !             do i=ilo, ihi
+    !                 if (imat_scaled(i,j,k) == cc) then
+    !                     com(1) = com(1) + i
+    !                     com(2) = com(2) + j
+    !                     com(3) = com(3) + k
+    !                 end if
+    !             end do
+    !         end do
+    !     end do
+    !     com = com / (self%atominfo(cc)%size * (SCALE_FAC**3))
+
+    !     ! Find the number of border voxels in the scaled cc
+    !     nborder = 0
+    !     do k=klo, khi
+    !         do j=jlo, jhi
+    !             do i=ilo, ihi
+    !                 if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
+    !                     nborder = nborder + 1
+    !                 end if
+    !             end do
+    !         end do
+    !     end do
+
+    !     ! Fill in matrices for the least squares fit, with the center of mass as the origin.
+    !     allocate(A(nborder, 6), AT(6, nborder), source=0.0_dp)
+    !     allocate(ones(nborder), source=1.0_dp)
+    !     nborder = 1
+    !     do k=klo, khi
+    !         do j=jlo, jhi
+    !             do i=ilo, ihi
+    !                 if (imat_scaled(i,j,k) == cc .and. border(i,j,k)) then
+    !                     u = (i-com(1)) * self%smpd / SCALE_FAC
+    !                     v = (j-com(2)) * self%smpd / SCALE_FAC
+    !                     w = (k-com(3)) * self%smpd / SCALE_FAC
+    !                     A(nborder, 1) = u**2
+    !                     A(nborder, 2) = v**2
+    !                     A(nborder, 3) = w**2
+    !                     A(nborder, 4) = 2*u*v
+    !                     A(nborder, 5) = 2*u*w
+    !                     A(nborder, 6) = 2*v*w
+    !                     nborder = nborder + 1
+    !                 end if
+    !             end do
+    !         end do
+    !     end do
+    !     ! Find the least squares solution to A*beta=ones where beta are the fitting params.
+    !     ! This minimizes the squared error in B1x^2 + B2y^2 + B3z^2 + B4xy + B5xz + B6yz = 1
+    !     AT = transpose(A)
+    !     ATA = matmul(AT, A) 
+    !     matavg = sum(ATA)/size(ATA) !Normalize ATA to make matinv easier on the computer
+    !     ATA = ATA / matavg
+    !     call matinv(ATA, ATA_inv, 6, errflg)
+    !     beta = matmul(ATA_inv, matmul(AT, ones)/matavg)
+        
+    !     ! Find the principal axes of the ellipsoid
+    !     B(1,1) = beta(1)
+    !     B(2,2) = beta(2)
+    !     B(3,3) = beta(3)
+    !     B(1,2) = beta(4)
+    !     B(1,3) = beta(5)
+    !     B(2,3) = beta(6)
+    !     B(2,1) = B(1,2)
+    !     B(3,1) = B(1,3)
+    !     B(3,2) = B(2,3)
+    !     call jacobi(B, 3, 3, eigenvals, eigenvecs, ifoo)
+    !     eigenvals = 1/sqrt(eigenvals) ! Convert eigenvalues to semi-axes
+    !     call eigsrt(eigenvals, eigenvecs, 3, 3)
+    !     write(*, '(i4, 3f8.2)') cc, eigenvecs(:,1)
+
+    !     ! Fill in the anisotropic displacement matrix in the principal basis.
+    !     aniso = 0.
+    !     do i=1,3
+    !         aniso(i,i) = eigenvals(i)
+    !         self%atominfo(cc)%semiaxes(i) = aniso(i,i) / self%theoretical_radius 
+    !     end do
+    !     self%atominfo(cc)%doi = aniso(3,3) / aniso(1,1)
+
+    !     ! Convert to x,y,z basis
+    !     call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+    !     if (errflg /= 0) then
+    !         ! The above call to matinv is prone to numerical errors if some matrix elements are very small. 
+    !         ! Find the approximate inverse by setting all very small numbers to 0.
+    !         tmpeigenvecs = eigenvecs
+    !         do j=1,3
+    !             do i=1,3
+    !                 if (abs(tmpeigenvecs(i,j)) < 0.00001) tmpeigenvecs(i,j) = 0._dp
+    !             end do
+    !         end do
+    !         call matinv(tmpeigenvecs, eigenvecs_inv, 3, errflg)
+    !         if (errflg /= 0) then
+    !             write(logfhandle, '(a,3f10.5,a,3f10.5,a,3f10.5)') "Numerical error taking inverse of eigenvectors: ", &
+    !                 &eigenvecs(:,1), ", ", eigenvecs(:,2), ", ", eigenvecs(:,3)
+    !             write(logfhandle, '(a, i5)') "Tossing ADP Calculations of cc: ", cc
+    !             self%atominfo(cc)%tossADP = .true.
+    !         end if
+    !     end if
+    !     aniso_sq = aniso**2   ! ANISOU format uses the squared matrix values
+    !     aniso = matmul(matmul(eigenvecs, aniso), eigenvecs_inv) ! Principal basis -> x,y,z basis
+    !     do i=1,3
+    !         self%atominfo(cc)%aniso_xyz(i) = aniso(i,i) / self%theoretical_radius
+    !     end do
+    !     self%atominfo(cc)%aniso = matmul(matmul(eigenvecs, aniso_sq), eigenvecs_inv) 
+
+    !     ! Find azimuthal and polar angles of the major semi-axis
+    !     ! First check if CC is spherical
+    !     majvector = eigenvecs(:,1)
+    !     ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
+    !     if (majvector(2) < 0.) then
+    !         majvector = -1. * majvector
+    !     end if
+    !     write(*, '(i4, 3f8.2)') cc, majvector(:3)
+    !     self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))
+    !     if (majvector(1) > 0.) then
+    !         self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))
+    !     else if (majvector(1) < 0.) then
+    !         self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1)) + PI
+    !     else
+    !         self%atominfo(cc)%azimuth = PI / 2
+    !     end if
+    !     if (majvector(3) > 0.) then
+    !         self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3))
+    !     else if (majvector(3) < 0.) then
+    !         self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)) + PI
+    !     else
+    !         self%atominfo(cc)%polar = PI / 2
+    !     end if
+    !     self%atominfo(cc)%azimuth = self%atominfo(cc)%azimuth * 180 / PI
+    !     self%atominfo(cc)%polar = self%atominfo(cc)%polar * 180 / PI
+    !     write(*, '(i4, 2f8.2)') cc, self%atominfo(cc)%azimuth, self%atominfo(cc)%polar
+
+    !     ! Convert to basis w/ 1/sqrt(3)*<1,1,1> as eigenvector.
+    !     eigenvecs(:3,1) = 1./sqrt(3.) * [1., 1., 1.]
+    !     eigenvecs(:3,1) = 1./sqrt(2.) * [1., 1., 0.]
+    !     eigenvecs(:3,1) = sqrt(2./3.) * [1., 0.5, -1.]
+    !     call matinv(eigenvecs, eigenvecs_inv, 3, errflg)
+    !     aniso = matmul(matmul(eigenvecs_inv, aniso), eigenvecs) ! x,y,z basis -> new basis
+    !     self%atominfo(cc)%aniso_111 = aniso(1,1) / self%theoretical_radius
+    !     ! write(*, '(i4, 3f8.5)') cc, self%atominfo(cc)%semiaxes
+    !     ! write(*, '(i4, 3f8.5)') cc, aniso(1,1) / self%theoretical_radius, aniso(2,2) / self%theoretical_radius, aniso(3,3) / self%theoretical_radius
+
+
+    ! end subroutine calc_aniso
 
     ! For the input cc, model of atomic centers, and lattice displacements |center - expected center|,
     ! finds the maximum lattice displacement of the atoms neighboring the atom cc.
@@ -2307,17 +2378,16 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%displ,                  CSV_DELIM ! DISPL
         write(funit,601,advance='no') self%atominfo(cc)%max_ndispl,             CSV_DELIM ! MAX_NDISPL
         write(funit,601,advance='no') self%atominfo(cc)%isobfac,                CSV_DELIM ! BFAC
-        write(funit,601,advance='no') self%atominfo(cc)%isocorr,                CSV_DELIM ! ISO_CORR
-        ! aniso
-        write(funit,601,advance='no') self%atominfo(cc)%anisocorr,              CSV_DELIM ! ANISO_CORR
+        ! anisotropic bfactors
         write(funit,601,advance='no') self%atominfo(cc)%semiaxes(1),            CSV_DELIM ! SEMIAX_MAJ
         write(funit,601,advance='no') self%atominfo(cc)%semiaxes(2),            CSV_DELIM ! SEMIAX_MED
         write(funit,601,advance='no') self%atominfo(cc)%semiaxes(3),            CSV_DELIM ! SEMIAX_MIN
-        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(1),           CSV_DELIM ! ANISO_X
-        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(2),           CSV_DELIM ! ANISO_Y
-        write(funit,601,advance='no') self%atominfo(cc)%aniso_xyz(3),           CSV_DELIM ! ANISO_Z
         write(funit,601,advance='no') self%atominfo(cc)%azimuth,                CSV_DELIM ! AZIMUTH
         write(funit,601,advance='no') self%atominfo(cc)%polar,                  CSV_DELIM ! POLAR
+        write(funit,601,advance='no') self%atominfo(cc)%doi,                    CSV_DELIM ! DOI
+        ! bfactor fit correlations
+        write(funit,601,advance='no') self%atominfo(cc)%isocorr,                CSV_DELIM ! ISO_CORR
+        write(funit,601,advance='no') self%atominfo(cc)%anisocorr,              CSV_DELIM ! ANISO_CORR
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -2391,18 +2461,6 @@ contains
         write(funit,601,advance='no') self%isobfac_stats%avg,        CSV_DELIM ! AVG_BFAC
         write(funit,601,advance='no') self%isobfac_stats%med,        CSV_DELIM ! MED_BFAC
         write(funit,601,advance='no') self%isobfac_stats%sdev,       CSV_DELIM ! SDEV_BFAC
-        ! -- Isotropic b-factor fit correlation
-        write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR
-        write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR
-        write(funit,601,advance='no') self%isocorr_stats%sdev,       CSV_DELIM ! SDEV_ISO_CORR
-        ! -- Anisotropic b-factor fit correlation
-        write(funit,601,advance='no') self%anisocorr_stats%avg,      CSV_DELIM ! AVG_ANISO_CORR
-        write(funit,601,advance='no') self%anisocorr_stats%med,      CSV_DELIM ! MED_ANISO_CORR
-        write(funit,601,advance='no') self%anisocorr_stats%sdev,     CSV_DELIM ! SDEV_ANISO_CORR
-        ! -- degree of isotropy
-        write(funit,601,advance='no') self%doi_stats%avg,            CSV_DELIM ! AVG_DOI
-        write(funit,601,advance='no') self%doi_stats%med,            CSV_DELIM ! MED_DOI
-        write(funit,601,advance='no') self%doi_stats%sdev,           CSV_DELIM ! SDEV_DOI
         ! -- Major semi-axis lengths of elliptical fits of CC shell
         write(funit,601,advance='no') self%semiaxis_maj_stats%avg,   CSV_DELIM ! AVG_SEMIAX_MAJ
         write(funit,601,advance='no') self%semiaxis_maj_stats%med,   CSV_DELIM ! MED_SEMIAX_MAJ
@@ -2415,22 +2473,6 @@ contains
         write(funit,601,advance='no') self%semiaxis_min_stats%avg,   CSV_DELIM ! AVG_SEMIAX_MIN
         write(funit,601,advance='no') self%semiaxis_min_stats%med,   CSV_DELIM ! MED_SEMIAX_MIN
         write(funit,601,advance='no') self%semiaxis_min_stats%sdev,  CSV_DELIM ! SDEV_SEMIAX_MIN
-        ! -- Anisotropic displacement along x-axis
-        write(funit,601,advance='no') self%aniso_x_stats%avg,        CSV_DELIM ! AVG_ANISO_X
-        write(funit,601,advance='no') self%aniso_x_stats%med,        CSV_DELIM ! MED_ANISO_X
-        write(funit,601,advance='no') self%aniso_x_stats%sdev,       CSV_DELIM ! SDEV_ANISO_X
-        ! -- Anisotropic displacement along y-axis
-        write(funit,601,advance='no') self%aniso_y_stats%avg,        CSV_DELIM ! AVG_ANISO_Y
-        write(funit,601,advance='no') self%aniso_y_stats%med,        CSV_DELIM ! MED_ANISO_Y
-        write(funit,601,advance='no') self%aniso_y_stats%sdev,       CSV_DELIM ! SDEV_ANISO_Y
-        ! -- Anisotropic displacement along z-axis
-        write(funit,601,advance='no') self%aniso_z_stats%avg,        CSV_DELIM ! AVG_ANISO_Z
-        write(funit,601,advance='no') self%aniso_z_stats%med,        CSV_DELIM ! MED_ANISO_Z
-        write(funit,601,advance='no') self%aniso_z_stats%sdev,       CSV_DELIM ! SDEV_ANISO_Z
-        ! -- Anisotropic displacement along (1,1,1) direction
-        write(funit,601,advance='no') self%aniso_111_stats%avg,      CSV_DELIM ! AVG_ANISO_111
-        write(funit,601,advance='no') self%aniso_111_stats%med,      CSV_DELIM ! MED_ANISO_111
-        write(funit,601,advance='no') self%aniso_111_stats%sdev,     CSV_DELIM ! SDEV_ANISO_111
         ! -- Azimuthal angle of major semi-axis
         write(funit,601,advance='no') self%azimuth_stats%avg,        CSV_DELIM ! AVG_AZIMUTH
         write(funit,601,advance='no') self%azimuth_stats%med,        CSV_DELIM ! MED_AZIMUTH
@@ -2439,6 +2481,18 @@ contains
         write(funit,601,advance='no') self%polar_stats%avg,          CSV_DELIM ! AVG_POLAR
         write(funit,601,advance='no') self%polar_stats%med,          CSV_DELIM ! MED_POLAR
         write(funit,601,advance='no') self%polar_stats%sdev,         CSV_DELIM ! SDEV_POLAR
+        ! -- degree of isotropy
+        write(funit,601,advance='no') self%doi_stats%avg,            CSV_DELIM ! AVG_DOI
+        write(funit,601,advance='no') self%doi_stats%med,            CSV_DELIM ! MED_DOI
+        write(funit,601,advance='no') self%doi_stats%sdev,           CSV_DELIM ! SDEV_DOI
+        ! -- Isotropic b-factor fit correlation
+        write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR
+        write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR
+        write(funit,601,advance='no') self%isocorr_stats%sdev,       CSV_DELIM ! SDEV_ISO_CORR
+        ! -- Anisotropic b-factor fit correlation
+        write(funit,601,advance='no') self%anisocorr_stats%avg,      CSV_DELIM ! AVG_ANISO_CORR
+        write(funit,601,advance='no') self%anisocorr_stats%med,      CSV_DELIM ! MED_ANISO_CORR
+        write(funit,601,advance='no') self%anisocorr_stats%sdev,     CSV_DELIM ! SDEV_ANISO_CORR
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -2522,22 +2576,6 @@ contains
         write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%avg,   CSV_DELIM ! AVG_SEMIAX_MIN
         write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%med,   CSV_DELIM ! MED_SEMIAX_MIN
         write(funit,601,advance='no') self%semiaxis_min_stats_cns(cn)%sdev,  CSV_DELIM ! SDEV_SEMIAX_MIN
-        ! -- Anisotropic displacement along x-axis
-        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_X
-        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_X
-        write(funit,601,advance='no') self%aniso_x_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_X
-        ! -- Anisotropic displacement along y-axis
-        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_Y
-        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_Y
-        write(funit,601,advance='no') self%aniso_y_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_Y
-        ! -- Anisotropic displacement along z-axis
-        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ANISO_Z
-        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%med,        CSV_DELIM ! MED_ANISO_Z
-        write(funit,601,advance='no') self%aniso_z_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ANISO_Z
-        ! -- Anisotropic displacement along (1,1,1) direction
-        write(funit,601,advance='no') self%aniso_111_stats_cns(cn)%avg,      CSV_DELIM ! AVG_ANISO_111
-        write(funit,601,advance='no') self%aniso_111_stats_cns(cn)%med,      CSV_DELIM ! MED_ANISO_111
-        write(funit,601,advance='no') self%aniso_111_stats_cns(cn)%sdev,     CSV_DELIM ! SDEV_ANISO_111
         ! -- Azimuthal angle of major semi-axis
         write(funit,601,advance='no') self%azimuth_stats_cns(cn)%avg,        CSV_DELIM ! AVG_AZIMUTH
         write(funit,601,advance='no') self%azimuth_stats_cns(cn)%med,        CSV_DELIM ! MED_AZIMUTH
@@ -2546,6 +2584,18 @@ contains
         write(funit,601,advance='no') self%polar_stats_cns(cn)%avg,          CSV_DELIM ! AVG_POLAR
         write(funit,601,advance='no') self%polar_stats_cns(cn)%med,          CSV_DELIM ! MED_POLAR
         write(funit,601,advance='no') self%polar_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_POLAR
+        ! -- degree of isotropy
+        write(funit,601,advance='no') self%doi_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOI
+        write(funit,601,advance='no') self%doi_stats_cns(cn)%med,            CSV_DELIM ! MED_DOI
+        write(funit,601,advance='no') self%doi_stats_cns(cn)%sdev,           CSV_DELIM ! SDEV_DOI   
+        ! -- isotropic b-factor fit correlation
+        write(funit,601,advance='no') self%isocorr_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ISO_CORR
+        write(funit,601,advance='no') self%isocorr_stats_cns(cn)%med,        CSV_DELIM ! MED_ISO_CORR
+        write(funit,601,advance='no') self%isocorr_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_ISO_CORR
+        ! -- anisotropic b-factor fit correlation
+        write(funit,601,advance='no') self%anisocorr_stats_cns(cn)%avg,      CSV_DELIM ! AVG_ANISO_CORR
+        write(funit,601,advance='no') self%anisocorr_stats_cns(cn)%med,      CSV_DELIM ! MED_ANISO_CORR
+        write(funit,601,advance='no') self%anisocorr_stats_cns(cn)%sdev,     CSV_DELIM ! SDEV_ANISO_CORR
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN

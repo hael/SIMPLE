@@ -6,11 +6,12 @@ module simple_nanoparticle_utils
 include 'simple_lib.f08'
 use simple_qr_solve
 use simple_atoms, only: atoms
+use simple_image, only: image
 implicit none
 
 public :: phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, find_atoms_subset
+public :: remove_atoms, find_atoms_subset, no_motion_variance
 private
 #include "simple_local_flags.inc"
 
@@ -1014,5 +1015,56 @@ contains
         enddo
         deallocate(mask)
     end subroutine find_atoms_subset
+
+    function no_motion_variance(element, smpd) result(var)
+        character(len=2), intent(in)    :: element
+        real, intent(in)                :: smpd
+        type(image)     :: one_atom
+        type(atoms)     :: ideal_atom
+        real, pointer   :: rmat(:,:,:)
+        real            :: cutoff, center(3), XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1), r, int, var, max_int
+        integer         :: ldim(3), i, j, k, errflg
+
+        ldim = 160.
+        cutoff = (8.)*smpd
+        center(:3) = real(ldim(:3)/2.)
+
+        call one_atom%new(ldim, smpd)
+        call ideal_atom%new(1)
+        call ideal_atom%set_element(1,element)
+        call ideal_atom%set_coord(1,smpd*center(:3)) ! DO NOT NEED THE +1
+        call ideal_atom%convolve(one_atom, cutoff, 0.)
+        call one_atom%get_rmat_ptr(rmat)
+
+        XTWX = 0.
+        XTWX_inv = 0.
+        XTWY = 0.
+        max_int = 0.
+        do k=1,ldim(3)
+            do j=1,ldim(2)
+                do i=1,ldim(1)
+                    r = euclid(1.*(/i, j, k/), 1.*center)
+                    int = rmat(i,j,k)
+                    if (int > 0) then
+                        if (int > max_int) then
+                            max_int = int
+                        end if
+                        XTWX(1,1) = XTWX(1,1) + int
+                        XTWX(1,2) = XTWX(1,2) + r**2 * int
+                        XTWX(2,2) = XTWX(2,2) + r**4 * int
+                        XTWY(1,1) = XTWY(1,1) + int * log(int)
+                        XTWY(2,1) = XTWY(2,1) + r**2 * int * log(int)
+                    end if
+                end do
+            end do
+        end do
+        XTWX(2,1) = XTWX(1,2)
+        call matinv(XTWX, XTWX_inv, 2, errflg)
+        B = matmul(XTWX_inv, XTWY)
+        print *, "Actual Peak: ", max_int
+        print *, "Stationary Fit Peak: ", exp(B(1,1))
+        var = -0.5 / B(2,1) ! Best fit variance
+    end function no_motion_variance
+
 
 end module simple_nanoparticle_utils
