@@ -82,7 +82,7 @@ type :: polarft_corrcalc
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
-    integer,             allocatable :: dist_cnt(:)
+    real(sp),            allocatable :: dist_energy(:)
     real(sp),            allocatable :: ptcl_ref_dist(:,:)          !< SO(2) distribution matrix (nptcls, nrefs)
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
@@ -355,7 +355,7 @@ contains
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%heap_vars(params_glob%nthr),self%ref_prob_cache(1:self%nrefs),&
-                    &self%dist_cnt(self%nrefs),self%ptcl_ref_dist(self%nptcls,self%nrefs),&
+                    &self%dist_energy(self%nrefs),self%ptcl_ref_dist(self%nptcls,self%nrefs),&
                     &self%refs_reg(self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%sqsum_refs(self%nrefs,self%nptcls))
         local_stat=0
@@ -937,7 +937,7 @@ contains
         real      :: euls_ref(3), euls_ptcl(3), x_ref(3), x_ptcl(3), dist, thres
         type(ori) :: o
         self%ptcl_ref_dist = 0.
-        self%dist_cnt      = 0
+        self%dist_energy   = 0.
         thres              = params_glob%arc_thres * pi / 180.
         do iref = 1, self%nrefs
             euls_ref = eulspace%get_euler(iref) * pi / 180.
@@ -948,11 +948,9 @@ contains
                 euls_ptcl = o%get_euler() * pi / 180.
                 x_ptcl    = [sin(euls_ptcl(2)) * cos(euls_ptcl(1)), sin(euls_ptcl(2)) * sin(euls_ptcl(1)), cos(euls_ptcl(2))]
                 dist      = sqrt(sum((x_ptcl - x_ref)**2))
-                if( dist < thres )then
-                    self%ptcl_ref_dist(i, iref) = (thres - dist) / thres
-                    self%dist_cnt(iref)         = self%dist_cnt(iref) + 1
-                endif
+                if( dist < thres ) self%ptcl_ref_dist(i, iref) = (thres - dist) / thres
             enddo
+            self%dist_energy(iref) = sum(self%ptcl_ref_dist(:, iref))
         enddo
     end subroutine build_ptcl_ref_dist
 
@@ -974,7 +972,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        self%ref_prob_cache   = self%ref_prob_cache / self%dist_cnt / self%nrots
+        self%ref_prob_cache   = self%ref_prob_cache / self%dist_energy / self%nrots
         params_glob%l_ref_reg = .true.
     end subroutine memoize_ref_prob
 
@@ -984,16 +982,16 @@ contains
         integer     :: i, iref, k
         complex(sp) :: ptcl_ctf
         self%sqsum_refs = 0.
-        !$omp parallel do collapse(2) default(shared) private(i, iref) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
-                if( self%iseven(i) )then
-                    self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + &
-                        & sum(sum(csq_fast(self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,i)), 2), 1)
-                else
-                    self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + &
-                        & sum(sum(csq_fast(self%pfts_refs_odd(:,:,iref) * self%ctfmats(:,:,i)), 2), 1)
-                endif
+                do k = self%kfromto(1),self%kfromto(2)
+                    if( self%iseven(i) )then
+                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + real(k) * sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
+                    else
+                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + real(k) * sum(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)))
+                    endif
+                enddo
             enddo
         enddo
         !$omp end parallel do
@@ -1002,11 +1000,11 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i, iref, k, ptcl_ctf) proc_bind(close) schedule(static)
         do k = self%kfromto(1), self%kfromto(2)
             do i = 1, self%nptcls
-                ptcl_ctf = sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
+                ptcl_ctf = real(k) * sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
                 do iref = 1, self%nrefs
                     if( self%ptcl_ref_dist(i, iref) > 0 )then
                         self%refs_reg(k,iref) = self%refs_reg(k,iref) + ptcl_ctf * self%ptcl_ref_dist(i, iref) / &
-                            &self%dist_cnt(iref) / self%sqsum_refs(iref, i) / self%sqsums_ptcls(i) / self%ref_prob_cache(iref)
+                            &self%dist_energy(iref) / self%sqsum_refs(iref, i) / sqrt(self%sqsums_ptcls(i)) / self%ref_prob_cache(iref)
                     endif
                 enddo
             enddo
@@ -2300,10 +2298,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iref
-        real,                    parameter     :: reg_eps = 0.5
         integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref), dp)
+            pft_ref(:,k) = params_glob%eps * pft_ref(:,k) + real((1. - params_glob%eps) * self%refs_reg(k,iref), dp)
         enddo
     end subroutine reg_ref_dp
 
@@ -2311,10 +2308,9 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iref
-        real,                    parameter     :: reg_eps = 0.5
         integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref)
+            pft_ref(:,k) = params_glob%eps * pft_ref(:,k) + (1. - params_glob%eps) * self%refs_reg(k,iref)
         enddo
     end subroutine reg_ref_sp
 
@@ -2356,7 +2352,7 @@ contains
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,&
-                &self%ref_prob_cache, self%ptcl_ref_dist, self%dist_cnt,&
+                &self%ref_prob_cache, self%ptcl_ref_dist, self%dist_energy,&
                 &self%refs_reg, self%sqsum_refs)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
