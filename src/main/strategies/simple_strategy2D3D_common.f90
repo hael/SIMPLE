@@ -82,7 +82,6 @@ contains
                     call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
                 endif
             end do
-            call stkio_r%close
         else
             do iptcl=fromptop(1),fromptop(2)
                 ind_in_batch = iptcl - fromptop(1) + 1
@@ -95,8 +94,8 @@ contains
                 endif
                 call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
             end do
-            call stkio_r%close
         endif
+        call stkio_r%close
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( n, pinds, batchlims )
@@ -501,7 +500,7 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
-        if( params_glob%l_ref_reg ) call exponential_reg( vol_ptr, lambda = 2., eps = 0.1 )
+        if( params_glob%l_ref_reg .and. trim(params_glob%ref_reg).eq.'exp' ) call exponential_reg( vol_ptr, lambda = 2., eps = 0.1 )
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking

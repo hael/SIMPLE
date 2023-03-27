@@ -51,6 +51,7 @@ type star_file
     type(star_data)           :: particles2D
     type(star_data)           :: particles3D
     type(star_data)           :: clusters2D
+    type(star_data)           :: class3D
     integer, allocatable      :: opticsmap(:)
     integer, allocatable      :: stkmap(:,:) ! (stkid : z)
     integer, allocatable      :: stkstates(:)
@@ -108,6 +109,9 @@ contains
         type(ori)                               :: testori
         character(len=XLONGSTRLEN), allocatable :: keys(:)
         integer                                 :: iori, ikey, testcount
+        do iori = 1, size(flags)
+            flags(iori)%present = .false.
+        end do
         ! find 1st non state 0 ori
         testcount = 0
         do iori = 1,sporis%get_noris()

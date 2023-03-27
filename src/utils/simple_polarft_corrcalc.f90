@@ -59,7 +59,6 @@ type heap_vars
     real(dp),    pointer :: argvec(:)          => null()
     complex(sp), pointer :: shmat(:,:)         => null()
     real(dp),    pointer :: kcorrs(:)          => null()
-    real(dp),    pointer :: kcorrs_tmp(:)      => null()
     complex(dp), pointer :: pft_ref_8(:,:)     => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
     complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
@@ -91,6 +90,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
+    complex(sp),         allocatable :: pfts_avg_even(:,:,:)          !< 3D complex matrix of average polar reference (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_avg_odd(:,:,:)           !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -129,6 +130,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
+    procedure          :: calc_ptcl_reg
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: cp_even2odd_ref
@@ -192,8 +194,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_prob
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
-    procedure, private :: gencorrs_3
-    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
+    generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -220,6 +221,7 @@ type :: polarft_corrcalc
     generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
     generic,   private :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
+    procedure, private :: reg_ptcl, dereg_ptcl
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -340,6 +342,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%pfts_avg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%pfts_avg_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -356,7 +360,6 @@ contains
                 &self%heap_vars(ithr)%shvec(self%pftsz),&
                 &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%kcorrs(self%nrots),&
-                &self%heap_vars(ithr)%kcorrs_tmp(self%nrots),&
                 &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
@@ -517,6 +520,39 @@ contains
             self%pfts_refs_odd(irot,k,iref)  = comp
         endif
     end subroutine set_ref_fcomp
+
+    subroutine calc_ptcl_reg( self, iseven )
+        class(polarft_corrcalc), intent(inout) :: self
+        logical,                 intent(in)    :: iseven
+        integer :: k, j, iref
+        if( iseven )then
+            self%pfts_avg_even = 0.
+            !$omp parallel do collapse(3) default(shared) private(iref,j,k) schedule(static) proc_bind(close)
+            do iref = 1, self%nrefs
+                do k = self%kfromto(1), self%kfromto(2)
+                    ! neighborhood distribution round iref should be here
+                    do j = 1, self%nrefs
+                        self%pfts_avg_even(:,k,iref) = self%pfts_avg_even(:,k,iref) + sum(self%pfts_refs_even(:,k,j))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            self%pfts_avg_even = self%pfts_avg_even / self%nrefs / self%nrots
+        else
+            self%pfts_avg_odd = 0.
+            !$omp parallel do collapse(3) default(shared) private(iref,j,k) schedule(static) proc_bind(close)
+            do iref = 1, self%nrefs
+                do k = self%kfromto(1), self%kfromto(2)
+                    ! neighborhood distribution round iref should be here
+                    do j = 1, self%nrefs
+                        self%pfts_avg_odd(:,k,iref) = self%pfts_avg_odd(:,k,iref) + sum(self%pfts_refs_odd(:,k,j))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            self%pfts_avg_odd = self%pfts_avg_odd / self%nrefs / self%nrots
+        endif
+    end subroutine calc_ptcl_reg
 
     subroutine set_dref_fcomp( self, iref, irot, k, dcomp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1559,7 +1595,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
+                call self%gencorrs_cc(    pft_ref, i, ithr, iref, self%heap_vars(ithr)%kcorrs)
                 cc = real(self%heap_vars(ithr)%kcorrs)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
@@ -1581,7 +1617,7 @@ contains
         pft_ref = pft_ref * shmat
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
+                call self%gencorrs_cc(    pft_ref, i, ithr, iref, self%heap_vars(ithr)%kcorrs)
                 cc = real(self%heap_vars(ithr)%kcorrs)
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
@@ -1590,51 +1626,17 @@ contains
         end select
     end subroutine gencorrs_2
     
-    subroutine gencorrs_3( self, iref, iptcl, cc, srch_order, which_iter )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        integer,                 intent(in)    :: srch_order(:,:)
-        integer, optional,       intent(in)    :: which_iter
-        integer,                 parameter     :: N_SAMPLES = 6, MAX_ITER = 20
-        complex(sp), pointer :: pft_ref(:,:)
-        integer :: i, ithr, k, iref_tmp, isample, iter_here
-        real    :: u, eps
-        call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                cc = real(self%heap_vars(ithr)%kcorrs)
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
-            case(OBJFUN_PROB)
-                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs_tmp)
-                cc = 0.
-                do k = 1, N_SAMPLES
-                    call random_number(u)
-                    isample  = floor(1 + size(srch_order, 2)*u)
-                    iref_tmp = srch_order(ithr, isample)
-                    call self%prep_ref4corr(iref_tmp, iptcl, pft_ref, i, ithr)
-                    call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
-                    cc = cc + self%heap_vars(ithr)%kcorrs
-                enddo
-                iter_here = 1
-                if( present(which_iter) ) iter_here = which_iter
-                eps = 1. - (min(iter_here, MAX_ITER + 1) - 1.)/real(MAX_ITER)
-                cc  = self%heap_vars(ithr)%kcorrs_tmp - eps * sum(cc) / real(N_SAMPLES) / self%nrots
-        end select
-    end subroutine gencorrs_3
-
-    subroutine gencorrs_cc( self, pft_ref, i, ithr, cc )
+    subroutine gencorrs_cc( self, pft_ref, i, ithr, iref, cc )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
-        integer,                 intent(in)    :: i, ithr
+        integer,                 intent(in)    :: i, ithr, iref
         real(dp),                intent(out)   :: cc(self%nrots)
         real(dp) :: sqsum_ref, sqsum_ptcl
         integer  :: ik
         sqsum_ref  = 0._dp
         sqsum_ptcl = 0._dp
         cc         = 0._dp
+        if( params_glob%l_obj_reg ) call self%reg_ptcl(i, iref)
         ! sum up correlations over k-rings
         do ik = self%kfromto(1),self%kfromto(2)
             sqsum_ref  = sqsum_ref  + real(ik, dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
@@ -1658,6 +1660,7 @@ contains
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         cc = cc / real(self%nrots * 2, dp) / dsqrt(sqsum_ref * sqsum_ptcl)
+        if( params_glob%l_obj_reg ) call self%dereg_ptcl(i, iref)
     end subroutine gencorrs_cc
 
     subroutine gencorrs_euclid( self, pft_ref, keuclids, iptcl, i, euclids )
@@ -1716,7 +1719,7 @@ contains
         gencorr_for_rot_8 = 0._dp
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                gencorr_for_rot_8 = self%gencorr_cc_for_rot_8(     pft_ref_8, iptcl, i, irot )
+                gencorr_for_rot_8 = self%gencorr_cc_for_rot_8(     pft_ref_8, iptcl, i, irot, iref )
             case(OBJFUN_EUCLID)
                 gencorr_for_rot_8 = self%gencorr_euclid_for_rot_8( pft_ref_8, iptcl, i, irot )
             case(OBJFUN_PROB)
@@ -1724,21 +1727,23 @@ contains
         end select
     end function gencorr_for_rot_8
 
-    function gencorr_cc_for_rot_8( self, pft_ref_8, iptcl, i, irot ) result( cc )
+    function gencorr_cc_for_rot_8( self, pft_ref_8, iptcl, i, irot, iref ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref_8(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
+        integer,                 intent(in)    :: iptcl, i, irot, iref
         real(dp) :: cc, sqsum_ref, sqsum_ptcl
         integer  :: ik
         sqsum_ref  = 0._dp
         sqsum_ptcl = 0._dp
         cc         = 0._dp
+        if( params_glob%l_obj_reg ) call self%reg_ptcl(i, iref)
         do ik = self%kfromto(1),self%kfromto(2)
             sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(real(csq_fast(pft_ref_8(:,ik)), dp))
             sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(real(csq_fast(self%pfts_ptcls(:,ik,i)), dp))
             cc         = cc         + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_8, i, ik, irot)
         end do
         cc = cc / dsqrt(sqsum_ref * sqsum_ptcl)
+        if( params_glob%l_obj_reg ) call self%dereg_ptcl(i, iref)
     end function gencorr_cc_for_rot_8
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref_8, iptcl, i, irot )
@@ -1776,7 +1781,7 @@ contains
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorr_cc_grad_for_rot_8(     pft_ref_8, pft_ref_tmp, iptcl, i, irot, f, grad )
+                call self%gencorr_cc_grad_for_rot_8(     pft_ref_8, pft_ref_tmp, iptcl, i, irot, iref, f, grad )
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_for_rot_8( pft_ref_8, pft_ref_tmp, iptcl, i, irot, f, grad )
             case(OBJFUN_PROB)
@@ -1784,10 +1789,10 @@ contains
         end select
     end subroutine gencorr_grad_for_rot_8
 
-    subroutine gencorr_cc_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, f, grad )
+    subroutine gencorr_cc_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, iref, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
+        integer,                 intent(in)    :: iptcl, i, irot, iref
         real(dp),                intent(out)   :: f, grad(2)
         real(dp) :: sqsum_ref, sqsum_ptcl
         integer  :: ik
@@ -1796,6 +1801,7 @@ contains
         sqsum_ptcl  = 0._dp
         f           = 0._dp
         grad        = 0._dp
+        if( params_glob%l_obj_reg ) call self%reg_ptcl(i, iref)
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do ik = self%kfromto(1),self%kfromto(2)
             sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
@@ -1809,6 +1815,7 @@ contains
         end do
         f    = f    / dsqrt(sqsum_ref*sqsum_ptcl)
         grad = grad / dsqrt(sqsum_ref*sqsum_ptcl)
+        if( params_glob%l_obj_reg ) call self%dereg_ptcl(i, iref)
     end subroutine gencorr_cc_grad_for_rot_8
 
     subroutine gencorr_euclid_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, f, grad )
@@ -1878,7 +1885,7 @@ contains
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorr_cc_grad_only_for_rot_8(     pft_ref_8, pft_ref_tmp, iptcl, i, irot, grad )
+                call self%gencorr_cc_grad_only_for_rot_8(     pft_ref_8, pft_ref_tmp, iptcl, i, irot, iref, grad )
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_only_for_rot_8( pft_ref_8, pft_ref_tmp, iptcl, i, irot, grad )
             case(OBJFUN_PROB)
@@ -1886,16 +1893,17 @@ contains
         end select
     end subroutine gencorr_grad_only_for_rot_8
 
-    subroutine gencorr_cc_grad_only_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, grad )
+    subroutine gencorr_cc_grad_only_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, iref, grad )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,                 intent(in)    :: iptcl, i, irot
+        integer,                 intent(in)    :: iptcl, i, irot, iref
         real(dp),                intent(out)   :: grad(2)
         integer  :: ik
         real(dp) :: sqsum_ref, sqsum_ptcl
         sqsum_ref  = 0._dp
         sqsum_ptcl = 0._dp
         grad       = 0._dp
+        if( params_glob%l_obj_reg ) call self%dereg_ptcl(i, iref)
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do ik = self%kfromto(1),self%kfromto(2)
             sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(real(csq_fast(pft_ref(:,ik)), dp))
@@ -1907,6 +1915,7 @@ contains
             grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, i, ik, irot)
         end do
         grad = grad / dsqrt(sqsum_ref*sqsum_ptcl)
+        if( params_glob%l_obj_reg ) call self%dereg_ptcl(i, iref)
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     subroutine gencorr_euclid_grad_only_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, i, irot, grad )
@@ -2187,6 +2196,46 @@ contains
         end do
     end subroutine deweight_ref_ptcl_dp
 
+    subroutine reg_ptcl( self, i, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: i, iref
+        real,                    parameter     :: reg_eps = 0.1
+        integer :: k
+        if( self%iseven(i) )then
+            do k=self%kfromto(1),self%kfromto(2)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_even(:,k,iref)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_even(:,k,iref))
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_even(:,k,iref))
+            enddo
+        else
+            do k=self%kfromto(1),self%kfromto(2)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    - reg_eps*         self%pfts_avg_odd(:,k,iref)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re - reg_eps*realpart(self%pfts_avg_odd(:,k,iref))
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im - reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))
+            enddo
+        endif
+    end subroutine reg_ptcl
+
+    subroutine dereg_ptcl( self, i, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: i, iref
+        real,                    parameter     :: reg_eps = 0.1
+        integer :: k
+        if( self%iseven(i) )then
+            do k=self%kfromto(1),self%kfromto(2)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_even(:,k,iref)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_even(:,k,iref))
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_even(:,k,iref))
+            enddo
+        else
+            do k=self%kfromto(1),self%kfromto(2)
+                self%pfts_ptcls(:,k,i)    = self%pfts_ptcls(:,k,i)    + reg_eps*         self%pfts_avg_odd(:,k,iref)
+                self%fftdat_ptcls(k,i)%re = self%fftdat_ptcls(k,i)%re + reg_eps*realpart(self%pfts_avg_odd(:,k,iref))
+                self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im + reg_eps*imagpart(self%pfts_avg_odd(:,k,iref))
+            enddo
+        endif
+    end subroutine dereg_ptcl
+
     ! DESTRUCTOR
 
     subroutine kill( self )
@@ -2206,7 +2255,7 @@ contains
                     &self%heap_vars(ithr)%pft_dref,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%corrs_over_k,&
-                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,self%heap_vars(ithr)%kcorrs_tmp,&
+                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%argmat_8,&
@@ -2221,7 +2270,7 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
+            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf, self%pfts_avg_even, self%pfts_avg_odd,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)

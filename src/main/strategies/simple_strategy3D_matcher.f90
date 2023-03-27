@@ -471,6 +471,10 @@ contains
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
+        if( params_glob%l_obj_reg )then
+            call pftcc%calc_ptcl_reg(.true.)
+            call pftcc%calc_ptcl_reg(.false.)
+        endif
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
     end subroutine prep_ccobjs4align
 
