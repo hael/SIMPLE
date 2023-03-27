@@ -52,6 +52,7 @@ type :: parameters
     character(len=3)          :: noise_norm ='no'
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
+    character(len=3)          :: obj_reg='no'         !< apply objective regularizer(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
@@ -403,6 +404,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
+    logical :: l_obj_reg      = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_ref_reg      = .false.
     logical :: l_sigma_glob   = .false.
@@ -503,6 +505,7 @@ contains
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
         call check_carg('objfun',         self%objfun)
+        call check_carg('obj_reg',        self%obj_reg)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
         call check_carg('oritype',        self%oritype)
@@ -1370,6 +1373,8 @@ contains
         end select
         ! reference regularization
         self%l_ref_reg = .not.( trim(self%ref_reg).eq.'none' )
+        ! objective regularization
+        self%l_obj_reg = trim(self%obj_reg).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

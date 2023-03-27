@@ -34,6 +34,7 @@ contains
     ! export
     procedure          :: export_mics
     procedure          :: export_cls2D
+    procedure          :: export_iter3D
     procedure          :: export_ptcls2D
     procedure          :: export_ptcls3D
     procedure, private :: export_stardata
@@ -145,6 +146,19 @@ contains
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnEstimatedResolution", splflag="res")]
       !  self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop", int=.true.)]
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop")]
+        
+        ! assign class3D flags
+        if (.not. allocated(self%starfile%class3D%flags)) allocate(self%starfile%class3D%flags(0))
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnReferenceImage",      splflag="lpvol",    string=.true.)]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="splPprocImage",          splflag="ppvol",    string=.true.)]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnSpectralIndex",       splflag="specind",  int=.true.)   ]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnResolution",          splflag="specres")                ]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnAngstromResolution",  splflag="specares")               ]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnGoldStandardFsc",     splflag="specfsc")                ]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="rlnEstimatedResolution", splflag="speceres")               ]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="splFsc05",               splflag="fsc05"                  )]
+        self%starfile%class3D%flags = [self%starfile%class3D%flags, star_flag(rlnflag="splFsc0128",             splflag="fsc0128"                )]
+        
     end subroutine initialise
 
     ! import
@@ -669,6 +683,124 @@ contains
         call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", mapstks=.false.)
     end subroutine export_cls2D
 
+    subroutine export_iter3D(self, spproj, states, iter)
+        class(starproject),                     intent(inout)   :: self
+        class(sp_project),                      intent(inout)   :: spproj
+        integer,                                intent(in)      :: states
+        integer,                                intent(in)      :: iter
+        type(sp_project)                                        :: classproj, fscproj
+        character(len=:),           allocatable                 :: stkname, relpath
+        character(len=STDLEN)                                   :: str_state, str_iter
+        character(len=LONGSTRLEN)                               :: volassemble_output, pprocvol, lpvol
+        character(len=XLONGSTRLEN)                              :: cwd
+        character(len=LEN_LINE)                                 :: line
+        character(len=LEN_LINE),    allocatable                 :: splitline(:)
+        integer                                                 :: i, j, state, fhandle, ios, ok
+        real                                                    :: smpd
+        real,                       allocatable                 :: fscs(:,:,:), maxres05(:), maxres0128(:)
+        logical                                                 :: ex
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
+        call simple_getcwd(cwd)
+        if(.not. self%starfile%initialised) call self%initialise()
+        str_iter = int2str_pad(iter,3)
+        allocate(fscs(states,2000,2))! assumed max 2000 px box
+        allocate(maxres05(states))
+        allocate(maxres0128(states))
+        fscs       = 0.0
+        maxres05   = 0.0
+        maxres0128 = 0.0
+        call classproj%os_cls3D%new(states, is_ptcl=.false.)
+        i = 0
+        do state = 1, states
+            str_state = int2str_pad(state,2)
+            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+            if(file_exists(volassemble_output)) then
+                i = 0
+                call fopen(fhandle, file=trim(adjustl(volassemble_output)), status='old')
+                do
+                    read(fhandle, '(A)', iostat=ios) line
+                    if(ios /= 0) exit
+                    if(len_trim(line) > 0) then
+                        line = trim(adjustl(line))
+                        if (index(line, "CORRELATION") > 0) then
+                            i = i + 1
+                            allocate(splitline(6))
+                            call split_dataline(line, splitline)
+                            read(splitline(3),*) fscs(state,i,1)
+                            read(splitline(6),*) fscs(state,i,2)
+                            deallocate(splitline)
+                        else if (index(line, "FSC=0.500") > 0) then
+                            allocate(splitline(7))
+                            call split_dataline(line, splitline)
+                            read(splitline(7),*) maxres05(state)
+                            deallocate(splitline)
+                        else if (index(line, "FSC=0.143") > 0) then
+                            allocate(splitline(7))
+                            call split_dataline(line, splitline)
+                            read(splitline(7),*) maxres0128(state)
+                            deallocate(splitline)
+                        end if
+                    end if
+                end do
+                call fclose(fhandle)
+            end if
+            pprocvol = trim(VOL_FBODY)//trim(str_state)//"_iter"//trim(str_iter)//trim(PPROC_SUFFIX)//".mrc"
+            lpvol    = trim(VOL_FBODY)//trim(str_state)//"_iter"//trim(str_iter)//trim(LP_SUFFIX)//".mrc"
+            if(file_exists(pprocvol)) then
+              call classproj%os_cls3D%set(state, 'ppvol', trim(basename(cwd))//"/"//trim(pprocvol))
+            end if
+            if(file_exists(lpvol)) then
+              call classproj%os_cls3D%set(state, 'lpvol', trim(basename(cwd))//"/"//trim(lpvol))
+            end if
+            call classproj%os_cls3D%set(state, 'state',    1.0)
+            call classproj%os_cls3D%set(state, 'speceres', maxres0128(state))
+            call classproj%os_cls3D%set(state, 'fsc05',    maxres05(state))
+            call classproj%os_cls3D%set(state, 'fsc0128',  maxres0128(state))
+        end do
+        if(maxval(maxres0128) .eq. 0.0) GO TO 10
+        self%starfile%filename ="class3D_iter"//trim(str_iter)//".star"
+        inquire(file=trim(adjustl(self%starfile%filename)), exist=ex)
+        if (ex) then
+            call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), position='append', iostat=ok)
+        else
+            call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), status='new', iostat=ok)
+        endif
+        write(fhandle, *) ""
+        write(fhandle, *) "data_model_general"
+        write(fhandle, *) ""
+        write(fhandle, "(A)")        "_rlnReferenceDimensionality       3"
+        write(fhandle, "(A)")        "_rlnDataDimensionality            2"
+        write(fhandle, "(A)")        "_rlnNrClasses                     " // states
+        write(fhandle, "(A,F12.4)")  "_rlnEstimatedResolution           ", minval(maxres0128)
+        call fclose(fhandle)
+        call enable_splflags(classproj%os_cls3D, self%starfile%class3D%flags)
+        call self%export_stardata(classproj, self%starfile%class3D%flags, classproj%os_cls3D, "model_classes", mapstks=.false.)
+        do state = 1, states
+            call fscproj%os_cls3D%new(i, is_ptcl=.false.)
+            do j = 1, i
+                call fscproj%os_cls3D%set(j, "state", 1.0)
+                call fscproj%os_cls3D%set(j, "specind", real(j) - 1.0)
+                if( j > 1) then
+                    call fscproj%os_cls3D%set(j, "specres", 1.0/(real(j) - 1.0))
+                else
+                    call fscproj%os_cls3D%set(j, "specres", 999.99)
+                end if 
+                call fscproj%os_cls3D%set(j, "specares", real(fscs(state, j, 1)))
+                call fscproj%os_cls3D%set(j, "specfsc",  real(fscs(state, j, 2)))
+            end do
+            call enable_splflags(fscproj%os_cls3D, self%starfile%class3D%flags)
+            call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//state, mapstks=.false.)
+            call fscproj%kill()
+        end do
+        10 CONTINUE
+        if(allocated(fscs))       deallocate(fscs)
+        if(allocated(maxres05))   deallocate(maxres05)
+        if(allocated(maxres0128)) deallocate(maxres0128)
+        if(allocated(stkname))    deallocate(stkname)
+        if(allocated(relpath))    deallocate(relpath)
+        if(allocated(splitline))  deallocate(splitline)
+    end subroutine export_iter3D
+
     subroutine export_ptcls2D(self, cline, spproj)
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
@@ -1184,6 +1316,7 @@ contains
         if(allocated(self%starfile%particles2D%flags)) deallocate(self%starfile%particles2D%flags)
         if(allocated(self%starfile%particles3D%flags)) deallocate(self%starfile%particles3D%flags)
         if(allocated(self%starfile%clusters2D%flags))  deallocate(self%starfile%clusters2D%flags)
+        if(allocated(self%starfile%class3D%flags))     deallocate(self%starfile%class3D%flags)
     end subroutine kill
 
 end module simple_starproject
