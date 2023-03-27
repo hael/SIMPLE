@@ -37,8 +37,8 @@ contains
         type(class_frcs) :: clsfrcs
         type(image)      :: weights_img
         real             :: smpd, lpstart, lp, val
-        integer          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
-        integer          :: nptcls, hpind_fsc, find, c_shape(3), m, n
+        integer          :: iptcl, box, box_pd, filtsz, ldim(3), ldim_pd(3), smooth_ext
+        integer          :: nptcls, hpind_fsc, find, m, n
         logical          :: lpstart_fallback, l_phaseplate, have_mask
         write(logfhandle,'(A)') '>>> 2D NONUNIFORM FILTERING'
         ! init
@@ -48,7 +48,8 @@ contains
         smooth_ext   = params_glob%smooth_ext
         ldim_pd      = ldim + 2 * smooth_ext
         ldim_pd(3)   = 1 ! because we operate on stacks
-        box          = ldim_pd(1)
+        box          = ldim(1)
+        box_pd       = ldim_pd(1)
         frcs_fname   = trim(params_glob%frcs)
         smpd         = even(1)%get_smpd()
         nptcls       = size(even)
@@ -57,7 +58,6 @@ contains
         l_phaseplate = params_glob%l_phaseplate
         have_mask    = present(mask)
         ! retrieve FRCs
-        call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
         if( file_exists(frcs_fname) )then
             call clsfrcs%read(frcs_fname)
@@ -76,14 +76,14 @@ contains
         frc = 0.
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
-            optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box, smpd)
+            optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box_pd, smpd)
         else
+            ! the below required to retrieve the right Fourier index limit when we are padding
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
-                ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, 0.1)                ! little overshoot, filter function anyway applied in polarft_corrcalc
-                lp   = calc_lowpass_lim(find, box, smpd)          ! box is the padded box size
-                optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
+                find = get_lplim_at_corr(frc, 0.1)          ! little overshoot, resolution is limited in polarft_corrcalc anyway
+                lp   = calc_lowpass_lim(find, box, smpd)    ! resolution limit in original image
+                optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box_pd, smpd) ! this is the Fourier index limit for the padded image
             end do
         endif
         ! fill up optf2Dvars struct
@@ -104,7 +104,7 @@ contains
             call optf2Dvars(iptcl)%even_copy_cmat%copy(even(iptcl))
             call optf2Dvars(iptcl)%even_copy_cmat%fft
             optf2Dvars(iptcl)%have_mask = .false.
-            allocate(optf2Dvars(iptcl)%cur_fil(box), source=0.)
+            allocate(optf2Dvars(iptcl)%cur_fil(box_pd), source=0.)
             if( have_mask )then
                 if( mask(iptcl)%nforeground() > 0 )then
                     optf2Dvars(iptcl)%have_mask = .true.
@@ -119,7 +119,7 @@ contains
         do m = -params_glob%smooth_ext, params_glob%smooth_ext
             do n = -params_glob%smooth_ext, params_glob%smooth_ext
                 val = -hyp(m,n) / (params_glob%smooth_ext + 1) + 1.
-                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
+                if( val > 0 ) call weights_img%set_rmat_at(box_pd/2+m+1, box_pd/2+n+1, 1, val)
             enddo
         enddo
         call weights_img%fft()
@@ -138,6 +138,7 @@ contains
             !$omp end parallel do
         endif
         ! destruct
+        call clsfrcs%kill
         call weights_img%kill
         do iptcl = 1, nptcls
             call optf2Dvars(iptcl)%odd_copy_rmat%kill
@@ -237,20 +238,19 @@ contains
         class(image),        intent(inout) :: odd, even, weights_img
         type(optfilt2Dvars), intent(inout) :: optf2Dvars
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        integer         :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
+        integer         :: k,l, box, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
         real            :: find_stepsz, val
         type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
         ! init
         ldim        = odd%get_ldim()
         box         = ldim(1)
-        dim3        = ldim(3)
-        if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
+        if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
         find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
-        ub          = (/ box-ext, box-ext, dim3 /)
+        ub          = (/ box-ext, box-ext, 1/)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
@@ -304,7 +304,7 @@ contains
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         real(kind=c_float),        pointer :: rmat_mask(:,:,:), rmat_odd_lowres(:,:,:), rmat_even_lowres(:,:,:)
         type(image)     :: odd_filt_lowres, even_filt_lowres
-        integer         :: k, l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
+        integer         :: k, l, box, ldim(3), find_start, find_stop, iter_no, ext, cutoff_find, lb(3), ub(3)
         real            :: find_stepsz, val, m
         type(image_ptr) :: pdiff_opt_odd, pdiff_opt_even, pdiff_odd, pdiff_even, pweights
         if( .not. optf2Dvars%have_mask )then
@@ -314,14 +314,13 @@ contains
         ! init
         ldim        = odd%get_ldim()
         box         = ldim(1)
-        dim3        = ldim(3)
-        if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
+        if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
         find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
-        ub          = (/ box-ext, box-ext, dim3 /)
+        ub          = (/ box-ext, box-ext, 1/)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img_odd %get_mat_ptrs(pdiff_odd)
@@ -762,7 +761,6 @@ contains
         hpind_fsc    = params_glob%hpind_fsc
         l_phaseplate = params_glob%l_phaseplate
         ! retrieve FRCs
-        call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
         if( file_exists(frcs_fname) )then
             call clsfrcs%read(frcs_fname)
@@ -785,10 +783,7 @@ contains
         else
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
-                ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, 0.1)                ! little overshoot
-                lp   = calc_lowpass_lim(find, box, smpd)          ! box is the padded box size
-                optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
+                optf2Dvars(iptcl)%lplim_hres = get_lplim_at_corr(frc, 0.1)
             end do
         endif
         ! fill up optf2Dvars struct
@@ -815,6 +810,7 @@ contains
             call optf2Dvars(iptcl)%even_filt%kill
             call optf2Dvars(iptcl)%odd_filt%kill
         enddo
+        call clsfrcs%kill
     end subroutine uni_filt2D_sub
 
     ! generating and applying the exponential regularization
