@@ -1066,7 +1066,7 @@ contains
                     if( self%ptcl_dist(i, i2) )then
                         do k = self%kfromto(1), self%kfromto(2)
                             self%ptcl_reg(k,iref,i) = self%ptcl_reg(k,iref,i) +&
-                                &sum(self%pfts_ptcls(:,k,i2) * self%ctfmats(:,k,i)) / self%sqsum_refs(iref, i2) / self%sqsums_ptcls(i2)
+                                &sum(self%pfts_ptcls(:,k,i2) * self%ctfmats(:,k,i2)) / self%sqsum_refs(iref, i2) / self%sqsums_ptcls(i2)
                         enddo
                         self%ptcl_reg(:,iref,i) = self%ptcl_reg(:,iref,i) / self%ptcl_dist_cnt(i)
                     endif
@@ -1123,9 +1123,9 @@ contains
                 if( self%ptcl_ref_dist(i, iref) )then
                     do k = self%kfromto(1), self%kfromto(2)
                         self%refs_reg(k,iref) = self%refs_reg(k,iref) +&
-                            &sum(self%pfts_ptcls(:,k,i)) / self%sqsums_ptcls(i)
+                            &sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
                     enddo
-                    self%refs_reg(:,iref) = self%refs_reg(:,iref) / self%dist_cnt(iref)
+                    self%refs_reg(:,iref) = self%refs_reg(:,iref) / self%dist_cnt(iref) / self%sqsum_refs(iref, i) / self%sqsums_ptcls(i)
                 endif
             enddo
         enddo
@@ -1801,7 +1801,7 @@ contains
         complex(sp), pointer :: pft_ref(:,:)
         integer :: ithr
         call self%prep_ref4corr(iref, iptcl, pft_ref, ithr)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref, iptcl)
+        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref)
         if( params_glob%l_obj_reg ) call self%reg_ref_ptcl(pft_ref, iref, iptcl)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
@@ -1824,7 +1824,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref, ithr)
         shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat(ithr, shvec, shmat)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref, iptcl)
+        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref)
         if( params_glob%l_obj_reg ) call self%reg_ref_ptcl(pft_ref, iref, iptcl)
         pft_ref = pft_ref * shmat
         select case(params_glob%cc_objfun)
@@ -1928,7 +1928,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref_8, ithr)
         shmat_8 => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref, iptcl)
+        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         if( params_glob%l_obj_reg ) call self%reg_ref_ptcl(pft_ref_8, iref, iptcl)
         pft_ref_8 = pft_ref_8 * shmat_8
         gencorr_for_rot_8 = 0._dp
@@ -1994,7 +1994,7 @@ contains
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8     => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref, iptcl)
+        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         if( params_glob%l_obj_reg ) call self%reg_ref_ptcl(pft_ref_8, iref, iptcl)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -2101,7 +2101,7 @@ contains
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8     => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref, iptcl)
+        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         if( params_glob%l_obj_reg ) call self%reg_ref_ptcl(pft_ref_8, iref, iptcl)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
@@ -2443,29 +2443,25 @@ contains
         enddo
     end subroutine reg_ref_ptcl_sp
 
-    subroutine reg_ref_dp( self, pft_ref, iref, iptcl )
+    subroutine reg_ref_dp( self, pft_ref, iref )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iref, iptcl
+        integer,                 intent(in)    :: iref
         real,                    parameter     :: reg_eps = 0.5
-        integer :: k, i
-        i = self%pinds(iptcl)
+        integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref) *&
-                &self%ctfmats(:,k,i) / self%sqsum_refs(iref, i) / self%ref_prob_cache(iref), dp)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref) / self%ref_prob_cache(iref), dp)
         enddo
     end subroutine reg_ref_dp
 
-    subroutine reg_ref_sp( self, pft_ref, iref, iptcl )
+    subroutine reg_ref_sp( self, pft_ref, iref )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iref, iptcl
+        integer,                 intent(in)    :: iref
         real,                    parameter     :: reg_eps = 0.5
-        integer :: k, i
-        i = self%pinds(iptcl)
+        integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref) *&
-                &self%ctfmats(:,k,i) / self%sqsum_refs(iref, i) / self%ref_prob_cache(iref)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref) / self%ref_prob_cache(iref)
         enddo
     end subroutine reg_ref_sp
 
