@@ -129,7 +129,7 @@ contains
             call find_ldim_nptcls(refs,ldim,ifoo)
             orig_box  = ldim(1)
         endif
-        l_update_sigmas = .false.
+        l_update_sigmas = params_glob%l_needs_sigma
         ! pixel size after motion correction
         if( cline%defined('eer_upsampling') )then
             orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
@@ -148,6 +148,7 @@ contains
         call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(trim(SNAPSHOT_DIR))
+        if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
@@ -171,7 +172,6 @@ contains
             call cline_cluster2D_chunk%set('prg',       'cluster2D')
         endif
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
-        call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
@@ -186,6 +186,7 @@ contains
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -199,7 +200,6 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('objfun',    'cc')
         call cline_cluster2D_pool%set('ptclw',     'no')
         call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
@@ -226,7 +226,24 @@ contains
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr2D))
         call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
+        if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
+        ! objective function
+        select case(params_glob%cc_objfun)
+        case(OBJFUN_CC)
+            call cline_cluster2D_chunk%set('objfun', 'cc')
+            call cline_cluster2D_pool%set('objfun',  'cc')
+        case(OBJFUN_EUCLID)
+            call cline_cluster2D_chunk%set('objfun', 'euclid')
+            call cline_cluster2D_pool%set('objfun',  'euclid')
+        case(OBJFUN_PROB)
+            call cline_cluster2D_chunk%set('objfun', 'prob')
+            call cline_cluster2D_pool%set('objfun',  'prob')
+        end select
+        if( .not.cline%defined('ml_reg') )then
+            call cline_cluster2D_chunk%set('ml_reg', 'no')
+            call cline_cluster2D_pool%set('ml_reg', 'no')
+        endif
         ! auto-scaling
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
         ! scaling (fourier cropping)
