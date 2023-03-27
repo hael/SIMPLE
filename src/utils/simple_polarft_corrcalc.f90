@@ -59,6 +59,7 @@ type heap_vars
     real(dp),    pointer :: argvec(:)          => null()
     complex(sp), pointer :: shmat(:,:)         => null()
     real(dp),    pointer :: kcorrs(:)          => null()
+    real(dp),    pointer :: kcorrs_tmp(:)      => null()
     complex(dp), pointer :: pft_ref_8(:,:)     => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
     complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
@@ -191,7 +192,8 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_prob
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
-    generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure, private :: gencorrs_3
+    generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -354,6 +356,7 @@ contains
                 &self%heap_vars(ithr)%shvec(self%pftsz),&
                 &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%kcorrs(self%nrots),&
+                &self%heap_vars(ithr)%kcorrs_tmp(self%nrots),&
                 &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_dref_8(self%pftsz,self%kfromto(1):self%kfromto(2),3),&
@@ -1586,6 +1589,41 @@ contains
                 call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
         end select
     end subroutine gencorrs_2
+    
+    subroutine gencorrs_3( self, iref, iptcl, cc, srch_order, which_iter )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(out)   :: cc(self%nrots)
+        integer,                 intent(in)    :: srch_order(:,:)
+        integer, optional,       intent(in)    :: which_iter
+        integer,                 parameter     :: N_SAMPLES = 6, MAX_ITER = 20
+        complex(sp), pointer :: pft_ref(:,:)
+        integer :: i, ithr, k, iref_tmp, isample, iter_here
+        real    :: u, eps
+        call self%prep_ref4corr(iref, iptcl, pft_ref, i, ithr)
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
+                cc = real(self%heap_vars(ithr)%kcorrs)
+            case(OBJFUN_EUCLID)
+                call self%gencorrs_euclid(pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, i, cc)
+            case(OBJFUN_PROB)
+                call self%gencorrs_cc(    pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs_tmp)
+                cc = 0.
+                do k = 1, N_SAMPLES
+                    call random_number(u)
+                    isample  = floor(1 + size(srch_order, 2)*u)
+                    iref_tmp = srch_order(ithr, isample)
+                    call self%prep_ref4corr(iref_tmp, iptcl, pft_ref, i, ithr)
+                    call self%gencorrs_cc(pft_ref, i, ithr, self%heap_vars(ithr)%kcorrs)
+                    cc = cc + self%heap_vars(ithr)%kcorrs
+                enddo
+                iter_here = 1
+                if( present(which_iter) ) iter_here = which_iter
+                eps = 1. - (min(iter_here, MAX_ITER + 1) - 1.)/real(MAX_ITER)
+                cc  = self%heap_vars(ithr)%kcorrs_tmp - eps * sum(cc) / real(N_SAMPLES) / self%nrots
+        end select
+    end subroutine gencorrs_3
 
     subroutine gencorrs_cc( self, pft_ref, i, ithr, cc )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2168,7 +2206,7 @@ contains
                     &self%heap_vars(ithr)%pft_dref,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%corrs_over_k,&
-                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
+                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,self%heap_vars(ithr)%kcorrs_tmp,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%argmat_8,&

@@ -222,11 +222,11 @@ contains
             call vol_copy%bp(0., fsc0143)
         else if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
-            if( params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB )then
-                ! FSC-based regularization is performed upon assembly
-            else
+            if( params%cc_objfun == OBJFUN_CC )then
                 call vol%apply_filter(optlp)
                 call vol_copy%apply_filter(optlp)
+            else
+                ! FSC-based regularization is performed upon assembly
             endif
             ! final low-pass filtering for smoothness
             call vol%bp(0., fsc0143)

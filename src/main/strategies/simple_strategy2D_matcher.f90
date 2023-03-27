@@ -412,8 +412,8 @@ contains
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
                 select case(params_glob%cc_objfun)
-                case(OBJFUN_EUCLID,OBJFUN_PROB)
-                    call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
+                    case(OBJFUN_EUCLID,OBJFUN_PROB)
+                        call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
                 end select
             endif
         endif

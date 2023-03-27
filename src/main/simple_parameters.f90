@@ -176,6 +176,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
+    character(len=STDLEN)     :: ref_reg='none'       !< reference regularizer type (none|exp){none}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -336,7 +337,7 @@ type :: parameters
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
-    real    :: lp_lowres  = 30.    !< optimization(search)-based low-pass limit lower bound
+    real    :: lpstart_nonuni= 30. !< optimization(search)-based low-pass limit lower bound
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
@@ -403,6 +404,7 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_ref_reg      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -525,6 +527,7 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
+        call check_carg('ref_reg',        self%ref_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -721,7 +724,7 @@ contains
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_discrete',    self%lp_discrete)
-        call check_rarg('lp_lowres',      self%lp_lowres)
+        call check_rarg('lpstart_nonuni', self%lpstart_nonuni)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
@@ -1268,7 +1271,7 @@ contains
             endif
         endif
         ! set newbox if scale is defined
-        self%kfromto(1) = 1
+        self%kfromto             = 1
         if( cline%defined('hp') ) self%kfromto(1) = max(1,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2)          = int(self%dstep/self%lp)          ! low-pass Fourier index set according to lp
         self%lp                  = max(self%fny,self%lp)            ! lowpass limit
@@ -1365,6 +1368,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
+        ! reference regularization
+        self%l_ref_reg = .not.( trim(self%ref_reg).eq.'none' )
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

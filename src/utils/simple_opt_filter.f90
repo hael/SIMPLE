@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
-public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D
+public :: nonuni_filt2D_sub, nonuni_filt2D, nonuni_filt3D, butterworth_filter, uni_filt2D, uni_filt2D_sub, uni_filt3D, exponential_reg
 private
 
 interface butterworth_filter
@@ -247,7 +247,7 @@ contains
         if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lp_lowres, box, even%get_smpd())
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
         ub          = (/ box-ext, box-ext, dim3 /)
@@ -318,7 +318,7 @@ contains
         if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lp_lowres, box, even%get_smpd())
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
         ub          = (/ box-ext, box-ext, dim3 /)
@@ -397,9 +397,10 @@ contains
     end subroutine nonuni_filt2D_masked
 
     ! 3D optimization(search)-based nonuniform filter, paralellized version
-    subroutine nonuni_filt3D(odd, even, mskimg)
+    subroutine nonuni_filt3D(odd, even, mskimg, lpstop)
         class(image),           intent(inout) :: odd, even
         class(image), optional, intent(inout) :: mskimg
+        real,         optional, intent(in)    :: lpstop
         type(image)                   ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, weights_img,&
                                         &diff_img_opt_odd, diff_img_opt_even, diff_img_odd, diff_img_even, odd_filt, even_filt
         integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
@@ -413,22 +414,25 @@ contains
         character(len=:), allocatable :: fsc_fname
         real(   kind=c_float),         pointer ::  in(:,:,:,:)
         complex(kind=c_float_complex), pointer :: out(:,:,:,:)
-        ldim         = odd%get_ldim()
-        filtsz       = odd%get_filtsz()
-        smooth_ext   = params_glob%smooth_ext
-        box          = ldim(1)
-        fsc_fname    = trim(params_glob%fsc)
-        smpd         = even%get_smpd()
-        ! calculate Fourier index limits for search
-        if( .not.file_exists(fsc_fname) ) then
-            THROW_WARN('FSC file: '//fsc_fname//' not found, falling back on lpstart: '//real2str(params_glob%lpstart))
-            find_stop = calc_fourier_index(params_glob%lpstart, box, smpd)
+        ldim       = odd%get_ldim()
+        filtsz     = odd%get_filtsz()
+        smooth_ext = params_glob%smooth_ext
+        box        = ldim(1)
+        fsc_fname  = trim(params_glob%fsc)
+        smpd       = even%get_smpd()
+        find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
+        if( present(lpstop) )then
+            find_stop = calc_fourier_index(lpstop, box, smpd)
         else
-            ! retrieve FSC and calculate optimal filter
-            fsc       = file2rarr(fsc_fname)
-            find_stop = min(get_lplim_at_corr(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_corrcalc
+            ! calculate Fourier index low-pass limit for search based on FSC
+            if( .not.file_exists(fsc_fname) ) then
+                THROW_HARD('FSC file: '//fsc_fname//' not found')
+            else
+                ! retrieve FSC and calculate low-pass limit
+                fsc       = file2rarr(fsc_fname)
+                find_stop = min(get_lplim_at_corr(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_corrcalc
+            endif
         endif
-        find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         if( find_start >= find_stop ) THROW_HARD('nonuni_filt3D: starting Fourier index is larger than ending Fourier index!')
         allocate(in(ldim(1),ldim(2),ldim(3),2), out(ldim(1),ldim(2),ldim(3),2))
@@ -547,12 +551,11 @@ contains
         type(image_ptr) :: pdiff_odd, pdiff_even, pweights, pmask
         type(c_ptr)     :: plan_fwd, plan_bwd
         integer         :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
-        integer         :: cutoff_find, best_ind_even, best_ind_odd, filtsz
+        integer         :: cutoff_find, best_ind_even, best_ind_odd
         real            :: rad, find_stepsz, smpd, cur_cost_odd, cur_cost_even
         real            :: best_cost_odd, best_cost_even
         logical         :: present_cuofindeo, present_mskimg
         ldim              = odd%get_ldim()
-        filtsz            = odd%get_filtsz()
         box               = ldim(1)
         fsc_fname         = trim(params_glob%fsc)
         smpd              = even%get_smpd()
@@ -567,7 +570,7 @@ contains
             fsc       = file2rarr(fsc_fname)
             find_stop = min(get_lplim_at_corr(fsc, 0.1),calc_fourier_index(params_glob%lpstop, box, smpd)) ! little overshoot, filter function anyway applied in polarft_corrcalc
         endif
-        find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         if( find_start >= find_stop ) THROW_HARD('uni_filt3D: starting Fourier index is larger than ending Fourier index!')
         allocate(in(ldim(1),ldim(2),ldim(3),2), out(ldim(1),ldim(2),ldim(3),2))
@@ -695,7 +698,7 @@ contains
         dim3        = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lp_lowres, box, even%get_smpd())
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
@@ -813,5 +816,30 @@ contains
             call optf2Dvars(iptcl)%odd_filt%kill
         enddo
     end subroutine uni_filt2D_sub
+
+    ! generating and applying the exponential regularization
+    subroutine exponential_reg( vol, lambda, eps )
+        class(image),           intent(inout) :: vol
+        real,         optional, intent(in)    :: lambda, eps
+        type(image_ptr) :: pvol
+        integer         :: k, l, m, box, ldim(3)
+        real            :: lambda_here, eps_here
+        ldim = vol%get_ldim()
+        box  = ldim(1)
+        call vol%get_mat_ptrs(pvol)
+        lambda_here = 1.
+        eps_here    = 0.01
+        if( present(lambda) ) lambda_here = lambda
+        if( present(eps   ) ) eps_here    = eps
+        !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(static) proc_bind(close)
+        do m = 1, ldim(3)
+            do l = 1, ldim(2)
+                do k = 1,ldim(1)
+                    pvol%rmat(k,l,m) = pvol%rmat(k,l,m) - eps_here * lambda_here**2 * exp( - lambda_here * pvol%rmat(k,l,m) )
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine exponential_reg
 
 end module simple_opt_filter

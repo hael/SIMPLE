@@ -107,7 +107,12 @@ contains
         l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
-        l_euclid    = (params%cc_objfun == OBJFUN_EUCLID .or. params%cc_objfun == OBJFUN_PROB)
+        select case(params%cc_objfun)
+            case(OBJFUN_EUCLID,OBJFUN_PROB)
+                l_euclid = .true.
+            case DEFAULT
+                l_euclid = .false.
+        end select
         orig_objfun = trim(params%objfun)
         call cline%delete('autoscale')
         ! set mkdir to no (to avoid nested directory structure)
@@ -490,6 +495,7 @@ contains
             call cline_reconstruct3D%set('box',   real(params%box))
             call cline_reconstruct3D%set('smpd',  params%smpd)
             ! reconstruction
+            call cline_reconstruct3D%set('ml_reg', 'no')
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()

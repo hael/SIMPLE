@@ -213,6 +213,9 @@ contains
         else
             if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
+                if( trim(params_glob%stream).eq.'yes' )then
+                    if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
+                endif
             else
                 if( which_iter < LPLIM1ITERBOUND )then
                     lplim = params_glob%lplims2D(1)
@@ -337,11 +340,7 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
-            call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-        else
-            call img_out%mask(params_glob%msk_crop, 'soft')
-        endif
+        call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
@@ -419,15 +418,16 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: nonuni_filt3D
+        use simple_opt_filter, only: nonuni_filt3D, butterworth_filter
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image)    :: mskvol
+        type(image)       :: mskvol
+        real, allocatable :: filter(:)
         ! ensure correct build_glob%vol dimensions
         call build_glob%vol%read_and_crop(    fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
+        if( params_glob%l_nonuniform )then
             if( params_glob%l_filemsk )then
                 call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
                     &params_glob%box_crop, params_glob%smpd_crop, ismask=.true.)
@@ -437,7 +437,23 @@ contains
                 call mskvol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
-            call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            if( params_glob%l_lpset )then ! nanocrystal refinement
+                if( cline%defined('lpstop') )then
+                    ! lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement
+                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
+                else
+                    ! applying uniform Butterworth filter at the cut-off frequency = lp
+                    allocate(filter(build_glob%vol%get_filtsz()))
+                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
+                    call build_glob%vol%fft
+                    call build_glob%vol_odd%fft
+                    call build_glob%vol%apply_filter(filter)
+                    call build_glob%vol_odd%apply_filter(filter)
+                    THROW_WARN('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
+                endif
+            else
+                call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+            endif
             ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft
@@ -451,7 +467,7 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( cline, s, do_center, xyz, iseven )
         use simple_projector,  only: projector
-        use simple_opt_filter, only: butterworth_filter
+        use simple_opt_filter, only: butterworth_filter, exponential_reg
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
@@ -476,10 +492,6 @@ contains
             ! no filtering
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
-        else if( params_glob%l_lpset )then
-            ! applying Butterworth filter at the cut-off frequency = lpstop
-            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
-            call vol_ptr%apply_filter(filter)
         else
             call vol_ptr%fft()
             if( any(build_glob%fsc(s,:) > 0.143) )then
@@ -489,6 +501,7 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
+        if( params_glob%l_ref_reg ) call exponential_reg( vol_ptr, lambda = 2., eps = 0.1 )
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking
@@ -499,11 +512,7 @@ contains
             call mskvol%kill
         else
             ! circular masking
-            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%cc_objfun == OBJFUN_PROB )then
-                call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
-            else
-                call vol_ptr%mask(params_glob%msk_crop, 'soft')
-            endif
+            call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then

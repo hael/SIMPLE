@@ -221,7 +221,7 @@ type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
-type(simple_input_param) :: lp_lowres
+type(simple_input_param) :: lpstart_nonuni
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: lpthres
 type(simple_input_param) :: max_dose
@@ -1061,7 +1061,7 @@ contains
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(lp_lowres,      'lp_lowres',    'num',    'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
+        call set_param(lpstart_nonuni, 'lpstart_nonuni','num',   'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
         call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
@@ -2742,7 +2742,7 @@ contains
         ! <empty>
         ! filter controls
         call nununiform_filter2D%set_input('filt_ctrls', 1, smooth_ext)
-        call nununiform_filter2D%set_input('filt_ctrls', 2, lp_lowres)
+        call nununiform_filter2D%set_input('filt_ctrls', 2, lpstart_nonuni)
         call nununiform_filter2D%set_input('filt_ctrls', 3, nsearch)
         frcs%required = .true.
         call nununiform_filter2D%set_input('filt_ctrls', 4, frcs)
@@ -2755,7 +2755,7 @@ contains
     subroutine new_nununiform_filter3D
         ! PROGRAM SPECIFICATION
         call nununiform_filter3D%new(&
-        &'nununiform_filter3D',&                                      ! name
+        &'nununiform_filter3D',&                                ! name
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
@@ -2772,9 +2772,9 @@ contains
         ! <empty>
         ! filter controls
         call nununiform_filter3D%set_input('filt_ctrls', 1, smooth_ext)
-        call nununiform_filter3D%set_input('filt_ctrls', 2, lp_lowres)
+        call nununiform_filter3D%set_input('filt_ctrls', 2, lpstart_nonuni)
         call nununiform_filter3D%set_input('filt_ctrls', 3, nsearch)
-        call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        call nununiform_filter3D%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .false., '')
         call nununiform_filter3D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call nununiform_filter3D%set_input('mask_ctrls', 1, mskdiam)
@@ -2802,7 +2802,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter3D%set_input('filt_ctrls', 1, lp_lowres)
+        call uniform_filter3D%set_input('filt_ctrls', 1, lpstart_nonuni)
         call uniform_filter3D%set_input('filt_ctrls', 2, nsearch)
         call uniform_filter3D%set_input('filt_ctrls', 3, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
         call uniform_filter3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
@@ -4642,7 +4642,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call uniform_filter2D%set_input('filt_ctrls', 1, lp_lowres)
+        call uniform_filter2D%set_input('filt_ctrls', 1, lpstart_nonuni)
         call uniform_filter2D%set_input('filt_ctrls', 2, nsearch)
         frcs%required = .true.
         call uniform_filter2D%set_input('filt_ctrls', 3, frcs)
