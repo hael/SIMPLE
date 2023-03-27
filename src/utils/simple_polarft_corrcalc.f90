@@ -2507,7 +2507,7 @@ contains
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%prob_cache,&
-                &self%ref_prob_cache, self%ptcl_dist, self%ptcl_dist_cnt, self%ptcl_ref_dist,&
+                &self%ref_prob_cache, self%ptcl_dist, self%ptcl_dist_cnt, self%ptcl_ref_dist, self%dist_cnt,&
                 &self%refs_reg, self%ptcl_reg, self%sqsum_refs)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
