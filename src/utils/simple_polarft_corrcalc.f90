@@ -83,9 +83,9 @@ type :: polarft_corrcalc
     real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     logical,             allocatable :: ptcl_dist(:,:)              !< SO(2) distribution matrix (nptcls, nptcls)
-    logical,             allocatable :: ptcl_ref_dist(:,:)          !< SO(2) distribution matrix (nptcls, nrefs)
     integer,             allocatable :: dist_cnt(:)
     integer,             allocatable :: ptcl_dist_cnt(:)
+    real(sp),            allocatable :: ptcl_ref_dist(:,:)          !< SO(2) distribution matrix (nptcls, nrefs)
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
@@ -394,7 +394,7 @@ contains
         self%sqsums_ptcls   = 0.
         self%prob_cache     = 1.
         self%ptcl_dist      = .true.
-        self%ptcl_ref_dist  = .true.
+        self%ptcl_ref_dist  = 1.
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -955,7 +955,7 @@ contains
         integer   :: iref, iptcl, i
         real      :: euls_ref(3), euls_ptcl(3), x_ref(3), x_ptcl(3), dist, thres
         type(ori) :: o
-        self%ptcl_ref_dist = .false.
+        self%ptcl_ref_dist = 0.
         self%dist_cnt      = 0
         thres              = params_glob%arc_thres * pi / 180.
         do iref = 1, self%nrefs
@@ -968,7 +968,7 @@ contains
                 x_ptcl    = [sin(euls_ptcl(2)) * cos(euls_ptcl(1)), sin(euls_ptcl(2)) * sin(euls_ptcl(1)), cos(euls_ptcl(2))]
                 dist      = sqrt(sum((x_ptcl - x_ref)**2))
                 if( dist < thres )then
-                    self%ptcl_ref_dist(i, iref) = .true.
+                    self%ptcl_ref_dist(i, iref) = (thres - dist) / thres
                     self%dist_cnt(iref)         = self%dist_cnt(iref) + 1
                 endif
             enddo
@@ -1087,46 +1087,49 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i, iref, cc, iptcl) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                if( self%ptcl_ref_dist(i, iref) )then
+                if( self%ptcl_ref_dist(i, iref) > 0. )then
                     iptcl = glob_pinds(i)
                     call self%gencorrs( iref, iptcl, cc )
-                    self%ref_prob_cache(iref) = self%ref_prob_cache(iref) + sum(cc) / self%dist_cnt(iref) / self%nrots
+                    self%ref_prob_cache(iref) = self%ref_prob_cache(iref) + sum(cc) * self%ptcl_ref_dist(i, iref)
                 endif
             enddo
         enddo
+        !$omp end parallel do
+        self%ref_prob_cache   = self%ref_prob_cache / self%dist_cnt / self%nrots
         params_glob%l_ref_reg = .true.
     end subroutine memoize_ref_prob
 
     ! memoize all reference reg terms
     subroutine memoize_ref_reg( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer  :: i, iref, k
+        integer     :: i, iref, k
+        complex(sp) :: ptcl_ctf
         self%sqsum_refs = 0.
-        !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do iref = 1, self%nrefs
-                do k = self%kfromto(1),self%kfromto(2)
-                    if( self%iseven(i) )then
-                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
-                    else
-                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + sum(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)))
-                    endif
-                enddo
+                if( self%iseven(i) )then
+                    self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + &
+                        & sum(sum(csq_fast(self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,i)), 2), 1)
+                else
+                    self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + &
+                        & sum(sum(csq_fast(self%pfts_refs_odd(:,:,iref) * self%ctfmats(:,:,i)), 2), 1)
+                endif
             enddo
         enddo
         !$omp end parallel do
         self%sqsum_refs = sqrt(self%sqsum_refs)
         self%refs_reg = 0.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k, ptcl_ctf) proc_bind(close) schedule(static)
+        do k = self%kfromto(1), self%kfromto(2)
             do i = 1, self%nptcls
-                if( self%ptcl_ref_dist(i, iref) )then
-                    do k = self%kfromto(1), self%kfromto(2)
-                        self%refs_reg(k,iref) = self%refs_reg(k,iref) +&
-                            &sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
-                    enddo
-                    self%refs_reg(:,iref) = self%refs_reg(:,iref) / self%dist_cnt(iref) / self%sqsum_refs(iref, i) / self%sqsums_ptcls(i)
-                endif
+                ptcl_ctf = sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
+                do iref = 1, self%nrefs
+                    if( self%ptcl_ref_dist(i, iref) > 0 )then
+                        self%refs_reg(k,iref) = self%refs_reg(k,iref) + ptcl_ctf * self%ptcl_ref_dist(i, iref) / &
+                            &self%dist_cnt(iref) / self%sqsum_refs(iref, i) / self%sqsums_ptcls(i) / self%ref_prob_cache(iref)
+                    endif
+                enddo
             enddo
         enddo
         !$omp end parallel do
@@ -2450,7 +2453,7 @@ contains
         real,                    parameter     :: reg_eps = 0.5
         integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref) / self%ref_prob_cache(iref), dp)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + real((1. - reg_eps) * self%refs_reg(k,iref), dp)
         enddo
     end subroutine reg_ref_dp
 
@@ -2461,7 +2464,7 @@ contains
         real,                    parameter     :: reg_eps = 0.5
         integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref) / self%ref_prob_cache(iref)
+            pft_ref(:,k) = reg_eps * pft_ref(:,k) + (1. - reg_eps) * self%refs_reg(k,iref)
         enddo
     end subroutine reg_ref_sp
 
