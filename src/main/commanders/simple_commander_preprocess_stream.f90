@@ -99,7 +99,7 @@ contains
         if( .not. cline%defined('nchunks')     ) call cline%set('nchunks',        2.0)
         if( .not. cline%defined('prune')       ) call cline%set('prune',         'no')
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
-        if( .not.cline%defined('objfun')       ) call cline%set('objfun',        'cc')
+        if( .not.cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
         if( .not.cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
         ncls_in = 0
         if( cline%defined('ncls') )then
