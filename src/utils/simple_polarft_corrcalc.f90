@@ -934,21 +934,19 @@ contains
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer   :: iref, iptcl, i
-        real      :: euls_ref(3), euls_ptcl(3), x_ref(3), x_ptcl(3), dist, thres
+        real      :: euls_ref(3), euls_ptcl(3), dist, thres
         type(ori) :: o
         self%ptcl_ref_dist = 0.
         self%dist_energy   = 0.
         thres              = params_glob%arc_thres * pi / 180.
         do iref = 1, self%nrefs
             euls_ref = eulspace%get_euler(iref) * pi / 180.
-            x_ref    = [sin(euls_ref(2)) * cos(euls_ref(1)), sin(euls_ref(2)) * sin(euls_ref(1)), cos(euls_ref(2))]
             do i = 1, self%nptcls
                 iptcl = glob_pinds(i)
                 call ptcl_eulspace%get_ori(iptcl, o)
                 euls_ptcl = o%get_euler() * pi / 180.
-                x_ptcl    = [sin(euls_ptcl(2)) * cos(euls_ptcl(1)), sin(euls_ptcl(2)) * sin(euls_ptcl(1)), cos(euls_ptcl(2))]
-                dist      = sqrt(sum((x_ptcl - x_ref)**2))
-                if( dist < thres ) self%ptcl_ref_dist(i, iref) = (thres - dist) / thres
+                dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
+                if( dist < thres ) self%ptcl_ref_dist(i, iref) = 1.
             enddo
             self%dist_energy(iref) = sum(self%ptcl_ref_dist(:, iref))
         enddo
