@@ -38,7 +38,6 @@ contains
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
-    procedure          :: downsample
     procedure          :: upsample
     ! I/O
     procedure          :: read
@@ -268,48 +267,15 @@ contains
         lp = median(lp3)
     end function estimate_lp_for_align
 
-    subroutine downsample( self, newbox, self_out )
-        class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: newbox
-        type(class_frcs),  intent(out) :: self_out
-        integer :: istate, iproj
-        real    :: new_smpd
-        if( newbox > self%box4frc_calc ) THROW_HARD('New > old filter size; downsample')
-        new_smpd = self%smpd * real(self%box4frc_calc) / real(newbox)
-        call self_out%new(self%nprojs, newbox, new_smpd, self%nstates)
-        do istate = 1,self%nstates
-            do iproj = 1,self%nprojs
-                call subsample_optlp(self%filtsz, self_out%filtsz, self%frcs(istate, iproj,:), self_out%frcs(istate, iproj,:))
-            enddo
-        enddo
-    end subroutine downsample
-
     subroutine upsample( self, newsmpd, newbox, self_out )
         class(class_frcs), intent(in)  :: self
         real,              intent(in)  :: newsmpd
         integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out
-        real    :: x, d, scale
-        integer :: istate, iproj, sh, l,r
         if( newbox <= self%box4frc_calc ) THROW_HARD('New <= old filter size; downsample')
         call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
-        scale = real(self%filtsz) / real(self_out%filtsz)
-        do istate = 1,self%nstates
-            do iproj = 1,self%nprojs
-                do sh = 1,self_out%filtsz
-                    x = scale*real(sh)
-                    l = max(1, floor(x))
-                    r = min(self%filtsz, ceiling(x))
-                    if( l==r )then
-                        self_out%frcs(istate, iproj,sh) = self%frcs(istate, iproj,l)
-                    else
-                        d = x-real(l)
-                        self_out%frcs(istate, iproj,sh) = (1.-d) * self%frcs(istate, iproj,l) +&
-                                                        &     d  * self%frcs(istate, iproj,r)
-                    endif
-                enddo
-            enddo
-        enddo
+        self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
+        if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
     end subroutine upsample
 
     ! I/O
