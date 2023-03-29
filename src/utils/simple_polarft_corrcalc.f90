@@ -927,7 +927,6 @@ contains
         complex(dp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
         real(dp)    :: ref_prob(self%nrefs), sqsum_ref, ptcl_ref_dist
         real        :: euls_ref(3), euls_ptcl(3), dist, thres, cc(self%nrots)
-        ! build distribution of particles around each iref
         thres                 = params_glob%arc_thres * pi / 180.
         ref_prob              = 0._dp
         params_glob%l_ref_reg = .false.
@@ -955,9 +954,12 @@ contains
                             sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)), dp))
                         endif
                     enddo
+                    ! computing distribution of particles around each iref (constants for now)
                     ptcl_ref_dist = 1._dp / dsqrt(sqsum_ref * real(self%sqsums_ptcls(i), dp))
+                    ! computing the probability of each 2D reference at iref
                     call self%gencorrs( iref, iptcl, cc )
-                    ref_prob(iref)        = ref_prob(iref) + sum(real(cc, dp)) * ptcl_ref_dist
+                    ref_prob(iref) = ref_prob(iref) + sum(real(cc, dp)) * ptcl_ref_dist
+                    ! computing the reg terms as the gradients w.r.t 2D references of the probability above
                     self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
                 endif
             enddo
