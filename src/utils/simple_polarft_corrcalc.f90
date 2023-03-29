@@ -90,7 +90,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(sp),         allocatable :: refs_reg(:,:)               !< -"-, caching reference reg terms
+    complex(dp),         allocatable :: refs_reg(:,:)               !< -"-, caching reference reg terms
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -924,18 +924,18 @@ contains
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl
-        complex(sp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(sp)    :: cc(self%nrots)
-        real        :: euls_ref(3), euls_ptcl(3), dist, thres, ptcl_ref_dist, ref_prob(self%nrefs), sqsum_ref
+        complex(dp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
+        real(dp)    :: ref_prob(self%nrefs), sqsum_ref, ptcl_ref_dist
+        real        :: euls_ref(3), euls_ptcl(3), dist, thres, cc(self%nrots)
         ! build distribution of particles around each iref
         thres                 = params_glob%arc_thres * pi / 180.
-        ref_prob              = 0.
+        ref_prob              = 0._dp
         params_glob%l_ref_reg = .false.
-        self%refs_reg         = 0.
+        self%refs_reg         = 0._dp
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
-                ptcl_ctf(k,i) = real(k) * sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
+                ptcl_ctf(k,i) = real(k, dp) * sum(real(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i), dp))
             enddo
         enddo
         !$omp end parallel do
@@ -947,17 +947,17 @@ contains
                 euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
-                    sqsum_ref = 0.
+                    sqsum_ref = 0._dp
                     do k = self%kfromto(1),self%kfromto(2)
                         if( self%iseven(i) )then
-                            sqsum_ref = sqsum_ref + real(k) * sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
+                            sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)), dp))
                         else
-                            sqsum_ref = sqsum_ref + real(k) * sum(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)))
+                            sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)), dp))
                         endif
                     enddo
-                    ptcl_ref_dist = 1. / sqrt(sqsum_ref * self%sqsums_ptcls(i))
+                    ptcl_ref_dist = 1._dp / dsqrt(sqsum_ref * real(self%sqsums_ptcls(i), dp))
                     call self%gencorrs( iref, iptcl, cc )
-                    ref_prob(iref)        = ref_prob(iref) + sum(cc) * ptcl_ref_dist
+                    ref_prob(iref)        = ref_prob(iref) + sum(real(cc, dp)) * ptcl_ref_dist
                     self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
                 endif
             enddo
