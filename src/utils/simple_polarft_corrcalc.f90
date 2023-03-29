@@ -939,11 +939,12 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, sqsum_ref, k, ptcl_ctf) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, sqsum_ref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                euls_ref  = eulspace%get_euler(iref)   * pi / 180.
-                euls_ptcl = ptcl_eulspace%get_euler(i) * pi / 180.
+                iptcl     = glob_pinds(i)
+                euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
+                euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
                     sqsum_ref = 0.
@@ -955,7 +956,6 @@ contains
                         endif
                     enddo
                     ptcl_ref_dist = 1. / sqrt(sqsum_ref * self%sqsums_ptcls(i))
-                    iptcl = glob_pinds(i)
                     call self%gencorrs( iref, iptcl, cc )
                     ref_prob(iref)        = ref_prob(iref) + sum(cc) * ptcl_ref_dist
                     self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
@@ -966,7 +966,7 @@ contains
         params_glob%l_ref_reg = .true.
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            self%refs_reg(k,:) = self%refs_reg(k,:) / self%nrots / ref_prob
+            self%refs_reg(k,:) = self%refs_reg(k,:) / ref_prob
         enddo
         !$omp end parallel do
     end subroutine compute_ref_reg
