@@ -169,13 +169,11 @@ type :: polarft_corrcalc
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
-    procedure          :: memoize_ref_prob
-    procedure          :: memoize_ref_reg
+    procedure          :: compute_ref_reg
     procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
     ! CALCULATORS
-    procedure          :: build_ptcl_ref_dist
     procedure          :: create_polar_absctfmats, calc_polar_ctf
     procedure, private :: prep_ref4corr_sp
     procedure, private :: prep_ref4corr_dp
@@ -925,17 +923,20 @@ contains
         call fftwf_destroy_plan(fwd_plan)
     end subroutine memoize
 
-    ! build the distribution matrix
-    subroutine build_ptcl_ref_dist( self, eulspace, ptcl_eulspace, glob_pinds )
+    ! computing all reference reg terms
+    subroutine compute_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
         use simple_ori
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer   :: iref, iptcl, i
-        real      :: euls_ref(3), euls_ptcl(3), dist, thres
-        type(ori) :: o
+        integer     :: i, iref, k, iptcl
+        complex(sp) :: ptcl_ctf
+        real(sp)    :: cc(self%nrots)
+        real        :: euls_ref(3), euls_ptcl(3), dist, thres
+        type(ori)   :: o
+        ! build distribution of particles around each iref
         self%ptcl_ref_dist = 0.
         self%dist_energy   = 0.
         thres              = params_glob%arc_thres * pi / 180.
@@ -950,13 +951,7 @@ contains
             enddo
             self%dist_energy(iref) = sum(self%ptcl_ref_dist(:, iref))
         enddo
-    end subroutine build_ptcl_ref_dist
-
-    subroutine memoize_ref_prob( self, glob_pinds )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        real(sp) :: cc(self%nrots)
-        integer  :: i, iref, iptcl
+        ! computing probability of each iref
         self%ref_prob_cache = 0.
         params_glob%l_ref_reg = .false.
         !$omp parallel do collapse(2) default(shared) private(i, iref, cc, iptcl) proc_bind(close) schedule(static)
@@ -972,13 +967,7 @@ contains
         !$omp end parallel do
         self%ref_prob_cache   = self%ref_prob_cache / self%dist_energy / self%nrots
         params_glob%l_ref_reg = .true.
-    end subroutine memoize_ref_prob
-
-    ! memoize all reference reg terms
-    subroutine memoize_ref_reg( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer     :: i, iref, k
-        complex(sp) :: ptcl_ctf
+        ! caching sqsum_refs
         self%sqsum_refs = 0.
         !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
@@ -993,7 +982,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        self%sqsum_refs = sqrt(self%sqsum_refs)
+        ! computing the gradient of the probability of each iref as the regularizing term
         self%refs_reg = 0.
         !$omp parallel do collapse(2) default(shared) private(i, iref, k, ptcl_ctf) proc_bind(close) schedule(static)
         do k = self%kfromto(1), self%kfromto(2)
@@ -1002,14 +991,14 @@ contains
                 do iref = 1, self%nrefs
                     if( self%ptcl_ref_dist(i, iref) > 0 )then
                         self%refs_reg(k,iref) = self%refs_reg(k,iref) + ptcl_ctf * self%ptcl_ref_dist(i, iref) / &
-                            &self%dist_energy(iref) / self%sqsum_refs(iref, i) / sqrt(self%sqsums_ptcls(i)) / self%ref_prob_cache(iref)
+                            &self%dist_energy(iref) / sqrt(self%sqsum_refs(iref, i) * self%sqsums_ptcls(i)) / self%ref_prob_cache(iref)
                     endif
                 enddo
             enddo
         enddo
         !$omp end parallel do
         self%refs_reg = self%refs_reg / self%nrots
-    end subroutine memoize_ref_reg
+    end subroutine compute_ref_reg
 
     subroutine calc_corr( self, iref, iptcl, corrs )
         class(polarft_corrcalc), intent(inout) :: self
