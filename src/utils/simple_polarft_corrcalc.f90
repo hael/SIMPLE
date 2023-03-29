@@ -954,12 +954,12 @@ contains
                         endif
                     enddo
                     ! computing distribution of particles around each iref (constants for now)
-                    ptcl_ref_dist = 1._dp / dsqrt(sqsum_ref * real(self%sqsums_ptcls(i), dp))
+                    ptcl_ref_dist = 1._dp
                     ! computing the probability of each 2D reference at iref
                     call self%gencorrs( iref, iptcl, cc )
                     ref_prob(iref) = ref_prob(iref) + sum(real(cc, dp)) * ptcl_ref_dist
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
-                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
+                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist / dsqrt(sqsum_ref * real(self%sqsums_ptcls(i), dp))
                 endif
             enddo
         enddo
