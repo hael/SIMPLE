@@ -82,15 +82,11 @@ type :: polarft_corrcalc
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
-    real(sp),            allocatable :: dist_energy(:)
-    real(sp),            allocatable :: ptcl_ref_dist(:,:)          !< SO(2) distribution matrix (nptcls, nrefs)
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),            allocatable :: ref_prob_cache(:)           !< caching ref probability
-    real(sp),            allocatable :: sqsum_refs(:,:)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -352,10 +348,7 @@ contains
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                    &self%heap_vars(params_glob%nthr),self%ref_prob_cache(1:self%nrefs),&
-                    &self%dist_energy(self%nrefs),self%ptcl_ref_dist(self%nptcls,self%nrefs),&
-                    &self%refs_reg(self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%sqsum_refs(self%nrefs,self%nptcls))
+                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -379,7 +372,6 @@ contains
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
-        self%ptcl_ref_dist  = 1.
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -932,72 +924,51 @@ contains
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl
-        complex(sp) :: ptcl_ctf
+        complex(sp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
         real(sp)    :: cc(self%nrots)
-        real        :: euls_ref(3), euls_ptcl(3), dist, thres
-        type(ori)   :: o
+        real        :: euls_ref(3), euls_ptcl(3), dist, thres, ptcl_ref_dist, ref_prob(self%nrefs), sqsum_ref
         ! build distribution of particles around each iref
-        self%ptcl_ref_dist = 0.
-        self%dist_energy   = 0.
-        thres              = params_glob%arc_thres * pi / 180.
-        do iref = 1, self%nrefs
-            euls_ref = eulspace%get_euler(iref) * pi / 180.
-            do i = 1, self%nptcls
-                iptcl = glob_pinds(i)
-                call ptcl_eulspace%get_ori(iptcl, o)
-                euls_ptcl = o%get_euler() * pi / 180.
-                dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
-                if( dist < thres ) self%ptcl_ref_dist(i, iref) = 1.
-            enddo
-            self%dist_energy(iref) = sum(self%ptcl_ref_dist(:, iref))
-        enddo
-        ! computing probability of each iref
-        self%ref_prob_cache = 0.
+        thres                 = params_glob%arc_thres * pi / 180.
+        ref_prob              = 0.
         params_glob%l_ref_reg = .false.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, iptcl) proc_bind(close) schedule(static)
+        self%refs_reg         = 0.
+        !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                ptcl_ctf(k,i) = real(k) * sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
+            enddo
+        enddo
+        !$omp end parallel do
+        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, sqsum_ref, k, ptcl_ctf) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                if( self%ptcl_ref_dist(i, iref) > 0. )then
+                euls_ref  = eulspace%get_euler(iref)   * pi / 180.
+                euls_ptcl = ptcl_eulspace%get_euler(i) * pi / 180.
+                dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
+                if( dist < thres )then
+                    sqsum_ref = 0.
+                    do k = self%kfromto(1),self%kfromto(2)
+                        if( self%iseven(i) )then
+                            sqsum_ref = sqsum_ref + real(k) * sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
+                        else
+                            sqsum_ref = sqsum_ref + real(k) * sum(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)))
+                        endif
+                    enddo
+                    ptcl_ref_dist = 1. / sqrt(sqsum_ref * self%sqsums_ptcls(i))
                     iptcl = glob_pinds(i)
                     call self%gencorrs( iref, iptcl, cc )
-                    self%ref_prob_cache(iref) = self%ref_prob_cache(iref) + sum(cc) * self%ptcl_ref_dist(i, iref)
+                    ref_prob(iref)        = ref_prob(iref) + sum(cc) * ptcl_ref_dist
+                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
                 endif
             enddo
         enddo
         !$omp end parallel do
-        self%ref_prob_cache   = self%ref_prob_cache / self%dist_energy / self%nrots
         params_glob%l_ref_reg = .true.
-        ! caching sqsum_refs
-        self%sqsum_refs = 0.
-        !$omp parallel do collapse(3) default(shared) private(i, iref, k) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            do iref = 1, self%nrefs
-                do k = self%kfromto(1),self%kfromto(2)
-                    if( self%iseven(i) )then
-                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + real(k) * sum(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)))
-                    else
-                        self%sqsum_refs(iref, i) = self%sqsum_refs(iref, i) + real(k) * sum(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)))
-                    endif
-                enddo
-            enddo
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%refs_reg(k,:) = self%refs_reg(k,:) / self%nrots / ref_prob
         enddo
         !$omp end parallel do
-        ! computing the gradient of the probability of each iref as the regularizing term
-        self%refs_reg = 0.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k, ptcl_ctf) proc_bind(close) schedule(static)
-        do k = self%kfromto(1), self%kfromto(2)
-            do i = 1, self%nptcls
-                ptcl_ctf = real(k) * sum(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i))
-                do iref = 1, self%nrefs
-                    if( self%ptcl_ref_dist(i, iref) > 0 )then
-                        self%refs_reg(k,iref) = self%refs_reg(k,iref) + ptcl_ctf * self%ptcl_ref_dist(i, iref) / &
-                            &self%dist_energy(iref) / sqrt(self%sqsum_refs(iref, i) * self%sqsums_ptcls(i)) / self%ref_prob_cache(iref)
-                    endif
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        self%refs_reg = self%refs_reg / self%nrots
     end subroutine compute_ref_reg
 
     subroutine calc_corr( self, iref, iptcl, corrs )
@@ -2338,9 +2309,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,&
-                &self%ref_prob_cache, self%ptcl_ref_dist, self%dist_energy,&
-                &self%refs_reg, self%sqsum_refs)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
