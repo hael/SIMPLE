@@ -918,7 +918,6 @@ contains
     ! computing all reference reg terms
     subroutine compute_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
-        use simple_ori
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
@@ -934,7 +933,7 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
-                ptcl_ctf(k,i) = real(k, dp) * sum(real(self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i), dp))
+                ptcl_ctf(k,i) = real(k, dp) * sum(self%pfts_ptcls(:,k,i) * real(self%ctfmats(:,k,i), dp))
             enddo
         enddo
         !$omp end parallel do
