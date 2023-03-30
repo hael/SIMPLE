@@ -927,10 +927,9 @@ contains
         complex(dp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
         real(dp)    :: ref_prob(self%nrefs), ptcl_ref_dist
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
-        thres                 = params_glob%arc_thres * pi / 180.
-        ref_prob              = 0._dp
-        params_glob%l_ref_reg = .false.
-        self%refs_reg         = 0._dp
+        thres         = params_glob%arc_thres * pi / 180.
+        ref_prob      = 0._dp
+        self%refs_reg = 0._dp
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
@@ -951,12 +950,11 @@ contains
                     ! computing the probability of each 2D reference at iref
                     ref_prob(iref) = ref_prob(iref) + self%cc_no_norm( iref, iptcl ) * ptcl_ref_dist
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
-                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
+                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + real(ptcl_ctf(:,i), dp) * ptcl_ref_dist
                 endif
             enddo
         enddo
         !$omp end parallel do
-        params_glob%l_ref_reg = .true.
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             self%refs_reg(k,:) = self%refs_reg(k,:) / ref_prob
