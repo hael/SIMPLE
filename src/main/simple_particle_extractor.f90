@@ -20,17 +20,18 @@ type :: ptcl_extractor
     real,             allocatable :: weights(:), isoshifts(:,:)
     character(len=:), allocatable :: gainrefname, stkname, moviename, docname
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
-    real                          :: doseperframe, scale, smpd, kv
+    real                          :: total_dose, doseperframe, preexposure, scale, smpd, kv
     integer                       :: ldim(3), ldim_sc(2)
-    integer                  :: boxsz, nptcls, nframes, ref_frame
-    logical                  :: l_doseweighting = .false.
-    logical                  :: l_scale = .false.
-    logical                  :: l_gain  = .false.
-    logical                  :: l_eer   = .false.
-    logical                  :: l_error = .false.
-    logical                  :: exists
+    integer                  :: boxsz, nptcls, nframes, ref_frame, start_frame
+    integer                  :: eer_fraction, eer_upsampling
+    logical                  :: l_doseweighing = .false.
+    logical                  :: l_scale        = .false.
+    logical                  :: l_gain         = .false.
+    logical                  :: l_eer          = .false.
+    logical                  :: exists         = .false.
   contains
-    procedure          :: read_doc
+    procedure          :: init
+    procedure          :: display
     procedure          :: prep_frames
     procedure          :: extract_ptcl
     procedure, private :: pix2polycoords
@@ -41,12 +42,95 @@ end type ptcl_extractor
 
 contains
 
-    subroutine read_doc( self, docname )
+    !>  Constructor
+    subroutine init( self, docname )
         use simple_oris, only: oris
         class(ptcl_extractor), intent(inout) :: self
         character(len=*),      intent(in)    :: docname
+        type(str4arr),    allocatable :: names(:)
+        type(starfile_table_type) :: table
+        integer(C_long)  :: num_objs, object_id
+        integer          :: i,iframe,n,nmics,ind, motion_model
+        logical          :: err
         call self%kill
-    end subroutine read_doc
+        self%docname = trim(docname)
+        call starfile_table__new(table)
+        call starfile_table__getnames(table, trim(self%docname)//C_NULL_CHAR, names)
+        n = size(names)
+        do i = 1,n
+            call starfile_table__read(table, trim(self%docname)//C_NULL_CHAR, names(i)%str )
+            select case(trim(names(i)%str))
+            case('general')
+                self%ldim(1)        = parse_int(table, EMDL_IMAGE_SIZE_X, err)
+                self%ldim(2)        = parse_int(table, EMDL_IMAGE_SIZE_Y, err)
+                self%nframes        = parse_int(table, EMDL_IMAGE_SIZE_Z, err)
+                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, self%moviename, err)
+                self%l_eer          = fname2format(self%moviename) == 'K'
+                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, self%gainrefname, err)
+                self%l_gain         = .not.err
+                self%scale          = parse_double(table, EMDL_MICROGRAPH_BINNING, err)
+                self%scale          = 1./self%scale
+                self%l_scale        = (.not.err) .and. (abs(self%scale - 1.0) > 0.01)
+                self%smpd           = parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, err)
+                self%doseperframe   = parse_double(table, EMDL_MICROGRAPH_DOSE_RATE, err)
+                self%l_doseweighing = (.not.err) .and. (self%doseperframe > 0.0001)
+                self%preexposure    = parse_double(table, EMDL_MICROGRAPH_PRE_EXPOSURE, err)
+                self%kv             = parse_double(table, EMDL_CTF_VOLTAGE, err)
+                self%start_frame    = parse_int(table, EMDL_MICROGRAPH_START_FRAME, err)
+                if( self%l_eer )then
+                    self%eer_upsampling =  parse_int(table, EMDL_MICROGRAPH_EER_UPSAMPLING, err)
+                    self%eer_fraction   = parse_int(table, EMDL_MICROGRAPH_EER_GROUPING, err)
+                endif
+                motion_model = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, err)
+            case('global_shift')
+                object_id  = starfile_table__firstobject(table)
+                num_objs   = starfile_table__numberofobjects(table)
+                if( int(num_objs - object_id) /= self%nframes ) THROW_HARD('Inconsistent # of shift entries and frames')
+                allocate(self%isoshifts(self%nframes,2),source=0.)
+                iframe = 0
+                do while( (object_id < num_objs) .and. (object_id >= 0) )
+                    iframe = iframe + 1
+                    self%isoshifts(iframe,1) = parse_double(table, EMDL_MICROGRAPH_SHIFT_X, err)
+                    self%isoshifts(iframe,2) = parse_double(table, EMDL_MICROGRAPH_SHIFT_Y, err)
+                    object_id = starfile_table__nextobject(table)
+                end do
+                self%isoshifts = self%isoshifts / self%scale
+            case('local_motion_model')
+                ! todo
+            case('hot_pixels')
+                ! todo
+            case DEFAULT
+                THROW_HARD('Invalid table: '//trim(names(i)%str))
+            end select
+        enddo
+        call starfile_table__delete(table)
+        self%total_dose = real(self%nframes) * self%doseperframe
+    end subroutine init
+
+    subroutine display( self )
+        class(ptcl_extractor), intent(in) :: self
+        integer :: i
+        print *, 'docname        ', self%docname
+        print *, 'nframes        ', self%nframes
+        print *, 'dimensions     ', self%ldim
+        print *, 'smpd           ', self%smpd
+        print *, 'voltage        ', self%kv
+        print *, 'doseperframe   ', self%doseperframe
+        print *, 'gainrefname    ', trim(self%gainrefname)
+        print *, 'moviename      ', trim(self%moviename)
+        print *, 'doseweighting  ', self%l_doseweighing
+        print *, 'total dose     ', self%total_dose
+        print *, 'scale          ', self%l_scale
+        print *, 'gain           ', self%l_gain
+        print *, 'eer            ', self%l_eer
+        print *, 'eer_fraction   ', self%eer_fraction
+        print *, 'eer_upsampling ', self%eer_upsampling
+        if( allocated(self%isoshifts) )then
+            do i = 1,size(self%isoshifts,dim=1)
+                print *,'isoshifts ',i,self%isoshifts(i,:)
+            enddo
+        endif
+    end subroutine display
 
     subroutine extract_ptcl( self, ptcl_pos_in, box_in, ptcl )
         class(ptcl_extractor), intent(inout) :: self
@@ -139,6 +223,33 @@ contains
         polyfun = real(res)
     end function polyfun
 
+    integer function parse_int( table, emdl_id, err )
+        class(starfile_table_type) :: table
+        integer, intent(in)        :: emdl_id
+        logical, intent(out)       :: err
+        err = starfile_table__getValue_int(table, emdl_id, parse_int)
+        err = .not.err
+    end function parse_int
+
+    real function parse_double( table, emdl_id, err )
+        class(starfile_table_type) :: table
+        integer, intent(in)        :: emdl_id
+        logical, intent(out)       :: err
+        real(dp) :: v
+        err = starfile_table__getValue_double(table, emdl_id, v)
+        err = .not.err
+        parse_double = real(v)
+    end function parse_double
+
+    subroutine parse_string( table, emdl_id, string, err )
+        class(starfile_table_type)                 :: table
+        integer,                       intent(in)  :: emdl_id
+        character(len=:), allocatable, intent(out) :: string
+        logical, intent(out)       :: err
+        err = starfile_table__getValue_string(table, emdl_id, string)
+        err = .not.err
+    end subroutine parse_string
+
     subroutine kill(self)
         class(ptcl_extractor), intent(inout) :: self
         integer :: i
@@ -150,13 +261,12 @@ contains
             enddo
             deallocate(self%frames)
         endif
-        self%l_doseweighting = .false.
-        self%l_gain          = .false.
-        self%l_error         = .false.
-        self%l_eer           = .false.
-        self%nframes         = 0
-        self%doseperframe    = 0.
-        self%scale           = 1.
+        self%l_doseweighing = .false.
+        self%l_gain         = .false.
+        self%l_eer          = .false.
+        self%nframes        = 0
+        self%doseperframe   = 0.
+        self%scale          = 1.
         self%moviename   = ''
         self%stkname     = ''
         self%docname     = ''
