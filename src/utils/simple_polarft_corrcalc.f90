@@ -946,13 +946,15 @@ contains
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
                     sqsum_ref = 0._dp
-                    do k = self%kfromto(1),self%kfromto(2)
-                        if( self%iseven(i) )then
+                    if( self%iseven(i) )then
+                        do k = self%kfromto(1),self%kfromto(2)
                             sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)), dp))
-                        else
+                        enddo
+                    else
+                        do k = self%kfromto(1),self%kfromto(2)
                             sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)), dp))
-                        endif
-                    enddo
+                        enddo
+                    endif
                     ! computing distribution of particles around each iref (constants for now)
                     ptcl_ref_dist = 1._dp
                     ! computing the probability of each 2D reference at iref
@@ -2259,7 +2261,7 @@ contains
         integer,                 intent(in)    :: iref
         integer :: k
         do k=self%kfromto(1),self%kfromto(2)
-            pft_ref(:,k) = params_glob%eps * pft_ref(:,k) + real((1. - params_glob%eps) * self%refs_reg(k,iref), dp)
+            pft_ref(:,k) = params_glob%eps * pft_ref(:,k) + (1._dp - params_glob%eps) * self%refs_reg(k,iref)
         enddo
     end subroutine reg_ref_dp
 
