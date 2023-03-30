@@ -946,14 +946,15 @@ contains
                 euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
-                    ! computing distribution of particles around each iref (constants for now)
-                    ptcl_ref_dist = 1._dp
-                    ! computing the probability of each 2D reference at iref
+                    ! find best irot for this pair of iref, iptcl
                     inpl_corrs     = self%cc_no_norm( iref, iptcl )
                     loc            = maxloc(inpl_corrs)
+                    ! computing distribution of particles around each iref (constants for now, maybe geodesics between {iref, loc} and iptcl)
+                    ptcl_ref_dist  = 1._dp
+                    ! computing the probability of each 2D reference at iref
                     ref_prob(iref) = ref_prob(iref) + inpl_corrs(loc(1)) * ptcl_ref_dist
-                    call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
+                    call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + real(ptcl_ctf_rot, dp) * ptcl_ref_dist
                 endif
             enddo
