@@ -188,6 +188,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: calc_euclidk_for_rot_8
+    procedure, private :: cc_no_norm
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
@@ -924,8 +925,8 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl
         complex(dp) :: ptcl_ctf(self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(dp)    :: ref_prob(self%nrefs), sqsum_ref, ptcl_ref_dist
-        real        :: euls_ref(3), euls_ptcl(3), dist, thres, cc(self%nrots)
+        real(dp)    :: ref_prob(self%nrefs), ptcl_ref_dist
+        real        :: euls_ref(3), euls_ptcl(3), dist, thres
         thres                 = params_glob%arc_thres * pi / 180.
         ref_prob              = 0._dp
         params_glob%l_ref_reg = .false.
@@ -937,7 +938,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        !$omp parallel do collapse(2) default(shared) private(i, iref, cc, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, sqsum_ref, k) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
@@ -945,23 +946,12 @@ contains
                 euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
-                    sqsum_ref = 0._dp
-                    if( self%iseven(i) )then
-                        do k = self%kfromto(1),self%kfromto(2)
-                            sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_even(:,k,iref) * self%ctfmats(:,k,i)), dp))
-                        enddo
-                    else
-                        do k = self%kfromto(1),self%kfromto(2)
-                            sqsum_ref = sqsum_ref + real(k, dp) * sum(real(csq_fast(self%pfts_refs_odd( :,k,iref) * self%ctfmats(:,k,i)), dp))
-                        enddo
-                    endif
                     ! computing distribution of particles around each iref (constants for now)
                     ptcl_ref_dist = 1._dp
                     ! computing the probability of each 2D reference at iref
-                    call self%gencorrs( iref, iptcl, cc )
-                    ref_prob(iref) = ref_prob(iref) + sum(real(cc, dp)) * ptcl_ref_dist
+                    ref_prob(iref) = ref_prob(iref) + self%cc_no_norm( iref, iptcl ) * ptcl_ref_dist
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
-                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist / dsqrt(sqsum_ref * real(self%sqsums_ptcls(i), dp))
+                    self%refs_reg(:,iref) = self%refs_reg(:,iref) + ptcl_ctf(:,i) * ptcl_ref_dist
                 endif
             enddo
         enddo
@@ -1676,6 +1666,46 @@ contains
                 call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, cc)
         end select
     end subroutine gencorrs_2
+
+    function cc_no_norm( self, iref, iptcl ) result(cc_out)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        complex(dp),             pointer       :: pft_ref_8(:,:)
+        real(dp) :: cc_out, cc(self%nrots)
+        integer  :: ithr, i, ik
+        i         =  self%pinds(iptcl)
+        ithr      =  omp_get_thread_num() + 1
+        pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
+        ! copy
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
+        cc = 0._dp
+        ! sum up correlations over k-rings
+        do ik = self%kfromto(1),self%kfromto(2)
+            ! move reference into Fourier Fourier space (particles are memoized)
+            self%fftdat(ithr)%ref_re(:) =  real(pft_ref_8(:,ik))
+            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref_8(:,ik)) * self%fft_factors
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
+            ! correlate
+            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re * self%ctfmats(:,ik,i)
+            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im * self%ctfmats(:,ik,i)
+            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
+            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
+            ! back transform
+            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
+            ! accumulate corrs
+            cc = cc + real(ik, dp) * real(self%fftdat(ithr)%backtransf, dp)
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc     = cc / real(self%nrots * 2, dp)
+        cc_out = sum(cc)
+    end function cc_no_norm
     
     subroutine gencorrs_cc( self, pft_ref, iptcl, ithr, iref, cc )
         class(polarft_corrcalc), intent(inout) :: self
