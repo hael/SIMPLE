@@ -971,7 +971,7 @@ contains
         complex(dp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         complex(dp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        if (irot >= self%pftsz + 1 .or. irot < 1) then
+        if (irot >= self%pftsz + 1 .or. irot <= 1) then
             ptcl_ctf_rot = ptcl_ctf
         else
             ptcl_ctf_rot(irot:self%pftsz,:) = ptcl_ctf(                1:self%pftsz-irot+1,:)
