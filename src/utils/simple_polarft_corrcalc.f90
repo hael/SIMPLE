@@ -375,6 +375,8 @@ contains
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
+        self%refs_prob      = 0._dp
+        self%refs_reg       = 0._dp
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -929,9 +931,7 @@ contains
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
-        thres          = params_glob%arc_thres * pi / 180.
-        self%refs_prob = 0._dp
-        self%refs_reg  = 0._dp
+        thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
@@ -2307,7 +2307,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iref
-        pft_ref = params_glob%eps * pft_ref + (1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+        pft_ref = params_glob%eps * pft_ref + (1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
     end subroutine reg_ref_sp
 
     ! DESTRUCTOR
