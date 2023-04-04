@@ -91,7 +91,7 @@ contains
         if( params_glob%mcpatch.eq.'yes' )then
             ldim4patch = [orientation%get('xdim'),orientation%get('ydim')] * params_glob%scale
             if( fname2format(self%moviename) .eq. 'K' )then
-                ! need to take up-sampling into account
+                ! need to take EER up-sampling into account
                 ldim4patch = ldim4patch * real(params_glob%eer_upsampling)
             endif
             if( .not.cline%defined('nxpatch') )then
@@ -242,6 +242,7 @@ contains
             call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
             call orientation%set('mceps', rel_fname)
         endif
+        call orientation%set('ref_frame',real(motion_correct_get_ref_frame()))
         call motion_correct_kill_common
     end subroutine iterate
 
