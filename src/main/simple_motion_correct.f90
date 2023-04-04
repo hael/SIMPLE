@@ -22,7 +22,7 @@ public :: motion_correct_with_patched
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
 public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_msd
 ! Utils
-public :: correct_gain
+public :: motion_correct_get_ref_frame, correct_gain
 private
 #include "simple_local_flags.inc"
 
@@ -805,6 +805,42 @@ contains
         l_eer = .false.
     end subroutine motion_correct_kill_common
 
+    ! PUBLIC UTILITY METHODS
+
+    ! gain correction, calculate image sum and identify outliers
+    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder )
+        type(image),     allocatable, intent(inout) :: frames_here(:)
+        character(len=*),             intent(in)    :: gainref_fname
+        class(image),                 intent(inout) :: gainimg
+        class(eer_decoder), optional, intent(in)    :: eerdecoder
+        integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here
+        write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
+        nframes_here = size(frames_here)
+        if( present(eerdecoder) )then
+            call eerdecoder%prep_gainref(gainref_fname, gainimg)
+        else
+            if( fname2format(gainref_fname)=='L' )then
+                THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
+            endif
+            ldim_here = frames_here(1)%get_ldim()
+            call find_ldim_nptcls(gainref_fname,ldim_gain,ifoo)
+            if( ldim_gain(1).ne.ldim_here(1) .or. ldim_gain(2).ne.ldim_here(2) )then
+                THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
+            endif
+            call gainimg%new(ldim_gain, frames_here(1)%get_smpd())
+            call gainimg%read(gainref_fname)
+        endif
+        !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
+        do iframe = 1,nframes_here
+            call frames_here(iframe)%mul(gainimg)
+        enddo
+        !$omp end parallel do
+    end subroutine correct_gain
+
+    integer function motion_correct_get_ref_frame()
+        motion_correct_get_ref_frame = fixed_frame
+    end function motion_correct_get_ref_frame
+
     ! COMMON PRIVATE UTILITY METHODS
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
@@ -855,33 +891,6 @@ contains
     end subroutine apply_dose_weighting
 
     ! gain correction, calculate image sum and identify outliers
-    subroutine correct_gain( frames, gainref_fname, gainimg, eerdecoder )
-        class(image),                 intent(inout) :: frames(nframes), gainimg
-        character(len=*),             intent(in)    :: gainref_fname
-        class(eer_decoder), optional, intent(in)    :: eerdecoder
-        integer :: ldim_gain(3), iframe, ifoo
-        write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
-        if( present(eerdecoder) )then
-            call eerdecoder%prep_gainref(gainref_fname, gainimg)
-        else
-            if( fname2format(gainref_fname)=='L' )then
-                THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
-            endif
-            call find_ldim_nptcls(gainref_fname,ldim_gain,ifoo)
-            if( ldim_gain(1).ne.ldim(1) .or. ldim_gain(2).ne.ldim(2) )then
-                THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
-            endif
-            call gainimg%new(ldim_gain, smpd)
-            call gainimg%read(gainref_fname)
-        endif
-        !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
-        do iframe = 1,nframes
-            call frames(iframe)%mul(gainimg)
-        enddo
-        !$omp end parallel do
-    end subroutine correct_gain
-
-    ! gain correction, calculate image sum and identify outliers
     subroutine cure_outliers( frames )
         use simple_image, only: image_ptr
         class(image), intent(inout) :: frames(nframes)
@@ -895,7 +904,7 @@ contains
         logical :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
         if( l_BENCH ) t_cure = tic()
-        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
+        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
         ! sum
         do iframe = 1,nframes
             call frames(iframe)%get_rmat_ptr(prmat)
@@ -1012,7 +1021,7 @@ contains
         endif
     end subroutine cure_outliers
 
-        !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
+    !>  Utility to calculate the number fractions, # eer frames per fraction and adjusted total_dose
     !   while minimizing the number of leftover frames given total dose, total # of eer frames & a dose target
     subroutine calc_eer_fraction(n_eer_frames, fraction_dose_target, tot_dose, nfractions, eerfraction)
         integer, intent(in)    :: n_eer_frames
