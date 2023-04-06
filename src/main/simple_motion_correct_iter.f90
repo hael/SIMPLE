@@ -110,7 +110,7 @@ contains
         msd = 0.0
         ! ALIGNEMENT
         select case(params_glob%algorithm)
-        case('iso','wpatch','poly')
+        case('wpatch','poly')
             write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
             if( cline%defined('boxfile') )then
                 if( file_exists(params_glob%boxfile) )then
@@ -141,6 +141,7 @@ contains
             call orientation%set('gof',   goodnessoffit(1))
             call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         case DEFAULT
+            if( trim(params_glob%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
             ! b-factors for alignment
             bfac_here = -1.
             if( cline%defined('bfac') ) bfac_here = params_glob%bfac
@@ -242,7 +243,6 @@ contains
             call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
             call orientation%set('mceps', rel_fname)
         endif
-        call orientation%set('ref_frame',real(motion_correct_get_ref_frame()))
         call motion_correct_kill_common
     end subroutine iterate
 

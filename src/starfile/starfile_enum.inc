@@ -379,5 +379,7 @@
         enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 357
         enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 358
 
-        enumerator :: EMDL_LAST_LABEL                                  = 359 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: SMPL_MOVIE_FRAME_WEIGHT                          = 359
+
+        enumerator :: EMDL_LAST_LABEL                                  = 360 ! **** NOTE ****: Do keep this label always at the end
     end enum
