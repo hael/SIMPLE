@@ -64,6 +64,7 @@ character(len=LONGSTRLEN), allocatable :: imported_stks(:)
 character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
+integer                                :: nptcls_glob=0, nptcls_rejected_glob=0
 integer                                :: origproj_time, n_spprojs_glob = 0
 logical                                :: initiated       = .false.
 ! Global parameters to avoid conflict with preprocess_stream
@@ -1069,7 +1070,9 @@ contains
         integer(timer_int_kind) :: t_tot
         if( .not.pool_available )return
         if( L_BENCH ) t_tot  = tic()
-        nptcls_tot = pool_proj%os_ptcl2D%get_noris()
+        nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
+        nptcls_glob          = nptcls_tot
+        nptcls_rejected_glob = 0
         if( nptcls_tot == 0 ) return
         pool_iter = pool_iter + 1
         call cline_cluster2D_pool%set('refs',    refs_glob)
@@ -1100,6 +1103,10 @@ contains
                 nptcls_old = nptcls_old + nptcls_per_stk(istk)
             endif
         enddo
+        nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
+        ! update info for gui
+        call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
+        call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
