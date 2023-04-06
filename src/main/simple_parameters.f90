@@ -32,6 +32,7 @@ type :: parameters
     character(len=3)          :: doprint='no'
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -474,6 +475,7 @@ contains
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
+        call check_carg('extractfrommov', self%extractfrommov)
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)

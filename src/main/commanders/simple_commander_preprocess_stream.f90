@@ -89,6 +89,7 @@ contains
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
         ! 2D classification
         if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',       30.0)
         if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)

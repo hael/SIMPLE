@@ -439,13 +439,19 @@ contains
         character(len=*),           intent(in) :: mc_starfile_fname, moviename
         logical,                    intent(in) :: writepoly
         character(len=*), optional, intent(in) :: gainref_fname
+        real(dp),     allocatable :: poly_coeffs(:)
         type(starfile_table_type) :: mc_starfile
-        real(dp) :: poly_coeffs(size(patched_polyn,1)),dpscale
+        real(dp) :: dpscale
         real     :: shift(2), doseperframe
-        integer  :: i,iframe, n, ndeadpixels, motion_model
-        motion_model = 0
-        if( writepoly ) motion_model = 1
+        integer  :: i,iframe, npoly, ndeadpixels, motion_model
         dpscale = real(params_glob%scale,dp)
+        motion_model = 0
+        if( writepoly )then
+            motion_model = 1
+            npoly        = size(patched_polyn,1)
+            poly_coeffs  = patched_polyn
+            if( do_scale ) poly_coeffs = patched_polyn / dpscale
+        endif
         call starfile_table__new(mc_starfile)
         call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
         ! global fields
@@ -488,23 +494,20 @@ contains
                 shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1),dp)/dpscale)
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2),dp)/dpscale)
+                call starfile_table__setValue_double(mc_starfile, SMPL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe),dp))
             else
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
+                call starfile_table__setValue_double(mc_starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
             endif
         enddo
         call starfile_table__write_ofile(mc_starfile)
         if( writepoly )then
             ! anisotropic shifts
-            n = size(patched_polyn,1)
-            poly_coeffs = patched_polyn
-            if( do_scale )then
-                poly_coeffs = patched_polyn / dpscale
-            endif
             call starfile_table__clear(mc_starfile)
             call starfile_table__setIsList(mc_starfile, .false.)
             call starfile_table__setName(mc_starfile, "local_motion_model")
-            do iframe = 1, n
+            do iframe = 1, npoly
                 call starfile_table__addObject(mc_starfile)
                 call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, poly_coeffs(iframe))
