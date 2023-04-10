@@ -10,7 +10,7 @@ use simple_strings
 use simple_fileio
 implicit none
 
-public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, mskdiam2lplimits, calc_dose_weights, get_resolution
 private
 #include "simple_local_flags.inc"
@@ -52,31 +52,6 @@ contains
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.99999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
-
-    subroutine subsample_optlp( filtsz, subfiltsz, filt, subfilt )
-        integer, intent(in)  :: filtsz, subfiltsz   !< sz of filters
-        real,    intent(in)  :: filt(filtsz)        !< filter coefficients
-        real,    intent(out) :: subfilt(subfiltsz)  !< output filter coefficients
-        real    :: x, fracx, step
-        integer :: i, floorx
-        if( filtsz < subfiltsz )then
-            THROW_HARD('Invalid filter sizes!')
-        else if( filtsz == subfiltsz )then
-            subfilt = filt
-        else
-            x    = 1.
-            step = real(filtsz-1) / real(subfiltsz-1)
-            do i = 2,subfiltsz-1
-                x          = x+step
-                floorx     = floor(x)
-                fracx      = x-real(floorx)
-                subfilt(i) = (1.-fracx)*filt(floorx) + fracx*filt(ceiling(x))
-                subfilt(i) = max(min(subfilt(i),1.),0.) ! always in [0.,1.]
-            enddo
-            subfilt(1)         = max(min(filt(1),1.),0.)
-            subfilt(subfiltsz) = max(min(filt(filtsz),1.),0.)
-        endif
-    end subroutine subsample_optlp
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )
