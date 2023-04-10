@@ -928,7 +928,7 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
         thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
@@ -950,9 +950,9 @@ contains
                     inpl_corrs    = self%cc_no_norm( iref, iptcl )
                     loc           = maxloc(inpl_corrs)
                     ! computing distribution of particles around each iref (constants for now, maybe geodesics between {iref, loc} and iptcl)
-                    ptcl_ref_dist = 1._dp
+                    ptcl_ref_dist = inpl_corrs(loc(1))
                     ! computing the probability of each 2D reference at iref
-                    self%refs_prob(iref) = self%refs_prob(iref) + inpl_corrs(loc(1)) * ptcl_ref_dist
+                    self%refs_prob(iref) = self%refs_prob(iref) + ptcl_ref_dist**2
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + real(ptcl_ctf_rot, dp) * ptcl_ref_dist
