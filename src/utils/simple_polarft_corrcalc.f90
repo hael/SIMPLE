@@ -88,6 +88,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
+    real(dp),            allocatable :: refs_prob(:)                !< -"-, caching reference reg terms
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(dp),         allocatable :: refs_reg(:,:,:)             !< -"-, caching reference reg terms
@@ -348,7 +349,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%refs_prob(self%nrefs),&
                     &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -373,6 +374,8 @@ contains
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
+        self%refs_prob      = 0._dp
+        self%refs_reg       = 0._dp
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -919,11 +922,9 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ref_prob(self%nrefs), ptcl_ref_dist, inpl_corrs(self%nrots)
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
-        thres         = params_glob%arc_thres * pi / 180.
-        ref_prob      = 0._dp
-        self%refs_reg = 0._dp
+        thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
@@ -940,22 +941,17 @@ contains
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
                     ! find best irot for this pair of iref, iptcl
-                    inpl_corrs     = self%cc_no_norm( iref, iptcl )
-                    loc            = maxloc(inpl_corrs)
+                    inpl_corrs    = self%cc_no_norm( iref, iptcl )
+                    loc           = maxloc(inpl_corrs)
                     ! computing distribution of particles around each iref (constants for now, maybe geodesics between {iref, loc} and iptcl)
-                    ptcl_ref_dist  = 1._dp
+                    ptcl_ref_dist = 1._dp
                     ! computing the probability of each 2D reference at iref
-                    ref_prob(iref) = ref_prob(iref) + inpl_corrs(loc(1)) * ptcl_ref_dist
+                    self%refs_prob(iref) = self%refs_prob(iref) + inpl_corrs(loc(1)) * ptcl_ref_dist
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + real(ptcl_ctf_rot, dp) * ptcl_ref_dist
                 endif
             enddo
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / ref_prob(iref)
         enddo
         !$omp end parallel do
     end subroutine compute_ref_reg
@@ -2295,14 +2291,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iref
-        pft_ref = params_glob%eps * pft_ref + (1._dp - params_glob%eps) * self%refs_reg(:,:,iref)
+        pft_ref = params_glob%eps * pft_ref + (1._dp - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
     end subroutine reg_ref_dp
 
     subroutine reg_ref_sp( self, pft_ref, iref )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iref
-        pft_ref = params_glob%eps * pft_ref + (1. - params_glob%eps) * self%refs_reg(:,:,iref)
+        pft_ref = params_glob%eps * pft_ref + (1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
     end subroutine reg_ref_sp
 
     ! DESTRUCTOR
@@ -2342,7 +2338,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%refs_prob)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

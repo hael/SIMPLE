@@ -97,6 +97,7 @@ contains
     procedure          :: map2Dshifts23D
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
+    procedure          :: map_ptcls_state_to_cls
     procedure          :: replace_project
     procedure          :: merge_stream_projects
     procedure          :: report_state2stk
@@ -2710,6 +2711,36 @@ contains
             endif
         end do
     end subroutine map2ptcls_state
+
+    ! this updates cls fields with respect to ptcl2D/3D states
+    subroutine map_ptcls_state_to_cls( self )
+        class(sp_project), intent(inout) :: self
+        integer, allocatable :: cls_states(:), cls_pops(:)
+        integer :: ncls, icls, iptcl, noris_ptcl2D, ncls2D, ncls3D
+        noris_ptcl2D = self%os_ptcl2D%get_noris()
+        if( noris_ptcl2D == 0 ) return
+        ncls2D = self%os_cls2D%get_noris()
+        if( ncls2D == 0 ) return
+        ncls3D = self%os_cls2D%get_noris()
+        ! cls2D
+        cls_states = nint(self%os_cls2D%get_all('state'))
+        cls_pops   = nint(self%os_cls2D%get_all('pop'))
+        do iptcl=1,noris_ptcl2D
+            if( self%os_ptcl2D%get_state(iptcl) == 1) cycle
+            icls = self%os_ptcl2D%get_class(iptcl)
+            if( (icls == 0) .or. (icls > ncls2D) ) cycle
+            cls_pops(icls) = cls_pops(icls) - 1
+        end do
+        where( cls_pops < 1 )
+            cls_pops   = 0
+            cls_states = 0
+        end where
+        call self%os_cls2D%set_all('pop', real(cls_pops))
+        call self%os_cls2D%set_all('state',real(cls_states))
+        ! cls3D should be congruent
+        if( ncls3D /= ncls2D ) call self%os_cls3D%new(ncls2D, is_ptcl=.false.)
+        call self%os_cls3D%set_all('state',real(cls_states))
+    end subroutine map_ptcls_state_to_cls
 
     subroutine replace_project( self, projfile_src, oritype )
         class(sp_project),     intent(inout) :: self

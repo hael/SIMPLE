@@ -434,6 +434,8 @@ enum EMDLabel
     EMDL_MICROGRAPH_PIXEL_SIZE,
     EMDL_POSTPROCESS_FSC_PART_FRACMASK,
 
+    SMPL_MOVIE_FRAME_WEIGHT,
+
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
 };//close enum Label
@@ -885,6 +887,9 @@ private:
 		EMDL::addLabel(EMDL_ORIENT_ORIGIN_Z_ANGSTROM, EMDL_DOUBLE, "rlnOriginZAngst", "Z-coordinate (in Angstrom) for the origin of rotation");
 		EMDL::addLabel(EMDL_MICROGRAPH_PIXEL_SIZE, EMDL_DOUBLE, "rlnMicrographPixelSize", "Pixel size of (averaged) micrographs after binning in Angstrom/pixel.");
 		EMDL::addLabel(EMDL_POSTPROCESS_FSC_PART_FRACMASK, EMDL_DOUBLE, "rlnFourierShellCorrelationParticleMaskFraction", "CisTEM-like correction of unmasked FSCs, based on fraction of white pixels in solvent mask");
+
+        // Custom SIMPLE entries
+		EMDL::addLabel(SMPL_MOVIE_FRAME_WEIGHT, EMDL_DOUBLE, "splMovieFrameWeight", "Movie frame weight");
     }
 
     ~StaticInitialization()
