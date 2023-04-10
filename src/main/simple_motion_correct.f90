@@ -21,6 +21,8 @@ public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
 public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_msd
+! Utils
+public :: correct_gain
 private
 #include "simple_local_flags.inc"
 
@@ -53,7 +55,6 @@ integer :: fixed_frame    = 0                             !< fixed frame of refe
 integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
 integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
-integer :: ldim_gain(3)   = [0,0,0]                       !< gain reference dimensions
 integer :: eer_fraction   = 0
 real    :: total_dose     = 0.                            !< total dose in e/A2
 real    :: hp             = 0.                            !< high-pass limit
@@ -229,7 +230,13 @@ contains
         endif
         ! gain reference & outliers detections
         if( l_BENCH ) t_cure = tic()
-        if( present(gainref) ) call correct_gain(movie_frames, gainref)
+        if( present(gainref) )then
+            if( l_eer )then
+                call correct_gain(movie_frames, gainref, gain_img, eerdecoder=eer)
+            else
+                call correct_gain(movie_frames, gainref, gain_img)
+            endif
+        endif
         call cure_outliers( movie_frames)
         call gain_img%kill
         if( l_BENCH ) rt_cure = toc(t_cure)
@@ -848,13 +855,14 @@ contains
     end subroutine apply_dose_weighting
 
     ! gain correction, calculate image sum and identify outliers
-    subroutine correct_gain( frames, gainref_fname )
-        class(image),     intent(inout) :: frames(nframes)
-        character(len=*), intent(in)    :: gainref_fname
-        integer     :: iframe, ifoo
+    subroutine correct_gain( frames, gainref_fname, gainimg, eerdecoder )
+        class(image),                 intent(inout) :: frames(nframes), gainimg
+        character(len=*),             intent(in)    :: gainref_fname
+        class(eer_decoder), optional, intent(in)    :: eerdecoder
+        integer :: ldim_gain(3), iframe, ifoo
         write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
-        if( l_eer )then
-            call eer%prep_gainref(gainref_fname, gain_img)
+        if( present(eerdecoder) )then
+            call eerdecoder%prep_gainref(gainref_fname, gainimg)
         else
             if( fname2format(gainref_fname)=='L' )then
                 THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
@@ -863,12 +871,12 @@ contains
             if( ldim_gain(1).ne.ldim(1) .or. ldim_gain(2).ne.ldim(2) )then
                 THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
             endif
-            call gain_img%new(ldim_gain, smpd)
-            call gain_img%read(gainref_fname)
+            call gainimg%new(ldim_gain, smpd)
+            call gainimg%read(gainref_fname)
         endif
         !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
         do iframe = 1,nframes
-            call frames(iframe)%mul(gain_img)
+            call frames(iframe)%mul(gainimg)
         enddo
         !$omp end parallel do
     end subroutine correct_gain

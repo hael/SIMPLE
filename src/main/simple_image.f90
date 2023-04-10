@@ -77,24 +77,17 @@ contains
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
-    procedure, private :: get_cmat_at_1
-    procedure, private :: get_cmat_at_2
+    procedure, private :: get_cmat_at_1, get_cmat_at_2
     generic            :: get_cmat_at => get_cmat_at_1, get_cmat_at_2
-    procedure, private :: get_rmat_at_1
-    procedure, private :: get_rmat_at_2
+    procedure, private :: get_rmat_at_1, get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
     procedure          :: set_rmat_at
-    procedure, private :: set_1
-    procedure, private :: set_2
+    procedure, private :: set_1, set_2
     generic            :: set => set_1, set_2
     procedure          :: set_rmat
-    procedure, private :: set_cmat_1
-    procedure, private :: set_cmat_2
-    procedure, private :: set_cmat_3
-    procedure, private :: set_cmat_4
+    procedure, private :: set_cmat_1, set_cmat_2, set_cmat_3, set_cmat_4
     generic            :: set_cmat => set_cmat_1, set_cmat_2, set_cmat_3, set_cmat_4
-    procedure, private :: set_cmat_at_1
-    procedure, private :: set_cmat_at_2
+    procedure, private :: set_cmat_at_1, set_cmat_at_2
     generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
     procedure          :: set_cmats_from_cmats
     procedure          :: add_cmats_to_cmats
@@ -112,8 +105,7 @@ contains
     procedure          :: rmat_associated
     procedure          :: cmat_associated
     procedure          :: is_wthreads
-    procedure, private :: serialize_1
-    procedure, private :: serialize_2
+    procedure, private :: serialize_1, serialize_2
     generic            :: serialize => serialize_1, serialize_2
     procedure          :: unserialize
     procedure          :: winserialize
@@ -151,60 +143,36 @@ contains
     generic :: operator(*) => multiplication, multiplication_const_real, multiplication_const_int
     procedure, private :: division
     generic :: operator(/) => division
-    procedure, private :: add_1
-    procedure, private :: add_2
-    procedure, private :: add_3
-    procedure, private :: add_4
-    procedure, private :: add_5
+    procedure, private :: add_1, add_2, add_3, add_4, add_5
     generic            :: add => add_1, add_2, add_3, add_4, add_5
     procedure          :: add_workshare
-    procedure, private :: subtr_1
-    procedure, private :: subtr_2
-    procedure, private :: subtr_3
-    procedure, private :: subtr_4
+    procedure, private :: subtr_1, subtr_2, subtr_3, subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
-    procedure, private :: div_1
-    procedure, private :: div_2
-    procedure, private :: div_3
-    procedure, private :: div_4
+    procedure, private :: div_1, div_2, div_3, div_4
     generic            :: div => div_1, div_2, div_3, div_4
     procedure          :: ctf_dens_correct
     procedure          :: ctf_dens_correct_wiener
-    procedure, private :: mul_1
-    procedure, private :: mul_2
-    procedure, private :: mul_3
-    procedure, private :: mul_4
-    procedure, private :: mul_5
+    procedure, private :: mul_1, mul_2, mul_3, mul_4, mul_5
     generic            :: mul => mul_1, mul_2, mul_3, mul_4, mul_5
     procedure, private :: conjugate
     generic            :: conjg => conjugate
-    procedure, private :: mul_rmat_at_1
-    procedure, private :: mul_rmat_at_2
+    procedure, private :: mul_rmat_at_1, mul_rmat_at_2
     generic            :: mul_rmat_at => mul_rmat_at_1, mul_rmat_at_2
-    procedure, private :: div_rmat_at_1
-    procedure, private :: div_rmat_at_2
+    procedure, private :: div_rmat_at_1, div_rmat_at_2
     generic            :: div_rmat_at => div_rmat_at_1, div_rmat_at_2
-    procedure, private :: add_cmat_at_1
-    procedure, private :: add_cmat_at_2
+    procedure, private :: add_cmat_at_1, add_cmat_at_2
     generic            :: add_cmat_at => add_cmat_at_1, add_cmat_at_2
-    procedure, private :: mul_cmat_at_1
-    procedure, private :: mul_cmat_at_2
-    procedure, private :: mul_cmat_at_3
-    procedure, private :: mul_cmat_at_4
+    procedure, private :: mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
     generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
-    procedure          :: mul_cmat
-    procedure, private :: div_cmat_at_1
-    procedure, private :: div_cmat_at_2
-    procedure, private :: div_cmat_at_3
-    procedure, private :: div_cmat_at_4
+    procedure, private :: mul_cmat_1, mul_cmat_2
+    generic            :: mul_cmat => mul_cmat_1, mul_cmat_2
+    procedure, private :: div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     procedure          :: sq_rt
     ! BINARY IMAGE METHODS (heavy binary lifters deferred to binimage that extends this class)
     procedure          :: nforeground
     procedure          :: nbackground
-    procedure, private :: binarize_1
-    procedure, private :: binarize_2
-    procedure, private :: binarize_3
+    procedure, private :: binarize_1, binarize_2, binarize_3
     generic            :: binarize => binarize_1, binarize_2, binarize_3
     procedure          :: cendist
     procedure          :: masscen
@@ -231,13 +199,10 @@ contains
     procedure          :: bp
     procedure          :: lp
     procedure          :: tophat
-    procedure, private :: apply_filter_1
-    procedure, private :: apply_filter_2
+    procedure, private :: apply_filter_1, apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: apply_filter_serial
-    procedure, private :: imfilter1
-    procedure, private :: imfilter2
-    procedure, private :: imfilter3
+    procedure, private :: imfilter1, imfilter2, imfilter3
     generic            :: imfilter => imfilter1, imfilter2, imfilter3
     procedure          :: phase_rand
     procedure          :: hannw
@@ -248,8 +213,7 @@ contains
     procedure          :: minmax
     procedure          :: avg_loc_sdev
     procedure          :: rmsd
-    procedure, private :: stats_1
-    procedure, private :: stats_2
+    procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
     procedure          :: noisesdev
     procedure          :: mean
@@ -263,27 +227,22 @@ contains
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: corr
     procedure          :: corr_shifted
-    procedure, private :: real_corr_1
-    procedure, private :: real_corr_2
+    procedure, private :: real_corr_1, real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: phase_corr
     procedure          :: fcorr_shift
-    procedure          :: prenorm4real_corr_1
-    procedure          :: prenorm4real_corr_2
+    procedure          :: prenorm4real_corr_1, prenorm4real_corr_2
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2
-    procedure, private :: real_corr_prenorm_1
-    procedure, private :: real_corr_prenorm_2
+    procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
     procedure          :: sqeuclid
-    procedure, private :: sqeuclid_matrix_1
-    procedure, private :: sqeuclid_matrix_2
+    procedure, private :: sqeuclid_matrix_1, sqeuclid_matrix_2
     generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
     procedure          :: opt_filter_costfun
     procedure          :: opt_filter_costfun_workshare
     procedure          :: fsc, fsc_scaled
     procedure          :: get_res
-    procedure, private :: oshift_1
-    procedure, private :: oshift_2
+    procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
     ! MODIFIERS
@@ -313,8 +272,7 @@ contains
     procedure          :: square
     procedure          :: corners
     procedure          :: before_after
-    procedure, private :: gauimg_1
-    procedure, private :: gauimg_2
+    procedure, private :: gauimg_1, gauimg_2
     generic            :: gauimg => gauimg_1, gauimg_2
     procedure          :: gauimg2D
     procedure          :: gauimg3D
@@ -344,8 +302,7 @@ contains
     procedure          :: rtsq_serial
     procedure          :: shift_phorig
     procedure          :: shift
-    procedure, private :: shift2Dserial_1
-    procedure, private :: shift2Dserial_2
+    procedure, private :: shift2Dserial_1, shift2Dserial_2
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
     procedure          :: set_within
     procedure          :: ft2img
@@ -1529,14 +1486,20 @@ contains
         self%cmat(h,k,l) = self%cmat(h,k,l) * cval
     end subroutine mul_cmat_at_4
 
-    subroutine mul_cmat( self, rmat, resmsk )
+    subroutine mul_cmat_1( self, rmat )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        self%cmat = self%cmat * rmat
+    end subroutine mul_cmat_1
+
+    subroutine mul_cmat_2( self, rmat, resmsk )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         where( resmsk )
             self%cmat = self%cmat * rmat
         end where
-    end subroutine mul_cmat
+    end subroutine mul_cmat_2
 
     subroutine print_cmat( self )
         class(image), intent(in) :: self
