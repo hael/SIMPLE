@@ -167,6 +167,7 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
     procedure          :: compute_ref_reg
+    procedure          :: regularize_refs
     procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
@@ -224,8 +225,6 @@ type :: polarft_corrcalc
     generic,   private :: weight_ref_ptcl => weight_ref_ptcl_sp, weight_ref_ptcl_dp
     procedure, private :: deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
     generic,   private :: deweight_ref_ptcl => deweight_ref_ptcl_sp, deweight_ref_ptcl_dp
-    procedure, private :: reg_ref_sp, reg_ref_dp
-    generic,   private :: reg_ref => reg_ref_sp, reg_ref_dp
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -963,6 +962,17 @@ contains
         !$omp end parallel do
     end subroutine compute_ref_reg
 
+    subroutine regularize_refs( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: iref
+        do iref = 1, self%nrefs
+            self%pfts_refs_even(:,:,iref) = params_glob%eps * self%pfts_refs_even(:,:,iref) +&
+                    &(1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+            self%pfts_refs_odd(:,:,iref)  = params_glob%eps * self%pfts_refs_odd(:,:,iref) +&
+                    &(1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+        enddo
+    end subroutine regularize_refs
+
     subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -1644,7 +1654,6 @@ contains
         complex(sp), pointer :: pft_ref(:,:)
         integer :: ithr
         call self%prep_ref4corr(iref, iptcl, pft_ref, ithr)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 call self%gencorrs_cc(    pft_ref, iptcl, ithr, iref, self%heap_vars(ithr)%kcorrs)
@@ -1666,7 +1675,6 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref, ithr)
         shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat(ithr, shvec, shmat)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref, iref)
         pft_ref = pft_ref * shmat
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
@@ -1808,7 +1816,6 @@ contains
         call self%prep_ref4corr(iref, iptcl, pft_ref_8, ithr)
         shmat_8 => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         pft_ref_8 = pft_ref_8 * shmat_8
         gencorr_for_rot_8 = 0._dp
         select case(params_glob%cc_objfun)
@@ -1873,7 +1880,6 @@ contains
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8     => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
@@ -1979,7 +1985,6 @@ contains
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8     => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, shvec, shmat_8)
-        if( params_glob%l_ref_reg ) call self%reg_ref(pft_ref_8, iref)
         pft_ref_8 = pft_ref_8 * shmat_8
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
@@ -2295,20 +2300,6 @@ contains
             self%fftdat_ptcls(k,i)%im = self%fftdat_ptcls(k,i)%im / real(w)
         end do
     end subroutine deweight_ref_ptcl_dp
-
-    subroutine reg_ref_dp( self, pft_ref, iref )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iref
-        pft_ref = params_glob%eps * pft_ref + (1._dp - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
-    end subroutine reg_ref_dp
-
-    subroutine reg_ref_sp( self, pft_ref, iref )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),    pointer, intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iref
-        pft_ref = params_glob%eps * pft_ref + (1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
-    end subroutine reg_ref_sp
 
     ! DESTRUCTOR
 
