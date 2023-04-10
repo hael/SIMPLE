@@ -821,6 +821,7 @@ contains
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
                 if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
+                call spproj%map_ptcls_state_to_cls
             case DEFAULT
                 THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
         end select

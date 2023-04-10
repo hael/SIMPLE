@@ -172,7 +172,7 @@ contains
         if( .not. cline%defined('mcconvention')    )  call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_upsampling')  )  call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         )  call cline%set('mcpatch',        'yes')
-        if( .not. cline%defined('mcpatch_thres')   )  call cline%set('mcpatch_thres',   'yes')
+        if( .not. cline%defined('mcpatch_thres')   )  call cline%set('mcpatch_thres',  'yes')
         if( .not. cline%defined('algorithm')       )  call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         )  call cline%set('pspecsz',         512.)
@@ -181,12 +181,13 @@ contains
         if( .not. cline%defined('dfmin')           )  call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           )  call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        )  call cline%set('ctfpatch',       'yes')
-        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',CTFRES_THRESHOLD)
-        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD)
+        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD)
+        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold',ICEFRAC_THRESHOLD)
         ! picking
         if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
         ! extraction
         if( .not. cline%defined('pcontrast')       )  call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('extractfrommov')  )  call cline%set('extractfrommov',  'no')
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! master parameters
@@ -721,6 +722,7 @@ contains
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -1540,10 +1542,11 @@ contains
         real    :: dfx,dfy,ogid,gid
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('outside')   ) call cline%set('outside',      'no')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('stream')    ) call cline%set('stream',       'no')
+        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('outside')       ) call cline%set('outside',         'no')
+        if( .not. cline%defined('pcontrast')     ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('stream')        ) call cline%set('stream',          'no')
+        if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -1729,9 +1732,11 @@ contains
         use simple_ctf,                 only: ctf
         use simple_ctf_estimate_fit,    only: ctf_estimate_fit
         use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
+        use simple_particle_extractor,  only: ptcl_extractor
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(builder)                           :: build
+        type(ptcl_extractor)                    :: extractor
         type(parameters)                        :: params
         type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
@@ -1836,10 +1841,10 @@ contains
                     call spproj%os_mic%set(imic, 'nptcls', 0.)
                     cycle
                 endif
-                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()) )
-                call boxfile%readNextDataLine(boxdata(1,:))
+                allocate( boxdata(boxfile%get_nrecs_per_line(),nptcls) )
+                call boxfile%readNextDataLine(boxdata(:,1))
                 call boxfile%kill
-                params%box = nint(boxdata(1,3))
+                params%box = nint(boxdata(3,1))
             endif
         enddo
         call spproj%write
@@ -1883,21 +1888,21 @@ contains
                 allocate(oris_mask(nptcls), source=.false.)
                 ! read box data & update mask
                 if(allocated(boxdata))deallocate(boxdata)
-                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()))
+                allocate( boxdata(boxfile%get_nrecs_per_line(),nptcls))
                 do iptcl=1,nptcls
-                    call boxfile%readNextDataLine(boxdata(iptcl,:))
-                    box = nint(boxdata(iptcl,3))
-                    if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
+                    call boxfile%readNextDataLine(boxdata(:,iptcl))
+                    box = nint(boxdata(3,iptcl))
+                    if( nint(boxdata(3,iptcl)) /= nint(boxdata(4,iptcl)) )then
                         THROW_HARD('only square windows allowed; exec_extract')
                     endif
                     ! modify coordinates if change in box (shift by half the difference)
-                    if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
-                    if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
-                        write(logfhandle,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
+                    if( box /= params%box ) boxdata(1:2,iptcl) = boxdata(1:2,iptcl) - real(params%box-box)/2.
+                    if( .not.cline%defined('box') .and. nint(boxdata(3,iptcl)) /= params%box )then
+                        write(logfhandle,*) 'box_current: ', nint(boxdata(3,iptcl)), 'box in params: ', params%box
                         THROW_HARD('inconsistent box sizes in box files; exec_extract')
                     endif
                     ! update particle mask & movie index
-                    if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) ) oris_mask(iptcl) = .true.
+                    if( box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box) ) oris_mask(iptcl) = .true.
                 end do
                 ! update micrograph field
                 nptcls2extract = count(oris_mask)
@@ -1927,46 +1932,57 @@ contains
                 ! output stack
                 ext = fname2ext(trim(basename(mic_name)))
                 stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
-                ! read micrograph
-                call micrograph%read(mic_name, 1)
-                ! phase-flip micrograph
-                if( cline%defined('ctf') )then
-                    if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
-                        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                        call micrograph%zero_edgeavg
-                        call micrograph%fft
-                        call tfun%apply_serial(micrograph, 'flip', ctfparms)
-                        call micrograph%ifft
-                        ! update stack ctf flag, mic flag unchanged
-                        ctfparms%ctfflag = CTFFLAG_FLIP
-                    endif
-                endif
-                ! extract
+                ! init extraction
                 stk_min   = huge(stk_min)
                 stk_max   = -stk_min
                 stk_mean  = 0.0
                 stk_sdev  = 0.0
                 cnt_stats = 0
                 call prepimgbatch(nptcls2extract)
-                !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-                !$omp private(i,iptcl,noutside,sdev_noise,l_err,meanv,sddevv,maxv,minv)&
-                !$omp reduction(+:stk_mean,stk_sdev,cnt_stats) reduction(min:stk_min) reduction(max:stk_max)
-                do i = 1,nptcls2extract
-                    iptcl = ptcl_inds(i)
-                    call micrograph%window(nint(boxdata(iptcl,1:2)), params%box, build%imgbatch(i), noutside)
-                    if( params%pcontrast .eq. 'black' ) call build%imgbatch(i)%neg()
-                    call build%imgbatch(i)%subtr_backgr_ramp(build%lmsk)
-                    call build%imgbatch(i)%norm_noise(build%lmsk, sdev_noise)
-                    call build%imgbatch(i)%stats(meanv, sddevv, maxv, minv, errout=l_err)
-                    if( .not.l_err )then
-                        cnt_stats = cnt_stats + 1
-                        stk_min   = min(stk_min,minv)
-                        stk_max   = max(stk_max,maxv)
-                        stk_mean  = stk_mean + meanv
-                        stk_sdev  = stk_sdev + sddevv**2.
+                if( trim(params%extractfrommov).eq.'yes' )then
+                    if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
+                        THROW_HARD('extractfrommov=yes does not support ctf=flip yet')
                     endif
-                end do
-                !$omp end parallel do
+                    call extractor%init(o_mic, params%box, (params%pcontrast .eq. 'black'))
+                    call extractor%extract_particles(ptcl_inds, nint(boxdata), build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
+                else
+                    ! read micrograph
+                    call micrograph%read(mic_name, 1)
+                    ! phase-flip micrograph
+                    if( cline%defined('ctf') )then
+                        if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
+                            tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                            call micrograph%zero_edgeavg
+                            call micrograph%fft
+                            call tfun%apply_serial(micrograph, 'flip', ctfparms)
+                            call micrograph%ifft
+                            ! update stack ctf flag, mic flag unchanged
+                            ctfparms%ctfflag = CTFFLAG_FLIP
+                        endif
+                    endif
+                    ! extraction
+                    !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+                    !$omp private(i,iptcl,noutside,sdev_noise,l_err,meanv,sddevv,maxv,minv)&
+                    !$omp reduction(+:stk_mean,stk_sdev,cnt_stats) reduction(min:stk_min) reduction(max:stk_max)
+                    do i = 1,nptcls2extract
+                        iptcl = ptcl_inds(i)
+                        call micrograph%window(nint(boxdata(1:2,iptcl)), params%box, build%imgbatch(i), noutside)
+                        if( params%pcontrast .eq. 'black' ) call build%imgbatch(i)%neg()
+                        call build%imgbatch(i)%subtr_backgr_ramp(build%lmsk)
+                        call build%imgbatch(i)%norm_noise(build%lmsk, sdev_noise)
+                        call build%imgbatch(i)%stats(meanv, sddevv, maxv, minv, errout=l_err)
+                        if( .not.l_err )then
+                            cnt_stats = cnt_stats + 1
+                            stk_min   = min(stk_min,minv)
+                            stk_max   = max(stk_max,maxv)
+                            stk_mean  = stk_mean + meanv
+                            stk_sdev  = stk_sdev + sddevv**2.
+                        endif
+                    end do
+                    !$omp end parallel do
+                    stk_mean = stk_mean / real(cnt_stats)
+                    stk_sdev = sqrt(stk_sdev / real(cnt_stats))
+                endif
                 ! write stack
                 call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
                 do i = 1,nptcls2extract
@@ -1974,8 +1990,6 @@ contains
                 enddo
                 call stkio_w%close
                 ! update stack stats
-                stk_mean = stk_mean / real(cnt_stats)
-                stk_sdev = sqrt(stk_sdev / real(cnt_stats))
                 call build%img%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
                 ! IMPORT INTO PROJECT
                 call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
@@ -1995,7 +2009,7 @@ contains
                 do i = 1,nptcls2extract
                     iptcl    = ptcl_inds(i)
                     iptcl_g  = iptcl_glob + i
-                    ptcl_pos = boxdata(iptcl,1:2)
+                    ptcl_pos = boxdata(1:2,iptcl)
                     ! updates particle position
                     call build%spproj%set_boxcoords(iptcl_g, nint(ptcl_pos))
                     ! updates particle defocus
@@ -2030,6 +2044,7 @@ contains
             call build%spproj%write
         endif
         ! end gracefully
+        call extractor%kill
         call micrograph%kill
         call o_mic%kill
         call o_tmp%kill
@@ -2074,9 +2089,10 @@ contains
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
             endif
         endif
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',  'ptcl3D')
+        if( .not. cline%defined('mkdir')     )     call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('pcontrast') )     call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('oritype')   )     call cline%set('oritype',     'ptcl3D')
+        if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
         call cline%set('nthr',1.)
         call params%new(cline)
         call cline%set('mkdir', 'no')

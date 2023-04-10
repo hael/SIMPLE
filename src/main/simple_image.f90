@@ -755,55 +755,36 @@ contains
         yboxrange(2)  = box      - yoshoot
         self_out%rmat = 0.
         self_out%rmat(xboxrange(1):xboxrange(2),yboxrange(1):yboxrange(2),1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
+        ! Rather than stretching the last inside line that creates stripes
+        ! it is scrambled to mitigate Gibbs phenomenon and preserve image stats
         if( xboxrange(1) > 1 )then
-            do i=1,xboxrange(1)-1
-                self_out%rmat(i,:,1) = self_out%rmat(xboxrange(1),:,1)
+            do i = 1,xboxrange(1)-1
+                do j = 1,self_out%ldim(2)
+                    self_out%rmat(i,j,1) = self_out%rmat(xboxrange(1),irnd_uni(self_out%ldim(2)),1)
+                enddo
             enddo
         endif
         if( xboxrange(2) < self_out%ldim(1) )then
-            do i=xboxrange(2)+1,self_out%ldim(1)
-                self_out%rmat(i,:,1) = self_out%rmat(xboxrange(2),:,1)
+            do i = xboxrange(2)+1,self_out%ldim(1)
+                do j = 1,self_out%ldim(2)
+                    self_out%rmat(i,j,1) = self_out%rmat(xboxrange(2),irnd_uni(self_out%ldim(2)),1)
+                enddo
             enddo
         endif
         if( yboxrange(1) > 1 )then
-            do i=1,yboxrange(1)-1
-                self_out%rmat(:,i,1) = self_out%rmat(:,yboxrange(1),1)
+            do j = 1,yboxrange(1)-1
+                do i = 1,self_out%ldim(1)
+                    self_out%rmat(i,j,1) = self_out%rmat(irnd_uni(self_out%ldim(1)),yboxrange(1),1)
+                enddo
             enddo
         endif
         if( yboxrange(2) < self_out%ldim(2) )then
-            do i=yboxrange(2)+1,self_out%ldim(2)
-                self_out%rmat(:,i,1) = self_out%rmat(:,yboxrange(2),1)
+            do j = yboxrange(2)+1,self_out%ldim(2)
+                do i = 1,self_out%ldim(1)
+                    self_out%rmat(i,j,1) = self_out%rmat(irnd_uni(self_out%ldim(1)),yboxrange(2),1)
+                enddo
             enddo
         endif
-        ! does the same but scrambles values so as to minimize Gibbs phenomenon, unused so far
-        ! if( xboxrange(1) > 1 )then
-        !     do i = 1,xboxrange(1)-1
-        !         do j = 1,self_out%ldim(2)
-        !             self_out%rmat(i,j,1) = self_out%rmat(xboxrange(1),irnd_uni(self_out%ldim(2)),1)
-        !         enddo
-        !     enddo
-        ! endif
-        ! if( xboxrange(2) < self_out%ldim(1) )then
-        !     do i = xboxrange(2)+1,self_out%ldim(1)
-        !         do j = 1,self_out%ldim(2)
-        !             self_out%rmat(i,j,1) = self_out%rmat(xboxrange(2),irnd_uni(self_out%ldim(2)),1)
-        !         enddo
-        !     enddo
-        ! endif
-        ! if( yboxrange(1) > 1 )then
-        !     do j = 1,yboxrange(1)-1
-        !         do i = 1,self_out%ldim(1)
-        !             self_out%rmat(i,j,1) = self_out%rmat(irnd_uni(self_out%ldim(1)),yboxrange(1),1)
-        !         enddo
-        !     enddo
-        ! endif
-        ! if( yboxrange(2) < self_out%ldim(2) )then
-        !     do j = yboxrange(2)+1,self_out%ldim(2)
-        !         do i = 1,self_out%ldim(1)
-        !             self_out%rmat(i,j,1) = self_out%rmat(irnd_uni(self_out%ldim(1)),yboxrange(2),1)
-        !         enddo
-        !     enddo
-        ! endif
     end subroutine window
 
     !>  window_slim  extracts a particle image from a box as defined by EMAN 1.9

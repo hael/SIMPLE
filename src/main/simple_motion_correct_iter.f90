@@ -91,7 +91,7 @@ contains
         if( params_glob%mcpatch.eq.'yes' )then
             ldim4patch = [orientation%get('xdim'),orientation%get('ydim')] * params_glob%scale
             if( fname2format(self%moviename) .eq. 'K' )then
-                ! need to take up-sampling into account
+                ! need to take EER up-sampling into account
                 ldim4patch = ldim4patch * real(params_glob%eer_upsampling)
             endif
             if( .not.cline%defined('nxpatch') )then
@@ -110,7 +110,7 @@ contains
         msd = 0.0
         ! ALIGNEMENT
         select case(params_glob%algorithm)
-        case('iso','wpatch','poly')
+        case('wpatch','poly')
             write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
             if( cline%defined('boxfile') )then
                 if( file_exists(params_glob%boxfile) )then
@@ -141,6 +141,7 @@ contains
             call orientation%set('gof',   goodnessoffit(1))
             call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         case DEFAULT
+            if( trim(params_glob%algorithm) .eq. 'iso' ) motion_correct_with_patched = .false.
             ! b-factors for alignment
             bfac_here = -1.
             if( cline%defined('bfac') ) bfac_here = params_glob%bfac
