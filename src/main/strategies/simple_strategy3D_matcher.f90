@@ -200,15 +200,12 @@ contains
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-            if( l_ctf )then
-                call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-                call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
-            endif
+            call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+            call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             if( params_glob%l_obj_reg )then
-                call pftcc%build_ref_ref_dist(build_glob%eulspace)
+                call pftcc%build_ptcl_dist(build_glob%spproj_field, pinds(batch_start:batch_end))
                 call pftcc%memoize_ptcl_prob(pinds(batch_start:batch_end))
-                call pftcc%memoize_ptcl_reg(.true.)
-                call pftcc%memoize_ptcl_reg(.false.)
+                call pftcc%memoize_ptcl_reg
             endif
             if( params_glob%l_ref_reg )then
                 call pftcc%build_ptcl_ref_dist(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
@@ -482,10 +479,6 @@ contains
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
-        if( params_glob%l_obj_reg )then
-            call pftcc%calc_ptcl_reg(.true.)
-            call pftcc%calc_ptcl_reg(.false.)
-        endif
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
     end subroutine prep_ccobjs4align
 
