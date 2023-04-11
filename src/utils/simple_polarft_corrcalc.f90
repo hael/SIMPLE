@@ -965,12 +965,14 @@ contains
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: iref
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             self%pfts_refs_even(:,:,iref) = params_glob%eps * self%pfts_refs_even(:,:,iref) +&
-                    &(1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                    &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
             self%pfts_refs_odd(:,:,iref)  = params_glob%eps * self%pfts_refs_odd(:,:,iref) +&
-                    &(1.    - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                    &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
         enddo
+        !$omp end parallel do
     end subroutine regularize_refs
 
     subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -978,11 +980,22 @@ contains
         complex(dp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         complex(dp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        if (irot >= self%pftsz + 1 .or. irot <= 1) then
-            ptcl_ctf_rot = ptcl_ctf
+        integer :: rot
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
         else
-            ptcl_ctf_rot(irot:self%pftsz,:) = ptcl_ctf(                1:self%pftsz-irot+1,:)
-            ptcl_ctf_rot(   1:irot-1    ,:) = ptcl_ctf(self%pftsz-irot+2:self%pftsz       ,:)
+            rot = irot
+        end if
+        if( irot == 1 )then
+            ptcl_ctf_rot = ptcl_ctf
+        else if( irot <= self%pftsz )then
+            ptcl_ctf_rot(rot:self%pftsz,:) =       ptcl_ctf(               1:self%pftsz-rot+1,:)
+            ptcl_ctf_rot(  1:rot-1     ,:) = conjg(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
+        else if( irot == self%pftsz + 1 )then
+            ptcl_ctf_rot = conjg(ptcl_ctf)
+        else
+            ptcl_ctf_rot(rot:self%pftsz,:) = conjg(ptcl_ctf(               1:self%pftsz-rot+1,:))
+            ptcl_ctf_rot(   1:rot-1    ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
         end if
     end subroutine rotate_polar
 
