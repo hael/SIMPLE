@@ -928,7 +928,7 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
         thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
