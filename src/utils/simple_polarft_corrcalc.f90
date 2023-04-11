@@ -88,10 +88,10 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    real(dp),            allocatable :: refs_prob(:)                !< -"-, caching reference reg terms
+    real(dp),            allocatable :: refs_prob(:)                !< -"-, caching reference reg probs
+    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, caching reference reg terms
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
-    complex(dp),         allocatable :: refs_reg(:,:,:)             !< -"-, caching reference reg terms
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -927,8 +927,8 @@ contains
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
-        complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
+        complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
         thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
@@ -955,7 +955,7 @@ contains
                     self%refs_prob(iref) = self%refs_prob(iref) + ptcl_ref_dist**2
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
-                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + real(ptcl_ctf_rot, dp) * ptcl_ref_dist
+                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
                 endif
             enddo
         enddo
@@ -968,9 +968,9 @@ contains
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             self%pfts_refs_even(:,:,iref) = params_glob%eps * self%pfts_refs_even(:,:,iref) +&
-                    &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                    &(1. - params_glob%eps) * real(self%refs_reg(:,:,iref) / self%refs_prob(iref))
             self%pfts_refs_odd(:,:,iref)  = params_glob%eps * self%pfts_refs_odd(:,:,iref) +&
-                    &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                    &(1. - params_glob%eps) * real(self%refs_reg(:,:,iref) / self%refs_prob(iref))
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
@@ -978,7 +978,7 @@ contains
     subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
         integer :: rot
         if( irot >= self%pftsz + 1 )then
@@ -986,16 +986,12 @@ contains
         else
             rot = irot
         end if
-        if( irot == 1 )then
-            ptcl_ctf_rot = ptcl_ctf
-        else if( irot <= self%pftsz )then
-            ptcl_ctf_rot(rot:self%pftsz,:) =       ptcl_ctf(               1:self%pftsz-rot+1,:)
-            ptcl_ctf_rot(  1:rot-1     ,:) = conjg(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
-        else if( irot == self%pftsz + 1 )then
-            ptcl_ctf_rot = conjg(ptcl_ctf)
+        ! just need the realpart
+        if( irot == 1 .or. irot == self%pftsz + 1 )then
+            ptcl_ctf_rot = real(ptcl_ctf)
         else
-            ptcl_ctf_rot(rot:self%pftsz,:) = conjg(ptcl_ctf(               1:self%pftsz-rot+1,:))
-            ptcl_ctf_rot(   1:rot-1    ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
+            ptcl_ctf_rot(   1:rot-1    ,:) = real(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
+            ptcl_ctf_rot(rot:self%pftsz,:) = real(ptcl_ctf(               1:self%pftsz-rot+1,:))
         end if
     end subroutine rotate_polar
 
@@ -1719,8 +1715,8 @@ contains
         ! sum up correlations over k-rings
         do ik = self%kfromto(1),self%kfromto(2)
             ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) =  real(pft_ref_8(:,ik))
-            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref_8(:,ik)) * self%fft_factors
+            self%fftdat(ithr)%ref_re(:) = real(pft_ref_8(:,ik),       sp)
+            self%fftdat(ithr)%ref_im(:) = real(aimag(pft_ref_8(:,ik)),sp) * self%fft_factors
             call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
             call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
             ! correlate
