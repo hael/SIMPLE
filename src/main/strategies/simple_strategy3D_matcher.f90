@@ -67,13 +67,12 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
-        character(len=:),      allocatable :: maps_dir, iter_dir
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
-        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, imatch
-        integer :: iptcl, fnr, ithr, state, n_nozero, iptcl_batch, iptcl_map
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, ncavgs
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
+        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
+        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr, l_ctf
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -415,7 +414,7 @@ contains
         character(len=:), allocatable :: fname
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: cnt, s, ind, iref, nrefs
+        integer   :: cnt, s, iref, nrefs
         logical   :: do_center
         ! first the polar
         nrefs = params_glob%nspace * params_glob%nstates
