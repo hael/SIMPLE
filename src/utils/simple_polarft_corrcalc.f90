@@ -166,7 +166,7 @@ type :: polarft_corrcalc
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
-    procedure          :: compute_ref_reg
+    procedure          :: accumulate_ref_reg
     procedure          :: regularize_refs
     procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
@@ -919,8 +919,8 @@ contains
         call fftwf_destroy_plan(fwd_plan)
     end subroutine memoize
 
-    ! computing all reference reg terms
-    subroutine compute_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
+    ! accumulating reference reg terms for each batch of particles
+    subroutine accumulate_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
@@ -960,17 +960,17 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine compute_ref_reg
+    end subroutine accumulate_ref_reg
 
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = params_glob%eps * self%pfts_refs_even(:,:,iref) +&
-                    &(1. - params_glob%eps) * real(self%refs_reg(:,:,iref) / self%refs_prob(iref))
-            self%pfts_refs_odd(:,:,iref)  = params_glob%eps * self%pfts_refs_odd(:,:,iref) +&
-                    &(1. - params_glob%eps) * real(self%refs_reg(:,:,iref) / self%refs_prob(iref))
+            self%pfts_refs_even(:,:,iref) = params_glob%eps  * self%pfts_refs_even(:,:,iref) +&
+                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+            self%pfts_refs_odd(:,:,iref)  = params_glob%eps  * self%pfts_refs_odd(:,:,iref) +&
+                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
