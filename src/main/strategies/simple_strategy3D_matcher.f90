@@ -526,7 +526,7 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! compute regularization terms
-        call pftcc%compute_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
+        call pftcc%accumulate_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
