@@ -28,6 +28,8 @@ contains
         if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
+        if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
+        if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
         ! 2D objective function section
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
