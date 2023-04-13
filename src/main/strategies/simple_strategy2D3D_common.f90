@@ -319,7 +319,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( params_glob%l_ml_reg )then
+        if( params_glob%l_ml_reg .or. params_glob%l_nonuniform)then
             ! no filtering
         else
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
@@ -466,7 +466,7 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        real    :: filter(build_glob%img%get_filtsz())
         integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol

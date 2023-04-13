@@ -247,6 +247,8 @@ contains
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
+        if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
+        if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -301,7 +303,7 @@ contains
             endif
         endif
         ! first stage
-        ! down-scaling for fast execution, greedy optimisation, no match filter
+        ! down-scaling for fast execution, greedy optimisation
         ! no incremental learning, no centering
         cline_cluster2D1 = cline
         cline_cluster2D2 = cline
@@ -313,11 +315,12 @@ contains
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
         call cline_cluster2D1%set('objfun',     'cc')
+        call cline_cluster2D1%set('nonuniform', 'no')
         call cline_cluster2D1%set('ml_reg','no')
         if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
         call cline_cluster2D1%delete('update_frac')
         ! second stage
-        ! down-scaling for fast execution, greedy optimisation, no match filter
+        ! down-scaling for fast execution, greedy optimisation
         call cline_cluster2D2%set('prg', 'cluster2D')
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',    MINSHIFT)
@@ -370,6 +373,8 @@ contains
         endif
         lp1 = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2 = max(2.*smpd, params%lp)
+        ! optional non-uniform filtering
+        if( params%l_nonuniform ) call cline_cluster2D2%set('smooth_ext', real(ceiling(params%smooth_ext * scale_factor)))
         ! execute initialiser
         if( cline%defined('refs') )then
             if( params%autoscale.eq.'yes')then
@@ -602,9 +607,10 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
-            call cline_cluster2D_stage1%set('ptclw','no')
-            call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
-            call cline_cluster2D_stage1%set('ml_reg','no')
+            call cline_cluster2D_stage1%set('ptclw',      'no')
+            call cline_cluster2D_stage1%set('objfun',     'cc') ! cc-based search in first phase
+            call cline_cluster2D_stage1%set('ml_reg',     'no')
+            call cline_cluster2D_stage1%set('nonuniform', 'no')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -681,6 +687,8 @@ contains
             trs_stage2 = MSK_FRAC * params%mskdiam / (2 * params%smpd_targets2D(2))
             trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
             call cline_cluster2D_stage2%set('trs', trs_stage2)
+            ! optional non-uniform filtering
+            if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
             if( l_shmem )then
