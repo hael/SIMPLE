@@ -14,7 +14,7 @@ public :: ptcl_extractor
 
 integer, parameter :: POLYDIM    = 18
 real,    parameter :: NSIGMAS    = 6.0
-logical, parameter :: DEBUG_HERE = .true.
+logical, parameter :: DEBUG_HERE = .false.
 
 type :: ptcl_extractor
     type(image),      allocatable :: frames(:)
@@ -41,11 +41,14 @@ type :: ptcl_extractor
     logical                       :: l_mov          = .true.
     logical                       :: exists         = .false.
   contains
-    procedure          :: init
+    procedure          :: init_mov
+    procedure          :: init_mic
+    procedure, private :: init_mask
     procedure, private :: parse_movie_metadata
     procedure, private :: generate_dose_weighing
     procedure          :: display
     procedure          :: extract_particles
+    procedure          :: extract_particles_from_mic
     procedure, private :: extract_ptcl
     procedure, private :: post_process
     procedure, private :: cure_outliers
@@ -58,115 +61,146 @@ end type ptcl_extractor
 contains
 
     !>  Constructor
-    subroutine init( self, omic, box, neg )
+    subroutine init_mov( self, omic, box, neg )
         use simple_ori, only: ori
         class(ptcl_extractor), intent(inout) :: self
         class(ori),            intent(in)    :: omic
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
-        type(image) :: tmp
-        real        :: radius
-        integer     :: i,iframe
+        integer :: i,iframe
         call self%kill
         if( .not. omic%isthere('mc_starfile') )then
-            THROW_WARN('Movie star doc is absent, reverting to micrograph extraction')
+            THROW_HARD('Movie star doc is absent 1, reverting to micrograph extraction')
             self%l_mov = .false.
         endif
         self%l_mov   = .true.
         self%docname = trim(omic%get_static('mc_starfile'))
         self%l_neg   = neg
         self%box     = box
-        call self%parse_movie_metadata
-        ! downscaling shifts
-        self%isoshifts = self%isoshifts * self%scale
-        self%polyx     = self%polyx * real(self%scale,dp)
-        self%polyy     = self%polyy * real(self%scale,dp)
-        ! dose-weighing
-        self%total_dose = real(self%nframes) * self%doseperframe
-        ! updates dimensions and pixel size
-        if( self%l_eer )then
-            select case(self%eer_upsampling)
-                case(1)
-                    ! 4K
-                case(2)
-                    ! 8K
-                    self%ldim(1:2) = 2 * self%ldim(1:2)
-                    self%smpd      = self%smpd / 2.0
-                case DEFAULT
-                    THROW_HARD('Unsupported up-sampling: '//int2str(self%eer_upsampling))
-            end select
+        if( .not.file_exists(self%docname) )then
+            THROW_HARD('Movie star doc is absent 2, reverting to micrograph extraction')
+            ! revert to mic extraction
+            self%l_mov = .false.
         endif
-        self%smpd_out   = self%smpd / self%scale
-        self%ldim_sc    = round2even(real(self%ldim)*self%scale)
-        self%ldim_sc(3) = 1
-        if( DEBUG_HERE ) print *,'dimensions done'
-        ! allocate & read frames
-        allocate(self%frames(self%nframes))
-        if( self%l_eer )then
-            call self%eer%new(self%moviename, self%smpd, self%eer_upsampling)
-            call self%eer%decode(self%frames, self%eer_fraction)
-        else
-            !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-            do iframe=1,self%nframes
-                call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
-            enddo
-            !$omp end parallel do
-            do iframe=1,self%nframes
-                call self%frames(iframe)%read(self%moviename, iframe)
-            end do
-        endif
-        if( DEBUG_HERE ) print *,'images read'
-        ! gain correction
-        if( self%l_gain )then
-            if( .not.file_exists(self%gainrefname) )then
-                THROW_HARD('gain reference: '//trim(self%gainrefname)//' not found')
-            endif
-            if( self%l_eer )then
-                call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer)
+        if( self%l_mov )then
+            ! get movie info
+            call self%parse_movie_metadata
+            if( .not.file_exists(self%moviename) )then
+                THROW_HARD('Movie is absent, reverting to micrograph extraction')
+                ! revert to mic extraction
+                self%l_mov = .false.
             else
-                call correct_gain(self%frames, self%gainrefname, self%gain)
+                ! downscaling shifts
+                self%isoshifts = self%isoshifts * self%scale
+                self%polyx     = self%polyx * real(self%scale,dp)
+                self%polyy     = self%polyy * real(self%scale,dp)
+                ! dose-weighing
+                self%total_dose = real(self%nframes) * self%doseperframe
+                ! updates dimensions and pixel size
+                if( self%l_eer )then
+                    select case(self%eer_upsampling)
+                        case(1)
+                            ! 4K
+                        case(2)
+                            ! 8K
+                            self%ldim(1:2) = 2 * self%ldim(1:2)
+                            self%smpd      = self%smpd / 2.0
+                        case DEFAULT
+                            THROW_HARD('Unsupported up-sampling: '//int2str(self%eer_upsampling))
+                    end select
+                endif
+                self%smpd_out   = self%smpd / self%scale
+                self%ldim_sc    = round2even(real(self%ldim)*self%scale)
+                self%ldim_sc(3) = 1
+                if( DEBUG_HERE ) print *,'dimensions done'
+                ! allocate & read frames
+                allocate(self%frames(self%nframes))
+                if( self%l_eer )then
+                    call self%eer%new(self%moviename, self%smpd, self%eer_upsampling)
+                    call self%eer%decode(self%frames, self%eer_fraction)
+                else
+                    !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+                    do iframe=1,self%nframes
+                        call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
+                    enddo
+                    !$omp end parallel do
+                    do iframe=1,self%nframes
+                        call self%frames(iframe)%read(self%moviename, iframe)
+                    end do
+                endif
+                if( DEBUG_HERE ) print *,'images read'
+                ! gain correction
+                if( self%l_gain )then
+                    if( .not.file_exists(self%gainrefname) )then
+                        THROW_HARD('gain reference: '//trim(self%gainrefname)//' not found')
+                    endif
+                    if( self%l_eer )then
+                        call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer)
+                    else
+                        call correct_gain(self%frames, self%gainrefname, self%gain)
+                    endif
+                endif
+                ! outliers curation
+                if( self%nhotpix > 0 )then
+                    call self%cure_outliers
+                endif
+                call self%gain%kill
+                ! downscale frames
+                !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+                do iframe=1,self%nframes
+                    call self%frames(iframe)%fft
+                    call self%frames(iframe)%clip_inplace(self%ldim_sc)
+                    call self%frames(iframe)%ifft
+                enddo
+                !$omp end parallel do
+                ! dimensions of the particle & frame particle
+                self%box_pd = find_larger_magic_box(self%box+1) ! subpixel shift & fftw friendly
+                allocate(self%frame_particle(nthr_glob),self%particle(nthr_glob))
+                !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
+                do i = 1,nthr_glob
+                    call self%particle(i)%new(      [self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
+                    call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
+                enddo
+                !$omp end parallel do
+                ! dose weighting
+                call self%generate_dose_weighing
+                ! mask for post-extraction normalizations
+                call self%init_mask
             endif
         endif
-        ! outliers curation
-        if( self%nhotpix > 0 )then
-            call self%cure_outliers
-        endif
-        call self%gain%kill
-        ! downscale frames
-        !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-        do iframe=1,self%nframes
-            call self%frames(iframe)%fft
-            call self%frames(iframe)%clip_inplace(self%ldim_sc)
-            call self%frames(iframe)%ifft
-        enddo
-        !$omp end parallel do
-        ! dimensions of the particle & frame particle
-        self%box_pd = find_larger_magic_box(self%box+1) ! subpixel shift & fftw friendly
-        allocate(self%frame_particle(nthr_glob),self%particle(nthr_glob))
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-        do i = 1,nthr_glob
-            call self%particle(i)%new(      [self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-            call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        ! dose weighting
-        call self%generate_dose_weighing
-        ! mask for post-extraction normalizations
+        ! micrograph init
+        if( .not.self%l_mov ) call self%init_mic( self%box, self%l_neg)
+        ! all done
+        self%exists = .true.
+    end subroutine init_mov
+
+    subroutine init_mic( self, box, neg )
+        class(ptcl_extractor), intent(inout) :: self
+        integer,               intent(in)    :: box
+        logical,               intent(in)    :: neg
+        self%box   = box
+        self%l_neg = neg
+        call self%init_mask
+    end subroutine init_mic
+
+    ! mask for post-extraction normalizations
+    subroutine init_mask( self )
+        class(ptcl_extractor), intent(inout) :: self
+        type(image) :: tmp
+        real :: radius
+        if( allocated(self%particle_mask) ) deallocate(self%particle_mask)
         radius = RADFRAC_NORM_EXTRACT * real(self%box/2)
         call tmp%disc([self%box,self%box,1], 1., radius, self%particle_mask)
         call tmp%kill
-        ! all done
-        self%exists = .true.
-    end subroutine init
+    end subroutine init_mask
 
     subroutine parse_movie_metadata( self )
         class(ptcl_extractor), intent(inout) :: self
         type(str4arr), allocatable :: names(:)
+        type(starfile_table_type)  :: table
         integer(C_long) :: num_objs, object_id
         integer         :: i,j,iframe,n,ind, motion_model
         logical         :: err
-        type(starfile_table_type)  :: table
-
         ! parsing individual movie meta-data
         call starfile_table__new(table)
         call starfile_table__getnames(table, trim(self%docname)//C_NULL_CHAR, names)
@@ -354,7 +388,7 @@ contains
                 vmin   = min(vmin,rmin)
                 vmax   = max(vmax,rmax)
                 vmean  = vmean + rmean
-                vsdev  = vsdev + rsdev**2.
+                vsdev  = vsdev + rsdev*rsdev
             endif
         end do
         !$omp end parallel do
@@ -364,10 +398,52 @@ contains
         endif
     end subroutine extract_particles
 
+    subroutine extract_particles_from_mic( self, mic, pinds, coords, particles, vmin, vmax, vmean, vsdev )
+        class(ptcl_extractor),    intent(inout) :: self
+        class(image),             intent(in)    :: mic
+        integer,     allocatable, intent(in)    :: pinds(:)
+        integer,                  intent(in)    :: coords(:,:)
+        type(image), allocatable, intent(inout) :: particles(:)
+        real,                     intent(out)   :: vmin, vmax, vmean, vsdev
+        real    :: rmin, rmax, rmean, rsdev, sdev_noise
+        integer :: i,j,n,cnt,noutside
+        logical :: l_err
+        n = size(pinds)
+        if( size(coords,dim=2) < n ) THROW_HARD('Inconsistent dimensions 1')
+        if( size(particles)    < n ) THROW_HARD('Inconsistent dimensions 2')
+        cnt   = 0
+        vmin  = huge(vmin)
+        vmax  = -vmin
+        vmean = 0.0
+        vsdev = 0.0
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(i,j,noutside,sdev_noise,l_err,rmin,rmax,rmean,rsdev)&
+        !$omp reduction(+:vmean,vsdev,cnt) reduction(min:vmin) reduction(max:vmax)
+        do i = 1,n
+            j = pinds(i)
+            noutside = 0
+            call mic%window(coords(1:2,j), self%box, particles(i), noutside)
+            call self%post_process(particles(i))
+            call particles(i)%stats(rmean, rsdev, rmax, rmin, errout=l_err)
+            if( .not.l_err )then
+                cnt   = cnt + 1
+                vmin  = min(vmin,rmin)
+                vmax  = max(vmax,rmax)
+                vmean = vmean + rmean
+                vsdev = vsdev + rsdev*rsdev
+            endif
+        end do
+        !$omp end parallel do
+        if( cnt > 0 )then
+            vmean = vmean / real(cnt)
+            vsdev = sqrt(vsdev / real(cnt))
+        endif
+    end subroutine extract_particles_from_mic
+
     !>  on a single thread
     subroutine extract_ptcl( self, ptcl_pos_in, ptcl_out)
         class(ptcl_extractor), intent(inout) :: self
-        integer,               intent(in)    :: ptcl_pos_in(2) ! top left corner
+        integer,               intent(in)    :: ptcl_pos_in(2) ! top left corner, scaled
         class(image),          intent(inout) :: ptcl_out
         real(dp)    :: cx,cy
         real        :: shift(2), aniso_shift(2), center(2), rpos(2)
@@ -378,9 +454,9 @@ contains
             THROW_HARD('Inconsistent dimensions!')
         endif
         ! particle center
-        center = real(ptcl_pos_in + self%box/2)                          ! base zero
-        cx = real(max(0.,min(center(1),real(self%ldim(1)-1))),dp) + 1.d0 ! base 1
-        cy = real(max(0.,min(center(2),real(self%ldim(2)-1))),dp) + 1.d0 ! base 1
+        center = real(ptcl_pos_in + self%box/2) ! base 0
+        cx     = center(1) + 1.d0               ! base 1
+        cy     = center(2) + 1.d0               ! base 1
         ! particle corner
         rpos = center - real(self%box_pd/2)
         ! extraction
@@ -396,6 +472,7 @@ contains
             pos   = nint(shift)         ! extraction coordinate
             shift = (shift - real(pos)) ! sub-pixel
             ! extract particle frame
+            foo = 0
             call self%frame_particle(ithr)%set_ft(.false.)
             call self%frames(t)%window(pos, self%box_pd, self%frame_particle(ithr), foo)
             ! sub-pixel shift
@@ -554,8 +631,8 @@ contains
         class(ptcl_extractor), intent(in)  :: self
         real(dp),              intent(in)  :: xin, yin
         real(dp),              intent(out) :: x, y
-        x = (xin-1.d0) / real(self%ldim(1)-1,dp) - 0.5d0
-        y = (yin-1.d0) / real(self%ldim(2)-1,dp) - 0.5d0
+        x = (xin-1.d0) / real(self%ldim_sc(1)-1,dp) - 0.5d0
+        y = (yin-1.d0) / real(self%ldim_sc(2)-1,dp) - 0.5d0
     end subroutine pix2polycoords
 
     pure subroutine get_local_shift( self, iframe, x, y, shift )
@@ -586,8 +663,7 @@ contains
         class(starfile_table_type) :: table
         integer, intent(in)        :: emdl_id
         logical, intent(out)       :: err
-        err = starfile_table__getValue_int(table, emdl_id, parse_int)
-        err = .not.err
+        err = .not.starfile_table__getValue_int(table, emdl_id, parse_int)
     end function parse_int
 
     real function parse_double( table, emdl_id, err )
@@ -595,8 +671,7 @@ contains
         integer, intent(in)        :: emdl_id
         logical, intent(out)       :: err
         real(dp) :: v
-        err = starfile_table__getValue_double(table, emdl_id, v)
-        err = .not.err
+        err = .not.starfile_table__getValue_double(table, emdl_id, v)
         parse_double = real(v)
     end function parse_double
 
@@ -604,11 +679,10 @@ contains
         class(starfile_table_type)                 :: table
         integer,                       intent(in)  :: emdl_id
         character(len=:), allocatable, intent(out) :: string
-        logical, intent(out)       :: err
-        err = starfile_table__getValue_string(table, emdl_id, string)
-        err = .not.err
+        logical, intent(out)                       :: err
+        err = .not.starfile_table__getValue_string(table, emdl_id, string)
     end subroutine parse_string
-
+    
     subroutine kill(self)
         class(ptcl_extractor), intent(inout) :: self
         integer :: i
