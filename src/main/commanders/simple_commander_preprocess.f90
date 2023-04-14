@@ -1736,8 +1736,8 @@ contains
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(builder)                           :: build
-        type(ptcl_extractor)                    :: extractor
         type(parameters)                        :: params
+        type(ptcl_extractor)                    :: extractor
         type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
         type(image)                             :: micrograph
@@ -1752,11 +1752,11 @@ contains
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         character(len=STDLEN)     :: ext
+        real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, box_first, i, iptcl_g
-        integer                   :: cnt, nmics_tot, ifoo, noutside, state, iptcl_glob, nptcls2extract, cnt_stats
-        real                      :: ptcl_pos(2), meanv,sddevv,minv,maxv,dfx,dfy,sdev_noise,stk_mean,stk_sdev,stk_max,stk_min
-        logical                   :: l_err, l_ctfpatch, l_gid_present, l_ogid_present
+        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
+        logical                   :: l_ctfpatch, l_gid_present, l_ogid_present
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
         call params%new(cline)
@@ -1854,13 +1854,13 @@ contains
             ! done
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
-            ! set normalization radius
-            params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
             ! init
             call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
-            noutside  = 0
+            if( trim(params%extractfrommov).ne.'yes' )then
+                call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
+            endif
             box_first = 0
             ! main loop
             iptcl_glob = 0 ! extracted particle index among ALL stacks
@@ -1873,7 +1873,6 @@ contains
                 ! fetch micrograph
                 call build%spproj_field%get_ori(imic, o_mic)
                 call o_mic%getter('imgkind', imgkind)
-                call o_mic%getter('intg', mic_name)
                 boxfile_name = trim(o_mic%get_static('boxfile'))
                 ! box file
                 nptcls = 0
@@ -1902,7 +1901,7 @@ contains
                         THROW_HARD('inconsistent box sizes in box files; exec_extract')
                     endif
                     ! update particle mask & movie index
-                    if( box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box) ) oris_mask(iptcl) = .true.
+                    oris_mask(iptcl)  = (trim(params%outside).eq.'yes') .or. box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box)
                 end do
                 ! update micrograph field
                 nptcls2extract = count(oris_mask)
@@ -1930,23 +1929,20 @@ contains
                     endif
                 endif
                 ! output stack
-                ext = fname2ext(trim(basename(mic_name)))
+                call o_mic%getter('intg', mic_name)
+                ext   = fname2ext(trim(basename(mic_name)))
                 stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
                 ! init extraction
-                stk_min   = huge(stk_min)
-                stk_max   = -stk_min
-                stk_mean  = 0.0
-                stk_sdev  = 0.0
-                cnt_stats = 0
                 call prepimgbatch(nptcls2extract)
                 if( trim(params%extractfrommov).eq.'yes' )then
+                    ! extraction from movie
                     if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
                         THROW_HARD('extractfrommov=yes does not support ctf=flip yet')
                     endif
-                    call extractor%init(o_mic, params%box, (params%pcontrast .eq. 'black'))
+                    call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
                     call extractor%extract_particles(ptcl_inds, nint(boxdata), build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
                 else
-                    ! read micrograph
+                    ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
                     ! phase-flip micrograph
                     if( cline%defined('ctf') )then
@@ -1961,27 +1957,8 @@ contains
                         endif
                     endif
                     ! extraction
-                    !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-                    !$omp private(i,iptcl,noutside,sdev_noise,l_err,meanv,sddevv,maxv,minv)&
-                    !$omp reduction(+:stk_mean,stk_sdev,cnt_stats) reduction(min:stk_min) reduction(max:stk_max)
-                    do i = 1,nptcls2extract
-                        iptcl = ptcl_inds(i)
-                        call micrograph%window(nint(boxdata(1:2,iptcl)), params%box, build%imgbatch(i), noutside)
-                        if( params%pcontrast .eq. 'black' ) call build%imgbatch(i)%neg()
-                        call build%imgbatch(i)%subtr_backgr_ramp(build%lmsk)
-                        call build%imgbatch(i)%norm_noise(build%lmsk, sdev_noise)
-                        call build%imgbatch(i)%stats(meanv, sddevv, maxv, minv, errout=l_err)
-                        if( .not.l_err )then
-                            cnt_stats = cnt_stats + 1
-                            stk_min   = min(stk_min,minv)
-                            stk_max   = max(stk_max,maxv)
-                            stk_mean  = stk_mean + meanv
-                            stk_sdev  = stk_sdev + sddevv**2.
-                        endif
-                    end do
-                    !$omp end parallel do
-                    stk_mean = stk_mean / real(cnt_stats)
-                    stk_sdev = sqrt(stk_sdev / real(cnt_stats))
+                    call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), build%imgbatch,&
+                        &stk_min,stk_max,stk_mean,stk_sdev)
                 endif
                 ! write stack
                 call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
@@ -2050,23 +2027,6 @@ contains
         call o_tmp%kill
         call qsys_job_finished('simple_commander_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
-
-        contains
-
-            function box_inside( ildim, coord, ibox ) result( inside )
-                integer, intent(in) :: ildim(3), coord(2), ibox
-                integer             :: fromc(2), toc(2)
-                logical             :: inside
-                if( params%outside .eq. 'yes' )then
-                    inside = .true.
-                    return
-                endif
-                fromc  = coord+1       ! compensate for the c-range that starts at 0
-                toc    = fromc+(ibox-1) ! the lower left corner is 1,1
-                inside = .true.        ! box is inside
-                if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
-            end function box_inside
-
     end subroutine exec_extract
 
     subroutine exec_reextract_distr( self, cline )
@@ -2237,23 +2197,28 @@ contains
     end subroutine exec_reextract_distr
 
     subroutine exec_reextract( self, cline )
-        use simple_ctf, only: ctf
+        use simple_ctf,                 only: ctf
+        use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
+        use simple_particle_extractor,  only: ptcl_extractor
         class(reextract_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
-        type(image)                   :: micrograph, img, mskimg
+        type(builder)                 :: build
+        type(image)                   :: micrograph, mskimg
         type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         type(stack_io)                :: stkio_w
+        type(ptcl_extractor)          :: extractor
         character(len=:), allocatable :: mic_name, imgkind
         logical,          allocatable :: pmsk(:,:,:), mic_mask(:), ptcl_mask(:)
-        integer,          allocatable :: mic2stk_inds(:)
+        integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
-        integer  :: nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind,cnt_stats
-        integer :: prev_pos(2),new_pos(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,istk
-        real    :: prev_shift(2), shift2d(2), shift3d(2), minv,maxv,meanv,sddevv,stk_stats(4),sdev_noise
+        integer :: i,nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind,cnt_stats
+        integer :: prev_pos(2),new_pos(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,istk,nptcls2extract
+        real    :: prev_shift(2), shift2d(2), shift3d(2)
+        real    :: stk_min,stk_max,stk_mean,stk_sdev,meanv,sddevv,maxv,minv,sdev_noise
         logical :: l_3d, l_err
         call cline%set('mkdir','no')
         call params%new(cline)
@@ -2302,6 +2267,7 @@ contains
         enddo
         nmics = count(mic_mask)
         if( nmics > 0 )then
+            call build%build_general_tbox(params, cline, do3d=.false.)
             call spproj_in%read_segment('ptcl2D', params%projfile)
             ! sanity checks
             do imic = 1,nmics_tot
@@ -2317,9 +2283,6 @@ contains
                 call spproj_in%os_stk%get_ori(stk_ind, o_stk)
                 fromp   = nint(o_stk%get('fromp'))
                 top     = nint(o_stk%get('top'))
-                do iptcl=fromp,top
-                    if(.not.spproj_in%has_boxcoords(iptcl)) THROW_HARD('missing particle coordinates 2; exec_reextract')
-                enddo
                 box_foo = nint(o_stk%get('box'))
                 if( prev_box == 0 ) prev_box = box_foo
                 if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_reextract')
@@ -2344,26 +2307,10 @@ contains
                 ctfparms = o_mic%get_ctfvars()
                 fromp    = nint(o_stk%get('fromp'))
                 top      = nint(o_stk%get('top'))
-                call micrograph%read(mic_name)
-                ! phase-flip micrograph. To-add as an option to not flip?
-                if( ctfparms%ctfflag == CTFFLAG_FLIP )then
-                    if( o_mic%isthere('dfx') )then
-                        ! phase flip micrograph
-                        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                        call micrograph%zero_edgeavg
-                        call micrograph%fft
-                        call tfun%apply_serial(micrograph, 'flip', ctfparms)
-                        call micrograph%ifft
-                    endif
-                endif
-                stack = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
-                ! particles extraction loop
-                nptcls         = 0
-                cnt_stats      = 0
-                stk_stats(1)   = huge(stk_stats(1))
-                stk_stats(2)   = -stk_stats(1)
-                stk_stats(3:4) = 0.
-                call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                stack    = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
+                ! updating shifts, positions, states and doc
+                if( allocated(boxcoords) ) deallocate(boxcoords)
+                allocate(boxcoords(2,fromp:top),source=0)
                 do iptcl=fromp,top
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle
@@ -2378,9 +2325,8 @@ contains
                     ishift  = nint(prev_shift)
                     new_pos = prev_pos - ishift
                     if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
+                    boxcoords(:,iptcl) = new_pos
                     if( box_inside(ldim, new_pos, params%box) )then
-                        ! included
-                        nptcls = nptcls+1
                         ptcl_mask(iptcl) = .true.
                         ! updates picking position
                         call spproj_in%set_boxcoords(iptcl, new_pos)
@@ -2394,50 +2340,91 @@ contains
                         endif
                         call spproj_in%os_ptcl2D%set_shift(iptcl, shift2d)
                         call spproj_in%os_ptcl3D%set_shift(iptcl, shift3d)
-                        call spproj_in%os_ptcl2D%set_state(iptcl, 1)
-                        call spproj_in%os_ptcl3D%set_state(iptcl, 1)
-                        ! extracts
-                        call micrograph%window(new_pos, params%box, img, noutside)
-                        if( params%pcontrast .eq. 'black' ) call img%neg()
-                        call img%subtr_backgr_ramp(pmsk)
-                        call img%norm_noise(pmsk, sdev_noise)
-                        call stkio_w%write(nptcls, img)
-                        ! keep track of stats
-                        call img%stats(meanv, sddevv, maxv, minv, errout=l_err)
-                        if( .not.l_err )then
-                            cnt_stats = cnt_stats + 1
-                            stk_stats(1) = min(stk_stats(1),minv)
-                            stk_stats(2) = max(stk_stats(2),maxv)
-                            stk_stats(3) = stk_stats(3) + meanv
-                            stk_stats(4) = stk_stats(4) + sddevv**2.
-                        endif
                     else
                         ! excluded
                         call spproj_in%os_ptcl2D%set_state(iptcl, 0)
                         call spproj_in%os_ptcl3D%set_state(iptcl, 0)
                     endif
                 enddo
-                call stkio_w%close
-                if( nptcls == 0 )then
+                nptcls2extract = count(ptcl_mask(fromp:top))
+                if( nptcls2extract > 0 )then
+                    if( allocated(ptcl_inds) ) deallocate(ptcl_inds)
+                    allocate(ptcl_inds(nptcls2extract),source=0)
+                    cnt = 0
+                    do iptcl = fromp,top
+                        if( .not.ptcl_mask(iptcl) ) cycle
+                        cnt = cnt + 1
+                        ptcl_inds(cnt) = iptcl
+                    enddo
+                    call prepimgbatch(nptcls2extract)
+                    if( trim(params%extractfrommov).eq.'yes' )then
+                        ptcl_inds = ptcl_inds -fromp+1 ! because indexing range lost when passed to extractor
+                        call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
+                        call extractor%extract_particles(ptcl_inds, boxcoords, build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
+                    else
+                        cnt_stats = 0
+                        stk_min   = huge(stk_mean)
+                        stk_max   = -stk_min
+                        stk_mean  = 0.
+                        stk_sdev  = 0.
+                        call micrograph%read(mic_name)
+                        if( ctfparms%ctfflag == CTFFLAG_FLIP )then
+                            if( o_mic%isthere('dfx') )then
+                                ! phase flip micrograph
+                                tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                                call micrograph%zero_edgeavg
+                                call micrograph%fft
+                                call tfun%apply_serial(micrograph, 'flip', ctfparms)
+                                call micrograph%ifft
+                            endif
+                        endif
+                        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+                        !$omp private(i,iptcl,noutside,sdev_noise,l_err,meanv,sddevv,maxv,minv)&
+                        !$omp reduction(+:stk_mean,stk_sdev,cnt_stats) reduction(min:stk_min) reduction(max:stk_max)
+                        do i = 1,nptcls2extract
+                            iptcl    = ptcl_inds(i)
+                            noutside = 0
+                            call micrograph%window(boxcoords(:,iptcl), params%box, build%imgbatch(i), noutside)
+                            if( params%pcontrast .eq. 'black' ) call build%imgbatch(i)%neg()
+                            call build%imgbatch(i)%subtr_backgr_ramp(pmsk)
+                            call build%imgbatch(i)%norm_noise(pmsk, sdev_noise)
+                            call build%imgbatch(i)%stats(meanv, sddevv, maxv, minv, errout=l_err)
+                            if( .not.l_err )then
+                                cnt_stats = cnt_stats + 1
+                                stk_min   = min(stk_min,minv)
+                                stk_max   = max(stk_max,maxv)
+                                stk_mean  = stk_mean + meanv
+                                stk_sdev  = stk_sdev + sddevv**2.
+                            endif
+                        end do
+                        !$omp end parallel do
+                        stk_mean = stk_mean / real(cnt_stats)
+                        stk_sdev = sqrt(stk_sdev / real(cnt_stats))
+                    endif
+                    ! write stack
+                    call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                    do i = 1,nptcls2extract
+                        call stkio_w%write(i, build%imgbatch(i))
+                    enddo
+                    call stkio_w%close
+                    call micrograph%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                    call make_relativepath(CWD_GLOB, stack, rel_stack)
+                    call spproj_in%os_stk%set(stk_ind,'stk',   rel_stack)
+                    call spproj_in%os_stk%set(stk_ind,'box',   real(params%box))
+                    call spproj_in%os_stk%set(stk_ind,'nptcls',real(nptcls2extract))
+                    call spproj_in%os_mic%set(imic,   'nptcls',real(nptcls2extract))
+                    call spproj_in%os_mic%delete_entry(imic,'boxfile')
+                else
                     ! all particles in this micrograph excluded
                     call spproj_in%os_stk%set(stk_ind,'state',0.)
                     call spproj_in%os_mic%set(imic,'state',0.)
                     mic_mask(imic) = .false.
                     mic2stk_inds(imic) = 0
-                else
-                    ! updates header, size, stack & removes box file
-                    stk_stats(3) = stk_stats(3) / real(cnt_stats)
-                    stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
-                    call img%update_header_stats(trim(adjustl(stack)), stk_stats)
-                    call make_relativepath(CWD_GLOB, stack, rel_stack)
-                    call spproj_in%os_stk%set(stk_ind,'stk',rel_stack)
-                    call spproj_in%os_stk%set(stk_ind,'box', real(params%box))
-                    call spproj_in%os_stk%set(stk_ind,'nptcls',real(nptcls))
-                    call spproj_in%os_mic%set(imic,'nptcls',real(nptcls))
-                    call spproj_in%os_mic%delete_entry(imic,'boxfile')
                 endif
             enddo
         endif
+        call extractor%kill
+        call killimgbatch
         ! OUTPUT
         call spproj%read_non_data_segments(params%projfile)
         call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))
@@ -2472,22 +2459,10 @@ contains
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         ! end gracefully
         call qsys_job_finished('simple_commander_preprocess :: exec_reextract')
+        call build%kill_general_tbox
         call o_mic%kill
         call o_stk%kill
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
-
-        contains
-
-            function box_inside( ildim, coord, box ) result( inside )
-                integer, intent(in) :: ildim(3), coord(2), box
-                integer             :: fromc(2), toc(2)
-                logical             :: inside
-                fromc  = coord+1       ! compensate for the c-range that starts at 0
-                toc    = fromc+(box-1) ! the lower left corner is 1,1
-                inside = .true.        ! box is inside
-                if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
-            end function box_inside
-
     end subroutine exec_reextract
 
     subroutine exec_pick_extract( self, cline )
@@ -2678,5 +2653,16 @@ contains
             end subroutine
 
     end subroutine exec_make_pickrefs
+
+    ! UTILITIES
+
+    logical function box_inside( ildim, coord, box )
+        integer, intent(in) :: ildim(3), coord(2), box
+        integer             :: fromc(2), toc(2)
+        fromc  = coord+1       ! compensate for the c-range that starts at 0
+        toc    = fromc+(box-1) ! the lower left corner is 1,1
+        box_inside = .true.    ! box is inside
+        if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) box_inside = .false.
+    end function box_inside
 
 end module simple_commander_preprocess

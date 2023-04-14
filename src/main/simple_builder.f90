@@ -322,8 +322,10 @@ contains
         integer :: iref
         if( self%general_tbox_exists )then
             call self%pgrpsyms%kill
-            call self%spproj_field%kill
-            self%spproj_field => null()
+            if( associated( self%spproj_field) )then
+                call self%spproj_field%kill
+                nullify(self%spproj_field)
+            endif
             call self%spproj%kill
             call self%eulspace%kill
             call self%img%kill
