@@ -295,6 +295,7 @@ contains
         call cmd_dict%push('eps',           'learning rate{0.003}')
         call cmd_dict%push('eo',            'use FSC for filtering and low-pass limit update(yes|aniso|no)')
         call cmd_dict%push('even',          'even orientation distribution(yes|no){no}')
+        call cmd_dict%push('extractfrommov','Whether to extract/re-extract single particles from movie frames rather than micrograph (yes|no){no}')
         call cmd_dict%push('startype',      'specifying startype for STAR formated projects (movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post|all)')
         call cmd_dict%push('extr_init',     'initial extremal ratio(0-1){0.5}')
         call cmd_dict%push('ext',           'file extension{.mrc}')
