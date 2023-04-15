@@ -3423,7 +3423,7 @@ contains
         &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &0, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3444,6 +3444,7 @@ contains
         ! <empty>
         ! computer controls
         call reextract%set_input('comp_ctrls', 1, nparts)
+        call reextract%set_input('comp_ctrls', 2, nthr)
     end subroutine new_reextract
 
     subroutine new_reproject
