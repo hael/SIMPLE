@@ -113,7 +113,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd
-        type(masker)      :: mskvol
         real, allocatable :: res(:), fsc(:), filter(:)
         integer :: j, nyq
         real    :: res_fsc05, res_fsc0143
