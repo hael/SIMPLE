@@ -930,14 +930,12 @@ contains
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
-        thres = params_glob%arc_thres * pi / 180.
-        !$omp parallel do collapse(2) default(shared) private(i, k) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            do k = self%kfromto(1),self%kfromto(2)
-                ptcl_ctf(:,k,i) = real(k, dp) * self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
-            enddo
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            ptcl_ctf(:,k,:) = real(k, dp) * self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:)
         enddo
         !$omp end parallel do
+        thres = params_glob%arc_thres * pi / 180.
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
@@ -967,10 +965,11 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
+            self%refs_reg(:,:,iref)       = self%refs_reg(:,:,iref) / self%refs_prob(iref)
             self%pfts_refs_even(:,:,iref) = params_glob%eps  * self%pfts_refs_even(:,:,iref) +&
-                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref)
             self%pfts_refs_odd(:,:,iref)  = params_glob%eps  * self%pfts_refs_odd(:,:,iref) +&
-                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref) / self%refs_prob(iref)
+                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref)
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
