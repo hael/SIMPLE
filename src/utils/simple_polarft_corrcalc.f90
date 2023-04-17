@@ -81,6 +81,7 @@ type :: polarft_corrcalc
     integer                          :: kfromto(2)                  !< band-pass Fourier index limits
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real                             :: delta                       !< voxel size in the frequency domain
+    integer,             allocatable :: reg_cnt(:)                  !< -"-, caching reference reg probs
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
@@ -168,6 +169,8 @@ type :: polarft_corrcalc
     procedure, private :: memoize_fft
     procedure          :: accumulate_ref_reg
     procedure          :: regularize_refs
+    procedure          :: geodesic_frobdev
+    procedure          :: reset_regs
     procedure          :: memoize, calc_corr
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
@@ -349,7 +352,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%refs_prob(self%nrefs),&
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%refs_prob(self%nrefs),self%reg_cnt(self%nrefs),&
                     &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -374,6 +377,7 @@ contains
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
+        self%reg_cnt        = 0
         self%refs_prob      = 0._dp
         self%refs_reg       = 0._dp
         ! set CTF flag
@@ -947,18 +951,42 @@ contains
                     ! find best irot for this pair of iref, iptcl
                     inpl_corrs    = self%cc_no_norm( iref, iptcl )
                     loc           = maxloc(inpl_corrs)
-                    ! computing distribution of particles around each iref (constants for now, maybe geodesics between {iref, loc} and iptcl)
-                    ptcl_ref_dist = inpl_corrs(loc(1))
+                    ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
+                    euls_ref      = eulspace%get_euler(iref)
+                    euls_ref(3)   = 360. - self%get_rot(loc(1))
+                    ptcl_ref_dist = dexp( -real(self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)), dp) )
                     ! computing the probability of each 2D reference at iref
-                    self%refs_prob(iref) = self%refs_prob(iref) + ptcl_ref_dist**2
+                    self%refs_prob(iref) = self%refs_prob(iref) + inpl_corrs(loc(1)) * ptcl_ref_dist
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability above
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
+                    ! updating the number of ptcls within the threshold
+                    self%reg_cnt(iref) = self%reg_cnt(iref) + 1
                 endif
             enddo
         enddo
         !$omp end parallel do
     end subroutine accumulate_ref_reg
+
+    pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
+        class(polarft_corrcalc), intent(in) :: self
+        real,                    intent(in) :: euls1(3), euls2(3)
+        real :: Imat(3,3), sumsq, diffmat(3,3), angle
+        real :: rmat1(3,3), rmat2(3,3)
+        Imat      = 0.
+        Imat(1,1) = 1.
+        Imat(2,2) = 1.
+        Imat(3,3) = 1.
+        rmat1 = euler2m(euls1)
+        rmat2 = euler2m(euls2)
+        diffmat = Imat - matmul(rmat1, transpose(rmat2))
+        sumsq   = sum(diffmat * diffmat)
+        if( sumsq > 1e-6 )then
+            angle = sqrt(sumsq)
+        else
+            angle = 0.
+        endif
+    end function geodesic_frobdev
 
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
@@ -973,6 +1001,13 @@ contains
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
+
+    subroutine reset_regs( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        self%reg_cnt   = 0
+        self%refs_prob = 0._dp
+        self%refs_reg  = 0._dp
+    end subroutine reset_regs
 
     subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2346,7 +2381,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%refs_prob)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%refs_prob,self%reg_cnt)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
