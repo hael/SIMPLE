@@ -188,6 +188,7 @@ contains
 
         ! ref regularization
         if( params_glob%l_ref_reg )then
+            call pftcc%reset_regs
             ! Batch loop
             do ibatch=1,nbatches
                 batch_start = batches(ibatch,1)
