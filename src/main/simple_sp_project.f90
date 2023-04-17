@@ -73,7 +73,6 @@ contains
     procedure          :: get_n_insegment_state
     procedure          :: get_nptcls
     procedure          :: get_box
-    procedure          :: has_boxcoords
     procedure          :: get_boxcoords
     procedure          :: get_smpd
     procedure          :: get_nmovies
@@ -354,10 +353,8 @@ contains
                 nptcls = proj%os_ptcl2D%get_noris()
                 do iptcl=1,nptcls
                     cnt = cnt + 1
-                    if( proj%has_boxcoords(iptcl) )then
-                        call proj%get_boxcoords(iptcl, boxcoords)
-                        call self%set_boxcoords(cnt, boxcoords)
-                    endif
+                    call proj%get_boxcoords(iptcl, boxcoords)
+                    call self%set_boxcoords(cnt, boxcoords)
                     if( ctfvar%ctfflag /= CTFFLAG_NO )then
                         dfx    = proj%os_ptcl2D%get_dfx(iptcl)
                         dfy    = proj%os_ptcl2D%get_dfy(iptcl)
@@ -1963,24 +1960,12 @@ contains
         get_box = nint( self%os_stk%get(1,'box') )
     end function get_box
 
-    logical function has_boxcoords(self, iptcl)
-        class(sp_project), target, intent(in) :: self
-        integer,                   intent(in) :: iptcl
-        has_boxcoords = .false.
-        if( self%os_ptcl2D%isthere(iptcl,'xpos') .and. self%os_ptcl2D%isthere(iptcl,'ypos'))then
-            has_boxcoords = .true.
-        endif
-    end function has_boxcoords
-
     subroutine get_boxcoords( self, iptcl, coords )
         class(sp_project), target, intent(in)  :: self
         integer,                   intent(in)  :: iptcl
         integer,                   intent(out) :: coords(2)
-        coords = 0
-        if( self%has_boxcoords(iptcl) )then
-            coords(1) = nint(self%os_ptcl2D%get(iptcl,'xpos'))
-            coords(2) = nint(self%os_ptcl2D%get(iptcl,'ypos'))
-        endif
+        coords(1) = nint(self%os_ptcl2D%get(iptcl,'xpos'))
+        coords(2) = nint(self%os_ptcl2D%get(iptcl,'ypos'))
     end subroutine get_boxcoords
 
     real function get_smpd( self )

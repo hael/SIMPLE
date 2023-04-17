@@ -21,7 +21,7 @@ use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_euclid_sigma2,       only: euclid_sigma2
 use simple_masker,              only: automask2D
-use simple_opt_filter,          only: uni_filt2D_sub
+use simple_opt_filter,          only: uni_filt2D_sub, nonuni_filt2D_sub
 use simple_classaverager
 use simple_progress
 implicit none
@@ -167,6 +167,7 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
+        if( params_glob%l_nonuniform ) call nonuni_filt2D_sub(cavgs_even, cavgs_odd)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space)

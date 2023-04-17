@@ -5,7 +5,7 @@ program simple_test_gauss2Dfit
 include 'simple_lib.f08'
 use simple_picker_utils, only: picker_utils
 use simple_image,        only: image
-use simple_gauss2Dfit,   only: gauss2Dfit
+use simple_gauss2Dfit,   only: batch_gauss2Dfit
 implicit none
 
 type(image),    allocatable :: refs(:), fits(:)
@@ -30,7 +30,7 @@ character(len=*), parameter :: csv_head = 'INDEX'//CSV_DELIM//'CORR'//&
 
 tpassed = 0
 write(logfhandle,'(a)') 'Test 1: Testing an unallocated array of references'
-call gauss2Dfit(refs, centers, sigmas, corrs)
+call batch_gauss2Dfit(refs, centers, sigmas, corrs)
 if (.not. allocated(corrs)) then 
     tpassed = tpassed + 1
     write(logfhandle,'(a)') 'Test 1 passed'
@@ -47,15 +47,15 @@ allocate(centers(2,nrefs), corrs(nrefs), sigmas(2,2,nrefs), source=0.)
 allocate(centers_sort(2,nrefs), corrs_sort(nrefs), sigmas_sort(2,2,nrefs),&
     &source=0.)
 
-! Calls to both implementations of gauss2Dfit with timing tests
+! Calls to both implementations of batch_gauss2Dfit with timing tests
 do iref = 1,nrefs
     call refs(iref)%new(ldim_refs, SMPD)
     call refs(iref)%read(micname, iref)
 end do
 t = tic()
-call gauss2Dfit(refs, centers, sigmas, corrs)
+call batch_gauss2Dfit(refs, centers, sigmas, corrs)
 rt1 = toc(t)
-call gauss2Dfit(refs, centers_sort, sigmas_sort, corrs_sort, irefs, fits)
+call batch_gauss2Dfit(refs, centers_sort, sigmas_sort, corrs_sort, irefs, fits)
 rt2 = toc(t) - rt1
 
 ! Here we assume that if correlations match then all other stats match

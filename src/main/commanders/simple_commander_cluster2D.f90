@@ -241,6 +241,8 @@ contains
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
+        if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
+        if( .not. cline%defined('smooth_ext')) call cline%set('smooth_ext',   20.)
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -329,6 +331,7 @@ contains
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
         call cline_cluster2D1%set('objfun',     'cc')
+        call cline_cluster2D1%set('nonuniform', 'no')
         call cline_cluster2D1%set('ml_reg','no')
         if( l_euclid ) call cline_cluster2D1%set('cc_iters', MINITS)
         call cline_cluster2D1%delete('update_frac')
@@ -578,6 +581,7 @@ contains
         call cline_cluster2D_stage1%set('ptclw', 'no')
         call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
         call cline_cluster2D_stage1%set('ml_reg','no')
+        call cline_cluster2D_stage1%set('nonuniform', 'no')
         if( params%l_frac_update )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -602,6 +606,7 @@ contains
         !          learning for acceleration
         call cline_cluster2D_stage2%set('refs', cavgs)
         call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
+        if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
         if( cline%defined('update_frac') )then
             call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         endif
@@ -634,7 +639,7 @@ contains
             call cline_make_cavgs%set('nparts',   real(params%nparts))
             call cline_make_cavgs%set('refs',     trim(finalcavgs))
             call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
-            call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used            
+            call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used
             if( l_shmem )then
                 params_ptr  => params_glob
                 params_glob => null()
