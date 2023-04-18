@@ -102,9 +102,8 @@ contains
                         case(1)
                             ! 4K
                         case(2)
-                            ! 8K
-                            self%ldim(1:2) = 2 * self%ldim(1:2)
-                            self%smpd      = self%smpd / 2.0
+                            ! 8K: no updates to dimsneiosn and pixel size are required
+                            ! unlike in motion correction to accomodate relion convention
                         case DEFAULT
                             THROW_HARD('Unsupported up-sampling: '//int2str(self%eer_upsampling))
                     end select
