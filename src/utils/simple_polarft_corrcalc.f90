@@ -964,7 +964,7 @@ contains
         !$omp end parallel do
     end subroutine accumulate_ref_reg
 
-    ! accumulating reference reg terms for each batch of particles
+    ! accumulating analytic step-size for each batch of particles
     subroutine accumulate_stepsize( self )
         class(polarft_corrcalc), intent(inout) :: self
         self%regs_eps = 1._dp
@@ -995,10 +995,10 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = params_glob%eps  * self%pfts_refs_even(:,:,iref) +&
-                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref)
-            self%pfts_refs_odd(:,:,iref)  = params_glob%eps  * self%pfts_refs_odd(:,:,iref) +&
-                                     &(1. - params_glob%eps) * self%refs_reg(:,:,iref)
+            self%pfts_refs_even(:,:,iref) = regs_eps(iref)  * self%pfts_refs_even(:,:,iref) +&
+                                     &(1. - regs_eps(iref)) * self%refs_reg(      :,:,iref)
+            self%pfts_refs_odd( :,:,iref) = regs_eps(iref)  * self%pfts_refs_odd( :,:,iref) +&
+                                     &(1. - regs_eps(iref)) * self%refs_reg(      :,:,iref)
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
