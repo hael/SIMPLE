@@ -931,7 +931,6 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        complex,                 pointer       :: pft_ref(:,:)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -942,13 +941,8 @@ contains
         enddo
         !$omp end parallel do
         thres = params_glob%arc_thres * pi / 180.
-        !$omp parallel do default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            if( self%iseven(i) )then
-                pft_ref = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref = self%pfts_refs_odd(:,:,iref)
-            endif
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
                 euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
@@ -964,7 +958,11 @@ contains
                     ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
-                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( pft_ref - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                    if( self%iseven(i) )then
+                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                    else
+                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                    endif
                 endif
             enddo
         enddo
