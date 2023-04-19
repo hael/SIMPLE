@@ -393,6 +393,7 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_eer_fraction = .false.
     logical :: l_envfsc       = .false.
+    logical :: l_eps          = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
@@ -1347,6 +1348,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
+        ! step-size (learning rate)
+        self%l_eps = cline%defined('eps')
         ! reference regularization
         self%l_ref_reg = trim(self%ref_reg).eq.'yes'
         ! ML regularization
