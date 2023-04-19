@@ -88,7 +88,8 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, caching reference reg terms
+    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
+    real(dp),            allocatable :: regs_eps(:)                 !< -"-, reference reg step-size
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -166,6 +167,7 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
     procedure          :: accumulate_ref_reg
+    procedure          :: accumulate_stepsize
     procedure          :: regularize_refs
     procedure          :: geodesic_frobdev
     procedure          :: reset_regs
@@ -350,7 +352,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_eps(self%nrefs),&
                     &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -376,6 +378,8 @@ contains
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
         self%refs_reg       = 0._dp
+        self%regs_eps       = 1._dp
+        if( params_glob%l_eps ) self%regs_eps = params_glob%eps
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -960,6 +964,12 @@ contains
         !$omp end parallel do
     end subroutine accumulate_ref_reg
 
+    ! accumulating reference reg terms for each batch of particles
+    subroutine accumulate_stepsize( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        self%regs_eps = 1._dp
+    end subroutine accumulate_stepsize
+
     pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
         class(polarft_corrcalc), intent(in) :: self
         real,                    intent(in) :: euls1(3), euls2(3)
@@ -995,7 +1005,9 @@ contains
 
     subroutine reset_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        self%refs_reg  = 0._dp
+        self%refs_reg = 0._dp
+        self%regs_eps = 1._dp
+        if( params_glob%l_eps ) self%regs_eps = params_glob%eps
     end subroutine reset_regs
 
     subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -2370,7 +2382,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_eps)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
