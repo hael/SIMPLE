@@ -194,6 +194,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: calc_euclidk_for_rot_8
     procedure, private :: cc_no_norm
+    procedure, private :: euclid_no_norm
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
@@ -930,6 +931,7 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
+        complex,                 pointer       :: pft_ref(:,:)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -940,8 +942,13 @@ contains
         enddo
         !$omp end parallel do
         thres = params_glob%arc_thres * pi / 180.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref = self%pfts_refs_odd(:,:,iref)
+            endif
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
                 euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
@@ -949,7 +956,7 @@ contains
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
                     ! find best irot for this pair of iref, iptcl
-                    inpl_corrs    = self%cc_no_norm( iref, iptcl )
+                    inpl_corrs    = self%euclid_no_norm( iref, iptcl )
                     loc           = maxloc(inpl_corrs)
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
@@ -957,7 +964,7 @@ contains
                     ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
-                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ptcl_ctf_rot / inpl_corrs(loc(1)) * ptcl_ref_dist
+                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( pft_ref - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
                 endif
             enddo
         enddo
@@ -995,10 +1002,10 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = regs_eps(iref)  * self%pfts_refs_even(:,:,iref) +&
-                                     &(1. - regs_eps(iref)) * self%refs_reg(      :,:,iref)
-            self%pfts_refs_odd( :,:,iref) = regs_eps(iref)  * self%pfts_refs_odd( :,:,iref) +&
-                                     &(1. - regs_eps(iref)) * self%refs_reg(      :,:,iref)
+            self%pfts_refs_even(:,:,iref) = self%regs_eps(iref)  * self%pfts_refs_even(:,:,iref) +&
+                                     &(1. - self%regs_eps(iref)) * self%refs_reg(      :,:,iref)
+            self%pfts_refs_odd( :,:,iref) = self%regs_eps(iref)  * self%pfts_refs_odd( :,:,iref) +&
+                                     &(1. - self%regs_eps(iref)) * self%refs_reg(      :,:,iref)
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
@@ -1769,6 +1776,33 @@ contains
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         cc = cc / real(self%nrots * 2, dp)
     end function cc_no_norm
+
+    function euclid_no_norm( self, iref, iptcl ) result(euclids)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        complex,                 pointer       :: pft_ref(:,:)
+        real(dp) :: euclids(self%nrots)
+        real(dp) :: denom, sumsqref, sumsqptcl
+        integer  :: ithr, i, k
+        i       =  self%pinds(iptcl)
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        ! copy
+        if( self%iseven(i) )then
+            pft_ref = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = self%pfts_refs_odd(:,:,iref)
+        endif
+        euclids = 0._dp
+        denom   = self%sqsums_ptcls(i)
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, iptcl, k, self%heap_vars(ithr)%kcorrs)
+            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
+            sumsqref  = sum(real(csq_fast(pft_ref(:,k)), dp))
+            euclids   = euclids + real(sumsqptcl + sumsqref - 2. * self%heap_vars(ithr)%kcorrs(:))
+        end do
+        euclids = real(dexp( - euclids/denom ))
+    end function euclid_no_norm
     
     subroutine gencorrs_cc( self, pft_ref, iptcl, ithr, iref, cc )
         class(polarft_corrcalc), intent(inout) :: self
