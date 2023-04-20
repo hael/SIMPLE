@@ -223,6 +223,7 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
+    integer :: maxnchunks=0
     integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
     integer :: nchunks=0
@@ -625,6 +626,7 @@ contains
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
+        call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)
