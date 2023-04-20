@@ -957,13 +957,13 @@ contains
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
                     euls_ref(3)   = 360. - self%get_rot(loc(1))
-                    ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
+                    ptcl_ref_dist = 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
-                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ( self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     else
-                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ( self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ( self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     endif
                 endif
             enddo
@@ -1008,7 +1008,7 @@ contains
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
                     euls_ref(3)   = 360. - self%get_rot(loc(1))
-                    ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
+                    ptcl_ref_dist = 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
