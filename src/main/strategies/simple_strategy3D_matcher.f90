@@ -527,7 +527,7 @@ contains
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! compute regularization terms
         call pftcc%accumulate_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds_here)
-        if( .not. params_glob%l_eps ) call pftcc%accumulate_stepsize()
+        if( .not. params_glob%l_eps ) call pftcc%accumulate_stepsize(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
