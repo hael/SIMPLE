@@ -1021,12 +1021,6 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            self%regs_eps(iref) = self%regs_eps(iref) / self%regs_denom(iref)
-            self%regs_eps(iref) = max(min(self%regs_eps(iref), 1._dp), 0._dp)
-        enddo
-        !$omp end parallel do
     end subroutine accumulate_stepsize
 
     pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
@@ -1054,6 +1048,8 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
+            self%regs_eps(iref) = self%regs_eps(iref) / self%regs_denom(iref)
+            self%regs_eps(iref) = max(min(self%regs_eps(iref), 1._dp), 0._dp)
             self%pfts_refs_even(:,:,iref) = self%regs_eps(iref)  * self%pfts_refs_even(:,:,iref) +&
                                      &(1. - self%regs_eps(iref)) * self%refs_reg(      :,:,iref)
             self%pfts_refs_odd( :,:,iref) = self%regs_eps(iref)  * self%pfts_refs_odd( :,:,iref) +&
