@@ -1012,11 +1012,11 @@ contains
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
-                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist
+                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     else
-                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist
+                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     endif
-                    self%regs_denom(iref) = self%regs_denom(iref) + sum(csq_fast(grad_diff)) * ptcl_ref_dist
+                    self%regs_denom(iref) = self%regs_denom(iref) + sum(csq_fast(grad_diff)) * ptcl_ref_dist / self%sqsums_ptcls(i)
                 endif
             enddo
         enddo
