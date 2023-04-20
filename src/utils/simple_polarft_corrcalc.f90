@@ -1012,9 +1012,9 @@ contains
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
-                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        self%regs_eps(iref) = self%regs_eps(iref) - real(sum(grad_diff * conjg(self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     else
-                        self%regs_eps(iref) = self%regs_eps(iref) + real(sum(grad_diff * conjg(self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        self%regs_eps(iref) = self%regs_eps(iref) - real(sum(grad_diff * conjg(self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
                     endif
                     self%regs_denom(iref) = self%regs_denom(iref) + sum(csq_fast(grad_diff)) * ptcl_ref_dist / self%sqsums_ptcls(i)
                 endif
@@ -1049,7 +1049,6 @@ contains
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             self%regs_eps(iref) = self%regs_eps(iref) / self%regs_denom(iref)
-            self%regs_eps(iref) = max(min(self%regs_eps(iref), 1._dp), 0._dp)
             self%pfts_refs_even(:,:,iref) = self%regs_eps(iref)  * self%pfts_refs_even(:,:,iref) +&
                                      &(1. - self%regs_eps(iref)) * self%refs_reg(      :,:,iref)
             self%pfts_refs_odd( :,:,iref) = self%regs_eps(iref)  * self%pfts_refs_odd( :,:,iref) +&
