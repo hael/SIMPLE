@@ -977,7 +977,7 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), sqsums_ptcls
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
@@ -985,7 +985,7 @@ contains
         enddo
         !$omp end parallel do
         thres = params_glob%arc_thres * pi / 180.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
@@ -993,19 +993,24 @@ contains
                 euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
+                    sqsums_ptcls  = sum(csq_fast(ptcl_ctf(:,:,i)))
                     ! find best irot for this pair of iref, iptcl
                     inpl_corrs    = self%euclid_no_norm( iref, iptcl )
                     loc           = maxloc(inpl_corrs)
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
                     euls_ref(3)   = 360. - self%get_rot(loc(1))
-                    ptcl_ref_dist = 1.
+                    ptcl_ref_dist = 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
-                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ( self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        do k = self%kfromto(1),self%kfromto(2)
+                            self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) - 2 * real(k) * real( self%pfts_refs_even(:,k,iref) - ptcl_ctf_rot(:,k) ) * ptcl_ref_dist / sqsums_ptcls
+                        enddo
                     else
-                        self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ( self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot ) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        do k = self%kfromto(1),self%kfromto(2)
+                            self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) - 2 * real(k) * real( self%pfts_refs_odd( :,k,iref) - ptcl_ctf_rot(:,k) ) * ptcl_ref_dist / sqsums_ptcls
+                        enddo
                     endif
                 endif
             enddo
@@ -1022,7 +1027,7 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer     :: i, iref, k, iptcl, loc(1)
         complex(dp) :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), dist_sum
+        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), sqsums_ptcls
         real        :: euls_ref(3), euls_ptcl(3), dist, thres
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
@@ -1030,7 +1035,7 @@ contains
         enddo
         !$omp end parallel do
         thres = params_glob%arc_thres * pi / 180.
-        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, euls_ptcl, dist, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
@@ -1038,21 +1043,27 @@ contains
                 euls_ptcl = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 dist      = acos(cos(euls_ref(2))*cos(euls_ptcl(2)) + sin(euls_ref(2))*sin(euls_ptcl(2))*cos(euls_ref(1) - euls_ptcl(1)))
                 if( dist < thres )then
+                    sqsums_ptcls  = sum(csq_fast(ptcl_ctf(:,:,i)))
                     ! find best irot for this pair of iref, iptcl
                     inpl_corrs    = self%euclid_no_norm( iref, iptcl )
                     loc           = maxloc(inpl_corrs)
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
                     euls_ref(3)   = 360. - self%get_rot(loc(1))
-                    ptcl_ref_dist = 1.
+                    ptcl_ref_dist = 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl))
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                     if( self%iseven(i) )then
-                        self%regs_eps(iref) = self%regs_eps(iref) - real(sum(self%refs_reg(:,:,iref) * conjg(self%pfts_refs_even(:,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        do k = self%kfromto(1),self%kfromto(2)
+                            self%regs_eps(  iref) = self%regs_eps(iref)   - real(sum(real(k) * self%refs_reg(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref) - ptcl_ctf_rot(:,k))), dp) * ptcl_ref_dist / sqsums_ptcls
+                            self%regs_denom(iref) = self%regs_denom(iref) +      sum(real(k) * self%refs_reg(:,k,iref)**2) * ptcl_ref_dist / sqsums_ptcls
+                        enddo
                     else
-                        self%regs_eps(iref) = self%regs_eps(iref) - real(sum(self%refs_reg(:,:,iref) * conjg(self%pfts_refs_odd( :,:,iref) - ptcl_ctf_rot)), dp) * ptcl_ref_dist / self%sqsums_ptcls(i)
+                        do k = self%kfromto(1),self%kfromto(2)
+                            self%regs_eps(  iref) = self%regs_eps(iref)   - real(sum(real(k) * self%refs_reg(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref) - ptcl_ctf_rot(:,k))), dp) * ptcl_ref_dist / sqsums_ptcls
+                            self%regs_denom(iref) = self%regs_denom(iref) +      sum(real(k) * self%refs_reg(:,k,iref)**2) * ptcl_ref_dist / sqsums_ptcls
+                        enddo
                     endif
-                    self%regs_denom(iref) = self%regs_denom(iref) + sum(self%refs_reg(:,:,iref)**2) * ptcl_ref_dist / self%sqsums_ptcls(i)
                 endif
             enddo
         enddo
@@ -1084,7 +1095,7 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%regs_eps(iref) = self%regs_eps(iref) / self%regs_denom(iref)
+            self%regs_eps(iref)           = self%regs_eps(iref) / self%regs_denom(iref)
             self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + self%regs_eps(iref) * self%refs_reg(:,:,iref)
             self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + self%regs_eps(iref) * self%refs_reg(:,:,iref)
         enddo
