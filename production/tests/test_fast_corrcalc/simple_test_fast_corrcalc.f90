@@ -22,7 +22,7 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 1
 real,    allocatable   :: corrs(:), corrs2(:)
-real                   :: corrmax, corr, cxy(3), lims(2,2), rmsd, df
+real                   :: shift(2), corrmax, corr, cxy(3), lims(2,2), rmsd, df
 real(dp)               :: f, grad(2)
 real(dp)               :: f_dev, grad_dev(2)
 integer                :: xsh, ysh, xbest, ybest, i, irot
@@ -97,19 +97,20 @@ t = tic()
 do irot = 1,500
     call pftcc%gencorrs(1,1, corrs)
 enddo
-print *,toc(t)
 print *,'gencorrs:     ',toc(t)
 
 ! stop
 
 ! shift
-call pftcc%gencorrs(1,1, [1.67,-2.32],corrs)
-call pftcc%gencorrs_dev(1,1, [1.67,-2.32], corrs2)
+shift = 4.*[ran3()-0.5, ran3()-0.5]
+print *,'shift: ',shift
+call pftcc%gencorrs(1,1, shift, corrs)
+call pftcc%gencorrs_dev(1,1, shift, corrs2)
 
 do irot = 1,pftcc%get_nrots()
     print *,irot,corrs(irot), corrs2(irot), abs(corrs(irot)-corrs2(irot))
-    corrs2(irot) = pftcc%gencorr_for_rot_8_dev(1,1,[1.67d0,-2.32d0],irot)
-    corrs(irot) = pftcc%gencorr_for_rot_8(1,1,[1.67d0,-2.32d0],irot)
+    corrs(irot)  = pftcc%gencorr_for_rot_8(1,1, real(shift,dp),irot)
+    corrs2(irot) = pftcc%gencorr_for_rot_8_dev(1,1, real(shift,dp), irot)
     print *,irot,corrs(irot), corrs2(irot), abs(corrs(irot)-corrs2(irot))
 enddo
 
@@ -117,45 +118,45 @@ enddo
 
 t = tic()
 do irot = 1,500
-    call pftcc%gencorrs_dev(1,1, [1.67,-2.32],corrs2)
+    call pftcc%gencorrs_dev(1,1, shift,corrs2)
 enddo
 print *,'gencorrs shifted dev ',toc(t)
 
 t = tic()
 do irot = 1,500
-    call pftcc%gencorrs(1,1, [1.67,-2.32],corrs)
+    call pftcc%gencorrs(1,1, shift,corrs)
 enddo
 print *,'gencorrs shifted     ',toc(t)
 
 t = tic()
 do irot = 1,500
-    corrs(irot) = pftcc%gencorr_for_rot_8_dev(1,1,[1.67d0,-2.32d0],irot)
+    corrs(irot) = pftcc%gencorr_for_rot_8_dev(1,1,real(shift,dp),irot)
 enddo
 print *,'gencorr_for_rot_8 dev ',toc(t)
 
 t = tic()
 do irot = 1,500
-    corrs2(irot) = pftcc%gencorr_for_rot_8(1,1,[1.67d0,-2.32d0],irot)
+    corrs2(irot) = pftcc%gencorr_for_rot_8(1,1,real(shift,dp),irot)
 enddo
 print *,'gencorr_for_rot_8     ',toc(t)
 
 ! stop
 
 do irot = 1,pftcc%get_nrots()
-    call pftcc%gencorr_grad_for_rot_8(1,1,[1.67d0,-2.32d0],irot,f,grad)
-    call pftcc%gencorr_grad_for_rot_8_dev(1,1,[1.67d0,-2.32d0],irot,f_dev,grad_dev)
+    call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f,grad)
+    call pftcc%gencorr_grad_for_rot_8_dev(1,1, real(shift,dp),irot,f_dev,grad_dev)
     print *,irot,f,f_dev,grad,grad_dev
 enddo
 
 t = tic()
 do irot = 1,500
-    call pftcc%gencorr_grad_for_rot_8(1,1,[1.67d0,-2.32d0],irot,f,grad)
+    call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f,grad)
 enddo
 print *,'gencorr_grad_for_rot_8     ',toc(t)
 
 t = tic()
 do irot = 1,500
-    call pftcc%gencorr_grad_for_rot_8_dev(1,1,[1.67d0,-2.32d0],irot,f_dev,grad_dev)
+    call pftcc%gencorr_grad_for_rot_8_dev(1,1, real(shift,dp),irot,f_dev,grad_dev)
 enddo
 print *,'gencorr_grad_for_rot_8 dev ',toc(t)
 
