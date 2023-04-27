@@ -193,12 +193,13 @@ contains
 
         ! ref regularization
         if( params_glob%l_ref_reg )then
+            call pftcc%reset_regs
             ! Batch loop
             do ibatch=1,nbatches
                 batch_start = batches(ibatch,1)
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
-                call reg_batch_particles(batchsz, pinds(batch_start:batch_end), batch_start, batch_end)
+                call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
             enddo
             call pftcc%regularize_refs
         endif
@@ -511,11 +512,10 @@ contains
         call pftcc%memoize_ffts
     end subroutine build_batch_particles
 
-    subroutine reg_batch_particles( nptcls_here, pinds_here, batch_start, batch_end )
+    subroutine reg_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
-        integer, intent(in) :: batch_start, batch_end
         integer :: iptcl_batch, iptcl, ithr
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
@@ -537,7 +537,7 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! compute regularization terms
-        call pftcc%accumulate_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds(batch_start:batch_end))
+        call pftcc%accumulate_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher

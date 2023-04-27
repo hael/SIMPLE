@@ -577,10 +577,10 @@ contains
         ! this workflow executes two stages of CLUSTER2D
         ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
         !          improved population distribution of clusters, no incremental learning,
-        call cline_cluster2D_stage1%set('lpstop',params%lpstart)
-        call cline_cluster2D_stage1%set('ptclw', 'no')
-        call cline_cluster2D_stage1%set('objfun','cc') ! cc-based search in first phase
-        call cline_cluster2D_stage1%set('ml_reg','no')
+        call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
+        call cline_cluster2D_stage1%set('ptclw',      'no')
+        call cline_cluster2D_stage1%set('objfun',     'cc') ! cc-based search in first phase
+        call cline_cluster2D_stage1%set('ml_reg',     'no')
         call cline_cluster2D_stage1%set('nonuniform', 'no')
         if( params%l_frac_update )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1

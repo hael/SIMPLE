@@ -27,7 +27,7 @@ type optfilt2Dvars
     logical           :: have_mask = .false.
 end type optfilt2Dvars
 
-logical :: TEST = .true.
+logical :: TEST = .false.
 
 contains
 

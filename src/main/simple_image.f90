@@ -231,10 +231,10 @@ contains
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: phase_corr
     procedure          :: fcorr_shift
-    procedure          :: prenorm4real_corr_1, prenorm4real_corr_2
-    generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2
-    procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2
-    generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
+    procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
+    generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
+    procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
+    generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
     procedure          :: sqeuclid
     procedure, private :: sqeuclid_matrix_1, sqeuclid_matrix_2
     generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
@@ -4721,6 +4721,24 @@ contains
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
     end subroutine prenorm4real_corr_2
 
+    !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
+    !>  The image is centered and standardized
+    subroutine prenorm4real_corr_3( self, err )
+        class(image), intent(inout) :: self
+        logical,      intent(out)   :: err
+        real :: npix, ave, var
+        npix      = real(product(self%ldim))
+        ave       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        self%rmat = self%rmat - ave
+        var       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( var > TINY )then
+            self%rmat = self%rmat / sqrt(var)
+            err = .false.
+        else
+            err = .true.
+        endif
+    end subroutine prenorm4real_corr_3
+
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
     function real_corr_prenorm_1( self_ref, self_ptcl, sxx_ref ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
@@ -4757,6 +4775,16 @@ contains
             r = 0.
         endif
     end function real_corr_prenorm_2
+
+    !>  \brief real_corr_prenorm_3 is for calculating a real-space correlation coefficient between images
+    !>  both inputs are assumed centered & standardized
+    real function real_corr_prenorm_3( self_ref, self_ptcl )
+        class(image), intent(inout) :: self_ref, self_ptcl
+        real :: r
+        real_corr_prenorm_3 = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))&
+                                & * self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)))
+        real_corr_prenorm_3 = real_corr_prenorm_3 / product(self_ref%ldim)
+    end function real_corr_prenorm_3
 
     function sqeuclid( self1, self2, mask ) result( r )
         class(image), intent(inout) :: self1, self2

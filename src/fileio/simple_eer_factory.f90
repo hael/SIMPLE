@@ -169,8 +169,7 @@ contains
         if( nimgs*fraction > self%nframes )then
             THROW_HARD('EER fraction is too large! decode')
         endif
-        ! here adopting relion's convention for fractionating where the last overhanging
-        ! raw frames (and most dose-damaged) are simply abandoned
+        ! the last overhanging raw frames (and most dose-damaged) are simply abandoned
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i = 1,nimgs
             call imgs(i)%kill
