@@ -1618,7 +1618,7 @@ contains
         call jacobi(cov, 3, 3, eigenvals, eigenvecs, nrot)
         call eigsrt(eigenvals, eigenvecs, 3, 3)
         ! Any negative eigenvalue or large eigenvalue implies intensity 
-        ! distribution can't be approximated as a Gaussian
+        ! distribution can't be approximated as a multivariate Gaussian
         if (any(eigenvals <= 0._dp) .or. any(eigenvals > (2*fit_rad)**2)) then
             self%atominfo(cc)%tossADP = .true.
             self%atominfo(cc)%u_evals = 0.
@@ -1891,9 +1891,9 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%isocorr,                CSV_DELIM ! ISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%anisocorr,              CSV_DELIM ! ANISO_CORR
         if( .not. omit_here )then
-        write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
-        write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
-        write(funit,601,advance='no') self%atominfo(cc)%center(3),              CSV_DELIM ! Z
+        write(funit,601,advance='no') self%atominfo(cc)%center(1)*self%smpd,    CSV_DELIM ! X
+        write(funit,601,advance='no') self%atominfo(cc)%center(2)*self%smpd,    CSV_DELIM ! Y
+        write(funit,601,advance='no') self%atominfo(cc)%center(3)*self%smpd,    CSV_DELIM ! Z
         ! strain
         write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
         write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
@@ -1903,7 +1903,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%exz_strain,             CSV_DELIM ! EXZ_STRAIN
         endif
         if( .not. omit_here )then
-        write(funit,601,advance='no') self%atominfo(cc)%radial_strain,          CSV_DELIM ! RADIAL_STRAIN
+        write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
         else
         write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
         endif
