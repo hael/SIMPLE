@@ -102,7 +102,7 @@ contains
                         case(1)
                             ! 4K
                         case(2)
-                            ! 8K: no updates to dimsneiosn and pixel size are required
+                            ! 8K: no updates to dimensions and pixel size are required
                             ! unlike in motion correction to accomodate relion convention
                         case DEFAULT
                             THROW_HARD('Unsupported up-sampling: '//int2str(self%eer_upsampling))
@@ -170,6 +170,7 @@ contains
         ! micrograph init
         if( .not.self%l_mov ) call self%init_mic( self%box, self%l_neg)
         ! all done
+        call self%eer%kill
         self%exists = .true.
     end subroutine init_mov
 
@@ -703,7 +704,6 @@ contains
         if( allocated(self%doses) )         deallocate(self%doses)
         if( allocated(self%hotpix_coords) ) deallocate(self%hotpix_coords)
         if( allocated(self%particle_mask) ) deallocate(self%particle_mask)
-        call self%eer%kill
         self%l_doseweighing = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.
