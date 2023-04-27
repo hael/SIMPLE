@@ -349,6 +349,8 @@ contains
         else
             call cline_cluster2D2%set('objfun', 'cc')
         endif
+        ! optional non-uniform filtering
+        if( params%l_nonuniform ) call cline_cluster2D2%set('smooth_ext', real(ceiling(params%smooth_ext * scale_factor)))
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! scale references
         if( l_scaling )then
@@ -606,10 +608,8 @@ contains
         !          learning for acceleration
         call cline_cluster2D_stage2%set('refs', cavgs)
         call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
-        if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
-        if( cline%defined('update_frac') )then
-            call cline_cluster2D_stage2%set('update_frac', params%update_frac)
-        endif
+        if( params%l_nonuniform )          call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
+        if( cline%defined('update_frac') ) call cline_cluster2D_stage2%set('update_frac', params%update_frac)
         if( l_euclid )then
             call cline_cluster2D_stage2%set('objfun',   trim(cline%get_carg('objfun')))
             call cline_cluster2D_stage2%set('cc_iters', 0.)
