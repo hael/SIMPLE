@@ -224,6 +224,7 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
+    integer :: maxnchunks=0
     integer :: minits=0            !< minimum # iterations
     integer :: mrcmode=2
     integer :: nchunks=0
@@ -395,6 +396,7 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_eer_fraction = .false.
     logical :: l_envfsc       = .false.
+    logical :: l_eps          = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
@@ -626,6 +628,7 @@ contains
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
+        call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('minits',         self%minits)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('nchunks',        self%nchunks)
@@ -1372,6 +1375,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
+        ! step-size (learning rate)
+        self%l_eps = cline%defined('eps')
         ! reference regularization
         self%l_ref_reg = trim(self%ref_reg).eq.'yes'
         ! ML regularization

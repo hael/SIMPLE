@@ -277,7 +277,8 @@ contains
         self%cwd        = ''
         self%watch_dir  = ''
         self%ext        = ''
-        if(allocated(self%history))deallocate(self%history)
+        if( allocated(self%history)    ) deallocate(self%history)
+        if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
         self%report_time    = 0
         self%starttime      = 0
         self%ellapsedtime   = 0

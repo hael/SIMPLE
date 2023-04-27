@@ -54,9 +54,10 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nchunks_imported
+        integer                                :: nchunks_imported_glob, nchunks_imported
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
-        logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d
+        logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
@@ -100,12 +101,11 @@ contains
         if( .not. cline%defined('nchunks')     ) call cline%set('nchunks',        2.0)
         if( .not. cline%defined('prune')       ) call cline%set('prune',         'no')
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
-        if( .not.cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
-        if( .not.cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
+        if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
+        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
         ncls_in = 0
         if( cline%defined('ncls') )then
-            ! to circumvent parameters class stringency
-            ! restored after params%new
+            ! to circumvent parameters class stringency, restored after params%new
             ncls_in = nint(cline%get_rarg('ncls'))
             call cline%delete('ncls')
         endif
@@ -125,6 +125,10 @@ contains
             params_glob%nparts_pool = params_glob%nparts
             call cline%set('nparts_pool', real(params_glob%nparts_pool))
         endif
+        if( .not. cline%defined('maxnchunks') .or. params_glob%maxnchunks < 1 )then
+            params_glob%maxnchunks = huge(params_glob%maxnchunks)
+        endif
+        call cline%delete('maxnchunks')
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -181,23 +185,31 @@ contains
         nptcls_glob = 0
         call import_prev_streams
         ! start watching
-        last_injection = simple_gettime()
-        prev_stacksz  = 0
-        nmovies       = 0
-        iter          = 0
-        n_imported    = 0
-        n_failed_jobs = 0
-        n_added       = 0
-        l_movies_left = .false.
-        l_haschanged  = .false.
+        nchunks_imported_glob = 0
+        last_injection        = simple_gettime()
+        prev_stacksz          = 0
+        nmovies               = 0
+        iter                  = 0
+        n_imported            = 0
+        n_failed_jobs         = 0
+        n_added               = 0
+        l_movies_left         = .false.
+        l_haschanged          = .false.
+        l_nchunks_maxed       = .false.
         do
-            ! termination & pausing
             if( file_exists(trim(TERM_STREAM)) )then
+                ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
             endif
             iter = iter + 1
-            call movie_buff%watch( nmovies, movies )
+            ! detection of new movies
+            if( l_nchunks_maxed )then
+                call movie_buff%kill
+                nmovies = 0
+            else
+                call movie_buff%watch( nmovies, movies )
+            endif
             ! append movies to processing stack
             if( nmovies > 0 )then
                 cnt = 0
@@ -262,20 +274,17 @@ contains
                 n_imported     = spproj%os_mic%get_noris()
                 ! always write micrographs snapshot if less than 1000 mics, else every INACTIVE_TIME
                 if( n_imported < 1000 .and. l_haschanged )then
-                    call update_user_params
-                    call cline%set('tilt_thres', params_glob%tilt_thres)
+                    call update_user_params(cline)
                     call write_migrographs_starfile
                 else if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
-                    call update_user_params
-                    call cline%set('tilt_thres', params_glob%tilt_thres)
+                    call update_user_params(cline)
                     call write_migrographs_starfile
                 endif
             else
                 ! wait & write snapshot
                 if( l_cluster2D )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
-                        call update_user_params
-                        call cline%set('tilt_thres', params_glob%tilt_thres)
+                        call update_user_params(cline)
                         call write_migrographs_starfile
                         l_haschanged = .false.
                     endif
@@ -284,8 +293,7 @@ contains
                         if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                             ! write project when inactive...
                             call write_project
-                            call update_user_params
-                            call cline%set('tilt_thres', params_glob%tilt_thres)
+                            call update_user_params(cline)
                             call write_migrographs_starfile
                             l_haschanged = .false.
                         else
@@ -296,23 +304,28 @@ contains
                 endif
             endif
             ! update beamtilt 
-            if(cline%defined('dir_meta')) then
-                call read_xml_beamtilts()
-            endif
+            if(cline%defined('dir_meta')) call read_xml_beamtilts()
             ! 2D classification section
             if( l_cluster2D )then
-                call update_user_params
+                call update_user_params(cline)
                 call update_chunks
                 call update_pool_status
                 call update_pool
-                call update_user_params
+                call update_user_params(cline)
                 call reject_from_pool
                 ! call reject_from_pool_user
-                call write_project_stream2D(.true.)
-                call import_chunks_into_pool(.false., nchunks_imported)
-                call classify_pool
-                call update_projects_mask(completed_fnames)
-                call classify_new_chunks(completed_fnames)
+                if( .not.l_nchunks_maxed )then
+                    call write_project_stream2D(.true.)
+                    call import_chunks_into_pool(.false., nchunks_imported)
+                    nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
+                    l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
+                    call classify_pool
+                    call update_projects_mask(completed_fnames)
+                    call classify_new_chunks(completed_fnames)
+                else
+                    ! # of chunks is above desired threshold
+                    if( is_pool_available() ) exit
+                endif
                 call sleep(WAITTIME)
             endif
         end do
@@ -323,8 +336,7 @@ contains
         else
             call write_project
         endif
-        call update_user_params
-        call cline%set('tilt_thres', params_glob%tilt_thres)
+        call update_user_params(cline)
         call write_migrographs_starfile
         ! cleanup
         call spproj%kill
@@ -504,7 +516,6 @@ contains
                 character(len=STDLEN)        :: ext, movie_here
                 character(len=LONGSTRLEN)    :: projname, projfile,xmlfile,xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
-                real                         :: tiltx, tilty
                 cwd_old = trim(cwd_glob)
                 call chdir(output_dir)
                 call simple_getcwd(cwd)

@@ -227,6 +227,7 @@ type(simple_input_param) :: lpthres
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
+type(simple_input_param) :: maxnchunks
 type(simple_input_param) :: mcpatch
 type(simple_input_param) :: mcpatch_thres
 type(simple_input_param) :: mcconvention
@@ -1067,7 +1068,9 @@ contains
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
-        call set_param(combine_eo,     'combine_eo',   'binary', 'whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
+
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2700,10 +2703,9 @@ contains
         &'is a distributed workflow for anisotropic motion correction of movies.&
         & If then total dose is given the individual frames will be filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
-        & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
-        & be pre-averaged in the given chunk size (Falcon 3 movies).',&     ! descr_long
+        & the down-scaling factor (for super-resolution movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 8, 0, 9, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, gainref)
@@ -2723,14 +2725,13 @@ contains
         call motion_correct%set_input('srch_ctrls', 1, trs)
         motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         motion_correct%srch_ctrls(1)%rval_default      = 20.
-        call motion_correct%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
-        call motion_correct%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call motion_correct%set_input('srch_ctrls', 4, mcpatch)
-        call motion_correct%set_input('srch_ctrls', 5, nxpatch)
-        call motion_correct%set_input('srch_ctrls', 6, nypatch)
-        call motion_correct%set_input('srch_ctrls', 7, mcconvention)
-        call motion_correct%set_input('srch_ctrls', 8, algorithm)
-        call motion_correct%set_input('srch_ctrls', 9, mcpatch_thres)
+        call motion_correct%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call motion_correct%set_input('srch_ctrls', 3, mcpatch)
+        call motion_correct%set_input('srch_ctrls', 4, nxpatch)
+        call motion_correct%set_input('srch_ctrls', 5, nypatch)
+        call motion_correct%set_input('srch_ctrls', 6, mcconvention)
+        call motion_correct%set_input('srch_ctrls', 7, algorithm)
+        call motion_correct%set_input('srch_ctrls', 8, mcpatch_thres)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2970,7 +2971,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 11, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 11, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -2994,21 +2995,20 @@ contains
         call preprocess%set_input('srch_ctrls', 1, trs)
         preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         preprocess%srch_ctrls(1)%rval_default      = 20.
-        call preprocess%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
-        call preprocess%set_input('srch_ctrls', 3, dfmin)
-        call preprocess%set_input('srch_ctrls', 4, dfmax)
-        call preprocess%set_input('srch_ctrls', 5, astigtol)
-        call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking outlier detection', '# of standard deviations threshold for picking oulier detection{2.5}', '{2.5}', .false., 2.5)
-        call preprocess%set_input('srch_ctrls', 8, pgrp)
-        preprocess%srch_ctrls(8)%required = .false.
-        call preprocess%set_input('srch_ctrls', 9, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess%set_input('srch_ctrls',10, mcpatch)
-        call preprocess%set_input('srch_ctrls',11, nxpatch)
-        call preprocess%set_input('srch_ctrls',12, nypatch)
-        call preprocess%set_input('srch_ctrls',13, mcconvention)
-        call preprocess%set_input('srch_ctrls',14, algorithm)
-        call preprocess%set_input('srch_ctrls',15, mcpatch_thres)
+        call preprocess%set_input('srch_ctrls', 2, dfmin)
+        call preprocess%set_input('srch_ctrls', 3, dfmax)
+        call preprocess%set_input('srch_ctrls', 4, astigtol)
+        call preprocess%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call preprocess%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking outlier detection', '# of standard deviations threshold for picking oulier detection{2.5}', '{2.5}', .false., 2.5)
+        call preprocess%set_input('srch_ctrls', 7, pgrp)
+        preprocess%srch_ctrls(7)%required = .false.
+        call preprocess%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess%set_input('srch_ctrls', 9, mcpatch)
+        call preprocess%set_input('srch_ctrls',10, nxpatch)
+        call preprocess%set_input('srch_ctrls',11, nypatch)
+        call preprocess%set_input('srch_ctrls',12, mcconvention)
+        call preprocess%set_input('srch_ctrls',13, algorithm)
+        call preprocess%set_input('srch_ctrls',14, mcpatch_thres)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3108,7 +3108,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 23, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 24, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3217,6 +3217,8 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 22, submenu="motion correction", online=.true.)
         call preprocess_stream_dev%set_input('srch_ctrls',23, objfun)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 23, submenu="search")
+        call preprocess_stream_dev%set_input('srch_ctrls',24, maxnchunks)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 24, submenu="cluster 2D", online=.true.)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
