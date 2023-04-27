@@ -19,8 +19,8 @@ implicit none
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
-public :: update_chunks, classify_new_chunks, import_chunks_into_pool, update_user_params, copy_optics_groups
-public :: update_path
+public :: update_chunks, classify_new_chunks, import_chunks_into_pool, is_pool_available
+public :: update_user_params, copy_optics_groups, update_path
 
 private
 #include "simple_local_flags.inc"
@@ -858,7 +858,8 @@ contains
     end subroutine reject_from_pool_user
 
     !> updates current parameters with user input
-    subroutine update_user_params
+    subroutine update_user_params( cline_here )
+        type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
         real       :: lpthres, ndev, tilt_thres
         call os%new(1, is_ptcl=.false.)
@@ -895,6 +896,7 @@ contains
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO HIGH: ',tilt_thres
                      else
                          params_glob%tilt_thres = tilt_thres
+                         call cline_here%set('tilt_thres', params_glob%tilt_thres)
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES UPDATED TO: ',tilt_thres
                      endif
                 endif
@@ -1612,6 +1614,10 @@ contains
         endif
         write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params_glob%lpstop2D
     end subroutine set_resolution_limits
+
+    logical function is_pool_available()
+        is_pool_available = pool_available
+    end function is_pool_available
 
     subroutine debug_print( string )
         character(len=*), intent(in) :: string
