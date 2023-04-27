@@ -947,12 +947,10 @@ contains
                     ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                     euls_ref      = eulspace%get_euler(iref)
                     euls_ref(3)   = 360. - self%get_rot(loc(1))
-                    ptcl_ref_dist = dexp( -real(self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)), dp) )
-                    ! computing the probability of each 2D reference at iref
-                    self%refs_prob(iref) = self%refs_prob(iref) + ptcl_ref_dist**2
-                    ! computing the reg terms as the gradients w.r.t 2D references of the probability above
+                    ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
+                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
-                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
+                    self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) - ptcl_ctf_rot / inpl_corrs(loc(1)) * ptcl_ref_dist
                     ! updating the number of ptcls within the threshold
                     self%reg_cnt(iref) = self%reg_cnt(iref) + 1
                 endif
@@ -986,7 +984,6 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%refs_reg(:,:,iref)       = self%refs_reg(:,:,iref) / self%refs_prob(iref)
             self%pfts_refs_even(:,:,iref) = params_glob%eps  * self%pfts_refs_even(:,:,iref) +&
                                      &(1. - params_glob%eps) * self%refs_reg(:,:,iref)
             self%pfts_refs_odd(:,:,iref)  = params_glob%eps  * self%pfts_refs_odd(:,:,iref) +&
