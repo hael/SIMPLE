@@ -193,7 +193,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: calc_euclidk_for_rot_8
-    procedure, private :: cc_no_norm
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
@@ -974,17 +973,16 @@ contains
     end subroutine memoize_refs
 
     ! accumulating reference reg terms for each batch of particles
-    subroutine accumulate_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds, nptcls_glob )
+    subroutine accumulate_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer,                 intent(in)    :: nptcls_glob
         integer  :: i, iref, k, iptcl, loc(1)
-        real     :: euls_ref(3), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(dp) :: ptcl_ref_dist, inpl_corrs(self%nrots), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                                                               &ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real     :: euls_ref(3), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), inpl_corrs(self%nrots)
+        real(dp) :: ptcl_ref_dist, ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                                       &ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             ptcl_ctf(:,k,:) = real(k, dp) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:), dp)
@@ -993,9 +991,9 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl         = glob_pinds(i)
+                iptcl = glob_pinds(i)
                 ! find best irot for this pair of iref, iptcl
-                inpl_corrs    = self%cc_no_norm( iref, iptcl )
+                call self%gencorrs( iref, iptcl, inpl_corrs )
                 loc           = maxloc(inpl_corrs)
                 ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                 euls_ref      = eulspace%get_euler(iref)
@@ -1759,45 +1757,6 @@ contains
                 call self%gencorrs_prob(  pft_ref, self%heap_vars(ithr)%kcorrs, iptcl, cc)
         end select
     end subroutine gencorrs_2
-
-    function cc_no_norm( self, iref, iptcl ) result(cc)
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        complex(dp),             pointer       :: pft_ref_8(:,:)
-        real(dp) :: cc(self%nrots)
-        integer  :: ithr, i, ik
-        i         =  self%pinds(iptcl)
-        ithr      =  omp_get_thread_num() + 1
-        pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
-        ! copy
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
-        cc = 0._dp
-        ! sum up correlations over k-rings
-        do ik = self%kfromto(1),self%kfromto(2)
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) = real(pft_ref_8(:,ik),       sp)
-            self%fftdat(ithr)%ref_im(:) = real(aimag(pft_ref_8(:,ik)),sp) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re * self%ctfmats(:,ik,i)
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im * self%ctfmats(:,ik,i)
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            cc = cc + real(ik, dp) * real(self%fftdat(ithr)%backtransf, dp)
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        cc = cc / real(self%nrots * 2, dp)
-    end function cc_no_norm
 
     subroutine gencorrs_cc( self, pft_ref, iptcl, ithr, iref, cc )
         class(polarft_corrcalc), intent(inout) :: self
