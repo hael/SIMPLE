@@ -998,7 +998,7 @@ contains
                 ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                 euls_ref      = eulspace%get_euler(iref)
                 euls_ref(3)   = 360. - self%get_rot(loc(1))
-                ptcl_ref_dist = exp( -self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
+                ptcl_ref_dist = 1./( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
