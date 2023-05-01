@@ -164,6 +164,7 @@ type :: parameters
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
+    character(len=7)          :: reg_obj='cc'         !< global reg objective function(euclid|cc){cc}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -191,6 +192,7 @@ type :: parameters
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1, OBJFUN_PROB = 2)
+    integer(kind(ENUM_OBJFUN))     :: reg_objfun  = OBJFUN_CC     !< reg objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
@@ -287,7 +289,6 @@ type :: parameters
     real    :: alpha=KBALPHA
     real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
-    real    :: arc_thres=10.       !< arc threshold in the cost function reg (in degrees)
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
@@ -506,6 +507,7 @@ contains
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)
         call check_carg('objfun',         self%objfun)
+        call check_carg('reg_obj',        self%reg_obj)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
         call check_carg('oritype',        self%oritype)
@@ -683,7 +685,6 @@ contains
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)
-        call check_rarg('arc_thres',      self%arc_thres)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigtol',       self%astigtol)
@@ -1316,6 +1317,16 @@ contains
                 self%cc_objfun = OBJFUN_PROB
             case DEFAULT
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
+                THROW_HARD('unsupported objective function; new')
+        end select
+        ! global reg objective function used
+        select case(trim(self%reg_obj))
+            case('cc')
+                self%reg_objfun = OBJFUN_CC
+            case('euclid')
+                self%reg_objfun = OBJFUN_EUCLID
+            case DEFAULT
+                write(logfhandle,*) 'reg objfun flag: ', trim(self%reg_obj)
                 THROW_HARD('unsupported objective function; new')
         end select
         ! dose weighing

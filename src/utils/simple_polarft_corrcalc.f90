@@ -97,6 +97,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
     real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
+    real(dp),            allocatable :: regs_eps(:)                 !< -"-, reference reg step-size
+    real(dp),            allocatable :: ss_denom(:)                 !< -"-, reference reg step-size denom
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -168,7 +170,10 @@ type :: polarft_corrcalc
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
-    procedure          :: accumulate_ref_reg
+    procedure          :: ref_reg_cc
+    procedure          :: ref_reg_euclid
+    procedure          :: accumulate_stepsize
+    procedure          :: normalize_regs
     procedure          :: regularize_refs
     procedure          :: geodesic_frobdev
     procedure          :: reset_regs
@@ -220,7 +225,8 @@ type :: polarft_corrcalc
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
     procedure, private :: calc_frc
-    procedure, private :: rotate_polar
+    procedure, private :: rotate_polar_real, rotate_polar_complex
+    generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex
     procedure, private :: rotate_ref
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
@@ -366,7 +372,7 @@ contains
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
+                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),self%regs_eps(self%nrefs),self%ss_denom(self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -393,6 +399,8 @@ contains
         self%wsqsums_ptcls  = 0.d0
         self%refs_reg       = 0.d0
         self%regs_denom     = 0.d0
+        self%regs_eps       = 0.d0
+        self%ss_denom       = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -972,8 +980,8 @@ contains
         call fftwf_destroy_plan(r2c_plan)
     end subroutine memoize_refs
 
-    ! accumulating reference reg terms for each batch of particles
-    subroutine accumulate_ref_reg( self, eulspace, ptcl_eulspace, glob_pinds )
+    ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
+    subroutine ref_reg_cc( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
         class(polarft_corrcalc), intent(inout) :: self
         type(oris),              intent(in)    :: eulspace
@@ -985,7 +993,7 @@ contains
                                        &ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            ptcl_ctf(:,k,:) = real(k, dp) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:), dp)
+            ptcl_ctf(:,k,:) = real(k) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:))
         enddo
         !$omp end parallel do
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
@@ -1007,7 +1015,94 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine accumulate_ref_reg
+    end subroutine ref_reg_cc
+
+    ! accumulating reference reg terms for each batch of particles, with euclid-based global objfunc
+    subroutine ref_reg_euclid( self, eulspace, ptcl_eulspace, glob_pinds )
+        use simple_oris
+        class(polarft_corrcalc), intent(inout) :: self
+        type(oris),              intent(in)    :: eulspace
+        type(oris),              intent(in)    :: ptcl_eulspace
+        integer,                 intent(in)    :: glob_pinds(self%nptcls)
+        integer     :: i, iref, k, iptcl, loc(1)
+        complex(sp) :: ptcl_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real        :: euls_ref(3), inpl_corrs(self%nrots)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_rot, ctf_rot) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot for this pair of iref, iptcl
+                call self%gencorrs( iref, iptcl, inpl_corrs )
+                loc           = maxloc(inpl_corrs)
+                ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
+                euls_ref      = eulspace%get_euler(iref)
+                euls_ref(3)   = 360. - self%get_rot(loc(1))
+                ptcl_ref_dist = 1./( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                call self%rotate_polar(self%pfts_ptcls(:,:,i), ptcl_rot, loc(1))
+                call self%rotate_polar(self%ctfmats(   :,:,i),  ctf_rot, loc(1))
+                if( self%iseven(i) )then
+                    do k = self%kfromto(1),self%kfromto(2)
+                        self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) + ptcl_ref_dist * &
+                            &real(2 * real(k) * real( self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
+                    enddo
+                else
+                    do k = self%kfromto(1),self%kfromto(2)
+                        self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) + ptcl_ref_dist * &
+                            &real(2. * real(k) * real( self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
+                    enddo
+                endif
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2 * ptcl_ref_dist
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine ref_reg_euclid
+
+    ! accumulating analytic step-size for each batch of particles
+    subroutine accumulate_stepsize( self, eulspace, ptcl_eulspace, glob_pinds )
+        use simple_oris
+        class(polarft_corrcalc), intent(inout) :: self
+        type(oris),              intent(in)    :: eulspace
+        type(oris),              intent(in)    :: ptcl_eulspace
+        integer,                 intent(in)    :: glob_pinds(self%nptcls)
+        integer     :: i, iref, k, iptcl, loc(1)
+        complex(sp) :: ptcl_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real        :: euls_ref(3), inpl_corrs(self%nrots)
+        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_rot, ctf_rot) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot for this pair of iref, iptcl
+                call self%gencorrs( iref, iptcl, inpl_corrs )
+                loc           = maxloc(inpl_corrs)
+                ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
+                euls_ref      = eulspace%get_euler(iref)
+                euls_ref(3)   = 360. - self%get_rot(loc(1))
+                ptcl_ref_dist = 1./( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                call self%rotate_polar(self%pfts_ptcls(:,:,i), ptcl_rot, loc(1))
+                call self%rotate_polar(self%ctfmats(   :,:,i),  ctf_rot, loc(1))
+                if( self%iseven(i) )then
+                    do k = self%kfromto(1),self%kfromto(2)
+                        self%regs_eps(  iref) = self%regs_eps(iref) + ptcl_ref_dist * &
+                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
+                        self%ss_denom(iref)   = self%ss_denom(iref) + ptcl_ref_dist * &
+                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
+                    enddo
+                else
+                    do k = self%kfromto(1),self%kfromto(2)
+                        self%regs_eps(  iref) = self%regs_eps(iref) + ptcl_ref_dist * &
+                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
+                        self%ss_denom(iref)   = self%ss_denom(iref) + ptcl_ref_dist * &
+                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
+                    enddo
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine accumulate_stepsize
 
     pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
         class(polarft_corrcalc), intent(in) :: self
@@ -1029,31 +1124,62 @@ contains
         endif
     end function geodesic_frobdev
 
-    subroutine regularize_refs( self )
+    subroutine normalize_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        real, parameter :: EPS_ONE = 1.
         integer :: iref
-        real    :: eps
-        if( params_glob%l_eps )then 
-            eps = params_glob%eps
-        else
-            eps = EPS_ONE
-        endif
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
-            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
+            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
         enddo
         !$omp end parallel do
+    end subroutine normalize_regs
+
+    subroutine regularize_refs( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        real, parameter :: EPS_ONE = 1., EPS_ZERO = 0.
+        integer :: iref
+        real    :: eps
+        select case(params_glob%reg_objfun)
+            case(OBJFUN_CC)
+                if( params_glob%l_eps )then 
+                    eps = params_glob%eps
+                else
+                    eps = EPS_ONE
+                endif
+                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * real(self%refs_reg(:,:,iref))
+                    self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * real(self%refs_reg(:,:,iref))
+                enddo
+                !$omp end parallel do
+            case(OBJFUN_EUCLID)
+                !$omp parallel do default(shared) private(iref, eps) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%regs_eps(iref) = self%regs_eps(iref) / self%ss_denom(iref)
+                    ! positive step-size to improve the probability
+                    if( self%regs_eps(iref) > 0. )then
+                        eps = real(self%regs_eps(iref))
+                    elseif( params_glob%l_eps )then 
+                        eps = params_glob%eps
+                    else
+                        eps = EPS_ZERO
+                    endif
+                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) - eps * real(self%refs_reg(:,:,iref))
+                    self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) - eps * real(self%refs_reg(:,:,iref))
+                enddo
+                !$omp end parallel do
+        end select
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
         self%refs_reg   = 0._dp
         self%regs_denom = 0._dp
+        self%regs_eps   = 0._dp
+        self%ss_denom   = 0._dp
     end subroutine reset_regs
 
-    subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
+    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
         real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -1071,7 +1197,31 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
             ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
         end if
-    end subroutine rotate_polar
+    end subroutine rotate_polar_real
+
+    subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: irot
+        integer :: rot
+        if( irot >= self%pftsz + 1 )then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if( irot == 1 )then
+            ptcl_ctf_rot = ptcl_ctf
+        else if( irot <= self%pftsz )then
+            ptcl_ctf_rot(rot:self%pftsz,:) =       ptcl_ctf(               1:self%pftsz-rot+1,:)
+            ptcl_ctf_rot(  1:rot-1     ,:) = conjg(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
+        else if( irot == self%pftsz + 1 )then
+            ptcl_ctf_rot = conjg(ptcl_ctf)
+        else
+            ptcl_ctf_rot(rot:self%pftsz,:) = conjg(ptcl_ctf(               1:self%pftsz-rot+1,:))
+            ptcl_ctf_rot(  1:rot-1     ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
+        end if
+    end subroutine rotate_polar_complex
 
     ! Brings the reference in register with particle
     subroutine rotate_ref( self, ref, irot, ref_rot)
@@ -2399,7 +2549,8 @@ contains
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom,&
+                &self%regs_eps,self%ss_denom)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
