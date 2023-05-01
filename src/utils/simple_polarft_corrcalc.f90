@@ -1045,12 +1045,12 @@ contains
                 if( self%iseven(i) )then
                     do k = self%kfromto(1),self%kfromto(2)
                         self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) + ptcl_ref_dist * &
-                            &real(2 * real(k) * real( self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
+                            &real(2._dp * real(k,dp) * real( self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
                     enddo
                 else
                     do k = self%kfromto(1),self%kfromto(2)
                         self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) + ptcl_ref_dist * &
-                            &real(2. * real(k) * real( self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
+                            &real(2._dp * real(k,dp) * real( self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
                     enddo
                 endif
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2 * ptcl_ref_dist
@@ -1087,16 +1087,16 @@ contains
                 if( self%iseven(i) )then
                     do k = self%kfromto(1),self%kfromto(2)
                         self%regs_eps(  iref) = self%regs_eps(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
+                            &real(real(k, dp) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
                         self%ss_denom(iref)   = self%ss_denom(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
+                            &real(real(k, dp) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
                     enddo
                 else
                     do k = self%kfromto(1),self%kfromto(2)
                         self%regs_eps(  iref) = self%regs_eps(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
+                            &real(real(k, dp) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
                         self%ss_denom(iref)   = self%ss_denom(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
+                            &real(real(k, dp) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
                     enddo
                 endif
             enddo
