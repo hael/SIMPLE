@@ -988,7 +988,7 @@ contains
         real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            ptcl_ctf(:,k,:) = real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:))
+            ptcl_ctf(:,k,:) = real(k) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:))
         enddo
         !$omp end parallel do
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
@@ -1045,63 +1045,20 @@ contains
     subroutine regularize_refs( self, which_iter )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: which_iter
-        real, parameter :: EPS_ONE = 1., EPS_ZERO = 0., REG_ITERS = 20.
-        integer     :: iref, k
-        complex(sp) :: reg_diff(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real        :: eps, ref_reg_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        select case(params_glob%reg_objfun)
-            case(OBJFUN_CC)
-                if( params_glob%l_eps )then 
-                    eps = params_glob%eps
-                else
-                    eps = min( 1., max(0., 2. - real(which_iter)/REG_ITERS) )
-                endif
-                !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
-                do iref = 1, self%nrefs
-                    do k = self%kfromto(1),self%kfromto(2)
-                        self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
-                        self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
-                    enddo
-                enddo
-                !$omp end parallel do
-            case(OBJFUN_EUCLID)
-                !$omp parallel do default(shared) private(iref, k, eps, ref_reg_tmp, reg_diff) proc_bind(close) schedule(static)
-                do iref = 1, self%nrefs
-                    ! for even
-                    reg_diff = self%pfts_refs_even(:,:,iref) - self%refs_reg(:,:,iref)
-                    do k = self%kfromto(1),self%kfromto(2)
-                        reg_diff(:,k) = real(k) * reg_diff(:,k)
-                    enddo
-                    ref_reg_tmp = 2. * real(reg_diff) / (1. + sum(csq_fast(reg_diff)))
-                    eps         = sum(ref_reg_tmp * real(reg_diff))/sum(ref_reg_tmp**2)
-                    ! positive step-size to improve the probability
-                    if( eps > 0. )then
-                        eps = eps
-                    elseif( params_glob%l_eps )then 
-                        eps = params_glob%eps
-                    else
-                        eps = EPS_ZERO
-                    endif
-                    self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) - eps * real(self%refs_reg(:,:,iref))
-                    ! for even
-                    reg_diff = self%pfts_refs_odd(:,:,iref) - self%refs_reg(:,:,iref)
-                    do k = self%kfromto(1),self%kfromto(2)
-                        reg_diff(:,k) = real(k) * reg_diff(:,k)
-                    enddo
-                    ref_reg_tmp = 2. * real(reg_diff) / (1. + sum(csq_fast(reg_diff)))
-                    eps         = sum(ref_reg_tmp * real(reg_diff))/sum(ref_reg_tmp**2)
-                    ! positive step-size to improve the probability
-                    if( eps > 0. )then
-                        eps = eps
-                    elseif( params_glob%l_eps )then 
-                        eps = params_glob%eps
-                    else
-                        eps = EPS_ZERO
-                    endif
-                    self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) - eps * real(self%refs_reg(:,:,iref))
-                enddo
-                !$omp end parallel do
-        end select
+        real, parameter :: REG_ITERS = 20.
+        integer :: iref
+        real    :: eps
+        if( params_glob%l_eps )then 
+            eps = params_glob%eps
+        else
+            eps = min( 1., max(0., 2. - real(which_iter)/REG_ITERS) )
+        endif
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * real(self%refs_reg(:,:,iref))
+        enddo
+        !$omp end parallel do
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
