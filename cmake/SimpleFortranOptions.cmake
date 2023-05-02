@@ -58,7 +58,7 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
       CMAKE_Fortran_COMPILER
-      NAMES gfortran- gfortran-12 gfortran-11 gfotran-10 gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran12 gfortran11 gfortran10 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
+      NAMES gfortran- gfortran-13 gfortran-12 gfortran-11 gfotran-10 gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran13 gfortran12 gfortran11 gfortran10 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
       PATHS /usr/local/bin /opt/local/bin /sw/bin /opt/homebrew/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
@@ -87,7 +87,7 @@ message(STATUS "Making sure your C compiler points to the correct binary")
     message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
     find_file (
       CMAKE_C_COMPILER_NEW
-      NAMES gcc-12 gcc-11 gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc-12 gcc11 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      NAMES gcc- gcc-13 gcc-12 gcc-11 gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc-fsf-6 gcc-fsf-5 gcc13 gcc12 gcc11 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
       HINTS ${FORTRAN_PARENT_DIR}
       PATHS  /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
@@ -114,7 +114,7 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
       CMAKE_CXX_COMPILER_NEW
-      NAMES g++- g++-12 g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++12 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
+      NAMES g++- g++-13 g++-12 g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++13 g++12 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
 NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
@@ -712,7 +712,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
  #   set(LARGE_FILE_SUPPORT OFF)
  # endif()
   if(LARGE_FILE_SUPPORT)
-    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=medium")
+    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=large")
   endif()
 
 elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME MATCHES "ifort*" OR Fortran_COMPILER_NAME MATCHES "mpiifort*")
@@ -758,7 +758,7 @@ endif()
     set(CMAKE_Fortran_FLAGS   "${CMAKE_Fortran_FLAGS} -traceback -shared-intel ")
   endif()
   if(LARGE_FILE_SUPPORT)
-    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=medium")
+    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=large")
   endif()
   message(STATUS "Intel CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} ")
   ## end Intel compilation section
