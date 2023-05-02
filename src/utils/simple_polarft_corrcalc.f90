@@ -1040,14 +1040,14 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
+            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref) * self%regs_w(iref) / self%nptcls
         enddo
         !$omp end parallel do
     end subroutine normalize_regs
 
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        real, parameter :: EPS_ONE = 1., EPS_ZERO = 0.
+        real, parameter :: EPS_HALF = .5, EPS_ZERO = 0.
         integer     :: iref, k
         complex(sp) :: reg_diff(self%pftsz,self%kfromto(1):self%kfromto(2))
         real        :: eps, ref_reg_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -1056,14 +1056,13 @@ contains
                 if( params_glob%l_eps )then 
                     eps = params_glob%eps
                 else
-                    eps = EPS_ONE
+                    eps = EPS_HALF
                 endif
-                eps = eps * self%regs_w(iref) / self%nptcls
                 !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     do k = self%kfromto(1),self%kfromto(2)
-                        self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
-                        self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
+                        self%pfts_refs_even(:,k,iref) = eps * self%pfts_refs_even(:,k,iref) + (1. - eps) * real(k) * real(self%refs_reg(:,k,iref))
+                        self%pfts_refs_odd( :,k,iref) = eps * self%pfts_refs_odd( :,k,iref) + (1. - eps) * real(k) * real(self%refs_reg(:,k,iref))
                     enddo
                 enddo
                 !$omp end parallel do
