@@ -97,6 +97,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(dp),         allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
     real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
+    real(dp),            allocatable :: regs_w(:)                   !< -"-
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -368,7 +369,7 @@ contains
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
+                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),self%regs_w(self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -395,6 +396,7 @@ contains
         self%wsqsums_ptcls  = 0.d0
         self%refs_reg       = 0.d0
         self%regs_denom     = 0.d0
+        self%regs_w         = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -1001,12 +1003,13 @@ contains
                 ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                 euls_ref      = eulspace%get_euler(iref)
                 euls_ref(3)   = 360. - self%get_rot(loc(1))
-                ptcl_ref_dist = 1./( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
+                ptcl_ref_dist = inpl_corrs(loc(1)) / ( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
                 self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * ptcl_ref_dist
+                self%regs_w(iref)         = self%regs_w(iref)         + ptcl_ref_dist
             enddo
         enddo
         !$omp end parallel do
@@ -1055,6 +1058,7 @@ contains
                 else
                     eps = EPS_ONE
                 endif
+                eps = eps * self%regs_w(iref) / self%nptcls
                 !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     do k = self%kfromto(1),self%kfromto(2)
@@ -1107,6 +1111,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         self%refs_reg   = 0._dp
         self%regs_denom = 0._dp
+        self%regs_w     = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -2479,7 +2484,7 @@ contains
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom,self%regs_w)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
