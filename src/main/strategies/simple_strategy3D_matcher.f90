@@ -197,7 +197,7 @@ contains
                 call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
             enddo
             call pftcc%normalize_regs
-            call pftcc%regularize_refs
+            call pftcc%regularize_refs(which_iter)
         endif
 
         ! Batch loop
