@@ -97,7 +97,6 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(dp),         allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
     real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
-    real(dp),            allocatable :: regs_w(:)                   !< -"-
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -369,7 +368,7 @@ contains
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                     &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),self%regs_w(self%nrefs))
+                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -396,7 +395,6 @@ contains
         self%wsqsums_ptcls  = 0.d0
         self%refs_reg       = 0.d0
         self%regs_denom     = 0.d0
-        self%regs_w         = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -1009,7 +1007,6 @@ contains
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
                 self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * ptcl_ref_dist
-                self%regs_w(iref)         = self%regs_w(iref)         + ptcl_ref_dist
             enddo
         enddo
         !$omp end parallel do
@@ -1040,14 +1037,15 @@ contains
         integer :: iref
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref) * self%regs_w(iref) / self%nptcls
+            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
         enddo
         !$omp end parallel do
     end subroutine normalize_regs
 
-    subroutine regularize_refs( self )
+    subroutine regularize_refs( self, which_iter )
         class(polarft_corrcalc), intent(inout) :: self
-        real, parameter :: EPS_HALF = .5, EPS_ZERO = 0.
+        integer,                 intent(in)    :: which_iter
+        real, parameter :: EPS_ONE = 1., EPS_ZERO = 0., REG_ITERS = 20.
         integer     :: iref, k
         complex(sp) :: reg_diff(self%pftsz,self%kfromto(1):self%kfromto(2))
         real        :: eps, ref_reg_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -1056,13 +1054,13 @@ contains
                 if( params_glob%l_eps )then 
                     eps = params_glob%eps
                 else
-                    eps = EPS_HALF
+                    eps = min( 1., max(0., 2. - real(which_iter)/REG_ITERS) )
                 endif
                 !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     do k = self%kfromto(1),self%kfromto(2)
-                        self%pfts_refs_even(:,k,iref) = eps * self%pfts_refs_even(:,k,iref) + (1. - eps) * real(k) * real(self%refs_reg(:,k,iref))
-                        self%pfts_refs_odd( :,k,iref) = eps * self%pfts_refs_odd( :,k,iref) + (1. - eps) * real(k) * real(self%refs_reg(:,k,iref))
+                        self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
+                        self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref))
                     enddo
                 enddo
                 !$omp end parallel do
@@ -1110,7 +1108,6 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         self%refs_reg   = 0._dp
         self%regs_denom = 0._dp
-        self%regs_w     = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -2483,7 +2480,7 @@ contains
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom,self%regs_w)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
