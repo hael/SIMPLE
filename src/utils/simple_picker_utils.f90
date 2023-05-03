@@ -13,7 +13,7 @@ real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
 integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
 integer, parameter :: MAXNREFS     = 100
 real,    parameter :: DIST_THRES   = real(OFFSET), NDEV_DEFAULT = 2.5
-logical, parameter :: L_WRITE = .true.
+logical, parameter :: L_WRITE      = .false.
 
 type picker_utils
     private
@@ -265,7 +265,7 @@ contains
         ! write coordinates
         box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
         call self%extract_boximgs2(box)
-        call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+        if( L_WRITE )call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
         call write_boxfile(self%nboxes2, self%positions2, box, self%boxname)
         call make_relativepath(CWD_GLOB, self%boxname, boxname_out) ! returns absolute path
     end subroutine exec_picker
