@@ -980,10 +980,9 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer     :: i, iref, iptcl, loc(1)
-        real        :: euls_ref(3), inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                                &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer  :: i, iref, iptcl, loc(1)
+        real     :: euls_ref(3), inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -999,8 +998,8 @@ contains
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
-                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * ptcl_ref_dist
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
             enddo
         enddo
         !$omp end parallel do
