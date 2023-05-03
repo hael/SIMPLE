@@ -96,7 +96,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    complex(dp),         allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
+    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
     real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -170,7 +170,6 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
     procedure          :: ref_reg_cc
-    procedure          :: normalize_regs
     procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure          :: memoize_ffts
@@ -981,16 +980,11 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer     :: i, iref, k, iptcl, loc(1)
-        real        :: euls_ref(3), inpl_corrs(self%nrots)
-        complex(dp) :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls),&
-                      &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            ptcl_ctf(:,k,:) = real(k) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:))
-        enddo
-        !$omp end parallel do
+        integer     :: i, iref, iptcl, loc(1)
+        real        :: euls_ref(3), inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real(dp)    :: ptcl_ref_dist, ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                                &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
@@ -1012,31 +1006,22 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc
 
-    subroutine normalize_regs( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer :: iref
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            self%refs_reg(:,:,iref) = self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
-        enddo
-        !$omp end parallel do
-    end subroutine normalize_regs
-
     subroutine regularize_refs( self, which_iter )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: which_iter
-        real, parameter :: REG_ITERS = 20.
-        integer :: iref
+        integer :: iref, k
         real    :: eps
         if( params_glob%l_eps )then 
             eps = params_glob%eps
         else
-            eps = min( 1., max(0., 2. - real(which_iter)/REG_ITERS) )
+            eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
         endif
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * real(self%refs_reg(:,:,iref))
-            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * real(self%refs_reg(:,:,iref))
+            do k = self%kfromto(1),self%kfromto(2)
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * real(k) * real(self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref))
+                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * real(k) * real(self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref))
+            enddo
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
