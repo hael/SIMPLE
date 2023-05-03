@@ -712,7 +712,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
  #   set(LARGE_FILE_SUPPORT OFF)
  # endif()
   if(LARGE_FILE_SUPPORT)
-    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=large")
+    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=medium")
   endif()
 
 elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME MATCHES "ifort*" OR Fortran_COMPILER_NAME MATCHES "mpiifort*")
@@ -758,7 +758,7 @@ endif()
     set(CMAKE_Fortran_FLAGS   "${CMAKE_Fortran_FLAGS} -traceback -shared-intel ")
   endif()
   if(LARGE_FILE_SUPPORT)
-    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=large")
+    set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=medium")
   endif()
   message(STATUS "Intel CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} ")
   ## end Intel compilation section
