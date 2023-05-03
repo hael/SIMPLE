@@ -1019,8 +1019,8 @@ contains
         !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do k = self%kfromto(1),self%kfromto(2)
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * real(k) * real(self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref))
-                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * real(k) * real(self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref))
+                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
+                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
             enddo
         enddo
         !$omp end parallel do
