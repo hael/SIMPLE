@@ -221,6 +221,7 @@ type :: parameters
     integer :: kfromto(2)
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
+    integer :: reg_iters=30        !< # iters regularization scheme
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxnchunks=0
@@ -623,6 +624,7 @@ contains
         call check_iarg('grow',           self%grow)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
+        call check_iarg('reg_iters',      self%reg_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxnchunks',     self%maxnchunks)
