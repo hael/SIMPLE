@@ -4,6 +4,7 @@ module simple_polarft_corrcalc
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
+use simple_ori,        only: geodesic_frobdev
 implicit none
 
 public :: polarft_corrcalc, pftcc_glob
@@ -171,7 +172,6 @@ type :: polarft_corrcalc
     procedure          :: ref_reg_cc
     procedure          :: normalize_regs
     procedure          :: regularize_refs
-    procedure          :: geodesic_frobdev
     procedure          :: reset_regs
     procedure          :: memoize_ffts
     procedure, private :: setup_npix_per_shell
@@ -1001,7 +1001,7 @@ contains
                 ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                 euls_ref      = eulspace%get_euler(iref)
                 euls_ref(3)   = 360. - self%get_rot(loc(1))
-                ptcl_ref_dist = inpl_corrs(loc(1)) / ( 1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
+                ptcl_ref_dist = inpl_corrs(loc(1)) / ( 1. + geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
@@ -1011,26 +1011,6 @@ contains
         enddo
         !$omp end parallel do
     end subroutine ref_reg_cc
-
-    pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
-        class(polarft_corrcalc), intent(in) :: self
-        real,                    intent(in) :: euls1(3), euls2(3)
-        real :: Imat(3,3), sumsq, diffmat(3,3), angle
-        real :: rmat1(3,3), rmat2(3,3)
-        Imat      = 0.
-        Imat(1,1) = 1.
-        Imat(2,2) = 1.
-        Imat(3,3) = 1.
-        rmat1 = euler2m(euls1)
-        rmat2 = euler2m(euls2)
-        diffmat = Imat - matmul(rmat1, transpose(rmat2))
-        sumsq   = sum(diffmat * diffmat)
-        if( sumsq > 1e-6 )then
-            angle = sqrt(sumsq)
-        else
-            angle = 0.
-        endif
-    end function geodesic_frobdev
 
     subroutine normalize_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
