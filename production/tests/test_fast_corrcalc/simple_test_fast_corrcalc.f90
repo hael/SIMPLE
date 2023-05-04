@@ -74,7 +74,8 @@ call pftcc%calc_polar_ctf(1, p%smpd,200.,2.7,0.1, df,df, 0.178)
 pftcc%pfts_ptcls(:,:,1) = pftcc%pfts_ptcls(:,:,1) * pftcc%ctfmats(:,:,1)
 call pftcc%memoize_sqsum_ptcl(1)
 call pftcc%memoize_ffts
-
+call pftcc%allocate_ptcls_memoization
+call pftcc%allocate_refs_memoization
 call pftcc%memoize_ptcls
 call pftcc%memoize_refs
 
@@ -117,25 +118,25 @@ enddo
 ! stop
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     call pftcc%gencorrs_dev(1,1, shift,corrs2)
 enddo
 print *,'gencorrs shifted dev ',toc(t)
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     call pftcc%gencorrs(1,1, shift,corrs)
 enddo
 print *,'gencorrs shifted     ',toc(t)
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     corrs(irot) = pftcc%gencorr_for_rot_8_dev(1,1,real(shift,dp),irot)
 enddo
 print *,'gencorr_for_rot_8 dev ',toc(t)
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     corrs2(irot) = pftcc%gencorr_for_rot_8(1,1,real(shift,dp),irot)
 enddo
 print *,'gencorr_for_rot_8     ',toc(t)
@@ -149,16 +150,18 @@ do irot = 1,pftcc%get_nrots()
 enddo
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f,grad)
 enddo
 print *,'gencorr_grad_for_rot_8     ',toc(t)
 
 t = tic()
-do irot = 1,500
+do irot = 1,pftcc%get_nrots()
     call pftcc%gencorr_grad_for_rot_8_dev(1,1, real(shift,dp),irot,f_dev,grad_dev)
 enddo
 print *,'gencorr_grad_for_rot_8 dev ',toc(t)
 
-call pftcc%kill_memoized
+call pftcc%kill_memoized_ptcls
+call pftcc%kill_memoized_refs
+call pftcc%kill
 end program simple_test_fast_corrcalc    
