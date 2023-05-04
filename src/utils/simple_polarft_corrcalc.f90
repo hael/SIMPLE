@@ -888,6 +888,7 @@ contains
         else
             eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
         endif
+        if( eps < TINY ) return
         !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do k = self%kfromto(1),self%kfromto(2)
