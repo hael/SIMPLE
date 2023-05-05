@@ -188,15 +188,22 @@ contains
 
         ! ref regularization
         if( params_glob%l_ref_reg )then
-            call pftcc%reset_regs
-            ! Batch loop
-            do ibatch=1,nbatches
-                batch_start = batches(ibatch,1)
-                batch_end   = batches(ibatch,2)
-                batchsz     = batch_end - batch_start + 1
-                call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-            enddo
-            call pftcc%regularize_refs(which_iter)
+            if( params_glob%l_eps )then 
+                ! user provided
+            else
+                params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+            endif
+            if( params_glob%eps > TINY )then
+                call pftcc%reset_regs
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                call pftcc%regularize_refs
+            endif
         endif
 
         ! Batch loop
