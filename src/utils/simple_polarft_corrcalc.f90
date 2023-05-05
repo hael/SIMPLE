@@ -219,7 +219,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_prob_grad_only_for_rot_8
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
-    procedure, private :: calc_frc
+    procedure, private :: calc_frc, calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex
     generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex
     procedure, private :: rotate_ref
@@ -851,6 +851,7 @@ contains
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real     :: euls(3), euls_ref(3)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        if( params_glob%eps < TINY ) return
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -878,22 +879,15 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc
 
-    subroutine regularize_refs( self, which_iter )
+    subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: which_iter
         integer :: iref, k
-        real    :: eps
-        if( params_glob%l_eps )then 
-            eps = params_glob%eps
-        else
-            eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-        endif
-        if( eps < TINY ) return
+        if( params_glob%eps < TINY ) return
         !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do k = self%kfromto(1),self%kfromto(2)
-                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
-                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
+                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + params_glob%eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
+                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + params_glob%eps * real(k) * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref))
             enddo
         enddo
         !$omp end parallel do
@@ -1569,6 +1563,36 @@ contains
             endif
         end do
     end subroutine calc_frc
+
+    ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
+    subroutine calc_raw_frc( self, pft1, pft2, frc )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(dp),             intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),             intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real,                    intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
+        real(dp) :: num, denom
+        integer  :: k
+        do k = self%kfromto(1),self%kfromto(2)
+            num   = real(sum(pft1(:,k)*conjg(pft2(:,k))),dp)
+            denom = real(sum(pft1(:,k)*conjg(pft1(:,k))),dp) * real(sum(pft2(:,k)*conjg(pft2(:,k))),dp)
+            if( denom > DTINY )then
+                frc(k) = real(num / dsqrt(denom))
+            else
+                frc(k) = 0.0
+            endif
+        end do
+    end subroutine calc_raw_frc
+
+    ! Calculates normalized PFT power spectrum
+    subroutine calc_pspec( self, pft, pspec )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(dp),             intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real,                    intent(out)   :: pspec(self%kfromto(1):self%kfromto(2))
+        integer :: k
+        do k = self%kfromto(1),self%kfromto(2)
+            pspec(k) = real( real(sum(pft(:,k)*conjg(pft(:,k))),dp) / real(self%pftsz,dp) )
+        end do
+    end subroutine calc_pspec
 
     function genmaxcorr_comlin( self, ieven, jeven ) result( cc_max )
         class(polarft_corrcalc), intent(inout) :: self
