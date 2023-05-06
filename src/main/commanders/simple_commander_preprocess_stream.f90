@@ -46,7 +46,7 @@ contains
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
-        type(sp_project)                       :: spproj, stream_spproj
+        type(sp_project)                       :: spproj, stream_spproj, tmp_spproj
         type(starproject)                      :: starproj
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
@@ -54,10 +54,10 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
-        integer                                :: nchunks_imported_glob, nchunks_imported
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
+        integer                                :: nchunks_imported_glob, nchunks_imported, box_extract
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, iproj
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
-        logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed
+        logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed, l_whether2D
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
@@ -85,6 +85,7 @@ contains
         if( .not. cline%defined('ctfresthreshold')  ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD)
         if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD)
         ! picking
+        if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
@@ -137,7 +138,27 @@ contains
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         call spproj%write(micspproj_fname)
         ! picking
-        l_pick = cline%defined('pickrefs')
+        l_pick = .false.
+        if( cline%defined('picker') )then
+            select case(trim(params%picker))
+            case('old')
+                if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+            case('new')
+                if(cline%defined('pickrefs'))then
+                    if( .not. cline%defined('mskdiam') )then
+                        THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                    endif
+                else
+                    if( .not.cline%defined('moldiam') )then
+                        THROW_HARD('MOLDIAM required for picker=new')
+                    endif
+                endif
+            end select
+            l_pick = .true.
+        endif
+        ! is 2D classification going to be performed & required parameters present
+        l_whether2D = .false.
+        if( l_pick ) call check_params_for_cluster2D(cline, l_whether2D)
         ! output directories
         output_dir = trim(PATH_HERE)//trim(dir_preprocess)
         call simple_mkdir(output_dir)
@@ -156,7 +177,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(1,stream=.true.)
         ! prepares picking references
-        if( l_pick )then
+        if( l_pick .and. cline%defined('pickrefs') )then
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
             call cline_make_pickrefs%set('stream','no')
@@ -171,14 +192,6 @@ contains
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             call qsys_cleanup
         endif
-        ! prep for 2D classification
-        l_cluster2D = .false.
-        if( l_pick )then
-            call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext), micspproj_fname, l_cluster2D)
-            call cline%delete('job_memory_per_task2D')
-            call cline%delete('qsys_partition2D')
-        endif
-        call cline%delete('ncls')
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
         ! import previous runs
@@ -196,6 +209,7 @@ contains
         l_movies_left         = .false.
         l_haschanged          = .false.
         l_nchunks_maxed       = .false.
+        l_cluster2D           = .false.
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -261,10 +275,10 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I5)')             '>>> # MOVIES PROCESSED & IMPORTED:     ',n_imported
-                if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',nptcls_glob
-                write(logfhandle,'(A,I3,A1,I3)')       '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
-                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)')             '>>> # FAILED JOBS                :     ',n_failed_jobs
+                write(logfhandle,'(A,I5)')                         '>>> # MOVIES PROCESSED & IMPORTED:     ',n_imported
+                if( l_pick ) write(logfhandle,'(A,I8)')            '>>> # PARTICLES EXTRACTED:          ',nptcls_glob
+                write(logfhandle,'(A,I3,A1,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
+                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)') '>>> # FAILED JOBS                :     ',n_failed_jobs
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
@@ -279,6 +293,21 @@ contains
                 else if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                     call update_user_params(cline)
                     call write_migrographs_starfile
+                endif
+                ! init cluster2D
+                if( l_whether2D .and.(.not.l_cluster2D) )then
+                    do iproj = 1,size(completed_fnames)
+                        call tmp_spproj%kill
+                        call tmp_spproj%read_segment('stk',completed_fnames(iproj))
+                        if( .not.tmp_spproj%os_stk%isthere(iproj,'box') ) cycle
+                        box_extract = nint(tmp_spproj%os_stk%get(iproj,'box')) ! getting particle size from first project
+                        call init_cluster2D_stream(cline, spproj, box_extract, micspproj_fname, l_cluster2D)
+                        call cline%delete('job_memory_per_task2D')
+                        call cline%delete('qsys_partition2D')
+                        call cline%delete('ncls')
+                        exit
+                    enddo
+                    call tmp_spproj%kill
                 endif
             else
                 ! wait & write snapshot
