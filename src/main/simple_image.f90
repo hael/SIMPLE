@@ -4068,7 +4068,7 @@ contains
     function avg_loc_sdev( self, winsz ) result( asdev )
         class(image), intent(in) :: self
         integer,      intent(in) :: winsz
-        real    :: avgs(self%ldim(1),self%ldim(2)), sdevs(self%ldim(1),self%ldim(2)), asdev
+        real    :: avg, sdevs(self%ldim(1),self%ldim(2)), asdev
         integer :: i, j, ir(2), jr(2), isz, jsz, npix
         if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
         do i = 1,self%ldim(1)
@@ -4080,8 +4080,8 @@ contains
                 jr(2)      = min(self%ldim(2), j + winsz)
                 jsz        = jr(2) - jr(1) + 1
                 npix       = isz * jsz
-                avgs(i,j)  = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
-                sdevs(i,j) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avgs(i,j))**2.0) / real(npix - 1))
+                avg        = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                sdevs(i,j) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1))
             end do
         end do
         asdev = sum(sdevs) / real(self%ldim(1) * self%ldim(2))

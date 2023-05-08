@@ -178,19 +178,21 @@ contains
         call qenv%new(1,stream=.true.)
         ! prepares picking references
         if( l_pick .and. cline%defined('pickrefs') )then
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call cline_make_pickrefs%set('stream','no')
-            call cline_make_pickrefs%delete('ncls')
-            call cline_make_pickrefs%delete('mskdiam')
-            if( cline_make_pickrefs%defined('eer_upsampling') )then
-                pickref_scale = real(params%eer_upsampling) * params%scale
-                call cline_make_pickrefs%set('scale',pickref_scale)
+            if( trim(params%picker).eq.'old' )then
+                cline_make_pickrefs = cline
+                call cline_make_pickrefs%set('prg','make_pickrefs')
+                call cline_make_pickrefs%set('stream','no')
+                call cline_make_pickrefs%delete('ncls')
+                call cline_make_pickrefs%delete('mskdiam')
+                if( cline_make_pickrefs%defined('eer_upsampling') )then
+                    pickref_scale = real(params%eer_upsampling) * params%scale
+                    call cline_make_pickrefs%set('scale',pickref_scale)
+                endif
+                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                call cline%set('pickrefs', '../'//trim(PICKREFS)//trim(params%ext))
+                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                call qsys_cleanup
             endif
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', '../'//trim(PICKREFS)//trim(params%ext))
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-            call qsys_cleanup
         endif
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
