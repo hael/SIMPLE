@@ -12,7 +12,9 @@ use simple_stat
 use simple_nrtxtfile
 implicit none
 
-public :: ori, test_ori, euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, geodesic_dist_trace, geodesic_dist_frobdev
+public :: ori, test_ori
+public :: euler2m, m2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
+public :: geodesic_frobdev
 private
 #include "simple_local_flags.inc"
 
@@ -516,7 +518,7 @@ contains
         class(ori), intent(in)    :: o_prev       !< template ori
         real,       intent(in)    :: athres       !< Euler angle threshold in degrees
         real,       intent(inout) :: eullims(3,2) !< Euler angle limits
-        real :: euls(3), ran
+        real :: euls(3)
         euls(1) = o_prev%e1get()
         euls(2) = o_prev%e2get()
         euls(3) = o_prev%e3get()
@@ -537,7 +539,7 @@ contains
         class(ori), intent(in)    :: o_prev                   !< template ori
         real,       intent(in)    :: athres_proj, athres_inpl !< Euler angle thresholds in degrees
         real,       intent(inout) :: eullims(3,2)             !< Euler angle limits
-        real :: euls(3), ran
+        real :: euls(3)
         euls(1) = o_prev%e1get()
         euls(2) = o_prev%e2get()
         euls(3) = o_prev%e3get()
@@ -1307,16 +1309,10 @@ contains
     !!          the image after projection
     subroutine mirror2d( self )
         class(ori), intent(inout) :: self
-        real :: euls(3), rmat(3,3), euls_mirr(3)
+        real :: euls(3), euls_mirr(3)
         euls = self%get_euler()
-        euls_mirr(1) = euls(1)
-        euls_mirr(2) = 180. + euls(2)
-        euls_mirr(3) = 180. - euls(3)
-        rmat = euler2m(euls_mirr)
-        ! the mirrored rotation matrix is constructed
-        ! convert to euler
-        euls = m2euler(rmat)
-        call self%set_euler(euls)
+        call euler_mirror(euls, euls_mirr)
+        call self%set_euler(euls_mirr)
     end subroutine mirror2d
 
     subroutine transp( self )
@@ -1331,30 +1327,10 @@ contains
 
     ! GEODESIC DISTANCE METRIC
 
-    !>  \brief  this metric is measuring the frobenius deviation from the identity matrix .in.[0,2*sqrt(2)]
-    !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
-    !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
-    !!          129, 883--886 (2007)
     !! \param self1,self2 ori class type rotational matrices
-    pure function geodesic_dist_frobdev( self1, self2 ) result(angle)
+    pure real function geodesic_dist_frobdev( self1, self2 )
         class(ori), intent(in) :: self1, self2
-        real :: Imat(3,3), sumsq, diffmat(3,3), angle
-        real :: euls1(3), euls2(3), rmat1(3,3), rmat2(3,3)
-        Imat      = 0.
-        Imat(1,1) = 1.
-        Imat(2,2) = 1.
-        Imat(3,3) = 1.
-        euls1 = self1%get_euler()
-        euls2 = self2%get_euler()
-        rmat1 = euler2m(euls1)
-        rmat2 = euler2m(euls2)
-        diffmat = Imat - matmul(rmat1, transpose(rmat2))
-        sumsq   = sum(diffmat * diffmat)
-        if( sumsq > 1e-6 )then
-            angle = sqrt(sumsq)
-        else
-            angle = 0.
-        endif
+        geodesic_dist_frobdev = geodesic_frobdev(self1%get_euler(), self2%get_euler())
     end function geodesic_dist_frobdev
 
     ! computing the angle of the difference rotation, see http://www.boris-belousov.net/2016/12/01/quat-dist/
@@ -1680,6 +1656,43 @@ contains
         ! convert to euler
         euls_out = m2euler(rmat)
     end subroutine euler_compose
+
+    !>  \brief  Generates mirror euler angles
+    pure subroutine euler_mirror( euls, euls_out)
+        real, intent(in)    :: euls(3)
+        real, intent(inout) :: euls_out(3)
+        real :: rmat(3,3)
+        euls_out(1) = euls(1)
+        euls_out(2) = 180. + euls(2)
+        euls_out(3) = 180. - euls(3)
+        ! the mirrored rotation matrix is constructed
+        rmat = euler2m(euls_out)
+        ! convert to euler
+        euls_out = m2euler(rmat)
+    end subroutine euler_mirror
+
+    !>  \brief  this metric is measuring the frobenius deviation from the identity matrix .in.[0,2*sqrt(2)]
+    !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
+    !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
+    !!          129, 883--886 (2007)
+    pure real function geodesic_frobdev( euls1, euls2 )
+        real, intent(in) :: euls1(3), euls2(3)
+        real :: Imat(3,3), sumsq, diffmat(3,3)
+        real :: rmat1(3,3), rmat2(3,3)
+        Imat      = 0.
+        Imat(1,1) = 1.
+        Imat(2,2) = 1.
+        Imat(3,3) = 1.
+        rmat1 = euler2m(euls1)
+        rmat2 = euler2m(euls2)
+        diffmat = Imat - matmul(rmat1, transpose(rmat2))
+        sumsq   = sum(diffmat * diffmat)
+        if( sumsq > 1e-6 )then
+            geodesic_frobdev = sqrt(sumsq)
+        else
+            geodesic_frobdev = 0.
+        endif
+    end function geodesic_frobdev
 
     ! UNIT TEST
 

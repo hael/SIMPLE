@@ -201,7 +201,8 @@ contains
                 batchsz     = batch_end - batch_start + 1
                 call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
             enddo
-            call pftcc%regularize_refs
+            call pftcc%normalize_regs
+            call pftcc%regularize_refs(which_iter)
         endif
 
         ! Batch loop
@@ -537,7 +538,7 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! compute regularization terms
-        call pftcc%accumulate_ref_reg(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+        call pftcc%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
