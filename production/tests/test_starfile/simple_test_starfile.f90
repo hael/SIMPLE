@@ -25,7 +25,7 @@ program simple_test_starfile
     call starfile_table__setComment(sfile, "this_is_a_comment")
     ! add 3 fields, 1 string and 2 doubles
     call starfile_table__setValue_string(sfile, EMDL_MICROGRAPH_NAME, "this_is_a_string")
-    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, 99._8)
+    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, 0.12345678901234567890d0)
     call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_EARLY, 42._8)
     ! write first segment
     call starfile_table__write_ofile(sfile)
@@ -36,13 +36,13 @@ program simple_test_starfile
     ! this one is not a list
     call starfile_table__setIsList(sfile, .false.)
     ! 4 double values
-    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 123._8)
+    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 0.12345678901234567890d0)
     call starfile_table__addObject(sfile)
     call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 456._8)
     call starfile_table__addObject(sfile)
     call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 789._8)
     call starfile_table__addObject(sfile)
-    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 101112._8)
+    call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, 101112345678._8)
     ! write second segment
     call starfile_table__write_ofile(sfile)
     call starfile_table__clear(sfile)

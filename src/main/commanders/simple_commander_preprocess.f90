@@ -222,16 +222,18 @@ contains
         call qenv%new(1,stream=.true.)
         ! prepares picking references
         if( l_pick )then
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call cline_make_pickrefs%set('stream','no')
-            if( cline_make_pickrefs%defined('eer_upsampling') )then
-                pickref_scale = real(params%eer_upsampling) * params%scale
-                call cline_make_pickrefs%set('scale',pickref_scale)
+            if( trim(params%picker).eq.'old' )then
+                cline_make_pickrefs = cline
+                call cline_make_pickrefs%set('prg','make_pickrefs')
+                call cline_make_pickrefs%set('stream','no')
+                if( cline_make_pickrefs%defined('eer_upsampling') )then
+                    pickref_scale = real(params%eer_upsampling) * params%scale
+                    call cline_make_pickrefs%set('scale',pickref_scale)
+                endif
+                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             endif
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         endif
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
@@ -743,16 +745,18 @@ contains
         ! prepares picking references
         l_pick = .false.
         if( cline%defined('pickrefs') )then
-            l_pick = .true.
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            if( cline_make_pickrefs%defined('eer_upsampling') )then
-                pickref_scale = real(params%eer_upsampling) * params%scale
-                call cline_make_pickrefs%set('scale',pickref_scale)
+            if( trim(params%picker).eq.'old' )then
+                cline_make_pickrefs = cline
+                call cline_make_pickrefs%set('prg','make_pickrefs')
+                if( cline_make_pickrefs%defined('eer_upsampling') )then
+                    pickref_scale = real(params%eer_upsampling) * params%scale
+                    call cline_make_pickrefs%set('scale',pickref_scale)
+                endif
+                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             endif
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('pickrefs', trim(PICKREFS)//params%ext)
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+            l_pick = .true.
         else if( cline%defined('moldiam') )then
             l_pick = .true.
         endif
@@ -779,6 +783,7 @@ contains
         use simple_picker_iter,         only: picker_iter
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
+        type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_mov
         type(ctf_estimate_iter)       :: ctfiter
@@ -805,11 +810,13 @@ contains
             select case(trim(params%picker))
             case('old')
                 if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+                call build%build_pick_tbox(params, cline)
             case('new')
                 if(cline%defined('pickrefs'))then
                     if( .not. cline%defined('mskdiam') )then
                         THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
                     endif
+                    call build%build_pick_tbox(params, cline)
                 else
                     if( .not.cline%defined('moldiam') )then
                         THROW_HARD('MOLDIAM required for picker=new')
@@ -965,6 +972,7 @@ contains
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
         call o_mov%kill
+        call build%kill_pick_tbox
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')

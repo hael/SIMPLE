@@ -359,21 +359,23 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
+        real    :: smpd
         integer :: ldim_refs(3), nrefs, iref
         ! picking references
         if( cline%defined('pickrefs') )then
             if( file_exists(trim(params%pickrefs)) )then
-                call find_ldim_nptcls(trim(params%pickrefs), ldim_refs, nrefs)
+                call find_ldim_nptcls(trim(params%pickrefs), ldim_refs, nrefs, smpd=smpd)
                 ldim_refs(3) = 1
                 allocate(self%pickrefs(nrefs))
                 do iref = 1,nrefs
-                    call self%pickrefs(iref)%new(ldim_refs, params%smpd)
+                    call self%pickrefs(iref)%new(ldim_refs, smpd)
                     call self%pickrefs(iref)%read(trim(params%pickrefs), iref)
                 end do
             else
                 THROW_HARD('file '//trim(params%pickrefs)//' does not exist')
             endif
         endif
+        build_glob => self
     end subroutine build_pick_tbox
 
      subroutine kill_pick_tbox( self )
