@@ -717,6 +717,7 @@ contains
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',          DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
+        if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
@@ -752,6 +753,8 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
             call cline%set('pickrefs', trim(PICKREFS)//params%ext)
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        else if( cline%defined('moldiam') )then
+            l_pick = .true.
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
@@ -797,7 +800,24 @@ contains
         if( params%scale > 1.01 )then
             THROW_HARD('scale cannot be > 1; exec_preprocess')
         endif
-        l_pick       = cline%defined('pickrefs')
+        l_pick = .false.
+        if( cline%defined('picker') )then
+            select case(trim(params%picker))
+            case('old')
+                if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+            case('new')
+                if(cline%defined('pickrefs'))then
+                    if( .not. cline%defined('mskdiam') )then
+                        THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                    endif
+                else
+                    if( .not.cline%defined('moldiam') )then
+                        THROW_HARD('MOLDIAM required for picker=new')
+                    endif
+                endif
+            end select
+            l_pick = .true.
+        endif
         l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )
