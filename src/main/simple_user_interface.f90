@@ -268,6 +268,7 @@ type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
+type(simple_input_param) :: picker
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
@@ -1070,7 +1071,7 @@ contains
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
-
+        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2899,7 +2900,7 @@ contains
         call pick%set_gui_params('parm_ios', 2, submenu="picking")
         call pick%set_input('parm_ios', 3, moldiam)
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
-        call pick%set_input('parm_ios', 4, 'picker', 'multi', 'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call pick%set_input('parm_ios', 4, picker)
         call pick%set_gui_params('parm_ios', 4, submenu="picking")
         ! alternative inputs
         ! <empty>
@@ -2971,7 +2972,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 11, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 13, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -2989,6 +2990,8 @@ contains
         call preprocess%set_input('parm_ios', 9,  pspecsz)
         call preprocess%set_input('parm_ios',10,  numlen)
         call preprocess%set_input('parm_ios',11,  ctfpatch)
+        call preprocess%set_input('parm_ios',12,  moldiam)
+        call preprocess%set_input('parm_ios',13,  picker)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3108,7 +3111,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 24, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 17, 0, 24, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3159,6 +3162,10 @@ contains
         call preprocess_stream_dev%set_gui_params('parm_ios', 14, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('parm_ios',15, prune)
         call preprocess_stream_dev%set_gui_params('parm_ios', 15, submenu="cluster 2D")
+        call preprocess_stream_dev%set_input('parm_ios',16, moldiam)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 16, submenu="picking")
+        call preprocess_stream_dev%set_input('parm_ios',17, picker)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 17, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -566,6 +566,8 @@ contains
         integer :: ncls, nptcls, ldim(3)
         real    :: smpd, diam
         call cline%set('dir_exec', 'analysis2D_nano')
+        if( .not. cline%defined('objfun')  ) call cline%set('objfun', 'cc') ! best objfun
+        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms 
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -627,6 +629,8 @@ contains
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
+        if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -730,6 +734,8 @@ contains
         if( .not. cline%defined('winsz')          ) call cline%set('winsz',           3.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
+        if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -911,7 +917,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')          ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',     'euclid') ! best objfun as determined by valid_corr
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global')
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
@@ -1367,6 +1373,8 @@ contains
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
+        if( .not. cline%defined('objfun')  ) call cline%set('objfun',      'cc') ! best objfun
+        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)

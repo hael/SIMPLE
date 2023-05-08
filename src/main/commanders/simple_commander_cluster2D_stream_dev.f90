@@ -20,7 +20,7 @@ public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool, is_pool_available
-public :: update_user_params, copy_optics_groups, update_path
+public :: update_user_params, copy_optics_groups, update_path, check_params_for_cluster2D
 
 private
 #include "simple_local_flags.inc"
@@ -81,22 +81,11 @@ logical               :: l_update_sigmas = .false.
 
 contains
 
-    subroutine init_cluster2D_stream( cline, spproj, refs, projfilegui, do2D )
-        class(cmdline),    intent(inout) :: cline
-        class(sp_project), intent(inout) :: spproj
-        character(len=*),  intent(in)    :: refs
-        character(len=*),  intent(in)    :: projfilegui
-        logical,           intent(inout) :: do2D
-        character(len=:), allocatable :: carg
-        real, parameter :: CENLP_2DSTREAM = 30.
-        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        real    :: rarg
-        integer :: ldim(3), ichunk, maybe2D, ifoo
-        ! check on strictly required parameters
-        if( .not.cline%defined('nthr2D') )then
-            THROW_HARD('Missing required agrument NTHR2D')
-        endif
-        ! check whether 2D classification will be performed based on 6 strictly required parameters
+    ! check whether 2D classification will be performed based on 4 strictly required parameters
+    subroutine check_params_for_cluster2D( cline, do2d )
+        class(cmdline), intent(in)  :: cline
+        logical,        intent(out) :: do2D
+        integer :: maybe2D
         maybe2D = merge(1,0,cline%defined('ncls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('nptcls_per_cls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('ncls_start'))
@@ -108,6 +97,24 @@ contains
         else
             do2D = .false.
         endif
+    end subroutine check_params_for_cluster2D
+
+    subroutine init_cluster2D_stream( cline, spproj, box_in, projfilegui, do2D )
+        class(cmdline),    intent(inout) :: cline
+        class(sp_project), intent(inout) :: spproj
+        integer,           intent(in)    :: box_in
+        character(len=*),  intent(in)    :: projfilegui
+        logical,           intent(inout) :: do2D
+        character(len=:), allocatable :: carg
+        real, parameter :: CENLP_2DSTREAM = 30.
+        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
+        real    :: rarg
+        integer :: ldim(3), ichunk, maybe2D, ifoo
+        ! check on strictly required parameters
+        if( .not.cline%defined('nthr2D') )then
+            THROW_HARD('Missing required agrument NTHR2D')
+        endif
+        call check_params_for_cluster2D(cline, do2D)
         if( .not.do2D ) return
         call seed_rnd
         ! general parameters
@@ -124,13 +131,8 @@ contains
         prev_snapshot_cavgs = ''
         orig_projfile       = trim(params_glob%projfile)
         projfile4gui        = trim(projfilegui)
-        if( cline%defined('box_extract') )then
-            orig_box = nint(cline%get_rarg('box_extract'))
-        else
-            call find_ldim_nptcls(refs,ldim,ifoo)
-            orig_box  = ldim(1)
-        endif
-        l_update_sigmas = params_glob%l_needs_sigma
+        orig_box            = box_in
+        l_update_sigmas     = params_glob%l_needs_sigma
         ! pixel size after motion correction
         if( cline%defined('eer_upsampling') )then
             orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
