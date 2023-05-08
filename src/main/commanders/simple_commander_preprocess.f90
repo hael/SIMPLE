@@ -2348,6 +2348,9 @@ contains
                         if( .not.ptcl_mask(iptcl) ) cycle
                         cnt = cnt + 1
                         ptcl_inds(cnt) = iptcl
+                        ! updating index of particle in stack
+                        call spproj_in%os_ptcl2D%set(iptcl, 'indstk', real(cnt))
+                        call spproj_in%os_ptcl3D%set(iptcl, 'indstk', real(cnt))
                     enddo
                     ptcl_inds = ptcl_inds -fromp+1 ! because indexing range lost when passed to extractor
                     call prepimgbatch(nptcls2extract)

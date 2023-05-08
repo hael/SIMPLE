@@ -96,8 +96,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
-    real(dp),            allocatable :: regs_eps(:)                 !< -"-, reference reg step-size
-    real(dp),            allocatable :: regs_denom(:)               !< -"-, reference reg step-size denom
+    real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -169,7 +168,6 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
     procedure          :: accumulate_ref_reg
-    procedure          :: accumulate_stepsize
     procedure          :: regularize_refs
     procedure          :: geodesic_frobdev
     procedure          :: reset_regs
@@ -194,8 +192,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: calc_euclidk_for_rot_8
-    procedure, private :: cc_no_norm
-    procedure, private :: euclid_no_norm
     procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_cc
     procedure, private :: gencorrs_euclid
@@ -223,8 +219,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
     procedure, private :: calc_frc
-    procedure, private :: rotate_polar_real, rotate_polar_complex
-    generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex
+    procedure, private :: rotate_polar
     procedure, private :: rotate_ref
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
@@ -369,7 +364,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_eps(self%nrefs),self%regs_denom(self%nrefs),&
+                    &self%fftdat_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -396,7 +391,6 @@ contains
         self%sqsums_ptcls   = 0.d0
         self%wsqsums_ptcls  = 0.d0
         self%refs_reg       = 0.d0
-        self%regs_eps       = 0.d0
         self%regs_denom     = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
@@ -978,88 +972,35 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer     :: i, iref, k, iptcl, loc(1)
-        complex(sp) :: ptcl_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
-        real        :: euls_ref(3), euls_ptcl(3), ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, euls_ptcl, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_rot, ctf_rot) proc_bind(close) schedule(static)
+        integer  :: i, iref, k, iptcl, loc(1)
+        real     :: euls_ref(3), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls), inpl_corrs(self%nrots)
+        real(dp) :: ptcl_ref_dist, ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                                       &ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            ptcl_ctf(:,k,:) = real(k, dp) * real(self%pfts_ptcls(:,k,:) * self%ctfmats(:,k,:), dp)
+        enddo
+        !$omp end parallel do
+        !$omp parallel do collapse(2) default(shared) private(i, iref, euls_ref, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl         = glob_pinds(i)
+                iptcl = glob_pinds(i)
                 ! find best irot for this pair of iref, iptcl
-                inpl_corrs    = self%cc_no_norm( iref, iptcl )
+                call self%gencorrs( iref, iptcl, inpl_corrs )
                 loc           = maxloc(inpl_corrs)
                 ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
                 euls_ref      = eulspace%get_euler(iref)
                 euls_ref(3)   = 360. - self%get_rot(loc(1))
-                ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
-                ! incorporating the normalization constant
-                ptcl_ref_dist = ptcl_ref_dist / (self%sqsums_ptcls(i) + sum(self%ctfmats(:,:,i)**2)) / real(self%nptcls, dp)
+                ptcl_ref_dist = exp( -self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)) )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                call self%rotate_polar(self%pfts_ptcls(:,:,i), ptcl_rot, loc(1))
-                call self%rotate_polar(self%ctfmats(   :,:,i),  ctf_rot, loc(1))
-                if( self%iseven(i) )then
-                    do k = self%kfromto(1),self%kfromto(2)
-                        self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) - ptcl_ref_dist * &
-                            &real(2 * real(k) * real( self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
-                    enddo
-                else
-                    do k = self%kfromto(1),self%kfromto(2)
-                        self%refs_reg(:,k,iref) = self%refs_reg(:,k,iref) - ptcl_ref_dist * &
-                            &real(2. * real(k) * real( self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k) ) * ctf_rot(:,k), dp)
-                    enddo
-                endif
+                call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc(1))
+                call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc(1))
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * ptcl_ref_dist
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * ptcl_ref_dist
             enddo
         enddo
         !$omp end parallel do
     end subroutine accumulate_ref_reg
-
-    ! accumulating analytic step-size for each batch of particles
-    subroutine accumulate_stepsize( self, eulspace, ptcl_eulspace, glob_pinds )
-        use simple_oris
-        class(polarft_corrcalc), intent(inout) :: self
-        type(oris),              intent(in)    :: eulspace
-        type(oris),              intent(in)    :: ptcl_eulspace
-        integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer     :: i, iref, k, iptcl, loc(1)
-        complex(sp) :: ptcl_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ptcl_ref_dist, inpl_corrs(self%nrots)
-        real        :: euls_ref(3), euls_ptcl(3), ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        !$omp parallel do collapse(2) default(shared) private(i, iref, k, euls_ref, euls_ptcl, ptcl_ref_dist, iptcl, inpl_corrs, loc, ptcl_rot, ctf_rot) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            do i = 1, self%nptcls
-                iptcl         = glob_pinds(i)
-                ! find best irot for this pair of iref, iptcl
-                inpl_corrs    = self%cc_no_norm( iref, iptcl )
-                loc           = maxloc(inpl_corrs)
-                ! computing distribution of particles around each iref, i.e. geodesics between {iref, loc} and iptcl
-                euls_ref      = eulspace%get_euler(iref)
-                euls_ref(3)   = 360. - self%get_rot(loc(1))
-                ptcl_ref_dist = 1./(1. + self%geodesic_frobdev(euls_ref, ptcl_eulspace%get_euler(iptcl)))
-                ! incorporating the normalization constant
-                ptcl_ref_dist = ptcl_ref_dist / (self%sqsums_ptcls(i) + sum(self%ctfmats(:,:,i)**2)) / real(self%nptcls, dp)
-                ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                call self%rotate_polar(self%pfts_ptcls(:,:,i), ptcl_rot, loc(1))
-                call self%rotate_polar(self%ctfmats(   :,:,i),  ctf_rot, loc(1))
-                if( self%iseven(i) )then
-                    do k = self%kfromto(1),self%kfromto(2)
-                        self%regs_eps(  iref) = self%regs_eps(iref)   - ptcl_ref_dist * &
-                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_even(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
-                        self%regs_denom(iref) = self%regs_denom(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
-                    enddo
-                else
-                    do k = self%kfromto(1),self%kfromto(2)
-                        self%regs_eps(  iref) = self%regs_eps(iref)   - ptcl_ref_dist * &
-                            &real(real(k) * sum(self%refs_reg(:,k,iref) * ctf_rot(:,k) * conjg(self%pfts_refs_odd(:,k,iref) * ctf_rot(:,k) - ptcl_rot(:,k))), dp)
-                        self%regs_denom(iref) = self%regs_denom(iref) + ptcl_ref_dist * &
-                            &real(real(k) * sum((self%refs_reg(:,k,iref) * ctf_rot(:,k))**2), dp)
-                    enddo
-                endif
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine accumulate_stepsize
 
     pure function geodesic_frobdev( self, euls1, euls2 ) result(angle)
         class(polarft_corrcalc), intent(in) :: self
@@ -1083,22 +1024,18 @@ contains
 
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        real, parameter :: SMALL_EPS = 0.0001
+        real, parameter :: EPS_ONE = 1.
         integer :: iref
         real    :: eps
-        !$omp parallel do default(shared) private(iref, eps) proc_bind(close) schedule(static)
+        if( params_glob%l_eps )then 
+            eps = params_glob%eps
+        else
+            eps = EPS_ONE
+        endif
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%regs_eps(iref) = self%regs_eps(iref) / self%regs_denom(iref)
-            ! positive step-size to improve the probability
-            if( self%regs_eps(iref) > 0. )then
-                eps = self%regs_eps(iref)
-            elseif( params_glob%l_eps )then 
-                eps = params_glob%eps
-            else
-                eps = SMALL_EPS
-            endif
-            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * self%refs_reg(:,:,iref)
-            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * self%refs_reg(:,:,iref)
+            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + eps * self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
+            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + eps * self%refs_reg(:,:,iref) / self%regs_denom(:,:,iref)
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
@@ -1106,14 +1043,13 @@ contains
     subroutine reset_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
         self%refs_reg   = 0._dp
-        self%regs_eps   = 0._dp
         self%regs_denom = 0._dp
     end subroutine reset_regs
 
-    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
+    subroutine rotate_polar( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
         real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
         integer :: rot
         if( irot >= self%pftsz + 1 )then
@@ -1128,31 +1064,7 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
             ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
         end if
-    end subroutine rotate_polar_real
-
-    subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,                 intent(in)    :: irot
-        integer :: rot
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        if( irot == 1 )then
-            ptcl_ctf_rot = ptcl_ctf
-        else if( irot <= self%pftsz )then
-            ptcl_ctf_rot(rot:self%pftsz,:) =       ptcl_ctf(               1:self%pftsz-rot+1,:)
-            ptcl_ctf_rot(  1:rot-1     ,:) = conjg(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
-        else if( irot == self%pftsz + 1 )then
-            ptcl_ctf_rot = conjg(ptcl_ctf)
-        else
-            ptcl_ctf_rot(rot:self%pftsz,:) = conjg(ptcl_ctf(               1:self%pftsz-rot+1,:))
-            ptcl_ctf_rot(  1:rot-1     ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
-        end if
-    end subroutine rotate_polar_complex
+    end subroutine rotate_polar
 
     ! Brings the reference in register with particle
     subroutine rotate_ref( self, ref, irot, ref_rot)
@@ -1837,88 +1749,6 @@ contains
         end select
     end subroutine gencorrs_2
 
-    function cc_no_norm( self, iref, iptcl ) result(cc)
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        complex(dp),             pointer       :: pft_ref_8(:,:)
-        real(dp) :: cc(self%nrots)
-        integer  :: ithr, i, ik
-        i         =  self%pinds(iptcl)
-        ithr      =  omp_get_thread_num() + 1
-        pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
-        ! copy
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-        endif
-        cc = 0._dp
-        ! sum up correlations over k-rings
-        do ik = self%kfromto(1),self%kfromto(2)
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) = real(pft_ref_8(:,ik),       sp)
-            self%fftdat(ithr)%ref_im(:) = real(aimag(pft_ref_8(:,ik)),sp) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(ik,i)%re * self%ctfmats(:,ik,i)
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(ik,i)%im * self%ctfmats(:,ik,i)
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            cc = cc + real(ik, dp) * real(self%fftdat(ithr)%backtransf, dp)
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        cc = cc / real(self%nrots * 2, dp)
-    end function cc_no_norm
-
-    ! [TODO] still need to fix the rotated pft_ref
-    function euclid_no_norm( self, iref, iptcl ) result(euclids)
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        complex,                 pointer       :: pft_ref(:,:)
-        real(dp) :: euclids(self%nrots)
-        real(dp) :: denom, sumsqref, sumsqptcl
-        integer  :: ithr, i, k
-        i       =  self%pinds(iptcl)
-        ithr    =  omp_get_thread_num() + 1
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        ! copy
-        if( self%iseven(i) )then
-            pft_ref = self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = self%pfts_refs_odd(:,:,iref)
-        endif
-        euclids = 0._dp
-        denom   = self%sqsums_ptcls(i)
-        do k=self%kfromto(1),self%kfromto(2)
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,k))
-            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,k)) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate FFTs
-            self%fftdat(ithr)%ref_fft_re = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(k,i)%re * self%ctfmats(:,k,i)
-            self%fftdat(ithr)%ref_fft_im = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(k,i)%im * self%ctfmats(:,k,i)
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1 + int(self%pftsz / 2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-            self%heap_vars(ithr)%kcorrs = real(self%fftdat(ithr)%backtransf / real(self%nrots * 2), dp)
-            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            sumsqref  = sum(real(csq_fast(pft_ref(:,k)), dp))
-            euclids   = euclids + real(k) * real(sumsqptcl + sumsqref - 2. * self%heap_vars(ithr)%kcorrs(:))
-        end do
-        euclids = real(dexp( - euclids/denom ))
-    end function euclid_no_norm
-    
     subroutine gencorrs_cc( self, pft_ref, iptcl, ithr, iref, cc )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp), pointer,    intent(in)    :: pft_ref(:,:)
@@ -2560,7 +2390,7 @@ contains
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_eps,self%regs_denom)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
