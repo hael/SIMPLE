@@ -58,8 +58,8 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
       CMAKE_Fortran_COMPILER
-      NAMES gfortran-  gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
-      PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
+      NAMES gfortran- gfortran-12 gfortran-11 gfotran-10 gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran12 gfortran11 gfortran10 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
+      PATHS /usr/local/bin /opt/local/bin /sw/bin /opt/homebrew/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
       )
@@ -87,9 +87,9 @@ message(STATUS "Making sure your C compiler points to the correct binary")
     message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
     find_file (
       CMAKE_C_COMPILER_NEW
-      NAMES gcc-11 gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc11 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      NAMES gcc-12 gcc-11 gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc-12 gcc11 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
       HINTS ${FORTRAN_PARENT_DIR}
-      PATHS  /sw/bin /usr/local/bin /opt/local/bin /usr/bin
+      PATHS  /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gcc preprocessor, starting with ${FORTRAN_PARENT_DIR} "
       NO_CMAKE_PATH NO_DEFAULT_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
@@ -114,8 +114,8 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
       CMAKE_CXX_COMPILER_NEW
-      NAMES g++- g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
-      PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
+      NAMES g++- g++-12 g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++12 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
+      PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
 NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
       )
@@ -537,28 +537,6 @@ else()
     set(EXTRA_LIBS ${EXTRA_LIBS} ${FFTW_LIBRARIES})
   endif()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
-endif()
-
-#############################################
-# NLOpt library
-#############################################
-if(USE_NLOPT)
-  include(ExternalProject)
-  set(NLOPT_VERSION 2.7.1)
-  set(NLOPT_INSTALL_DIR ${CMAKE_BINARY_DIR})
-  ExternalProject_Add(nlopt_src
-    DOWNLOAD_COMMAND wget https://github.com/stevengj/nlopt/archive/v${NLOPT_VERSION}.tar.gz
-    PATCH_COMMAND   tar -xzf ../v${NLOPT_VERSION}.tar.gz && rm -rf ../nlopt_src-build/nlopt-${NLOPT_VERSION} && mv nlopt-${NLOPT_VERSION} ../nlopt_src-build/
-    CMAKE_COMMAND   cmake -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=${NLOPT_INSTALL_DIR} nlopt-${NLOPT_VERSION}/
-    BUILD_COMMAND   make -s
-    INSTALL_COMMAND make -s install
-    LOG_DOWNLOAD ON
-    LOG_CONFIGURE ON
-    LOG_INSTALL ON
-    LOG_BUILD ON
-    LOG_OUTPUT_ON_FAILURE ON
-  )
-  set(EXTRA_LIBS ${EXTRA_LIBS} -I${NLOPT_INSTALL_DIR}/include -L${NLOPT_INSTALL_DIR}/lib -lnlopt -lm )
 endif()
 
 #############################################

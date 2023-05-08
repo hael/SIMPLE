@@ -33,12 +33,6 @@ list(APPEND JPG_src
 if(USE_LIBTIFF)
     list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/tiff/libtiff_funs.c")
 endif()
-if(NOT USE_NLOPT)
-  list(REMOVE_ITEM OPS_src "nlopt_callback.f90")
-  list(REMOVE_ITEM OPS_src "nlopt_enum.f90")
-  list(REMOVE_ITEM OPS_src "nlopt_interface.f90")
-  list(REMOVE_ITEM OPS_src "nlopt_wrap.f90")
-endif()
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.f[09][0-9]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
 
 # add the simple_args module to SIMPLE_src
