@@ -178,6 +178,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
+    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh|dev){global}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -288,6 +289,7 @@ type :: parameters
     real    :: alpha=KBALPHA
     real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
+    real    :: arc_thres=10.       !< arc threshold in the reg scheme (in degrees)
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
@@ -530,6 +532,7 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
+        call check_carg('reg_mode',       self%reg_mode)
         call check_carg('ref_reg',        self%ref_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -684,6 +687,7 @@ contains
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)
+        call check_rarg('arc_thres',      self%arc_thres)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigtol',       self%astigtol)
