@@ -857,9 +857,9 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl       = glob_pinds(i)
-                euls_ref    = eulspace%get_euler(iref)
-                euls        = ptcl_eulspace%get_euler(iptcl)
+                iptcl    = glob_pinds(i)
+                euls_ref = eulspace%get_euler(iref)
+                euls     = ptcl_eulspace%get_euler(iptcl)
                 ! projection direction distance, euler_dist could be used instead
                 euls_ref(3)   = 0.
                 euls(3)       = 0.
@@ -894,10 +894,10 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl     = glob_pinds(i)
-                euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
-                euls      = ptcl_eulspace%get_euler(iptcl) * pi / 180.
-                theta     = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
+                iptcl    = glob_pinds(i)
+                euls_ref =      eulspace%get_euler(iref)  * pi / 180.
+                euls     = ptcl_eulspace%get_euler(iptcl) * pi / 180.
+                theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                 if( theta <= params_glob%arc_thres*pi/180.  .and. theta >= 0. )then
                     ! find best irot for this pair of iref, iptcl
                     call self%gencorrs( iref, iptcl, inpl_corrs )
@@ -924,37 +924,32 @@ contains
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
         integer  :: i, iref, iptcl, loc, k, k_int
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real     :: euls(3), euls_ref(3), cos_theta, k_proj
+        real     :: euls(3), euls_ref(3), cos_theta, k_proj, theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cos_theta,k_proj,k_int,k) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cos_theta,theta,k_proj,k_int,k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 iptcl     = glob_pinds(i)
                 euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
                 euls      = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 cos_theta = cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1))
-                if( acos(cos_theta) < pi/6. .and. acos(cos_theta) >= 0. .and. &
+                theta     = acos(cos_theta)
+                if( theta < params_glob%arc_thres*pi/180. .and. theta >= 0. .and. &
                  &(self%kfromto(2)*cos_theta >= self%kfromto(1) .or. self%kfromto(1)*cos_theta <= self%kfromto(2)) )then
-                    euls_ref  =      eulspace%get_euler(iref)
-                    euls      = ptcl_eulspace%get_euler(iptcl)
-                    ! projection direction distance, euler_dist could be used instead
-                    euls_ref(3)   = 0.
-                    euls(3)       = 0.
-                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     ! find best irot for this pair of iref, iptcl
                     call self%gencorrs( iref, iptcl, inpl_corrs )
                     loc = maxloc(inpl_corrs, dim=1)
                     if( inpl_corrs(loc) < TINY ) cycle
                     ! distance & correlation weighing
-                    ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                    ptcl_ref_dist = 1.
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     do k = self%kfromto(1),self%kfromto(2)
                         k_proj = real(k) * cos_theta
                         if( k_proj > self%kfromto(1) .and. k_proj < self%kfromto(2) )then
-                            k_int  = floor(k_proj)
+                            k_int = floor(k_proj)
                             self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
                             self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
                             k_int = ceiling(k_proj)
