@@ -289,7 +289,7 @@ type :: parameters
     real    :: alpha=KBALPHA
     real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
-    real    :: arc_thres=10.       !< arc threshold in the reg scheme (in degrees)
+    real    :: arc_thres=30.       !< arc threshold in the reg scheme (in degrees)
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}

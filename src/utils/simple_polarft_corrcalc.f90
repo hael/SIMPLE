@@ -853,7 +853,6 @@ contains
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real     :: euls(3), euls_ref(3)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        if( params_glob%eps < TINY ) return
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -891,7 +890,6 @@ contains
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        if( params_glob%eps < TINY ) return
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -928,9 +926,7 @@ contains
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real     :: euls(3), euls_ref(3), cos_theta, k_proj
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
-        if( params_glob%eps < TINY ) return
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cos_theta,k_proj,k_int,k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
@@ -983,7 +979,6 @@ contains
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: iref, k
-        if( params_glob%eps < TINY ) return
         !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do k = self%kfromto(1),self%kfromto(2)
