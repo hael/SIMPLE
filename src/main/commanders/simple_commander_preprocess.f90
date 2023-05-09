@@ -783,7 +783,6 @@ contains
         use simple_picker_iter,         only: picker_iter
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_mov
         type(ctf_estimate_iter)       :: ctfiter
@@ -810,13 +809,11 @@ contains
             select case(trim(params%picker))
             case('old')
                 if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-                call build%build_pick_tbox(params, cline)
             case('new')
                 if(cline%defined('pickrefs'))then
                     if( .not. cline%defined('mskdiam') )then
                         THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
                     endif
-                    call build%build_pick_tbox(params, cline)
                 else
                     if( .not.cline%defined('moldiam') )then
                         THROW_HARD('MOLDIAM required for picker=new')
@@ -971,8 +968,8 @@ contains
         else
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
+        call piter%kill
         call o_mov%kill
-        call build%kill_pick_tbox
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
@@ -1501,7 +1498,7 @@ contains
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
-        type(builder)                 :: build
+        type(sp_project)              :: spproj
         type(picker_iter)             :: piter
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, intg_name, imgkind
@@ -1509,7 +1506,6 @@ contains
         integer :: fromto(2), imic, ntot, nptcls_out, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
-        call build%init_params_and_build_pick_tbox(cline, params)
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
@@ -1526,16 +1522,16 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! read project file
-        call build%spproj%read(params%projfile)
+        call spproj%read(params%projfile)
         ! look for movies
-        if( build%spproj%get_nintgs() == 0 )then
+        if( spproj%get_nintgs() == 0 )then
             THROW_HARD('No integrated micrograph to process!')
         endif
         ! perform picking
         cnt = 0
         do imic=fromto(1),fromto(2)
             cnt   = cnt + 1
-            call build%spproj_field%get_ori(imic, o)
+            call spproj%os_mic%get_ori(imic, o)
             state = 1
             if( o%isthere('state') ) state = nint(o%get('state'))
             if( state == 0 ) cycle
@@ -1544,13 +1540,16 @@ contains
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
                 call piter%iterate(cline, params%smpd, intg_name, boxfile, nptcls_out, output_dir)
-                call build%spproj_field%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
-        call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        ! cleanup
         call o%kill
+        call spproj%kill
+        call piter%kill
         ! end gracefully
         call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
@@ -1877,6 +1876,7 @@ contains
         enddo
         call spproj%write
         call spproj%kill
+        params_glob%box = params%box ! for prepimgbatch
         ! actual extraction
         if( nmics == 0 )then
             ! done
@@ -2552,6 +2552,7 @@ contains
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
         call o_mic%kill
+        call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
 
