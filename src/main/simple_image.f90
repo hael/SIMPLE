@@ -1895,37 +1895,22 @@ contains
     end function square_dims
 
     !>  \brief  checks for same dimensions, overloaded as (.eqdims.)
-    pure function same_dims_1( self1, self2 ) result( yep )
+    pure logical function same_dims_1( self1, self2 )
         class(image), intent(in) :: self1, self2
-        logical :: yep, test(3)
-        test = .false.
-        test(1) = self1%ldim(1) == self2%ldim(1)
-        test(2) = self1%ldim(2) == self2%ldim(2)
-        test(3) = self1%ldim(3) == self2%ldim(3)
-        yep = all(test)
+        same_dims_1 = all(self1%ldim == self2%ldim)
     end function same_dims_1
 
     !>  \brief  checks for same dimensions
-    pure function same_dims( self1, ldim ) result( yep )
-        class(image), intent(in) :: self1
+    pure logical function same_dims( self, ldim )
+        class(image), intent(in) :: self
         integer,      intent(in) :: ldim(3) !< dimensions
-        logical :: yep, test(3)
-        test = .false.
-        test(1) = self1%ldim(1) == ldim(1)
-        test(2) = self1%ldim(2) == ldim(2)
-        test(3) = self1%ldim(3) == ldim(3)
-        yep = all(test)
+        same_dims = all(self%ldim == ldim)
     end function same_dims
 
     !>  \brief  checks for same sampling distance, overloaded as (.eqsmpd.)
-    pure  function same_smpd( self1, self2 ) result( yep )
+    logical pure function same_smpd( self1, self2 )
         class(image), intent(in) :: self1, self2
-        logical :: yep
-        if( abs(self1%smpd-self2%smpd) < 0.0001 )then
-            yep = .true.
-        else
-            yep = .false.
-        endif
+        same_smpd = abs(self1%smpd-self2%smpd) < 0.0001
     end function same_smpd
 
     !>  \brief  checks if image is ft
@@ -6815,7 +6800,6 @@ contains
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: ang,shxi,shyi
         class(image), optional, intent(inout) :: self_out
-        type(image) :: self_here
         real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi,fixcenmshx,fiycenmshy
         real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
         integer :: iycen,ixcen,ix,iy
@@ -6824,7 +6808,6 @@ contains
         logical :: didft
         if( self_in%ldim(3) > 1 )         THROW_HARD('only for 2D images; rtsq')
         if( .not. self_in%square_dims() ) THROW_HARD('only for square dims; rtsq;')
-        call self_here%new(self_in%ldim, self_in%smpd)
         didft = .false.
         if( self_in%ft )then
             call self_in%ifft()
@@ -6885,16 +6868,20 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        self_here%rmat(:self_here%ldim(1),:self_here%ldim(2),1) = mat_out
-        self_here%ft = .false.
         if( present(self_out) )then
-            call self_out%copy(self_here)
+            if( (self_in.eqdims.self_out) .and. (self_in.eqsmpd.self_out) )then
+                ! no need to update dimensions
+            else
+                call self_out%copy(self_in)
+            endif
+            self_out%rmat(:self_in%ldim(1),:self_in%ldim(2),1) = mat_out
+            self_out%ft = .false.
         else
-            call self_in%copy(self_here)
+            self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1) = mat_out
+            self_in%ft = .false.
         endif
-        call self_here%kill()
         if( didft )then
-            call self_in%ifft()
+            call self_in%fft()
         endif
     end subroutine rtsq
 

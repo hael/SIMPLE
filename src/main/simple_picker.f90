@@ -24,7 +24,7 @@ type(image),      allocatable :: refs(:), refs_refine(:), ptcls(:)
 logical,          allocatable :: selected_peak_positions(:), l_refs_err(:), l_refs_refine_err(:)
 real,             allocatable :: corrmat(:,:), peak_stats(:,:)
 integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:), refmat(:,:)
-character(len=:), allocatable :: micname, refsname
+character(len=:), allocatable :: micname
 character(len=LONGSTRLEN)     :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
@@ -34,16 +34,16 @@ real                          :: msk, msk_refine, lp, distthr, ndev
 
 contains
 
-    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
-        character(len=*),           intent(in) :: micfname, refsfname
+    subroutine init_picker( micfname, pickrefs, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
+        character(len=*),           intent(in) :: micfname
+        type(image),   allocatable, intent(in) :: pickrefs(:)
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         character(len=*), optional, intent(in) :: dir_out
         type(image)       :: refimg
-        integer           :: ifoo, iref
+        integer           :: orig_ldim_refs(3), ifoo, iref
         real              :: hp
         allocate(micname,  source=trim(micfname))
-        allocate(refsname, source=trim(refsfname))
         boxname = basename( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
@@ -56,15 +56,15 @@ contains
         call micrograph%new(ldim, smpd)
         call micrograph%read(micname)
         ! find reference dimensions
-        call find_ldim_nptcls(refsname, ldim_refs, nrefs)
-        orig_box              = ldim_refs(1)
+        orig_ldim_refs = pickrefs(1)%get_ldim()
+        nrefs          = size(pickrefs)
+        orig_box       = orig_ldim_refs(1)
         ! modify according to PICKER_SHRINK & PICKER_SHRINK_REFINE
-        ldim_refs_refine      = ldim_refs
-        ldim_refs(1)          = round2even(real(ldim_refs(1))/PICKER_SHRINK)
-        ldim_refs(2)          = round2even(real(ldim_refs(2))/PICKER_SHRINK)
+        ldim_refs(1)          = round2even(real(orig_ldim_refs(1))/PICKER_SHRINK)
+        ldim_refs(2)          = round2even(real(orig_ldim_refs(2))/PICKER_SHRINK)
         ldim_refs(3)          = 1
-        ldim_refs_refine(1)   = round2even(real(ldim_refs_refine(1))/PICKER_SHRINK_REFINE)
-        ldim_refs_refine(2)   = round2even(real(ldim_refs_refine(2))/PICKER_SHRINK_REFINE)
+        ldim_refs_refine(1)   = round2even(real(orig_ldim_refs(1))/PICKER_SHRINK_REFINE)
+        ldim_refs_refine(2)   = round2even(real(orig_ldim_refs(2))/PICKER_SHRINK_REFINE)
         ldim_refs_refine(3)   = 1
         ldim_shrink(1)        = round2even(real(ldim(1))/PICKER_SHRINK)
         ldim_shrink(2)        = round2even(real(ldim(2))/PICKER_SHRINK)
@@ -85,12 +85,12 @@ contains
         distthr               = BOXFRAC*real(ldim_refs(1))
         if( present(distthr_in) ) distthr = distthr_in/smpd_shrunken
         ! read and shrink references
-        allocate( refs(nrefs), refs_refine(nrefs), l_refs_err(nrefs), l_refs_refine_err(nrefs) )
+        allocate(refs(nrefs),refs_refine(nrefs),l_refs_err(nrefs),l_refs_refine_err(nrefs))
         call refimg%new([orig_box,orig_box,1], smpd)
         do iref=1,nrefs
             call refs(iref)%new(ldim_refs, smpd_shrunken)
             call refs_refine(iref)%new(ldim_refs_refine, smpd_shrunken_refine)
-            call refimg%read(refsname, iref)
+            call refimg%copy_fast(pickrefs(iref))
             call refimg%fft()
             call refimg%clip(refs(iref))
             call refimg%clip(refs_refine(iref))
@@ -358,7 +358,7 @@ contains
             call mic_shrunken%kill
             call mic_shrunken_refine%kill
             deallocate(selected_peak_positions,corrmat,l_refs_err,l_refs_refine_err)
-            deallocate(peak_positions,peak_positions_refined,refmat,micname,refsname,peak_stats)
+            deallocate(peak_positions,peak_positions_refined,refmat,micname,peak_stats)
             do iref=1,nrefs
                 call refs(iref)%kill
                 call refs_refine(iref)%kill
