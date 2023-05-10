@@ -894,13 +894,12 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        complex(sp), pointer :: shmat(:,:)
-        integer  :: i, iref, iptcl, loc, ithr
+        integer  :: i, iref, iptcl, loc
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,shmat,ithr) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
                 iptcl    = glob_pinds(i)
@@ -917,11 +916,6 @@ contains
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                    ithr  = omp_get_thread_num() + 1
-                    shmat => self%heap_vars(ithr)%shmat
-                    call self%gen_shmat(ithr, ptcl_eulspace%get_2Dshift(iptcl), shmat)
-                    ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                    ctf_rot      =      ctf_rot * shmat
                     self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
                 endif
@@ -988,11 +982,18 @@ contains
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer  :: iref, k
-        real     :: eps_k
         real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
-        prob_cc_odd  = 0._dp
-        prob_cc_even = 0._dp
-        if( trim(params_glob%reg_mode) == 'globdev' )then
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            if( any(self%regs_denom(:,k,:) < TINY) ) continue
+            self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+        enddo
+        !$omp end parallel do
+        prob_cc_odd  = 1._dp
+        prob_cc_even = 1._dp
+        if( trim(params_glob%reg_mode) == 'globdev' .or.  trim(params_glob%reg_mode) == 'neigh' )then
+            prob_cc_odd  = 0._dp
+            prob_cc_even = 0._dp
             !$omp parallel do default(shared) private(iref, k) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do k = self%kfromto(1),self%kfromto(2)
@@ -1004,14 +1005,10 @@ contains
             enddo
             !$omp end parallel do
         endif
-        !$omp parallel do collapse(2) default(shared) private(iref, k, eps_k) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            do k = self%kfromto(1),self%kfromto(2)
-                if( any(self%regs_denom(:,k,iref) < TINY) ) continue
-                eps_k = params_glob%eps * real(k)
-                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref) / prob_cc_even(iref))
-                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref) / prob_cc_odd( iref))
-            enddo
+            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_even(iref))
+            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_odd( iref))
         enddo
         !$omp end parallel do
     end subroutine regularize_refs
