@@ -990,18 +990,17 @@ contains
         integer  :: iref, k
         real     :: eps_k
         real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
-        self%refs_reg = self%refs_reg / self%regs_denom
-        prob_cc_odd  = 1._dp
-        prob_cc_even = 1._dp
+        prob_cc_odd  = 0._dp
+        prob_cc_even = 0._dp
         if( trim(params_glob%reg_mode) == 'globdev' )then
-            prob_cc_odd  = 0._dp
-            prob_cc_even = 0._dp
-            !$omp parallel do collapse(2) default(shared) private(iref, k) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(iref, k) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do k = self%kfromto(1),self%kfromto(2)
                     prob_cc_odd( iref) = prob_cc_odd( iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_odd( :,k,iref), dp) )
                     prob_cc_even(iref) = prob_cc_even(iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_even(:,k,iref), dp) )
                 enddo
+                prob_cc_odd( iref) = 1._dp + max(0._dp, prob_cc_odd( iref))
+                prob_cc_even(iref) = 1._dp + max(0._dp, prob_cc_even(iref))
             enddo
             !$omp end parallel do
         endif
@@ -1010,8 +1009,8 @@ contains
             do k = self%kfromto(1),self%kfromto(2)
                 if( any(self%regs_denom(:,k,iref) < TINY) ) continue
                 eps_k = params_glob%eps * real(k)
-                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / prob_cc_even(iref))
-                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / prob_cc_odd( iref))
+                self%pfts_refs_even(:,k,iref) = self%pfts_refs_even(:,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref) / prob_cc_even(iref))
+                self%pfts_refs_odd( :,k,iref) = self%pfts_refs_odd( :,k,iref) + eps_k * real(self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref) / prob_cc_odd( iref))
             enddo
         enddo
         !$omp end parallel do
