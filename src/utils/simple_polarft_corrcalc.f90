@@ -908,7 +908,7 @@ contains
                 theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                 if( theta <= params_glob%arc_thres*pi/180.  .and. theta >= 0. )then
                     ! find best irot for this pair of iref, iptcl
-                    call self%gencorrs( iref, iptcl, ptcl_eulspace%get_2Dshift(iptcl), inpl_corrs )
+                    call self%gencorrs( iref, iptcl, inpl_corrs )
                     loc = maxloc(inpl_corrs, dim=1)
                     if( inpl_corrs(loc) < TINY ) cycle
                     ! distance & correlation weighing
@@ -985,12 +985,13 @@ contains
         real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            if( any(self%regs_denom(:,k,:) < TINY) ) continue
-            self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+            if( any(self%regs_denom(:,k,:) < TINY) )then
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
+            else
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+            endif
         enddo
         !$omp end parallel do
-        prob_cc_odd  = 1._dp
-        prob_cc_even = 1._dp
         if( trim(params_glob%reg_mode) == 'globdev' .or.  trim(params_glob%reg_mode) == 'neigh' )then
             prob_cc_odd  = 0._dp
             prob_cc_even = 0._dp
@@ -1004,13 +1005,21 @@ contains
                 prob_cc_even(iref) = 1._dp + max(0._dp, prob_cc_even(iref))
             enddo
             !$omp end parallel do
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_even(iref))
+                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_odd( iref))
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            enddo
+            !$omp end parallel do
         endif
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_even(iref))
-            self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_odd( iref))
-        enddo
-        !$omp end parallel do
+        
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
