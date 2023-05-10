@@ -38,6 +38,7 @@ real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_pr
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
 logical                      :: l_stream = .false.
+logical                      :: l_ctf    = .false.
 
 contains
 
@@ -55,7 +56,7 @@ contains
         real    :: frac_srch_space, snhc_sz
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
+        logical :: doprint, l_partial_sums, l_frac_update, have_frcs
         logical :: l_snhc, l_greedy, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -203,7 +204,6 @@ contains
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-            if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
@@ -380,7 +380,12 @@ contains
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters
-        call pftcc%memoize_ffts
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        if( L_CTFROTDEV )then
+            call pftcc%memoize_ptcls
+        else
+            call pftcc%memoize_ffts
+        endif
     end subroutine build_pftcc_batch_particles
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
@@ -455,6 +460,7 @@ contains
             endif
         end do
         !$omp end parallel do
+        if( L_CTFROTDEV ) call pftcc%memoize_refs
         ! CLEANUP
         deallocate(match_imgs)
     end subroutine preppftcc4align
