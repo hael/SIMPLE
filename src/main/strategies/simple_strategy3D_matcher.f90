@@ -544,7 +544,16 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! compute regularization terms
-        call pftcc%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+        select case(trim(params_glob%reg_mode))
+            case('global')
+                call pftcc%ref_reg_cc(      build_glob%eulspace, build_glob%spproj_field, pinds_here)
+            case('neigh')
+                call pftcc%ref_reg_cc_neigh(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+            case('dev')
+                call pftcc%ref_reg_cc_dev(  build_glob%eulspace, build_glob%spproj_field, pinds_here)
+            case DEFAULT
+                THROW_HARD('regularization mode: '//trim(params_glob%reg_mode)//' unsupported')
+        end select
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
