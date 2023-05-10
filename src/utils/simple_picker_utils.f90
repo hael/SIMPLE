@@ -27,7 +27,8 @@ type picker_utils
     type(image)                   :: mic_raw, mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
     type(image),      allocatable :: boximgs1(:), boximgs2(:), boxrefs(:,:)
     integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
-    real,             allocatable :: box_scores1(:), sxx_refs(:,:)
+    real,             allocatable :: box_scores1(:)
+    logical,          allocatable :: l_err_refs(:,:)
     character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
     logical                       :: refpick = .false.
@@ -198,8 +199,8 @@ contains
             end do
             deallocate(self%boxrefs)
         endif
-        if( allocated(self%sxx_refs) ) deallocate(self%sxx_refs)
-        allocate( self%boxrefs(self%nrefs,2), self%sxx_refs(self%nrefs,2) )
+        if( allocated(self%l_err_refs) ) deallocate(self%l_err_refs)
+        allocate(self%l_err_refs(self%nrefs,2),self%boxrefs(self%nrefs,2))
         call img_rot%new(ldim, smpd)
         ang = 360./real(nrots)
         cnt = 0
@@ -209,29 +210,35 @@ contains
                 cnt = cnt + 1
                 call imgs(iimg)%rtsq(rot, 0., 0., img_rot)
                 call img_rot%fft
-                call self%boxrefs(cnt,1)%new(self%ldim_box1, SMPD_SHRINK1)
-                call self%boxrefs(cnt,2)%new(self%ldim_box2, SMPD_SHRINK2)
+                call self%boxrefs(cnt,1)%new(self%ldim_box1, SMPD_SHRINK1, wthreads=.false.)
+                call self%boxrefs(cnt,2)%new(self%ldim_box2, SMPD_SHRINK2, wthreads=.false.)
                 call self%boxrefs(cnt,1)%set_ft(.true.)
                 call self%boxrefs(cnt,2)%set_ft(.true.)
                 call img_rot%clip(self%boxrefs(cnt,1))
                 call img_rot%clip(self%boxrefs(cnt,2))
-                ! convolve with Gaussians
-                call self%boxrefs(cnt,1)%mul(self%imgau_shrink1)
-                call self%boxrefs(cnt,2)%mul(self%imgau_shrink2)
-                ! back to real-space
-                call self%boxrefs(cnt,1)%ifft
-                call self%boxrefs(cnt,2)%ifft
-                call self%boxrefs(cnt,1)%mask(mskrad1, 'hard')
-                call self%boxrefs(cnt,2)%mask(mskrad2, 'hard')
-                call self%boxrefs(cnt,1)%prenorm4real_corr(self%sxx_refs(cnt,1))
-                call self%boxrefs(cnt,2)%prenorm4real_corr(self%sxx_refs(cnt,2))
-                if( L_WRITE )then
-                    call self%boxrefs(cnt,1)%write('boxrefs_shrink1.mrc', cnt)
-                    call self%boxrefs(cnt,2)%write('boxrefs_shrink2.mrc', cnt)
-                endif
                 rot = rot + ang
             end do
         end do
+        !$omp parallel do schedule(static) default(shared) private(cnt) proc_bind(close)
+        do cnt = 1,self%nrefs
+            ! convolve with Gaussians
+            call self%boxrefs(cnt,1)%mul(self%imgau_shrink1)
+            call self%boxrefs(cnt,2)%mul(self%imgau_shrink2)
+            ! back to real-space
+            call self%boxrefs(cnt,1)%ifft
+            call self%boxrefs(cnt,2)%ifft
+            call self%boxrefs(cnt,1)%mask(mskrad1, 'hard')
+            call self%boxrefs(cnt,2)%mask(mskrad2, 'hard')
+            call self%boxrefs(cnt,1)%prenorm4real_corr(self%l_err_refs(cnt,1))
+            call self%boxrefs(cnt,2)%prenorm4real_corr(self%l_err_refs(cnt,2))
+        end do
+        !$omp end parallel do
+        if( L_WRITE )then
+            do cnt = 1,self%nrefs
+                call self%boxrefs(cnt,1)%write('boxrefs_shrink1.mrc', cnt)
+                call self%boxrefs(cnt,2)%write('boxrefs_shrink2.mrc', cnt)
+            enddo
+        endif
         call self%imgau_shrink1%ifft
         call self%imgau_shrink2%ifft
         call img_rot%kill
@@ -264,8 +271,10 @@ contains
         self%positions2 = nint(shrink2 * real(self%positions2))
         ! write coordinates
         box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
-        call self%extract_boximgs2(box)
-        if( L_WRITE )call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+        if( L_WRITE )then
+            call self%extract_boximgs2(box)
+            call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+        endif
         call write_boxfile(self%nboxes2, self%positions2, box, self%boxname)
         call make_relativepath(CWD_GLOB, self%boxname, boxname_out) ! returns absolute path
     end subroutine exec_picker
@@ -373,7 +382,7 @@ contains
 
     subroutine extract_boximgs1( self )
         class(picker_utils), intent(inout) :: self
-        integer :: ibox
+        integer :: pos(2), ibox
         logical :: outside
         if( .not. allocated(self%positions1) ) THROW_HARD('positions need to be set before constructing boximgs1')
         if( allocated(self%boximgs1) )then
@@ -383,10 +392,11 @@ contains
             deallocate(self%boximgs1)
         endif
         allocate(self%boximgs1(self%nboxes1))
-        !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(ibox,outside,pos) proc_bind(close)
         do ibox = 1,self%nboxes1
             call self%boximgs1(ibox)%new(self%ldim_box1, SMPD_SHRINK1)
-            call self%mic_shrink1%window_slim(self%positions1(ibox,:), self%ldim_box1(1), self%boximgs1(ibox), outside)
+            pos = self%positions1(ibox,:)
+            call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), self%boximgs1(ibox), outside)
         end do
         !$omp end parallel do
     end subroutine extract_boximgs1
@@ -395,7 +405,7 @@ contains
         class(picker_utils), target, intent(inout) :: self
         integer, optional,           intent(in)    :: box_in
         type(image), pointer :: mic_ptr => null()
-        integer :: ibox, ldim(3), noutside
+        integer :: pos(2), ldim(3), ibox, noutside
         logical :: outside
         real    :: smpd
         if( .not. allocated(self%positions2) ) THROW_HARD('positions need to be set before constructing boximgs2')
@@ -410,20 +420,22 @@ contains
             ldim    =  [box_in,box_in,1]
             smpd    =  self%smpd_raw
             mic_ptr => self%mic_raw
-            !$omp parallel do schedule(static) default(shared) private(ibox,noutside) proc_bind(close)
+            !$omp parallel do schedule(static) default(shared) private(pos,ibox,noutside) proc_bind(close)
             do ibox = 1,self%nboxes2
                 call self%boximgs2(ibox)%new(ldim, smpd)
-                call mic_ptr%window(self%positions2(ibox,:), ldim(1), self%boximgs2(ibox), noutside)
+                pos = self%positions2(ibox,:)
+                call mic_ptr%window(pos, ldim(1), self%boximgs2(ibox), noutside)
             end do
             !$omp end parallel do
         else
             ldim    =  self%ldim_box2
             smpd    =  SMPD_SHRINK2
             mic_ptr => self%mic_shrink2
-            !$omp parallel do schedule(static) default(shared) private(ibox,outside) proc_bind(close)
+            !$omp parallel do schedule(static) default(shared) private(pos,ibox,outside) proc_bind(close)
             do ibox = 1,self%nboxes2
                 call self%boximgs2(ibox)%new(ldim, smpd)
-                call mic_ptr%window_slim(self%positions2(ibox,:), ldim(1), self%boximgs2(ibox), outside)
+                pos = self%positions2(ibox,:)
+                call mic_ptr%window_slim(pos, ldim(1), self%boximgs2(ibox), outside)
             end do
             !$omp end parallel do
         endif
@@ -434,8 +446,8 @@ contains
         integer, allocatable :: positions_tmp(:,:)
         real,    allocatable :: tmp(:)
         real        :: box_scores(self%nx_offset,self%ny_offset,1), t, scores(self%nrefs)
-        logical     :: is_peak(self%nx_offset,self%ny_offset,1), outside
-        integer     :: ioff, joff, npeaks, cnt, ithr, iref
+        logical     :: is_peak(self%nx_offset,self%ny_offset,1), outside, l_err
+        integer     :: pos(2), ioff, joff, npeaks, cnt, ithr, iref
         type(image) :: boximgs_heap(nthr_glob)
         ! calculate box_scores
         if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
@@ -443,26 +455,35 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
         if( self%refpick .and. .not. self%hybrid )then
-            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores) proc_bind(close)
+            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
                     ithr = omp_get_thread_num() + 1
-                    call self%mic_shrink1%window_slim(self%positions1(self%inds_offset(ioff,joff),:),&
-                    &self%ldim_box1(1), boximgs_heap(ithr), outside)
-                    do iref = 1,self%nrefs
-                        scores(iref) = self%boxrefs(iref,1)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,1))
-                    end do
-                    box_scores(ioff,joff,1) = maxval(scores)
+                    pos  = self%positions1(self%inds_offset(ioff,joff),:)
+                    call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
+                    call boximgs_heap(ithr)%prenorm4real_corr(l_err)
+                    if( l_err )then
+                        box_scores(ioff,joff,1) = 0.
+                    else
+                        do iref = 1,self%nrefs
+                            if( self%l_err_refs(iref,1) )then
+                                scores(iref) = 0.
+                            else
+                                scores(iref) = self%boxrefs(iref,1)%real_corr_prenorm(boximgs_heap(ithr))
+                            endif
+                        end do
+                        box_scores(ioff,joff,1) = maxval(scores)
+                    endif
                 end do
             end do
             !$omp end parallel do
         else
-            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside) proc_bind(close)
+            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
                     ithr = omp_get_thread_num() + 1
-                    call self%mic_shrink1%window_slim(self%positions1(self%inds_offset(ioff,joff),:),&
-                    &self%ldim_box1(1), boximgs_heap(ithr), outside)
+                    pos  = self%positions1(self%inds_offset(ioff,joff),:)
+                    call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
                     box_scores(ioff,joff,1) = self%imgau_shrink1%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink1)
                 end do
             end do
@@ -593,9 +614,9 @@ contains
 
     subroutine refine_positions( self )
         class(picker_utils), intent(inout) :: self
-        integer     :: ibox, xrange(2), yrange(2), xind, yind, ithr, old_pos(2), iref
+        integer     :: ibox, xrange(2), yrange(2), xind, yind, ithr, iref
         real        :: box_score, box_score_trial, factor, rpos(2), scores(self%nrefs)
-        logical     :: outside
+        logical     :: outside, l_err
         type(image) :: boximgs_heap(nthr_glob)
         if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
         self%nboxes2 = self%nboxes1
@@ -606,7 +627,7 @@ contains
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-            !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial)
+            !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
             do ibox= 1,self%nboxes2
                 rpos      = real(self%positions2(ibox,:))
                 xrange(1) = max(0,        nint(rpos(1) - factor))
@@ -618,10 +639,19 @@ contains
                     do yind = yrange(1),yrange(2)
                         ithr = omp_get_thread_num() + 1
                         call self%mic_shrink2%window_slim([xind,yind], self%ldim_box2(1), boximgs_heap(ithr), outside)
-                        do iref = 1,self%nrefs
-                            scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,2))
-                        end do
-                        box_score_trial = maxval(scores)
+                        call boximgs_heap(ithr)%prenorm4real_corr(l_err)
+                        if( l_err )then
+                            box_score_trial = -1.
+                        else
+                            do iref = 1,self%nrefs
+                                if( self%l_err_refs(iref,2) )then
+                                    scores(iref) = -1.
+                                else
+                                    scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr))
+                                endif
+                            end do
+                            box_score_trial = maxval(scores)
+                        endif
                         if( box_score_trial > box_score )then
                             self%positions2(ibox,:) = [xind,yind]
                             box_score = box_score_trial
@@ -716,7 +746,7 @@ contains
         type(image) :: boximgs_heap(nthr_glob)
         real        :: scores_peak(self%nboxes2), factor, smd, ksstat, prob
         real        :: scores(self%nrefs), pixrad_shrink2, rpos(2), a_peak, a_nonpeak, s_peak, s_nonpeak
-        logical     :: mask_backgr(0:self%nx2,0:self%ny2), outside
+        logical     :: mask_backgr(0:self%nx2,0:self%ny2), outside, l_err
         integer     :: ibox, jbox, off_here, nbackgr, ithr, iref, xrange(2), yrange(2), xind, yind
         if( .not. allocated(self%positions2) ) THROW_HARD('positions2 need to be set')
         do ithr = 1,nthr_glob
@@ -760,14 +790,23 @@ contains
         allocate(scores_nonpeak(nbackgr), source=0.)
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
         if( self%refpick )then
-            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores)
+            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores,l_err)
             do ibox = 1,nbackgr
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([positions_backgr(ibox,1),positions_backgr(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
-                do iref = 1,self%nrefs
-                    scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,2))
-                end do
-                scores_nonpeak(ibox) = maxval(scores)
+                call boximgs_heap(ithr)%prenorm4real_corr(l_err)
+                if( l_err )then
+                    scores_nonpeak(ibox) = 0.0
+                else
+                    do iref = 1,self%nrefs
+                        if( self%l_err_refs(iref,2))then
+                            scores(iref) = 0.0
+                        else
+                            scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr))
+                        endif
+                    end do
+                    scores_nonpeak(ibox) = maxval(scores)
+                endif
             end do
             !$omp end parallel do
         else
@@ -775,19 +814,28 @@ contains
             do ibox = 1,nbackgr
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([positions_backgr(ibox,1),positions_backgr(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
-                scores_nonpeak(ibox)    = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
+                scores_nonpeak(ibox) = self%imgau_shrink2%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink2)
             end do
             !$omp end parallel do
         endif
         if( self%refpick )then
-            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores)
+            !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores,l_err)
             do ibox = 1,self%nboxes2
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
-                do iref = 1,self%nrefs
-                    scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr), self%sxx_refs(iref,2))
-                end do
-                scores_peak(ibox) = maxval(scores)
+                call boximgs_heap(ithr)%prenorm4real_corr(l_err)
+                if( l_err )then
+                    scores_nonpeak(ibox) = 0.0
+                else
+                    do iref = 1,self%nrefs
+                        if( self%l_err_refs(iref,2))then
+                            scores(iref) = 0.0
+                        else
+                            scores(iref) = self%boxrefs(iref,2)%real_corr_prenorm(boximgs_heap(ithr))
+                        endif
+                    end do
+                    scores_peak(ibox) = maxval(scores)
+                endif
             end do
             !$omp end parallel do
         else
@@ -806,7 +854,11 @@ contains
         write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
         write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
         write(logfhandle,'(a,1x,f4.2)') 'P             = ', prob
-        if( smd < 0.2 .and. prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar' 
+        if( smd < 0.2 .and. prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar'
+        ! cleanup
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
     end subroutine peak_vs_nonpeak_stats
 
     subroutine kill( self )
@@ -831,7 +883,6 @@ contains
             if( allocated(self%positions2)  ) deallocate(self%positions2)
             if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
             if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
-            if( allocated(self%sxx_refs)    ) deallocate(self%sxx_refs)
             if( allocated(self%fbody)       ) deallocate(self%fbody)
         endif
 
@@ -858,9 +909,6 @@ contains
         character(len=*),  intent(in)    :: fname
         logical, optional, intent(in)    :: mask(n)
         integer :: ibox, cnt
-
-        print *, 'boximgs file: ', trim(fname)
-
         if( present(mask) )then
             cnt = 0
             do ibox = 1,n
