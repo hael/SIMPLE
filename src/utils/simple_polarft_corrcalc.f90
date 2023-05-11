@@ -800,7 +800,11 @@ contains
                 physh = nint(self%polar(irot,k)) + 1
                 physk = nint(self%polar(irot+self%nrots,k)) + c
                 if( physk > box ) cycle
-                comp = merge(self%pfts_refs_even(irot,k,i), self%pfts_ptcls(irot,k,i), isref)
+                if( isref )then
+                    comp = self%pfts_refs_even(irot,k,i)
+                else
+                    comp = self%pfts_ptcls(irot,k,i)
+                endif
                 cmat(physh,physk) = cmat(physh,physk) + comp
                 norm(physh,physk) = norm(physh,physk) + 1
             end do
@@ -917,6 +921,8 @@ contains
                 ! distance & correlation weighing
                 ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                 self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
@@ -952,6 +958,8 @@ contains
                     ! distance & correlation weighing
                     ptcl_ref_dist = inpl_corrs(loc) / ( 1. + theta )
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                    loc = (self%nrots+1)-(loc-1)
+                    if( loc > self%nrots ) loc = loc - self%nrots
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
@@ -990,6 +998,8 @@ contains
                     ! distance & correlation weighing
                     ptcl_ref_dist = 1.
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                    loc = (self%nrots+1)-(loc-1)
+                    if( loc > self%nrots ) loc = loc - self%nrots
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     do k = self%kfromto(1),self%kfromto(2)
