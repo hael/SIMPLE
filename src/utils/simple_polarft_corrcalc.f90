@@ -164,6 +164,7 @@ type :: polarft_corrcalc
     procedure          :: print
     procedure          :: vis_ptcl
     procedure          :: vis_ref
+    procedure          :: polar2cartesian
     ! MODIFIERS
     procedure          :: shift_ptcl
     ! MEMOIZER
@@ -778,6 +779,43 @@ contains
             call gnufor_image(aimag(self%pfts_refs_odd(:,:,iref)), palette='gray')
         endif
     end subroutine vis_ref
+
+    subroutine polar2cartesian( self, i, isref, cmat, box )
+        class(polarft_corrcalc), intent(in)    :: self
+        integer,                 intent(in)    :: i
+        logical,                 intent(in)    :: isref
+        complex,    allocatable, intent(inout) :: cmat(:,:)
+        integer,                 intent(out)   :: box
+        integer, allocatable :: norm(:,:)
+        complex :: comp
+        integer :: k,c,irot,physh,physk
+        if( allocated(cmat) ) deallocate(cmat)
+        box = 2*self%kfromto(2)
+        c   = box/2+1
+        allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
+        allocate(norm(box/2+1,box),source=0)
+        do irot=1,self%pftsz
+            do k=self%kfromto(1),self%kfromto(2)
+                ! Nearest-neighbour interpolation
+                physh = nint(self%polar(irot,k)) + 1
+                physk = nint(self%polar(irot+self%nrots,k)) + c
+                if( physk > box ) cycle
+                comp = merge(self%pfts_refs_even(irot,k,i), self%pfts_ptcls(irot,k,i), isref)
+                cmat(physh,physk) = cmat(physh,physk) + comp
+                norm(physh,physk) = norm(physh,physk) + 1
+            end do
+        end do
+        ! normalization
+        where(norm>0)
+            cmat = cmat / real(norm)
+        end where
+        ! irot = self%pftsz+1, eg. angle=180.
+        do k = 1,box/2-1
+            cmat(1,k+c) = conjg(cmat(1,c-k))
+        enddo
+        ! arbitrary magnitude
+        cmat(1,c) = (100.0,0.0)
+    end subroutine polar2cartesian
 
     subroutine print( self )
         class(polarft_corrcalc), intent(in) :: self
