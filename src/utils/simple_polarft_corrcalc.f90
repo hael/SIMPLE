@@ -1031,15 +1031,13 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer  :: iref, k
         real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
-        !$omp parallel do collapse(2) default(shared) private(k, iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            do k = self%kfromto(1),self%kfromto(2)
-                if( any(abs(self%regs_denom(:,k,iref)) < TINY) )then
-                    self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref)
-                else
-                    self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref)
-                endif
-            enddo
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom(:,k,iref)) < TINY )
+                self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref)
+            elsewhere
+                self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref)
+            endwhere
         enddo
         !$omp end parallel do
         if( trim(params_glob%reg_mode) == 'globdev' .or.  trim(params_glob%reg_mode) == 'neigh' )then
