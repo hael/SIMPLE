@@ -1062,8 +1062,8 @@ contains
         else
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+                self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+                self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
             enddo
             !$omp end parallel do
         endif
