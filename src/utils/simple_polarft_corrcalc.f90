@@ -1033,10 +1033,10 @@ contains
         real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,iref)) < TINY )
-                self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref)
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
             elsewhere
-                self%refs_reg(:,k,iref) = real(k, dp) * self%refs_reg(:,k,iref) / self%regs_denom(:,k,iref)
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
