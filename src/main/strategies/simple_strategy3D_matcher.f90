@@ -204,6 +204,8 @@ contains
                 enddo
                 call pftcc%regularize_refs
             endif
+            ! no shift for the first reg_iters iterations
+            if( which_iter <= params_glob%reg_iters ) params_glob%l_doshift = .false.
         endif
 
         ! Batch loop
