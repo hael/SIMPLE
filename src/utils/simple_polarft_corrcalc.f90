@@ -930,7 +930,7 @@ contains
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                 self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
@@ -967,7 +967,7 @@ contains
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
+                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
                 endif
             enddo
         enddo
@@ -1010,19 +1010,19 @@ contains
                         k_proj = real(k) * cos_theta
                         if( k_proj > self%kfromto(1) .and. k_proj < self%kfromto(2) )then
                             k_int = floor(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
+                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * (k_int + 1. - k_proj)* real(ptcl_ref_dist, dp)
+                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * (k_int + 1. - k_proj)
                             k_int = ceiling(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp) * (k_proj - k_int + 1)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp) * (k_proj - k_int + 1)
+                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * (k_proj - k_int + 1) * real(ptcl_ref_dist, dp)
+                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * (k_proj - k_int + 1)
                         elseif( int(k_proj) == self%kfromto(1) )then
                             k_int = self%kfromto(1)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp)
+                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k) * real(ptcl_ref_dist, dp)
+                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2
                         elseif( int(k_proj) == self%kfromto(2) )then
                             k_int = self%kfromto(2)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp)
+                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k) * real(ptcl_ref_dist, dp)
+                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2
                         endif
                     enddo
                 endif
