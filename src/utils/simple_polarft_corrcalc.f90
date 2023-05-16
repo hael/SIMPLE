@@ -2602,8 +2602,8 @@ contains
             call fftwf_free(self%cvec2(i)%p)
             call fftw_free(self%drvec(i)%p)
         enddo
-        deallocate(self%ft_ref_even,self%ft_ref_odd,&
-        &self%ft_ref2_even,self%ft_ref2_odd,self%cvec1,self%cvec2,self%drvec)
+        deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
+        &self%rvec1,self%cvec1,self%cvec2,self%drvec)
         call fftwf_destroy_plan(self%plan_fwd1)
         call fftwf_destroy_plan(self%plan_bwd1)
         call fftwf_destroy_plan(self%plan_mem_r2c)
