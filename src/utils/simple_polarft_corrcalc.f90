@@ -117,10 +117,14 @@ type :: polarft_corrcalc
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
     ! for testing
+    ! plans
     type(c_ptr)                   :: plan_fwd1, plan_bwd1
+    type(c_ptr)                   :: plan_mem_r2c
+    ! memoized terms
     type(fftw_cvec),  allocatable :: ft_ptcl_ctf(:,:),  ft_ctf2(:,:)
     type(fftw_cvec),  allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)
     type(fftw_cvec),  allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:)
+    ! convenience vectors
     type(fftw_cvec),  allocatable :: cvec1(:), cvec2(:)
     type(fftw_rvec),  allocatable :: rvec1(:)
     type(fftw_drvec), allocatable :: drvec(:)
@@ -2506,33 +2510,20 @@ contains
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self
-        type(fftw_cvec), allocatable :: cvecs1(:), cvecs2(:)
-        type(c_ptr)                  :: fwd_plan, r2c_plan
         integer :: ithr,i,k
-        ! allocations
-        allocate(cvecs1(nthr_glob),cvecs2(nthr_glob))
-        do ithr = 1,nthr_glob
-            cvecs1(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            cvecs2(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            call c_f_pointer(cvecs1(ithr)%p, cvecs1(ithr)%c, [self%nrots])
-            call c_f_pointer(cvecs2(ithr)%p, cvecs2(ithr)%c, [self%nrots])
-        enddo
-        fwd_plan = fftwf_plan_dft_1d(    self%nrots, cvecs1(1)%c,     cvecs2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        r2c_plan = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,           ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        ! memoization
         !$omp parallel do collapse(2) private(i,k,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
                 ithr = omp_get_thread_num() + 1
                 ! FT(X.CTF)
                 if( self%with_ctf )then
-                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
+                    self%cvec2(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
                 else
-                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i)
+                    self%cvec2(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i)
                 endif
-                cvecs1(ithr)%c(self%pftsz+1:self%nrots) = conjg(cvecs1(ithr)%c(1:self%pftsz))
-                call fftwf_execute_dft(fwd_plan, cvecs1(ithr)%c, cvecs2(ithr)%c)
-                self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) = cvecs2(ithr)%c(1:self%pftsz+1)
+                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) = self%cvec2(ithr)%c(1:self%pftsz+1)
                 ! FT(CTF2)
                 if( self%with_ctf )then
                     self%rvec1(ithr)%r(1:self%pftsz)            = self%ctfmats(:,k,i)*self%ctfmats(:,k,i)
@@ -2540,34 +2531,18 @@ contains
                 else
                     self%rvec1(ithr)%r = 1.0
                 endif
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ctf2(k,i)%c(1:self%pftsz+1) = self%cvec1(ithr)%c(1:self%pftsz+1)
             enddo
         enddo
         !$omp end parallel do
-        ! clean-up
-        do ithr = 1,nthr_glob
-            call fftwf_free(cvecs1(ithr)%p)
-            call fftwf_free(cvecs2(ithr)%p)
-        enddo
-        deallocate(cvecs1,cvecs2)
-        call fftwf_destroy_plan(fwd_plan)
-        call fftwf_destroy_plan(r2c_plan)
     end subroutine memoize_ptcls
 
     subroutine memoize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        type(fftw_cvec), allocatable :: cvecs1(:)
-        type(c_ptr)                  :: r2c_plan
         integer :: k, ithr, iref
         ! allocations
         call self%allocate_refs_memoization
-        allocate(cvecs1(nthr_glob))
-        r2c_plan = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        do ithr = 1,nthr_glob
-            cvecs1(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            call c_f_pointer(cvecs1(ithr)%p, cvecs1(ithr)%c, [self%nrots])
-        enddo
         ! memoization
         !$omp parallel do collapse(2) private(iref,k,ithr) default(shared) proc_bind(close) schedule(static)
         do iref = 1,self%nrefs
@@ -2586,22 +2561,17 @@ contains
                 ! FT(REF2even)*
                 self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_even(:,k,iref))
                 self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ref2_even(k,iref)%c = conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
                 ! FT(REF2odd)*
                 self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_odd(:,k,iref))
                 self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ref2_odd(k,iref)%c = conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
             enddo
         enddo
         !$omp end parallel do
         ! clean-up
-        do ithr = 1,nthr_glob
-            call fftwf_free(cvecs1(ithr)%p)
-        enddo
-        deallocate(cvecs1)
-        call fftwf_destroy_plan(r2c_plan)
     end subroutine memoize_refs
 
     subroutine kill_memoized_ptcls( self )
@@ -2636,6 +2606,7 @@ contains
         &self%ft_ref2_even,self%ft_ref2_odd,self%cvec1,self%cvec2,self%drvec)
         call fftwf_destroy_plan(self%plan_fwd1)
         call fftwf_destroy_plan(self%plan_bwd1)
+        call fftwf_destroy_plan(self%plan_mem_r2c)
     end subroutine kill_memoized_refs
 
     subroutine allocate_ptcls_memoization( self )
@@ -2685,8 +2656,10 @@ contains
                 call c_f_pointer(self%ft_ref2_odd( ik,iref)%p, self%ft_ref2_odd( ik,iref)%c, [self%pftsz+1])
             enddo
         enddo
-        self%plan_fwd1 = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        self%plan_bwd1 = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        ! plans
+        self%plan_fwd1    = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_bwd1    = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_mem_r2c = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
     end subroutine allocate_refs_memoization
 
     subroutine gencorrs_dev_1( self, iref, iptcl, cc )
@@ -3003,7 +2976,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i
-        real(dp) :: sqsum_ref, denom
+        real(dp) :: sqsum_ref
         integer  :: k
         sqsum_ref  = 0.d0
         gencorr_cc_for_rot_8_dev = 0.d0
@@ -3011,12 +2984,7 @@ contains
             sqsum_ref                = sqsum_ref +                real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
             gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
         end do
-        denom = sqsum_ref * self%sqsums_ptcls(i)
-        if( denom > DTINY )then
-            gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev / dsqrt(denom)
-        else
-            gencorr_cc_for_rot_8_dev = 0.d0
-        endif
+        gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
     end function gencorr_cc_for_rot_8_dev
 
     real(dp) function gencorr_euclid_for_rot_8_dev( self, pft_ref, iptcl )
