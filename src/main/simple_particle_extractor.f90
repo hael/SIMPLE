@@ -45,7 +45,7 @@ type :: ptcl_extractor
     procedure          :: init_mic
     procedure, private :: init_mask
     procedure, private :: parse_movie_metadata
-    procedure, private :: generate_dose_weighing
+    procedure, private :: generate_dose_weighing, apply_dose_weighing
     procedure          :: display
     procedure          :: extract_particles
     procedure          :: extract_particles_from_mic
@@ -67,7 +67,9 @@ contains
         class(ori),            intent(in)    :: omic
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
-        integer :: i,iframe
+        character(len=:), allocatable :: poly_fname
+        real(dp),         allocatable :: poly(:)
+        integer  :: i,iframe
         call self%kill
         if( .not. omic%isthere('mc_starfile') )then
             THROW_HARD('Movie star doc is absent 1, reverting to micrograph extraction')
@@ -92,6 +94,12 @@ contains
             else
                 ! downscaling shifts
                 self%isoshifts = self%isoshifts * self%scale
+                poly_fname = fname_new_ext(self%docname,'poly')
+                if( file_exists(poly_fname) )then
+                    poly = file2drarr(poly_fname)
+                    self%polyx = poly(:POLYDIM)
+                    self%polyy = poly(POLYDIM+1:)
+                endif
                 self%polyx     = self%polyx * real(self%scale,dp)
                 self%polyy     = self%polyy * real(self%scale,dp)
                 ! dose-weighing
@@ -111,7 +119,6 @@ contains
                 self%smpd_out   = self%smpd / self%scale
                 self%ldim_sc    = round2even(real(self%ldim)*self%scale)
                 self%ldim_sc(3) = 1
-                if( DEBUG_HERE ) print *,'dimensions done'
                 ! allocate & read frames
                 allocate(self%frames(self%nframes))
                 if( self%l_eer )then
@@ -127,7 +134,6 @@ contains
                         call self%frames(iframe)%read(self%moviename, iframe)
                     end do
                 endif
-                if( DEBUG_HERE ) print *,'images read'
                 ! gain correction
                 if( self%l_gain )then
                     if( .not.file_exists(self%gainrefname) )then
@@ -145,10 +151,22 @@ contains
                 endif
                 call self%gain%kill
                 ! downscale frames
+                ! !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+                ! do iframe=1,self%nframes
+                !     call self%frames(iframe)%fft
+                !     call self%frames(iframe)%clip_inplace(self%ldim_sc)
+                !     call self%frames(iframe)%ifft
+                ! enddo
+                ! !$omp end parallel do
                 !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
                 do iframe=1,self%nframes
                     call self%frames(iframe)%fft
                     call self%frames(iframe)%clip_inplace(self%ldim_sc)
+                enddo
+                !$omp end parallel do
+                call self%apply_dose_weighing
+                !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+                do iframe=1,self%nframes
                     call self%frames(iframe)%ifft
                 enddo
                 !$omp end parallel do
@@ -162,7 +180,7 @@ contains
                 enddo
                 !$omp end parallel do
                 ! dose weighting
-                call self%generate_dose_weighing
+                ! call self%generate_dose_weighing
                 ! mask for post-extraction normalizations
                 call self%init_mask
             endif
@@ -479,7 +497,7 @@ contains
             call self%frame_particle(ithr)%fft
             call self%frame_particle(ithr)%shift2Dserial(-shift)
             ! dose-weighing
-            if( self%l_doseweighing ) call self%frame_particle(ithr)%mul_cmat(self%doses(:,:,t:t))
+            ! if( self%l_doseweighing ) call self%frame_particle(ithr)%mul_cmat(self%doses(:,:,t:t))
             ! weighted sum
             call self%particle(ithr)%add(self%frame_particle(ithr), w=self%weights(t))
         enddo
@@ -625,6 +643,46 @@ contains
             !$omp end parallel do
         endif
     end subroutine cure_outliers
+
+        ! Frames assumed in fourier space
+    subroutine apply_dose_weighing( self )
+        class(ptcl_extractor), intent(inout) :: self
+        real, parameter :: A=0.245, B=-1.665, C=2.81
+        real            :: qs(self%nframes), acc_doses(self%nframes)
+        real            :: spaFreqk, twoNe, spafreq, limhsq,limksq
+        integer         :: nrflims(3,2), ldim(3), hphys,kphys, iframe, h,k
+        if( .not.self%l_doseweighing ) return
+        if( .not.self%frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
+        nrflims = self%frames(1)%loop_lims(2)
+        ldim    = self%frames(1)%get_ldim()
+        limhsq  = (real(ldim(1))*self%smpd_out)**2.
+        limksq  = (real(ldim(2))*self%smpd_out)**2.
+        do iframe=1,self%nframes
+            acc_doses(iframe) = real(iframe) * self%doseperframe
+        end do
+        if( is_equal(self%kV,200.) )then
+            acc_doses = acc_doses / 0.8
+        else if( is_equal(self%kV,100.) )then
+            acc_doses = acc_doses / 0.64
+        endif
+        !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,iframe,qs)&
+        !$omp default(shared) schedule(static) proc_bind(close)
+        do k = nrflims(2,1),nrflims(2,2)
+            kphys    = k + 1 + merge(ldim(2),0,k<0)
+            spaFreqk = real(k*k)/limksq
+            do h = nrflims(1,1),nrflims(1,2)
+                hphys   = h + 1
+                spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
+                twoNe   = 2.*(A*spaFreq**B + C)
+                qs = exp(-acc_doses/twoNe)
+                qs = qs / sqrt(sum(qs*qs))
+                do iframe = 1,self%nframes
+                    call self%frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine apply_dose_weighing
 
     !>  pixels to coordinates for polynomial evaluation (scaled in/out)
     elemental subroutine pix2polycoords( self, xin, yin, x, y )
