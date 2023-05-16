@@ -1034,7 +1034,6 @@ contains
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer  :: iref, k
-        real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
@@ -1044,34 +1043,12 @@ contains
             endwhere
         enddo
         !$omp end parallel do
-        if( trim(params_glob%reg_mode) == 'globdev' .or.  trim(params_glob%reg_mode) == 'neigh' )then
-            prob_cc_odd  = 0._dp
-            prob_cc_even = 0._dp
-            !$omp parallel do default(shared) private(iref, k) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do k = self%kfromto(1),self%kfromto(2)
-                    prob_cc_odd( iref) = prob_cc_odd( iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_odd( :,k,iref), dp) )
-                    prob_cc_even(iref) = prob_cc_even(iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_even(:,k,iref), dp) )
-                enddo
-                prob_cc_odd( iref) = 1._dp + max(0._dp, prob_cc_odd( iref))
-                prob_cc_even(iref) = 1._dp + max(0._dp, prob_cc_even(iref))
-            enddo
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_even(iref))
-                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_odd( iref))
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-                self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-            enddo
-            !$omp end parallel do
-        endif
-        
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+        enddo
+        !$omp end parallel do
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
