@@ -980,52 +980,35 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer  :: i, iref, iptcl, loc, k, k_int
+        integer  :: i, iref, iptcl, loc
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real     :: euls(3), euls_ref(3), cos_theta, k_proj, theta
+        real     :: euls(3), euls_ref(3), shvec(2)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cos_theta,theta,k_proj,k_int,k) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot, shvec) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl     = glob_pinds(i)
-                euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
-                euls      = ptcl_eulspace%get_euler(iptcl) * pi / 180.
-                cos_theta = cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1))
-                theta     = acos(cos_theta)
-                if( theta < params_glob%arc_thres*pi/180. .and. theta >= 0. .and. &
-                 &(self%kfromto(2)*cos_theta >= self%kfromto(1) .or. self%kfromto(1)*cos_theta <= self%kfromto(2)) )then
-                    ! find best irot for this pair of iref, iptcl
-                    call self%gencorrs( iref, iptcl, inpl_corrs )
-                    loc = maxloc(inpl_corrs, dim=1)
-                    if( inpl_corrs(loc) < TINY ) cycle
-                    ! distance & correlation weighing
-                    ptcl_ref_dist = 1.
-                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                    loc = (self%nrots+1)-(loc-1)
-                    if( loc > self%nrots ) loc = loc - self%nrots
-                    call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                    call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                    do k = self%kfromto(1),self%kfromto(2)
-                        k_proj = real(k) * cos_theta
-                        if( k_proj > self%kfromto(1) .and. k_proj < self%kfromto(2) )then
-                            k_int = floor(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * (k_int + 1. - k_proj)* real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * (k_int + 1. - k_proj)
-                            k_int = ceiling(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * (k_proj - k_int + 1) * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * (k_proj - k_int + 1)
-                        elseif( int(k_proj) == self%kfromto(1) )then
-                            k_int = self%kfromto(1)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k) * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2
-                        elseif( int(k_proj) == self%kfromto(2) )then
-                            k_int = self%kfromto(2)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k) * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2
-                        endif
-                    enddo
-                endif
+                iptcl    = glob_pinds(i)
+                euls_ref = eulspace%get_euler(iref)
+                euls     = ptcl_eulspace%get_euler(iptcl)
+                ! projection direction distance, euler_dist could be used instead
+                euls_ref(3)   = 0.
+                euls(3)       = 0.
+                ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
+                ! find best irot for this pair of iref, iptcl
+                shvec         = ptcl_eulspace%get_2Dshift(iptcl)
+                call self%gencorrs( iref, iptcl, -shvec , inpl_corrs )
+                loc = maxloc(inpl_corrs, dim=1)
+                if( inpl_corrs(loc) < TINY ) cycle
+                ! distance & correlation weighing
+                ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc, shvec)
+                call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc, shvec)
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
@@ -1057,12 +1040,14 @@ contains
         self%regs_denom = 0._dp
     end subroutine reset_regs
 
-    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
+    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
         real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        integer :: rot
+        real,        optional,   intent(in)    :: shvec(2)
+        complex(sp), pointer :: shmat(:,:)
+        integer :: rot, ithr
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1075,6 +1060,12 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
             ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
         end if
+        if( present(shvec) )then
+            ithr  = omp_get_thread_num() + 1
+            shmat => self%heap_vars(ithr)%shmat
+            call self%gen_shmat(ithr, shvec, shmat)
+            ptcl_ctf_rot = ptcl_ctf_rot * real(shmat, dp)
+        endif
     end subroutine rotate_polar_real
 
     subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
