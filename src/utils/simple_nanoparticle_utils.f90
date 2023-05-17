@@ -11,7 +11,7 @@ implicit none
 
 public :: phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, find_atoms_subset, no_motion_variance
+public :: remove_atoms, find_atoms_subset
 private
 #include "simple_local_flags.inc"
 
@@ -663,6 +663,8 @@ contains
         call Exy_strain%writepdb('Exy_strain')
         call Eyz_strain%writepdb('Eyz_strain')
         call Exz_strain%writepdb('Exz_strain')
+        ! Output ideal lattice for visualization
+        call write_ideal_lattice_pdb(element, modelFromABC)
         ! kill
         call Exx_strain%kill
         call Eyy_strain%kill
@@ -881,6 +883,42 @@ contains
         call a%kill
     end subroutine write_matrix2pdb
 
+    ! Outputs pdb file of ideal atomic positions from fit lattice for visualization
+    subroutine write_ideal_lattice_pdb( element, lattice, betas )
+        character(len=2),  intent(in) :: element
+        real, allocatable, intent(in) :: lattice(:,:)
+        real, optional,    intent(in) :: betas(size(lattice, dim=2))
+        character(len=:), allocatable :: ext
+        character(len=4)              :: atom_name
+        character(len=STDLEN)         :: fbody
+        character(len=*), parameter   :: pdbfile='ideal_lattice.pdb'
+        integer     :: n, i
+        type(atoms) :: a
+        logical     :: betas_present
+        betas_present = present(betas)
+        ! check that the file extension is .pdb
+        if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
+        atom_name = trim(adjustl(element))//'  '
+        n = size(lattice, dim=1)
+        call a%new(n)
+        ! fill up a
+        do i = 1, n
+            call a%set_name(i,atom_name)
+            call a%set_element(i, element)
+            call a%set_coord(i, lattice(i,:)) ! Note indexing different compared to matrix2pdb()
+            call a%set_num(i,i)
+            call a%set_resnum(i,1) ! Resnum 1 allows visualization of bonds
+            call a%set_chain(i,'A')
+            call a%set_occupancy(i,1.)
+            if( betas_present ) call a%set_beta(i, betas(i))
+        enddo
+        ! write PDB
+        ext   = fname2ext(trim(pdbfile))
+        fbody = get_fbody(trim(pdbfile), ext)
+        call a%writePDB(fbody)
+        call a%kill
+    end subroutine write_ideal_lattice_pdb
+
     subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad, frac_diam )
         real,              intent(in)    :: points_P(:,:), points_Q(:,:)
         character(len=2),  intent(in)    :: element
@@ -1015,56 +1053,5 @@ contains
         enddo
         deallocate(mask)
     end subroutine find_atoms_subset
-
-    function no_motion_variance(element, smpd) result(var)
-        character(len=2), intent(in)    :: element
-        real, intent(in)                :: smpd
-        type(image)     :: one_atom
-        type(atoms)     :: ideal_atom
-        real, pointer   :: rmat(:,:,:)
-        real            :: cutoff, center(3), XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1), r, int, var, max_int
-        integer         :: ldim(3), i, j, k, errflg
-
-        ldim = 160.
-        cutoff = (8.)*smpd
-        center(:3) = real(ldim(:3)/2.)
-
-        call one_atom%new(ldim, smpd)
-        call ideal_atom%new(1)
-        call ideal_atom%set_element(1,element)
-        call ideal_atom%set_coord(1,smpd*center(:3)) ! DO NOT NEED THE +1
-        call ideal_atom%convolve(one_atom, cutoff, 0.)
-        call one_atom%get_rmat_ptr(rmat)
-
-        XTWX = 0.
-        XTWX_inv = 0.
-        XTWY = 0.
-        max_int = 0.
-        do k=1,ldim(3)
-            do j=1,ldim(2)
-                do i=1,ldim(1)
-                    r = euclid(1.*(/i, j, k/), 1.*center)
-                    int = rmat(i,j,k)
-                    if (int > 0) then
-                        if (int > max_int) then
-                            max_int = int
-                        end if
-                        XTWX(1,1) = XTWX(1,1) + int
-                        XTWX(1,2) = XTWX(1,2) + r**2 * int
-                        XTWX(2,2) = XTWX(2,2) + r**4 * int
-                        XTWY(1,1) = XTWY(1,1) + int * log(int)
-                        XTWY(2,1) = XTWY(2,1) + r**2 * int * log(int)
-                    end if
-                end do
-            end do
-        end do
-        XTWX(2,1) = XTWX(1,2)
-        call matinv(XTWX, XTWX_inv, 2, errflg)
-        B = matmul(XTWX_inv, XTWY)
-        print *, "Actual Peak: ", max_int
-        print *, "Stationary Fit Peak: ", exp(B(1,1))
-        var = -0.5 / B(2,1) ! Best fit variance
-    end function no_motion_variance
-
 
 end module simple_nanoparticle_utils
