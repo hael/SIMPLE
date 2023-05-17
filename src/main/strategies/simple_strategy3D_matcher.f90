@@ -188,11 +188,16 @@ contains
 
         ! ref regularization
         if( params_glob%l_ref_reg )then
-            if( params_glob%l_eps )then 
-                ! user provided
-            else
-                params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-            endif
+            select case(trim(params_glob%eps_mode))
+                case('auto')
+                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                case('fixed')
+                    ! user provided, or default value in simple_parameters
+                case('linear')
+                    params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
+                case DEFAULT
+                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
+            end select
             if( params_glob%eps > TINY )then
                 call pftcc%reset_regs
                 ! Batch loop
