@@ -20,7 +20,7 @@ public :: motion_correct_dev, motion_correct_patched, motion_correct_patched_cal
 public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
-public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_msd
+public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_bid
 ! Utils
 public :: motion_correct_get_ref_frame, correct_gain
 private
@@ -415,23 +415,16 @@ contains
         endif
     end subroutine motion_correct_iso_calc_sums
 
-    subroutine motion_correct_calc_msd( include_patch, msd )
+    subroutine motion_correct_calc_bid( include_patch, bid )
         logical, intent(in)  :: include_patch
-        real,    intent(out) :: msd
-        real    :: shifts(nframes,2)
-        integer :: t
+        real,    intent(out) :: bid
         if( include_patch )then
-            do t = 1, nframes
-                shifts(t,1) = shifts_toplot(t,1) + real(sum(patched_shifts(1,t,:,:))/real(params_glob%nxpatch*params_glob%nypatch,dp))
-                shifts(t,2) = shifts_toplot(t,2) + real(sum(patched_shifts(2,t,:,:))/real(params_glob%nxpatch*params_glob%nypatch,dp))
-            enddo
+            bid = real(sum(patched_shifts**2) / real(nframes*params_glob%nxpatch*params_glob%nypatch,dp))
+            bid = sqrt( bid )
         else
-            shifts = shifts_toplot
+            bid = 0.0
         endif
-        msd = sum( (shifts(:,1)-shifts(1,1))**2 )
-        msd = msd + sum( (shifts(:,2)-shifts(1,2))**2 )
-        msd = msd/real(nframes)
-    end subroutine motion_correct_calc_msd
+    end subroutine motion_correct_calc_bid
 
     ! Write iso/aniso-tropic shifts
     subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
