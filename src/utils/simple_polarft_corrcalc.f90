@@ -1032,6 +1032,7 @@ contains
             self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
         enddo
         !$omp end parallel do
+        if( L_CTFROTDEV ) call self%memoize_refs
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
@@ -2595,6 +2596,7 @@ contains
     subroutine allocate_refs_memoization( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: ik, ithr, iref
+        if( allocated(self%ft_ref_even) ) call self%kill_memoized_refs
         allocate(self%ft_ref_even( self%kfromto(1):self%kfromto(2),self%nrefs),&
         &self%ft_ref_odd(  self%kfromto(1):self%kfromto(2),self%nrefs),&
         &self%ft_ref2_even(self%kfromto(1):self%kfromto(2),self%nrefs),&

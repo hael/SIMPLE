@@ -73,7 +73,7 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
-        logical :: doprint, do_extr, l_ctf
+        logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -174,12 +174,6 @@ contains
         call prepimgbatch(batchsz_max)
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
-            l_ctf = build_glob%spproj%get_ctfflag('ptcl3D').ne.'no'
-        else
-            ! class averages have no CTF
-            l_ctf = .false.
-        endif
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         if( L_BENCH_GLOB )then
             rt_prep_orisrch = toc(t_prep_orisrch)
@@ -219,8 +213,6 @@ contains
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-            call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-            call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -475,6 +467,7 @@ contains
                 call o_tmp%kill
             end do
         end do
+        if( L_CTFROTDEV ) call pftcc%memoize_refs
         ! then the Cartesian
         ! must be done here since params_glob%kfromto is dynamically set
         call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
@@ -510,8 +503,14 @@ contains
             call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
+        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+        call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        call pftcc%memoize_ffts
+        if( L_CTFROTDEV )then
+            call pftcc%memoize_ptcls
+        else
+            call pftcc%memoize_ffts
+        endif
     end subroutine build_batch_particles
 
     subroutine reg_batch_particles( nptcls_here, pinds_here )
@@ -533,10 +532,14 @@ contains
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ffts
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+        ! Memoize particles FFT parameters
+        if( L_CTFROTDEV )then
+            call pftcc%memoize_ptcls
+        else
+            call pftcc%memoize_ffts
+        endif
         ! compute regularization terms
         select case(trim(params_glob%reg_mode))
             case('global')
