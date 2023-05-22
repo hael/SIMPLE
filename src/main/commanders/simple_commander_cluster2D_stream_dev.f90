@@ -1131,11 +1131,9 @@ contains
             enddo
             call random_generator%kill
         else
-            nptcls2update = nptcls_tot
-            nptcls_sel    = sum(nptcls_per_stk)
-            do istk = 1,nstks_tot
-                pool_stacks_mask(istk) = nptcls_per_stk(istk) > 0
-            enddo
+            nptcls2update    = nptcls_tot
+            nptcls_sel       = sum(nptcls_per_stk)
+            pool_stacks_mask = nptcls_per_stk > 0
         endif
         nstks2update = count(pool_stacks_mask)
         ! transfer stacks and particles
@@ -1185,16 +1183,17 @@ contains
             enddo
         endif
         ! update command line and write project
-        if( sum(prev_eo_pops) == 0 )then
-            call cline_cluster2D_pool%delete('update_frac')
-        else
-            frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-            call cline_cluster2D_pool%set('update_frac', frac_update)
-            call cline_cluster2D_pool%set('center',      'no')
-            do icls = 1,ncls_glob
-                call spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
-                call spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
-            enddo
+        call cline_cluster2D_pool%delete('update_frac')
+        if( nptcls_sel > MAX_STREAM_NPTCLS )then
+            if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
+                frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
+                call cline_cluster2D_pool%set('update_frac', frac_update)
+                call cline_cluster2D_pool%set('center',      'no')
+                do icls = 1,ncls_glob
+                    call spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
+                    call spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
+                enddo
+            endif
         endif
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call spproj%kill
