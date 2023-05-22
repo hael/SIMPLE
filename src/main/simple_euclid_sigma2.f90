@@ -126,17 +126,23 @@ contains
         if( params_glob%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
             ! copy global sigma to particles
+            !$omp parallel do default(shared) private(iptcl,eo) proc_bind(close) schedule(static)
             do iptcl = params_glob%fromp, params_glob%top
+                if(os%get_state(iptcl) == 0 ) cycle
                 eo = nint(os%get(iptcl, 'eo')) ! 0/1
                 self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,1,:)
             end do
+            !$omp end parallel do
         else
             ! copy group sigmas to particles
+            !$omp parallel do default(shared) private(iptcl,eo,igroup) proc_bind(close) schedule(static)
             do iptcl = params_glob%fromp, params_glob%top
+                if(os%get_state(iptcl) == 0 ) cycle
                 igroup  = nint(os%get(iptcl, 'stkind'))
                 eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
                 self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
             end do
+            !$omp end parallel do
         endif
     end subroutine read_groups
 

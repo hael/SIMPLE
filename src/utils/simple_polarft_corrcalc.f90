@@ -3268,7 +3268,7 @@ contains
             if( denom < 1.d-16 )then
                 frc(k) = 0.
             else
-                frc(k) = real(num / denom)
+                frc(k) = real(num / sqrt(denom))
             endif
         end do
     end subroutine calc_frc_dev
