@@ -381,11 +381,7 @@ contains
         !$omp end parallel do
         ! Memoize particles FFT parameters
         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-        if( L_CTFROTDEV )then
-            call pftcc%memoize_ptcls
-        else
-            call pftcc%memoize_ffts
-        endif
+        call pftcc%memoize_ptcls
     end subroutine build_pftcc_batch_particles
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
@@ -460,7 +456,7 @@ contains
             endif
         end do
         !$omp end parallel do
-        if( L_CTFROTDEV ) call pftcc%memoize_refs
+        call pftcc%memoize_refs
         ! CLEANUP
         deallocate(match_imgs)
     end subroutine preppftcc4align

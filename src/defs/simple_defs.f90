@@ -51,7 +51,6 @@ logical,          parameter   :: L_DEV_GLOB         = .false.  !< global develop
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
 integer,          parameter   :: AUTOMSK_FREQ       = 3        !< frequency of automasking
-logical,          parameter   :: L_CTFROTDEV = .false.
 
 ! type for arrays of allocatable strings
 type str4arr

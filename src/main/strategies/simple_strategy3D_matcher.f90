@@ -468,7 +468,7 @@ contains
             end do
             !$omp end parallel do
         end do
-        if( L_CTFROTDEV ) call pftcc%memoize_refs
+        call pftcc%memoize_refs
         ! then the Cartesian
         ! must be done here since params_glob%kfromto is dynamically set
         if( params_glob%l_cartesian ) call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
@@ -501,11 +501,7 @@ contains
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         if( params_glob%l_cartesian ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        if( L_CTFROTDEV )then
-            call pftcc%memoize_ptcls
-        else
-            call pftcc%memoize_ffts
-        endif
+        call pftcc%memoize_ptcls
     end subroutine build_batch_particles
 
     subroutine reg_batch_particles( nptcls_here, pinds_here )
@@ -530,11 +526,7 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        if( L_CTFROTDEV )then
-            call pftcc%memoize_ptcls
-        else
-            call pftcc%memoize_ffts
-        endif
+        call pftcc%memoize_ptcls
         ! compute regularization terms
         select case(trim(params_glob%reg_mode))
             case('global')

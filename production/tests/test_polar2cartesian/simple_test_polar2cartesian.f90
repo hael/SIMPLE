@@ -73,7 +73,7 @@ call b%img%rtsq(25.,20.0,10.0, img_copy)
 call img_copy%write('particle_shifted_rotated.mrc')
 call img_copy%fft()
 call img_copy%polarize(pftcc, 1, isptcl=.true., iseven=.true., mask=b%l_resmsk)
-call pftcc%memoize_ffts
+call pftcc%memoize_ptcls
 call pftcc%polar2cartesian(1,.false.,cmat,box)
 call img%new([box,box,1],1.0)
 call img%set_cmat(cmat)
