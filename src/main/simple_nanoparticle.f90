@@ -102,11 +102,11 @@ type :: atom_stats
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
-    real    :: u_iso             = 0. ! isotropic B-Factor                                          U_ISO
+    real    :: u_iso             = 0. ! isotropic displacement parameters (b-factor)                U_ISO
     real    :: u_evals(3)        = 0. ! eigenvalues of aniso displacement matrix (maj,med,min)      U_(MAJ,MED,MIN)
     real    :: azimuth           = 0. ! Azimuthal angle of major eigenvector [0,Pi)                 AZIMUTH
     real    :: polar             = 0. ! Polar angle of major eigenvector [0, Pi)                    POLAR
-    real    :: doi               = 0. ! degree of isotropy (only accurate for CN & NP averages)     DOI
+    real    :: doi               = 0. ! degree of isotropy                                          DOI
     real    :: isocorr           = 0. ! Correlation of isotropic B-Factor fit to input map          ISO_CORR
     real    :: anisocorr         = 0. ! Correlation of anisotropic B-Factor fit to input map        ANISO_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
@@ -529,7 +529,9 @@ contains
         ! OUTLIERS DISCARDING
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
+        if (WRITE_OUTPUT) call simatms%write(trim(self%fbody)//'_SIM_pre_validation.mrc')
         call self%validate_atoms(simatms)
+        if ( WRITE_OUTPUT )call self%write_centers('valid_corr_in_bfac_field_pre_discard', 'valid_corr')
         ! discard atoms with low valid_corr
         call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
         ! discard lowly coordinated atoms
@@ -1147,7 +1149,7 @@ contains
         character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:)
         real                 :: tmp_diam, a(3), res_fsc05, res_fsc0143, base_isotropic
-        integer              :: i, cc, cn, ios
+        integer              :: i, cc, cn, ios, cc_largest, max_size
         character(*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
 
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
@@ -1188,7 +1190,7 @@ contains
 
         call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fit_anisotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
-
+        max_size = 0
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
             ! index of the connected component
@@ -1233,6 +1235,7 @@ contains
         self%n_aniso = self%n_cc - count(self%atominfo(:)%tossADP)
         call fit_isotropic%write(fn_fit_isotropic)
         call fit_anisotropic%write(fn_fit_anisotropic)
+        if (WRITE_OUTPUT) call write_2D_slice()
 
         ! CALCULATE GLOBAL NP PARAMETERS
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
@@ -1267,6 +1270,7 @@ contains
         call self%write_centers('u_iso_in_bfac_field',      'u_iso')
         call self%write_centers('doi_in_bfac_field',        'doi')
         call self%write_centers_aniso('aniso_bfac_field')
+        ! Write a pdb file containing the ideal lattice positions (with no missing atoms) for visualization
         ! destruct
         deallocate(mask, cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call fit_isotropic%kill
@@ -1279,8 +1283,6 @@ contains
             subroutine calc_zscore( arr )
                 real, intent(inout) :: arr(:)
                 arr = (arr - self%map_stats%avg) / self%map_stats%sdev
-                print *, "RMAT AVG: ", self%map_stats%avg
-                print *, "RMAT SDEV ", self%map_stats%sdev
             end subroutine calc_zscore
 
             subroutine calc_cn_stats( cn )
@@ -1346,6 +1348,41 @@ contains
                 call simatms%kill
                 call atoms_obj%kill
             end subroutine write_cn_atoms
+
+            ! Outputs the intensities of a 2D slice containing the center of the largest CC 
+            ! as a CSV file for visualization in Python/Matlab. Output positions are the voxel
+            ! positions with respect to the CC center.
+            subroutine write_2D_slice()
+                integer :: cc, cc_largest, max_size, center(3), ldim_slice(3), i, j, funit
+                character(*), parameter :: fn_slice='cc_2D_slice.csv'
+                character(*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
+                ! Find largest CC for best visualization
+                max_size = 0
+                cc_largest = 0
+                do cc=1, self%n_cc
+                    if (self%atominfo(cc)%size > max_size) then
+                        cc_largest = cc
+                        max_size = self%atominfo(cc)%size
+                    end if
+                end do
+                center(:) = self%atominfo(cc_largest)%center(:)
+                ! Write output as CSV file with the cc center at the origin for easy analysis
+                call fopen(funit, file=fn_slice, status='replace')
+                write(funit, '(A)') 'X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
+                601 format(F10.6,A2)
+                602 format(F10.6)
+                do i=1,self%ldim(1)
+                    do j=1, self%ldim(2)
+                        if ( imat_cc(i, j, center(3)) == cc_largest ) then
+                            write(funit,601,advance='no') real(i-center(1)),    CSV_DELIM ! X
+                            write(funit,601,advance='no') real(j-center(2)),    CSV_DELIM ! Y
+                            write(funit,602) rmat_raw(i,j,center(3))                      ! Intensity
+                        end if
+                    end do
+                end do
+                call fclose(funit)
+            end subroutine write_2D_slice
+
     end subroutine fillin_atominfo
 
     ! calc the avg of the centers coords

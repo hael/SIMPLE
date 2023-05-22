@@ -179,6 +179,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh|dev){global}
+    character(len=STDLEN)     :: eps_mode='auto'      !< reg eps mode(auto|fixed|linear){auto}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -398,7 +399,6 @@ type :: parameters
     logical :: l_doshift      = .false.
     logical :: l_eer_fraction = .false.
     logical :: l_envfsc       = .false.
-    logical :: l_eps          = .false.
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
@@ -535,6 +535,7 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
+        call check_carg('eps_mode',       self%eps_mode)
         call check_carg('ref_reg',        self%ref_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -1379,8 +1380,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
-        ! step-size (learning rate)
-        self%l_eps = cline%defined('eps')
+        ! reg eps mode
+        if( cline%defined('eps') ) self%eps_mode = 'fixed'
         ! reference regularization
         self%l_ref_reg = trim(self%ref_reg).eq.'yes'
         ! ML regularization
