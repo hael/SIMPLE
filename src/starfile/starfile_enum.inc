@@ -380,6 +380,7 @@
         enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 358
 
         enumerator :: SMPL_MOVIE_FRAME_WEIGHT                          = 359
+        enumerator :: SMPL_MOVIE_FRAME_ALIGN                           = 360
 
-        enumerator :: EMDL_LAST_LABEL                                  = 360 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 361 ! **** NOTE ****: Do keep this label always at the end
     end enum

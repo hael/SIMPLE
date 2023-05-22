@@ -30,7 +30,7 @@ type :: ptcl_extractor
     real                          :: scale
     real                          :: total_dose, doseperframe, preexposure, kv
     integer                       :: ldim(3), ldim_sc(3), box, box_pd
-    integer                       :: nframes, start_frame, nhotpix
+    integer                       :: nframes, start_frame, nhotpix, align_frame
     integer                       :: eer_fraction, eer_upsampling
     logical                       :: l_doseweighing = .false.
     logical                       :: l_scale        = .false.
@@ -248,8 +248,10 @@ contains
                     self%eer_upsampling = parse_int(table, EMDL_MICROGRAPH_EER_UPSAMPLING, err)
                     self%eer_fraction   = parse_int(table, EMDL_MICROGRAPH_EER_GROUPING, err)
                 endif
-                motion_model = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, err)
-                self%l_poly  = motion_model == 1
+                motion_model     = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, err)
+                self%l_poly      = motion_model == 1
+                self%align_frame = 0
+                if( self%l_poly ) self%align_frame = parse_int(table, SMPL_MOVIE_FRAME_ALIGN, err)
             case('global_shift')
                 ! parse isotropic shifts
                 object_id  = starfile_table__firstobject(table)
@@ -362,6 +364,7 @@ contains
         print *, 'eer            ', self%l_eer
         print *, 'eer_fraction   ', self%eer_fraction
         print *, 'eer_upsampling ', self%eer_upsampling
+        print *, 'align_frame    ', self%align_frame
         if( allocated(self%isoshifts) )then
             do i = 1,size(self%isoshifts,dim=2)
                 print *,'isoshifts ',i,self%isoshifts(:,i),self%weights(i)
@@ -699,7 +702,7 @@ contains
         real(dp),              intent(in)  :: x, y
         real,                  intent(out) :: shift(2)
         real(dp) :: t, xx, yy
-        t = real(iframe-1, dp)
+        t = real(iframe-self%align_frame, dp)
         call self%pix2polycoords(x,y, xx,yy)
         shift(1) = polyfun(self%polyx(:), xx,yy,t)
         shift(2) = polyfun(self%polyy(:), xx,yy,t)
@@ -771,6 +774,7 @@ contains
         self%nhotpix        = 0
         self%doseperframe   = 0.
         self%scale          = 1.
+        self%align_frame    = 0
         self%moviename   = ''
         self%docname     = ''
         self%gainrefname = ''

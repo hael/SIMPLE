@@ -19,7 +19,7 @@ public :: motion_correct_iso_kill
 public :: motion_correct_dev, motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: motion_correct_with_patched
 ! Common & convenience
-public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
+public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname, motion_correct_write_poly
 public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_bid
 ! Utils
 public :: motion_correct_get_ref_frame, correct_gain
@@ -426,6 +426,17 @@ contains
         endif
     end subroutine motion_correct_calc_bid
 
+    ! write polynomial coefficients
+    subroutine motion_correct_write_poly( fname )
+        character(len=*),  intent(in) :: fname
+        real(dp), allocatable :: polycoeffs(:)
+        if( trim(params_glob%extractfrommov).eq.'yes' )then
+            call motion_patch%get_poly_coeffs(polycoeffs)
+            if( do_scale ) polycoeffs = polycoeffs / real(params_glob%scale,dp)
+            call arr2file(polycoeffs, fname)
+        endif
+    end subroutine motion_correct_write_poly
+
     ! Write iso/aniso-tropic shifts
     subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
         use simple_starfile_wrappers
@@ -434,7 +445,6 @@ contains
         character(len=*), optional, intent(in) :: gainref_fname
         real(dp),     allocatable :: poly_coeffs(:)
         type(starfile_table_type) :: mc_starfile
-        character(len=:), allocatable :: poly_fname
         real(dp) :: dpscale
         real     :: shift(2), doseperframe
         integer  :: i,iframe, npoly, ndeadpixels, motion_model
@@ -444,11 +454,7 @@ contains
             motion_model = 1
             npoly        = size(patched_polyn,1)
             poly_coeffs  = patched_polyn
-            if( do_scale ) poly_coeffs = patched_polyn / dpscale
-            if( trim(params_glob%extractfrommov).eq.'yes' )then
-                poly_fname = fname_new_ext(mc_starfile_fname,'poly')
-                call arr2file(poly_coeffs, poly_fname)
-            endif
+            if( do_scale ) poly_coeffs = poly_coeffs / dpscale
         endif
         call starfile_table__new(mc_starfile)
         call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
@@ -480,6 +486,9 @@ contains
             call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_EER_GROUPING, eer_fraction)
         endif
         call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, motion_model)
+        if( writepoly .and. trim(params_glob%extractfrommov).eq.'yes' )then
+            call starfile_table__setValue_int(mc_starfile, SMPL_MOVIE_FRAME_ALIGN, fixed_frame)
+        endif
         call starfile_table__write_ofile(mc_starfile)
         ! isotropic shifts
         call starfile_table__clear(mc_starfile)
