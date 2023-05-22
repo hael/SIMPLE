@@ -441,6 +441,7 @@ contains
         character(len=*), optional, intent(in) :: gainref_fname
         real(dp),     allocatable :: poly_coeffs(:)
         type(starfile_table_type) :: mc_starfile
+        character(len=:), allocatable :: poly_fname
         real(dp) :: dpscale
         real     :: shift(2), doseperframe
         integer  :: i,iframe, npoly, ndeadpixels, motion_model
@@ -451,6 +452,10 @@ contains
             npoly        = size(patched_polyn,1)
             poly_coeffs  = patched_polyn
             if( do_scale ) poly_coeffs = patched_polyn / dpscale
+            if( trim(params_glob%extractfrommov).eq.'yes' )then
+                poly_fname = fname_new_ext(mc_starfile_fname,'poly')
+                call arr2file(poly_coeffs, poly_fname)
+            endif
         endif
         call starfile_table__new(mc_starfile)
         call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)

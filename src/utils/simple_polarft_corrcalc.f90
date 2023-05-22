@@ -117,10 +117,14 @@ type :: polarft_corrcalc
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
     ! for testing
+    ! plans
     type(c_ptr)                   :: plan_fwd1, plan_bwd1
+    type(c_ptr)                   :: plan_mem_r2c
+    ! memoized terms
     type(fftw_cvec),  allocatable :: ft_ptcl_ctf(:,:),  ft_ctf2(:,:)
     type(fftw_cvec),  allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)
     type(fftw_cvec),  allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:)
+    ! convenience vectors
     type(fftw_cvec),  allocatable :: cvec1(:), cvec2(:)
     type(fftw_rvec),  allocatable :: rvec1(:)
     type(fftw_drvec), allocatable :: drvec(:)
@@ -919,7 +923,7 @@ contains
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                 self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
@@ -956,7 +960,7 @@ contains
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +   ctf_rot**2 * real(ptcl_ref_dist, dp)
+                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
                 endif
             enddo
         enddo
@@ -969,52 +973,35 @@ contains
         type(oris),              intent(in)    :: eulspace
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
-        integer  :: i, iref, iptcl, loc, k, k_int
+        integer  :: i, iref, iptcl, loc
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
-        real     :: euls(3), euls_ref(3), cos_theta, k_proj, theta
+        real     :: euls(3), euls_ref(3), shvec(2)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cos_theta,theta,k_proj,k_int,k) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot, shvec) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%nptcls
-                iptcl     = glob_pinds(i)
-                euls_ref  =      eulspace%get_euler(iref)  * pi / 180.
-                euls      = ptcl_eulspace%get_euler(iptcl) * pi / 180.
-                cos_theta = cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1))
-                theta     = acos(cos_theta)
-                if( theta < params_glob%arc_thres*pi/180. .and. theta >= 0. .and. &
-                 &(self%kfromto(2)*cos_theta >= self%kfromto(1) .or. self%kfromto(1)*cos_theta <= self%kfromto(2)) )then
-                    ! find best irot for this pair of iref, iptcl
-                    call self%gencorrs( iref, iptcl, inpl_corrs )
-                    loc = maxloc(inpl_corrs, dim=1)
-                    if( inpl_corrs(loc) < TINY ) cycle
-                    ! distance & correlation weighing
-                    ptcl_ref_dist = 1.
-                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                    loc = (self%nrots+1)-(loc-1)
-                    if( loc > self%nrots ) loc = loc - self%nrots
-                    call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                    call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                    do k = self%kfromto(1),self%kfromto(2)
-                        k_proj = real(k) * cos_theta
-                        if( k_proj > self%kfromto(1) .and. k_proj < self%kfromto(2) )then
-                            k_int = floor(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp) * (k_int + 1. - k_proj)
-                            k_int = ceiling(k_proj)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp) * (k_proj - k_int + 1)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp) * (k_proj - k_int + 1)
-                        elseif( int(k_proj) == self%kfromto(1) )then
-                            k_int = self%kfromto(1)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp)
-                        elseif( int(k_proj) == self%kfromto(2) )then
-                            k_int = self%kfromto(2)
-                            self%refs_reg(  :,k_int,iref) = self%refs_reg(  :,k_int,iref) + ptcl_ctf_rot(:,k)    * real(ptcl_ref_dist, dp)
-                            self%regs_denom(:,k_int,iref) = self%regs_denom(:,k_int,iref) +      ctf_rot(:,k)**2 * real(ptcl_ref_dist, dp)
-                        endif
-                    enddo
-                endif
+                iptcl    = glob_pinds(i)
+                euls_ref = eulspace%get_euler(iref)
+                euls     = ptcl_eulspace%get_euler(iptcl)
+                ! projection direction distance, euler_dist could be used instead
+                euls_ref(3)   = 0.
+                euls(3)       = 0.
+                ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
+                ! find best irot for this pair of iref, iptcl
+                shvec         = ptcl_eulspace%get_2Dshift(iptcl)
+                call self%gencorrs( iref, iptcl, -shvec , inpl_corrs )
+                loc = maxloc(inpl_corrs, dim=1)
+                if( inpl_corrs(loc) < TINY ) cycle
+                ! distance & correlation weighing
+                ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc, shvec)
+                call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc, shvec)
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
@@ -1023,7 +1010,6 @@ contains
     subroutine regularize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer  :: iref, k
-        real(dp) :: prob_cc_odd(self%nrefs), prob_cc_even(self%nrefs)
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
@@ -1033,34 +1019,12 @@ contains
             endwhere
         enddo
         !$omp end parallel do
-        if( trim(params_glob%reg_mode) == 'globdev' .or.  trim(params_glob%reg_mode) == 'neigh' )then
-            prob_cc_odd  = 0._dp
-            prob_cc_even = 0._dp
-            !$omp parallel do default(shared) private(iref, k) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do k = self%kfromto(1),self%kfromto(2)
-                    prob_cc_odd( iref) = prob_cc_odd( iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_odd( :,k,iref), dp) )
-                    prob_cc_even(iref) = prob_cc_even(iref) + real(k, dp) * sum( self%refs_reg(:,k,iref) * real(self%pfts_refs_even(:,k,iref), dp) )
-                enddo
-                prob_cc_odd( iref) = 1._dp + max(0._dp, prob_cc_odd( iref))
-                prob_cc_even(iref) = 1._dp + max(0._dp, prob_cc_even(iref))
-            enddo
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pfts_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_even(iref))
-                self%pfts_refs_odd( :,:,iref) = self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref) / prob_cc_odd( iref))
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-                self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-            enddo
-            !$omp end parallel do
-        endif
-        
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+        enddo
+        !$omp end parallel do
     end subroutine regularize_refs
 
     subroutine reset_regs( self )
@@ -1069,12 +1033,14 @@ contains
         self%regs_denom = 0._dp
     end subroutine reset_regs
 
-    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
+    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot, shvec )
         class(polarft_corrcalc), intent(inout) :: self
         real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        integer :: rot
+        real,        optional,   intent(in)    :: shvec(2)
+        complex(sp), pointer :: shmat(:,:)
+        integer :: rot, ithr
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1087,6 +1053,12 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
             ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
         end if
+        if( present(shvec) )then
+            ithr  = omp_get_thread_num() + 1
+            shmat => self%heap_vars(ithr)%shmat
+            call self%gen_shmat(ithr, shvec, shmat)
+            ptcl_ctf_rot = ptcl_ctf_rot * real(shmat, dp)
+        endif
     end subroutine rotate_polar_real
 
     subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -2497,33 +2469,20 @@ contains
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self
-        type(fftw_cvec), allocatable :: cvecs1(:), cvecs2(:)
-        type(c_ptr)                  :: fwd_plan, r2c_plan
         integer :: ithr,i,k
-        ! allocations
-        allocate(cvecs1(nthr_glob),cvecs2(nthr_glob))
-        do ithr = 1,nthr_glob
-            cvecs1(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            cvecs2(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            call c_f_pointer(cvecs1(ithr)%p, cvecs1(ithr)%c, [self%nrots])
-            call c_f_pointer(cvecs2(ithr)%p, cvecs2(ithr)%c, [self%nrots])
-        enddo
-        fwd_plan = fftwf_plan_dft_1d(    self%nrots, cvecs1(1)%c,     cvecs2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        r2c_plan = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,           ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        ! memoization
         !$omp parallel do collapse(2) private(i,k,ithr) default(shared) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             do k = self%kfromto(1),self%kfromto(2)
                 ithr = omp_get_thread_num() + 1
                 ! FT(X.CTF)
                 if( self%with_ctf )then
-                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
+                    self%cvec2(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i)
                 else
-                    cvecs1(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i)
+                    self%cvec2(ithr)%c(1:self%pftsz) = self%pfts_ptcls(:,k,i)
                 endif
-                cvecs1(ithr)%c(self%pftsz+1:self%nrots) = conjg(cvecs1(ithr)%c(1:self%pftsz))
-                call fftwf_execute_dft(fwd_plan, cvecs1(ithr)%c, cvecs2(ithr)%c)
-                self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) = cvecs2(ithr)%c(1:self%pftsz+1)
+                self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(self%cvec2(ithr)%c(1:self%pftsz))
+                call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+                self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) = self%cvec2(ithr)%c(1:self%pftsz+1)
                 ! FT(CTF2)
                 if( self%with_ctf )then
                     self%rvec1(ithr)%r(1:self%pftsz)            = self%ctfmats(:,k,i)*self%ctfmats(:,k,i)
@@ -2531,34 +2490,18 @@ contains
                 else
                     self%rvec1(ithr)%r = 1.0
                 endif
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ctf2(k,i)%c(1:self%pftsz+1) = self%cvec1(ithr)%c(1:self%pftsz+1)
             enddo
         enddo
         !$omp end parallel do
-        ! clean-up
-        do ithr = 1,nthr_glob
-            call fftwf_free(cvecs1(ithr)%p)
-            call fftwf_free(cvecs2(ithr)%p)
-        enddo
-        deallocate(cvecs1,cvecs2)
-        call fftwf_destroy_plan(fwd_plan)
-        call fftwf_destroy_plan(r2c_plan)
     end subroutine memoize_ptcls
 
     subroutine memoize_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        type(fftw_cvec), allocatable :: cvecs1(:)
-        type(c_ptr)                  :: r2c_plan
         integer :: k, ithr, iref
         ! allocations
         call self%allocate_refs_memoization
-        allocate(cvecs1(nthr_glob))
-        r2c_plan = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        do ithr = 1,nthr_glob
-            cvecs1(ithr)%p = fftwf_alloc_complex(int(self%nrots, c_size_t))
-            call c_f_pointer(cvecs1(ithr)%p, cvecs1(ithr)%c, [self%nrots])
-        enddo
         ! memoization
         !$omp parallel do collapse(2) private(iref,k,ithr) default(shared) proc_bind(close) schedule(static)
         do iref = 1,self%nrefs
@@ -2577,22 +2520,17 @@ contains
                 ! FT(REF2even)*
                 self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_even(:,k,iref))
                 self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ref2_even(k,iref)%c = conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
                 ! FT(REF2odd)*
                 self%rvec1(ithr)%r(           1:self%pftsz) = csq_fast(self%pfts_refs_odd(:,k,iref))
                 self%rvec1(ithr)%r(self%pftsz+1:self%nrots) = self%rvec1(ithr)%r(1:self%pftsz)
-                call fftwf_execute_dft_r2c(r2c_plan, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
+                call fftwf_execute_dft_r2c(self%plan_mem_r2c, self%rvec1(ithr)%r, self%cvec1(ithr)%c)
                 self%ft_ref2_odd(k,iref)%c = conjg(self%cvec1(ithr)%c(1:self%pftsz+1))
             enddo
         enddo
         !$omp end parallel do
         ! clean-up
-        do ithr = 1,nthr_glob
-            call fftwf_free(cvecs1(ithr)%p)
-        enddo
-        deallocate(cvecs1)
-        call fftwf_destroy_plan(r2c_plan)
     end subroutine memoize_refs
 
     subroutine kill_memoized_ptcls( self )
@@ -2623,10 +2561,11 @@ contains
             call fftwf_free(self%cvec2(i)%p)
             call fftw_free(self%drvec(i)%p)
         enddo
-        deallocate(self%ft_ref_even,self%ft_ref_odd,&
-        &self%ft_ref2_even,self%ft_ref2_odd,self%cvec1,self%cvec2,self%drvec)
+        deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
+        &self%rvec1,self%cvec1,self%cvec2,self%drvec)
         call fftwf_destroy_plan(self%plan_fwd1)
         call fftwf_destroy_plan(self%plan_bwd1)
+        call fftwf_destroy_plan(self%plan_mem_r2c)
     end subroutine kill_memoized_refs
 
     subroutine allocate_ptcls_memoization( self )
@@ -2676,8 +2615,10 @@ contains
                 call c_f_pointer(self%ft_ref2_odd( ik,iref)%p, self%ft_ref2_odd( ik,iref)%c, [self%pftsz+1])
             enddo
         enddo
-        self%plan_fwd1 = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
-        self%plan_bwd1 = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        ! plans
+        self%plan_fwd1    = fftwf_plan_dft_1d(    self%nrots, self%cvec2(1)%c, self%cvec2(1)%c, FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_bwd1    = fftwf_plan_dft_c2r_1d(self%nrots, self%cvec1(1)%c, self%rvec1(1)%r,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+        self%plan_mem_r2c = fftwf_plan_dft_r2c_1d(self%nrots, self%rvec1(1)%r, self%cvec1(1)%c,               ior(FFTW_PATIENT, FFTW_USE_WISDOM))
     end subroutine allocate_refs_memoization
 
     subroutine gencorrs_dev_1( self, iref, iptcl, cc )
@@ -2994,7 +2935,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: i
-        real(dp) :: sqsum_ref, denom
+        real(dp) :: sqsum_ref
         integer  :: k
         sqsum_ref  = 0.d0
         gencorr_cc_for_rot_8_dev = 0.d0
@@ -3002,12 +2943,7 @@ contains
             sqsum_ref                = sqsum_ref +                real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
             gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
         end do
-        denom = sqsum_ref * self%sqsums_ptcls(i)
-        if( denom > DTINY )then
-            gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev / dsqrt(denom)
-        else
-            gencorr_cc_for_rot_8_dev = 0.d0
-        endif
+        gencorr_cc_for_rot_8_dev = gencorr_cc_for_rot_8_dev / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
     end function gencorr_cc_for_rot_8_dev
 
     real(dp) function gencorr_euclid_for_rot_8_dev( self, pft_ref, iptcl )
