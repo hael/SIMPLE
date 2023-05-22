@@ -547,6 +547,8 @@ contains
         select case(trim(params_glob%reg_mode))
             case('global')
                 call pftcc%ref_reg_cc(      build_glob%eulspace, build_glob%spproj_field, pinds_here)
+            case('globdev')
+                call pftcc%ref_reg_cc(      build_glob%eulspace, build_glob%spproj_field, pinds_here)
             case('neigh')
                 call pftcc%ref_reg_cc_neigh(build_glob%eulspace, build_glob%spproj_field, pinds_here)
             case('dev')
