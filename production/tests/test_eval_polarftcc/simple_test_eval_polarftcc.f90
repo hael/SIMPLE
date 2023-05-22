@@ -65,7 +65,7 @@ program simple_test_eval_polarftcc
     print *,'---------------------'
 
     call pftcc%shift_ptcl(1,shvec)
-    call pftcc%memoize_ffts
+    call pftcc%memoize_ptcls
 
     !### TIMING
     allocate(cc_fft(pftcc%get_nrots()))

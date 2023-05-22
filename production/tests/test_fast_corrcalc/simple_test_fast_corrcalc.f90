@@ -78,13 +78,12 @@ pftcc%pfts_ptcls(:,:,1) = pftcc%pfts_ptcls(:,:,1) * pftcc%ctfmats(:,:,1)
 
 ! memoizations
 call pftcc%memoize_sqsum_ptcl(1)
-call pftcc%memoize_ffts
 call pftcc%memoize_refs
 call pftcc%allocate_ptcls_memoization
 call pftcc%memoize_ptcls
 
 call pftcc%gencorrs(1,1, corrs)
-call pftcc%gencorrs_dev(1,1, corrs2)
+call pftcc%gencorrs(1,1, corrs2)
 ! do irot = 1,pftcc%get_nrots()
 !     print *,irot,corrs(irot), corrs2(irot), abs(corrs(irot)-corrs2(irot))
 ! enddo
@@ -95,7 +94,7 @@ print *,'gencorr abs err min max: ',minval(corrs),maxval(corrs)
 
 t = tic()
 do irot = 1,500
-    call pftcc%gencorrs_dev(1,1, corrs2)
+    call pftcc%gencorrs(1,1, corrs2)
 enddo
 print *,'gencorrs dev t: ',toc(t)
 
@@ -111,16 +110,16 @@ print *,'gencorrs t    : ',toc(t)
 shift = 4.*[ran3()-0.5, ran3()-0.5]
 print *,'shift: ',shift
 call pftcc%gencorrs(1,1, shift, corrs)
-call pftcc%gencorrs_dev(1,1, shift, corrs2)
+call pftcc%gencorrs(1,1, shift, corrs2)
 corrs = abs(corrs-corrs2)
 print *,'gencorr shifted abs err min max: ',minval(corrs),maxval(corrs)
 
 call pftcc%gencorrs(1,1, shift, corrs)
-call pftcc%gencorrs_dev(1,1, shift, corrs2)
+call pftcc%gencorrs(1,1, shift, corrs2)
 do irot = 1,pftcc%get_nrots()
     ! print *,irot,corrs(irot), corrs2(irot), abs(corrs(irot)-corrs2(irot))
     corrs(irot)  = pftcc%gencorr_for_rot_8(1,1, real(shift,dp),irot)
-    corrs2(irot) = pftcc%gencorr_for_rot_8_dev(1,1, real(shift,dp), irot)
+    corrs2(irot) = pftcc%gencorr_for_rot_8(1,1, real(shift,dp), irot)
     ! print *,irot,corrs(irot), corrs2(irot), abs(corrs(irot)-corrs2(irot))
     corrs(irot) = abs(corrs(irot)-corrs2(irot))
 enddo
@@ -130,7 +129,7 @@ print *,'gencorr for_rot_8 abs err min max: ',minval(corrs),maxval(corrs)
 
 t = tic()
 do irot = 1,pftcc%get_nrots()
-    call pftcc%gencorrs_dev(1,1, shift,corrs2)
+    call pftcc%gencorrs(1,1, shift,corrs2)
 enddo
 print *,'gencorrs shifted dev t ',toc(t)
 
@@ -142,7 +141,7 @@ print *,'gencorrs shifted     t ',toc(t)
 
 t = tic()
 do irot = 1,pftcc%get_nrots()
-    corrs(irot) = pftcc%gencorr_for_rot_8_dev(1,1,real(shift,dp),irot)
+    corrs(irot) = pftcc%gencorr_for_rot_8(1,1,real(shift,dp),irot)
 enddo
 print *,'gencorr_for_rot_8 dev t ',toc(t)
 
@@ -158,7 +157,7 @@ gradx_err = 0.d0
 grady_err = 0.d0
 do irot = 1,nrots
     call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f,grad)
-    call pftcc%gencorr_grad_for_rot_8_dev(1,1, real(shift,dp),irot,f_dev,grad_dev)
+    call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f_dev,grad_dev)
     f_err     = f_err + abs(f-f_dev)
     gradx_err = gradx_err + abs(grad(1)-grad_dev(1))
     grady_err = grady_err + abs(grad(2)-grad_dev(2))
@@ -176,7 +175,7 @@ print *,'gencorr_grad_for_rot_8     t ',toc(t)
 
 t = tic()
 do irot = 1,pftcc%get_nrots()
-    call pftcc%gencorr_grad_for_rot_8_dev(1,1, real(shift,dp),irot,f_dev,grad_dev)
+    call pftcc%gencorr_grad_for_rot_8(1,1, real(shift,dp),irot,f_dev,grad_dev)
 enddo
 print *,'gencorr_grad_for_rot_8 dev t ',toc(t)
 
@@ -186,7 +185,7 @@ allocate(sig(pftcc%kfromto(1):pftcc%kfromto(2)),sig2(pftcc%kfromto(1):pftcc%kfro
 f_err  = 0.d0
 do irot = 1,nrots
     call pftcc%gencorr_sigma_contrib(1,1, shift,irot,sig)
-    call pftcc%gencorr_sigma_contrib_dev(1,1, shift,irot,sig2)
+    call pftcc%gencorr_sigma_contrib(1,1, shift,irot,sig2)
     f_err = f_err + sum(abs(sig-sig2))
     ! print *,irot,' --- ',sum(abs(sig-sig2))
 enddo
@@ -200,13 +199,13 @@ print *,'gencorr_sigma_contrib     t ',toc(t)
 
 t = tic()
 do irot = 1,pftcc%get_nrots()
-    call pftcc%gencorr_sigma_contrib_dev(1,1, shift,irot,sig2)
+    call pftcc%gencorr_sigma_contrib(1,1, shift,irot,sig2)
 enddo
 print *,'gencorr_sigma_contrib dev t ',toc(t)
 
 ! vs. not fourier accelerated version
 call pftcc%gencorrs(1,1, shift, corrs)
-call pftcc%gencorrs_dev(1,1, shift, corrs2)
+call pftcc%gencorrs(1,1, shift, corrs2)
 do irot = 1,pftcc%get_nrots()
     corr         = pftcc%calc_corr_rot_shift(1,1,shift,irot)
     corrs(irot)  = abs(corrs(irot)-corr)
