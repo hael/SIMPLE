@@ -1563,6 +1563,7 @@ contains
                 corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
             end do
             ! use Otsu's algorithm to remove the junk
+            allocate(mask_otsu(ncls_sel))
             call otsu(ncls_sel, corrs_top_ranking, mask_otsu)
             pop1 = count(      mask_otsu)
             pop2 = count(.not. mask_otsu)

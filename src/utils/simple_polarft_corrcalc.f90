@@ -2630,37 +2630,43 @@ contains
 
     subroutine kill_memoized_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: i,j
-        do i = 1,size(self%ft_ptcl_ctf,dim=1)
-            do j = 1,size(self%ft_ptcl_ctf,dim=2)
-                call fftwf_free(self%ft_ptcl_ctf(i,j)%p)
-                call fftwf_free(self%ft_ctf2(i,j)%p)
+        integer :: i,j,lb(2),ub(2)
+        if( allocated(self%ft_ptcl_ctf) )then
+            lb = lbound(self%ft_ptcl_ctf)
+            ub = ubound(self%ft_ptcl_ctf)
+            do i = lb(1),ub(1)
+                do j = lb(2),ub(2)
+                    call fftwf_free(self%ft_ptcl_ctf(i,j)%p)
+                    call fftwf_free(self%ft_ctf2(i,j)%p)
+                enddo
             enddo
-        enddo
-        deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
+            deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
+        endif
     end subroutine kill_memoized_ptcls
 
     subroutine kill_memoized_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i,j
-        do i = 1,size(self%ft_ref_even,dim=1)
-            do j = 1,size(self%ft_ref_even,dim=2)
-                call fftwf_free(self%ft_ref_even(i,j)%p)
-                call fftwf_free(self%ft_ref_odd(i,j)%p)
-                call fftwf_free(self%ft_ref2_even(i,j)%p)
-                call fftwf_free(self%ft_ref2_odd(i,j)%p)
+        if( allocated(self%ft_ref_even) )then
+            do i = 1,size(self%ft_ref_even,dim=1)
+                do j = 1,size(self%ft_ref_even,dim=2)
+                    call fftwf_free(self%ft_ref_even(i,j)%p)
+                    call fftwf_free(self%ft_ref_odd(i,j)%p)
+                    call fftwf_free(self%ft_ref2_even(i,j)%p)
+                    call fftwf_free(self%ft_ref2_odd(i,j)%p)
+                enddo
             enddo
-        enddo
-        do i = 1,size(self%cvec1,dim=1)
-            call fftwf_free(self%cvec1(i)%p)
-            call fftwf_free(self%cvec2(i)%p)
-            call fftw_free(self%drvec(i)%p)
-        enddo
-        deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
-        &self%rvec1,self%cvec1,self%cvec2,self%drvec)
-        call fftwf_destroy_plan(self%plan_fwd1)
-        call fftwf_destroy_plan(self%plan_bwd1)
-        call fftwf_destroy_plan(self%plan_mem_r2c)
+            do i = 1,size(self%cvec1,dim=1)
+                call fftwf_free(self%cvec1(i)%p)
+                call fftwf_free(self%cvec2(i)%p)
+                call fftw_free(self%drvec(i)%p)
+            enddo
+            deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd,&
+            &self%rvec1,self%cvec1,self%cvec2,self%drvec)
+            call fftwf_destroy_plan(self%plan_fwd1)
+            call fftwf_destroy_plan(self%plan_bwd1)
+            call fftwf_destroy_plan(self%plan_mem_r2c)
+        endif
     end subroutine kill_memoized_refs
 
     subroutine allocate_ptcls_memoization( self )
