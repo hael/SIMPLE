@@ -308,6 +308,8 @@ contains
                 call cline_calc_sigma%set('which_iter', real(params%startit))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
                 ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
+                if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
+                if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
                 call xfirst_sigmas%execute(cline)
                 ! update command lines
                 call cline%set('needs_sigma','yes')
@@ -324,7 +326,7 @@ contains
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
             endif
-            if( (.not.str_has_substr(params%refine, 'neigh')) .and. (trim(params%refine).ne.'cont') )then
+            if( (.not.str_has_substr(params%refine, 'neigh')) )then
                 ! this forces the first round of alignment on the starting model(s)
                 ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
                 call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
