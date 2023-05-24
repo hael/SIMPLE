@@ -130,7 +130,7 @@ contains
         call pspec_img%init_polarizer(pftcc, KBALPHA)
         call pspec_img%fft
         call pspec_img%polarize(pftcc,1, .false., .true.)
-        call pftcc%memoize_ptcls
+        call pftcc%memoize_refs
         ! cleanup
         call sheet%kill
         call cline%kill

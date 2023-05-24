@@ -1232,6 +1232,7 @@ contains
         real               :: smpd, ave,var,sdev
         integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         logical            :: err
+        call cline%set('objfun','cc')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! sanity checks & dimensions
         call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
