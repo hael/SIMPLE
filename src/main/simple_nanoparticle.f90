@@ -36,7 +36,7 @@ character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//&
 &'ADJ_CN13'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'&
 &//CSV_DELIM//'U_ISO'//CSV_DELIM//'U_MAJ'//CSV_DELIM//'U_MED'//CSV_DELIM//'U_MIN'//CSV_DELIM//'AZIMUTH'//&
-&CSV_DELIM//'POLAR'//CSV_DELIM//'DOI'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//'X'//CSV_DELIM&
+&CSV_DELIM//'POLAR'//CSV_DELIM//'DOI'//CSV_DELIM//'DOI_MIN'//CSV_DELIM//'ISO_CORR'//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//'X'//CSV_DELIM&
 &//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//&
 &CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
@@ -44,7 +44,7 @@ character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'ADJ_CN13'//&
 &CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//&
 &'U_ISO'//CSV_DELIM//'U_MAJ'//CSV_DELIM//'U_MED'//CSV_DELIM//&
-&'U_MIN'//CSV_DELIM//'AZIMUTH'//CSV_DELIM//'POLAR'//CSV_DELIM//'DOI'//CSV_DELIM//'ISO_CORR'&
+&'U_MIN'//CSV_DELIM//'AZIMUTH'//CSV_DELIM//'POLAR'//CSV_DELIM//'DOI'//CSV_DELIM//'DOI_MIN'//CSV_DELIM//'ISO_CORR'&
 &//CSV_DELIM//'ANISO_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CSV_DELIM//'DIAM'//&
@@ -63,6 +63,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'NANISO'//CS
 &CSV_DELIM//'AVG_AZIMUTH'//CSV_DELIM//'MED_AZIMUTH'//CSV_DELIM//'SDEV_AZIMUTH'//&
 &CSV_DELIM//'AVG_POLAR'//CSV_DELIM//'MED_POLAR'//CSV_DELIM//'SDEV_POLAR'//&
 &CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
+&CSV_DELIM//'AVG_DOI_MIN'//CSV_DELIM//'MED_DOI_MIN'//CSV_DELIM//'SDEV_DOI_MIN'//&
 &CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
 &CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
@@ -83,6 +84,7 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CS
 &CSV_DELIM//'AVG_AZIMUTH'//CSV_DELIM//'MED_AZIMUTH'//CSV_DELIM//'SDEV_AZIMUTH'//&
 &CSV_DELIM//'AVG_POLAR'//CSV_DELIM//'MED_POLAR'//CSV_DELIM//'SDEV_POLAR'//&
 &CSV_DELIM//'AVG_DOI'//CSV_DELIM//'MED_DOI'//CSV_DELIM//'SDEV_DOI'//&
+&CSV_DELIM//'AVG_DOI_MIN'//CSV_DELIM//'MED_DOI_MIN'//CSV_DELIM//'SDEV_DOI_MIN'//&
 &CSV_DELIM//'AVG_ISO_CORR'//CSV_DELIM//'MED_ISO_CORR'//CSV_DELIM//'SDEV_ISO_CORR'//&
 &CSV_DELIM//'AVG_ANISO_CORR'//CSV_DELIM//'MED_ANISO_CORR'//CSV_DELIM//'SDEV_ANISO_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
@@ -107,6 +109,7 @@ type :: atom_stats
     real    :: azimuth           = 0. ! Azimuthal angle of major eigenvector [0,Pi)                 AZIMUTH
     real    :: polar             = 0. ! Polar angle of major eigenvector [0, Pi)                    POLAR
     real    :: doi               = 0. ! degree of isotropy                                          DOI
+    real    :: doi_min           = 0. ! degree of isotropy w/r to average eigenvalues of aniso      DOI_MIN
     real    :: isocorr           = 0. ! Correlation of isotropic B-Factor fit to input map          ISO_CORR
     real    :: anisocorr         = 0. ! Correlation of anisotropic B-Factor fit to input map        ANISO_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
@@ -158,6 +161,7 @@ type :: nanoparticle
     type(stats_struct)    :: isocorr_stats
     type(stats_struct)    :: anisocorr_stats
     type(stats_struct)    :: doi_stats
+    type(stats_struct)    :: doi_min_stats
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
@@ -178,6 +182,7 @@ type :: nanoparticle
     type(stats_struct)    :: azimuth_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: polar_stats_cns(CNMIN:CNMAX)  
     type(stats_struct)    :: doi_stats_cns(CNMIN:CNMAX) 
+    type(stats_struct)    :: doi_min_stats_cns(CNMIN:CNMAX) 
     type(stats_struct)    :: isocorr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: anisocorr_stats_cns(CNMIN:CNMAX) 
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
@@ -1238,23 +1243,24 @@ contains
         if (WRITE_OUTPUT) call write_2D_slice()
 
         ! CALCULATE GLOBAL NP PARAMETERS
-        call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
+        call calc_stats(  real(self%atominfo(:)%size),    self%size_stats,         mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
         call calc_stats(  self%atominfo(:)%bondl,         self%bondl_stats         )
         call calc_stats(  self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
-        call calc_stats(  self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
+        call calc_stats(  self%atominfo(:)%diam,          self%diam_stats,         mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_zscore( self%atominfo(:)%avg_int ) ! to get comparable intensities between different particles
         call calc_zscore( self%atominfo(:)%max_int ) ! -"-
         call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
         call calc_stats(  self%atominfo(:)%u_iso,         self%u_iso_stats         )
-        call calc_stats(  self%atominfo(:)%u_evals(1),   self%u_maj_stats,  mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%u_evals(2),   self%u_med_stats,  mask=.not.self%atominfo(:)%tossADP )
-        call calc_stats(  self%atominfo(:)%u_evals(3),   self%u_min_stats,  mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%u_evals(1),    self%u_maj_stats,         mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%u_evals(2),    self%u_med_stats,         mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%u_evals(3),    self%u_min_stats,         mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%azimuth,       self%azimuth_stats,       mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%polar,         self%polar_stats,         mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%doi,           self%doi_stats,           mask=.not.self%atominfo(:)%tossADP )
+        call calc_stats(  self%atominfo(:)%doi_min,       self%doi_min_stats,       mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%isocorr,       self%isocorr_stats       )
         call calc_stats(  self%atominfo(:)%anisocorr,     self%anisocorr_stats,     mask=.not.self%atominfo(:)%tossADP )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
@@ -1269,6 +1275,7 @@ contains
         call self%write_centers('cn_std_in_bfac_field',     'cn_std')
         call self%write_centers('u_iso_in_bfac_field',      'u_iso')
         call self%write_centers('doi_in_bfac_field',        'doi')
+        call self%write_centers('doi_min_in_bfac_field',    'doi_min')
         call self%write_centers_aniso('aniso_bfac_field')
         ! Write a pdb file containing the ideal lattice positions (with no missing atoms) for visualization
         ! destruct
@@ -1314,6 +1321,7 @@ contains
                 call calc_stats( self%atominfo(:)%azimuth,       self%azimuth_stats_cns(cn),       mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%polar,         self%polar_stats_cns(cn),         mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%doi,           self%doi_stats_cns(cn),           mask=adp_mask  )
+                call calc_stats( self%atominfo(:)%doi_min,       self%doi_min_stats_cns(cn),       mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%isocorr,       self%isocorr_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%anisocorr,     self%anisocorr_stats_cns(cn),     mask=adp_mask  )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
@@ -1651,7 +1659,7 @@ contains
         corr = fit%real_corr(self%img_raw, mask=fit_mask)
         self%atominfo(cc)%anisocorr = corr 
 
-        ! Calculate eigenvals and orientation of major eigenvector
+        ! Calculate eigenvalues and orientation of major eigenvector
         call jacobi(cov, 3, 3, eigenvals, eigenvecs, nrot)
         call eigsrt(eigenvals, eigenvecs, 3, 3)
         ! Any negative eigenvalue or large eigenvalue implies intensity 
@@ -1663,12 +1671,13 @@ contains
             self%atominfo(cc)%azimuth = 0.
             self%atominfo(cc)%polar = 0.
             self%atominfo(cc)%doi = 0.
+            self%atominfo(cc)%doi_min = 0.
             self%atominfo(cc)%aniso = 0.
             return
         end if
         self%atominfo(cc)%u_evals(:3) = eigenvals(:3)
         self%atominfo(cc)%doi = eigenvals(3)/eigenvals(1)
-
+        self%atominfo(cc)%doi_min = eigenvals(2)/eigenvals(1)
         ! Find azimuthal and polar angles of the major eigenvector
         majvector = eigenvecs(:,1)
         ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
@@ -1810,8 +1819,10 @@ contains
                   call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std))! use standard coordination number
               case('max_int')
                   call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
-            case('doi')
-                call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)     ! use isotropic b-factor
+              case('doi')
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)     ! use isotropic b-factor
+              case('doi_min')
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%doi_min)     ! use isotropic b-factor
               case('u_iso')
                   call centers_pdb%set_beta(cc,self%atominfo(cc)%u_iso)     ! use isotropic b-factor
               case DEFAULT
@@ -1924,6 +1935,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%azimuth,                CSV_DELIM ! AZIMUTH
         write(funit,601,advance='no') self%atominfo(cc)%polar,                  CSV_DELIM ! POLAR
         write(funit,601,advance='no') self%atominfo(cc)%doi,                    CSV_DELIM ! DOI
+        write(funit,601,advance='no') self%atominfo(cc)%doi_min,                CSV_DELIM ! DOI_MIN
         ! atomic displacement fit correlations
         write(funit,601,advance='no') self%atominfo(cc)%isocorr,                CSV_DELIM ! ISO_CORR
         write(funit,601,advance='no') self%atominfo(cc)%anisocorr,              CSV_DELIM ! ANISO_CORR
@@ -2016,6 +2028,10 @@ contains
         write(funit,601,advance='no') self%doi_stats%avg,            CSV_DELIM ! AVG_DOI
         write(funit,601,advance='no') self%doi_stats%med,            CSV_DELIM ! MED_DOI
         write(funit,601,advance='no') self%doi_stats%sdev,           CSV_DELIM ! SDEV_DOI
+        ! -- degree of isotropy minimum w/r to anisotropy average
+        write(funit,601,advance='no') self%doi_min_stats%avg,        CSV_DELIM ! AVG_DOI_MIN
+        write(funit,601,advance='no') self%doi_min_stats%med,        CSV_DELIM ! MED_DOI_MIN
+        write(funit,601,advance='no') self%doi_min_stats%sdev,       CSV_DELIM ! SDEV_DOI_MIN
         ! -- Isotropic displacement fit correlation
         write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR
         write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR
@@ -2099,6 +2115,10 @@ contains
         write(funit,601,advance='no') self%doi_stats_cns(cn)%avg,            CSV_DELIM ! AVG_DOI
         write(funit,601,advance='no') self%doi_stats_cns(cn)%med,            CSV_DELIM ! MED_DOI
         write(funit,601,advance='no') self%doi_stats_cns(cn)%sdev,           CSV_DELIM ! SDEV_DOI   
+        ! -- degree of isotropy min w/r to average anisotropy
+        write(funit,601,advance='no') self%doi_min_stats_cns(cn)%avg,        CSV_DELIM ! AVG_DOI_MIN
+        write(funit,601,advance='no') self%doi_min_stats_cns(cn)%med,        CSV_DELIM ! MED_DOI_MIN
+        write(funit,601,advance='no') self%doi_min_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_DOI_MIN
         ! -- isotropic displacement fit correlation
         write(funit,601,advance='no') self%isocorr_stats_cns(cn)%avg,        CSV_DELIM ! AVG_ISO_CORR
         write(funit,601,advance='no') self%isocorr_stats_cns(cn)%med,        CSV_DELIM ! MED_ISO_CORR
