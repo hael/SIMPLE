@@ -26,42 +26,9 @@ type fftw_drvec
     real(kind=c_double), pointer :: r(:) => null()
 end type fftw_drvec
 
-! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
-! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
-! type fftw_carr
-!     type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
-!     type(c_ptr)                            :: p_im                      !< -"-
-!     real(kind=c_float),            pointer :: re(:) => null()           !< corresponding Fortran pointers
-!     complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
-! end type fftw_carr
-
-! type fftw_carr_fft
-!     type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
-!     type(c_ptr)                            :: p_im                      !< -"-
-!     complex(kind=c_float_complex), pointer :: re(:) => null()           !< corresponding Fortran pointers
-!     complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
-! end type fftw_carr_fft
-
-! type fftw_arrs
-!     type(c_ptr)                            :: p_ref_re                  !< pointer for C-style allocation
-!     type(c_ptr)                            :: p_ref_im                  !< -"-
-!     type(c_ptr)                            :: p_ref_fft_re              !< -"-
-!     type(c_ptr)                            :: p_ref_fft_im              !< -"-
-!     type(c_ptr)                            :: p_product_fft             !< -"-
-!     type(c_ptr)                            :: p_backtransf              !< -"-
-!     real(kind=c_float),            pointer :: ref_re(:)      => null()  !< corresponding Fortran pointers
-!     complex(kind=c_float_complex), pointer :: ref_im(:)      => null()  !< -"-
-!     complex(kind=c_float_complex), pointer :: ref_fft_re(:)  => null()  !< -"-
-!     complex(kind=c_float_complex), pointer :: ref_fft_im(:)  => null()  !< -"-
-!     complex(kind=c_float_complex), pointer :: product_fft(:) => null()  !< -"-
-!     real(kind=c_float),            pointer :: backtransf(:)  => null()  !< -"-
-! end type fftw_arrs
-
 type heap_vars
     complex(sp), pointer :: pft_ref(:,:)       => null()
     complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
-    ! complex(sp), pointer :: pft_dref(:,:,:)    => null()
-    ! real,        pointer :: corrs_over_k(:)    => null()
     real(dp),    pointer :: argvec(:)          => null()
     complex(sp), pointer :: shmat(:,:)         => null()
     real(dp),    pointer :: kcorrs(:)          => null()
@@ -71,9 +38,6 @@ type heap_vars
     complex(dp), pointer :: shvec(:)           => null()
     complex(dp), pointer :: shmat_8(:,:)       => null()
     real(dp),    pointer :: argmat_8(:,:)      => null()
-    ! real(dp),    pointer :: fdf_y_8(:)         => null()
-    ! real(dp),    pointer :: fdf_T1_8(:,:)      => null()
-    ! real(dp),    pointer :: fdf_T2_8(:,:)      => null()
 end type heap_vars
 
 type :: polarft_corrcalc
@@ -107,11 +71,12 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd1, plan_bwd1
     type(c_ptr)                      :: plan_mem_r2c
     ! Memoized terms
-    type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:),  ft_ctf2(:,:)
-    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)
-    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:)
-    ! Convenience vectors
-    type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
+    type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:)            !< Fourier Transform of particle time CTF
+    type(fftw_cvec),     allocatable :: ft_ctf2(:,:)                !< Fourier Transform of CTF squared
+    type(fftw_cvec),     allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)  !< Fourier Tansform of even/odd references
+    type(fftw_cvec),     allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:) !< Fourier Tansform of even/odd references squared modulus
+    ! Convenience vectors, thread memoization
+    type(heap_vars),     allocatable :: heap_vars(:)
     type(fftw_cvec),     allocatable :: cvec1(:), cvec2(:)
     type(fftw_rvec),     allocatable :: rvec1(:)
     type(fftw_drvec),    allocatable :: drvec(:)
