@@ -92,6 +92,9 @@ contains
                 ! revert to mic extraction
                 self%l_mov = .false.
             else
+                ! frame of reference
+                self%isoshifts(1,:) = self%isoshifts(1,self%align_frame)
+                self%isoshifts(2,:) = self%isoshifts(2,self%align_frame)
                 ! downscaling shifts
                 self%isoshifts = self%isoshifts * self%scale
                 poly_fname = fname_new_ext(self%docname,'poly')
@@ -250,7 +253,7 @@ contains
                 endif
                 motion_model     = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, err)
                 self%l_poly      = motion_model == 1
-                self%align_frame = 0
+                self%align_frame = 1
                 if( self%l_poly ) self%align_frame = parse_int(table, SMPL_MOVIE_FRAME_ALIGN, err)
             case('global_shift')
                 ! parse isotropic shifts
