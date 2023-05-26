@@ -793,9 +793,13 @@ contains
                 endif
                 deallocate(cls_mask)
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
+                ! write stream2d.star with ptcl numbers post rejection 
+               ! call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), nptcls_rejected)
             endif
         else
             write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
+            ! write stream2d.star with ptcl numbers post rejection 
+            !call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), 0)
         endif
         call img%kill
     end subroutine reject_from_pool
@@ -1068,7 +1072,7 @@ contains
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, rejection_fhandle, ok
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
         integer(timer_int_kind) :: t_tot
         if( .not.pool_available )return
@@ -1110,6 +1114,10 @@ contains
         ! update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
+        if( file_exists('.rejection')) call del_file('.rejection')
+        call fopen(rejection_fhandle,file='.rejection', status='new', iostat=ok)
+        write(rejection_fhandle, '(RD,I6,I6)') nptcls_glob, nptcls_rejected_glob
+        call fclose(rejection_fhandle)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
