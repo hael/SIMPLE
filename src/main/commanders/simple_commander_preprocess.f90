@@ -11,6 +11,7 @@ use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_stack_io,       only: stack_io
 use simple_qsys_funs
+use simple_progress
 implicit none
 
 public :: preprocess_commander_stream
@@ -1646,6 +1647,8 @@ contains
             nmics = nmics + 1
         enddo
         if( nmics == 0 ) THROW_HARD('No particles to extract! exec_extract')
+        ! progress
+        call progressfile_init_parts(params%nparts) 
         ! DISTRIBUTED EXTRACTION
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -1729,6 +1732,8 @@ contains
         endif
         ! final write
         call spproj%write(params%projfile)
+        ! progress
+        call progressfile_complete_parts(params%nparts) 
         ! clean
         call spproj%kill
         call o_mic%kill
@@ -1779,11 +1784,11 @@ contains
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         character(len=STDLEN)     :: ext
-        real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy
+        real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, box_first, i, iptcl_g
         integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
-        logical                   :: l_ctfpatch, l_gid_present, l_ogid_present
+        logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
         call params%new(cline)
@@ -1791,6 +1796,8 @@ contains
         output_dir = PATH_HERE
         fromto(:)  = [params%fromp, params%top]
         nmics_here = fromto(2)-fromto(1)+1
+        prog_write = .false.
+        prog_part  = .false.
         if( params%stream.eq.'yes' )then
             output_dir = DIR_EXTRACT
             if( cline%defined('dir') ) output_dir = trim(params%dir)//'/'
@@ -1817,6 +1824,13 @@ contains
                 call spproj_in%os_mic%get_ori(imic, o_tmp)
                 call spproj%os_mic%set_ori(cnt, o_tmp)
             enddo
+            prog_write = .true.
+            if( cline%defined('part') ) then 
+                prog_part = .true.
+                call progressfile_init_part(int(cline%get_rarg('part')))
+            else
+                call progressfile_init()
+            endif
             call spproj_in%kill
         endif
         ! input boxes
@@ -1890,6 +1904,7 @@ contains
             box_first = 0
             ! main loop
             iptcl_glob = 0 ! extracted particle index among ALL stacks
+            prog = 0.0
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )then
                     call build%spproj_field%set(imic, 'nptcls', 0.)
@@ -2041,6 +2056,17 @@ contains
                 ! clean
                 call boxfile%kill
                 call ctffit%kill
+                ! progress
+                if(prog_write) then
+                    if( (real(imic) / real(nmics_here)) > prog + 0.05 ) then
+                        prog = real(imic) / real(nmics_here)
+                        if(prog_part) then 
+                            call progressfile_update_part(int(cline%get_rarg('part')), prog)
+                        else
+                            call progressfile_update(prog)
+                        endif
+                    endif
+                endif
             enddo
             call killimgbatch
             ! write
@@ -2051,6 +2077,7 @@ contains
         call micrograph%kill
         call o_mic%kill
         call o_tmp%kill
+        call progressfile_update(1.0)
         call qsys_job_finished('simple_commander_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
     end subroutine exec_extract
