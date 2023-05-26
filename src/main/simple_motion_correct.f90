@@ -281,7 +281,6 @@ contains
         real                                :: ave, sdev, var, minw, maxw, corr
         logical                             :: err, err_stat
         type(motion_align_hybrid)           :: hybrid_srch
-        ! type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
         class(*), pointer                   :: callback_ptr
         callback_ptr => null()
         ! initialise

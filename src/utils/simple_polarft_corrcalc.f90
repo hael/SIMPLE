@@ -51,7 +51,6 @@ type :: polarft_corrcalc
     integer                          :: kfromto(2)                  !< band-pass Fourier index limits
     integer                          :: nk                          !< number of shells used durring alignement
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
-    ! real                             :: delta                       !< voxel size in the frequency domain
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(dp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),            allocatable :: wsqsums_ptcls(:)            !< memoized square sums weighted by sigmas^2 (taken from kfromto(1):kfromto(2))
@@ -71,8 +70,8 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd1, plan_bwd1
     type(c_ptr)                      :: plan_mem_r2c
     ! Memoized terms
-    type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:)            !< Fourier Transform of particle time CTF
-    type(fftw_cvec),     allocatable :: ft_ctf2(:,:)                !< Fourier Transform of CTF squared
+    type(fftw_cvec),     allocatable :: ft_ptcl_ctf(:,:)            !< Fourier Transform of particle times CTF
+    type(fftw_cvec),     allocatable :: ft_ctf2(:,:)                !< Fourier Transform of CTF squared modulus
     type(fftw_cvec),     allocatable :: ft_ref_even(:,:),  ft_ref_odd(:,:)  !< Fourier Tansform of even/odd references
     type(fftw_cvec),     allocatable :: ft_ref2_even(:,:), ft_ref2_odd(:,:) !< Fourier Tansform of even/odd references squared modulus
     ! Convenience vectors, thread memoization
