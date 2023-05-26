@@ -45,7 +45,8 @@ type :: ptcl_extractor
     procedure          :: init_mic
     procedure, private :: init_mask
     procedure, private :: parse_movie_metadata
-    procedure, private :: generate_dose_weighing, apply_dose_weighing
+    procedure, private :: apply_dose_weighing
+    procedure          :: generate_micrograph
     procedure          :: display
     procedure          :: extract_particles
     procedure          :: extract_particles_from_mic
@@ -67,6 +68,7 @@ contains
         class(ori),            intent(in)    :: omic
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
+        ! type(image) :: mic
         character(len=:), allocatable :: poly_fname
         real(dp),         allocatable :: poly(:)
         integer  :: i,iframe
@@ -93,18 +95,19 @@ contains
                 self%l_mov = .false.
             else
                 ! frame of reference
-                self%isoshifts(1,:) = self%isoshifts(1,self%align_frame)
-                self%isoshifts(2,:) = self%isoshifts(2,self%align_frame)
+                self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
+                self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
                 ! downscaling shifts
                 self%isoshifts = self%isoshifts * self%scale
+                ! polynomial coefficients
                 poly_fname = fname_new_ext(self%docname,'poly')
                 if( file_exists(poly_fname) )then
                     poly = file2drarr(poly_fname)
                     self%polyx = poly(:POLYDIM)
                     self%polyy = poly(POLYDIM+1:)
                 endif
-                self%polyx     = self%polyx * real(self%scale,dp)
-                self%polyy     = self%polyy * real(self%scale,dp)
+                self%polyx = self%polyx * real(self%scale,dp)
+                self%polyy = self%polyy * real(self%scale,dp)
                 ! dose-weighing
                 self%total_dose = real(self%nframes) * self%doseperframe
                 ! updates dimensions and pixel size
@@ -153,14 +156,7 @@ contains
                     call self%cure_outliers
                 endif
                 call self%gain%kill
-                ! downscale frames
-                ! !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-                ! do iframe=1,self%nframes
-                !     call self%frames(iframe)%fft
-                !     call self%frames(iframe)%clip_inplace(self%ldim_sc)
-                !     call self%frames(iframe)%ifft
-                ! enddo
-                ! !$omp end parallel do
+                ! downscale frames & dose-weighing
                 !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
                 do iframe=1,self%nframes
                     call self%frames(iframe)%fft
@@ -182,14 +178,16 @@ contains
                     call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
                 enddo
                 !$omp end parallel do
-                ! dose weighting
-                ! call self%generate_dose_weighing
                 ! mask for post-extraction normalizations
                 call self%init_mask
             endif
         endif
         ! micrograph init
         if( .not.self%l_mov ) call self%init_mic( self%box, self%l_neg)
+        ! ! generate micrograph from movie frames
+        ! call self%generate_micrograph(mic)
+        ! call mic%write(fname_new_ext(basename(self%docname),'mrc'))
+        ! call mic%kill
         ! all done
         call self%eer%kill
         self%exists = .true.
@@ -306,44 +304,104 @@ contains
         if( DEBUG_HERE ) print *,'movie doc parsed'
     end subroutine parse_movie_metadata
 
-    subroutine generate_dose_weighing( self )
+    !>  Regenerates micrograph from movie
+    subroutine generate_micrograph( self, micrograph )
         class(ptcl_extractor), intent(inout) :: self
-        real,   parameter :: A=0.245, B=-1.665, C=2.81
-        real, allocatable :: qs(:), accumulated_doses(:)
-        real              :: spaFreqk, twoNe, spafreq, limsq
-        integer           :: cshape(3), nrflims(3,2), hphys,kphys, iframe, h,k
-        if( .not.self%l_doseweighing ) return
-        nrflims = self%frame_particle(1)%loop_lims(2)
-        cshape  = self%frame_particle(1)%get_array_shape()
-        allocate(self%doses(cshape(1),cshape(2),self%nframes),&
-            &qs(self%nframes), accumulated_doses(self%nframes), source=0.)
+        type(image),           intent(inout) :: micrograph
+        real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
+        real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
+        integer       :: ldim(3), i, j, iframe
+        real          :: w, pixx,pixy
+        ! Stage drift
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,self%nframes
-            accumulated_doses(iframe) = real(iframe) * self%doseperframe
+            call self%frames(iframe)%fft
+            call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
+            call self%frames(iframe)%ifft
         end do
-        if( is_equal(self%kV,200.) )then
-            accumulated_doses = accumulated_doses / 0.8
-        else if( is_equal(self%kV,100.) )then
-            accumulated_doses = accumulated_doses / 0.64
-        endif
-        limsq = (real(self%box_pd)*self%smpd_out)**2.
-        !$omp parallel private(h,k,spafreq,spafreqk,twoNe,kphys,hphys,qs)&
-        !$omp default(shared) proc_bind(close)
-        !$omp do schedule(static)
-        do k = nrflims(2,1),nrflims(2,2)
-            kphys    = k + 1 + merge(self%box_pd,0,k<0)
-            spaFreqk = real(k*k)/limsq
-            do h = nrflims(1,1),nrflims(1,2)
-                hphys   = h + 1
-                spaFreq = sqrt( real(h*h)/limsq + spaFreqk )
-                twoNe   = 2.*(A*spaFreq**B + C)
-                qs = exp(-accumulated_doses/twoNe)
-                qs = qs / sqrt(sum(qs*qs))
-                self%doses(hphys,kphys,:) = qs
-            enddo
+        !$omp end parallel do
+        ! Beam-induced motion
+        ldim = self%ldim_sc
+        call micrograph%new(ldim, self%smpd_out)
+        call micrograph%zero_and_unflag_ft
+        call micrograph%get_rmat_ptr(rmatout)
+        ti = 0.d0
+        do iframe = 1,self%nframes
+            call self%frames(iframe)%get_rmat_ptr(rmatin)
+            w = self%weights(iframe)
+            t = real(iframe-self%align_frame, dp)
+            dt  = ti-t
+            dt2 = ti*ti - t*t
+            dt3 = ti*ti*ti - t*t*t
+            B1x  = sum(self%polyx(4:6)   * [dt,dt2,dt3])
+            B1x2 = sum(self%polyx(7:9)   * [dt,dt2,dt3])
+            B1xy = sum(self%polyx(16:18) * [dt,dt2,dt3])
+            B2x  = sum(self%polyy(4:6)   * [dt,dt2,dt3])
+            B2x2 = sum(self%polyy(7:9)   * [dt,dt2,dt3])
+            B2xy = sum(self%polyy(16:18) * [dt,dt2,dt3])
+            !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
+            !$omp proc_bind(close) schedule(static)
+            do j = 1, ldim(2)
+                y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
+                y2 = y*y
+                A1 =           sum(self%polyx(1:3)   * [dt,dt2,dt3])
+                A1 = A1 + y  * sum(self%polyx(10:12) * [dt,dt2,dt3])
+                A1 = A1 + y2 * sum(self%polyx(13:15) * [dt,dt2,dt3])
+                A2 =           sum(self%polyy(1:3)   * [dt,dt2,dt3])
+                A2 = A2 + y  * sum(self%polyy(10:12) * [dt,dt2,dt3])
+                A2 = A2 + y2 * sum(self%polyy(13:15) * [dt,dt2,dt3])
+                do i = 1, ldim(1)
+                    x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
+                    x2 = x*x
+                    xy = x*y
+                    pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
+                    pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
+                    rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
+                end do
+            end do
+            !$omp end parallel do
         enddo
-        !$omp end do
-        !$omp end parallel
-    end subroutine generate_dose_weighing
+    contains
+
+        pure real function interp_bilin( xval, yval )
+            real, intent(in) :: xval, yval
+            integer  :: x1_h,  x2_h,  y1_h,  y2_h
+            real     :: t, u
+            logical  :: outside
+            outside = .false.
+            x1_h = floor(xval)
+            x2_h = x1_h + 1
+            if( x1_h<1 .or. x2_h<1 )then
+                x1_h    = 1
+                outside = .true.
+            endif
+            if( x1_h>ldim(1) .or. x2_h>ldim(1) )then
+                x1_h    = ldim(1)
+                outside = .true.
+            endif
+            y1_h = floor(yval)
+            y2_h = y1_h + 1
+            if( y1_h<1 .or. y2_h<1 )then
+                y1_h    = 1
+                outside = .true.
+            endif
+            if( y1_h>ldim(2) .or. y2_h>ldim(2) )then
+                y1_h    = ldim(2)
+                outside = .true.
+            endif
+            if( outside )then
+                interp_bilin = rmatin(x1_h, y1_h, 1)
+                return
+            endif
+            t  = xval - real(x1_h)
+            u  = yval - real(y1_h)
+            interp_bilin =  (1. - t) * (1. - u) * rmatin(x1_h, y1_h, 1) + &
+                                 &t  * (1. - u) * rmatin(x2_h, y1_h, 1) + &
+                                 &t  *       u  * rmatin(x2_h, y2_h, 1) + &
+                           &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
+        end function interp_bilin
+
+    end subroutine generate_micrograph
 
     subroutine display( self )
         class(ptcl_extractor), intent(in) :: self
@@ -361,7 +419,8 @@ contains
         print *, 'moviename      ', trim(self%moviename)
         print *, 'doseweighting  ', self%l_doseweighing
         print *, 'total dose     ', self%total_dose
-        print *, 'scale          ', self%l_scale
+        print *, 'l_scale        ', self%l_scale
+        print *, 'scale          ', self%scale
         print *, 'gain           ', self%l_gain
         print *, 'nhotpix        ', self%nhotpix
         print *, 'eer            ', self%l_eer
@@ -501,9 +560,7 @@ contains
             call self%frames(t)%window(pos, self%box_pd, self%frame_particle(ithr), foo)
             ! sub-pixel shift
             call self%frame_particle(ithr)%fft
-            call self%frame_particle(ithr)%shift2Dserial(-shift)
-            ! dose-weighing
-            ! if( self%l_doseweighing ) call self%frame_particle(ithr)%mul_cmat(self%doses(:,:,t:t))
+            call self%frame_particle(ithr)%shift2Dserial(shift)
             ! weighted sum
             call self%particle(ithr)%add(self%frame_particle(ithr), w=self%weights(t))
         enddo

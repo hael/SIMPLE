@@ -2236,7 +2236,7 @@ contains
         type(ctfparams)               :: ctfparms
         type(stack_io)                :: stkio_w
         type(ptcl_extractor)          :: extractor
-        character(len=:), allocatable :: mic_name, imgkind
+        character(len=:), allocatable :: mic_name, imgkind, ext
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
@@ -2328,7 +2328,8 @@ contains
                 ctfparms = o_mic%get_ctfvars()
                 fromp    = nint(o_stk%get('fromp'))
                 top      = nint(o_stk%get('top'))
-                stack    = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
+                ext      = fname2ext(trim(basename(mic_name)))
+                stack    = trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
                 ! updating shifts, positions, states and doc
                 if( allocated(boxcoords) ) deallocate(boxcoords)
                 allocate(boxcoords(2,fromp:top),source=0)
