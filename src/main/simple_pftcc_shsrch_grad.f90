@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_opt_spec,         only: opt_spec
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_optimizer,        only: optimizer
+use simple_parameters,       only: params_glob
 implicit none
 
 public :: pftcc_shsrch_grad
@@ -158,8 +159,8 @@ contains
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
-        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
-        real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost
+        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost, sh(2)
+        real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better
         found_better      = .false.
@@ -169,6 +170,7 @@ contains
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search_opt_angle(init_xy, init_rot)
                 if( init_rot /= 0 )then
@@ -208,6 +210,7 @@ contains
             self%ospec%x      = [0.,0.]
             self%ospec%x_8    = [0.d0,0.d0]
             lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            initial_cost        = lowest_cost_overall
             if( perform_rndstart )then
                 init_xy(1)     = 2.*(ran3()-0.5) * init_range
                 init_xy(2)     = 2.*(ran3()-0.5) * init_range
@@ -239,6 +242,18 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         end if
+        ! shift regularization: taking the result from lbfgsb as a line search reference
+        if( found_better .and. params_glob%l_sh_reg )then
+            sh = cxy(2:) * params_glob%eps_shreg
+            call pftcc_glob%gencorrs(self%reference, self%particle, sh, corrs)
+            loc = maxloc(corrs,dim=1)
+            if( -corrs(loc) < initial_cost )then
+                cxy(1)  = - corrs(loc)
+                cxy(2:) =   sh
+                return
+            endif
+            irot = 0 ! to communicate that a better solution was not found
+        endif
     end function grad_shsrch_minimize
 
     subroutine coarse_search(self, lowest_cost, init_xy)

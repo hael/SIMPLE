@@ -213,6 +213,8 @@ contains
                 call pftcc%regularize_refs
             endif
         endif
+        ! shift regularization
+        if( params_glob%l_sh_reg ) params_glob%eps_shreg = real(which_iter)/real(params_glob%reg_iters)
 
         ! Batch loop
         do ibatch=1,nbatches
