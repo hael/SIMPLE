@@ -3850,7 +3850,7 @@ contains
             case(PTCL3D_SEG)
                 info = info//'3D information, one per particle'
             case(OUT_SEG)
-                info = info//'crtitical project outputs: class averages, 3D volumes, FSC/FRC files etc.'
+                info = info//'critical project outputs: class averages, 3D volumes, FSC/FRC files etc.'
             case(OPTICS_SEG)
                 info = info//'optics group information.'
             case(PROJINFO_SEG)

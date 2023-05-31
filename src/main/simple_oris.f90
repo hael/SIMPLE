@@ -93,6 +93,7 @@ type :: oris
     procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
     procedure          :: delete_3Dalignment
+    procedure          :: transfer_2Dshifts
     procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
     generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
     procedure          :: transfer_3Dparams
@@ -1571,6 +1572,15 @@ contains
             call self%o(i)%rnd_ori(trs, eullims)
         end do
     end subroutine rnd_oris
+
+    subroutine transfer_2Dshifts( self_out, self_in )
+        class(oris), intent(inout) :: self_out
+        type(oris),   intent(in)   :: self_in
+        integer :: i
+        do i = 1,self_out%n
+            call self_out%o(i)%set_shift(self_in%o(i)%get_2Dshift())
+        enddo
+    end subroutine transfer_2Dshifts
 
     subroutine transfer_2Dparams_1( self, i, o_in )
         class(oris), intent(inout) :: self
