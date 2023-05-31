@@ -466,6 +466,7 @@ contains
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
             spproj%os_cls2D  = spproj_sc%os_cls2D
             spproj%os_cls3D  = spproj_sc%os_cls3D
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
             ! restores original project and deletes backup & scaled
             call spproj%write(params%projfile)
             call del_file(orig_projfile_bak)
@@ -474,6 +475,10 @@ contains
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
             call spproj%write_segment_inside('out', params%projfile)
+            call spproj%read_segment('ptcl2D', params%projfile)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
         endif
         call spproj_sc%kill
         call spproj%kill
@@ -761,6 +766,8 @@ contains
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
         call spproj%write_segment_inside('out', params%projfile)
+        call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+        call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! clean
         call spproj%kill()
         ! ranking

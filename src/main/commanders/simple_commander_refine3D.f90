@@ -280,7 +280,6 @@ contains
         do_abinitio = .not. have_oris .and. .not. vol_defined
         if( do_abinitio )then
             call build%spproj_field%rnd_oris
-            call build%spproj_field%zero_shifts
             have_oris = .true.
             call build%spproj%write_segment_inside(params%oritype)
         endif
