@@ -15,7 +15,7 @@ public :: remove_atoms, find_atoms_subset
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false.
+logical, parameter :: DEBUG = .true.
 integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
