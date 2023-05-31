@@ -200,8 +200,8 @@ contains
             loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
             ref = loc(1)
             if( params_glob%l_ref_reg )then
-                call self%grad_reg_sh_obj%set_indices(ref, self%iptcl)
-                cxy = self%grad_reg_sh_obj%minimize(irot=irot)
+                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
             else
                 ! BFGS over shifts with in-plane rot exhaustive callback
                 call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
