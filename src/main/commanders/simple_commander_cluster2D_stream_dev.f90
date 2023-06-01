@@ -113,7 +113,7 @@ contains
         integer :: ldim(3), ichunk, maybe2D, ifoo
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
-            THROW_HARD('Missing required agrument NTHR2D')
+            THROW_HARD('Missing required argument NTHR2D')
         endif
         call check_params_for_cluster2D(cline, do2D)
         if( .not.do2D ) return
@@ -166,6 +166,9 @@ contains
         endif
         if( cline%defined('qsys_partition2D') )then
             call pool_proj%compenv%set(1,'qsys_partition', params_glob%qsys_partition2D)
+        endif
+        if( cline%defined('walltime') )then
+            call pool_proj%compenv%set(1,'walltime', real(params_glob%walltime))
         endif
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         ! initialize chunks parameters and objects
