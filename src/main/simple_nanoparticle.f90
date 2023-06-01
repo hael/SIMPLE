@@ -21,7 +21,8 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
-logical,          parameter :: WRITE_OUTPUT        = .true. ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
+logical,          parameter :: ATOMS_STATS_OMIT    = .true. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
@@ -1897,10 +1898,14 @@ contains
         call fopen(funit, file=ATOMS_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOMS_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
-        write(funit,'(a)') ATOM_STATS_HEAD_OMIT
+        if (ATOMS_STATS_OMIT) then
+            write(funit,'(a)') ATOM_STATS_HEAD_OMIT
+        else
+            write(funit,'(a)') ATOM_STATS_HEAD
+        endif
         ! write records
         do cc = 1, size(self%atominfo)
-            call self%write_atominfo(cc, funit, omit=.true.)
+            call self%write_atominfo(cc, funit, omit=ATOMS_STATS_OMIT)
         enddo
         call fclose(funit)
     end subroutine write_csv_files
