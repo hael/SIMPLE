@@ -13,7 +13,7 @@ public :: test_filt2D
 private
 
 interface butterworth_filter
-    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3
+    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3, butterworth_filter_4
 end interface butterworth_filter
 
 type optfilt2Dvars
@@ -274,6 +274,17 @@ contains
                                 &( 1 - butterworth(real(freq_val-1), BW_ORDER, real(c1)) )
         enddo
     end subroutine butterworth_filter_3
+
+    subroutine butterworth_filter_4(cutoff_find, kfromto, cur_fil)
+        integer,      intent(in)    :: cutoff_find
+        integer,      intent(in)    :: kfromto(2)
+        real,         intent(inout) :: cur_fil(:)
+        integer,      parameter     :: BW_ORDER = 8
+        integer :: freq_val
+        do freq_val = kfromto(1), kfromto(2)
+            cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
+        enddo
+    end subroutine butterworth_filter_4
 
     subroutine test_filt2D(odd, even, weights_img, optf2Dvars)
         class(image),        intent(inout) :: odd, even, weights_img

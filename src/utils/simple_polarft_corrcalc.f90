@@ -827,11 +827,12 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_dev
 
-    subroutine regularize_refs( self, is_eo )
+    subroutine regularize_refs( self, lp_set )
+        use simple_opt_filter, only: butterworth_filter
         class(polarft_corrcalc), intent(inout) :: self
-        logical,       optional, intent(in)    :: is_eo
-        integer :: iref, k
-        real    :: frc(self%kfromto(1):self%kfromto(2))
+        logical,                 intent(in)    :: lp_set
+        integer :: iref, k, find
+        real    :: filt(self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
@@ -850,13 +851,24 @@ contains
             self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
         !$omp end parallel do
-        if( is_eo )then
-            !$omp parallel do default(shared) private(iref,frc,k) proc_bind(close) schedule(static)
+        if( lp_set )then
+            ! applying butterworth filter at cut-off = lp
+            find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+            call butterworth_filter(find, self%kfromto, filt)
+            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+            do k = self%kfromto(1),self%kfromto(2)
+                self%pfts_refs_even(:,k,:) = filt(k) * self%pfts_refs_even(:,k,:)
+                self%pfts_refs_odd( :,k,:) = filt(k) * self%pfts_refs_odd( :,k,:)
+            enddo
+            !$omp end parallel do
+        else
+            ! applying frc filter
+            !$omp parallel do default(shared) private(iref,filt,k) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                call self%calc_raw_frc(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), frc)
+                call self%calc_raw_frc(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), filt)
                 do k = self%kfromto(1),self%kfromto(2)
-                    self%pfts_refs_even(:,k,iref) = frc(k) * self%pfts_refs_even(:,k,iref)
-                    self%pfts_refs_odd( :,k,iref) = frc(k) * self%pfts_refs_odd( :,k,iref)
+                    self%pfts_refs_even(:,k,iref) = filt(k) * self%pfts_refs_even(:,k,iref)
+                    self%pfts_refs_odd( :,k,iref) = filt(k) * self%pfts_refs_odd( :,k,iref)
                 enddo
             enddo
             !$omp end parallel do

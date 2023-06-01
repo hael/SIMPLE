@@ -202,7 +202,7 @@ contains
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
                 ! frc filter when e/o is on
-                call pftcc%regularize_refs( .not. params_glob%l_lpset )
+                call pftcc%regularize_refs( params_glob%l_lpset )
             endif
         endif
 
