@@ -1087,10 +1087,12 @@ contains
 
     subroutine kill_memoized_refs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: i,j
+        integer :: i,j,lb(2),ub(2)
         if( allocated(self%ft_ref_even) )then
-            do i = 1,size(self%ft_ref_even,dim=1)
-                do j = 1,size(self%ft_ref_even,dim=2)
+            lb = lbound(self%ft_ref_even)
+            ub = ubound(self%ft_ref_even)
+            do i = lb(1),ub(1)
+                do j = lb(2),ub(2)
                     call fftwf_free(self%ft_ref_even(i,j)%p)
                     call fftwf_free(self%ft_ref_odd(i,j)%p)
                     call fftwf_free(self%ft_ref2_even(i,j)%p)
