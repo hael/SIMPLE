@@ -479,8 +479,12 @@ contains
         endif
         ! Volume filtering
         filtsz = build_glob%img%get_filtsz()
-        if( params_glob%l_ml_reg .or. params_glob%l_lpset )then
+        if( params_glob%l_ml_reg )then
             ! no filtering
+        else if( params_glob%l_lpset )then
+            ! Butterworth low-pass filter
+            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+            call vol_ptr%apply_filter(filter)
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else

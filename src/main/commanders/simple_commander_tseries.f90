@@ -954,7 +954,7 @@ contains
         character(len=*), parameter   :: BINARY     = 'recvol_state01_BIN.mrc'
         character(len=*), parameter   :: CCS        = 'recvol_state01_CC.mrc'
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
-        character(len=*), parameter   :: FINAL_MAPS = './final_thresholded_results/'
+        character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
@@ -1002,9 +1002,8 @@ contains
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
-        if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
-            call cline_detect_atms%set('use_thres', 'no')        ! no thresholding during refinement
-        endif
+        call cline_detect_atms%set('corr_thres', 0.3)            ! mild thresholding during refinement
+        call cline_detect_atms%set('cs_thres',   2.0)            ! mild thresholding during refinement
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1053,8 +1052,6 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
-        call cline_detect_atms%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
-        call cline_detect_atms%set('use_thres', 'yes') ! use contact score threshold for final model building
         params_ptr  => params_glob
         params_glob => null()
         call xdetect_atms%execute(cline_detect_atms)
@@ -1064,10 +1061,10 @@ contains
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
         call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
-        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
-        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
-        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_CC.mrc')
+        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
+        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
+        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(SPLITTED, FINAL_MAPS//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
         ! clean
         call del_file(SIMVOL)
@@ -1117,8 +1114,8 @@ contains
             call xreproject%execute(cline_reproject)
             params_glob => params_ptr
             params_ptr  => null()
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-            call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+            call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
             ! re-project
             params_ptr  => params_glob
             params_glob => null()
@@ -1136,7 +1133,7 @@ contains
                     call imgs(i + 2)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,                 cnt)
                     call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-                    call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                    call imgs(i + 2)%read('reprojs_SIM.mrc',   cnt)
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
                     call imgs(i + 2)%norm
@@ -1150,9 +1147,9 @@ contains
             do i = 1,3*ncavgs,3
                 cnt = cnt + 1
                 if( state_mask(cnt) )then
-                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2    )
-                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 1)
-                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 2)
+                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2    )
+                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 1)
+                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 2)
                     call imgs(i    )%kill
                     call imgs(i + 1)%kill
                     call imgs(i + 2)%kill
@@ -1161,7 +1158,7 @@ contains
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
-        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
