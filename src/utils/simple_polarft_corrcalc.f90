@@ -827,9 +827,11 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_dev
 
-    subroutine regularize_refs( self )
+    subroutine regularize_refs( self, is_eo )
         class(polarft_corrcalc), intent(inout) :: self
-        integer  :: iref, k
+        logical,       optional, intent(in)    :: is_eo
+        integer :: iref, k
+        real    :: frc(self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
@@ -848,6 +850,17 @@ contains
             self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
         !$omp end parallel do
+        if( is_eo )then
+            !$omp parallel do default(shared) private(iref,frc,k) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                call self%calc_raw_frc(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), frc)
+                do k = self%kfromto(1),self%kfromto(2)
+                    self%pfts_refs_even(:,k,iref) = frc(k) * self%pfts_refs_even(:,k,iref)
+                    self%pfts_refs_odd( :,k,iref) = frc(k) * self%pfts_refs_odd( :,k,iref)
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
         call self%memoize_refs
     end subroutine regularize_refs
 
@@ -1343,8 +1356,8 @@ contains
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )
         class(polarft_corrcalc), intent(inout) :: self
-        complex(dp),             intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),             intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
         real,                    intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
         real(dp) :: num, denom
         integer  :: k
