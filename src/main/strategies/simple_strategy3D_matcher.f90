@@ -540,31 +540,4 @@ contains
         end select
     end subroutine reg_batch_particles
 
-    subroutine reg_batch_particles_dev( nptcls_here, pinds_here )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
-            ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        ! make CTFs
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
-        ! compute regularization terms
-        call pftcc%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
-    end subroutine reg_batch_particles_dev
-
 end module simple_strategy3D_matcher
