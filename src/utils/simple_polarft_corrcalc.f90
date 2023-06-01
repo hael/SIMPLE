@@ -59,8 +59,10 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
-    real(dp),            allocatable :: regs_denom(:,:,:)           !< -"-
+    real(dp),            allocatable :: refs_reg_even(:,:,:)        !< -"-, reference reg terms, even
+    real(dp),            allocatable :: refs_reg_odd(:,:,:)         !< -"-, reference reg terms, odd
+    real(dp),            allocatable :: regs_denom_even(:,:,:)      !< -"-, even
+    real(dp),            allocatable :: regs_denom_odd(:,:,:)       !< -"-, odd
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -133,7 +135,6 @@ type :: polarft_corrcalc
     procedure          :: ref_reg_cc_neigh
     procedure          :: ref_reg_cc_dev
     procedure          :: regularize_refs
-    procedure          :: change_refs
     procedure          :: reset_regs
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
@@ -293,8 +294,10 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
-                    &self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                    &self%heap_vars(params_glob%nthr),self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
+                    &self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%regs_denom_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%heap_vars(params_glob%nthr),self%refs_reg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%refs_reg_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -308,13 +311,15 @@ contains
                 &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%argmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)))
         end do
-        self%pfts_refs_even = zero
-        self%pfts_refs_odd  = zero
-        self%pfts_ptcls     = zero
-        self%sqsums_ptcls   = 0.d0
-        self%wsqsums_ptcls  = 0.d0
-        self%refs_reg       = 0.d0
-        self%regs_denom     = 0.d0
+        self%pfts_refs_even  = zero
+        self%pfts_refs_odd   = zero
+        self%pfts_ptcls      = zero
+        self%sqsums_ptcls    = 0.d0
+        self%wsqsums_ptcls   = 0.d0
+        self%refs_reg_even   = 0.d0
+        self%refs_reg_odd    = 0.d0
+        self%regs_denom_even = 0.d0
+        self%regs_denom_odd  = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -736,8 +741,13 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
+                if( self%iseven(i) )then
+                    self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) +      ctf_rot**2
+                else
+                    self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) +      ctf_rot**2
+                endif
             enddo
         enddo
         !$omp end parallel do
@@ -773,8 +783,13 @@ contains
                     if( loc > self%nrots ) loc = loc - self%nrots
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                    self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
+                    if( self%iseven(i) )then
+                        self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) +      ctf_rot**2
+                    else
+                        self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) +      ctf_rot**2
+                    endif
                 endif
             enddo
         enddo
@@ -799,8 +814,13 @@ contains
                 euls     = ptcl_eulspace%get_euler(iptcl) * pi / 180.
                 theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                 if( theta <= params_glob%arc_thres*pi/180.  .and. theta >= 0. )then
-                    self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) +     ptcl_ctf(:,:,i)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + self%ctfmats(:,:,i)**2
+                    if( self%iseven(i) )then
+                        self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) +     ptcl_ctf(:,:,i)
+                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + self%ctfmats(:,:,i)**2
+                    else
+                        self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) +     ptcl_ctf(:,:,i)
+                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + self%ctfmats(:,:,i)**2
+                    endif
                 endif
             enddo
         enddo
@@ -812,47 +832,31 @@ contains
         integer  :: iref, k
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
-            elsewhere
-                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+            self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
+            self%refs_reg_odd( :,k,:) = real(k, dp) * self%refs_reg_odd( :,k,:)
+            where( abs(self%regs_denom_even(:,k,:)) > TINY )
+                self%refs_reg_even(:,k,:) = self%refs_reg_even(:,k,:) / self%regs_denom_even(:,k,:)
+            endwhere
+            where( abs(self%regs_denom_odd(:,k,:)) > TINY )
+                self%refs_reg_odd(:,k,:) = self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
         !$omp end parallel do
         call self%memoize_refs
     end subroutine regularize_refs
 
-    subroutine change_refs( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer  :: iref, k
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%refs_reg(:,k,:) = self%refs_reg(:,k,:)
-            elsewhere
-                self%refs_reg(:,k,:) = self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
-            endwhere
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = real(self%refs_reg(:,:,iref))
-            self%pfts_refs_odd( :,:,iref) = real(self%refs_reg(:,:,iref))
-        enddo
-        !$omp end parallel do
-        call self%memoize_refs
-    end subroutine change_refs
-
     subroutine reset_regs( self )
         class(polarft_corrcalc), intent(inout) :: self
-        self%refs_reg   = 0._dp
-        self%regs_denom = 0._dp
+        self%refs_reg_even   = 0._dp
+        self%refs_reg_odd    = 0._dp
+        self%regs_denom_even = 0._dp
+        self%regs_denom_odd  = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot, shvec )
@@ -2233,7 +2237,8 @@ contains
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,self%refs_reg,self%regs_denom)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,&
+                &self%refs_reg_even,self%refs_reg_odd,self%regs_denom_even,self%regs_denom_odd)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)

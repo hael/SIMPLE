@@ -201,15 +201,6 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                if( trim(params_glob%reg_mode) == "dev" )then
-                    call pftcc%change_refs
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call reg_batch_particles_dev(batchsz, pinds(batch_start:batch_end))
-                    enddo
-                endif
                 call pftcc%regularize_refs
             endif
         endif
