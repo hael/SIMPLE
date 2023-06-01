@@ -1,7 +1,6 @@
 ! common strategy3D methods and type specification for polymorphic strategy3D object creation are delegated to this class
 module simple_strategy3D_srch
 include 'simple_lib.f08'
-use simple_pftcc_reg_shsrch,   only: pftcc_reg_shsrch   ! gradient-based shift search in the reg
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
 use simple_cartft_corrcalc,    only: cftcc_glob
@@ -24,7 +23,6 @@ end type strategy3D_spec
 
 type strategy3D_srch
     character(len=:), allocatable :: refine              !< 3D refinement flag
-    type(pftcc_reg_shsrch)  :: grad_reg_sh_obj           !< origin shift search object, used in the reg
     type(pftcc_shsrch_grad) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(cftcc_shsrch_grad) :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
@@ -111,7 +109,6 @@ contains
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
         &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
         call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
-        call self%grad_reg_sh_obj%new(maxits=MAXITS)
         self%exists = .true.
     end subroutine new
 
@@ -199,14 +196,9 @@ contains
         if( self%doshift )then
             loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
             ref = loc(1)
-            if( params_glob%l_ref_reg )then
-                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
-            else
-                ! BFGS over shifts with in-plane rot exhaustive callback
-                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
-            endif
+            ! BFGS over shifts with in-plane rot exhaustive callback
+            call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+            cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 ! irot > 0 guarantees improvement found, update solution
                 s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
@@ -251,7 +243,6 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        call self%grad_reg_sh_obj%kill
         call self%cart_shsrch_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
