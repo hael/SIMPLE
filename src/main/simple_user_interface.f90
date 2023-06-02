@@ -169,6 +169,7 @@ type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
+type(simple_program), target :: tseries_make_projavgs
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
@@ -424,6 +425,7 @@ contains
         call new_tseries_import_particles
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
+        call new_tseries_make_projavgs
         call new_tseries_swap_stack
         call new_tseries_track_particles
         call new_tseries_reconstruct3D
@@ -737,6 +739,8 @@ contains
                 ptr2prg => tseries_import_particles
             case('tseries_make_pickavg')
                 ptr2prg => tseries_make_pickavg
+            case('tseries_make_projavgs')
+                ptr2prg => tseries_make_projavgs
             case('tseries_motion_correct')
                 ptr2prg => tseries_motion_correct
             case('tseries_swap_stack')
@@ -890,6 +894,7 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
+        write(logfhandle,'(A)') tseries_make_projavgs%name
     end subroutine list_single_prgs_in_ui
 
     ! private class methods
@@ -4622,6 +4627,33 @@ contains
         ! computer controls
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
+
+    subroutine new_tseries_make_projavgs
+        ! PROGRAM SPECIFICATION
+        call tseries_make_projavgs%new(&
+        &'tseries_make_projavgs',&                                                       ! name
+        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'is a program for aligning & averaging the first few frames of the time-series&
+        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        &'single_exec',&                                                                 ! executable
+        &0, 2, 0, 0, 0, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_make_projavgs%set_input('parm_ios', 1, nspace)
+        call tseries_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{15}', .false., 15.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_make_projavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_make_projavgs
 
     subroutine new_tseries_swap_stack
         ! PROGRAM SPECIFICATION

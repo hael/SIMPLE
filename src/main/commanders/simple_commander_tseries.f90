@@ -972,6 +972,7 @@ contains
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -1549,136 +1550,134 @@ contains
     end subroutine exec_tseries_reconstruct3D_distr
 
     subroutine exec_tseries_make_projavgs( self, cline )
-        use simple_polarft_corrcalc
         use simple_strategy2D3D_common
         class(tseries_make_projavgs_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)               :: params
         type(builder)                  :: build
-        type(image),       allocatable :: pavgs(:)
-        type(polarft_corrcalc), target :: pftcc
-        real,              allocatable :: pweights(:,:), corrs(:), denom(:)
-        integer,           allocatable :: pinds(:), batches(:,:), e3inds(:,:)
+        type(image),       allocatable :: pavgs(:), rot_imgs(:)
+        real,              allocatable :: sumw(:), ref_weights(:,:)
+        integer,           allocatable :: pinds(:), batches(:,:)
         logical,           allocatable :: ptcl_mask(:)
-        real    :: euls_ref(3), euls(3), cc, x, y, sdev_noise, dist
-        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer :: iptcl, nrots, iref, ibatch, nptcls2update, i, loc
+        character(len=:),  allocatable :: stkname
+        real    :: euls_ref(3), euls(3), cc, x, y, sdev_noise, dist, dist_threshold, mindist, w
+        real    :: spiral_step
+        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, ind_in_stk, cnt
+        integer :: iptcl, iref, ibatch, nptcls2update, i, ref_ind
         logical :: fall_over
         call cline%set('tseries', 'yes')
-        call cline%set('objfun',   'cc')
-        if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',        'no')
-        if( .not. cline%defined('oritype')       ) call cline%set('oritype',  'ptcl3D')
-        if( .not. cline%defined('ctf')           ) call cline%set('ctf',          'no')
-        if( .not. cline%defined('lp')            ) call cline%set('lp',            1.5)
-        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt','no')
-        call build%init_params_and_build_strategy3D_tbox(cline,params)
+        call cline%set('objfun',  'cc')
+        call cline%set('oritype', 'ptcl3D')
+        call cline%set('ctf',     'no')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ptclw')  ) call cline%set('ptclw', 'no')
+        if( .not. cline%defined('pgrp')   ) call cline%set('pgrp',  'c1')
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
+        if( .not. cline%defined('athres') ) call cline%set('athres', 5.)
+        call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
-            case('ptcl3D','ptcl2D')
+            case('ptcl3D')
                 fall_over = build%spproj%get_nptcls() == 0
             case DEFAULT
                 THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
-
-        call set_bp_range(cline)
-        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        call build%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
-            &1.0, nptcls2update, pinds, ptcl_mask)
-
-        ! PREP BATCH ALIGNEMENT
+        ! allocations
+        allocate(pavgs(params%nspace),sumw(params%nspace))
+        sumw = 0.0
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do iref = 1,params%nspace
+            call pavgs(iref)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
+            call pavgs(iref)%zero_and_unflag_ft
+        enddo
+        !$omp end parallel do
+        ! particles mask and indices
+        allocate(ptcl_mask(params%nptcls),source=.true.)
+        !$omp parallel do default(shared) private(iptcl) proc_bind(close) schedule(static)
+        do iptcl = 1,params%nptcls
+            ptcl_mask(iptcl) = build%spproj_field%get_state(iptcl) > 0
+        enddo
+        !$omp end parallel do
+        nptcls2update = count(ptcl_mask)
+        allocate(pinds(nptcls2update))
+        i = 0
+        do iptcl = 1,params%nptcls
+            if( ptcl_mask(iptcl) )then
+                i        = i+1
+                pinds(i) = iptcl
+            endif
+        enddo
+        ! batch prep
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
         batches     = split_nobjs_even(nptcls2update, nbatches)
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
-
-        ! PREPARE THE FT_CORRCALC & DATA STRUCTURES
-        call prep_refs(cline, batchsz_max)
-        nrots = pftcc%get_nrots()
-        call build%vol%kill
-        call build%vol_odd%kill
-        call build%vol2%kill
-        if( pftcc%exists() )call build%img_match%init_polarizer(pftcc, params%alpha)
         call prepimgbatch(batchsz_max)
-        allocate(e3inds(batchsz_max,params%nspace),source=0)
-        allocate(pweights(batchsz_max,params%nspace),corrs(nrots),denom(params%nspace),source=0.)
-        allocate(pavgs(params%nspace))
+        allocate(ref_weights(batchsz_max,params%nspace),rot_imgs(batchsz_max))
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1,params%nspace
-            call pavgs(iref)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
-            call pavgs(iref)%zero_and_flag_ft
+        do i = 1,batchsz_max
+            call rot_imgs(i)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
         enddo
         !$omp end parallel do
-        ! Alignement and reconstruction
+        ! angular threshold
+        euls_ref       = 0.
+        euls           = [0.,params%athres,0.]
+        dist_threshold = geodesic_frobdev(euls_ref,euls)
+        spiral_step    = rad2deg(3.809/sqrt(real(params%nspace)))
         do ibatch=1,nbatches
+            call progress_gfortran(ibatch,nbatches)
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
-            ! Alignement
-            e3inds   = 0
-            pweights = 0.0
-            call prep_particles(batchsz, pinds(batch_start:batch_end))
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,cc,iptcl,corrs,loc,dist) proc_bind(close) schedule(static)
-            do iref = 1, params%nspace
-                do i = 1, batchsz
-                    iptcl = pinds(batch_start+i-1)
-                    euls_ref = build%eulspace%get_euler(iref)
-                    euls     = build%spproj_field%get_euler(iptcl)
+            ! Weights
+            ref_weights = -1.0
+            do i = 1,batchsz
+                iptcl   = pinds(batch_start+i-1)
+                euls    = build%spproj_field%get_euler(iptcl)
+                euls(3) = 0.
+                do iref = 1,params%nspace
+                    euls_ref    = build%eulspace%get_euler(iref)
                     euls_ref(3) = 0.
-                    euls(3)     = 0.
-                    dist        = geodesic_frobdev(euls_ref,euls)
-                    ! angular threshold goes here
-                    call pftcc%gencorrs(iref, iptcl, corrs)
-                    loc = maxloc(corrs, dim=1)
-                    cc  = corrs(loc)
-                    if( cc < TINY ) cycle
-                    ! in-plane angle
-                    loc = (nrots+1)-(loc-1)
-                    if( loc > nrots ) loc = loc - nrots
-                    e3inds(iptcl,iref) = loc
-                    ! particle weight
-                    euls_ref = build%eulspace%get_euler(iref)
-                    euls     = build%spproj_field%get_euler(iptcl)
-                    euls_ref(3) = 0.
-                    euls(3)     = 0.
-                    pweights(iptcl,iref) = cc / (1.0 + dist)
+                    dist        = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.)) ! => [0;1]
+                    if( dist > dist_threshold ) cycle
+                    w = 1. / (1. + 999.0*dist)
+                    ref_weights(i,iref) = w
                 enddo
             enddo
-            !$omp end parallel do
-            ! projection classes generation
+            ! Images prep
             call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
-            !$omp parallel do default(shared) private(i,iptcl,x,y) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,x,y,sdev_noise) proc_bind(close) schedule(static)
             do i = 1, batchsz
                 iptcl = pinds(batch_start+i-1)
                 call build%imgbatch(i)%norm_noise(build%lmsk, sdev_noise)
-                call build%imgbatch(i)%fft
                 x = build%spproj_field%get(iptcl, 'x')
                 y = build%spproj_field%get(iptcl, 'y')
-                if(abs(x) > 0.0001 .or. abs(y) > 0.0001) call build%imgbatch(i)%shift2Dserial([-x,-y])
+                call build%imgbatch(i)%fft
+                call build%imgbatch(i)%shift2Dserial(-[x,y])
+                call build%imgbatch(i)%ifft
+                call rot_imgs(i)%zero_and_flag_ft
+                call build%imgbatch(i)%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_imgs(i))
             enddo
             !$omp end parallel do
-            do iref = 1, params%nspace
-                !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
-                do i = 1, batchsz
-                    if( pweights(i,iref) < 0.001 ) cycle
-                    denom(iref) = denom(iref) + pweights(i,iref)
-                    ! weighted interpolation goes here
+            ! Projection direction weighted sum
+            !$omp parallel do default(shared) private(i,iref,w) proc_bind(close) schedule(static)
+            do iref = 1,params%nspace
+                do i = 1,batchsz
+                    w = ref_weights(i,iref)
+                    if( w < TINY ) cycle
+                    sumw(iref) = sumw(iref) + w
+                    call pavgs(iref)%add(rot_imgs(i),w=w)
                 enddo
-                !$omp end parallel do
             enddo
+            !$omp end parallel do
         enddo
-        call pftcc%kill
-        ! final normalization
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        ! Weights normalization
+        !$omp parallel do default(shared) private(i,w) proc_bind(close) schedule(static)
         do iref = 1,params%nspace
-            if( denom(iref) > 0.0005 )then
-                call pavgs(iref)%div(denom(iref))
-                call pavgs(iref)%ifft
+            if( sumw(iref) > 0.001 )then
+                call pavgs(iref)%div(sumw(iref))
             else
                 call pavgs(iref)%zero_and_unflag_ft
             endif
@@ -1688,52 +1687,9 @@ contains
         do iref = 1,params%nspace
             call pavgs(iref)%write(params%outstk,iref)
         enddo
+        call build%eulspace%write('projdirs.txt')
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_PROJAVGS NORMAL STOP ****')
-
-      contains
-
-        subroutine prep_refs( cline, batchsz_max )
-            class(cmdline), intent(inout) :: cline !< command line
-            integer,        intent(in)    :: batchsz_max
-            type(ori) :: o_tmp
-            integer   :: s, iref
-            call pftcc%new(params%nspace, [1,batchsz_max], params%kfromto)
-            call read_and_filter_refvols( cline, params%vols_even(s), params%vols_odd(s) )
-            call preprefvol(cline, s, .false., [0.,0.,0.], .false.)
-            call preprefvol(cline, s, .false., [0.,0.,0.], .true.)
-            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-            do iref=1,params%nspace
-                call build%eulspace%get_ori(iref, o_tmp)
-                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
-                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
-                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
-                call o_tmp%kill
-            end do
-            !$omp end parallel do
-            call pftcc%memoize_refs
-        end subroutine prep_refs
-
-        subroutine prep_particles( nptcls_here, pinds_here )
-            use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-            integer, intent(in) :: nptcls_here
-            integer, intent(in) :: pinds_here(nptcls_here)
-            integer :: iptcl_batch, iptcl
-            call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-            call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
-            do iptcl_batch = 1,nptcls_here
-                iptcl = pinds_here(iptcl_batch)
-                ! prep
-                call prepimg4align(iptcl, build%imgbatch(iptcl_batch))
-                call build%img_match%polarize(pftcc, build%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build%l_resmsk)
-                call pftcc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
-            end do
-            !$omp end parallel do
-            call pftcc%memoize_ptcls
-        end subroutine prep_particles
-
     end subroutine exec_tseries_make_projavgs
 
   end module simple_commander_tseries
