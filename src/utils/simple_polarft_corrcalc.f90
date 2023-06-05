@@ -61,8 +61,10 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     real(dp),            allocatable :: refs_reg_even(:,:,:)        !< -"-, reference reg terms, even
     real(dp),            allocatable :: refs_reg_odd(:,:,:)         !< -"-, reference reg terms, odd
+    real(dp),            allocatable :: refs_reg(:,:,:)             !< -"-, reference reg terms
     real(dp),            allocatable :: regs_denom_even(:,:,:)      !< -"-, even
     real(dp),            allocatable :: regs_denom_odd(:,:,:)       !< -"-, odd
+    real(dp),            allocatable :: regs_denom(:,:,:)       !< -"-
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -296,7 +298,9 @@ contains
                     &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                     &self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%regs_denom_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%heap_vars(params_glob%nthr),self%refs_reg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%refs_reg(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%refs_reg_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -318,8 +322,10 @@ contains
         self%wsqsums_ptcls   = 0.d0
         self%refs_reg_even   = 0.d0
         self%refs_reg_odd    = 0.d0
+        self%refs_reg        = 0.d0
         self%regs_denom_even = 0.d0
         self%regs_denom_odd  = 0.d0
+        self%regs_denom      = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -748,6 +754,8 @@ contains
                     self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) +      ctf_rot**2
                 endif
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
@@ -835,13 +843,20 @@ contains
         real    :: filt(self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
-            self%refs_reg_odd( :,k,:) = real(k, dp) * self%refs_reg_odd( :,k,:)
-            where( abs(self%regs_denom_even(:,k,:)) > TINY )
-                self%refs_reg_even(:,k,:) = self%refs_reg_even(:,k,:) / self%regs_denom_even(:,k,:)
+            where( abs(self%regs_denom_even(:,k,:)) < TINY )
+                self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
+            elsewhere
+                self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:) / self%regs_denom_even(:,k,:)
             endwhere
-            where( abs(self%regs_denom_odd(:,k,:)) > TINY )
-                self%refs_reg_odd(:,k,:) = self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
+            where( abs(self%regs_denom_odd(:,k,:)) < TINY )
+                self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:)
+            elsewhere
+                self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
+            endwhere
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
+            elsewhere
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
@@ -851,28 +866,6 @@ contains
             self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
         !$omp end parallel do
-        if( lp_set )then
-            ! applying butterworth filter at cut-off = lp
-            find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
-            call butterworth_filter(find, self%kfromto, filt)
-            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-            do k = self%kfromto(1),self%kfromto(2)
-                self%pfts_refs_even(:,k,:) = filt(k) * self%pfts_refs_even(:,k,:)
-                self%pfts_refs_odd( :,k,:) = filt(k) * self%pfts_refs_odd( :,k,:)
-            enddo
-            !$omp end parallel do
-        else
-            ! applying frc filter
-            !$omp parallel do default(shared) private(iref,filt,k) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                call self%calc_raw_frc(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), filt)
-                do k = self%kfromto(1),self%kfromto(2)
-                    self%pfts_refs_even(:,k,iref) = filt(k) * self%pfts_refs_even(:,k,iref)
-                    self%pfts_refs_odd( :,k,iref) = filt(k) * self%pfts_refs_odd( :,k,iref)
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
         call self%memoize_refs
     end subroutine regularize_refs
 
@@ -880,8 +873,10 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         self%refs_reg_even   = 0._dp
         self%refs_reg_odd    = 0._dp
+        self%refs_reg        = 0._dp
         self%regs_denom_even = 0._dp
         self%regs_denom_odd  = 0._dp
+        self%regs_denom      = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot, shvec )
@@ -2265,7 +2260,7 @@ contains
             deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,&
-                &self%refs_reg_even,self%refs_reg_odd,self%regs_denom_even,self%regs_denom_odd)
+                &self%refs_reg_even,self%refs_reg_odd,self%regs_denom_even,self%regs_denom_odd,self%refs_reg,self%regs_denom)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
