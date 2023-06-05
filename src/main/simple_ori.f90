@@ -32,10 +32,8 @@ type :: ori
     procedure          :: ori_from_rotmat
     ! SETTERS
     procedure          :: reject
-    procedure          :: assign_ori
-    generic            :: assignment(=) => assign_ori
-    procedure          :: copy_ori
-    procedure          :: copy => copy_ori
+    generic            :: assignment(=) => copy
+    procedure          :: copy
     procedure          :: append_ori
     procedure          :: delete_entry
     procedure          :: delete_2Dclustering
@@ -52,6 +50,10 @@ type :: ori
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
+    procedure          :: set_state
+    procedure          :: set_class
+    procedure          :: set_stkind
+    procedure          :: set_ogid
     procedure, private :: rnd_euler_1
     procedure, private :: rnd_euler_2
     procedure, private :: rnd_euler_3
@@ -79,9 +81,10 @@ type :: ori
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
     procedure          :: get_state
-    procedure          :: set_state
     procedure          :: get_class
     procedure          :: get_dfx, get_dfy
+    procedure          :: get_eo
+    procedure          :: get_updatecnt
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
@@ -189,13 +192,7 @@ contains
         endif
     end subroutine reject
 
-    subroutine assign_ori( self_out, self_in )
-        type(ori), intent(in)     :: self_in
-        class(ori), intent(inout) :: self_out
-        call self_out%copy(self_in)
-    end subroutine assign_ori
-
-    subroutine copy_ori( self_out, self_in )
+    subroutine copy( self_out, self_in )
         class(ori), intent(in)     :: self_in
         class(ori), intent(inout)  :: self_out
         character(len=KEYLEN)      :: key
@@ -223,7 +220,7 @@ contains
                 end do
             endif
         endif
-    end subroutine copy_ori
+    end subroutine copy
 
     subroutine append_ori( self_out, self_in )
         class(ori), intent(in)     :: self_in
@@ -481,6 +478,46 @@ contains
         character(len=*), intent(in)    :: key, val
         call self%chtab%set(key, val)
     end subroutine set_2
+
+    subroutine set_state( self, state )
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: state
+        if( self%is_ptcl )then
+            self%pparms(I_STATE) = real(state)
+        else
+            call self%set('state', real(state))
+        endif
+    end subroutine set_state
+
+    subroutine set_class( self, cls )
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: cls
+        if( self%is_ptcl )then
+            self%pparms(I_CLASS) = real(cls)
+        else
+            call self%set('class', real(cls))
+        endif
+    end subroutine set_class
+
+    subroutine set_stkind( self, stkind )
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: stkind
+        if( self%is_ptcl )then
+            self%pparms(I_STKIND) = real(stkind)
+        else
+            call self%set('stkind', real(stkind))
+        endif
+    end subroutine set_stkind
+
+    subroutine set_ogid( self, ogid )
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: ogid
+        if( self%is_ptcl )then
+            self%pparms(I_OGID) = real(ogid)
+        else
+            call self%set('ogid', real(ogid))
+        endif
+    end subroutine set_ogid
 
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self )
@@ -797,16 +834,6 @@ contains
         endif
     end function get_state
 
-    subroutine set_state( self, state )
-        class(ori), intent(inout) :: self
-        integer,    intent(in)    :: state
-        if( self%is_ptcl )then
-            self%pparms(I_STATE) = real(state)
-        else
-            call self%set('state', real(state))
-        endif
-    end subroutine set_state
-
     pure integer function get_class( self )
         class(ori), intent(in) :: self
         if( self%is_ptcl )then
@@ -815,6 +842,24 @@ contains
             get_class = nint(self%htab%get('class'))
         endif
     end function get_class
+
+    pure integer function get_eo( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_eo = nint(self%pparms(I_EO))
+        else
+            get_eo = nint(self%htab%get('eo'))
+        endif
+    end function get_eo
+
+    pure integer function get_updatecnt( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_updatecnt = nint(self%pparms(I_UPDATECNT))
+        else
+            get_updatecnt = nint(self%htab%get('updatecnt'))
+        endif
+    end function get_updatecnt
 
     pure real function get_dfx( self )
         class(ori), intent(in) :: self

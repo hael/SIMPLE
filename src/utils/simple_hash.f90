@@ -27,8 +27,7 @@ type :: hash
     procedure, private :: alloc_hash
     procedure, private :: realloc_hash
     procedure, private :: copy
-    procedure, private :: assign
-    generic            :: assignment(=) => assign
+    generic            :: assignment(=) => copy
     !< SETTERS
     procedure          :: push
     procedure          :: set
@@ -151,13 +150,6 @@ contains
             end do
         endif
     end subroutine copy
-
-    !>  \brief  is a polymorphic assigner
-    subroutine assign( self_out, self_in )
-        class(hash), intent(inout) :: self_out
-        class(hash), intent(in)    :: self_in
-        call self_out%copy(self_in)
-    end subroutine assign
 
     ! SETTERS
 
