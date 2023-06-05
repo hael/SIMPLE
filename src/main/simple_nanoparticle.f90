@@ -1039,6 +1039,7 @@ contains
         ! remove atoms with < NVOX_THRESH voxels
         do cc = 1, self%n_cc
             if( count(imat_cc == cc) < NVOX_THRESH )then
+                n_discard = n_discard + 1
                 where(imat_cc == cc) imat_bin = 0
             endif
         end do
