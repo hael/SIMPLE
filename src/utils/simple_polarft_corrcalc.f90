@@ -862,8 +862,8 @@ contains
         !$omp end parallel do
         !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
-            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
         enddo
         !$omp end parallel do
         call self%memoize_refs
@@ -879,14 +879,12 @@ contains
         self%regs_denom      = 0._dp
     end subroutine reset_regs
 
-    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot, shvec )
+    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(polarft_corrcalc), intent(inout) :: self
         real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        real,        optional,   intent(in)    :: shvec(2)
-        complex(sp), pointer :: shmat(:,:)
-        integer :: rot, ithr
+        integer :: rot
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -899,12 +897,6 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
             ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
         end if
-        if( present(shvec) )then
-            ithr  = omp_get_thread_num() + 1
-            shmat => self%heap_vars(ithr)%shmat
-            call self%gen_shmat(ithr, shvec, shmat)
-            ptcl_ctf_rot = ptcl_ctf_rot * real(shmat, dp)
-        endif
     end subroutine rotate_polar_real
 
     subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -1449,11 +1441,11 @@ contains
         endif
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, shift, cc)
+                call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
             case(OBJFUN_EUCLID)
-                call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, shift, cc)
+                call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
             case(OBJFUN_PROB)
-                call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, shift, cc)
+                call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, cc)
         end select
     end subroutine gencorrs_2
 
@@ -1492,11 +1484,10 @@ contains
         corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots) / dsqrt(self%drvec(ithr)%r(1:self%nrots)))
     end subroutine gencorrs_cc
 
-    subroutine gencorrs_shifted_cc( self, pft_ref, iptcl, iref, shift, corrs)
+    subroutine gencorrs_shifted_cc( self, pft_ref, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: iptcl, iref
-        real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: corrs(self%nrots)
         integer  :: k, i, ithr
         logical  :: even
@@ -1568,11 +1559,10 @@ contains
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
     end subroutine gencorrs_euclid
 
-    subroutine gencorrs_shifted_euclid( self, pft_ref, iptcl, iref, shift, euclids )
+    subroutine gencorrs_shifted_euclid( self, pft_ref, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: iptcl, iref
-        real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: euclids(self%nrots)
         real(dp) :: w, sumsqptcl
         integer  :: k, i, ithr
@@ -1649,11 +1639,10 @@ contains
         prob = real( self%heap_vars(ithr)%kcorrs / real(self%nk,dp) )
     end subroutine gencorrs_prob
 
-    subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, shift, prob )
+    subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, prob )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: iptcl, iref
-        real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: prob(self%nrots)
         real(dp) :: w, sumsqptcl, denom
         integer  :: k, i, ithr
