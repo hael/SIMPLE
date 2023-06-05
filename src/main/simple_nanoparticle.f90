@@ -1037,6 +1037,7 @@ contains
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
         ! remove atoms with < NVOX_THRESH voxels
+        n_discard = 0
         do cc = 1, self%n_cc
             if( count(imat_cc == cc) < NVOX_THRESH )then
                 n_discard = n_discard + 1
@@ -1044,7 +1045,6 @@ contains
             endif
         end do
         ! Removing outliers based on coordination number
-        n_discard = 0
         call remove_lowly_contacted( cthresh )
         ! don't leave behind any atoms with cscore < cthresh - 2
         new_cthresh = cthresh - 2
