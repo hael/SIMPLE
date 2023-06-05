@@ -52,6 +52,8 @@ type :: oris
     procedure          :: get_dfx, get_dfy
     procedure          :: get_state
     procedure          :: get_class
+    procedure          :: get_eo
+    procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
     procedure, private :: isthere_1
     procedure, private :: isthere_2
@@ -100,6 +102,9 @@ type :: oris
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: set_state
+    procedure          :: set_class
+    procedure          :: set_stkind
+    procedure          :: set_ogid
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -425,6 +430,18 @@ contains
         get_class = self%o(i)%get_class()
     end function get_class
 
+    pure integer function get_eo( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_eo = self%o(i)%get_eo()
+    end function get_eo
+
+    pure integer function get_updatecnt( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_updatecnt = self%o(i)%get_updatecnt()
+    end function get_updatecnt
+
     ! assumes project has been pruned to remove state=0 particles
     subroutine get_tseries_neighs( self, nsz, ptcls2neigh  )
        class(oris),          intent(in)    :: self
@@ -515,7 +532,7 @@ contains
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
         integer, optional, intent(in)    :: eo
-        integer :: mylab, pop, i, mystate, myeo
+        integer :: mylab, pop, i
         logical :: cconsider_w, consider_eo
         real    :: w
         cconsider_w = .false.
@@ -526,19 +543,27 @@ contains
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
         pop = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( consider_eo )then
-                myeo = nint(self%o(i)%get('eo'))
-                if( myeo /= eo ) cycle
-            endif
-            w = 1.0
-            if( cconsider_w ) w = self%o(i)%get('w')
-            if( mystate > 0 .and. w > TINY )then
+        if( cconsider_w )then
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( consider_eo )then
+                    if( self%o(i)%get_eo() /= eo ) cycle
+                endif
+                if( self%o(i)%get('w') > TINY )then
+                    mylab = nint(self%o(i)%get(label))
+                    if( mylab == ind )  pop = pop + 1
+                endif
+            end do
+        else
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( consider_eo )then
+                    if( self%o(i)%get_eo() /= eo ) cycle
+                endif
                 mylab = nint(self%o(i)%get(label))
                 if( mylab == ind )  pop = pop + 1
-            endif
-        end do
+            end do
+        endif
     end function get_pop
 
     !>  \brief  is for getting all rotation matrices
@@ -561,8 +586,7 @@ contains
         logical, optional,    intent(in)    :: consider_w
         integer, optional,    intent(in)    :: maxn ! max label, for the case where the last class/state is missing
         integer, optional,    intent(in)    :: eo
-        integer :: i, mystate, myval, n, myeo
-        real    :: w
+        integer :: i, myval, n
         logical :: cconsider_w, consider_eo
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
@@ -577,19 +601,27 @@ contains
         endif
         if(allocated(pops))deallocate(pops)
         allocate(pops(n),source=0)
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( consider_eo )then
-                myeo = nint(self%o(i)%get('eo'))
-                if( myeo /= eo ) cycle
-            endif
-            w = 1.0
-            if( cconsider_w )  w = self%o(i)%get('w')
-            if( mystate > 0 .and. w > TINY )then
+        if( cconsider_w )then
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( consider_eo )then
+                    if( self%o(i)%get_eo() /= eo ) cycle
+                endif
+                if( self%o(i)%get('w') > TINY )then
+                    myval = nint(self%o(i)%get(label))
+                    if( myval > 0 ) pops(myval) = pops(myval) + 1
+                endif
+            end do
+        else
+            do i=1,self%n
+                if( self%o(i)%isstatezero() ) cycle
+                if( consider_eo )then
+                    if( self%o(i)%get_eo() /= eo ) cycle
+                endif
                 myval = nint(self%o(i)%get(label))
                 if( myval > 0 ) pops(myval) = pops(myval) + 1
-            endif
-        end do
+            end do
+        endif
     end subroutine get_pops
 
     function get_all_normals(self) result(normals)
@@ -873,9 +905,8 @@ contains
         integer,              intent(in)    :: ind
         integer, allocatable, intent(out)   :: indices(:)
         logical, optional,    intent(in)    :: consider_w
-        integer :: pop, mystate, cnt, myval, i
+        integer :: pop, cnt, myval, i
         logical :: cconsider_w
-        real    :: w
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
@@ -886,18 +917,27 @@ contains
         if( pop > 0 )then
             allocate( indices(pop) )
             cnt = 0
-            do i=1,self%n
-                mystate = nint(self%o(i)%get('state'))
-                w = 1.0
-                if( cconsider_w ) w = self%o(i)%get('w')
-                if( mystate > 0 .and. w > TINY )then
+            if( cconsider_w )then
+                do i=1,self%n
+                    if( self%o(i)%isstatezero() ) cycle
+                    if( self%o(i)%get('w') > TINY )then
+                        myval = nint(self%get(i, trim(label)))
+                        if( myval == ind )then
+                            cnt = cnt + 1
+                            indices(cnt) = i
+                        endif
+                    endif
+                end do
+            else
+                do i=1,self%n
+                    if( self%o(i)%isstatezero() ) cycle
                     myval = nint(self%get(i, trim(label)))
                     if( myval == ind )then
                         cnt = cnt + 1
                         indices(cnt) = i
                     endif
-                endif
-            end do
+                end do
+            endif
         endif
     end subroutine get_pinds
 
@@ -1365,6 +1405,24 @@ contains
         integer,     intent(in)    :: i, state
         call self%o(i)%set_state(state)
     end subroutine set_state
+
+    subroutine set_class( self, i, cls )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, cls
+        call self%o(i)%set_class(cls)
+    end subroutine set_class
+
+    subroutine set_stkind( self, i, stkind )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, stkind
+        call self%o(i)%set_stkind(stkind)
+    end subroutine set_stkind
+
+    subroutine set_ogid( self, i, ogid )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, ogid
+        call self%o(i)%set_ogid(ogid)
+    end subroutine set_ogid
 
     subroutine e1set( self, i, e1 )
         class(oris), intent(inout) :: self
