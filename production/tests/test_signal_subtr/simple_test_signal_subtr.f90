@@ -6,7 +6,7 @@ program simple_test_signal_subtr
     implicit none
     
     type(image),    allocatable :: cavgs(:), reprojs(:), out(:)
-    character(*)    :: stks='cavgs_vs_reprojections_rec_and_sim.mrc'
+    character(*), parameter    :: stks='cavgs_vs_reprojections_rec_and_sim.mrc'
 
     ! Read in stacks
 
