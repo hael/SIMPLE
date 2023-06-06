@@ -481,7 +481,7 @@ contains
         filtsz = build_glob%img%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering
-        else if( params_glob%l_lpset )then
+        else if( params_glob%l_lpset .and. (.not. params_glob%l_ref_reg) )then
             ! Butterworth low-pass filter
             call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
             call vol_ptr%apply_filter(filter)
