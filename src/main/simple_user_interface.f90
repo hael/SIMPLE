@@ -1698,7 +1698,7 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D", online=.true.)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
-	    call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
+        call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
         ! computer controls
         call cluster2D_subsets%set_input('comp_ctrls', 1, nchunks)
         call cluster2D_subsets%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
@@ -4642,7 +4642,7 @@ contains
         ! <empty>
         ! parameter input/output
         call tseries_make_projavgs%set_input('parm_ios', 1, nspace)
-        call tseries_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{15}', .false., 15.)
+        call tseries_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{10}', .false., 10.)
         ! alternative inputs
         ! <empty>
         ! search controls
