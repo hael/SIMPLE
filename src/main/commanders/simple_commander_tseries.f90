@@ -1564,16 +1564,18 @@ contains
         real    :: spiral_step
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, ind_in_stk, cnt
         integer :: iptcl, iref, ibatch, nptcls2update, i, ref_ind
-        logical :: fall_over
+        logical :: fall_over, l_cls3D
         call cline%set('tseries', 'yes')
         call cline%set('objfun',  'cc')
-        call cline%set('oritype', 'ptcl3D')
         call cline%set('ctf',     'no')
+        call cline%set('pgrp',  'c1')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ptclw')  ) call cline%set('ptclw', 'no')
-        if( .not. cline%defined('pgrp')   ) call cline%set('pgrp',  'c1')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
-        if( .not. cline%defined('athres') ) call cline%set('athres', 5.)
+        if( .not. cline%defined('athres') ) call cline%set('athres', 10.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        l_cls3D = trim(cline%get_carg('oritype')).eq.'cls3D'
+        call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! sanity check
         fall_over = .false.
@@ -1584,6 +1586,20 @@ contains
                 THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
+        ! input orientations
+        if( l_cls3D )then
+            params%nspace  = build%spproj%os_cls3D%get_noris(consider_state=.true.)
+            call build%eulspace%new(params%nspace,.false.)
+            cnt = 0
+            do iref = 1,build%spproj%os_cls3D%get_noris()
+                if( build%spproj%os_cls3D%get_state(iref) == 0 ) cycle
+                cnt = cnt+1
+                call build%eulspace%transfer_ori(cnt, build%spproj%os_cls3D, iref)
+            enddo
+            call build%eulspace%set_all2single('e3',0.)
+        else
+            call build%eulspace%set_all2single('state',1.)
+        endif
         ! allocations
         allocate(pavgs(params%nspace),sumw(params%nspace))
         sumw = 0.0
@@ -1624,7 +1640,7 @@ contains
         ! angular threshold
         euls_ref       = 0.
         euls           = [0.,params%athres,0.]
-        dist_threshold = geodesic_frobdev(euls_ref,euls)
+        dist_threshold = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.))
         spiral_step    = rad2deg(3.809/sqrt(real(params%nspace)))
         do ibatch=1,nbatches
             call progress_gfortran(ibatch,nbatches)
@@ -1638,6 +1654,7 @@ contains
                 euls    = build%spproj_field%get_euler(iptcl)
                 euls(3) = 0.
                 do iref = 1,params%nspace
+                    if( build%eulspace%get_state(iref) == 0 ) cycle
                     euls_ref    = build%eulspace%get_euler(iref)
                     euls_ref(3) = 0.
                     dist        = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.)) ! => [0;1]
@@ -1664,6 +1681,7 @@ contains
             ! Projection direction weighted sum
             !$omp parallel do default(shared) private(i,iref,w) proc_bind(close) schedule(static)
             do iref = 1,params%nspace
+                if( build%eulspace%get_state(iref) == 0 ) cycle
                 do i = 1,batchsz
                     w = ref_weights(i,iref)
                     if( w < TINY ) cycle
@@ -1676,6 +1694,7 @@ contains
         ! Weights normalization
         !$omp parallel do default(shared) private(i,w) proc_bind(close) schedule(static)
         do iref = 1,params%nspace
+            if( build%eulspace%get_state(iref) == 0 ) cycle
             if( sumw(iref) > 0.001 )then
                 call pavgs(iref)%div(sumw(iref))
             else
@@ -1684,8 +1703,11 @@ contains
         enddo
         !$omp end parallel do
         ! write
+        cnt = 0
         do iref = 1,params%nspace
-            call pavgs(iref)%write(params%outstk,iref)
+            if( build%eulspace%get_state(iref) == 0 ) cycle
+            cnt = cnt + 1
+            call pavgs(iref)%write(params%outstk,cnt)
         enddo
         call build%eulspace%write('projdirs.txt')
         ! end gracefully
