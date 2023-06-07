@@ -26,7 +26,7 @@ program simple_test_signal_subtr
     end do
 
     ! Ensure proper normalizations
-    ! I'm not sure if this is the correct way to normalize
+    ! This is wrong
     do iref=1, nrefs
         call cavgs(iref)%norm()
         call reprojs(iref)%norm()
