@@ -206,6 +206,7 @@ contains
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
         integer :: lpstart_find
+        params_glob%kfromto(1) = max(2,calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
