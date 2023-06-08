@@ -27,13 +27,13 @@ program simple_test_2D_core_finder
     allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)))
 
     do iref=1,nrefs
-        print *, "iref", i
+        print *, "iref", iref
         rmat = cavgs(iref)%get_rmat()
         do n=0, nshells
             mask = .false.
             do i=1, ldim_refs(1)
                 do j=1, ldim_refs(2)
-                    r = i**2 + j**2
+                    r = sqrt(real(i**2 + j**2))
                     if (r > n*shell_size .and. r < (n+1)*shell_size) then
                         mask(i,j,1) = .true.
                     end if
