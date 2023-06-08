@@ -53,7 +53,8 @@ type :: polarft_corrcalc
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(dp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
-    real(dp),            allocatable :: wsqsums_ptcls(:)            !< memoized square sums weighted by sigmas^2 (taken from kfromto(1):kfromto(2))
+    real(dp),            allocatable :: ksqsums_ptcls(:)            !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
+    real(dp),            allocatable :: wsqsums_ptcls(:)            !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
@@ -295,7 +296,7 @@ contains
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                    &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
+                    &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                     &self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%regs_denom_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -319,6 +320,7 @@ contains
         self%pfts_refs_odd   = zero
         self%pfts_ptcls      = zero
         self%sqsums_ptcls    = 0.d0
+        self%ksqsums_ptcls   = 0.d0
         self%wsqsums_ptcls   = 0.d0
         self%refs_reg_even   = 0.d0
         self%refs_reg_odd    = 0.d0
@@ -355,16 +357,18 @@ contains
             ! re-index & reallocate
             self%nptcls = nptcls
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
+            if( allocated(self%ksqsums_ptcls)) deallocate(self%ksqsums_ptcls)
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                        &self%sqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
+                        &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
             call self%kill_memoized_ptcls
             call self%allocate_ptcls_memoization
         endif
         self%pfts_ptcls    = zero
         self%sqsums_ptcls  = 0.d0
+        self%ksqsums_ptcls = 0.d0
         self%wsqsums_ptcls = 0.d0
         self%iseven        = .true.
         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
@@ -708,8 +712,10 @@ contains
         self%sqsums_ptcls(i) = 0.d0
         if( l_sigma ) self%wsqsums_ptcls(i) = 0.d0
         do ik = self%kfromto(1),self%kfromto(2)
-            sumsqk               = real(ik,dp) * real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
-            self%sqsums_ptcls(i) = self%sqsums_ptcls(i) + sumsqk
+            sumsqk               = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
+            self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
+            sumsqk                = real(ik,dp) * sumsqk
+            self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
             if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
         enddo
     end subroutine memoize_sqsum_ptcl
@@ -1536,7 +1542,7 @@ contains
             endif
             ! IFFT(FT(CTF2) x FT(REF2)*)
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) + real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! FT(X.CTF) x FT(REF)*
             if( even )then
                 self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) * self%ft_ref_even(k,iref)%c(1:self%pftsz+1)
@@ -1545,7 +1551,7 @@ contains
             endif
             ! IFFT( FT(X.CTF) x FT(REF)* )
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs(1:self%nrots) = self%heap_vars(ithr)%kcorrs(1:self%nrots) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            self%heap_vars(ithr)%kcorrs(1:self%nrots) = self%heap_vars(ithr)%kcorrs(1:self%nrots) + real(self%rvec1(ithr)%r(1:self%nrots),dp)
         end do
         self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) * (self%sqsums_ptcls(i) * real(2*self%nrots,dp))
         corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots) / dsqrt(self%drvec(ithr)%r(1:self%nrots)))
@@ -1572,7 +1578,7 @@ contains
             endif
             ! IFFT(FT(CTF2) x FT(REF2))
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = self%drvec(ithr)%r + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            self%drvec(ithr)%r = self%drvec(ithr)%r + real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! FT(S.REF), shifted reference
             self%cvec2(ithr)%c(1:self%pftsz)            = pft_ref(:,k)
             self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
@@ -1581,7 +1587,7 @@ contains
             self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
             ! IFFT(FT(X.CTF) x FT(S.REF)*)
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(self%rvec1(ithr)%r(1:self%nrots),dp)
         end do
         self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots),dp)
         corrs = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
@@ -1794,7 +1800,7 @@ contains
             sqsum_ref            = sqsum_ref +            real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
             gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
         end do
-        gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end function gencorr_cc_for_rot_8
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
@@ -1899,7 +1905,7 @@ contains
                 grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         endif
-        denom = dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        denom = dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
         f     = f    / denom
         grad  = grad / denom
     end subroutine gencorr_cc_grad_for_rot_8
@@ -2043,7 +2049,7 @@ contains
                 grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         endif
-        grad = grad / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        grad = grad / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     function gencorr_cont_cc_for_rot_8( self, iref, iptcl, shvec, irot )result(cc)
@@ -2078,7 +2084,7 @@ contains
             sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp_8(:,k) * conjg(pft_ref_tmp_8(:,k)),dp))
             cc        = cc        + real(k,kind=dp) * sum(real(pft_ref_tmp_8(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
         end do
-        cc = cc / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        cc = cc / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end function gencorr_cont_cc_for_rot_8
 
     function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
@@ -2137,7 +2143,7 @@ contains
                 T2(j) = T2(j) + real(k,kind=dp) * real(sum(pft_dref_8(:,k,j) * conjg(pft_ref_8(:,k))),dp)
             enddo
         enddo
-        denom = sqrt(sqsum_ref * self%sqsums_ptcls(i))
+        denom = sqrt(sqsum_ref * self%ksqsums_ptcls(i))
         cc    = num / denom
         dcc   = (T1 - num * T2 / sqsum_ref) / denom
     end function gencorr_cont_grad_cc_for_rot_8
@@ -2200,7 +2206,7 @@ contains
                 T2(j) = T2(j) + real(k,kind=dp) * real(sum(pft_dref_8(:,k,j) * conjg(pft_ref_8(:,k))),dp)
             enddo
         enddo
-        denom     = sqrt(sqsum_ref * self%sqsums_ptcls(i))
+        denom     = sqrt(sqsum_ref * self%ksqsums_ptcls(i))
         f         = num / denom
         grad(1:3) = (T1 - num * T2 / sqsum_ref) / denom
         ! shift derivatives
@@ -2313,7 +2319,7 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate( self%sqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
+            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone,&
                 &self%refs_reg_even,self%refs_reg_odd,self%regs_denom_even,self%regs_denom_odd,self%refs_reg,self%regs_denom)
