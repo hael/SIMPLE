@@ -882,7 +882,11 @@ contains
         real    :: filt(self%kfromto(1):self%kfromto(2))
         ! even/odd only when lpset is .false.
         if( params_glob%l_lpset )then
-            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+            ! generating butterworth filter at cut-off = lp
+            find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+            call butterworth_filter(find, self%kfromto, filt)
+            !$omp parallel default(shared) private(k,iref) proc_bind(close)
+            !$omp do schedule(static)
             do k = self%kfromto(1),self%kfromto(2)
                 where( abs(self%regs_denom(:,k,:)) < TINY )
                     self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
@@ -890,24 +894,23 @@ contains
                     self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
                 endwhere
             enddo
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            !$omp end do nowait
+            !$omp do schedule(static)
             do iref = 1, self%nrefs
                 self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
                 self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
             enddo
-            !$omp end parallel do
-            ! applying butterworth filter at cut-off = lp
-            find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
-            call butterworth_filter(find, self%kfromto, filt)
-            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+            !$omp end do nowait
+            !$omp do schedule(static)
             do k = self%kfromto(1),self%kfromto(2)
                 self%pfts_refs_even(:,k,:) = filt(k) * self%pfts_refs_even(:,k,:)
                 self%pfts_refs_odd( :,k,:) = filt(k) * self%pfts_refs_odd( :,k,:)
             enddo
-            !$omp end parallel do
+            !$omp end do
+            !$omp end parallel
         else
-            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+            !$omp parallel default(shared) private(k,iref,filt) proc_bind(close)
+            !$omp do schedule(static)
             do k = self%kfromto(1),self%kfromto(2)
                 where( abs(self%regs_denom_even(:,k,:)) < TINY )
                     self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
@@ -920,15 +923,15 @@ contains
                     self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
                 endwhere
             enddo
-            !$omp end parallel do
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            !$omp end do nowait
+            !$omp do schedule(static)
             do iref = 1, self%nrefs
                 self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
                 self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
             enddo
-            !$omp end parallel do
+            !$omp end do nowait
             ! applying frc filter
-            !$omp parallel do default(shared) private(iref,filt,k) proc_bind(close) schedule(static)
+            !$omp do schedule(static)
             do iref = 1, self%nrefs
                 call self%calc_raw_frc(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref), filt)
                 do k = self%kfromto(1),self%kfromto(2)
@@ -936,7 +939,8 @@ contains
                     self%pfts_refs_odd( :,k,iref) = filt(k) * self%pfts_refs_odd( :,k,iref)
                 enddo
             enddo
-            !$omp end parallel do
+            !$omp end do
+            !$omp end parallel
         endif
         call self%memoize_refs
     end subroutine regularize_refs
