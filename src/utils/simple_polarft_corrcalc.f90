@@ -712,8 +712,9 @@ contains
         self%sqsums_ptcls(i) = 0.d0
         if( l_sigma ) self%wsqsums_ptcls(i) = 0.d0
         do ik = self%kfromto(1),self%kfromto(2)
-            sumsqk                = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
+            sumsqk               = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
             self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
+            sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
             if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
         enddo
@@ -755,7 +756,7 @@ contains
                     call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
+                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                 enddo
             enddo
             !$omp end parallel do
@@ -783,10 +784,10 @@ contains
                     call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                     if( self%iseven(i) )then
                         self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) +      ctf_rot**2
+                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
                     else
                         self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) +      ctf_rot**2
+                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
                     endif
                 enddo
             enddo
@@ -827,7 +828,7 @@ contains
                         call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                         call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                         self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) +      ctf_rot**2
+                        self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                     endif
                 enddo
             enddo
@@ -854,10 +855,10 @@ contains
                         call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
                         if( self%iseven(i) )then
                             self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                            self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) +      ctf_rot**2
+                            self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
                         else
                             self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                            self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) +      ctf_rot**2
+                            self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
                         endif
                     endif
                 enddo
@@ -906,7 +907,7 @@ contains
                 self%pfts_refs_even(:,k,:) = filt(k) * self%pfts_refs_even(:,k,:)
                 self%pfts_refs_odd( :,k,:) = filt(k) * self%pfts_refs_odd( :,k,:)
             enddo
-            !$omp end do
+            !$omp end do nowait
             !$omp end parallel
         else
             !$omp parallel default(shared) private(k,iref,filt) proc_bind(close)
@@ -939,7 +940,7 @@ contains
                     self%pfts_refs_odd( :,k,iref) = filt(k) * self%pfts_refs_odd( :,k,iref)
                 enddo
             enddo
-            !$omp end do
+            !$omp end do nowait
             !$omp end parallel
         endif
         call self%memoize_refs
@@ -1608,7 +1609,7 @@ contains
         even = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1648,7 +1649,7 @@ contains
         even = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1688,7 +1689,7 @@ contains
         denom =  self%wsqsums_ptcls(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1729,7 +1730,7 @@ contains
         denom = self%wsqsums_ptcls(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1800,10 +1801,10 @@ contains
         sqsum_ref            = 0.d0
         gencorr_cc_for_rot_8 = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            sqsum_ref            = sqsum_ref +            sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
-            gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+            sqsum_ref            = sqsum_ref +            real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
+            gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
         end do
-        gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end function gencorr_cc_for_rot_8
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
@@ -1816,7 +1817,7 @@ contains
         gencorr_euclid_for_rot_8 = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
             gencorr_euclid_for_rot_8 = gencorr_euclid_for_rot_8 +&
-                &(1._dp / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
+                &(real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
         end do
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
@@ -1832,7 +1833,7 @@ contains
         pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
         gencorr_prob_for_rot_8 = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            diffsq = (1._dp / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
+            diffsq = (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
             gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 + dexp(-diffsq / denom)
         end do
         gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 / real(self%nk,dp)
@@ -1882,33 +1883,33 @@ contains
         if( self%with_ctf )then
             call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-                f         = f         + sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                f         = f         + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         else
             call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-                f         = f         + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                f         = f         + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         endif
-        denom = dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        denom = dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
         f     = f    / denom
         grad  = grad / denom
     end subroutine gencorr_cc_grad_for_rot_8
@@ -1933,14 +1934,14 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w       = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w       = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             f       = f + w * sum(real(csq_fast(pft_diff(:,k)),dp))
             grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w       = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w      = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
         f    = dexp( -f / denom )
@@ -1967,7 +1968,7 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             expdiffsq =  dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / denom)
             f         = f + expdiffsq
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
@@ -1976,7 +1977,7 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             expdiffsq =  dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / denom)
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
             grad(2)   = grad(2) - expdiffsq * 2.d0 * w*gradsq/denom
@@ -2028,31 +2029,31 @@ contains
         if( self%with_ctf )then
             call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         else
             call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             enddo
             call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
             do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
             end do
         endif
-        grad = grad / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        grad = grad / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     function gencorr_cont_cc_for_rot_8( self, iref, iptcl, shvec, irot )result(cc)
