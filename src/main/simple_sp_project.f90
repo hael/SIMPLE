@@ -270,6 +270,9 @@ contains
         endif
         if( cline%defined('qsys_partition') )then
             call self%compenv%set(1, 'qsys_partition', cline%get_carg('qsys_partition'))
+        else
+            iostat = simple_getenv('SIMPLE_QSYS_PARTITION', env_var, silent=.true.)
+            if( iostat == 0 ) call self%compenv%set(1, 'qsys_partition', trim(env_var))
         endif
         if( cline%defined('qsys_qos') )then
             call self%compenv%set(1, 'qsys_qos', cline%get_carg('qsys_qos'))
