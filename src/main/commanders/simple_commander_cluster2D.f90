@@ -618,8 +618,9 @@ contains
             call cline_cluster2D_stage1%set('nonuniform', 'no')
             ! reg in the first stage
             if( params%l_ref_reg )then
-                call cline_cluster2D_stage1%set('ref_reg','yes')
-                call cline_cluster2D_stage1%set('eps',    1.)
+                call cline_cluster2D_stage1%set('ref_reg',   'yes')
+                call cline_cluster2D_stage1%set('eps_mode',  'linear')
+                call cline_cluster2D_stage1%set('reg_iters', 10.)
             endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
