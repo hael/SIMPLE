@@ -134,10 +134,12 @@ type :: polarft_corrcalc
     procedure          :: shift_ptcl
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
+    procedure          :: ref_reg_cc_2D
     procedure          :: ref_reg_cc
     procedure          :: ref_reg_cc_neigh
     procedure          :: ref_reg_cc_dev
     procedure          :: regularize_refs
+    procedure          :: regularize_refs_2D
     procedure          :: reset_regs
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
@@ -720,6 +722,34 @@ contains
         enddo
     end subroutine memoize_sqsum_ptcl
 
+    ! 2D accumulating reference reg terms for each batch of particles
+    subroutine ref_reg_cc_2D( self, glob_pinds )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: glob_pinds(self%nptcls)
+        integer  :: i, iref, iptcl, loc
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = real(self%pfts_ptcls * self%ctfmats)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot for this pair of iref, iptcl
+                call self%gencorrs( iref, iptcl, inpl_corrs )
+                loc = maxloc(inpl_corrs, dim=1)
+                if( inpl_corrs(loc) < TINY ) cycle
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
+                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(inpl_corrs(loc), dp)  ! inpl_corrs as the weight of each ptcl
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine ref_reg_cc_2D
+
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
@@ -875,6 +905,29 @@ contains
         type(oris),              intent(in)    :: ptcl_eulspace
         integer,                 intent(in)    :: glob_pinds(self%nptcls)
     end subroutine ref_reg_cc_dev
+
+    subroutine regularize_refs_2D( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: iref, k
+        !$omp parallel default(shared) private(k,iref) proc_bind(close)
+        !$omp do schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
+            elsewhere
+                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+            endwhere
+        enddo
+        !$omp end do nowait
+        !$omp do schedule(static)
+        do iref = 1, self%nrefs
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+        enddo
+        !$omp end do nowait
+        !$omp end parallel
+        call self%memoize_refs
+    end subroutine regularize_refs_2D
 
     subroutine regularize_refs( self )
         use simple_opt_filter, only: butterworth_filter
