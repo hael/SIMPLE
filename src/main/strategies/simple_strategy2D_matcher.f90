@@ -196,6 +196,32 @@ contains
         l_ctf            = build_glob%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+
+        ! ref regularization
+        if( params_glob%l_ref_reg )then
+            select case(trim(params_glob%eps_mode))
+                case('auto')
+                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                case('fixed')
+                    ! user provided, or default value in simple_parameters
+                case('linear')
+                    params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
+                case DEFAULT
+                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
+            end select
+            if( params_glob%eps > TINY )then
+                call pftcc%reset_regs
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call reg_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                call pftcc%regularize_refs_2D
+            endif
+        endif
+        
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -383,6 +409,33 @@ contains
         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftcc%memoize_ptcls
     end subroutine build_pftcc_batch_particles
+
+    !>  \brief  prepares batch particle images for regularization
+    subroutine reg_pftcc_batch_particles( nptcls_here, pinds )
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
+        integer, intent(in) :: nptcls_here
+        integer, intent(in) :: pinds(nptcls_here)
+        integer :: iptcl_batch, iptcl
+        call read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
+        ! reassign particles indices & associated variables
+        call pftcc%reallocate_ptcls(nptcls_here, pinds)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch)&
+        !$omp schedule(static) proc_bind(close)
+        do iptcl_batch = 1,nptcls_here
+            iptcl = pinds(iptcl_batch)
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            ! transfer to polar coordinates
+            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            ! e/o flag
+            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+        end do
+        !$omp end parallel do
+        ! Memoize particles FFT parameters
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        call pftcc%memoize_ptcls
+        ! accumulating regularization term
+        call pftcc%ref_reg_cc_2D(pinds)
+    end subroutine reg_pftcc_batch_particles
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftcc4align( which_iter )

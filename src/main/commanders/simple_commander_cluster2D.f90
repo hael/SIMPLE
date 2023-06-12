@@ -616,6 +616,11 @@ contains
             call cline_cluster2D_stage1%set('objfun',     'cc') ! cc-based search in first phase
             call cline_cluster2D_stage1%set('ml_reg',     'no')
             call cline_cluster2D_stage1%set('nonuniform', 'no')
+            ! reg in the first stage
+            if( params%l_ref_reg )then
+                call cline_cluster2D_stage1%set('ref_reg','yes')
+                call cline_cluster2D_stage1%set('eps',    1.)
+            endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -694,6 +699,10 @@ contains
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! optional non-uniform filtering
             if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
+            ! no reg in second stage
+            if( params%l_ref_reg )then
+                call cline_cluster2D_stage2%set('ref_reg','no')
+            endif
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
             if( l_shmem )then
