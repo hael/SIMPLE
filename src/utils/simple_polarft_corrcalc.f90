@@ -743,8 +743,13 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(    ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%ctfmats(:,:,i),      ctf_rot, loc)
-                self%refs_reg(  :,:,iref) = self%refs_reg(  :,:,iref) + ptcl_ctf_rot * real(inpl_corrs(loc), dp)  ! inpl_corrs as the weight of each ptcl
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                if( self%iseven(i) )then
+                    self%refs_reg_even(  :,:,iref) = self%refs_reg_even(  :,:,iref) + ptcl_ctf_rot * real(inpl_corrs(loc), dp)
+                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                else
+                    self%refs_reg_odd(  :,:,iref) = self%refs_reg_odd(  :,:,iref) + ptcl_ctf_rot * real(inpl_corrs(loc), dp)
+                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                endif
             enddo
         enddo
         !$omp end parallel do
@@ -910,19 +915,24 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer :: iref, k
         !$omp parallel default(shared) private(k,iref) proc_bind(close)
-        !$omp do schedule(static)
+            !$omp do schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:)
+            where( abs(self%regs_denom_even(:,k,:)) < TINY )
+                self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)
             elsewhere
-                self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
+                self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:) / self%regs_denom_even(:,k,:)
+            endwhere
+            where( abs(self%regs_denom_odd(:,k,:)) < TINY )
+                self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:)
+            elsewhere
+                self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
             endwhere
         enddo
         !$omp end do nowait
         !$omp do schedule(static)
         do iref = 1, self%nrefs
-            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
-            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
+            self%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
+            self%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
         !$omp end do nowait
         !$omp end parallel
