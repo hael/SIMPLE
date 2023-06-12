@@ -915,7 +915,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer :: iref, k
         !$omp parallel default(shared) private(k,iref) proc_bind(close)
-            !$omp do schedule(static)
+        !$omp do schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom_even(:,k,:)) < TINY )
                 self%refs_reg_even(:,k,:) = real(k, dp) * self%refs_reg_even(:,k,:)

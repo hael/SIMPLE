@@ -620,7 +620,7 @@ contains
             if( params%l_ref_reg )then
                 call cline_cluster2D_stage1%set('ref_reg',   'yes')
                 call cline_cluster2D_stage1%set('eps_mode',  'linear')
-                call cline_cluster2D_stage1%set('reg_iters', 10.)
+                call cline_cluster2D_stage1%set('reg_iters', real(MAXITS_STAGE1))
             endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
