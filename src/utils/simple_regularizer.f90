@@ -15,7 +15,6 @@ private
 type :: regularizer
     integer               :: nrots
     integer               :: nrefs
-    integer               :: nptcls
     integer               :: pftsz
     integer               :: kfromto(2)
     real(dp), allocatable :: refs_reg_even(:,:,:)        !< -"-, reference reg terms, even
@@ -51,7 +50,6 @@ contains
         class(polarft_corrcalc), target, intent(inout) :: pftcc
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
-        self%nptcls  = pftcc%nptcls
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
@@ -72,14 +70,14 @@ contains
     ! 2D accumulating reference reg terms for each batch of particles
     subroutine ref_reg_cc_2D( self, glob_pinds )
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%nptcls)
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer  :: i, iref, iptcl, loc
-        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            do i = 1, self%nptcls
+            do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
                 ! find best irot for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
@@ -108,9 +106,9 @@ contains
         class(regularizer), intent(inout) :: self
         type(oris),         intent(in)    :: eulspace
         type(oris),         intent(in)    :: ptcl_eulspace
-        integer,            intent(in)    :: glob_pinds(self%nptcls)
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer  :: i, iref, iptcl, loc
-        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real     :: euls(3), euls_ref(3)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
@@ -118,7 +116,7 @@ contains
         if( params_glob%l_lpset )then
             !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                do i = 1, self%nptcls
+                do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
                     euls_ref = eulspace%get_euler(iref)
                     euls     = ptcl_eulspace%get_euler(iptcl)
@@ -145,7 +143,7 @@ contains
         else
             !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot, ctf_rot) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                do i = 1, self%nptcls
+                do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
                     euls_ref = eulspace%get_euler(iref)
                     euls     = ptcl_eulspace%get_euler(iptcl)
@@ -182,9 +180,9 @@ contains
         class(regularizer), intent(inout) :: self
         type(oris),         intent(in)    :: eulspace
         type(oris),         intent(in)    :: ptcl_eulspace
-        integer,            intent(in)    :: glob_pinds(self%nptcls)
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer  :: i, iref, iptcl, loc
-        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
@@ -192,7 +190,7 @@ contains
         if( params_glob%l_lpset )then
             !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                do i = 1, self%nptcls
+                do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
                     euls_ref =      eulspace%get_euler(iref)  * pi / 180.
                     euls     = ptcl_eulspace%get_euler(iptcl) * pi / 180.
@@ -218,7 +216,7 @@ contains
         else
             !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
-                do i = 1, self%nptcls
+                do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
                     euls_ref =      eulspace%get_euler(iref)  * pi / 180.
                     euls     = ptcl_eulspace%get_euler(iptcl) * pi / 180.
@@ -255,7 +253,7 @@ contains
         class(regularizer), intent(inout) :: self
         type(oris),         intent(in)    :: eulspace
         type(oris),         intent(in)    :: ptcl_eulspace
-        integer,            intent(in)    :: glob_pinds(self%nptcls)
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
     end subroutine ref_reg_cc_dev
 
     subroutine regularize_refs_2D( self )
