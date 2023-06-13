@@ -1431,6 +1431,7 @@ contains
         use simple_polarizer,        only: polarizer
         use simple_class_frcs,       only: class_frcs
         use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_regularizer,      only: regularizer
         use simple_aff_prop,         only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -1439,6 +1440,7 @@ contains
         type(class_frcs)              :: clsfrcs
         type(image)                   :: img_msk
         type(polarft_corrcalc)        :: pftcc
+        type(regularizer)             :: reg_obj
         type(aff_prop)                :: aprop
         type(polarizer),  allocatable :: cavg_imgs(:), cavg_imgs_good(:)
         character(len=:), allocatable :: cavgsstk, cavgsstk_shifted, classname, frcs_fname
@@ -1538,6 +1540,7 @@ contains
         params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
         call pftcc%new(ncls_sel, [1,1], params%kfromto)
+        if( params%l_ref_reg ) call reg_obj%new(pftcc)
         if( trim(params%bin_cls).ne.'no' .and. .not. DEBUG )then
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
@@ -1781,6 +1784,7 @@ contains
         call clsfrcs%kill
         call pftcc%kill
         call aprop%kill
+        if( params%l_ref_reg ) call reg_obj%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do

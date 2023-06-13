@@ -5,6 +5,7 @@ module simple_strategy2D_matcher
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_polarft_corrcalc,    only: polarft_corrcalc
+use simple_regularizer,         only: regularizer
 use simple_cmdline,             only: cmdline
 use simple_builder,             only: build_glob
 use simple_parameters,          only: params_glob
@@ -31,6 +32,7 @@ private
 #include "simple_local_flags.inc"
 
 type(polarft_corrcalc)       :: pftcc
+type(regularizer)            :: reg_obj
 type(euclid_sigma2)          :: eucl_sigma
 logical,         allocatable :: ptcl_mask(:)
 integer                      :: batchsz_max
@@ -210,7 +212,7 @@ contains
                     THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
             end select
             if( params_glob%eps > TINY )then
-                call pftcc%reset_regs
+                call reg_obj%reset_regs
                 ! Batch loop
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
@@ -218,7 +220,7 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call pftcc%regularize_refs_2D
+                call reg_obj%regularize_refs_2D
             endif
         endif
         
@@ -434,7 +436,7 @@ contains
         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftcc%memoize_ptcls
         ! accumulating regularization term
-        call pftcc%ref_reg_cc_2D(pinds)
+        call reg_obj%ref_reg_cc_2D(pinds)
     end subroutine reg_pftcc_batch_particles
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
