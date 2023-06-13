@@ -275,13 +275,13 @@ contains
                 self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
             endwhere
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp do schedule(static)
         do iref = 1, self%nrefs
             self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
             self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp end parallel
         call self%pftcc%memoize_refs
     end subroutine regularize_refs_2D
@@ -305,19 +305,19 @@ contains
                     self%refs_reg(:,k,:) = real(k, dp) * self%refs_reg(:,k,:) / self%regs_denom(:,k,:)
                 endwhere
             enddo
-            !$omp end do nowait
+            !$omp end do
             !$omp do schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
                 self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg(:,:,iref))
             enddo
-            !$omp end do nowait
+            !$omp end do
             !$omp do schedule(static)
             do k = self%kfromto(1),self%kfromto(2)
                 self%pftcc%pfts_refs_even(:,k,:) = filt(k) * self%pftcc%pfts_refs_even(:,k,:)
                 self%pftcc%pfts_refs_odd( :,k,:) = filt(k) * self%pftcc%pfts_refs_odd( :,k,:)
             enddo
-            !$omp end do nowait
+            !$omp end do
             !$omp end parallel
         else
             !$omp parallel default(shared) private(k,iref,filt) proc_bind(close)
@@ -334,13 +334,13 @@ contains
                     self%refs_reg_odd(:,k,:) = real(k, dp) * self%refs_reg_odd(:,k,:) / self%regs_denom_odd(:,k,:)
                 endwhere
             enddo
-            !$omp end do nowait
+            !$omp end do
             !$omp do schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%refs_reg_even(:,:,iref))
                 self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%refs_reg_odd(:,:,iref))
             enddo
-            !$omp end do nowait
+            !$omp end do
             ! applying frc filter
             !$omp do schedule(static)
             do iref = 1, self%nrefs
@@ -350,7 +350,7 @@ contains
                     self%pftcc%pfts_refs_odd( :,k,iref) = filt(k) * self%pftcc%pfts_refs_odd( :,k,iref)
                 enddo
             enddo
-            !$omp end do nowait
+            !$omp end do
             !$omp end parallel
         endif
         call self%pftcc%memoize_refs
