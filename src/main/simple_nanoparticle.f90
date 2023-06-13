@@ -20,9 +20,9 @@ real,             parameter :: CORR_THRES_SIGMA    = -2.0    ! sigma for valid_c
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
-logical,          parameter :: DEBUG               = .true. ! for debugging purposes
-logical,          parameter :: WRITE_OUTPUT        = .true. ! for figures generation
-logical,          parameter :: ATOMS_STATS_OMIT    = .true. ! omit = shorter atoms stats output
+logical,          parameter :: DEBUG               = .false. ! for debugging purposes
+logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
+logical,          parameter :: ATOMS_STATS_OMIT    = .true.  ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
