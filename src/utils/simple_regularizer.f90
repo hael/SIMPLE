@@ -77,10 +77,10 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer  :: i, iref, iptcl, loc
-        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), weight
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,weight) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -88,16 +88,17 @@ contains
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 loc = maxloc(inpl_corrs, dim=1)
                 if( inpl_corrs(loc) < TINY ) cycle
+                weight = inpl_corrs(loc)
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                 if( self%pftcc%iseven(i) )then
-                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot * real(inpl_corrs(loc), dp)
+                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot * real(weight, dp)
                     self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
                 else
-                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot * real(inpl_corrs(loc), dp)
+                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot * real(weight, dp)
                     self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
                 endif
             enddo
@@ -143,7 +144,9 @@ contains
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                     ! neighboring reg terms
-                    theta = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
+                    euls_ref = pi / 180. * eulspace%get_euler(iref)
+                    euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
+                    theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                     if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
                         self%regs_neigh(:,:,iref)       = self%regs_neigh(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                         self%regs_denom_neigh(:,:,iref) = self%regs_denom_neigh(:,:,iref) + ctf_rot**2
