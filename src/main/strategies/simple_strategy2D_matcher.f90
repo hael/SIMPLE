@@ -209,7 +209,7 @@ contains
                 case('linear')
                     params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
                 case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
+                    THROW_HARD('reg eps mode: '//trim(params_glob%eps_mode)//' unsupported')
             end select
             if( params_glob%eps > TINY )then
                 call reg_obj%reset_regs

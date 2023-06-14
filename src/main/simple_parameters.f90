@@ -178,7 +178,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh|dev){global}
+    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|glob_neigh|neigh_ref){global}
     character(len=STDLEN)     :: eps_mode='auto'      !< reg eps mode(auto|fixed|linear){auto}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
