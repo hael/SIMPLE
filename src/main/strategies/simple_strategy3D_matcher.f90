@@ -69,6 +69,7 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
+        character(len=STDLEN) :: reg_mode_in
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
@@ -186,13 +187,19 @@ contains
         if( params_glob%l_ref_reg )then
             select case(trim(params_glob%eps_mode))
                 case('auto')
-                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                    if( which_iter <= 2*params_glob%reg_iters )then
+                        params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                        reg_mode_in     = 'glob_neigh'
+                    else
+                        params_glob%eps = min( 1., max(0., 3. - real(which_iter)/params_glob%reg_iters) )
+                        reg_mode_in     = 'neigh_ref'
+                    endif
                 case('fixed')
                     ! user provided, or default value in simple_parameters
                 case('linear')
                     params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
                 case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
+                    THROW_HARD('reg eps mode: '//trim(params_glob%eps_mode)//' unsupported')
             end select
             if( params_glob%eps > TINY )then
                 call reg_obj%reset_regs
