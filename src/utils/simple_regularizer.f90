@@ -217,11 +217,15 @@ contains
         call self%pftcc%memoize_refs
     end subroutine regularize_refs_2D
 
-    subroutine regularize_refs( self )
+    subroutine regularize_refs( self, reg_mode_in )
         use simple_opt_filter, only: butterworth_filter
-        class(regularizer), intent(inout) :: self
+        class(regularizer),              intent(inout) :: self
+        character(len=STDLEN), optional, intent(in)    :: reg_mode_in
+        character(len=STDLEN) :: reg_mode_here
         integer :: iref, k, find
         real    :: filt(self%kfromto(1):self%kfromto(2))
+        reg_mode_here = trim(params_glob%reg_mode)
+        if( present(reg_mode_in) ) reg_mode_here = reg_mode_in
         ! even/odd only when lpset is .false.
         if( params_glob%l_lpset )then
             ! generating butterworth filter at cut-off = lp
@@ -242,7 +246,7 @@ contains
                 endwhere
             enddo
             !$omp end do
-            select case(trim(params_glob%reg_mode))
+            select case( reg_mode_here )
                 case('global')
                     !$omp do schedule(static)
                     do iref = 1, self%nrefs
