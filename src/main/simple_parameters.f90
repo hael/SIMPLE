@@ -333,7 +333,7 @@ type :: parameters
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
-    real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
+    real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=1.0
@@ -341,7 +341,7 @@ type :: parameters
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
-    real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
+    real    :: lp_ctf_estimate=LP_CTF_ESTIMATE !< low-pass limit 4 ctf_estimate(in A)
     real    :: lpstart_nonuni= 30. !< optimization(search)-based low-pass limit lower bound
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
