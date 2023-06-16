@@ -210,7 +210,11 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call reg_obj%regularize_refs
+                if( trim(params_glob%eps_mode) == 'auto' )then
+                    call reg_obj%regularize_refs(reg_mode_in)
+                else
+                    call reg_obj%regularize_refs
+                endif
             endif
         endif
 
