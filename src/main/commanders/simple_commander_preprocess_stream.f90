@@ -76,9 +76,9 @@ contains
         if( .not. cline%defined('mcpatch_thres')    ) call cline%set('mcpatch_thres','  yes')
         if( .not. cline%defined('tilt_thres')       ) call cline%set('tilt_thres',      0.05)
         ! ctf estimation
-        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',         512.)
-        if( .not. cline%defined('hp_ctf_estimate')  ) call cline%set('hp_ctf_estimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate')  ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512.)
+        if( .not. cline%defined('hp_ctf_estimate')  ) call cline%set('hp_ctf_estimate',  HP_CTF_ESTIMATE)
+        if( .not. cline%defined('lp_ctf_estimate')  ) call cline%set('lp_ctf_estimate',  LP_CTF_ESTIMATE)
         if( .not. cline%defined('dfmin')            ) call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')            ) call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')         ) call cline%set('ctfpatch',         'yes')
@@ -268,7 +268,6 @@ contains
                 if( n_fail_iter > 0 )then
                     n_failed_jobs = n_failed_jobs + n_fail_iter
                     do cnt = 1,n_fail_iter
-                        THROW_WARN('Something went wrong with: '//trim(failed_jobs_clines(cnt)%get_carg('projfile'))//'. Skipping')
                         call failed_jobs_clines(cnt)%kill
                     enddo
                     deallocate(failed_jobs_clines)
@@ -440,7 +439,7 @@ contains
                         enddo
                         call stream_spproj%kill
                     enddo
-                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj%os_ptcl2D%get_noris()
                     call spproj%write_segment_inside('ptcl2D', params%projfile)
                     spproj%os_ptcl3D = spproj%os_ptcl2D
                     call spproj%os_ptcl2D%kill
