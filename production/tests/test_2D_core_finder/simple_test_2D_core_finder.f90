@@ -10,12 +10,12 @@ program simple_test_2D_core_finder
     use simple_image,        only: image
     implicit none
     
-    real, parameter     :: smpd=0.358, nprad_A=14.0, shell_size_A = 2.0
+    real, parameter     :: smpd=0.358, nprad_A=14.0, shell_size_A = 2.0, res=1.0, maskdiam_A=20.0
     logical, parameter  :: normalize_real_space = .false.
 
     type(image)                 :: cavg, reproj, diff
     type(image)                 :: temp
-    real                :: nprad_vox=nprad_A/smpd, shell_size_vox=shell_size_A/smpd
+    real                :: nprad_vox=nprad_A/smpd, shell_size_vox=shell_size_A/smpd, mskdiam_vox=maskdiam_A/smpd
     real                :: r, mean, center(2), minmax(2)
     real, allocatable   :: rmat(:,:,:)
     integer             :: iref, icavg, ldim1(3), ldim2(3), ldim_refs(3), ifoo, nshells, i, j, n, funit
@@ -77,20 +77,39 @@ program simple_test_2D_core_finder
         end if
         call reproj%read(fn_reprojs, icavg)
 
+        ! Apply circular mask prior to normalization
+        call cavg%mask(mskdiam_vox, 'hard')
+        call reproj%mask(mskdiam_vox, 'hard')
+
         ! Normalize for comparison
-        ! Unsure if this is a proper way to normalize
         if (normalize_real_space) then
+            ! Low-pass filter at resolution in reconstruction (1Å)
+            call cavg%fft()
+            call reproj%fft()
+            call cavg%lp(calc_fourier_index(res, ldim_refs(1), smpd))
+            call reproj%lp(calc_fourier_index(res, ldim_refs(1), smpd))
+            call cavg%ifft()
+            call reproj%ifft()
             call cavg%norm()
             call reproj%norm()
         else
             call match_fourier_variance(cavg, reproj)
         end if
+        call reproj%mask(mskdiam_vox, 'hard')
 
         ! Signal Subtraction
         diff = cavg - reproj
 
+        ! Analysis should inlcude low-pass filter if normalized in Fourier space
+        if (.not. normalize_real_space) then
+            call diff%fft()
+            call diff%lp(calc_fourier_index(res, ldim_refs(1), smpd))
+            call diff%ifft()
+        end if
+
         ! Take averages of shells out to the NP radius
         rmat = diff%get_rmat()
+        mean = 0. 
         do n=0, nshells
             mask = .false. ! For now use mask in case we want to calculate other stats in the future
             do i=1, ldim_refs(1)
@@ -98,17 +117,19 @@ program simple_test_2D_core_finder
                     r = sqrt(real((i - center(1))**2 + (j - center(2))**2))
                     if (r > n*shell_size_vox .and. r < (n+1)*shell_size_vox) then
                         mask(i,j,1) = .true.
+                        ! mean = mean + abs(rmat(i,j,1))
                     end if
                 end do
             end do
-            mean = sum(rmat, mask=mask) / count(mask)
+            ! mean = mean / count(mask)
+            mean = sum(abs(rmat), mask=mask) / count(mask)
             ! Write csv file containing statistics
             write(funit,601,advance='no') real(iref-1),                CSV_DELIM ! INDEX
             write(funit,601,advance='no') n*shell_size_A,              CSV_DELIM ! RMIN
             write(funit,601,advance='no') (n+1)*shell_size_A,          CSV_DELIM ! RMAX
             write(funit,601,advance='no') real(count(mask)),           CSV_DELIM ! COUNT
             write(funit,601,advance='no') abs(mean),                   CSV_DELIM ! MEAN_DIFF
-            write(funit,601,advance='no') maxval(rmat, mask=mask),     CSV_DELIM ! MIN_DIFF
+            write(funit,601,advance='no') minval(rmat, mask=mask),     CSV_DELIM ! MIN_DIFF
             write(funit,602)              maxval(rmat, mask=mask)                ! MAX_DIFF
             ! Write images
             call cavg%write(fn_cavgs_out, iref)
@@ -142,7 +163,7 @@ contains
         real, allocatable                      :: img1_shavgs(:), img2_shavgs(:)
         real                                   :: minmax(2)
         integer, allocatable        :: sh_counts(:)
-        integer, parameter          :: niter=5
+        integer, parameter          :: niter=1
         integer                     :: iter, i, j, h, k, sh, lims(3,2), phys(3), ldim(3), array_shape(3), nshells
 
         if (.not. img1%exists()) then
@@ -194,19 +215,19 @@ contains
             end do
             deallocate(sh_counts, img1_shavgs, img2_shavgs)
 
-            ! Match greyscale range of img2 to img1
-            call img2%ifft()
-            minmax = img1%minmax()
-            do i=1, ldim(1)
-                do j=1, ldim(2)
-                    if (rmat2(i,j,1) > minmax(2)) then
-                        rmat2(i,j,1) = minmax(2)
-                    else if (rmat2(i,j,1) < minmax(1)) then
-                        rmat2(i,j,1) = minmax(1)
-                    end if
-                end do
-            end do
-            call img2%fft()
+            ! ! Match greyscale range of img2 to img1
+            ! call img2%ifft()
+            ! minmax = img1%minmax()
+            ! do i=1, ldim(1)
+            !     do j=1, ldim(2)
+            !         if (rmat2(i,j,1) > minmax(2)) then
+            !             rmat2(i,j,1) = minmax(2)
+            !         else if (rmat2(i,j,1) < minmax(1)) then
+            !             rmat2(i,j,1) = minmax(1)
+            !         end if
+            !     end do
+            ! end do
+            ! call img2%fft()
 
             ! Preserve phase information of img2
             array_shape = img2%get_array_shape()
