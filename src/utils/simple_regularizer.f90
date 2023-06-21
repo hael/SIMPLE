@@ -144,17 +144,21 @@ contains
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                     ! neighboring reg terms
-                    loc_thres = self%nrots * params_glob%arc_thres / 360.
-                    loc       = maxloc(inpl_corrs(1:loc_thres), dim=1)
-                    loc_m     = maxloc(inpl_corrs(self%nrots-loc_thres:self%nrots), dim=1)
-                    if( inpl_corrs(loc_m) > inpl_corrs(loc) ) loc = loc_m
-                    if( inpl_corrs(loc) < TINY ) cycle
-                    ! distance & correlation weighing
-                    ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
                     euls_ref = pi / 180. * eulspace%get_euler(iref)
                     euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
-                    theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
+                    theta    = acos(sin(euls_ref(2))*sin(euls(2)) + cos(euls_ref(2))*cos(euls(2))*cos(euls_ref(1) - euls(1)))
                     if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
+                        loc_thres = self%nrots * params_glob%arc_thres / 360.
+                        loc       = maxloc(inpl_corrs(1:loc_thres), dim=1)
+                        loc_m     = maxloc(inpl_corrs(self%nrots-loc_thres:self%nrots), dim=1)
+                        if( inpl_corrs(loc_m) > inpl_corrs(loc) ) loc = loc_m
+                        if( inpl_corrs(loc) < TINY ) cycle
+                        ! distance & correlation weighing
+                        ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                        loc = (self%nrots+1)-(loc-1)
+                        if( loc > self%nrots ) loc = loc - self%nrots
+                        call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
+                        call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                         self%regs_neigh(:,:,iref)       = self%regs_neigh(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                         self%regs_denom_neigh(:,:,iref) = self%regs_denom_neigh(:,:,iref) + ctf_rot**2
                     endif
