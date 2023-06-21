@@ -14,13 +14,15 @@ use simple_starproject,    only: starproject
 use simple_euclid_sigma2,  only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
 use simple_qsys_funs
 use simple_commander_cluster2D
+use FoX_dom
 implicit none
 
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool, is_pool_available
-public :: update_user_params, copy_optics_groups, update_path, check_params_for_cluster2D
+public :: update_user_params, update_path, check_params_for_cluster2D
+public :: read_pool_xml_beamtilts, assign_pool_optics
 
 private
 #include "simple_local_flags.inc"
@@ -76,7 +78,7 @@ character(len=STDLEN) :: refs_glob
 real                  :: orig_smpd, smpd, scale_factor, mskdiam     ! dimensions
 integer               :: orig_box, box, boxpd
 real                  :: lp_greedy, lpstart_stoch                   ! resolution limits
-integer               :: max_ncls, nptcls_per_chunk, ncls_glob
+integer               :: max_ncls, nptcls_per_chunk, ncls_glob, nmics_last
 logical               :: l_wfilt, do_autoscale, l_greedy
 logical               :: l_update_sigmas = .false.
 
@@ -134,6 +136,7 @@ contains
         projfile4gui        = trim(projfilegui)
         orig_box            = box_in
         l_update_sigmas     = params_glob%l_needs_sigma
+        nmics_last          = 0
         ! pixel size after motion correction
         if( cline%defined('eer_upsampling') )then
             orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
@@ -916,155 +919,54 @@ contains
         call os%kill
     end subroutine update_user_params
     
-    !> update optics groups from master projfile. Allows asynchronous assignment.
-    subroutine copy_optics_groups( spproj )
-        type(sp_project), intent(inout) :: spproj
-        integer                         :: nori, spori
-        character(len=:), allocatable   :: intg, bsname
-        write(logfhandle,'(A)')'>>> COPYING OPTICS GROUPS'
-        ! update mics
-        do nori = 1, pool_proj%os_mic%get_noris()
-            if(pool_proj%os_mic%isthere(nori, "intg")) then
-                intg   = trim(pool_proj%os_mic%get_static(nori, "intg"))
-                bsname = trim(get_bsname(intg))
-                spori  = match_field(spproj%os_mic, 'bsname', bsname)
-                if(spori > 0) then
-                    if(spproj%os_mic%isthere(spori, "tiltx")) call pool_proj%os_mic%set(nori, "tiltx", spproj%os_mic%get(spori, "tiltx"))
-                    if(spproj%os_mic%isthere(spori, "tilty")) call pool_proj%os_mic%set(nori, "tilty", spproj%os_mic%get(spori, "tilty"))
-                    if(spproj%os_mic%isthere(spori, "ogid" )) call pool_proj%os_mic%set(nori, "ogid",  spproj%os_mic%get(spori, "ogid" ))
-                end if
-            end if
+    !> read xml beamtilts into pool_proj
+    subroutine read_pool_xml_beamtilts()
+        type(Node), pointer     :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
+        integer                 :: i, iread
+        integer(timer_int_kind) :: bt0
+        real(timer_int_kind)    :: bt_read
+        if( DEBUG_HERE ) bt0 = tic()
+        iread = 0
+        do i = 1, pool_proj%os_mic%get_noris()
+            if ( pool_proj%os_mic%get(i, "tiltx") == 0.0 .and. pool_proj%os_mic%get(i, "tilty") == 0.0) then
+                if(file_exists(pool_proj%os_mic%get_static(i, "meta"))) then
+                    xmldoc        => parseFile(trim(adjustl(pool_proj%os_mic%get_static(i,"meta"))))
+                    beamtiltnode  => item(getElementsByTagname(xmldoc, "BeamShift"),0)
+                    beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
+                    beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
+                    call pool_proj%os_mic%set(i, "tiltx", str2real(getTextContent(beamtiltnodex)))
+                    call pool_proj%os_mic%set(i, "tilty", str2real(getTextContent(beamtiltnodey)))
+                    call destroy(xmldoc)
+                    iread = iread + 1
+                endif
+            endif
         end do
-        pool_proj%os_optics = spproj%os_optics
-        if(allocated(intg))   deallocate(intg)
-        if(allocated(bsname)) deallocate(bsname)
-        
-        contains
-        
-            integer function match_field( sporis, field, matchstr )
-                type(oris),       intent(inout)    :: sporis 
-                character(len=*), intent(in)       :: field, matchstr
-                character(len=:), allocatable      :: fieldstr, teststr
-                integer                            :: nori
-                match_field = 0
-                do nori = 1, sporis%get_noris()
-                    if(sporis%isthere(nori, field)) then
-                        fieldstr = trim(sporis%get_static(nori, field))
-                        teststr  = trim(get_bsname(fieldstr))
-                        if(index(matchstr, teststr) == 1) then
-                            match_field = nori
-                            exit
-                        end if
-                    end if
-                end do
-                if(allocated(fieldstr)) deallocate(fieldstr)
-                if(allocated(teststr))  deallocate(teststr)
-            end function match_field
-            
-            character(len=LONGSTRLEN) function get_bsname(path)
-                character(len=*), intent(in)  :: path
-                character(len=:), allocatable :: filename
-                filename = basename(path)
-                if(index(filename, INTGMOV_SUFFIX) > 0) then
-                    filename = filename(:index(filename, INTGMOV_SUFFIX) - 1)
-                end if
-                if(index(filename, EXTRACT_STK_FBODY) > 0) then
-                    filename = filename(index(filename, EXTRACT_STK_FBODY) + len(EXTRACT_STK_FBODY):)
-                end if
-                if(index(filename, '_fractions') > 0) then
-                    filename = filename(:index(filename, '_fractions') - 1)
-                end if
-                if(index(filename, '_EER') > 0) then
-                    filename = filename(:index(filename, '_EER') - 1)
-                end if
-                get_bsname = trim(adjustl(filename))
-                if(allocated(filename)) deallocate(filename)
-            end function get_bsname
-            
-    end subroutine copy_optics_groups
-
-    !> update optics groups for stks and particles from optics groups assigned to mics
-    subroutine propagate_optics_groups()
-        integer                         :: nori, spori, ptclori, box, ogid, stkbox
-        real                            :: fromp, top
-        character(len=:), allocatable   :: stk, bsname
-        write(logfhandle,'(A)')'>>> PROPAGATING OPTICS GROUPS'
-        ! update stks and ptcls
-        do nori = 1, pool_proj%os_stk%get_noris()
-           if(pool_proj%os_stk%isthere(nori, 'stk')) then
-                stk    = trim(pool_proj%os_stk%get_static(nori, 'stk'))
-                bsname = trim(get_bsname(stk))
-                spori  = match_field(pool_proj%os_mic, 'intg', bsname)
-                if(spori > 0) then
-                    if(pool_proj%os_mic%isthere(spori, 'ogid')) then
-                        ogid  = nint(pool_proj%os_mic%get(spori, 'ogid'))
-                        fromp = pool_proj%os_stk%get(nori,  'fromp')
-                        top   = pool_proj%os_stk%get(nori,  'top'  )
-                        do ptclori = nint(fromp), nint(top)
-                            call pool_proj%os_ptcl2D%set_ogid(ptclori, ogid)
-                            call pool_proj%os_ptcl3D%set_ogid(ptclori, ogid)
-                        end do
-                        call pool_proj%os_stk%set_ogid(nori, ogid)
-                    end if
-                end if
-            end if
-            if(pool_proj%os_stk%isthere(nori, 'box') .and. pool_proj%os_stk%isthere(nori, 'ogid')) then
-                ogid   = nint(pool_proj%os_stk%get(nori, 'ogid'))
-                stkbox = nint(pool_proj%os_stk%get(nori, 'box'))
-                if(ogid > 0 .and. stkbox > 0) then
-                    box = nint(pool_proj%os_optics%get(ogid, 'box'))
-                    if(box == 0) then
-                        call pool_proj%os_optics%set(ogid, 'box', real(stkbox))
-                    end if
-                end if
-            end if
-        end do
-        if(allocated(stk))    deallocate(stk)
-        if(allocated(bsname)) deallocate(bsname)
-        
-        contains
-        
-            integer function match_field( sporis, field, matchstr )
-                type(oris),       intent(inout)    :: sporis 
-                character(len=*), intent(in)       :: field, matchstr
-                character(len=:), allocatable      :: fieldstr, teststr
-                integer                            :: nori
-                match_field = 0
-                do nori = 1, sporis%get_noris()
-                    if(sporis%isthere(nori, field)) then
-                        fieldstr = trim(sporis%get_static(nori, field))
-                        teststr  = trim(get_bsname(fieldstr))
-                        if(index(matchstr, teststr) == 1) then
-                            match_field = nori
-                            exit
-                        end if
-                    end if
-                end do
-                if(allocated(fieldstr)) deallocate(fieldstr)
-                if(allocated(teststr))  deallocate(teststr)
-            end function match_field
-            
-            character(len=LONGSTRLEN) function get_bsname(path)
-                character(len=*), intent(in)  :: path
-                character(len=:), allocatable :: filename
-                filename = basename(path)
-                if(index(filename, INTGMOV_SUFFIX) > 0) then
-                    filename = filename(:index(filename, INTGMOV_SUFFIX) - 1)
-                end if
-                if(index(filename, EXTRACT_STK_FBODY) > 0) then
-                    filename = filename(index(filename, EXTRACT_STK_FBODY) + len(EXTRACT_STK_FBODY):)
-                end if
-                if(index(filename, '_fractions') > 0) then
-                    filename = filename(:index(filename, '_fractions') - 1)
-                end if
-                if(index(filename, '_EER') > 0) then
-                    filename = filename(:index(filename, '_EER') - 1)
-                end if
-                get_bsname = trim(adjustl(filename))
-                if(allocated(filename)) deallocate(filename)
-            end function get_bsname
-            
-    end subroutine propagate_optics_groups
+        if(iread > 0) write(logfhandle,'(A,A,A)') '>>> READ POOL METADATA FOR ', int2str(iread), ' MOVIES'
+        if( DEBUG_HERE )then
+            bt_read = toc(bt0)
+            print *,'bt_read  : ', bt_read; call flush(6)
+        endif
+    end subroutine read_pool_xml_beamtilts
+    
+    subroutine assign_pool_optics(cline_here, propagate)
+        type(cmdline), intent(inout) :: cline_here
+        logical, optional            :: propagate
+        logical                      :: l_propagate
+        integer(timer_int_kind)      :: ot0
+        real(timer_int_kind)         :: ot_assign
+        if( DEBUG_HERE ) ot0 = tic()
+        l_propagate = .false.
+        if(present(propagate)) l_propagate = propagate
+        if(pool_proj%os_mic%get_noris() > nmics_last) then
+            nmics_last = pool_proj%os_mic%get_noris()
+            call starproj%assign_optics(cline_here, pool_proj, propagate=l_propagate)
+            write(logfhandle,'(A,A,A)') '>>> ASSIGNED POOL OPTICS INTO ', int2str(pool_proj%os_optics%get_noris()), ' GROUPS'
+        end if
+        if( DEBUG_HERE )then
+            ot_assign = toc(ot0)
+            print *,'ot_assign  : ', ot_assign; call flush(6)
+        endif
+    end subroutine assign_pool_optics
 
     subroutine classify_pool
         use simple_ran_tabu
@@ -1119,7 +1021,7 @@ contains
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
         if( file_exists('.rejection')) call del_file('.rejection')
         call fopen(rejection_fhandle,file='.rejection', status='new', iostat=ok)
-        write(rejection_fhandle, '(RD,I6,I6)') nptcls_glob, nptcls_rejected_glob
+        write(rejection_fhandle, '(RD,I10,I10)') nptcls_glob, nptcls_rejected_glob
         call fclose(rejection_fhandle)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
@@ -1320,7 +1222,6 @@ contains
                 ! automatic pruning performed upon final writing
                 call pool_proj%prune_particles
             endif
-            call propagate_optics_groups
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
             ! preserve down-scaling
@@ -1338,7 +1239,6 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            call propagate_optics_groups
             call pool_proj%write(projfile)
             if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
                 ! automatic pruning performed upon final writing

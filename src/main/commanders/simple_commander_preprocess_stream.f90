@@ -56,7 +56,7 @@ contains
         real                                   :: pickref_scale
         integer                                :: nchunks_imported_glob, nchunks_imported, box_extract
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, iproj
-        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
+        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in, nmic_star
         logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed, l_whether2D
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -104,6 +104,8 @@ contains
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency, restored after params%new
@@ -208,6 +210,7 @@ contains
         n_imported            = 0
         n_failed_jobs         = 0
         n_added               = 0
+        nmic_star             = 0
         l_movies_left         = .false.
         l_haschanged          = .false.
         l_nchunks_maxed       = .false.
@@ -287,13 +290,14 @@ contains
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
-                ! always write micrographs snapshot if less than 1000 mics, else every INACTIVE_TIME
+                ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
                     call write_migrographs_starfile
-                else if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                else if( n_imported > nmic_star + 100 .and. l_haschanged )then
                     call update_user_params(cline)
                     call write_migrographs_starfile
+                    nmic_star = n_imported
                 endif
                 ! init cluster2D
                 if( l_whether2D .and.(.not.l_cluster2D) )then
@@ -333,8 +337,8 @@ contains
                     endif
                 endif
             endif
-            ! update beamtilt 
-            if(cline%defined('dir_meta')) call read_xml_beamtilts()
+            ! read beamtilts if not 2D
+            if(.not. l_cluster2D .and. cline%defined('dir_meta')) call read_xml_beamtilts()
             ! 2D classification section
             if( l_cluster2D )then
                 call update_user_params(cline)
@@ -343,6 +347,8 @@ contains
                 call update_pool
                 call update_user_params(cline)
                 call reject_from_pool
+                call read_pool_xml_beamtilts()
+                call assign_pool_optics(cline, propagate = .false.)
                 ! call reject_from_pool_user
                 if( .not.l_nchunks_maxed )then
                     call write_project_stream2D(.true.)
@@ -356,12 +362,14 @@ contains
                     ! # of chunks is above desired threshold
                     if( is_pool_available() ) exit
                 endif
+                
                 call sleep(WAITTIME)
             endif
         end do
         ! termination
         if( l_cluster2D )then
-            call copy_optics_groups(spproj)
+            call read_pool_xml_beamtilts()
+            call assign_pool_optics(cline, propagate = .true.)
             call terminate_stream2D(.true.)
         else
             call write_project
@@ -378,11 +386,27 @@ contains
 
             !>  write starfile snapshot
             subroutine write_migrographs_starfile
+                integer(timer_int_kind)      :: ms0
+                real(timer_int_kind)         :: ms_assign, ms_export
+                
                 if (spproj%os_mic%get_noris() > 0) then
-                    call starproj%assign_optics(cline, spproj)
+                    if( .not. l_cluster2D ) then
+                        if( DEBUG_HERE ) ms0 = tic()
+                        call starproj%assign_optics(cline, spproj)
+                        if( DEBUG_HERE )then
+                            ms_assign = toc(ms0)
+                            print *,'ms_assign  : ', ms_assign; call flush(6)
+                        endif
+                    end if
+                    if( DEBUG_HERE ) ms0 = tic()
                     call starproj%export_mics(cline, spproj)
+                    if( DEBUG_HERE )then
+                        ms_export = toc(ms0)
+                        print *,'ms_export  : ', ms_export; call flush(6)
+                    endif
                     if(allocated(starproj%tiltinfo)) deallocate(starproj%tiltinfo)
                 end if
+                
             end subroutine write_migrographs_starfile
 
             subroutine write_project()
@@ -723,6 +747,7 @@ contains
                 do i = 1, spproj%os_mic%get_noris()
                     if ( spproj%os_mic%get(i, "tiltx") == 0.0 .and. spproj%os_mic%get(i, "tilty") == 0.0) then
                         if(file_exists(spproj%os_mic%get_static(i, "meta"))) then
+                            write(logfhandle, *) "stream reading " // trim(adjustl(spproj%os_mic%get_static(i,"meta")))
                             xmldoc => parseFile(trim(adjustl(spproj%os_mic%get_static(i,"meta"))))
                             beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"),0)
                             beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
