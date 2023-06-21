@@ -4636,7 +4636,7 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
         &'single_exec',&                                                                 ! executable
-        &0, 2, 0, 0, 0, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 1, 1, .true.)                                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4650,7 +4650,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        ! <empty>
+        call tseries_make_projavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call tseries_make_projavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_projavgs
