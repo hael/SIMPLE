@@ -144,6 +144,7 @@ contains
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                     ! neighboring reg terms
+                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     euls_ref = pi / 180. * eulspace%get_euler(iref)
                     euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
                     theta    = acos(sin(euls_ref(2))*sin(euls(2)) + cos(euls_ref(2))*cos(euls(2))*cos(euls_ref(1) - euls(1)))
