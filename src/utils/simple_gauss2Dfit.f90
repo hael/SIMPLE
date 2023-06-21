@@ -113,8 +113,8 @@ subroutine gauss2Dfit(ref, center, cov, corr, fit)
     real,        intent(out)     :: center(2), cov(2,2), corr
     real, pointer       :: rmat(:,:,:)
     real, allocatable   :: rmat_fit(:,:,:)
-    real    :: cov_inv(2,2), displ(2,1), displ_T(1,2), lambda(1,1), r(2)
-    real    :: smpd, int, prob, minint, totint, totprob
+    real    :: cov_inv(2,2), displ(2,1), displ_T(1,2), lambda(1,1)
+    real    :: smpd, prob, minint, totint, totprob
     integer :: ldim(3), i, j, errflg
 
     ldim = ref%get_ldim()

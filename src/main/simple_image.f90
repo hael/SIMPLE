@@ -641,8 +641,7 @@ contains
         integer, parameter :: HDAMPWINSZ=2
         integer, parameter :: DAMPWINSZ =5
         real :: medi(self%ldim(1)),medj(self%ldim(2)),vals(DAMPWINSZ**2)
-        integer :: h,mh,k,mk,lims(3,2),ci,cj,i,j,ii,jj,cnt,l,r,u,d,n
-        real    :: sum
+        integer :: h,mh,k,mk,lims(3,2),i,j,l,r,u,d,n
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)
@@ -965,7 +964,7 @@ contains
         logical,          optional, intent(in)    :: readhead
         type(imgfile)    :: ioimg
         character(len=1) :: form
-        integer          :: ldim(3), iform, first_slice
+        integer          :: ldim(3), first_slice
         integer          :: last_slice, ii
         real             :: smpd
         logical          :: isvol
@@ -2835,7 +2834,7 @@ contains
         real, allocatable, intent(inout) :: spec(:)
         logical, optional, intent(in)    :: norm
         real, allocatable :: counts(:)
-        integer :: lims(3,2), phys(3), phys2d(2), sh, lfny, h, k, l
+        integer :: lims(3,2), phys(3), sh, lfny, h, k, l
         logical :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
@@ -3142,8 +3141,7 @@ contains
         integer,        intent(in)    :: find
         real, optional, intent(in)    :: width
         integer :: h, k, l, lims(3,2), phys(3)
-        logical :: didft, dohp, dolp
-        real    :: freq, hplim_freq, wwidth, w
+        real    :: freq, wwidth, w
         wwidth =10.
         if( present(width) ) wwidth = width
         lims = self%fit%loop_lims(2)
@@ -3458,8 +3456,8 @@ contains
         real, intent(in)    :: filt(:)
         real, allocatable   :: shifted_filt(:)
         real, allocatable   :: rmat_t(:,:,:)
-        integer :: ldim(3), sz_f(1), L1, L2, L3
-        integer :: i, j, k, m, n, o
+        integer :: ldim(3), sz_f(1), L1
+        integer :: i, j, m, n
         ldim = img%get_ldim()
         sz_f = shape(filt)
         L1 = sz_f(1)
@@ -3491,8 +3489,8 @@ contains
         real, intent(in)    :: filt(:,:)
         real, allocatable   :: shifted_filt(:,:)
         real, allocatable   :: rmat_t(:,:,:)
-        integer :: ldim(3), sz_f(2), L1, L2, L3
-        integer :: i, j, k, m, n, o
+        integer :: ldim(3), sz_f(2), L1, L2
+        integer :: i, j, m, n
         ldim = img%get_ldim()
         sz_f = shape(filt)
         L1 = sz_f(1)
@@ -4574,8 +4572,8 @@ contains
         complex     :: c1,c2
         real        :: w,rw,rhplim,rlplim,rsh,normsq
         real(dp)    :: sqsum1,sqsum2
-        integer     :: nrflims(3,2),phys(3),npix
-        integer     :: h,k,l,shsq, hplim, hplimsq, bphplimsq, lplim, lplimsq, bplplimsq
+        integer     :: nrflims(3,2),phys(3)
+        integer     :: h,k,l,shsq, lplim, lplimsq, bplplimsq
         if( present(border) )then
             if( self1%ldim(3) > 1 ) THROW_HARD('Border discarding not implemented for 3D')
             if( border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 )then
@@ -4759,7 +4757,6 @@ contains
     !>  both inputs are assumed centered & standardized
     real function real_corr_prenorm_3( self_ref, self_ptcl )
         class(image), intent(inout) :: self_ref, self_ptcl
-        real :: r
         real_corr_prenorm_3 = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))&
                                 & * self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)))
         real_corr_prenorm_3 = real_corr_prenorm_3 / product(self_ref%ldim)

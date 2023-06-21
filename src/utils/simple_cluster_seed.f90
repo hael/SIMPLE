@@ -113,8 +113,7 @@ contains
     !>  partitions have a uniform distribution of correlations
     subroutine draw_ranked(os)
         type(oris), intent(inout) :: os
-        type(ran_tabu) :: rt
-        integer        :: tmp(nlabels), order(nptcls), config(nptcls), pops(nlabels)
+        integer        :: order(nptcls), config(nptcls), pops(nlabels)
         real           :: corrs(nptcls)
         integer        :: iptcl, s, ind
         write(logfhandle,'(A)') '>>> GENERATING RANKED'

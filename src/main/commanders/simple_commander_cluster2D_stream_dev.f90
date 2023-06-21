@@ -112,7 +112,7 @@ contains
         real, parameter :: CENLP_2DSTREAM = 30.
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: rarg
-        integer :: ldim(3), ichunk, maybe2D, ifoo
+        integer :: ichunk, maybe2D
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
             THROW_HARD('Missing required argument NTHR2D')

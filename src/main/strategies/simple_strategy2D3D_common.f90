@@ -243,9 +243,7 @@ contains
         class(image), intent(inout) :: img
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        type(ori)       :: oprev
         real            :: x, y, sdev_noise
-        logical         :: iseven
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
         ! CTF parameters

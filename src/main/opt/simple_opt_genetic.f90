@@ -29,7 +29,6 @@ contains
         real   ,     intent(in)    :: mut_rate
         type(stack), intent(inout) :: bits
         integer     :: k
-        real        :: val
         call bits%clear()
         do k = 1, nrefs
             call bits%push(k)

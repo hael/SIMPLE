@@ -350,7 +350,6 @@ contains
         character(len=3), optional, intent(in)    :: circular, elongated
         integer,          optional, intent(in)    :: min_nccs
         integer, allocatable :: sz(:)
-        real    :: lt, ht     ! low and high thresh for ccs polising
         real    :: ave, stdev ! avg and stdev of the size od the ccs
         integer :: n_cc, thresh_down, thresh_up
         character(len=3)   :: ccircular, eelongated

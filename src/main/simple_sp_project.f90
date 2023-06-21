@@ -3361,7 +3361,6 @@ contains
         type(binoris_seginfo), allocatable, intent(out) :: seginfos(:)
         integer,               allocatable, intent(out) :: seginds(:)
         character(len=:), allocatable :: projfile
-        integer :: i
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: read_segments_info')
         endif

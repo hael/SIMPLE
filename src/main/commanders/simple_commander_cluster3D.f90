@@ -47,15 +47,13 @@ contains
         type(parameters)                       :: params
         type(sym)                              :: symop
         type(sp_project)                       :: spproj, work_proj
-        type(oris)                             :: os, opeaks
+        type(oris)                             :: os
         type(ctfparams)                        :: ctfparms
-        character(len=:),          allocatable :: cavg_stk, orig_projfile, prev_vol, target_name
-        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=:),          allocatable :: cavg_stk, orig_projfile
         real,                      allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
         integer,                   allocatable :: labels(:), states(:), tmp_iarr(:)
-        real     :: trs, extr_init, lp_cls3D, smpdfoo
-        integer  :: i, iter, startit, ncls, boxfoo, iptcl, ipart
-        integer  :: nptcls_part, istate, n_nozero
+        real     :: trs, extr_init, lp_cls3D
+        integer  :: iter, startit, ncls
         logical  :: fall_over, cavgs_import
         if( nint(cline%get_rarg('nstates')) <= 1 ) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',      'yes')

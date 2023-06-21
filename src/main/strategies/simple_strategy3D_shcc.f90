@@ -38,7 +38,7 @@ contains
         integer,                 intent(in)   :: ithr
         integer   :: isample, nevals(2)
         type(ori) :: o, osym, obest
-        real      :: corr, euldist, dist_inpl, corr_best, corr_inpl, e3
+        real      :: corr, euldist, dist_inpl, corr_best
         real      :: cxy(3), shvec(2), shvec_incr(2)
         logical   :: got_better
         ! continuous stochastic search

@@ -37,7 +37,7 @@ contains
         class(strategy3D_greedy_neigh), intent(inout) :: self
         integer,                        intent(in)    :: ithr
         type(ori) :: o
-        integer   :: iref, iproj, minnrefs, loc(1)
+        integer   :: iref, iproj, loc(1)
         real      :: inpl_corrs(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
         ! execute search

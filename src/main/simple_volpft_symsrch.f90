@@ -179,7 +179,7 @@ contains
         complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace_nonred)
         complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace_nonred)
         real    :: sqsum_targets(nsym), sqsum_sum
-        integer :: isym, k
+        integer :: isym
         sum_of_sym_targets = cmplx(0.,0.)
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym

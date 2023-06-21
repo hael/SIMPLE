@@ -166,9 +166,9 @@ contains
         type(ori)            :: o_single
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
-        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
+        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
         real                 :: resmin, resmax, resmed, resave, ressdev, resvar, nr, nr_tot
-        integer              :: nprojs, iptcl, icls, i, j, noris, ncls
+        integer              :: nprojs, iptcl, icls, j, noris, ncls
         real,    allocatable :: clustszs(:), pops(:), res(:)
         integer, allocatable :: clustering(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
