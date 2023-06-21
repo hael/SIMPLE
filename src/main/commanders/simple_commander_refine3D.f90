@@ -85,23 +85,23 @@ contains
         ! other variables
         type(parameters)    :: params
         type(builder)       :: build
-        type(qsys_env)      :: qenv, qenv_cls3D
-        type(chash)         :: job_descr, job_descr_cavgs
+        type(qsys_env)      :: qenv
+        type(chash)         :: job_descr
         type(starproject)   :: starproj
         character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
-        integer,                   allocatable :: state_pops(:), tmp_iarr(:)
-        real,                      allocatable :: res(:), tmp_rarr(:), fsc(:)
+        integer,                   allocatable :: state_pops(:)
+        real,                      allocatable :: res(:), fsc(:)
         character(len=STDLEN)     :: vol, vol_iter, str, str_iter, fsc_templ, orig_objfun
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates
         logical :: l_combine_eo, l_lpset, l_griddingset ! l_ptclw,
-        real    :: corr, corr_prev, smpd, lplim
+        real    :: corr, corr_prev, smpd
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
-        integer :: ncls, icls, ind, fnr
+        integer :: fnr
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
             return

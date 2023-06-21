@@ -2594,7 +2594,7 @@ contains
         type(image),      allocatable :: projs(:)
         integer, parameter :: NREFS=100, NPROJS=20
         real    :: ang, rot, smpd_here
-        integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
+        integer :: nrots, iref, irot, ldim(3), ldim_here(3), ncavgs, icavg
         integer :: cnt, norefs
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')

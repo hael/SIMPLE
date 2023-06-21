@@ -317,8 +317,8 @@ contains
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:), fsc(:)
-        real                  :: lp_rand, msk
-        integer               :: k,k_rand, find_plate, filtsz
+        real                  :: msk
+        integer               :: k, find_plate, filtsz
         logical               :: l_combined, l_euclid_regularization
         msk    = real(self%box / 2) - COSMSKHALFWIDTH - 1.
         ! msk  = self%msk ! for a tighter spherical mask

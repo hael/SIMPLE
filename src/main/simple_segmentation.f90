@@ -47,7 +47,6 @@ contains
         integer            :: n_it, ldim(3)
         logical            :: DEBUG
         real               :: r                       !random # which guarantees me not to get stuck
-        real               :: ave, sdev, minv, maxv
         DEBUG  = .false.
         ggoal = 2.
         ldim = img%get_ldim()
@@ -260,7 +259,7 @@ contains
         real,            intent(in) :: thresh(2) ! low and high thresholds
         real, optional,  intent(in) :: lp(1)     ! lp filtering
         type(binimage) :: Gr !gradient image
-        integer        :: ldim(3), s(3), r(3), k, i, j, nsz                   !just for implementation
+        integer        :: ldim(3), r(3), k, i, j, nsz                   !just for implementation
         real,    allocatable :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)   !derivates, gradient
         integer :: neigh_8_inds(3,8) ! 8-neighborhoods of a pixel
         real    :: smpd, llp(1)

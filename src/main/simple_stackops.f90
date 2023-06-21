@@ -36,7 +36,6 @@ contains
         type(image)        :: img
         real, allocatable  :: pcavec(:)
         integer            :: n, fnum, ier, i, ldim(3), ldim_mask(3)
-        logical            :: err
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception( n, ldim, 'make_pattern_stack' )
@@ -203,7 +202,7 @@ contains
         real,             intent(in) :: smpd
         character(len=:), allocatable :: fname_out
         type(image)       :: img
-        integer           :: i, n, ldim(3), numlen, funit, iostat, nptcls
+        integer           :: i, ldim(3), numlen, funit, iostat, nptcls
         call find_ldim_nptcls(fname, ldim, nptcls)
         ldim(3) = 1
         call img%new(ldim, smpd)

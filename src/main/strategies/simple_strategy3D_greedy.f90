@@ -37,11 +37,8 @@ contains
     subroutine srch_greedy( self, ithr )
         class(strategy3D_greedy), intent(inout) :: self
         integer,                  intent(in)    :: ithr
-        type(ori) :: osym, oi, oj
-        integer   :: iref, isample, loc(1), cnt, npeaks, i, j
-        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs), angdist
-        real      :: euldist, dist_inpl, sdev, var, cc_peak_avg, cc_nonpeak_avg
-        logical   :: peaks(self%s%nrefs), err
+        integer   :: iref, isample, loc(1)
+        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr

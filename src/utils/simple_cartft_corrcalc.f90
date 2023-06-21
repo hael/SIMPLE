@@ -97,7 +97,7 @@ contains
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         logical  :: even_dims, test(2)
-        integer  :: i, cnt, ithr, lims(3,2)
+        integer  :: i, cnt
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -190,7 +190,7 @@ contains
         class(cartft_corrcalc), target, intent(inout) :: self
         integer,                        intent(in)    :: pfromto(2)
         logical      :: even_dims, test(2)
-        integer      :: i, cnt, ithr, lims(3,2)
+        integer      :: i
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -250,7 +250,7 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: nptcls
         integer,                intent(in)    :: pinds(nptcls)
-        integer :: i,iptcl,ik
+        integer :: i,iptcl
         self%pfromto(1) = minval(pinds)
         self%pfromto(2) = maxval(pinds)
         if( allocated(self%pinds) ) deallocate(self%pinds)
@@ -555,7 +555,6 @@ contains
         integer,                intent(in)    :: iptcl
         class(ori),             intent(in)    :: o
         real,                   intent(in)    :: shvec(2)
-        type(projector),        pointer       :: vol_ptr
         real    :: corr
         integer :: ithr
         call self%prep_ref4corr(iptcl, o, shvec, ithr)
@@ -789,7 +788,6 @@ contains
         type(ori),              intent(in)    :: o
         real(sp),               intent(in)    :: shvec(2)
         real(sp),               intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        type(projector),        pointer       :: vol_ptr
         integer  :: r, h, k, ithr
         call self%prep_ref4corr(iptcl, o, shvec, ithr)
         sigma_contrib = 0.0

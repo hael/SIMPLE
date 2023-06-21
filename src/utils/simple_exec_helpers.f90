@@ -19,7 +19,6 @@ contains
         character(len=:), allocatable   :: projfile
         type(qsys_env)   :: qenv
         type(parameters) :: params
-        logical          :: has_projfile
         ! generate script for queue submission?
         if( cline%defined('script') )then
             if( cline%get_carg('script').eq.'yes' )then

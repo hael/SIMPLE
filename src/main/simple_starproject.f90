@@ -218,7 +218,6 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         character(len=*)                  :: filename
-        integer                           :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
@@ -455,9 +454,9 @@ contains
 
     subroutine read_starheaders(self)
         class(starproject), intent(inout) :: self
-        character(len=LEN_LINE)           :: line, blockname, flagname, datastring
+        character(len=LEN_LINE)           :: line, blockname, flagname
         logical                           :: flagsopen, dataopen
-        integer                           :: ios, delimindex,flagindex, istart, iend, flagid, lineindex, fhandle
+        integer                           :: ios, delimindex,flagindex, lineindex, fhandle
         flagsopen = .false.
         dataopen  = .false.
         lineindex = 1
@@ -632,7 +631,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -653,7 +651,7 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         integer, optional,  intent(in)    :: iter
-        character(len=:), allocatable     :: stkname, relpath
+        character(len=:), allocatable     :: stkname
         integer                           :: i, ncls
         real                              :: smpd
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
@@ -698,7 +696,6 @@ contains
         character(len=LEN_LINE)                                 :: line
         character(len=LEN_LINE),    allocatable                 :: splitline(:)
         integer                                                 :: i, j, state, fhandle, ios, ok
-        real                                                    :: smpd
         real,                       allocatable                 :: fscs(:,:,:), maxres05(:), maxres0128(:)
         logical                                                 :: ex
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
@@ -807,7 +804,7 @@ contains
         class(starproject),                     intent(inout)   :: self
         integer,                                intent(in)      :: ptcls, rejected
         character(len=XLONGSTRLEN)                              :: cwd
-        integer                                                 :: fhandle, ios, ok
+        integer                                                 :: fhandle, ok
         logical                                                 :: ex
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         call simple_getcwd(cwd)
@@ -831,7 +828,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles2D.star"
         if( VERBOSE_OUTPUT )then
@@ -852,7 +848,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project)                 :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles3D.star"
         if( VERBOSE_OUTPUT )then
@@ -1011,9 +1006,8 @@ contains
     subroutine assign_xml_tiltinfo(self, xmldir)
         class(starproject), target, intent(inout) :: self
         character(len=*),           intent(in)    :: xmldir
-        character(len=LONGSTRLEN)                 :: eputilt
         type(Node), pointer                       :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
-        integer                                   :: i, j
+        integer                                   :: i
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "reading tilt info from metadata ... "
         do i = 1,size(self%tiltinfo)
@@ -1037,7 +1031,7 @@ contains
         real,               intent(in)    :: threshold
         integer, allocatable              :: populations(:), labels(:), tiltinfopos(:)
         real,    allocatable              :: tilts(:,:), centroids(:,:)
-        integer :: i, j, k, tiltcount, groupcount, matchcount
+        integer :: i, j, tiltcount, groupcount, matchcount
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "clustering initial beamtilt groups using tilt info and a threshold of ", threshold, " ... "
         groupcount = 0
@@ -1078,7 +1072,7 @@ contains
         class(cmdline),        intent(inout)   :: cline
         class(sp_project)                      :: spproj
         logical,    optional,  intent(in)      :: propagate
-        integer                                :: i, j, element, noptics
+        integer                                :: i, element, noptics
         integer                                :: ptclstkid
         real                                   :: ogid, box, stkbox
         character(len=LONGSTRLEN)              :: ogname
@@ -1299,7 +1293,7 @@ contains
         type(tilt_info)            :: tiltinfo
         character(len=XLONGSTRLEN) :: path
         character(len=LONGSTRLEN)  :: filename
-        integer                    :: i, itmp, tiltind, ntiltinfo
+        integer                    :: i, itmp, ntiltinfo
         allocate(tiltinfotmp(sporis%get_noris()))
         ntiltinfo = size(self%tiltinfo)
         itmp = 1

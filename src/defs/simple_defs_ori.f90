@@ -268,7 +268,6 @@ contains
         integer, intent(in) :: ind
         real,    intent(in) :: val
         real, parameter :: TINY = 1e-10
-        logical :: is_zero
         oriparam_isthere = .false.
         if( ind < 1 .or. ind > N_NON_EMPTY ) return
         select case(ind)

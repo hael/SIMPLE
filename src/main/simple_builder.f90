@@ -304,7 +304,6 @@ contains
 
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self
-        integer :: iref
         if( self%general_tbox_exists )then
             call self%pgrpsyms%kill
             if( associated( self%spproj_field) )then

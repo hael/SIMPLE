@@ -15,7 +15,7 @@ contains
     
     subroutine progressfile_init_parts(nparts)
         integer, intent(in) :: nparts
-        integer             :: progress_fhandle, ok, ipart
+        integer             :: ipart
         do ipart = 1, nparts
             call progressfile_init_part(ipart)
         enddo
@@ -63,7 +63,7 @@ contains
     
     subroutine progressfile_complete_parts(nparts)
         integer, intent(in) :: nparts
-        integer             :: progress_fhandle, ok, ipart
+        integer             :: ipart
         do ipart = 1, nparts
             if( file_exists('.progress_' // trim(adjustl(int2str(ipart)))) ) call del_file('.progress_'// trim(adjustl(int2str(ipart))))
         enddo

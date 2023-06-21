@@ -188,7 +188,7 @@ contains
         integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
         real,    allocatable :: mat(:,:)                    ! pariwise distances matrix
         logical, allocatable :: mask(:), outliers(:)
-        integer :: N, i, j, cnt, ncls, filnum, io_stat
+        integer :: N, i, j, cnt, ncls
         integer :: index(1), loc1(1), loc2(1)
         real    :: d
         if( size(data_in, dim = 2) .ne. 2 )then

@@ -11,7 +11,7 @@ contains
         class(chash),               intent(in)    :: job_descr
         type(parameters), optional, intent(in)    :: extra_params
         character(len=:), allocatable             :: prg
-        integer :: i, nptcls, top, fromp, np, part, io_stat      
+        integer :: top, fromp, np, part, io_stat      
         if(job_descr%isthere("prg")) then
             prg = job_descr%get("prg")
             top   = 0
@@ -86,7 +86,7 @@ contains
     function estimate_mem_usage_scale(part, boxsize, nthr) result (memusagerounded)
         integer, intent(in) :: part, boxsize, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, baseline, threadcoefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         baseline    = 250000 + 1100 * boxsize
         memusage = baseline * (1 + threadcoefficient * nthr)
@@ -97,7 +97,7 @@ contains
     function estimate_mem_usage_motion_corr(part, micsizex, micsizey, nthr) result (memusagerounded)
         integer, intent(in) :: part, micsizex, micsizey, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, threadcoefficient, ptcl1000coefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         ptcl1000coefficient = 0.02 ! % increase in mem per 1000 particles
        ! baseline    = 450000 + 23 * boxsize * boxsize
@@ -111,7 +111,7 @@ contains
     function estimate_mem_usage_preprocess(part, micsizex, micsizey, nthr) result (memusagerounded)
         integer, intent(in) :: part, micsizex, micsizey, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, threadcoefficient, ptcl1000coefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         ptcl1000coefficient = 0.02 ! % increase in mem per 1000 particles
        ! baseline    = 450000 + 23 * boxsize * boxsize
@@ -125,7 +125,7 @@ contains
     function estimate_mem_usage_ctf_estimation(part, micsizex, micsizey, nthr) result (memusagerounded)
         integer, intent(in) :: part, micsizex, micsizey, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, threadcoefficient, ptcl1000coefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         ptcl1000coefficient = 0.02 ! % increase in mem per 1000 particles
        ! baseline    = 450000 + 23 * boxsize * boxsize
@@ -139,7 +139,7 @@ contains
     function estimate_mem_usage_pick(part, micsizex, micsizey, nthr) result (memusagerounded)
         integer, intent(in) :: part, micsizex, micsizey, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, threadcoefficient, ptcl1000coefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         ptcl1000coefficient = 0.02 ! % increase in mem per 1000 particles
        ! baseline    = 450000 + 23 * boxsize * boxsize
@@ -153,7 +153,7 @@ contains
     function estimate_mem_usage_extract(part, micsizex, micsizey, nthr) result (memusagerounded)
         integer, intent(in) :: part, micsizex, micsizey, nthr
         integer             :: memusagerounded
-        real                :: memusage, baseline, clsgradient, threadcoefficient, ptcl1000coefficient
+        real                :: memusage, threadcoefficient, ptcl1000coefficient
         threadcoefficient   = 0.01 ! % increase in mem per thread
         ptcl1000coefficient = 0.02 ! % increase in mem per 1000 particles
        ! baseline    = 450000 + 23 * boxsize * boxsize
