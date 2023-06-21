@@ -137,10 +137,11 @@ type :: polarft_corrcalc
     procedure, private :: gen_shmat, gen_shmat_8
     procedure          :: calc_corr_rot_shift
     procedure          :: genmaxcorr_comlin
-    procedure          :: gencorrs_cc,     gencorrs_shifted_cc
-    procedure          :: gencorrs_euclid, gencorrs_shifted_euclid
-    procedure          :: gencorrs_prob,   gencorrs_shifted_prob
-    procedure, private :: gencorrs_1,      gencorrs_2
+    procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
+    procedure          :: gencorrs_cc,          gencorrs_shifted_cc
+    procedure          :: gencorrs_euclid,      gencorrs_shifted_euclid
+    procedure          :: gencorrs_prob,        gencorrs_shifted_prob
+    procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
@@ -1157,7 +1158,11 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_cc(iptcl, iref, cc)
+                if( params_glob%l_kweight )then
+                    call self%gencorrs_weighted_cc(iptcl, iref, cc)
+                else
+                    call self%gencorrs_cc(iptcl, iref, cc)
+                endif
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(iptcl, iref, cc)
             case(OBJFUN_PROB)
@@ -1184,7 +1189,11 @@ contains
         endif
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
+                if( params_glob%l_kweight )then
+                    call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
+                else
+                    call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
+                endif
             case(OBJFUN_EUCLID)
                 call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
             case(OBJFUN_PROB)
@@ -1262,6 +1271,77 @@ contains
         self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots),dp)
         corrs = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
     end subroutine gencorrs_shifted_cc
+
+    subroutine gencorrs_weighted_cc( self, iptcl, iref, corrs)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, iref
+        real(sp),                intent(out)   :: corrs(self%nrots)
+        integer  :: k, i, ithr
+        logical  :: even
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        even = self%iseven(i)
+        self%heap_vars(ithr)%kcorrs = 0.d0
+        self%drvec(ithr)%r          = 0.d0
+        do k = self%kfromto(1),self%kfromto(2)
+            ! FT(CTF2) x FT(REF2)*)
+            if( even )then
+                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_even(k,iref)%c(1:self%pftsz+1)
+            else
+                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ctf2(k,i)%c(1:self%pftsz+1) * self%ft_ref2_odd(k,iref)%c(1:self%pftsz+1)
+            endif
+            ! IFFT(FT(CTF2) x FT(REF2)*)
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            ! FT(X.CTF) x FT(REF)*
+            if( even )then
+                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) * self%ft_ref_even(k,iref)%c(1:self%pftsz+1)
+            else
+                self%cvec1(ithr)%c(1:self%pftsz+1) = self%ft_ptcl_ctf(k,i)%c(1:self%pftsz+1) * self%ft_ref_odd(k,iref)%c(1:self%pftsz+1)
+            endif
+            ! IFFT( FT(X.CTF) x FT(REF)* )
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            self%heap_vars(ithr)%kcorrs(1:self%nrots) = self%heap_vars(ithr)%kcorrs(1:self%nrots) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+        end do
+        self%drvec(ithr)%r(1:self%nrots) = self%drvec(ithr)%r(1:self%nrots) * (self%ksqsums_ptcls(i) * real(2*self%nrots,dp))
+        corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots) / dsqrt(self%drvec(ithr)%r(1:self%nrots)))
+    end subroutine gencorrs_weighted_cc
+
+    subroutine gencorrs_shifted_weighted_cc( self, pft_ref, iptcl, iref, corrs)
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: iptcl, iref
+        real(sp),                intent(out)   :: corrs(self%nrots)
+        integer  :: k, i, ithr
+        logical  :: even
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        even = self%iseven(i)
+        self%heap_vars(ithr)%kcorrs = 0.d0
+        self%drvec(ithr)%r          = 0.d0
+        do k = self%kfromto(1),self%kfromto(2)
+            ! FT(CTF2) x FT(REF2)), REF2 is shift invariant
+            if( even )then
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
+            else
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
+            endif
+            ! IFFT(FT(CTF2) x FT(REF2))
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            self%drvec(ithr)%r = self%drvec(ithr)%r + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+            ! FT(S.REF), shifted reference
+            self%cvec2(ithr)%c(1:self%pftsz)            = pft_ref(:,k)
+            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
+            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
+            ! FT(X.CTF) x FT(S.REF)*
+            self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+            ! IFFT(FT(X.CTF) x FT(S.REF)*)
+            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
+        end do
+        self%drvec(ithr)%r = self%drvec(ithr)%r * real(self%ksqsums_ptcls(i) * real(2*self%nrots),dp)
+        corrs = real(self%heap_vars(ithr)%kcorrs / dsqrt(self%drvec(ithr)%r))
+    end subroutine gencorrs_shifted_weighted_cc
 
     subroutine gencorrs_euclid( self, iptcl, iref, euclids )
         class(polarft_corrcalc), intent(inout) :: self

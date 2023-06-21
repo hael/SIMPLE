@@ -41,6 +41,7 @@ type :: parameters
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
+    character(len=3)          :: kweight='no'         !< k-weighted option for cc cost function
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -401,6 +402,7 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
+    logical :: l_kweight      = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
@@ -493,6 +495,7 @@ contains
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('keepvol',        self%keepvol)
+        call check_carg('kweight',        self%kweight)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('mcpatch',        self%mcpatch)
@@ -1355,6 +1358,8 @@ contains
             case DEFAULT
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
+        ! k-weighted cc option
+        self%l_kweight = trim(self%kweight).eq.'yes'
         ! reg eps mode
         if( cline%defined('eps') ) self%eps_mode = 'fixed'
         ! reference regularization
