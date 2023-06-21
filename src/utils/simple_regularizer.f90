@@ -147,7 +147,7 @@ contains
                     ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     euls_ref = pi / 180. * eulspace%get_euler(iref)
                     euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
-                    theta    = acos(sin(euls_ref(2))*sin(euls(2)) + cos(euls_ref(2))*cos(euls(2))*cos(euls_ref(1) - euls(1)))
+                    theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                     if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
                         loc_thres = self%nrots * params_glob%arc_thres / 360.
                         loc       = maxloc(inpl_corrs(1:loc_thres), dim=1)
