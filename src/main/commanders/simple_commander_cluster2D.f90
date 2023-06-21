@@ -1003,7 +1003,7 @@ contains
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
             call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
             ! assemble alignment docs
             if( L_BENCH_GLOB )then

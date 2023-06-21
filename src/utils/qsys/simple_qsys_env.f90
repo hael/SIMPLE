@@ -9,7 +9,7 @@ use simple_qsys_slurm,   only: qsys_slurm
 use simple_qsys_pbs,     only: qsys_pbs
 use simple_qsys_sge,     only: qsys_sge
 use simple_qsys_ctrl,    only: qsys_ctrl
-use simple_parameters,   only: params_glob
+use simple_parameters,   only: parameters, params_glob
 implicit none
 
 public :: qsys_env
@@ -143,12 +143,13 @@ contains
         call self%qscripts%generate_script(cline, self%qdescr, script_name, prg_output)
     end subroutine gen_script
 
-    subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody, array )
-        class(qsys_env)            :: self
-        class(chash)               :: job_descr
-        class(chash),     optional :: part_params(self%nparts)
-        character(len=*), optional :: algnfbody
-        logical,          optional :: array
+    subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody, array, extra_params)
+        class(qsys_env)                        :: self
+        class(chash)                           :: job_descr
+        class(chash),     optional             :: part_params(self%nparts)
+        type(parameters), optional, intent(in) :: extra_params
+        character(len=*), optional             :: algnfbody
+        logical,          optional             :: array
         logical :: aarray
         aarray = .false.
         if( present(array) ) aarray = array
@@ -170,7 +171,7 @@ contains
             call self%qscripts%schedule_array_jobs
         else
             call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
-            &outfile_body=algnfbody, part_params=part_params)
+            &outfile_body=algnfbody, part_params=part_params, extra_params=extra_params)
             call self%qscripts%schedule_jobs
         endif
     end subroutine gen_scripts_and_schedule_jobs

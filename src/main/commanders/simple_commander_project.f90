@@ -945,7 +945,7 @@ contains
         call job_descr%set('nthr',     int2str(1))
         call job_descr%set('nparts',   int2str(nparts))
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
         ! delete copy in working directory
         if( gen_sc_project ) call del_file(params%projfile)
         ! clean
