@@ -278,7 +278,7 @@ contains
     subroutine butterworth_filter_4(cutoff_find, kfromto, cur_fil)
         integer,      intent(in)    :: cutoff_find
         integer,      intent(in)    :: kfromto(2)
-        real,         intent(inout) :: cur_fil(:)
+        real,         intent(inout) :: cur_fil(kfromto(1):kfromto(2))
         integer,      parameter     :: BW_ORDER = 8
         integer :: freq_val
         do freq_val = kfromto(1), kfromto(2)
@@ -551,7 +551,6 @@ contains
         integer                       :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
         real                          :: rad, find_stepsz, val, smpd
         type(image_ptr)               :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
-        type(c_ptr)                   :: plan_fwd, plan_bwd
         integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         real,             allocatable :: fsc(:), cur_fil(:)
@@ -693,10 +692,9 @@ contains
         type(image)     ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat,&
                             &diff_img_odd, diff_img_even, odd_filt, even_filt
         type(image_ptr) :: pdiff_odd, pdiff_even, pweights, pmask
-        type(c_ptr)     :: plan_fwd, plan_bwd
-        integer         :: k,l,m, box, ldim(3), find_start, find_stop, iter_no
+        integer         :: box, ldim(3), find_start, find_stop, iter_no
         integer         :: cutoff_find, best_ind_even, best_ind_odd
-        real            :: rad, find_stepsz, smpd, cur_cost_odd, cur_cost_even
+        real            :: find_stepsz, smpd, cur_cost_odd, cur_cost_even
         real            :: best_cost_odd, best_cost_even
         logical         :: present_cuofindeo, present_mskimg
         ldim              = odd%get_ldim()
@@ -889,9 +887,9 @@ contains
         type(optfilt2Dvars), allocatable   :: optf2Dvars(:)
         real,                allocatable   :: frc(:)
         type(class_frcs) :: clsfrcs
-        real             :: smpd, lpstart, lp
+        real             :: smpd, lpstart
         integer          :: iptcl, box, filtsz, ldim(3)
-        integer          :: nptcls, hpind_fsc, find, c_shape(3)
+        integer          :: nptcls, hpind_fsc, find
         logical          :: lpstart_fallback, l_phaseplate
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING'
         ! init
