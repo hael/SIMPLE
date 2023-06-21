@@ -18,6 +18,7 @@ public :: nununiform_filter3D_commander
 public :: nununiform_filter2D_commander
 public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
+public :: cavg_filter2D_commander
 private
 #include "simple_local_flags.inc"
 
@@ -50,6 +51,11 @@ type, extends(commander_base) :: uniform_filter3D_commander
   contains
     procedure :: execute      => exec_uniform_filter3D
 end type uniform_filter3D_commander
+
+type, extends(commander_base) :: cavg_filter2D_commander
+  contains
+    procedure :: execute      => exec_cavg_filter2D
+end type cavg_filter2D_commander
 
 contains
 
@@ -375,5 +381,37 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_uniform_filter2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
+
+    subroutine exec_cavg_filter2D( self, cline )
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        class(cavg_filter2D_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(image), allocatable :: imgs(:)
+        type(polarft_corrcalc)   :: pftcc
+        type(builder)            :: build
+        type(parameters)         :: params
+        integer                  :: nptcls, iptcl
+        logical                  :: l_ctf
+        call cline%set('dir_exec', 'cavg_filter2D')
+        call cline%set('mkdir',    'yes')
+        call build%init_params_and_build_spproj(cline,params)
+        call build%spproj%update_projinfo(cline)
+        ! reading all images
+        nptcls = build%spproj%get_nptcls()
+        allocate(imgs(nptcls))
+        call pftcc%new(nptcls, [1,nptcls], params%kfromto)
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=1).ne.'no'
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+        call build%img_match%init_polarizer(pftcc, params%alpha)
+        call prepimgbatch(nptcls)
+        call read_imgbatch([1, nptcls])
+        do iptcl = 1, nptcls
+            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+        enddo
+        ! end gracefully
+        call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
+    end subroutine exec_cavg_filter2D
 
 end module simple_commander_resolest

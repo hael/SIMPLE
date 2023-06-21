@@ -98,6 +98,7 @@ type(fsc_commander)                         :: xfsc
 type(whiten_and_filter_commander)           :: xwhiten_and_filter
 type(nununiform_filter2D_commander)         :: xnununiform_filter2D
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
+type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -291,6 +292,8 @@ select case(trim(prg))
         call xnununiform_filter2D%execute(cline)
     case( 'nununiform_filter3D' )
         call xnununiform_filter3D%execute(cline)
+    case( 'cavg_filter2D' )
+        call xcavg_filter2D%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -369,7 +372,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('cb648974')
+call simple_print_git_version('2557eb91')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
