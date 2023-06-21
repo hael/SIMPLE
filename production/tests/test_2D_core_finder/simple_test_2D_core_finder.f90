@@ -13,14 +13,15 @@ program simple_test_2D_core_finder
     real, parameter     :: smpd=0.358, nprad_A=14.0, shell_size_A = 2.0, res=1.0, maskdiam_A=20.0
     logical, parameter  :: normalize_real_space = .false.
 
-    type(image)                 :: cavg, reproj, diff
-    type(image)                 :: temp
+    type(image)                     :: cavg, reproj, diff
+    type(image)                     :: temp
+    real(kind=c_float), pointer     :: rmat(:,:,:)=>null(), rmat_cavg(:,:,:)=>null(), rmat_reproj(:,:,:)=>null()
     real                :: nprad_vox=nprad_A/smpd, shell_size_vox=shell_size_A/smpd, mskdiam_vox=maskdiam_A/smpd
     real                :: r, mean, center(2), minmax(2)
-    real, allocatable   :: rmat(:,:,:)
     integer             :: iref, icavg, ldim1(3), ldim2(3), ldim_refs(3), ifoo, nshells, i, j, n, funit
     logical, allocatable       :: is_populated(:), mask(:,:,:)
     character(len=256)         :: fn_cavgs, fn_reprojs
+    character(*), parameter    :: mask_type="soft"
     character(*), parameter    :: fn_diff='cavgs_minus_reprojections.mrc', fn_shells='shells.mrc'
     character(*), parameter    :: fn_cavgs_out='cavgs_out.mrc', fn_reprojs_out='reprojs_out.mrc'
     character(*), parameter    :: fn_results='results.csv'
@@ -78,8 +79,8 @@ program simple_test_2D_core_finder
         call reproj%read(fn_reprojs, icavg)
 
         ! Apply circular mask prior to normalization
-        call cavg%mask(mskdiam_vox, 'hard')
-        call reproj%mask(mskdiam_vox, 'hard')
+        call cavg%mask(mskdiam_vox, mask_type)
+        call reproj%mask(mskdiam_vox, mask_type)
 
         ! Normalize for comparison
         if (normalize_real_space) then
@@ -95,7 +96,7 @@ program simple_test_2D_core_finder
         else
             call match_fourier_variance(cavg, reproj)
         end if
-        call reproj%mask(mskdiam_vox, 'hard')
+        call reproj%mask(mskdiam_vox, mask_type)
 
         ! Signal Subtraction
         diff = cavg - reproj
@@ -108,7 +109,9 @@ program simple_test_2D_core_finder
         end if
 
         ! Take averages of shells out to the NP radius
-        rmat = diff%get_rmat()
+        call diff%get_rmat_ptr(rmat)
+        call cavg%get_rmat_ptr(rmat_cavg)
+        call reproj%get_rmat_ptr(rmat_reproj)
         mean = 0. 
         do n=0, nshells
             mask = .false. ! For now use mask in case we want to calculate other stats in the future
@@ -117,18 +120,18 @@ program simple_test_2D_core_finder
                     r = sqrt(real((i - center(1))**2 + (j - center(2))**2))
                     if (r > n*shell_size_vox .and. r < (n+1)*shell_size_vox) then
                         mask(i,j,1) = .true.
-                        ! mean = mean + abs(rmat(i,j,1))
                     end if
                 end do
             end do
-            ! mean = mean / count(mask)
-            mean = sum(abs(rmat), mask=mask) / count(mask)
+            !mean = sum(abs(rmat), mask=mask) / sum(abs(reproj%get_rmat()), mask=mask)
+            ! Mean fractional difference since the signal is higher at the core than at the surface
+            mean = 2 * sum(abs(rmat), mask=mask) / (sum(abs(rmat_reproj), mask=mask) + sum(abs(rmat_cavg), mask=mask))
             ! Write csv file containing statistics
             write(funit,601,advance='no') real(iref-1),                CSV_DELIM ! INDEX
             write(funit,601,advance='no') n*shell_size_A,              CSV_DELIM ! RMIN
             write(funit,601,advance='no') (n+1)*shell_size_A,          CSV_DELIM ! RMAX
             write(funit,601,advance='no') real(count(mask)),           CSV_DELIM ! COUNT
-            write(funit,601,advance='no') abs(mean),                   CSV_DELIM ! MEAN_DIFF
+            write(funit,601,advance='no') mean,                        CSV_DELIM ! MEAN_DIFF
             write(funit,601,advance='no') minval(rmat, mask=mask),     CSV_DELIM ! MIN_DIFF
             write(funit,602)              maxval(rmat, mask=mask)                ! MAX_DIFF
             ! Write images
