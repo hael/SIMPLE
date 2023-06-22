@@ -48,6 +48,8 @@ type :: parameters
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
+    character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
+    character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
     character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: noise_norm ='no'
@@ -511,6 +513,8 @@ contains
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
         call check_carg('ml_reg',         self%ml_reg)
+        call check_carg('ml_reg_chunk',   self%ml_reg_chunk)
+        call check_carg('ml_reg_pool',    self%ml_reg_pool)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('needs_sigma',    self%needs_sigma)

@@ -243,6 +243,8 @@ type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: ml_reg
+type(simple_input_param) :: ml_reg_chunk
+type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: nchunks
@@ -1084,6 +1086,8 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(ml_reg_chunk,   'ml_reg_chunk', 'binary', 'Subset ML regularization', 'Subset Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(ml_reg_pool,    'ml_reg_pool',  'binary', 'Pool ML regularization', 'Pool Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
@@ -1693,7 +1697,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 10, 8, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 10, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1749,6 +1753,10 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 8, kweight_pool)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 9, ml_reg_chunk)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls',10, ml_reg_pool)
+        call cluster2D_subsets%set_gui_params('filt_ctrls',10, submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
