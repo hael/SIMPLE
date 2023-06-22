@@ -1599,7 +1599,8 @@ contains
         if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
         if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',   'no')
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
-        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
+        if( .not. cline%defined('ml_reg_chunk') ) call cline%set('ml_reg_chunk', 'no')
+        if( .not. cline%defined('ml_reg_pool')  ) call cline%set('ml_reg_pool',  'no')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'group')
         if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
         if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init', 'no')
@@ -1635,6 +1636,10 @@ contains
         call cline%delete('nptcls_per_cls')
         call cline%delete('ncls_start')
         call cline%delete('numlen')
+        call cline%delete('kweight_chunk')
+        call cline%delete('kweight_pool')
+        call cline%delete('ml_reg_chunk')
+        call cline%delete('ml_reg_pool')
         cline_cluster2D_pool   = cline
         cline_cluster2D_chunk  = cline
         ! chunk classification
@@ -1656,6 +1661,7 @@ contains
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
         call cline_cluster2D_chunk%set('kweight',   params%kweight_chunk)
+        call cline_cluster2D_chunk%set('ml_reg',    params%ml_reg_chunk)
         if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt )         call cline_cluster2D_chunk%set('wiener',  'partial')
         call cline_cluster2D_chunk%delete('update_frac')
@@ -1675,6 +1681,7 @@ contains
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
         call cline_cluster2D_pool%set('kweight',   params%kweight_pool)
+        call cline_cluster2D_pool%set('ml_reg',   params%ml_reg_pool)
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call cline_cluster2D_pool%delete('lpstop')
