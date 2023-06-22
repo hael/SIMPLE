@@ -31,6 +31,7 @@ type strategy2D_srch
     integer                 :: prev_class    =  0   !< previous class index
     integer                 :: best_class    =  0   !< best class index found by search
     integer                 :: best_rot      =  0   !< best in-plane rotation found by search
+    integer                 :: prev_rot      =  0   !< previous in-plane rotation found by search
     integer                 :: iptcl         =  0   !< global particle index
     integer                 :: iptcl_map     =  0   !< index in pre-allocated batch array
     integer                 :: ithr          =  0   !< current thread
@@ -114,6 +115,7 @@ contains
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = prev_roind
+        self%prev_rot   = prev_roind
         ! calculate previous best corr (treshold for better)
         call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
         if( params_glob%cc_objfun == OBJFUN_CC )then

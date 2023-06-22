@@ -231,6 +231,7 @@ contains
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: phase_corr
     procedure          :: fcorr_shift
+    procedure          :: norm_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
@@ -4697,6 +4698,18 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
     end subroutine prenorm4real_corr_2
+
+    !> \brief standardize image within logical mask
+    subroutine norm_within( self, mask )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: npix, ax, sxx
+        npix = real(count(mask))
+        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
+        if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
+    end subroutine norm_within
 
     !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
     !>  The image is centered and standardized

@@ -686,7 +686,8 @@ contains
         logical  :: l_sigma
         i       = self%pinds(iptcl)
         l_sigma = associated(self%sigma2_noise)
-        self%sqsums_ptcls(i) = 0.d0
+        self%sqsums_ptcls(i)  = 0.d0
+        self%ksqsums_ptcls(i) = 0.d0
         if( l_sigma ) self%wsqsums_ptcls(i) = 0.d0
         do ik = self%kfromto(1),self%kfromto(2)
             sumsqk               = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
@@ -1152,13 +1153,17 @@ contains
         end do
     end function genmaxcorr_comlin
 
-    subroutine gencorrs_1( self, iref, iptcl, cc )
+    subroutine gencorrs_1( self, iref, iptcl, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
+        logical :: kw
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                if( params_glob%l_kweight )then
+                kw = params_glob%l_kweight
+                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                if( kw )then
                     call self%gencorrs_weighted_cc(iptcl, iref, cc)
                 else
                     call self%gencorrs_cc(iptcl, iref, cc)
@@ -1170,13 +1175,15 @@ contains
         end select
     end subroutine gencorrs_1
 
-    subroutine gencorrs_2( self, iref, iptcl, shift, cc )
+    subroutine gencorrs_2( self, iref, iptcl, shift, cc, kweight )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shift(2)
         real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer :: i, ithr
+        logical :: kw
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
         shmat   => self%heap_vars(ithr)%shmat
@@ -1189,7 +1196,9 @@ contains
         endif
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                if( params_glob%l_kweight )then
+                kw = params_glob%l_kweight
+                if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+                if( kw )then
                     call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
                 else
                     call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
@@ -1546,11 +1555,19 @@ contains
         integer  :: k
         sqsum_ref            = 0.d0
         gencorr_cc_for_rot_8 = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsum_ref            = sqsum_ref +            real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
-            gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-        end do
-        gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
+        if( params_glob%l_kweight_shift )then
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsum_ref            = sqsum_ref +            real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
+                gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+            end do
+            gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsum_ref            = sqsum_ref +            sum(real(pft_ref(:,k) * conjg(pft_ref(:,k)),dp))
+                gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 + sum(real(pft_ref(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+            end do
+            gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
+        endif
     end function gencorr_cc_for_rot_8
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
@@ -1620,42 +1637,78 @@ contains
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
         integer,                 intent(in)    :: iptcl, irot
         real(dp),                intent(out)   :: f, grad(2)
-        real(dp) :: sqsum_ref, denom
+        real(dp) :: sqsum_ref, sqsum_ptcl, denom
         integer  :: k, i
         i           = self%pinds(iptcl)
         sqsum_ref   = 0.d0
         f           = 0.d0
         grad        = 0.d0
         if( self%with_ctf )then
-            call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-                f         = f         + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            end do
+            if( params_glob%l_kweight_shift )then
+                sqsum_ptcl = self%ksqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                    f         = f         + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            else
+                sqsum_ptcl = self%sqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                    f         = f         + sum(real(self%ctfmats(:,k,i)                     * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            endif
         else
-            call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-                f         = f         + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            end do
+            if( params_glob%l_kweight_shift )then
+                sqsum_ptcl = self%ksqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                    f         = f         + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            else
+                sqsum_ptcl = self%sqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                    f         = f         + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            endif
         endif
-        denom = dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
+        denom = dsqrt(sqsum_ref * sqsum_ptcl)
         f     = f    / denom
         grad  = grad / denom
     end subroutine gencorr_cc_grad_for_rot_8
@@ -1768,38 +1821,72 @@ contains
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
         integer,                 intent(in)    :: i, irot
         real(dp),                intent(out)   :: grad(2)
-        real(dp) :: sqsum_ref
+        real(dp) :: sqsum_ref, sqsum_ptcl
         integer  :: k
         sqsum_ref = 0.d0
         grad      = 0.d0
         if( self%with_ctf )then
-            call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            end do
+            if( params_glob%l_kweight_shift )then
+                sqsum_ptcl = self%ksqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + real(k,kind=dp) * sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            else
+                sqsum_ptcl = self%sqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + sum(real(self%ctfmats(:,k,i)*self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + sum(real(self%ctfmats(:,k,i) * pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            endif
         else
-            call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            enddo
-            call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-            do k = self%kfromto(1),self%kfromto(2)
-                grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
-            end do
+            if( params_glob%l_kweight_shift )then
+                sqsum_ptcl = self%ksqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + real(k,kind=dp) * sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            else
+                sqsum_ptcl = self%sqsums_ptcls(i)
+                call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + sum(real(pft_ref_tmp(:,k) * conjg(pft_ref_tmp(:,k)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(1) = grad(1) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                enddo
+                call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
+                do k = self%kfromto(1),self%kfromto(2)
+                    grad(2) = grad(2) + sum(real(pft_ref_tmp(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+                end do
+            endif
         endif
-        grad = grad / dsqrt(sqsum_ref * self%ksqsums_ptcls(i))
+        grad = grad / dsqrt(sqsum_ref * sqsum_ptcl)
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     function gencorr_cont_cc_for_rot_8( self, iref, iptcl, shvec, irot )result(cc)

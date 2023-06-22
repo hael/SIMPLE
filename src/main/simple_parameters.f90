@@ -41,7 +41,6 @@ type :: parameters
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
-    character(len=3)          :: kweight='no'         !< k-weighted option for cc cost function
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -63,6 +62,8 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
+    character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
+    character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: ref_reg='no'         !< apply objective regularizer to the reference(yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -162,6 +163,9 @@ type :: parameters
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
+    character(len=STDLEN)     :: kweight='default'    !< k-weighted options for cc cost function(default|all|inpl|none){default}
+    character(len=STDLEN)     :: kweight_chunk='default' !< k-weighted options for cc in chunks(default|all|inpl|none){default}
+    character(len=STDLEN)     :: kweight_pool='default'  !< k-weighted options for cc in pool(default|all|inpl|none){default}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
@@ -403,6 +407,8 @@ type :: parameters
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
+    logical :: l_kweight_shift= .true.
+    logical :: l_kweight_rot  = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
@@ -496,6 +502,8 @@ contains
         call check_carg('interpfun',      self%interpfun)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('kweight',        self%kweight)
+        call check_carg('kweight_chunk',  self%kweight_chunk)
+        call check_carg('kweight_pool',   self%kweight_pool)
         call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('mcpatch',        self%mcpatch)
@@ -532,6 +540,8 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
+        call check_carg('remove_chunks',  self%remove_chunks)
+        call check_carg('rnd_cls_init',   self%rnd_cls_init)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
@@ -1359,7 +1369,36 @@ contains
                 THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
         ! k-weighted cc option
-        self%l_kweight = trim(self%kweight).eq.'yes'
+        select case(trim(self%kweight))
+        case('all')
+            self%l_kweight       = .true. ! class/projection direction selection
+            self%l_kweight_rot   = .true. ! in-plane rotation
+            self%l_kweight_shift = .true. ! shift search
+        case('inpl')
+            self%l_kweight       = .false.
+            self%l_kweight_rot   = .true.
+            self%l_kweight_shift = .true.
+        case('none')
+            self%l_kweight       = .false.
+            self%l_kweight_rot   = .false.
+            self%l_kweight_shift = .false.
+        case DEFAULT
+            self%l_kweight       = .false.
+            self%l_kweight_rot   = .false.
+            self%l_kweight_shift = .true.
+        end select
+        select case(trim(self%kweight_chunk))
+        case('all','inpl','none','default')
+            ! all valid
+        case DEFAULT
+            THROW_HARD('INVALID KWEIGHT_CHUNK ARGUMENT')
+        end select
+        select case(trim(self%kweight_pool))
+        case('all','inpl','none','default')
+            ! all valid
+        case DEFAULT
+            THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
+        end select
         ! reg eps mode
         if( cline%defined('eps') ) self%eps_mode = 'fixed'
         ! reference regularization

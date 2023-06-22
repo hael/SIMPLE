@@ -943,7 +943,22 @@ contains
                         endif
                     endif
                 else
-                    call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                    if( trim(params%rnd_cls_init).eq.'yes' )then
+                        if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with RND_CLS_INIT=YES ')
+                        ! initialization from random classes
+                        do iptcl=1,params%nptcls
+                            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                            call build%spproj_field%set(iptcl, 'class', real(irnd_uni(params%ncls)))
+                            call build%spproj_field%set(iptcl, 'w',     1.0)
+                            call build%spproj_field%e3set(iptcl,ran3()*360.0)
+                        end do
+                        call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                        call cline_make_cavgs%set('refs', params%refs)
+                        call xmake_cavgs%execute(cline_make_cavgs)
+                    else
+                        ! initialization from raw images
+                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                    endif
                 endif
                 call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
                 call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
