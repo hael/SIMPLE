@@ -197,8 +197,14 @@ contains
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+        call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
         if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
+        if( cline%defined('cls_rnd_init') )then
+            call cline_cluster2D_chunk%set('cls_rnd_init', params_glob%rnd_cls_init)
+        else
+            call cline_cluster2D_chunk%set('cls_rnd_init','no')
+        endif
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%init(ichunk, pool_proj)
@@ -216,6 +222,7 @@ contains
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_pool%set('lpstart_nonuni',real(params_glob%lpstart_nonuni))
+        call cline_cluster2D_pool%set('kweight',   params_glob%kweight_pool)
         if( cline%defined('cenlp') )then
             rarg = cline%get_rarg('cenlp')
             call cline_cluster2D_pool%set('cenlp', rarg)
@@ -639,7 +646,7 @@ contains
                 ncls_glob = ncls_here
             endif
             ! tidy
-            call converged_chunks(ichunk)%remove_folder
+            if( trim(params_glob%remove_chunks).eq.'yes' ) call converged_chunks(ichunk)%remove_folder
             call converged_chunks(ichunk)%kill
         enddo
         nchunks_imported = nchunks2import
@@ -1577,24 +1584,28 @@ contains
         integer :: maxits, pool_nstks, iptcl, jptcl, jstk, nchunks_imported, tot_nchunks_imported
         integer :: minits, nsplit
         logical :: all_chunks_submitted, all_chunks_imported, l_once, l_converged
-        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',      30.0)
-        if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
-        if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('lp')           ) call cline%set('lp',          GREEDY_TARGET_LP)
-        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',     30.0)
-        if( .not. cline%defined('ndev')         ) call cline%set('ndev',        1.5)
-        if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl2D')
-        if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'partial')
-        if( .not. cline%defined('walltime')     ) call cline%set('walltime',    29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk',1.0)
-        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',     2.0)
-        if( .not. cline%defined('numlen')       ) call cline%set('numlen',      5.0)
-        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',  'no')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
-        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',      'no')
-        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',   'group')
-        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',  'no')
+        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',       30.0)
+        if( .not. cline%defined('center')       ) call cline%set('center',      'yes')
+        if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',   'yes')
+        if( .not. cline%defined('lp')           ) call cline%set('lp',           GREEDY_TARGET_LP)
+        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',      30.0)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev',         1.5)
+        if( .not. cline%defined('oritype')      ) call cline%set('oritype',      'ptcl2D')
+        if( .not. cline%defined('wiener')       ) call cline%set('wiener',       'partial')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
+        if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
+        if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
+        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',   'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',       'euclid')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'no')
+        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est',    'group')
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'no')
+        if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init', 'no')
+        if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
+        if( .not. cline%defined('kweight_chunk')) call cline%set('kweight_chunk','default')
+        if( .not. cline%defined('kweight_pool') ) call cline%set('kweight_pool', 'default')
         if( cline%defined('lpstop') ) call cline%set('lpstop2D', cline%get_rarg('lpstop'))
         call cline%set('nthr2D', cline%get_rarg('nthr'))
         call cline%set('ptclw',  'no')
@@ -1643,7 +1654,8 @@ contains
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
-        call cline_cluster2D_chunk%set('minits', CHUNK_MINITS)
+        call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+        call cline_cluster2D_chunk%set('kweight',   params%kweight_chunk)
         if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt )         call cline_cluster2D_chunk%set('wiener',  'partial')
         call cline_cluster2D_chunk%delete('update_frac')
@@ -1662,6 +1674,7 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment, sigma bookkeeping
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
+        call cline_cluster2D_pool%set('kweight',   params%kweight_pool)
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call cline_cluster2D_pool%delete('lpstop')

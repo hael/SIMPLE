@@ -221,6 +221,9 @@ type(simple_input_param) :: hp
 type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
+type(simple_input_param) :: kweight
+type(simple_input_param) :: kweight_chunk
+type(simple_input_param) :: kweight_pool
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lpstart_nonuni
@@ -281,8 +284,10 @@ type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
+type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
+type(simple_input_param) :: rnd_cls_init
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
@@ -1083,6 +1088,11 @@ contains
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(rnd_cls_init,   'rnd_cls_init', 'binary', 'Initiate 2D classification from random classes', 'Initiate 2D classification from random classes vs. raw images(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1513,7 +1523,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 7, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1549,6 +1559,8 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
         call cluster2D%set_input('srch_ctrls', 10, sigma_est)
         call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
+        call cluster2D%set_input('srch_ctrls', 11, rnd_cls_init)
+        call cluster2D%set_gui_params('srch_ctrls', 11, submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -1573,6 +1585,8 @@ contains
         cluster2D%filt_ctrls(7)%descr_placeholder = '(yes|no){no}'
         cluster2D%filt_ctrls(7)%cval_default      = 'no'
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 8, kweight)
+        call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -1660,7 +1674,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D_stream%set_input('filt_ctrls', 5, wiener)
         call cluster2D_stream%set_input('filt_ctrls', 6, lplim_crit)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
@@ -1679,7 +1693,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 8, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 10, 8, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1712,6 +1726,10 @@ contains
         call cluster2D_subsets%set_gui_params('srch_ctrls', 7, submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, objfun)
         call cluster2D_subsets%set_gui_params('srch_ctrls', 8, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 9, rnd_cls_init)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 9, submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 10, submenu="cluster2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
@@ -1727,6 +1745,10 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 6,  reject_cls)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D", online=.true.)
+        call cluster2D_subsets%set_input('filt_ctrls', 7, kweight_chunk)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 8, kweight_pool)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)

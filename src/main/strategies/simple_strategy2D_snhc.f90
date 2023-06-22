@@ -5,6 +5,7 @@ use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
+use simple_parameters,       only: params_glob
 implicit none
 
 public :: strategy2D_snhc
@@ -87,6 +88,28 @@ contains
                 self%s%best_class = class_glob
                 self%s%best_corr  = cc_glob
                 self%s%best_rot   = inpl_glob
+            endif
+            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
+                ! back-calculating in-plane angle with k-weighing
+                if( found_better )then
+                    call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, corrs, kweight=.true.)
+                    self%s%prev_corr = corrs(self%s%prev_rot) ! updated threshold
+                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
+                    if( inpl_ind == 0 )then
+                        ! accept greedy best
+                        self%s%best_rot  = maxloc(corrs, dim=1)
+                        self%s%best_corr = corrs(self%s%best_rot)
+                    else
+                        ! accept SHC parameters
+                        self%s%best_corr = corrs(inpl_ind)
+                        self%s%best_rot  = inpl_ind
+                    endif
+                else
+                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                    self%s%best_rot  = maxloc(corrs, dim=1)
+                    self%s%best_corr = corrs(self%s%best_rot)
+                endif
             endif
             call self%s%inpl_srch
             nrefs_bound = min(nrefs, nrefs_bound+1)
