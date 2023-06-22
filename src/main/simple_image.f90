@@ -3457,7 +3457,7 @@ contains
         real, allocatable   :: shifted_filt(:)
         real, allocatable   :: rmat_t(:,:,:)
         integer :: ldim(3), sz_f(1), L1
-        integer :: i, j, m, n
+        integer :: i, j, m
         ldim = img%get_ldim()
         sz_f = shape(filt)
         L1 = sz_f(1)
@@ -3471,7 +3471,7 @@ contains
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 do m = -(L1-1)/2,(L1-1)/2
-                    rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m)
+                    rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+1,1)*shifted_filt(m)
                 enddo
             end do
         end do
