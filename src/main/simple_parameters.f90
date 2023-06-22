@@ -165,7 +165,7 @@ type :: parameters
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
     character(len=STDLEN)     :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
-    character(len=STDLEN)     :: kweight='default'    !< k-weighted options for cc cost function(default|all|inpl|none){default}
+    character(len=STDLEN)     :: kweight='default'    !< k-weighted options for cc cost function(default|all|cls|inpl|none){default}
     character(len=STDLEN)     :: kweight_chunk='default' !< k-weighted options for cc in chunks(default|all|inpl|none){default}
     character(len=STDLEN)     :: kweight_pool='default'  !< k-weighted options for cc in pool(default|all|inpl|none){default}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
@@ -1378,6 +1378,10 @@ contains
             self%l_kweight       = .true. ! class/projection direction selection
             self%l_kweight_rot   = .true. ! in-plane rotation
             self%l_kweight_shift = .true. ! shift search
+        case('cls')
+            self%l_kweight       = .true.
+            self%l_kweight_rot   = .false.
+            self%l_kweight_shift = .false.
         case('inpl')
             self%l_kweight       = .false.
             self%l_kweight_rot   = .true.
