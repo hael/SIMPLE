@@ -188,6 +188,7 @@ type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: box_extract
+type(simple_input_param) :: cc_iters
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
@@ -1097,6 +1098,7 @@ contains
         call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1527,7 +1529,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 11, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1565,6 +1567,8 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
         call cluster2D%set_input('srch_ctrls', 11, rnd_cls_init)
         call cluster2D%set_gui_params('srch_ctrls', 11, submenu="search")
+        call cluster2D%set_input('srch_ctrls', 12, cc_iters)
+        call cluster2D%set_gui_params('srch_ctrls', 12, submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -1697,7 +1701,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 10, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 11, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1734,6 +1738,9 @@ contains
         call cluster2D_subsets%set_gui_params('srch_ctrls', 9, submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks)
         call cluster2D_subsets%set_gui_params('srch_ctrls', 10, submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 11, cc_iters)
+        cluster2D_subsets%srch_ctrls(11)%rval_default = 5.
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 11, submenu="cluster2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
