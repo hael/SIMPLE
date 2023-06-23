@@ -1330,13 +1330,21 @@ contains
                 top_glob  = top_glob+1
                 ptcl_cnt  = ptcl_cnt+1
                 ! copy image
-                call img%read(stkname, iptcl-fromp+1)
+                if(spproj%os_ptcl2D%isthere(iptcl, 'indstk') .and. spproj%os_ptcl2D%get(iptcl, 'indstk') > 0.0) then
+                        write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
+                        call img%read(stkname, nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
+                else
+                        write(logfhandle, *) "STK2 " // int2str(nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
+                        call img%read(stkname, iptcl-fromp+1)
+                endif
                 call img%write(newstkname, ptcl_cnt)
                 ! update orientations
                 call spproj_out%os_ptcl2D%transfer_ori(ptcl_glob, spproj%os_ptcl2D, iptcl)
                 call spproj_out%os_ptcl3D%transfer_ori(ptcl_glob, spproj%os_ptcl3D, iptcl)
                 call spproj_out%os_ptcl2D%set(ptcl_glob,'stkind',real(stkind))
                 call spproj_out%os_ptcl3D%set(ptcl_glob,'stkind',real(stkind))
+                call spproj_out%os_ptcl2D%set(ptcl_glob,'indstk',real(ptcl_cnt))
+                call spproj_out%os_ptcl3D%set(ptcl_glob,'indstk',real(ptcl_cnt))
             enddo
             ! update stack
             call make_relativepath(CWD_GLOB, newstkname, relstkname)
