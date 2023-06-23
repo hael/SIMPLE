@@ -2480,10 +2480,11 @@ contains
         & accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected&
         & and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
-        &1, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        &2, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call import_movies%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+        call import_movies%set_input('img_ios', 1, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '')
+        call import_movies%set_input('img_ios', 2, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/')
         ! parameter input/output
         call import_movies%set_input('parm_ios', 1, smpd)
         call import_movies%set_input('parm_ios', 2, kv)
