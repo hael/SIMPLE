@@ -550,7 +550,7 @@ contains
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real     :: scale, trs_stage2
         integer  :: last_iter_stage1, last_iter_stage2
-        logical  :: scaling, l_shmem, l_euclid
+        logical  :: scaling, l_shmem, l_euclid, l_cc_iters
         call set_cluster2D_defaults( cline )
         call cline%delete('clip')
         ! set shared-memory flag
@@ -564,6 +564,7 @@ contains
         else
             l_shmem = .true.
         endif
+        l_cc_iters = cline%defined('cc_iters')
         ! master parameters
         call params%new(cline)
         ! report limits used
@@ -611,9 +612,13 @@ contains
             ! Stage 1: down-scaling for fast execution, hybrid extremal/SHC optimisation for
             !          improved population distribution of clusters, no incremental learning,
             cline_cluster2D_stage1 = cline
+            if( l_euclid )then
+                call cline_cluster2D_stage1%set('objfun', trim(cline%get_carg('objfun')))
+            else
+                call cline_cluster2D_stage1%set('objfun', 'cc') ! cc-based search in first phase
+            endif
             call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
             call cline_cluster2D_stage1%set('ptclw',      'no')
-            call cline_cluster2D_stage1%set('objfun',     'cc') ! cc-based search in first phase
             call cline_cluster2D_stage1%set('ml_reg',     'no')
             call cline_cluster2D_stage1%set('nonuniform', 'no')
             ! reg in the first stage
@@ -626,10 +631,24 @@ contains
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
-                if( l_euclid ) call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1_EXTR))
+                if( l_euclid )then
+                    if( l_cc_iters )then
+                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
+                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    else
+                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    endif
+                endif
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-                if( l_euclid ) call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                if( l_euclid )then
+                    if( l_cc_iters )then
+                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
+                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    else
+                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    endif
+                endif
             endif
             ! Scaling
             call spproj%scale_projfile(params%smpd_targets2D(2), projfile_sc,&
@@ -687,6 +706,7 @@ contains
             ! Stage 2: refinement stage, down-scaling, no extremal updates, optional incremental
             !          learning for acceleration
             cline_cluster2D_stage2 = cline
+            call cline_cluster2D_stage2%delete('cc_iters')
             call cline_cluster2D_stage2%set('refs', cavgs)
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then

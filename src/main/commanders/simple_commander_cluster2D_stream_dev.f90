@@ -1662,8 +1662,14 @@ contains
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
         call cline_cluster2D_chunk%set('kweight',   params%kweight_chunk)
         call cline_cluster2D_chunk%set('ml_reg',    params%ml_reg_chunk)
-        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
-        if( l_wfilt )         call cline_cluster2D_chunk%set('wiener',  'partial')
+        if( l_update_sigmas )then
+            if( cline%defined('cc_iters') )then
+                call cline_cluster2D_chunk%set('cc_iters',real(min(params_glob%cc_iters,nint(CHUNK_MINITS-1.0))))
+            else
+                call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
+            endif
+        endif
+        if( l_wfilt ) call cline_cluster2D_chunk%set('wiener',  'partial')
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
         call cline_cluster2D_chunk%delete('lpstop')
