@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_moviewatcher,   only: moviewatcher
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
@@ -279,10 +280,11 @@ contains
         type(sp_project)                       :: spproj
         type(oris)                             :: deftab
         type(ctfparams)                        :: ctfvars, prev_ctfvars
+        type(moviewatcher)                     :: movie_buff
         character(len=:),          allocatable :: phaseplate
         character(len=LONGSTRLEN), allocatable :: boxfnames(:), movfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
-        logical :: inputted_boxtab, inputted_deftab, first_import
+        logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -291,6 +293,11 @@ contains
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         inputted_deftab = cline%defined('deftab')
+        inputted_dir_movies = cline%defined('dir_movies')
+        inputted_filetab    = cline%defined('filetab')
+        if(inputted_dir_movies .and. inputted_filetab)                        THROW_HARD ('dir_movies cannot be set with a filetab! exec_import_movies')
+        if(.not. inputted_dir_movies .and. .not. inputted_filetab)            THROW_HARD ('either dir_movies or filetab must be given! exec_import_movies')
+        if(inputted_dir_movies .and. ( inputted_deftab .or. inputted_boxtab)) THROW_HARD ('dir_movies cannot be set with a deftab or boxtab! exec_import_movies')
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
@@ -299,7 +306,6 @@ contains
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
         first_import = nprev_movies==0 .and. nprev_intgs==0
-        nmovf        = nlines(params%filetab)
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -347,14 +353,23 @@ contains
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
-        call read_filetable(params%filetab, movfnames)
+        nmovf = 0
+        if( inputted_filetab ) then
+            nmovf = nlines(params%filetab)
+            call read_filetable(params%filetab, movfnames)
+        else if( inputted_dir_movies) then
+            ! movie watcher init for files older that 1 second (assumed already in place at exec)
+            movie_buff = moviewatcher(1)
+            call movie_buff%watch( nmovf, movfnames )
+            call movie_buff%kill
+        endif
         if( params%mkdir.eq.'yes' )then
             ! taking care of paths
             do i=1,nmovf
                 if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
             enddo
         endif
-        if( inputted_deftab )then
+        if( inputted_deftab .and. .not. inputted_dir_movies )then
             ! micrographs with pre-determined CTF parameters
             call deftab%new(nlines(params%deftab), is_ptcl=.false.)
             call deftab%read_ctfparams_state_eo(params%deftab)
@@ -365,7 +380,7 @@ contains
             call spproj%add_movies(movfnames, ctfvars)
         endif
         ! add boxtab
-        if( inputted_boxtab )then
+        if( inputted_boxtab .and. .not. inputted_dir_movies)then
             call read_filetable(params%boxtab, boxfnames)
             nboxf = size(boxfnames)
             if( nboxf /= nmovf )then
@@ -384,7 +399,7 @@ contains
                     call spproj%os_mic%set_boxfile(nprev_intgs+i, boxfname)
                 endif
             end do
-        endif
+        endif 
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
