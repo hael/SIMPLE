@@ -64,6 +64,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
+    character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: ref_reg='no'         !< apply objective regularizer to the reference(yes|no){no}
@@ -551,6 +552,7 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
         call check_carg('eps_mode',       self%eps_mode)
+        call check_carg('randomise',      self%randomise)
         call check_carg('ref_reg',        self%ref_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)

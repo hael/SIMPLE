@@ -4,9 +4,11 @@ include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_image,          only: image
 use simple_moviewatcher,   only: moviewatcher
-use simple_parameters,     only: parameters
+use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
+use simple_stack_io,       only: stack_io
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
@@ -25,6 +27,7 @@ public :: selection_commander
 public :: merge_stream_projects_commander
 public :: replace_project_field_commander
 public :: scale_project_commander_distr
+public :: projops_commander
 public :: prune_project_commander_distr
 public :: prune_project_commander
 private
@@ -99,6 +102,11 @@ type, extends(commander_base) :: scale_project_commander_distr
   contains
     procedure :: execute      => exec_scale_project_distr
 end type scale_project_commander_distr
+
+type, extends(commander_base) :: projops_commander
+  contains
+    procedure :: execute      => exec_projops
+end type projops_commander
 
 type, extends(commander_base) :: prune_project_commander_distr
   contains
@@ -972,6 +980,86 @@ contains
         call build%spproj%kill
         call simple_end('**** SIMPLE_SCALE_PROJECT_DISTR NORMAL STOP ****')
     end subroutine exec_scale_project_distr
+
+    subroutine exec_projops( self, cline )
+        class(projops_commander),     intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters)            :: params
+        type(sp_project)            :: spproj
+        type(oris)                  :: oris_backup
+        type(image)                 :: img
+        type(stack_io)              :: stksrc, stkdst
+        integer, allocatable        :: randmap(:)
+        character(len=XLONGSTRLEN)  :: cwd
+        integer                     :: i, ifoo, ldim(3)
+        logical                     :: l_randomise
+        ! init
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call simple_getcwd(cwd)
+        call spproj%read( params%projfile )
+        l_randomise = trim(params_glob%randomise) .eq. 'yes'
+        if( l_randomise ) then
+            if(spproj%os_stk%get_noris() .ne. 1)    THROW_HARD('Can only randomise particles in a single stack')
+            if(spproj%os_ptcl2D%get_noris() .lt. 1) THROW_HARD('No particle information present in project file')
+            write(logfhandle,'(A)')'>>> RANDOMISING PARTICLE ORDER'
+            randmap = generate_randomisation_map(spproj%os_ptcl2D%get_noris(), 5)
+            write(logfhandle,'(A)')'>>> REMAPPING PARTICLES'
+            oris_backup = spproj%os_ptcl2D
+            do i=1, spproj%os_ptcl2D%get_noris()
+                call spproj%os_ptcl2D%transfer_ori(i, oris_backup, randmap(i))
+            enddo
+            call oris_backup%kill
+            write(logfhandle,'(A)')'>>> WRITING UPDATED STACK'
+            if(.not. file_exists(spproj%os_stk%get_static(1, 'stk'))) THROW_HARD('Stack file does not exist')
+            call find_ldim_nptcls(spproj%os_stk%get_static(1, 'stk'), ldim, ifoo)
+            ldim(3) = 1
+            call img%new(ldim, params%smpd)
+            call stkdst%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+            call stksrc%open(spproj%os_stk%get_static(1, 'stk'), params%smpd, 'read', bufsz=spproj%os_ptcl2D%get_noris())
+            call stksrc%read_whole ! can we make this better/faster/less ram intensive?
+            do i=1, spproj%os_ptcl2D%get_noris()
+                call stksrc%read(randmap(i), img)
+                call stkdst%write(i, img)
+            enddo
+            call stkdst%close
+            call stksrc%close
+            call img%kill
+            spproj%os_ptcl2D = spproj%os_ptcl3D
+            call spproj%os_stk%set(1,'stk', trim(cwd) // '/' // trim(params%outstk))
+        endif
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+        ! write project file
+        call spproj%write(basename(params%projfile))
+        ! end gracefully
+        if (allocated(randmap)) deallocate(randmap)
+        call simple_end('**** PROJOPS NORMAL STOP ****')
+        
+        contains
+        
+            function generate_randomisation_map( array_size, niter ) result( array )
+                integer, intent(in)    :: array_size, niter
+                integer, allocatable   :: array(:)
+                integer                :: i, iswap, iter, tmp
+                real                   :: rrand
+                array = [( i, i=1, array_size )]
+                do iter=1,niter
+                    do i=1, array_size
+                        call random_number(rrand)
+                        iswap = floor( array_size * rrand) + 1
+                        tmp   = array(iswap)
+                        array(iswap) = array(i)
+                        array(i)     = tmp
+                    enddo
+                enddo
+                
+            end function generate_randomisation_map
+            
+        
+    end subroutine exec_projops
 
     subroutine exec_prune_project_distr( self, cline )
         class(prune_project_commander_distr), intent(inout) :: self

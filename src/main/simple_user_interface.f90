@@ -138,6 +138,7 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
+type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
@@ -406,6 +407,7 @@ contains
         call new_print_magic_boxes
         call new_print_project_info
         call new_print_project_field
+        call new_projops
         call new_prune_project
         call new_atoms_stats
         call new_reproject
@@ -514,6 +516,7 @@ contains
         call push2prg_ptr_array(print_magic_boxes)
         call push2prg_ptr_array(print_project_info)
         call push2prg_ptr_array(print_project_field)
+        call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
@@ -696,6 +699,8 @@ contains
                 ptr2prg => print_project_info
             case('print_project_field')
                 ptr2prg => print_project_field
+            case('projops')
+                ptr2prg => projops  
             case('prune_project')
                 ptr2prg => prune_project
             case('atoms_stats')
@@ -841,6 +846,7 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
@@ -3747,6 +3753,32 @@ contains
         ! computer controls
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
+
+    subroutine new_projops
+        ! PROGRAM SPECIFICATION
+        call projops%new(&
+        &'projops',&                                ! name
+        &'Project manipulation tools',&             ! descr_short
+        &'Project manipulation tools',&             ! descr_long
+        &'simple_exec',&                            ! executable
+        &0, 4, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call projops%set_input('parm_ios', 1, projfile)
+        call projops%set_input('parm_ios', 2, smpd)
+        call projops%set_input('parm_ios', 3, 'randomise', 'binary', 'Randomise particles within stack', 'Randomise particles within stack(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call projops%set_input('parm_ios', 4, outstk)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_projops
 
     subroutine new_prune_project
         ! PROGRAM SPECIFICATION
