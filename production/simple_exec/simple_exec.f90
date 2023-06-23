@@ -133,6 +133,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr)         :: xscale_project
+type(projops_commander)                     :: xprojops
 type(prune_project_commander_distr)         :: xprune_project
 
 ! SYSTEM INTERACTION PROGRAMS
@@ -354,6 +355,8 @@ select case(trim(prg))
     ! MISCELLANEOUS WORKFLOWS
     case( 'scale_project' )
         call xscale_project%execute( cline )
+    case( 'projops' )
+        call xprojops%execute( cline )   
     case( 'prune_project' )
         call xprune_project%execute( cline )
 
@@ -372,7 +375,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('2557eb91')
+call simple_print_git_version('a8e6bd26')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
