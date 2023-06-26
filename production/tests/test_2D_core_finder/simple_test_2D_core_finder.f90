@@ -15,7 +15,7 @@ program simple_test_2D_core_finder
 
     type(image)                     :: cavg, reproj, diff
     type(image)                     :: temp
-    real(kind=c_float), pointer     :: rmat(:,:,:)=>null(), rmat_cavg(:,:,:)=>null(), rmat_reproj(:,:,:)=>null()
+    real(kind=c_float), pointer     :: rmat(:,:,:)=>null()
     real                :: nprad_vox=nprad_A/smpd, shell_size_vox=shell_size_A/smpd, mskdiam_vox=maskdiam_A/smpd
     real                :: r, mean, center(2), minmax(2)
     integer             :: iref, icavg, ldim1(3), ldim2(3), ldim_refs(3), ifoo, nshells, i, j, n, funit
@@ -110,8 +110,6 @@ program simple_test_2D_core_finder
 
         ! Take averages of shells out to the NP radius
         call diff%get_rmat_ptr(rmat)
-        call cavg%get_rmat_ptr(rmat_cavg)
-        call reproj%get_rmat_ptr(rmat_reproj)
         mean = 0. 
         do n=0, nshells
             mask = .false. ! For now use mask in case we want to calculate other stats in the future
@@ -124,8 +122,7 @@ program simple_test_2D_core_finder
                 end do
             end do
             !mean = sum(abs(rmat), mask=mask) / sum(abs(reproj%get_rmat()), mask=mask)
-            ! Mean fractional difference since the signal is higher at the core than at the surface
-            mean = 2 * sum(abs(rmat), mask=mask) / (sum(abs(rmat_reproj), mask=mask) + sum(abs(rmat_cavg), mask=mask))
+            mean = sum(abs(rmat), mask=mask) / count(mask)
             ! Write csv file containing statistics
             write(funit,601,advance='no') real(iref-1),                CSV_DELIM ! INDEX
             write(funit,601,advance='no') n*shell_size_A,              CSV_DELIM ! RMIN
