@@ -1006,6 +1006,7 @@ contains
             randmap = generate_randomisation_map(spproj%os_ptcl2D%get_noris(), 5)
             write(logfhandle,'(A)')'>>> REMAPPING PARTICLES'
             oris_backup = spproj%os_ptcl2D
+            call spproj%os_ptcl2D%new(oris_backup%get_noris(), .true.)
             do i=1, spproj%os_ptcl2D%get_noris()
                 call spproj%os_ptcl2D%transfer_ori(i, oris_backup, randmap(i))
             enddo
@@ -1016,16 +1017,16 @@ contains
             ldim(3) = 1
             call img%new(ldim, params%smpd)
             call stkdst%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
-            call stksrc%open(spproj%os_stk%get_static(1, 'stk'), params%smpd, 'read', bufsz=spproj%os_ptcl2D%get_noris())
-            call stksrc%read_whole ! can we make this better/faster/less ram intensive?
             do i=1, spproj%os_ptcl2D%get_noris()
+                call stksrc%open(spproj%os_stk%get_static(1, 'stk'),params%smpd, 'read', bufsz=1)
                 call stksrc%read(randmap(i), img)
                 call stkdst%write(i, img)
+                call stksrc%close
             enddo
             call stkdst%close
             call stksrc%close
             call img%kill
-            spproj%os_ptcl2D = spproj%os_ptcl3D
+            spproj%os_ptcl3D = spproj%os_ptcl2D
             call spproj%os_stk%set(1,'stk', trim(cwd) // '/' // trim(params%outstk))
         endif
         ! update project info
