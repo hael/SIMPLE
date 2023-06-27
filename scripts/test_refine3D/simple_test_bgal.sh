@@ -10,3 +10,7 @@ wait
 simple_exec prg=initial_3Dmodel pgrp=d2 mskdiam=180 nthr=40 projfile=3_selection/bgal.simple &
 wait
 simple_exec prg=refine3D pgrp=d2 mskdiam=180 nparts=4 nthr=20 maxits=10 refine=neigh objfun=euclid nonuniform=yes sigma_est=global &
+wait
+simple_exec prg=automask mskdiam=180 amsklp=12 mw=465 thres=0.012 nthr=20 vol1=5_refine3D/recvol_state01_iter010_lp.mrc smpd=1.275 &
+wait
+simple_exec prg=refine3D pgrp=d2 mskdiam=180 nparts=4 nthr=20 maxits=10 refine=neigh objfun=euclid ml_reg=no nonuniform=yes sigma_est=global continue=yes mskfile=6_automask/automask.mrc combine_eo=yes projfile=5_refine3D/bgal.simple &
