@@ -1157,9 +1157,11 @@ contains
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun
-        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid
+        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, fname
+        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid, j, io_stat, funit
         logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg
+        real,    allocatable       :: corrs(:)
+        integer, allocatable       :: order(:)
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1322,6 +1324,20 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
                 ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
+                ! print CSV file of correlation vs particle number
+                if( trim(params_glob%print_corrs).eq.'yes' )then
+                    corrs = build%spproj%os_ptcl2D%get_all('corr')
+                    order = (/(j,j=1,size(corrs))/)
+                    call hpsort(corrs, order)
+                    fname = 'ptcls_vs_cavgs_corrs_iter'// int2str(params%which_iter) //'.csv'
+                    call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+                    call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                    write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+                    do j = 1,size(corrs)
+                        write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs(j))
+                    end do
+                    call fclose(funit)
+                endif
                 ! exit condition
                 converged = converged .and. (i >= params%minits)
                 if( converged .or. i >= params%maxits )then

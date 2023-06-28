@@ -61,6 +61,7 @@ type :: parameters
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
+    character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
@@ -537,6 +538,7 @@ contains
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
+        call check_carg('print_corrs',    self%print_corrs)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
