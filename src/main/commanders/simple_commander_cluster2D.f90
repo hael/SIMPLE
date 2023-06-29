@@ -1158,10 +1158,10 @@ contains
         type(builder), target      :: build
         type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, fname
-        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid, j, io_stat, funit
+        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid, j, io_stat, funit, class_ind, class_max
         logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg
-        real,    allocatable       :: corrs(:)
-        integer, allocatable       :: order(:)
+        real,    allocatable       :: corrs(:), corrs_all(:), class_all(:)
+        integer, allocatable       :: order(:), class_cnt(:)
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1324,20 +1324,6 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
                 ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
-                ! print CSV file of correlation vs particle number
-                if( trim(params_glob%print_corrs).eq.'yes' )then
-                    corrs = build%spproj%os_ptcl2D%get_all('corr')
-                    order = (/(j,j=1,size(corrs))/)
-                    call hpsort(corrs, order)
-                    fname = 'ptcls_vs_cavgs_corrs_iter'// int2str(params%which_iter) //'.csv'
-                    call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
-                    call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
-                    write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
-                    do j = 1,size(corrs)
-                        write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs(j))
-                    end do
-                    call fclose(funit)
-                endif
                 ! exit condition
                 converged = converged .and. (i >= params%minits)
                 if( converged .or. i >= params%maxits )then
@@ -1354,6 +1340,54 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
+            ! print CSV file of correlation vs particle number
+            if( trim(params_glob%print_corrs).eq.'yes' )then
+                class_all = build%spproj%os_ptcl2D%get_all('class')
+                class_max = int(maxval(class_all))
+                ! counting the number of particles in each class
+                allocate(class_cnt(class_max))
+                do class_ind = 1, class_max
+                    class_cnt(class_ind) = 0
+                    do j = 1, size(class_all)
+                        if( class_all(j) == class_ind ) class_cnt(class_ind) = class_cnt(class_ind) + 1
+                    enddo
+                enddo
+                ! print all sorted corrs
+                corrs_all = build%spproj%os_ptcl2D%get_all('corr')
+                order     = (/(j,j=1,size(corrs_all))/)
+                call hpsort(corrs_all, order)
+                fname = 'ptcls_vs_cavgs_corrs_iter'// int2str(params%which_iter) //'.csv'
+                call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+                call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+                do j = 1,size(corrs_all)
+                    write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs_all(j))
+                end do
+                call fclose(funit)
+                ! print sorted corrs for each class
+                do class_ind = 1, class_max
+                    if( allocated(corrs) ) deallocate(corrs)
+                    allocate(corrs(class_cnt(class_ind)), source=0.)
+                    cnt = 0
+                    do j = 1, size(corrs_all)
+                        if( class_all(j) == class_ind )then
+                            cnt = cnt + 1
+                            corrs(cnt) = corrs_all(j)
+                        endif
+                    enddo
+                    if( allocated(order) ) deallocate(order)
+                    order = (/(j,j=1,class_cnt(class_ind))/)
+                    call hpsort(corrs, order)
+                    fname = 'ptcls_vs_cavgs_corrs_cls_'// int2str(class_ind) //'.csv'
+                    call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+                    call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                    write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+                    do j = 1,size(corrs)
+                        write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs(j))
+                    end do
+                    call fclose(funit)
+                enddo
+            endif
             ! end gracefully
             call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
