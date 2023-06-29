@@ -379,7 +379,7 @@ contains
         class(opt_image_weights), intent(inout) :: self
         real(dp),                 intent(in)    :: vec(:)
         real(dp) :: cost
-        integer  :: i, n
+        integer  :: i
         real(dp) :: val_RR
         real(dp) :: val_e(self%nframes)
         real(dp) :: val_D(self%nframes)

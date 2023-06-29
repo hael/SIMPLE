@@ -6145,7 +6145,6 @@ endif
     type(xml_doc_state), pointer :: xds
     type(element_t), pointer :: elem
     type(attribute_t), pointer :: att
-    logical :: defaults_
     integer :: i
 
     if (.not.associated(arg)) then

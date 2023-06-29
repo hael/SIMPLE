@@ -466,7 +466,7 @@ contains
     real, intent(inout) :: thisX(:), thisY(:)
     !simple linear interpolation on a rectilinear grid
 
-    integer :: i, j
+    integer :: i
     real :: t
 
     do i = 1, size(thisX)
@@ -491,7 +491,7 @@ contains
     real, intent(inout) :: thisX(:), thisY(:)
     ! simplest possible rescaling: linear interpolation & find where they cross.
 
-    integer :: i, j, tx1, tx2, ty1, ty2
+    integer :: i, tx1, tx2, ty1, ty2
     real :: tx, ty, txfrac, tyfrac 
     real, dimension(2) :: bottomPoint, topPoint, bottomToTop, scaledT
 
@@ -586,7 +586,6 @@ contains
     integer, intent(in), optional :: ncv
     real, intent(in), optional :: ignore_gt
     type(contourObject) :: o
-    type(contourLines) :: cp
 
     integer :: i, ncv_
     real :: x(size(z,1)), y(size(z,2))
@@ -656,7 +655,6 @@ contains
     integer, intent(in), optional :: ncv
     real, intent(in), optional :: ignore_gt
     type(contourObject) :: o
-    type(contourLines) :: cp
 
     integer :: i, ncv_
     real :: zmin, zmax, zinc
@@ -724,7 +722,6 @@ contains
     integer, intent(in), optional :: ncv
     real, intent(in), optional :: ignore_gt
     type(contourObject) :: o
-    type(contourLines) :: cp
 
     integer :: i, ncv_
     real :: zmin, zmax, zinc
@@ -920,13 +917,11 @@ contains
     integer :: i, j, imin, imax, jmin, jmax
     real :: dmax, cval
     integer :: ibkey
-    integer :: icv, icur, iflag, ii, iedge, ix, jcur, jump, jj, ks, k, l, idir, nxidir, ni, m, n
+    integer :: icv, icur, iflag, ii, iedge, ix, jcur, jj, ks, k, l, idir, nxidir, ni
     real :: zz, z1, z2
 
     integer :: nx, ny, ncv
-    integer, allocatable :: tempList(:)
 
-    integer :: se, ee
 
     INTEGER L1(4), L2(4), IJ(2)
     !
@@ -954,9 +949,6 @@ contains
     ! 1 for each point (though we don't need the last surely?)
     ! 1 for each contour value
     logical :: uphill, uphills(4)
-    ! need to keep track of boundaries as well:
-    integer :: boundary1, boundary2
-    real :: highpoint(2), firstpoint(2)
 
     type(contourLines) :: cp
 
@@ -1259,7 +1251,7 @@ contains
     type(richline), intent(in) :: l
     real, intent(in) :: x, y
     logical :: p
-    integer :: i, j
+    integer :: i
 
     p = .false.
     do i = 1, size(l%x)
@@ -1496,14 +1488,14 @@ contains
     integer, intent(in) :: nx, ny
 
     type(richline), pointer :: l
-    integer :: i, ii, j, jj, ix, jjj
+    integer :: i, ii, j, jjj
 
     integer :: s, ce, once, lastlinelength, lastse
     integer :: minLine, minLine1, minLine2, minLevel
     logical :: forward, forward1, forward2, allOneLevel
     real :: x, y, minGap1, minGap2
 
-    logical :: infinite1, infinite2, infinite3, uphill
+    logical :: uphill
 
     ! This is the algorithm:
     ! For each line on each contour:
@@ -1716,9 +1708,9 @@ contains
     type(contourLines), intent(inout) :: cp
     real, dimension(:,:), intent(in) :: z
 
-    integer :: i, j, ii, jj, k, kk
+    integer :: i, j, ii, jj, kk
     integer, pointer :: tempList(:)
-    real :: x, y, testX, testY, z1, z2, a
+    real :: x, y, a
 
     do i = 1, size(cp%contours)
       ! Go over all contour levels

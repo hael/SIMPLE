@@ -528,7 +528,6 @@ contains
         integer,          optional, intent(in)    :: fromto(2)
         logical,          optional, intent(in)    :: only_ctfparams_state_eo, wthreads
         integer,       allocatable :: batches(:,:)
-        character(len=self%header(isegment)%n_bytes_per_record), allocatable :: str_os_line(:) ! string with static length (set to max(strlen))
         character(len=:), allocatable ::  tmp_string
         integer(kind=8) :: ibytes, ipos
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
