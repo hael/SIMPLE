@@ -528,8 +528,6 @@ subroutine dqrdc ( a, lda, n, p, qraux, jpvt, work, job )
   real ( kind = 8 ) nrmxl
   integer ( kind = 4 ) pl
   integer ( kind = 4 ) pu
-  real ( kind = 8 ) ddot_var
-  real ( kind = 8 ) dnrm2_var
   logical swapj
   real ( kind = 8 ) t
   real ( kind = 8 ) tt
@@ -1104,7 +1102,6 @@ subroutine dqrsl ( a, lda, n, k, qraux, y, qy, qty, b, rsd, ab, job, info )
   real ( kind = 8 ) qty(n)
   real ( kind = 8 ) qy(n)
   real ( kind = 8 ) rsd(n)
-  real ( kind = 8 ) ddot_var
   real ( kind = 8 ) t
   real ( kind = 8 ) temp
   real ( kind = 8 ) y(n)
@@ -1731,13 +1728,11 @@ subroutine dsvdc ( a, lda, m, n, s, e, u, ldu, v, ldv, work, job, info )
   integer ( kind = 4 ) nrtp1
   real ( kind = 8 ) s(*)
   real ( kind = 8 ) scale
-  real ( kind = 8 ) ddot_var
   real ( kind = 8 ) shift
   real ( kind = 8 ) sl
   real ( kind = 8 ) sm
   real ( kind = 8 ) smm1
   real ( kind = 8 ) sn
-  real ( kind = 8 ) dnrm2_var
   real ( kind = 8 ) t
   real ( kind = 8 ) t1
   real ( kind = 8 ) test

@@ -4571,7 +4571,7 @@ contains
         integer, optional, intent(in)    :: border
         real, parameter :: width = 3.
         complex     :: c1,c2
-        real        :: w,rw,rhplim,rlplim,rsh,normsq
+        real        :: w,rw,rlplim,rsh,normsq
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3)
         integer     :: h,k,l,shsq, lplim, lplimsq, bplplimsq

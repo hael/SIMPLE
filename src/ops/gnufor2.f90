@@ -959,7 +959,7 @@ contains
         character(len=*),optional :: color, terminal, filename, persist, input
         integer                   :: i, j, ierror, ios, file_unit, nx
         character(len=100)        :: data_file_name, command_file_name, yrange, xrange1, xrange2, my_color, &
-            & xtic_start, dxtic, xtic_end, my_pause, my_persist
+            & xtic_start, xtic_end, my_pause, my_persist
         real(kind=4)              :: xmin, xmax, xhist(0:n), yhist(n+1), dx
 
         ! prepare the data

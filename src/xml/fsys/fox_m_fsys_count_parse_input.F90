@@ -33,9 +33,7 @@ contains
     logical, intent(in), optional :: csv
     integer :: num
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: ij, k, s_i, err
 
     character(len=len(s)) :: s2
     logical :: csv_, eof
@@ -142,12 +140,9 @@ contains
   pure function countlogical(s, datatype) result(num)
     character(len=*), intent(in) :: s
     logical, intent(in) :: datatype
-    logical :: dummy_data
     integer :: num
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: ij, k, s_i, err, length
 
 
     s_i = 1
@@ -199,9 +194,7 @@ contains
     integer :: dummy_data
     integer num
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: ij, k, s_i, err, ios, length
 
     s_i = 1
     err = 0
@@ -252,9 +245,7 @@ end function countinteger
     real(sp) :: dummy_data
     integer :: num
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -306,9 +297,7 @@ end function countinteger
     real(dp) :: dummy_data
     integer :: num
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -357,11 +346,10 @@ end function countinteger
   pure function countcomplexsp(s, datatype) result(num)
     character(len=*), intent(in) :: s
     complex(sp), intent(in) :: datatype
-    complex(sp) :: dummy_data
     integer :: num
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: ij, k, s_i, err, ios, length
     real :: r, c
 
 
@@ -459,11 +447,10 @@ end function countinteger
   pure function countcomplexdp(s, datatype) result(num)
     character(len=*), intent(in) :: s
     complex(dp), intent(in) :: datatype
-    complex(dp) :: dummy_data
     integer :: num
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: ij, k, s_i, err, ios, length
     real :: r, c
 
 

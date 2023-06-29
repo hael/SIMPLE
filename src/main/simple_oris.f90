@@ -2827,7 +2827,6 @@ contains
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o_in
         real,        intent(inout) :: mindist
-        real, allocatable :: ows(:)
         real      :: dists(self%n), x
         integer   :: inds(self%n), i, loc(1)
         type(ori) :: o

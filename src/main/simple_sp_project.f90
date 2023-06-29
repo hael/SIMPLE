@@ -2667,7 +2667,7 @@ contains
     subroutine map_ptcls_state_to_cls( self )
         class(sp_project), intent(inout) :: self
         integer, allocatable :: cls_states(:), cls_pops(:)
-        integer :: ncls, icls, iptcl, noris_ptcl2D, ncls2D, ncls3D
+        integer :: icls, iptcl, noris_ptcl2D, ncls2D, ncls3D
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 ) return
         ncls2D = self%os_cls2D%get_noris()
