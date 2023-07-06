@@ -133,7 +133,7 @@ contains
                     ! find best irot for this pair of iref, iptcl
                     call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
                     ! distance & correlation weighing
-                    ptcl_ref_dist = 1. / ( 1. + ptcl_ref_dist )
+                    ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = (self%nrots+1)-(loc-1)
                     if( loc > self%nrots ) loc = loc - self%nrots
@@ -344,24 +344,23 @@ contains
         real(dp),           intent(out)   :: init_xy(2)
         integer,            intent(out)   :: irot
         real,               intent(out)   :: corr_out
-        integer,            parameter     :: NUM_STEPS = 3
-        real(dp) :: x, y, max_corr, corr, stepx,stepy
+        integer,            parameter     :: NUM_STEPS = 5
+        real(dp) :: x, y, corr, stepx, stepy
         real     :: corrs(self%nrots)
         integer  :: loc, ix,iy
         init_xy  = 0.d0
         irot     = 0
-        max_corr = 0._dp
         corr_out = 0.
-        stepx    = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
-        stepy    = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
+        stepx    = real(2 * MINSHIFT,dp)/real(NUM_STEPS,dp)
+        stepy    = real(2 * MINSHIFT,dp)/real(NUM_STEPS,dp)
         do ix = 1,NUM_STEPS
-            x = params_glob%trs + stepx/2. + real(ix-1,dp)*stepx
+            x = MINSHIFT + stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,NUM_STEPS
-                y = params_glob%trs + stepy/2. + real(iy-1,dp)*stepy
+                y = MINSHIFT + stepy/2. + real(iy-1,dp)*stepy
                 call self%pftcc%gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 corr = max(0._dp, real(corrs(loc), dp))
-                if (corr > max_corr) then
+                if (corr > corr_out) then
                     corr_out   = corr
                     irot       = loc
                     init_xy(1) = x
