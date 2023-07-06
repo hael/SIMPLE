@@ -131,6 +131,12 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)
         call build%spproj%write_segment_inside('projinfo')
+        ! randomized oris and zero shifts when ref_reg is on
+        if( params%l_ref_reg )then
+            call build%spproj_field%rnd_oris
+            call build%spproj_field%zero_shifts
+            write(logfhandle,'(A)')   '>>> APPLYING RANDOMIZED ORIS AND ZERO SHIFTS'
+        endif
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
