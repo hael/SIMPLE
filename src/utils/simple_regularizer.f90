@@ -35,7 +35,7 @@ type :: regularizer
     procedure          :: regularize_refs
     procedure          :: regularize_refs_2D
     procedure          :: reset_regs
-    procedure, private :: calc_raw_frc, calc_pspec
+    procedure, private :: calc_raw_frc, calc_pspec, coarse_rot_angle
     procedure, private :: rotate_polar_real, rotate_polar_complex
     generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex
     ! DESTRUCTOR
@@ -382,6 +382,38 @@ contains
             ptcl_ctf_rot(  1:rot-1     ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
         end if
     end subroutine rotate_polar_complex
+
+    ! adapted from coarse_search_opt_angle in simple_pftcc_shsrch_grad
+    subroutine coarse_rot_angle(self, iref, iptcl, init_xy, irot)
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: iref, iptcl
+        real(dp),           intent(out)   :: init_xy(2)
+        integer,            intent(out)   :: irot
+        integer,            parameter     :: NUM_STEPS = 5
+        real(dp) :: x, y, lowest_cost, cost, stepx,stepy
+        real     :: corrs(self%nrots)
+        integer  :: loc, ix,iy
+        init_xy     = 0.d0
+        irot        = 0
+        lowest_cost = huge(lowest_cost)
+        stepx       = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
+        stepy       = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
+        do ix = 1,NUM_STEPS
+            x = params_glob%trs + stepx/2. + real(ix-1,dp)*stepx
+            do iy = 1,NUM_STEPS
+                y = params_glob%trs + stepy/2. + real(iy-1,dp)*stepy
+                call self%pftcc%gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
+                loc  = maxloc(corrs,dim=1)
+                cost = - corrs(loc)
+                if (cost < lowest_cost) then
+                    lowest_cost = cost
+                    irot        = loc
+                    init_xy(1)  = x
+                    init_xy(2)  = y
+                end if
+            end do
+        end do
+    end subroutine coarse_rot_angle
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )
