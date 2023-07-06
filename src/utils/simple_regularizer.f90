@@ -114,13 +114,13 @@ contains
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer  :: i, iref, iptcl, loc, loc_thres, loc_m
-        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
         real     :: euls(3), euls_ref(3), theta
-        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         ! even/odd only when lpset is .false.
         if( params_glob%l_lpset )then
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m) proc_bind(close) schedule(static)
+            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m,cur_corr,init_xy) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
@@ -131,11 +131,9 @@ contains
                     euls(3)       = 0.
                     ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     ! find best irot for this pair of iref, iptcl
-                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                    loc = maxloc(inpl_corrs, dim=1)
-                    if( inpl_corrs(loc) < TINY ) cycle
+                    call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
                     ! distance & correlation weighing
-                    ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                    ptcl_ref_dist = 1. / ( 1. + ptcl_ref_dist )
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = (self%nrots+1)-(loc-1)
                     if( loc > self%nrots ) loc = loc - self%nrots
@@ -340,32 +338,34 @@ contains
     end subroutine rotate_polar_complex
 
     ! adapted from coarse_search_opt_angle in simple_pftcc_shsrch_grad
-    subroutine coarse_rot_angle(self, iref, iptcl, init_xy, irot)
+    subroutine coarse_rot_angle(self, iref, iptcl, init_xy, irot, corr_out)
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: iref, iptcl
         real(dp),           intent(out)   :: init_xy(2)
         integer,            intent(out)   :: irot
-        integer,            parameter     :: NUM_STEPS = 5
-        real(dp) :: x, y, lowest_cost, cost, stepx,stepy
+        real,               intent(out)   :: corr_out
+        integer,            parameter     :: NUM_STEPS = 3
+        real(dp) :: x, y, max_corr, corr, stepx,stepy
         real     :: corrs(self%nrots)
         integer  :: loc, ix,iy
-        init_xy     = 0.d0
-        irot        = 0
-        lowest_cost = huge(lowest_cost)
-        stepx       = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
-        stepy       = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
+        init_xy  = 0.d0
+        irot     = 0
+        max_corr = 0._dp
+        corr_out = 0.
+        stepx    = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
+        stepy    = real(2 * params_glob%trs,dp)/real(NUM_STEPS,dp)
         do ix = 1,NUM_STEPS
             x = params_glob%trs + stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,NUM_STEPS
                 y = params_glob%trs + stepy/2. + real(iy-1,dp)*stepy
                 call self%pftcc%gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
-                cost = - corrs(loc)
-                if (cost < lowest_cost) then
-                    lowest_cost = cost
-                    irot        = loc
-                    init_xy(1)  = x
-                    init_xy(2)  = y
+                corr = max(0._dp, real(corrs(loc), dp))
+                if (corr > max_corr) then
+                    corr_out   = corr
+                    irot       = loc
+                    init_xy(1) = x
+                    init_xy(2) = y
                 end if
             end do
         end do
