@@ -143,26 +143,6 @@ contains
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
-                    ! neighboring reg terms
-                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                    euls_ref = pi / 180. * eulspace%get_euler(iref)
-                    euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
-                    theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
-                    if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
-                        loc_thres = self%nrots * params_glob%arc_thres / 360.
-                        loc       = maxloc(inpl_corrs(1:loc_thres), dim=1)
-                        loc_m     = maxloc(inpl_corrs(self%nrots-loc_thres:self%nrots), dim=1)
-                        if( inpl_corrs(loc_m) > inpl_corrs(loc) ) loc = loc_m
-                        if( inpl_corrs(loc) < TINY ) cycle
-                        ! distance & correlation weighing
-                        ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
-                        loc = (self%nrots+1)-(loc-1)
-                        if( loc > self%nrots ) loc = loc - self%nrots
-                        call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                        call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
-                        self%regs_neigh(:,:,iref)       = self%regs_neigh(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom_neigh(:,:,iref) = self%regs_denom_neigh(:,:,iref) + ctf_rot**2
-                    endif
                 enddo
             enddo
             !$omp end parallel do
@@ -251,38 +231,14 @@ contains
                 elsewhere
                     self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:) / self%regs_denom(:,k,:)
                 endwhere
-                where( abs(self%regs_denom_neigh(:,k,:)) < TINY )
-                    self%regs_neigh(:,k,:) = real(k, dp) * self%regs_neigh(:,k,:)
-                elsewhere
-                    self%regs_neigh(:,k,:) = real(k, dp) * self%regs_neigh(:,k,:) / self%regs_denom_neigh(:,k,:)
-                endwhere
             enddo
             !$omp end do
-            select case( reg_mode_here )
-                case('global')
-                    !$omp do schedule(static)
-                    do iref = 1, self%nrefs
-                        self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
-                        self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
-                    enddo
-                    !$omp end do
-                case('glob_neigh')
-                    !$omp do schedule(static)
-                    do iref = 1, self%nrefs
-                        self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * real(self%regs_neigh(:,:,iref)) + params_glob%eps * real(self%regs(:,:,iref))
-                        self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * real(self%regs_neigh(:,:,iref)) + params_glob%eps * real(self%regs(:,:,iref))
-                    enddo
-                    !$omp end do
-                case('neigh_ref')
-                    !$omp do schedule(static)
-                    do iref = 1, self%nrefs
-                        self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs_neigh(:,:,iref))
-                        self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs_neigh(:,:,iref))
-                    enddo
-                    !$omp end do
-                case DEFAULT
-                    THROW_HARD('regularization mode: '//trim(params_glob%reg_mode)//' unsupported')
-            end select
+            !$omp do schedule(static)
+            do iref = 1, self%nrefs
+                self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
+                self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
+            enddo
+            !$omp end do
             !$omp do schedule(static)
             do k = self%kfromto(1),self%kfromto(2)
                 self%pftcc%pfts_refs_even(:,k,:) = filt(k) * self%pftcc%pfts_refs_even(:,k,:)
