@@ -187,13 +187,7 @@ contains
         if( params_glob%l_ref_reg )then
             select case(trim(params_glob%eps_mode))
                 case('auto')
-                    if( which_iter <= 2*params_glob%reg_iters )then
-                        params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-                        reg_mode_in     = 'glob_neigh'
-                    else
-                        params_glob%eps = min( 1., max(0., 3. - real(which_iter)/params_glob%reg_iters) )
-                        reg_mode_in     = 'neigh_ref'
-                    endif
+                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
                 case('fixed')
                     ! user provided, or default value in simple_parameters
                 case('linear')
@@ -210,11 +204,7 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                if( trim(params_glob%eps_mode) == 'auto' )then
-                    call reg_obj%regularize_refs(reg_mode_in)
-                else
-                    call reg_obj%regularize_refs
-                endif
+                call reg_obj%regularize_refs
             endif
         endif
 
