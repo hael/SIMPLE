@@ -622,9 +622,9 @@ contains
             call cline_cluster2D_stage1%set('ml_reg',     'no')
             call cline_cluster2D_stage1%set('nonuniform', 'no')
             ! reg in the first stage
-            if( params%l_ref_reg )then
-                call cline_cluster2D_stage1%set('ref_reg',   'yes')
-                call cline_cluster2D_stage1%set('eps_mode',  'linear')
+            if( params%l_reg_ref )then
+                call cline_cluster2D_stage1%set('reg_ref',       'yes')
+                call cline_cluster2D_stage1%set('reg_eps_mode',  'linear')
                 call cline_cluster2D_stage1%set('trs',       0.)
                 call cline_cluster2D_stage1%set('reg_iters', real(MAXITS_STAGE1))
             endif
@@ -722,8 +722,8 @@ contains
             ! optional non-uniform filtering
             if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
             ! no reg in second stage
-            if( params%l_ref_reg )then
-                call cline_cluster2D_stage2%set('ref_reg','no')
+            if( params%l_reg_ref )then
+                call cline_cluster2D_stage2%set('reg_ref','no')
             endif
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))

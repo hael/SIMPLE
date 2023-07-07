@@ -68,7 +68,8 @@ type :: parameters
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
-    character(len=3)          :: ref_reg='no'         !< apply objective regularizer to the reference(yes|no){no}
+    character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
+    character(len=3)          :: reg_opt_ang='no'     !< opt angle in the reg terms (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -188,7 +189,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|glob_neigh|neigh_ref){global}
-    character(len=STDLEN)     :: eps_mode='auto'      !< reg eps mode(auto|fixed|linear){auto}
+    character(len=STDLEN)     :: reg_eps_mode='auto'  !< reg eps mode(auto|fixed|linear){auto}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -420,7 +421,8 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_ref_reg      = .false.
+    logical :: l_reg_ref      = .false.
+    logical :: l_reg_opt_ang  = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -553,9 +555,10 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
-        call check_carg('eps_mode',       self%eps_mode)
+        call check_carg('reg_eps_mode',   self%reg_eps_mode)
         call check_carg('randomise',      self%randomise)
-        call check_carg('ref_reg',        self%ref_reg)
+        call check_carg('reg_ref',        self%reg_ref)
+        call check_carg('reg_opt_ang',    self%reg_opt_ang)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -1412,9 +1415,11 @@ contains
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg eps mode
-        if( cline%defined('eps') ) self%eps_mode = 'fixed'
+        if( cline%defined('eps') ) self%reg_eps_mode = 'fixed'
         ! reference regularization
-        self%l_ref_reg = trim(self%ref_reg).eq.'yes'
+        self%l_reg_ref = trim(self%reg_ref).eq.'yes'
+        ! optimal angle in the reg
+        self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
