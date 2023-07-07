@@ -131,7 +131,14 @@ contains
                     euls(3)       = 0.
                     ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     ! find best irot for this pair of iref, iptcl
-                    call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
+                    if( params_glob%l_reg_opt_ang )then
+                        call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
+                    else
+                        call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                        loc      = maxloc(inpl_corrs, dim=1)
+                        cur_corr = inpl_corrs(loc)
+                    endif
+                    if( cur_corr < TINY ) cycle
                     ! distance & correlation weighing
                     ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
