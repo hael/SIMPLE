@@ -482,8 +482,10 @@ contains
             ! no filtering
         else if( params_glob%l_lpset .and. (.not. params_glob%l_reg_ref) )then
             ! Butterworth low-pass filter
-            call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
-            call vol_ptr%apply_filter(filter)
+            ! call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+            ! call vol_ptr%apply_filter(filter)
+            !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
+            call vol_ptr%bp(0., params_glob%lp)
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else

@@ -1381,26 +1381,26 @@ contains
         end select
         ! k-weighted cc option
         select case(trim(self%kweight))
-        case('all')
-            self%l_kweight       = .true. ! class/projection direction selection
-            self%l_kweight_rot   = .true. ! in-plane rotation
-            self%l_kweight_shift = .true. ! shift search
-        case('cls')
-            self%l_kweight       = .true.
-            self%l_kweight_rot   = .false.
-            self%l_kweight_shift = .false.
-        case('inpl')
-            self%l_kweight       = .false.
-            self%l_kweight_rot   = .true.
-            self%l_kweight_shift = .true.
-        case('none')
-            self%l_kweight       = .false.
-            self%l_kweight_rot   = .false.
-            self%l_kweight_shift = .false.
-        case DEFAULT
-            self%l_kweight       = .false.
-            self%l_kweight_rot   = .false.
-            self%l_kweight_shift = .true.
+            case('all')
+                self%l_kweight       = .true. ! class/projection direction selection
+                self%l_kweight_rot   = .true. ! in-plane rotation
+                self%l_kweight_shift = .true. ! shift search
+            case('cls')
+                self%l_kweight       = .true.
+                self%l_kweight_rot   = .false.
+                self%l_kweight_shift = .false.
+            case('inpl')
+                self%l_kweight       = .false.
+                self%l_kweight_rot   = .true.
+                self%l_kweight_shift = .true.
+            case('none')
+                self%l_kweight       = .false.
+                self%l_kweight_rot   = .false.
+                self%l_kweight_shift = .false.
+            case DEFAULT
+                self%l_kweight       = .false.
+                self%l_kweight_rot   = .false.
+                self%l_kweight_shift = .true.
         end select
         select case(trim(self%kweight_chunk))
         case('all','inpl','none','default')
