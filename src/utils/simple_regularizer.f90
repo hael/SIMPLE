@@ -85,7 +85,7 @@ contains
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
                 ! find best irot for this pair of iref, iptcl
-                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs, kweight=params_glob%l_kweight_rot )
                 loc = maxloc(inpl_corrs, dim=1)
                 if( inpl_corrs(loc) < TINY ) cycle
                 weight = inpl_corrs(loc)
@@ -113,14 +113,15 @@ contains
         type(oris),         intent(in)    :: eulspace
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer  :: i, iref, iptcl, loc, loc_thres, loc_m
+        complex(sp),        pointer       :: shmat(:,:)
+        integer  :: i, iref, iptcl, loc, loc_thres, loc_m, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         ! even/odd only when lpset is .false.
         if( params_glob%l_lpset )then
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m,cur_corr,init_xy) proc_bind(close) schedule(static)
+            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m,cur_corr,init_xy,ithr,shmat) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
@@ -134,7 +135,7 @@ contains
                     if( params_glob%l_reg_opt_ang )then
                         call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
                     else
-                        call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                        call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs, kweight=params_glob%l_kweight_rot )
                         loc      = maxloc(inpl_corrs, dim=1)
                         cur_corr = inpl_corrs(loc)
                     endif
@@ -146,6 +147,12 @@ contains
                     if( loc > self%nrots ) loc = loc - self%nrots
                     call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
+                    if( params_glob%l_reg_opt_ang )then
+                        ithr  = omp_get_thread_num() + 1
+                        shmat => self%pftcc%heap_vars(ithr)%shmat
+                        call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
+                        ptcl_ctf_rot = ptcl_ctf_rot * shmat
+                    endif
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                 enddo
@@ -163,7 +170,7 @@ contains
                     euls(3)       = 0.
                     ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     ! find best irot for this pair of iref, iptcl
-                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                    call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs, kweight=params_glob%l_kweight_rot )
                     loc = maxloc(inpl_corrs, dim=1)
                     if( inpl_corrs(loc) < TINY ) cycle
                     ! distance & correlation weighing
@@ -351,20 +358,20 @@ contains
         real(dp),           intent(out)   :: init_xy(2)
         integer,            intent(out)   :: irot
         real,               intent(out)   :: corr_out
-        integer,            parameter     :: NUM_STEPS = 5
+        integer,            parameter     :: NUM_STEPS = 5, REG_MINSHIFT = 1
         real(dp) :: x, y, corr, stepx, stepy
         real     :: corrs(self%nrots)
         integer  :: loc, ix,iy
         init_xy  = 0.d0
         irot     = 0
         corr_out = 0.
-        stepx    = real(2 * MINSHIFT,dp)/real(NUM_STEPS,dp)
-        stepy    = real(2 * MINSHIFT,dp)/real(NUM_STEPS,dp)
+        stepx    = real(2 * REG_MINSHIFT,dp)/real(NUM_STEPS,dp)
+        stepy    = real(2 * REG_MINSHIFT,dp)/real(NUM_STEPS,dp)
         do ix = 1,NUM_STEPS
-            x = MINSHIFT + stepx/2. + real(ix-1,dp)*stepx
+            x = -REG_MINSHIFT + stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,NUM_STEPS
-                y = MINSHIFT + stepy/2. + real(iy-1,dp)*stepy
-                call self%pftcc%gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
+                y = -REG_MINSHIFT + stepy/2. + real(iy-1,dp)*stepy
+                call self%pftcc%reg_gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 corr = max(0._dp, real(corrs(loc), dp))
                 if (corr > corr_out) then
