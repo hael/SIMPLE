@@ -195,6 +195,7 @@ contains
                 case DEFAULT
                     THROW_HARD('reg eps mode: '//trim(params_glob%reg_eps_mode)//' unsupported')
             end select
+            pftcc%with_ctf = .true.
             if( params_glob%eps > TINY )then
                 call reg_obj%reset_regs
                 ! Batch loop
@@ -204,8 +205,9 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call reg_obj%regularize_refs
+                call reg_obj%regularize_refs_test
             endif
+            pftcc%with_ctf = .false.
         endif
 
         ! Batch loop
@@ -533,7 +535,7 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! compute regularization terms
-        call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+        call reg_obj%ref_reg_cc_test(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
