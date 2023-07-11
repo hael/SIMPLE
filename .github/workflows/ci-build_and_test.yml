@@ -1,0 +1,183 @@
+name: Build & Run SIMPLE Tests 
+
+on:
+  workflow_dispatch:
+    branches: [ continuous-integration ]
+  push:
+    branches: [ continuous-integration ]
+
+jobs:
+  Build_and_Test_Linux:
+    name: Build and Test SIMPLE on Linux Machine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies 
+        run: |
+             sudo apt-get update
+             echo "Install Basic Dependencies"
+             sudo apt-get -y install cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc openmpi-bin openmpi-doc libopenmpi-dev 
+             echo "Install FFTW"
+             wget ftp://ftp.fftw.org/pub/fftw/fftw-3.3.8.tar.gz
+             tar zxvf fftw-3.3.8.tar.gz
+             cd fftw-3.3.8
+             ./bootstrap.sh --prefix=/usr/local
+             make -j
+             sudo make install
+             make distclean
+             ./bootstrap.sh --prefix=/usr/local --enable-single
+             make -j
+             sudo make install
+             make distclean
+             cd ..
+             echo "Intall EMAN2"
+             wget https://cryoem.bcm.edu/cryoem/static/software/release-2.99.47/eman2.99.47_sphire1.4_sparx.linux64.sh 
+             echo "eman2" | bash eman2.99.47_sphire1.4_sparx.linux64.sh 
+             eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
+             
+
+      - name: Install SIMPLE
+        run: |
+             mkdir -p build
+             cd build
+             cmake -DGUI=OFF ..
+             make -j install
+             export SIMPLE_EMAIL="my.name@uni.edu"
+             export SIMPLE_QSYS="local"
+             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+
+      - name: Test SIMPLE
+        run: |
+             export SIMPLE_EMAIL="my.name@uni.edu"
+             export SIMPLE_QSYS="local"
+             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+             eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
+             echo "-------------------- TEST INSTALL -------------------------"
+             simple_test_install 
+             echo "-------------------- TEST ANGRES -------------------------"
+             simple_test_angres
+             echo "-------------------- TEST ANSI COLORS -------------------------"
+             simple_test_ansi_colors
+             echo "-------------------- TEST BINORIS -------------------------"
+             simple_test_binoris
+             echo "-------------------- TEST BOUNDS FROM MASK3D -------------------------"
+             simple_test_bounds_from_mask3D
+             echo "-------------------- TEST CONT IN PLANE -------------------------"
+             simple_test_cont_inplane
+             echo "-------------------- TEST COORS TO WEIGHTS -------------------------"
+             simple_test_corrs2weights
+             echo "-------------------- TEST CTF -------------------------"
+             simple_test_ctf
+             echo "-------------------- TEST EULER -------------------------"
+             simple_test_euler
+             echo "-------------------- TEST EXTR FRAC -------------------------"
+             simple_test_extr_frac
+             echo "-------------------- TEST FFTW PLAN MANY -------------------------"
+             simple_test_fftw_plan_many_1D
+             echo "-------------------- TEST FILE INPUT OUTPUT-------------------------"
+             simple_test_fileio
+             echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
+             simple_test_io_parallel
+             echo "-------------------- TEST FPLANE PROJECTION -------------------------"
+             simple_test_fplane_proj
+             echo "-------------------- TEST GRAPHENE MASK -------------------------"
+             simple_test_graphene_mask
+             echo "-------------------- TEST IMAGE FILE -------------------------"
+             simple_test_imgfile
+             echo "-------------------- TEST INSIDE WRITE -------------------------"
+             simple_test_inside_write
+             echo "-------------------- TEST INSTALL -------------------------"
+             simple_test_install
+             echo "-------------------- TEST INPUT OUTPUT -------------------------"
+             simple_test_io
+             echo "-------------------- TEST LPLIMS -------------------------"
+             simple_test_lplims
+             echo "-------------------- TEST MASK -------------------------"
+             simple_test_mask
+             echo "-------------------- TEST MASKNLOC -------------------------"
+             simple_test_maxnloc
+             echo "-------------------- TEST MEMORY USE -------------------------"
+             simple_test_memuse
+             echo "-------------------- TEST MULTIMODAL -------------------------"
+             simple_test_multinomal
+             echo "-------------------- TEST NEIGH -------------------------"
+             simple_test_neigh
+             echo "-------------------- TEST OPENMP -------------------------"
+             simple_test_openmp
+             echo "-------------------- TEST OPT GENERIC -------------------------"
+             simple_test_opt_genetic
+             echo "-------------------- TEST ORDER CORR -------------------------"
+             simple_test_order_corr
+             echo "-------------------- TEST ORI -------------------------"
+             simple_test_ori
+             echo "-------------------- TEST OTSU -------------------------"
+             simple_test_otsu
+             echo "-------------------- TEST PHASE CORR -------------------------"
+             simple_test_phasecorr
+             echo "-------------------- TEST PHASEPLATE CORRECT FSC -------------------------"
+             simple_test_phaseplate_correct_fsc
+             echo "-------------------- TEST RAD MED -------------------------"
+             simple_test_rad_med
+             echo "-------------------- TEST RANK WEIGHTS -------------------------"
+             simple_test_rank_weights
+             echo "-------------------- TEST REPLACE SUBSTR -------------------------"
+             simple_test_replace_substr
+             echo "-------------------- TEST SERIALIZE -------------------------"
+             simple_test_serialize
+             echo "-------------------- TEST SIMD -------------------------"
+             simple_test_simd
+             echo "-------------------- TEST SRCH -------------------------"
+             simple_test_srch
+             echo "-------------------- TEST STACK -------------------------"
+             simple_test_stack
+             echo "-------------------- TEST START FILE -------------------------"
+             simple_test_starfile
+             echo "-------------------- TEST STRINGMATCH -------------------------"
+             simple_test_stringmatch
+             echo "-------------------- TEST SYM -------------------------"
+             simple_test_sym
+             echo "-------------------- TEST TSERIES NEIGH -------------------------"
+             simple_test_tseries_neigh
+             echo "-------------------- TEST UNIFORM EULER -------------------------"
+             simple_test_uniform_euler
+             echo "-------------------- TEST UNIFORM ROT -------------------------"
+             simple_test_uniform_rot
+             echo "-------------------- TEST UNITS -------------------------"
+             simple_test_units
+         
+
+#  Build_and_Test_MacOS:
+#    name: Build and Test SIMPLE on MacOS x86_64
+#    runs-on: macos-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#
+#      - name: Install Dependencies 
+#        run: |
+#             uname -a
+#             echo "Install Dependencies"
+#             brew update
+#             brew install cmake gcc fftw libtiff jbigkit sqlite 
+#             brew upgrade
+#             echo "Intall EMAN2"
+#             wget https://cryoem.bcm.edu/cryoem/static/software/release-2.99.47/eman2.99.47_sphire1.4_sparx.MacOS.sh
+#             echo "eman2" | bash eman2.99.47_sphire1.4_sparx.MacOS.sh 
+#             eval "$($GITHUB_WORKSPACE/eman2/bin/conda shell.bash hook)" 
+#
+#             which gfortran
+#     
+#      - name: Install SIMPLE
+#        run: |
+#             mkdir -p build
+#             cd build
+#             cmake -DGUI=OFF ..
+#             make -j install
+#             export SIMPLE_EMAIL="my.name@uni.edu"
+#             export SIMPLE_QSYS="local"
+#             export SIMPLE_PATH=$GITHUB_WORKSPACE/build
+#             export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+
+#             #xcode-select --install
