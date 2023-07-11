@@ -376,6 +376,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
+    real    :: reg_minshift=5.     !< shift limit in reg scheme
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -776,6 +777,7 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
+        call check_rarg('reg_minshift',   self%reg_minshift)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
