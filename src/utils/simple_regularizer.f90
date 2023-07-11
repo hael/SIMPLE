@@ -449,19 +449,20 @@ contains
         real(dp),           intent(out)   :: init_xy(2)
         integer,            intent(out)   :: irot
         real,               intent(out)   :: corr_out
-        integer,            parameter     :: NUM_STEPS = 5, REG_MINSHIFT = 1
+        integer,            parameter     :: NUM_STEPS = 5
         real(dp) :: x, y, corr, stepx, stepy
-        real     :: corrs(self%nrots)
-        integer  :: loc, ix,iy
-        init_xy  = 0.d0
-        irot     = 0
-        corr_out = 0.
-        stepx    = real(2 * REG_MINSHIFT,dp)/real(NUM_STEPS,dp)
-        stepy    = real(2 * REG_MINSHIFT,dp)/real(NUM_STEPS,dp)
+        real     :: corrs(self%nrots), reg_minsh
+        integer  :: loc, ix, iy
+        init_xy   = 0.d0
+        irot      = 0
+        corr_out  = 0.
+        reg_minsh = params_glob%reg_minshift
+        stepx     = real(2 * reg_minsh,dp)/real(NUM_STEPS,dp)
+        stepy     = real(2 * reg_minsh,dp)/real(NUM_STEPS,dp)
         do ix = 1,NUM_STEPS
-            x = -REG_MINSHIFT + stepx/2. + real(ix-1,dp)*stepx
+            x = -reg_minsh + stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,NUM_STEPS
-                y = -REG_MINSHIFT + stepy/2. + real(iy-1,dp)*stepy
+                y = -reg_minsh + stepy/2. + real(iy-1,dp)*stepy
                 call self%pftcc%reg_gencorrs(iref, iptcl, real([x,y]), corrs, kweight=params_glob%l_kweight_rot)
                 loc  = maxloc(corrs,dim=1)
                 corr = max(0._dp, real(corrs(loc), dp))
