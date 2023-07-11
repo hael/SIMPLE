@@ -245,19 +245,13 @@ contains
                 enddo
                 !$omp end parallel do
             case('neigh_ref')
-                !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,cur_corr,init_xy,ithr,shmat,theta) proc_bind(close) schedule(static)
+                !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,iptcl,inpl_corrs,loc,ptcl_ctf_rot,cur_corr,init_xy,ithr,shmat,theta) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     do i = 1, self%pftcc%nptcls
                         iptcl    = glob_pinds(i)
-                        euls_ref = eulspace%get_euler(iref)
-                        euls     = ptcl_eulspace%get_euler(iptcl)
-                        ! projection direction distance, euler_dist could be used instead
-                        euls_ref(3)   = 0.
-                        euls(3)       = 0.
-                        ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                        euls_ref      = pi / 180. * eulspace%get_euler(iref)
-                        euls          = pi / 180. * ptcl_eulspace%get_euler(iptcl)
-                        theta         = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
+                        euls_ref = pi / 180. * eulspace%get_euler(iref)
+                        euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
+                        theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                         if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
                             ! find best irot for this pair of iref, iptcl
                             if( params_glob%l_reg_opt_ang )then
@@ -268,8 +262,6 @@ contains
                                 cur_corr = inpl_corrs(loc)
                             endif
                             if( cur_corr < TINY ) cycle
-                            ! distance & correlation weighing
-                            ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
                             ! computing the reg terms as the gradients w.r.t 2D references of the probability
                             loc = (self%nrots+1)-(loc-1)
                             if( loc > self%nrots ) loc = loc - self%nrots
@@ -280,7 +272,7 @@ contains
                                 call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
                                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
                             endif
-                            self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                            self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot
                         endif
                     enddo
                 enddo
