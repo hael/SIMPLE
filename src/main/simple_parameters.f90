@@ -70,6 +70,7 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
     character(len=3)          :: reg_opt_ang='no'     !< opt angle in the reg terms (yes|no){no}
+    character(len=3)          :: reg_init='yes'       !< randomized oris and zero shifts in the reg scheme (yes|no){yes}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -424,6 +425,7 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
     logical :: l_reg_opt_ang  = .false.
+    logical :: l_reg_init     = .true.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -560,6 +562,7 @@ contains
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
+        call check_carg('reg_init',       self%reg_init)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -1422,6 +1425,8 @@ contains
         self%l_reg_ref = trim(self%reg_ref).eq.'yes'
         ! optimal angle in the reg
         self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
+        ! randomized ories and zero shifts in reg shceme
+        self%l_reg_init = trim(self%reg_init).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
