@@ -20,6 +20,7 @@ type :: regularizer
     real(dp), allocatable :: regs_even(:,:,:)        !< -"-, reg terms, even
     real(dp), allocatable :: regs_odd(:,:,:)         !< -"-, reg terms, odd
     real(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
+    integer,  allocatable :: regs_cnt(:)             !< -"-, reg terms neighbor count
     real(dp), allocatable :: regs_neigh(:,:,:)       !< -"-, neighborhood reg terms
     real(dp), allocatable :: regs_denom_even(:,:,:)  !< -"-, reg denom, even
     real(dp), allocatable :: regs_denom_odd(:,:,:)   !< -"-, reg denom, odd
@@ -62,10 +63,12 @@ contains
                 &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_neigh(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_cnt(self%nrefs),&
                 &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs_even        = 0.d0
         self%regs_odd         = 0.d0
         self%regs             = 0.d0
+        self%regs_cnt         = 0
         self%regs_neigh       = 0.d0
         self%regs_denom_even  = 0.d0
         self%regs_denom_odd   = 0.d0
@@ -241,6 +244,7 @@ contains
                             ptcl_ctf_rot = ptcl_ctf_rot * shmat
                         endif
                         self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                        self%regs_cnt(iref) = self%regs_cnt(iref) + 1
                     enddo
                 enddo
                 !$omp end parallel do
@@ -273,6 +277,7 @@ contains
                                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
                             endif
                             self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot
+                            self%regs_cnt(iref) = self%regs_cnt(iref) + 1
                         endif
                     enddo
                 enddo
@@ -393,8 +398,8 @@ contains
         !$omp end do
         !$omp do schedule(static)
         do iref = 1, self%nrefs
-            self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
-            self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
+            self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
+            self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
         enddo
         !$omp end do
         !$omp end parallel
@@ -406,6 +411,7 @@ contains
         self%regs_even        = 0._dp
         self%regs_odd         = 0._dp
         self%regs             = 0._dp
+        self%regs_cnt         = 0
         self%regs_neigh       = 0._dp
         self%regs_denom_even  = 0._dp
         self%regs_denom_odd   = 0._dp
@@ -545,6 +551,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs_even,self%regs_odd,self%regs_denom_even,self%regs_denom_odd,self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh)
+        deallocate(self%regs_even,self%regs_odd,self%regs_denom_even,self%regs_denom_odd,&
+                  &self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh,self%regs_cnt)
     end subroutine kill
 end module simple_regularizer
