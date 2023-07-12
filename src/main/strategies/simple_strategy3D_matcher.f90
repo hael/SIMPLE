@@ -69,7 +69,6 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
-        character(len=STDLEN) :: reg_mode_in
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
@@ -185,28 +184,16 @@ contains
 
         ! ref regularization
         if( params_glob%l_reg_ref )then
-            select case(trim(params_glob%reg_eps_mode))
-                case('auto')
-                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-                case('fixed')
-                    ! user provided, or default value in simple_parameters
-                case('linear')
-                    params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
-                case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_eps_mode)//' unsupported')
-            end select
             pftcc%with_ctf = .true.
-            if( params_glob%eps > TINY )then
-                call reg_obj%reset_regs
-                ! Batch loop
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-                enddo
-                call reg_obj%regularize_refs_test
-            endif
+            call reg_obj%reset_regs
+            ! Batch loop
+            do ibatch=1,nbatches
+                batch_start = batches(ibatch,1)
+                batch_end   = batches(ibatch,2)
+                batchsz     = batch_end - batch_start + 1
+                call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+            enddo
+            call reg_obj%regularize_refs_test
             pftcc%with_ctf = .false.
         endif
 

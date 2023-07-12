@@ -189,8 +189,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|glob_neigh|neigh_ref){global}
-    character(len=STDLEN)     :: reg_eps_mode='auto'  !< reg eps mode(auto|fixed|linear){auto}
+    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh){global}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -558,7 +557,6 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
-        call check_carg('reg_eps_mode',   self%reg_eps_mode)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
@@ -1419,8 +1417,6 @@ contains
         case DEFAULT
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! reg eps mode
-        if( cline%defined('eps') ) self%reg_eps_mode = 'fixed'
         ! reference regularization
         self%l_reg_ref = trim(self%reg_ref).eq.'yes'
         ! optimal angle in the reg
