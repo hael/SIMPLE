@@ -5,7 +5,6 @@ use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 use simple_ctf,        only: ctf
 use simple_image,      only: image, image_ptr
-use simple_imgfile,    only: imgfile
 use simple_stack_io,   only: stack_io
 use simple_euclid_sigma2
 use simple_fsc
@@ -1191,12 +1190,12 @@ contains
 
     !>  \brief  re-generates the object after distributed execution
     subroutine cavger_assemble_sums_from_parts
+        use simple_imgfile, only: imgfile
         complex(kind=c_float_complex), pointer :: cmat_ptr1(:,:,:) => null()
         complex(kind=c_float_complex), pointer :: cmat_ptr2(:,:,:) => null()
         complex(kind=c_float_complex), pointer :: cmat_ptr3(:,:,:) => null()
         complex(kind=c_float_complex), pointer :: cmat_ptr4(:,:,:) => null()
         real(kind=c_float),            pointer :: rmat_ptr(:,:,:)  => null()  !< image pixels/voxels (in data)
-        logical, parameter            :: SERIAL_READ = .false.
         integer(timer_int_kind)       ::  t_init,  t_io,  t_workshare_sum,  t_set_sums,  t_merge_eos_and_norm,  t_tot
         real(timer_int_kind)          :: rt_init, rt_io, rt_workshare_sum, rt_set_sums, rt_merge_eos_and_norm, rt_tot
         complex,          allocatable :: csums(:,:,:,:)
@@ -1242,27 +1241,20 @@ contains
             allocate(cao, source='cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cto, source='ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            if( SERIAL_READ )then 
-                call imgs4read(1)%read(cae)
-                call imgs4read(2)%read(cao)
-                call imgs4read(3)%read(cte)
-                call imgs4read(4)%read(cto)
-            else
-                call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                call ioimg(4)%open(cto, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(4)
-                do i = 1, 4
-                    call imgs4read(i)%get_rmat_ptr(rmat_ptr)
-                    call ioimg(i)%rSlices(1,ldim_here(1),rmat_ptr,is_mrc=.true.)
-                end do
-                !$omp end parallel do
-                call ioimg(1)%close
-                call ioimg(2)%close
-                call ioimg(3)%close
-                call ioimg(4)%close
-            endif
+            call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+            call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+            call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+            call ioimg(4)%open(cto, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+            !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(4)
+            do i = 1, 4
+                call imgs4read(i)%get_rmat_ptr(rmat_ptr)
+                call ioimg(i)%rSlices(1,ldim_here(1),rmat_ptr,is_mrc=.true.)
+            end do
+            !$omp end parallel do
+            call ioimg(1)%close
+            call ioimg(2)%close
+            call ioimg(3)%close
+            call ioimg(4)%close
             deallocate(cae, cao, cte, cto)
             if( L_BENCH_GLOB )then
                 rt_io = rt_io + toc(t_io)
@@ -1299,27 +1291,20 @@ contains
                 allocate(cao, source='cavgs_odd_wfilt_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
                 allocate(cte, source='ctfsqsums_even_wfilt_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
                 allocate(cto, source='ctfsqsums_odd_wfilt_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-                if( SERIAL_READ )then 
-                    call imgs4read(1)%read(cae)
-                    call imgs4read(2)%read(cao)
-                    call imgs4read(3)%read(cte)
-                    call imgs4read(4)%read(cto)
-                else
-                    call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                    call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                    call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                    call ioimg(4)%open(cto, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
-                    !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(4)
-                    do i = 1, 4
-                        call imgs4read(i)%get_rmat_ptr(rmat_ptr)
-                        call ioimg(i)%rSlices(1,ldim_here(1),rmat_ptr,is_mrc=.true.)
-                    end do
-                    !$omp end parallel do
-                    call ioimg(1)%close
-                    call ioimg(2)%close
-                    call ioimg(3)%close
-                    call ioimg(4)%close
-                endif
+                call ioimg(1)%open(cae, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+                call ioimg(2)%open(cao, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+                call ioimg(3)%open(cte, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+                call ioimg(4)%open(cto, ldim_here, smpd, formatchar='M', readhead=.false., rwaction='read')
+                !$omp parallel do default(shared) private(i,rmat_ptr) schedule(static) num_threads(4)
+                do i = 1, 4
+                    call imgs4read(i)%get_rmat_ptr(rmat_ptr)
+                    call ioimg(i)%rSlices(1,ldim_here(1),rmat_ptr,is_mrc=.true.)
+                end do
+                !$omp end parallel do
+                call ioimg(1)%close
+                call ioimg(2)%close
+                call ioimg(3)%close
+                call ioimg(4)%close
                 deallocate(cae, cao, cte, cto)
                 if( L_BENCH_GLOB )then
                     rt_io = rt_io + toc(t_io)
