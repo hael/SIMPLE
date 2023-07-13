@@ -71,7 +71,7 @@ contains
         integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, reg_eps
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
@@ -184,17 +184,23 @@ contains
 
         ! ref regularization
         if( params_glob%l_reg_ref )then
-            pftcc%with_ctf = .true.
-            call reg_obj%reset_regs
-            ! Batch loop
-            do ibatch=1,nbatches
-                batch_start = batches(ibatch,1)
-                batch_end   = batches(ibatch,2)
-                batchsz     = batch_end - batch_start + 1
-                call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-            enddo
-            call reg_obj%regularize_refs_test
-            pftcc%with_ctf = .false.
+            reg_eps = 0.
+            if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
+            if( reg_eps < 1. )then
+                call reg_obj%reset_regs
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                if( trim(params_glob%reg_mode) .eq. 'sto' )then
+                    call reg_obj%regularize_refs( min(1., reg_eps) )
+                else
+                    call reg_obj%regularize_refs
+                endif
+            endif
         endif
 
         ! Batch loop
@@ -522,7 +528,7 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! compute regularization terms
-        call reg_obj%ref_reg_cc_test(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+        call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
