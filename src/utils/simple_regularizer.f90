@@ -32,9 +32,7 @@ type :: regularizer
     procedure          :: new
     ! PROCEDURES
     procedure          :: ref_reg_cc
-    procedure          :: ref_reg_cc_test
     procedure          :: regularize_refs
-    procedure          :: regularize_refs_test
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec, coarse_rot_angle
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
@@ -83,265 +81,83 @@ contains
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
-        integer  :: i, iref, iptcl, loc, loc_thres, loc_m, ithr
+        integer  :: i, iref, iptcl, loc, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        ! even/odd only when lpset is .false.
-        if( params_glob%l_lpset )then
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m,cur_corr,init_xy,ithr,shmat) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do i = 1, self%pftcc%nptcls
-                    iptcl    = glob_pinds(i)
-                    euls_ref = eulspace%get_euler(iref)
-                    euls     = ptcl_eulspace%get_euler(iptcl)
-                    ! projection direction distance, euler_dist could be used instead
-                    euls_ref(3)   = 0.
-                    euls(3)       = 0.
-                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                    ! find best irot for this pair of iref, iptcl
-                    if( params_glob%l_reg_opt_ang )then
-                        call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
-                    else
-                        call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs )
-                        loc      = maxloc(inpl_corrs, dim=1)
-                        cur_corr = inpl_corrs(loc)
-                    endif
-                    if( cur_corr < TINY ) cycle
-                    ! distance & correlation weighing
-                    ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
-                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                    loc = (self%nrots+1)-(loc-1)
-                    if( loc > self%nrots ) loc = loc - self%nrots
-                    call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                    call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
-                    if( params_glob%l_reg_opt_ang )then
-                        ithr  = omp_get_thread_num() + 1
-                        shmat => self%pftcc%heap_vars(ithr)%shmat
-                        call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
-                        ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                    endif
-                    self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do i = 1, self%pftcc%nptcls
-                    iptcl    = glob_pinds(i)
-                    euls_ref = eulspace%get_euler(iref)
-                    euls     = ptcl_eulspace%get_euler(iptcl)
-                    ! projection direction distance, euler_dist could be used instead
-                    euls_ref(3)   = 0.
-                    euls(3)       = 0.
-                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                    ! find best irot for this pair of iref, iptcl
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%pftcc%nptcls
+                iptcl    = glob_pinds(i)
+                euls_ref = eulspace%get_euler(iref)
+                euls     = ptcl_eulspace%get_euler(iptcl)
+                ! projection direction distance, euler_dist could be used instead
+                euls_ref(3)   = 0.
+                euls(3)       = 0.
+                ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
+                ! find best irot for this pair of iref, iptcl
+                if( params_glob%l_reg_opt_ang )then
+                    call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
+                else
                     call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs )
-                    loc = maxloc(inpl_corrs, dim=1)
-                    if( inpl_corrs(loc) < TINY ) cycle
-                    ! distance & correlation weighing
-                    ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
-                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                    loc = (self%nrots+1)-(loc-1)
-                    if( loc > self%nrots ) loc = loc - self%nrots
-                    call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                    call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
-                    if( self%pftcc%iseven(i) )then
-                        self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
-                    else
-                        self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
-                    endif
-                enddo
+                    loc      = maxloc(inpl_corrs, dim=1)
+                    cur_corr = inpl_corrs(loc)
+                endif
+                if( cur_corr < TINY ) cycle
+                ! distance & correlation weighing
+                ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
+                if( params_glob%l_reg_opt_ang )then
+                    ithr  = omp_get_thread_num() + 1
+                    shmat => self%pftcc%heap_vars(ithr)%shmat
+                    call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
+                    ptcl_ctf_rot = ptcl_ctf_rot * shmat
+                endif
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                self%regs_cnt(iref)       = self%regs_cnt(iref) + 1
             enddo
-            !$omp end parallel do
-        endif
+        enddo
+        !$omp end parallel do
     end subroutine ref_reg_cc
 
-    ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine ref_reg_cc_test( self, eulspace, ptcl_eulspace, glob_pinds )
-        use simple_oris
+    subroutine regularize_refs( self, ref_freq_in )
         class(regularizer), intent(inout) :: self
-        type(oris),         intent(in)    :: eulspace
-        type(oris),         intent(in)    :: ptcl_eulspace
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        complex(sp),        pointer       :: shmat(:,:)
-        integer  :: i, iref, iptcl, loc, ithr
-        real     :: inpl_corrs(self%nrots), ptcl_ref_dist, cur_corr, theta
-        real     :: euls(3), euls_ref(3)
-        real(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
-        select case( trim(params_glob%reg_mode) )
-            case('global')
-                !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,cur_corr,init_xy,ithr,shmat) proc_bind(close) schedule(static)
-                do iref = 1, self%nrefs
-                    do i = 1, self%pftcc%nptcls
-                        iptcl    = glob_pinds(i)
-                        euls_ref = eulspace%get_euler(iref)
-                        euls     = ptcl_eulspace%get_euler(iptcl)
-                        ! projection direction distance, euler_dist could be used instead
-                        euls_ref(3)   = 0.
-                        euls(3)       = 0.
-                        ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                        ! find best irot for this pair of iref, iptcl
-                        if( params_glob%l_reg_opt_ang )then
-                            call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
-                        else
-                            call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs )
-                            loc      = maxloc(inpl_corrs, dim=1)
-                            cur_corr = inpl_corrs(loc)
-                        endif
-                        if( cur_corr < TINY ) cycle
-                        ! distance & correlation weighing
-                        ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
-                        ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                        loc = (self%nrots+1)-(loc-1)
-                        if( loc > self%nrots ) loc = loc - self%nrots
-                        call self%rotate_polar(self%pftcc%pfts_ptcls(:,:,i), ptcl_ctf_rot, loc)
-                        if( params_glob%l_reg_opt_ang )then
-                            ithr  = omp_get_thread_num() + 1
-                            shmat => self%pftcc%heap_vars(ithr)%shmat
-                            call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
-                            ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                        endif
-                        self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                        self%regs_cnt(iref) = self%regs_cnt(iref) + 1
-                    enddo
-                enddo
-                !$omp end parallel do
-            case('neigh')
-                !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,iptcl,inpl_corrs,loc,ptcl_ctf_rot,cur_corr,init_xy,ithr,shmat,theta) proc_bind(close) schedule(static)
-                do iref = 1, self%nrefs
-                    do i = 1, self%pftcc%nptcls
-                        iptcl    = glob_pinds(i)
-                        euls_ref = pi / 180. * eulspace%get_euler(iref)
-                        euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
-                        theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
-                        if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
-                            ! find best irot for this pair of iref, iptcl
-                            if( params_glob%l_reg_opt_ang )then
-                                call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
-                            else
-                                call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs )
-                                loc      = maxloc(inpl_corrs, dim=1)
-                                cur_corr = inpl_corrs(loc)
-                            endif
-                            if( cur_corr < TINY ) cycle
-                            ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                            loc = (self%nrots+1)-(loc-1)
-                            if( loc > self%nrots ) loc = loc - self%nrots
-                            call self%rotate_polar(self%pftcc%pfts_ptcls(:,:,i), ptcl_ctf_rot, loc)
-                            if( params_glob%l_reg_opt_ang )then
-                                ithr  = omp_get_thread_num() + 1
-                                shmat => self%pftcc%heap_vars(ithr)%shmat
-                                call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
-                                ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                            endif
-                            self%regs(:,:,iref) = self%regs(:,:,iref) + ptcl_ctf_rot
-                            self%regs_cnt(iref) = self%regs_cnt(iref) + 1
-                        endif
-                    enddo
-                enddo
-                !$omp end parallel do
-        end select
-    end subroutine ref_reg_cc_test
-
-    subroutine regularize_refs( self, reg_mode_in )
-        use simple_opt_filter, only: butterworth_filter
-        class(regularizer),              intent(inout) :: self
-        character(len=STDLEN), optional, intent(in)    :: reg_mode_in
-        character(len=STDLEN) :: reg_mode_here
-        integer :: iref, k, find
-        real    :: filt(self%kfromto(1):self%kfromto(2))
-        reg_mode_here = trim(params_glob%reg_mode)
-        if( present(reg_mode_in) ) reg_mode_here = reg_mode_in
-        ! even/odd only when lpset is .false.
-        if( params_glob%l_lpset )then
-            ! generating butterworth filter at cut-off = lp
-            find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
-            call butterworth_filter(find, self%kfromto, filt)
-            !$omp parallel default(shared) private(k,iref) proc_bind(close)
-            !$omp do schedule(static)
-            do k = self%kfromto(1),self%kfromto(2)
-                where( abs(self%regs_denom(:,k,:)) < TINY )
-                    self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:)
-                elsewhere
-                    self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:) / self%regs_denom(:,k,:)
-                endwhere
-            enddo
-            !$omp end do
-            !$omp do schedule(static)
-            do iref = 1, self%nrefs
-                self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
-                self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs(:,:,iref))
-            enddo
-            !$omp end do
-            !$omp do schedule(static)
-            do k = self%kfromto(1),self%kfromto(2)
-                self%pftcc%pfts_refs_even(:,k,:) = filt(k) * self%pftcc%pfts_refs_even(:,k,:)
-                self%pftcc%pfts_refs_odd( :,k,:) = filt(k) * self%pftcc%pfts_refs_odd( :,k,:)
-            enddo
-            !$omp end do
-            !$omp end parallel
-        else
-            !$omp parallel default(shared) private(k,iref,filt) proc_bind(close)
-            !$omp do schedule(static)
-            do k = self%kfromto(1),self%kfromto(2)
-                where( abs(self%regs_denom_even(:,k,:)) < TINY )
-                    self%regs_even(:,k,:) = real(k, dp) * self%regs_even(:,k,:)
-                elsewhere
-                    self%regs_even(:,k,:) = real(k, dp) * self%regs_even(:,k,:) / self%regs_denom_even(:,k,:)
-                endwhere
-                where( abs(self%regs_denom_odd(:,k,:)) < TINY )
-                    self%regs_odd(:,k,:) = real(k, dp) * self%regs_odd(:,k,:)
-                elsewhere
-                    self%regs_odd(:,k,:) = real(k, dp) * self%regs_odd(:,k,:) / self%regs_denom_odd(:,k,:)
-                endwhere
-            enddo
-            !$omp end do
-            !$omp do schedule(static)
-            do iref = 1, self%nrefs
-                self%pftcc%pfts_refs_even(:,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_even(:,:,iref) + params_glob%eps * real(self%regs_even(:,:,iref))
-                self%pftcc%pfts_refs_odd( :,:,iref) = (1. - params_glob%eps) * self%pftcc%pfts_refs_odd( :,:,iref) + params_glob%eps * real(self%regs_odd(:,:,iref))
-            enddo
-            !$omp end do
-            ! applying frc filter
-            !$omp do schedule(static)
-            do iref = 1, self%nrefs
-                call self%calc_raw_frc(self%pftcc%pfts_refs_even(:,:,iref), self%pftcc%pfts_refs_odd(:,:,iref), filt)
-                do k = self%kfromto(1),self%kfromto(2)
-                    self%pftcc%pfts_refs_even(:,k,iref) = filt(k) * self%pftcc%pfts_refs_even(:,k,iref)
-                    self%pftcc%pfts_refs_odd( :,k,iref) = filt(k) * self%pftcc%pfts_refs_odd( :,k,iref)
-                enddo
-            enddo
-            !$omp end do
-            !$omp end parallel
-        endif
-        call self%pftcc%memoize_refs
-    end subroutine regularize_refs
-    
-    subroutine regularize_refs_test( self )
-        class(regularizer), intent(inout) :: self
+        real, optional,     intent(in)    :: ref_freq_in
         integer :: iref, k
+        real    :: ref_freq
+        ref_freq = 0.
+        if( present(ref_freq_in) ) ref_freq = ref_freq_in
         !$omp parallel default(shared) private(k,iref) proc_bind(close)
         !$omp do schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:)
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:)
+            elsewhere
+                self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:) / self%regs_denom(:,k,:)
+            endwhere
         enddo
         !$omp end do
         !$omp do schedule(static)
         do iref = 1, self%nrefs
-            self%pftcc%pfts_refs_even(:,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
-            self%pftcc%pfts_refs_odd( :,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
+            if( ran3() < ref_freq )then
+                ! keep the refs
+            else
+                ! using the reg terms as refs
+                self%pftcc%pfts_refs_even(:,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
+                self%pftcc%pfts_refs_odd( :,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
+            endif
         enddo
         !$omp end do
         !$omp end parallel
         call self%pftcc%memoize_refs
-    end subroutine regularize_refs_test
-
+    end subroutine regularize_refs
+    
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
         self%regs_even        = 0._dp
