@@ -36,7 +36,7 @@ type :: regularizer
     procedure          :: ref_reg_cc
     procedure          :: regularize_refs
     procedure          :: reset_regs
-    procedure, private :: calc_raw_frc, calc_pspec, coarse_rot_angle
+    procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
     generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_test
     ! DESTRUCTOR
@@ -80,7 +80,7 @@ contains
         lims_init(:,1)        = -params_glob%reg_minshift
         lims_init(:,2)        =  params_glob%reg_minshift
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-        &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.false.)
+        &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
     end subroutine new
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
@@ -106,22 +106,18 @@ contains
                 euls_ref(3)   = 0.
                 euls(3)       = 0.
                 ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
-                ! find best irot for this pair of iref, iptcl
-                if( params_glob%l_reg_opt_ang )then
-                    call self%coarse_rot_angle(iref, iptcl, init_xy, loc, cur_corr)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                loc = maxloc(inpl_corrs, dim=1)
+                call self%grad_shsrch_obj%set_indices(iref, iptcl)
+                cxy = self%grad_shsrch_obj%minimize(irot=loc)
+                if( loc > 0 )then
+                    cur_corr = cxy(1)
+                    init_xy  = cxy(2:3)
                 else
-                    call self%pftcc%reg_gencorrs( iref, iptcl, inpl_corrs )
-                    loc = maxloc(inpl_corrs, dim=1)
-                    call self%grad_shsrch_obj%set_indices(iref, iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=loc)
-                    if( loc > 0 )then
-                        cur_corr = cxy(1)
-                        init_xy  = cxy(2:3)
-                    else
-                        loc      = maxloc(inpl_corrs, dim=1)
-                        cur_corr = inpl_corrs(loc)
-                        init_xy  = 0.
-                    endif
+                    loc      = maxloc(inpl_corrs, dim=1)
+                    cur_corr = inpl_corrs(loc)
+                    init_xy  = 0.
                 endif
                 if( cur_corr < TINY ) cycle
                 ! distance & correlation weighing
@@ -251,40 +247,6 @@ contains
             ptcl_ctf_rot(rot:self%pftsz,:) = real(ptcl_ctf(               1:self%pftsz-rot+1,:), dp)
         end if
     end subroutine rotate_polar_test
-
-    ! adapted from coarse_search_opt_angle in simple_pftcc_shsrch_grad
-    subroutine coarse_rot_angle(self, iref, iptcl, init_xy, irot, corr_out)
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: iref, iptcl
-        real(dp),           intent(out)   :: init_xy(2)
-        integer,            intent(out)   :: irot
-        real,               intent(out)   :: corr_out
-        integer,            parameter     :: NUM_STEPS = 5
-        real(dp) :: x, y, corr, stepx, stepy
-        real     :: corrs(self%nrots), reg_minsh
-        integer  :: loc, ix, iy
-        init_xy   = 0.d0
-        irot      = 0
-        corr_out  = 0.
-        reg_minsh = params_glob%reg_minshift
-        stepx     = real(2 * reg_minsh,dp)/real(NUM_STEPS,dp)
-        stepy     = real(2 * reg_minsh,dp)/real(NUM_STEPS,dp)
-        do ix = 1,NUM_STEPS
-            x = -reg_minsh + stepx/2. + real(ix-1,dp)*stepx
-            do iy = 1,NUM_STEPS
-                y = -reg_minsh + stepy/2. + real(iy-1,dp)*stepy
-                call self%pftcc%reg_gencorrs(iref, iptcl, real([x,y]), corrs)
-                loc  = maxloc(corrs,dim=1)
-                corr = max(0._dp, real(corrs(loc), dp))
-                if (corr > corr_out) then
-                    corr_out   = corr
-                    irot       = loc
-                    init_xy(1) = x
-                    init_xy(2) = y
-                end if
-            end do
-        end do
-    end subroutine coarse_rot_angle
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )
