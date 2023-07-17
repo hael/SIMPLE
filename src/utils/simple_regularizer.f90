@@ -75,10 +75,10 @@ contains
         self%regs_denom_neigh = 0.d0
         self%regs_denom       = 0.d0
         self%pftcc            => pftcc
-        lims(:,1)             = -params_glob%trs
-        lims(:,2)             =  params_glob%trs
-        lims_init(:,1)        = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)        =  SHC_INPL_TRSHWDTH
+        lims(:,1)             = -params_glob%reg_minshift
+        lims(:,2)             =  params_glob%reg_minshift
+        lims_init(:,1)        = -params_glob%reg_minshift
+        lims_init(:,2)        =  params_glob%reg_minshift
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
         &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.false.)
     end subroutine new
@@ -115,7 +115,6 @@ contains
                     call self%grad_shsrch_obj%set_indices(iref, iptcl)
                     cxy = self%grad_shsrch_obj%minimize(irot=loc)
                     if( loc > 0 )then
-                        loc      = 360. - self%pftcc%get_rot(loc)
                         cur_corr = cxy(1)
                         init_xy  = cxy(2:3)
                     else
