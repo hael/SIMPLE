@@ -129,7 +129,7 @@ contains
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                 ithr  = omp_get_thread_num() + 1
                 shmat => self%pftcc%heap_vars(ithr)%shmat
-                call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
+                call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
@@ -150,7 +150,7 @@ contains
         !$omp do schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:)
+                self%regs(:,k,:) = 0._dp
             elsewhere
                 self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:) / self%regs_denom(:,k,:)
             endwhere
