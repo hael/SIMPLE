@@ -211,6 +211,7 @@ contains
     procedure          :: NLmean3D
     ! CALCULATORS
     procedure          :: minmax
+    procedure          :: loc_sdev
     procedure          :: avg_loc_sdev
     procedure          :: rmsd
     procedure, private :: stats_1, stats_2
@@ -4049,6 +4050,29 @@ contains
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
 
+    subroutine loc_sdev( self, winsz, sdevimg )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: winsz
+        class(image), intent(inout) :: sdevimg
+        real    :: avg
+        integer :: i, j, ir(2), jr(2), isz, jsz, npix
+        if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
+        call sdevimg%new(self%ldim, self%smpd)
+        do i = 1,self%ldim(1)
+            ir(1) = max(1,            i - winsz)
+            ir(2) = min(self%ldim(1), i + winsz)
+            isz   = ir(2) - ir(1) + 1
+            do j = 1,self%ldim(2)
+                jr(1) = max(1,            j - winsz)
+                jr(2) = min(self%ldim(2), j + winsz)
+                jsz   = jr(2) - jr(1) + 1
+                npix  = isz * jsz
+                avg   = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1)) 
+            end do
+        end do
+    end subroutine loc_sdev
+
     function avg_loc_sdev( self, winsz ) result( asdev )
         class(image), intent(in) :: self
         integer,      intent(in) :: winsz
@@ -5990,7 +6014,7 @@ contains
         type(image) :: maskimg
         logical, allocatable :: l_mask(:,:,:)
         corrs = 0.
-        do k=1,fdim(self1%ldim(1))-3
+        do k = 1, fdim(self1%ldim(1))-3
             call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
             l_mask = bin2logical(maskimg)
             corrs(k) = self1%real_corr(self2, l_mask)
@@ -5998,6 +6022,20 @@ contains
         call maskimg%kill
         deallocate(l_mask)
     end subroutine frc_pspec
+
+    subroutine ring_stats( self, stats )
+        class(image),                    intent(inout) :: self
+        type(stats_struct), allocatable, intent(inout) :: stats(:)
+        integer     :: iring, npix, nrings
+        type(image) :: maskimg
+        nrings = fdim(self%ldim(1))-3
+        if( allocated(stats) ) deallocate(stats)
+        allocate(stats(nrings))
+        do iring = 1, nrings
+            call maskimg%ring(self%ldim, self%smpd, real(iring+2), real(iring-2), npix)
+            call self%stats_2(stats(iring)%avg, stats(iring)%sdev, stats(iring)%maxv, stats(iring)%minv, maskimg)
+        end do
+    end subroutine ring_stats
 
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
