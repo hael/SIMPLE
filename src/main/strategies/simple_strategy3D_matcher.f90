@@ -183,7 +183,7 @@ contains
         endif
 
         ! ref regularization
-        if( params_glob%l_reg_ref )then
+        if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             reg_eps = 0.
             if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
             if( reg_eps < 1. )then
