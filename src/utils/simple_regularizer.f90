@@ -27,8 +27,8 @@ type :: regularizer
     real(dp), allocatable :: regs_denom_odd(:,:,:)   !< -"-, reg denom, odd
     real(dp), allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real(dp), allocatable :: regs_denom_neigh(:,:,:) !< -"-, neighborhood reg denom
-    class(polarft_corrcalc), pointer :: pftcc => null()
-    type(pftcc_shsrch_grad)          :: grad_shsrch_obj
+    class(polarft_corrcalc), pointer     :: pftcc => null()
+    type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
     contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -50,7 +50,8 @@ contains
         class(regularizer),      target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
         integer, parameter :: MAXITS = 60
-        real :: lims(2,2), lims_init(2,2)
+        real    :: lims(2,2), lims_init(2,2)
+        integer :: ithr
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
         self%pftsz   = pftcc%pftsz
@@ -63,7 +64,7 @@ contains
                 &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_neigh(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_cnt(self%nrefs),&
+                &self%regs_cnt(self%nrefs),self%grad_shsrch_obj(params_glob%nthr),&
                 &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs_even        = 0.d0
         self%regs_odd         = 0.d0
@@ -79,8 +80,10 @@ contains
         lims(:,2)             =  params_glob%reg_minshift
         lims_init(:,1)        = -params_glob%reg_minshift
         lims_init(:,2)        =  params_glob%reg_minshift
-        call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-        &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
+        do ithr = 1, params_glob%nthr
+            call self%grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
+            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
+        enddo
     end subroutine new
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
@@ -99,6 +102,7 @@ contains
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
+                ithr     = omp_get_thread_num() + 1
                 iptcl    = glob_pinds(i)
                 euls_ref = eulspace%get_euler(iref)
                 euls     = ptcl_eulspace%get_euler(iptcl)
@@ -109,8 +113,8 @@ contains
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 loc = maxloc(inpl_corrs, dim=1)
-                call self%grad_shsrch_obj%set_indices(iref, iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=loc)
+                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
                 if( loc > 0 )then
                     cur_corr = cxy(1)
                     init_xy  = cxy(2:3)
@@ -127,7 +131,6 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
-                ithr  = omp_get_thread_num() + 1
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
