@@ -35,6 +35,7 @@ contains
     procedure :: minimize    => grad_shsrch_minimize
     procedure :: kill        => grad_shsrch_kill
     procedure :: does_opt_angle
+    procedure :: set_limits
     procedure :: coarse_search
     procedure :: coarse_search_opt_angle
 end type pftcc_shsrch_grad
@@ -81,6 +82,12 @@ contains
         class(pftcc_shsrch_grad), intent(in) :: self
         does_opt_angle = self%opt_angle
     end function does_opt_angle
+
+    subroutine set_limits( self, lims )
+        class(pftcc_shsrch_grad), intent(inout) :: self              !< instance
+        real,                     intent(in)    :: lims(self%ospec%ndim,2) !< new limits
+        call self%ospec%set_limits(lims)
+    end subroutine set_limits
 
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self
