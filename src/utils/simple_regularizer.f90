@@ -92,12 +92,12 @@ contains
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
-        integer  :: i, iref, iptcl, loc, ithr
+        integer  :: i, iref, iptcl, loc, ithr, sh_step
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
-        real     :: euls(3), euls_ref(3), theta, cxy(3)
+        real     :: euls(3), euls_ref(3), theta, cxy(3), lims(2,2)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy,lims,sh_step) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 ithr     = omp_get_thread_num() + 1
@@ -110,9 +110,15 @@ contains
                 ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                loc = maxloc(inpl_corrs, dim=1)
-                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
+                do sh_step = 1, int(params_glob%reg_minshift)
+                    loc       = maxloc(inpl_corrs, dim=1)
+                    lims(:,1) = -sh_step
+                    lims(:,2) =  sh_step
+                    call self%grad_shsrch_obj(ithr)%set_limits(lims)
+                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
+                    if( loc > 0 .and. cxy(1) > inpl_corrs(loc) ) exit
+                enddo
                 if( loc > 0 )then
                     cur_corr = cxy(1)
                     init_xy  = cxy(2:3)
