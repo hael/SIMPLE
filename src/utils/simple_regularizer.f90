@@ -21,7 +21,6 @@ type :: regularizer
     real(dp), allocatable :: regs_even(:,:,:)        !< -"-, reg terms, even
     real(dp), allocatable :: regs_odd(:,:,:)         !< -"-, reg terms, odd
     real(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
-    integer,  allocatable :: regs_cnt(:)             !< -"-, reg terms neighbor count
     real(dp), allocatable :: regs_neigh(:,:,:)       !< -"-, neighborhood reg terms
     real(dp), allocatable :: regs_denom_even(:,:,:)  !< -"-, reg denom, even
     real(dp), allocatable :: regs_denom_odd(:,:,:)   !< -"-, reg denom, odd
@@ -64,12 +63,11 @@ contains
                 &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_neigh(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_cnt(self%nrefs),self%grad_shsrch_obj(params_glob%nthr),&
+                &self%grad_shsrch_obj(params_glob%nthr),&
                 &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs_even        = 0.d0
         self%regs_odd         = 0.d0
         self%regs             = 0.d0
-        self%regs_cnt         = 0
         self%regs_neigh       = 0.d0
         self%regs_denom_even  = 0.d0
         self%regs_denom_odd   = 0.d0
@@ -78,8 +76,8 @@ contains
         self%pftcc            => pftcc
         lims(:,1)             = -params_glob%reg_minshift
         lims(:,2)             =  params_glob%reg_minshift
-        lims_init(:,1)        = -params_glob%reg_minshift
-        lims_init(:,2)        =  params_glob%reg_minshift
+        lims_init(:,1)        = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)        =  SHC_INPL_TRSHWDTH
         do ithr = 1, params_glob%nthr
             call self%grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
             &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
@@ -125,18 +123,17 @@ contains
                 endif
                 if( cur_corr < TINY ) cycle
                 ! distance & correlation weighing
-                ptcl_ref_dist = cur_corr / ( 1. + ptcl_ref_dist )
+                ptcl_ref_dist = cur_corr / ( 1. + exp(ptcl_ref_dist) )
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                 shmat => self%pftcc%heap_vars(ithr)%shmat
-                call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
+                call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
-                self%regs_cnt(iref)       = self%regs_cnt(iref) + 1
             enddo
         enddo
         !$omp end parallel do
@@ -165,8 +162,8 @@ contains
                 ! keep the refs
             else
                 ! using the reg terms as refs
-                self%pftcc%pfts_refs_even(:,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
-                self%pftcc%pfts_refs_odd( :,:,iref) = real(self%regs(:,:,iref)) / real(max(self%regs_cnt(iref), 1))
+                self%pftcc%pfts_refs_even(:,:,iref) = real(self%regs(:,:,iref))
+                self%pftcc%pfts_refs_odd( :,:,iref) = real(self%regs(:,:,iref))
             endif
         enddo
         !$omp end do
@@ -179,7 +176,6 @@ contains
         self%regs_even        = 0._dp
         self%regs_odd         = 0._dp
         self%regs             = 0._dp
-        self%regs_cnt         = 0
         self%regs_neigh       = 0._dp
         self%regs_denom_even  = 0._dp
         self%regs_denom_odd   = 0._dp
@@ -286,6 +282,6 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs_even,self%regs_odd,self%regs_denom_even,self%regs_denom_odd,&
-                  &self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh,self%regs_cnt)
+                  &self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh)
     end subroutine kill
 end module simple_regularizer
