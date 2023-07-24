@@ -339,7 +339,7 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
+        call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         ! gridding prep
         if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
