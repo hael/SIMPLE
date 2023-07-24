@@ -26,14 +26,18 @@ type :: regularizer
     real(dp), allocatable :: regs_denom_odd(:,:,:)   !< -"-, reg denom, odd
     real(dp), allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real(dp), allocatable :: regs_denom_neigh(:,:,:) !< -"-, neighborhood reg denom
+    complex(sp), allocatable :: cur_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
+    complex(sp), allocatable :: cur_refs_odd(:,:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
     contains
     ! CONSTRUCTOR
     procedure          :: new
     ! PROCEDURES
+    procedure          :: assign_pftcc
     procedure          :: ref_reg_cc
     procedure          :: regularize_refs
+    procedure          :: regularize_refs_test
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
@@ -56,6 +60,8 @@ contains
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
+        allocate(self%cur_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%cur_refs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         allocate(self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_denom_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -83,6 +89,12 @@ contains
             &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
         enddo
     end subroutine new
+
+    subroutine assign_pftcc( self, pftcc )
+        class(regularizer),      target, intent(inout) :: self
+        class(polarft_corrcalc), target, intent(inout) :: pftcc
+        self%pftcc => pftcc
+    end subroutine assign_pftcc
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc( self, eulspace, ptcl_eulspace, glob_pinds )
@@ -176,6 +188,20 @@ contains
         !$omp end parallel
         call self%pftcc%memoize_refs
     end subroutine regularize_refs
+
+    subroutine regularize_refs_test( self, which_iter )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: which_iter
+        if( which_iter == 1 )then
+            ! do nothing
+        else
+            self%pftcc%pfts_refs_even = (self%cur_refs_even * real(which_iter - 1) + self%pftcc%pfts_refs_even) / real(which_iter)
+            self%pftcc%pfts_refs_odd  = (self%cur_refs_odd  * real(which_iter - 1) + self%pftcc%pfts_refs_odd ) / real(which_iter)
+        endif
+        self%cur_refs_even = self%pftcc%pfts_refs_even
+        self%cur_refs_odd  = self%pftcc%pfts_refs_odd
+        call self%pftcc%memoize_refs
+    end subroutine regularize_refs_test
     
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
@@ -288,6 +314,7 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs_even,self%regs_odd,self%regs_denom_even,self%regs_denom_odd,&
+                  &self%cur_refs_even,self%cur_refs_odd,&
                   &self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh)
     end subroutine kill
 end module simple_regularizer
