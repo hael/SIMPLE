@@ -714,6 +714,10 @@ contains
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! optional non-uniform filtering
             if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
+            ! for testing
+            if( cline%defined('extr_iter') )then
+                call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))
+            endif
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
             if( l_shmem )then
