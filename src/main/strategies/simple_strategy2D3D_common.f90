@@ -211,18 +211,24 @@ contains
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
         else
-            if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
-                lplim = build_glob%clsfrcs%estimate_lp_for_align()
-                if( trim(params_glob%stream).eq.'yes' )then
-                    if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
-                endif
-            else
-                if( which_iter < LPLIM1ITERBOUND )then
-                    lplim = params_glob%lplims2D(1)
-                else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-                    lplim = params_glob%lplims2D(3)
+            if( trim(params_glob%stream).eq.'yes' )then
+                if( file_exists(params_glob%frcs) )then
+                    lplim = build_glob%clsfrcs%estimate_lp_for_align()
                 else
-                    lplim = params_glob%lplims2D(2)
+                    lplim = params_glob%lplims2D(3)
+                endif
+                if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
+            else
+                if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
+                    lplim = build_glob%clsfrcs%estimate_lp_for_align()
+                else
+                    if( which_iter < LPLIM1ITERBOUND )then
+                        lplim = params_glob%lplims2D(1)
+                    else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+                        lplim = params_glob%lplims2D(3)
+                    else
+                        lplim = params_glob%lplims2D(2)
+                    endif
                 endif
             endif
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
