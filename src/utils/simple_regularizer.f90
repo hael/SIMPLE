@@ -26,18 +26,14 @@ type :: regularizer
     real(dp), allocatable :: regs_denom_odd(:,:,:)   !< -"-, reg denom, odd
     real(dp), allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real(dp), allocatable :: regs_denom_neigh(:,:,:) !< -"-, neighborhood reg denom
-    complex(sp), allocatable :: cur_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
-    complex(sp), allocatable :: cur_refs_odd(:,:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
     contains
     ! CONSTRUCTOR
     procedure          :: new
     ! PROCEDURES
-    procedure          :: assign_pftcc
     procedure          :: ref_reg_cc
     procedure          :: regularize_refs
-    procedure          :: regularize_refs_test
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
@@ -60,8 +56,6 @@ contains
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
-        allocate(self%cur_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%cur_refs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         allocate(self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_denom_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
@@ -90,12 +84,6 @@ contains
         enddo
     end subroutine new
 
-    subroutine assign_pftcc( self, pftcc )
-        class(regularizer),      target, intent(inout) :: self
-        class(polarft_corrcalc), target, intent(inout) :: pftcc
-        self%pftcc => pftcc
-    end subroutine assign_pftcc
-
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc( self, eulspace, ptcl_eulspace, glob_pinds )
         use simple_oris
@@ -104,12 +92,12 @@ contains
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
-        integer  :: i, iref, iptcl, loc, ithr, sh_step
+        integer  :: i, iref, iptcl, loc, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
-        real     :: euls(3), euls_ref(3), theta, cxy(3), lims(2,2)
+        real     :: euls(3), euls_ref(3), theta, cxy(3)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy,lims,sh_step) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 ithr     = omp_get_thread_num() + 1
@@ -122,15 +110,9 @@ contains
                 ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                do sh_step = 1, int(params_glob%reg_minshift)
-                    loc       = maxloc(inpl_corrs, dim=1)
-                    lims(:,1) = -sh_step
-                    lims(:,2) =  sh_step
-                    call self%grad_shsrch_obj(ithr)%set_limits(lims)
-                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
-                    if( loc > 0 .and. cxy(1) > inpl_corrs(loc) ) exit
-                enddo
+                loc = maxloc(inpl_corrs, dim=1)
+                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
                 if( loc > 0 )then
                     cur_corr = cxy(1)
                     init_xy  = cxy(2:3)
@@ -188,20 +170,6 @@ contains
         !$omp end parallel
         call self%pftcc%memoize_refs
     end subroutine regularize_refs
-
-    subroutine regularize_refs_test( self, which_iter )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: which_iter
-        if( which_iter == 1 )then
-            ! do nothing
-        else
-            self%pftcc%pfts_refs_even = (self%cur_refs_even * real(which_iter - 1) + self%pftcc%pfts_refs_even) / real(which_iter)
-            self%pftcc%pfts_refs_odd  = (self%cur_refs_odd  * real(which_iter - 1) + self%pftcc%pfts_refs_odd ) / real(which_iter)
-        endif
-        self%cur_refs_even = self%pftcc%pfts_refs_even
-        self%cur_refs_odd  = self%pftcc%pfts_refs_odd
-        call self%pftcc%memoize_refs
-    end subroutine regularize_refs_test
     
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
@@ -314,7 +282,6 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs_even,self%regs_odd,self%regs_denom_even,self%regs_denom_odd,&
-                  &self%cur_refs_even,self%cur_refs_odd,&
                   &self%regs,self%regs_denom,self%regs_neigh,self%regs_denom_neigh)
     end subroutine kill
 end module simple_regularizer

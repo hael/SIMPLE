@@ -34,6 +34,7 @@ type :: builder
     type(image)                         :: img_tmp                !< -"-
     type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
+    type(projector)                     :: avg_vol, avg_vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
@@ -279,6 +280,8 @@ contains
             if( ddo3d )then
                 call self%vol%new([params%box,params%box,params%box], params%smpd)
                 call self%vol_odd%new([params%box,params%box,params%box], params%smpd)
+                call self%avg_vol%new([params%box,params%box,params%box], params%smpd)
+                call self%avg_vol_odd%new([params%box,params%box,params%box], params%smpd)
                 call self%vol2%new([params%box,params%box,params%box], params%smpd)
             endif
             ! build arrays
@@ -324,6 +327,10 @@ contains
             call self%vol%kill
             call self%vol_odd%kill_expanded
             call self%vol_odd%kill
+            call self%avg_vol%kill_expanded
+            call self%avg_vol%kill
+            call self%avg_vol_odd%kill_expanded
+            call self%avg_vol_odd%kill
             call self%vol2%kill
             if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
             if( allocated(self%fsc)           ) deallocate(self%fsc)
