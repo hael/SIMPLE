@@ -139,7 +139,7 @@ contains
                 ! refinement mode specifics
                 select case(trim(params_glob%refine))
                     case('clustersym')
-                       ! symmetry pairing matrix
+                        ! symmetry pairing matrix
                         c1_symop = sym('c1')
                         params_glob%nspace = min(params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 2500)
                         call build_glob%eulspace%new(params_glob%nspace, is_ptcl=.false.)
@@ -184,29 +184,23 @@ contains
 
         ! ref regularization
         if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            if( which_iter == 1)then
-                call reg_obj%new(pftcc)
-            else
-                call reg_obj%assign_pftcc(pftcc)
+            reg_eps = 0.
+            if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
+            if( reg_eps < 1. )then
+                call reg_obj%reset_regs
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                if( trim(params_glob%reg_mode) .eq. 'sto' )then
+                    call reg_obj%regularize_refs( min(1., reg_eps) )
+                else
+                    call reg_obj%regularize_refs
+                endif
             endif
-            ! reg_eps = 0.
-            ! if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
-            ! if( reg_eps < 1. )then
-            !     call reg_obj%reset_regs
-            !     ! Batch loop
-            !     do ibatch=1,nbatches
-            !         batch_start = batches(ibatch,1)
-            !         batch_end   = batches(ibatch,2)
-            !         batchsz     = batch_end - batch_start + 1
-            !         call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-            !     enddo
-            !     if( trim(params_glob%reg_mode) .eq. 'sto' )then
-            !         call reg_obj%regularize_refs( min(1., reg_eps) )
-            !     else
-            !         call reg_obj%regularize_refs
-            !     endif
-            ! endif
-            call reg_obj%regularize_refs_test(which_iter)
         endif
 
         ! Batch loop
@@ -340,6 +334,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
+            if( params_glob%l_reg_ref ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -429,6 +424,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        if( params_glob%l_reg_ref ) call reg_obj%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
