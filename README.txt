@@ -17,7 +17,7 @@ System Requirements:
 
     - Linux: (we use Ubuntu 16.04 and above)
     - MacOSX: 10.10 and above
-    - CMake 3.2 and above
+    - CMake 3.5 and above
     - FFTW 3.3 and above
     - GNU toolchain (gcc & gfortran) 5.5
     - libTIFF 4+ (for TIFF format support, ensure dev packages installed)
