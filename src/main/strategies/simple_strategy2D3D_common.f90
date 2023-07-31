@@ -426,8 +426,8 @@ contains
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
         if( cline%defined('eps') )then
-            call build_glob%vol%remove_neg
-            call build_glob%vol_odd%remove_neg
+            call build_glob%vol%zero_neg
+            call build_glob%vol_odd%zero_neg
         endif
         if( params_glob%l_nonuniform )then
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
@@ -524,7 +524,7 @@ contains
             call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
         endif
         if( cline%defined('eps') )then
-            call vol_ptr%remove_neg
+            call vol_ptr%zero_neg
             if( iseven )then
                 call build_glob%avg_vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
                 if( params_glob%which_iter == 1 )then
@@ -533,7 +533,7 @@ contains
                     call build_glob%avg_vol%read('cur_avg.mrc')
                     build_glob%avg_vol = build_glob%avg_vol + (build_glob%vol - build_glob%avg_vol) * params_glob%eps
                 endif
-                call build_glob%avg_vol%remove_neg
+                call build_glob%avg_vol%zero_neg
                 call build_glob%avg_vol%write('cur_avg.mrc')
                 build_glob%vol = build_glob%avg_vol
                 vol_ptr => build_glob%vol
@@ -545,7 +545,7 @@ contains
                     call build_glob%avg_vol_odd%read('cur_avg_odd.mrc')
                     build_glob%avg_vol_odd = build_glob%avg_vol_odd + (build_glob%vol_odd - build_glob%avg_vol_odd) * params_glob%eps
                 endif
-                call build_glob%avg_vol_odd%remove_neg
+                call build_glob%avg_vol_odd%zero_neg
                 call build_glob%avg_vol_odd%write('cur_avg_odd.mrc')
                 build_glob%vol_odd = build_glob%avg_vol_odd
                 vol_ptr => build_glob%vol_odd
