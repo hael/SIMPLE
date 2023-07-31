@@ -241,7 +241,11 @@ contains
                             allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('neigh')
-                        allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( params_glob%l_reg_ref )then
+                            allocate(strategy3D_neigh            :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     case('shc_neigh')
                         allocate(strategy3D_shc_sub              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
