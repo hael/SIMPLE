@@ -425,7 +425,7 @@ contains
         call build_glob%vol%read(fname_even)
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
-        if( params_glob%l_reg_ref )then
+        if( cline%defined('eps') )then
             call build_glob%vol%remove_neg
             call build_glob%vol_odd%remove_neg
         endif
@@ -523,7 +523,7 @@ contains
         if( params_glob%gridding.eq.'yes' )then
             call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
         endif
-        if( params_glob%l_reg_ref .and. cline%defined('eps') )then
+        if( cline%defined('eps') )then
             call vol_ptr%remove_neg
             if( iseven )then
                 call build_glob%avg_vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
