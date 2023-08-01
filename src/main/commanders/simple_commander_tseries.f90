@@ -636,6 +636,7 @@ contains
         if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
+        if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
@@ -741,6 +742,7 @@ contains
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
+        if( .not. cline%defined('kweight')        ) call cline%set('kweight',  'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         ! set shared-memory flag
