@@ -425,7 +425,7 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
     logical :: l_reg_opt_ang  = .false.
-    logical :: l_reg_init     = .true.
+    logical :: l_reg_init     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
