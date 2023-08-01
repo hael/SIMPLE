@@ -71,7 +71,7 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
     character(len=3)          :: reg_opt_ang='no'     !< opt angle in the reg terms (yes|no){no}
-    character(len=3)          :: reg_init='yes'       !< randomized oris and zero shifts in the reg scheme (yes|no){yes}
+    character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
