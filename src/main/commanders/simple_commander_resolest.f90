@@ -401,6 +401,7 @@ contains
         character(len=:),   allocatable :: cavgsstk
         call cline%set('dir_exec', 'cavg_filter2D')
         call cline%set('mkdir',    'yes')
+        call cline%set('oritype',  'ptcl2D')
         call build%init_params_and_build_spproj(cline,params)
         call build%spproj%update_projinfo(cline)
         ! reading all images
@@ -435,7 +436,7 @@ contains
                     call build%imgbatch(iptcl)%fft
                     call build%imgbatch(iptcl)%shift2Dserial(-[x,y])
                     call build%imgbatch(iptcl)%ifft
-                    call rot_img%zero_and_flag_ft
+                    call rot_img%zero_and_unflag_ft
                     call build%imgbatch(iptcl)%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_img)
                     call calc_cavg%add(rot_img)
                     call ctf_img%fft
