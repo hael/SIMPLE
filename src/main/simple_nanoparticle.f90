@@ -1767,88 +1767,88 @@ contains
     end subroutine simulate_atoms
 
     subroutine write_centers_1( self, fname, coords )
-       class(nanoparticle),        intent(inout) :: self
-       character(len=*), optional, intent(in)    :: fname
-       real,             optional, intent(in)    :: coords(:,:)
-       type(atoms) :: centers_pdb
-       integer     :: cc
-       if( present(coords) )then
-           call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
-           do cc=1,size(coords, dim = 2)
-               call set_atm_info
-           enddo
-       else
-           call centers_pdb%new(self%n_cc, dummy=.true.)
-           do cc=1,self%n_cc
-               call set_atm_info
-           enddo
-       endif
-       if( present(fname) ) then
-           call centers_pdb%writepdb(fname)
-       else
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+        real,             optional, intent(in)    :: coords(:,:)
+        type(atoms) :: centers_pdb
+        integer     :: cc
+        if( present(coords) )then
+            call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
+            do cc=1,size(coords, dim = 2)
+                call set_atm_info
+            enddo
+        else
+            call centers_pdb%new(self%n_cc, dummy=.true.)
+            do cc=1,self%n_cc
+                call set_atm_info
+            enddo
+        endif
+        if( present(fname) ) then
+            call centers_pdb%writepdb(fname)
+        else
            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
            write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
-       endif
+        endif
 
-       contains
+        contains
 
-           subroutine set_atm_info
-               call centers_pdb%set_name(cc,self%atom_name)
-               call centers_pdb%set_element(cc,self%element)
-               call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use per atom valid corr
-               call centers_pdb%set_resnum(cc,cc)
-           end subroutine set_atm_info
+            subroutine set_atm_info
+                call centers_pdb%set_name(cc,self%atom_name)
+                call centers_pdb%set_element(cc,self%element)
+                call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+                call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use per atom valid corr
+                call centers_pdb%set_resnum(cc,cc)
+            end subroutine set_atm_info
 
-   end subroutine write_centers_1
+    end subroutine write_centers_1
 
-   subroutine write_centers_2( self, fname, which )
-      class(nanoparticle), intent(inout) :: self
-      character(len=*),    intent(in)    :: fname
-      character(len=*),    intent(in)    :: which ! parameter in the B-factor field of the pdb file
-      type(atoms) :: centers_pdb
-      integer     :: cc
-      call centers_pdb%new(self%n_cc, dummy=.true.)
-      do cc=1,self%n_cc
-          call centers_pdb%set_name(cc,self%atom_name)
-          call centers_pdb%set_element(cc,self%element)
-          call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-          select case(which)
-              case('cn_gen')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
-              case('cn_std')
-                  call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std))! use standard coordination number
-              case('max_int')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
-              case('doi')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)     ! use isotropic b-factor
-              case('doi_min')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%doi_min)     ! use isotropic b-factor
-              case('u_iso')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%u_iso)     ! use isotropic b-factor
-              case DEFAULT
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
-          end select
-          call centers_pdb%set_resnum(cc,cc)
-      enddo
-     call centers_pdb%writepdb(fname)
-  end subroutine write_centers_2
+    subroutine write_centers_2( self, fname, which )
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: fname
+        character(len=*),    intent(in)    :: which ! parameter in the B-factor field of the pdb file
+        type(atoms) :: centers_pdb
+        integer     :: cc
+        call centers_pdb%new(self%n_cc, dummy=.true.)
+        do cc=1,self%n_cc
+            call centers_pdb%set_name(cc,self%atom_name)
+            call centers_pdb%set_element(cc,self%element)
+            call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+            select case(which)
+                case('cn_gen')
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
+                case('cn_std')
+                    call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std))! use standard coordination number
+                case('max_int')
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
+                case('doi')
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi)     ! use isotropic b-factor
+                case('doi_min')
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%doi_min)     ! use isotropic b-factor
+                case('u_iso')
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%u_iso)     ! use isotropic b-factor
+                case DEFAULT
+                    call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
+            end select
+            call centers_pdb%set_resnum(cc,cc)
+        enddo
+        call centers_pdb%writepdb(fname)
+    end subroutine write_centers_2
 
-  subroutine write_centers_aniso( self, fname)
-    class(nanoparticle), intent(inout) :: self
-    character(len=*),    intent(in)    :: fname
-    type(atoms) :: centers_pdb
-    real        :: aniso(3, 3, self%n_cc)
-    integer     :: cc
-    call centers_pdb%new(self%n_cc, dummy=.true.)
-    do cc=1,self%n_cc
-        call centers_pdb%set_name(cc,self%atom_name)
-        call centers_pdb%set_element(cc,self%element)
-        call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-        call centers_pdb%set_resnum(cc,cc)
-        aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:) ! in Angstroms
-    enddo
-    call centers_pdb%writepdb_aniso(fname, aniso)
+    subroutine write_centers_aniso( self, fname)
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: fname
+        type(atoms) :: centers_pdb
+        real        :: aniso(3, 3, self%n_cc)
+        integer     :: cc
+        call centers_pdb%new(self%n_cc, dummy=.true.)
+        do cc=1,self%n_cc
+            call centers_pdb%set_name(cc,self%atom_name)
+            call centers_pdb%set_element(cc,self%element)
+            call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+            call centers_pdb%set_resnum(cc,cc)
+            aniso(:,:,cc) = self%atominfo(cc)%aniso(:,:) ! in Angstroms
+        enddo
+        call centers_pdb%writepdb_aniso(fname, aniso)
     end subroutine write_centers_aniso
 
     subroutine write_individual_atoms( self )
@@ -2060,42 +2060,42 @@ contains
         602 format(F8.4)
         if( count(self%atominfo(:)%cn_std == cn) < 2 ) return
         ! -- coordination number
-        write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD
+        write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD               (1)
         ! -- # atoms per cn
-        write(funit,601,advance='no') self%natoms_cns(cn),                   CSV_DELIM ! NATOMS
-        write(funit,601,advance='no') self%natoms_aniso_cns(cn),             CSV_DELIM ! NANISO
+        write(funit,601,advance='no') self%natoms_cns(cn),                   CSV_DELIM ! NATOMS               (2)
+        write(funit,601,advance='no') self%natoms_aniso_cns(cn),             CSV_DELIM ! NANISO               (3)
         ! -- atom size
-        write(funit,601,advance='no') self%size_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NVOX
-        write(funit,601,advance='no') self%size_stats_cns(cn)%med,           CSV_DELIM ! MED_NVOX
-        write(funit,601,advance='no') self%size_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_NVOX
+        write(funit,601,advance='no') self%size_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NVOX             (4)
+        write(funit,601,advance='no') self%size_stats_cns(cn)%med,           CSV_DELIM ! MED_NVOX             (5)
+        write(funit,601,advance='no') self%size_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_NVOX            (6)
         ! -- bond length
-        write(funit,601,advance='no') self%bondl_stats_cns(cn)%avg,          CSV_DELIM ! AVG_NN_BONDL
-        write(funit,601,advance='no') self%bondl_stats_cns(cn)%med,          CSV_DELIM ! MED_NN_BONDL
-        write(funit,601,advance='no') self%bondl_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_NN_BONDL
+        write(funit,601,advance='no') self%bondl_stats_cns(cn)%avg,          CSV_DELIM ! AVG_NN_BONDL         (7)
+        write(funit,601,advance='no') self%bondl_stats_cns(cn)%med,          CSV_DELIM ! MED_NN_BONDL         (8)
+        write(funit,601,advance='no') self%bondl_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_NN_BONDL        (9)
         ! -- generalized coordination number
-        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%avg,         CSV_DELIM ! AVG_CN_GEN
-        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%med,         CSV_DELIM ! MED_CN_GEN
-        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%sdev,        CSV_DELIM ! SDEV_CN_GEN
+        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%avg,         CSV_DELIM ! AVG_CN_GEN           (10)
+        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%med,         CSV_DELIM ! MED_CN_GEN           (11)
+        write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%sdev,        CSV_DELIM ! SDEV_CN_GEN          (12)
         ! -- atom diameter
-        write(funit,601,advance='no') self%diam_stats_cns(cn)%avg,           CSV_DELIM ! AVG_DIAM
-        write(funit,601,advance='no') self%diam_stats_cns(cn)%med,           CSV_DELIM ! MED_DIAM
-        write(funit,601,advance='no') self%diam_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_DIAM
+        write(funit,601,advance='no') self%diam_stats_cns(cn)%avg,           CSV_DELIM ! AVG_DIAM             (13)
+        write(funit,601,advance='no') self%diam_stats_cns(cn)%med,           CSV_DELIM ! MED_DIAM             (14)
+        write(funit,601,advance='no') self%diam_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_DIAM            (15)
         ! -- average intensity
-        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%avg,        CSV_DELIM ! AVG_AVG_INT
-        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%med,        CSV_DELIM ! MED_AVG_INT
-        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_AVG_INT
+        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%avg,        CSV_DELIM ! AVG_AVG_INT          (16)
+        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%med,        CSV_DELIM ! MED_AVG_INT          (17)
+        write(funit,601,advance='no') self%avg_int_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_AVG_INT         (18)
         ! -- maximum intensity
-        write(funit,601,advance='no') self%max_int_stats_cns(cn)%avg,        CSV_DELIM ! AVG_MAX_INT
-        write(funit,601,advance='no') self%max_int_stats_cns(cn)%med,        CSV_DELIM ! MED_MAX_INT
-        write(funit,601,advance='no') self%max_int_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_MAX_INT
+        write(funit,601,advance='no') self%max_int_stats_cns(cn)%avg,        CSV_DELIM ! AVG_MAX_INT          (19)
+        write(funit,601,advance='no') self%max_int_stats_cns(cn)%med,        CSV_DELIM ! MED_MAX_INT          (20)
+        write(funit,601,advance='no') self%max_int_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_MAX_INT         (21)
         ! -- maximum correlation
-        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
-        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
-        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR       (22)
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR       (23)
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR      (24)
         ! -- Isotropic displacement parameter
-        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%avg,          CSV_DELIM ! AVG_U_ISO
-        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%med,          CSV_DELIM ! MED_U_ISO
-        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_U_ISO
+        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%avg,          CSV_DELIM ! AVG_U_ISO            (25)
+        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%med,          CSV_DELIM ! MED_U_ISO            (26)
+        write(funit,601,advance='no') self%u_iso_stats_cns(cn)%sdev,         CSV_DELIM ! SDEV_U_ISO           (27)
         ! -- anisotropic displacement parameters major eigenvalue
         write(funit,601,advance='no') self%u_maj_stats_cns(cn)%avg,          CSV_DELIM ! AVG_U_MAJ
         write(funit,601,advance='no') self%u_maj_stats_cns(cn)%med,          CSV_DELIM ! MED_U_MAJ
