@@ -570,6 +570,7 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
+        call check_carg('split_mode',     self%split_mode)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
