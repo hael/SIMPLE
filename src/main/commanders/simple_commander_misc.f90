@@ -17,6 +17,7 @@ public :: print_fsc_commander
 public :: print_magic_boxes_commander
 public :: print_dose_weights_commander
 public :: kstest_commander
+public :: pearsn_commander
 public :: mkdir_commander
 public :: remoc_commander
 public :: comparemc_commander
@@ -47,6 +48,11 @@ type, extends(commander_base) :: kstest_commander
   contains
     procedure :: execute       => exec_kstest
 end type kstest_commander
+
+type, extends(commander_base) :: pearsn_commander
+  contains
+    procedure :: execute       => exec_pearsn
+end type pearsn_commander
 
 type, extends(commander_base) :: mkdir_commander
   contains
@@ -167,34 +173,32 @@ contains
         write(logfhandle,'(a)') 'Small P values show that the cumulative distribution functions of the two data sets differ significantly'
         ! end gracefully
         call simple_end('**** SIMPLE_KSTEST NORMAL STOP ****')
-
-        contains
-
-            subroutine read_nrs_dat( filename, arr, ndat )
-                character(len=*),  intent(in)  :: filename
-                real, allocatable, intent(out) :: arr(:)
-                integer,           intent(out) :: ndat
-                integer            :: ndatlines, nrecs, i, j, cnt
-                real, allocatable  :: line(:)
-                type(nrtxtfile)    :: nrsfile
-                call nrsfile%new(filename, 1)
-                ndatlines = nrsfile%get_ndatalines()
-                nrecs     = nrsfile%get_nrecs_per_line()
-                ndat = ndatlines * nrecs
-                allocate( line(nrecs), arr(ndat) )
-                cnt = 0
-                do i=1,ndatlines
-                    call nrsfile%readNextDataLine(line)
-                    do j=1,nrecs
-                        cnt = cnt + 1
-                        arr(cnt) = line(j)
-                    end do
-                end do
-                deallocate (line)
-                call nrsfile%kill
-            end subroutine read_nrs_dat
-
     end subroutine exec_kstest
+
+    subroutine exec_pearsn( self, cline )
+        class(pearsn_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters)   :: params
+        integer            :: ndat1, ndat2
+        real               :: corr, ave1, sdev1, var, ave2, sdev2
+        real, allocatable  :: dat1(:), dat2(:)
+        logical            :: err
+        call params%new(cline)
+        call read_nrs_dat(params%infile,  dat1, ndat1)
+        call read_nrs_dat(params%infile2, dat2, ndat2)
+        if( ndat1 /= ndat2 ) THROW_HARD('Input distributions not identical')
+        call moment(dat1, ave1, sdev1, var, err)
+        call moment(dat2, ave2, sdev2, var, err)
+        write(logfhandle,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile : ', ave1, sdev1
+        write(logfhandle,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile2: ', ave2, sdev2
+        write(logfhandle,'(a)') '>>> PEARSON CORRELATION OF THE TWO DISTRIBUTIONS'
+        corr = pearsn(dat1, dat2)
+        write(logfhandle,'(a,1x,f4.2)') 'CORR = ', corr
+        write(logfhandle,'(a)') 'P represents the significance level for the null hypothesis that the two data sets are drawn from the same distribution'
+        write(logfhandle,'(a)') 'Small P values show that the cumulative distribution functions of the two data sets differ significantly'
+        ! end gracefully
+        call simple_end('**** SIMPLE_PEARSN NORMAL STOP ****')
+    end subroutine exec_pearsn
 
     !>  dsym_cylinder search intended for symmetry of order D
     subroutine exec_dsym_volinit( dsym_os, cylinder)
@@ -991,5 +995,31 @@ contains
             end subroutine parse_movie_star
 
     end subroutine exec_comparemc
+
+    ! utility routines
+
+    subroutine read_nrs_dat( filename, arr, ndat )
+        character(len=*),  intent(in)  :: filename
+        real, allocatable, intent(out) :: arr(:)
+        integer,           intent(out) :: ndat
+        integer            :: ndatlines, nrecs, i, j, cnt
+        real, allocatable  :: line(:)
+        type(nrtxtfile)    :: nrsfile
+        call nrsfile%new(filename, 1)
+        ndatlines = nrsfile%get_ndatalines()
+        nrecs     = nrsfile%get_nrecs_per_line()
+        ndat = ndatlines * nrecs
+        allocate( line(nrecs), arr(ndat) )
+        cnt = 0
+        do i=1,ndatlines
+            call nrsfile%readNextDataLine(line)
+            do j=1,nrecs
+                cnt = cnt + 1
+                arr(cnt) = line(j)
+            end do
+        end do
+        deallocate (line)
+        call nrsfile%kill
+    end subroutine read_nrs_dat
 
 end module simple_commander_misc
