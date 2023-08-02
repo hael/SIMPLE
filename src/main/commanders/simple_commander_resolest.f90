@@ -388,11 +388,17 @@ contains
         class(cavg_filter2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(image), allocatable :: imgs(:)
+        integer,     allocatable :: pinds(:)
         type(polarft_corrcalc)   :: pftcc
         type(builder)            :: build
         type(parameters)         :: params
+        type(image)              :: img_cavg, calc_cavg, rot_img, ctf2_img, ctf_img
         integer                  :: nptcls, iptcl
         logical                  :: l_ctf
+        integer                  :: ncls, n, ldim(3), j, cnt, box
+        real                     :: smpd, x, y, sdev_noise
+        integer, parameter       :: ICLS = 86
+        character(len=:),   allocatable :: cavgsstk
         call cline%set('dir_exec', 'cavg_filter2D')
         call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
@@ -407,9 +413,56 @@ contains
         call build%img_match%init_polarizer(pftcc, params%alpha)
         call prepimgbatch(nptcls)
         call read_imgbatch([1, nptcls])
+        call build%spproj%os_ptcl2D%get_pinds(ICLS, 'class', pinds)
+        call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
+        call find_ldim_nptcls(cavgsstk, ldim, n)
+        ldim(3)  = 1
+        cnt      = 1
+        call calc_cavg%new(ldim, smpd)
+        call rot_img%new(ldim, smpd)
+        call ctf2_img%new(ldim, smpd)
+        call ctf_img%new(ldim, smpd)
+        call calc_cavg%zero_and_unflag_ft
+        call ctf2_img%zero_and_unflag_ft
+        call ctf2_img%fft
         do iptcl = 1, nptcls
-            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+            do j = 1, size(pinds)
+                if( pinds(j) == iptcl )then
+                    call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+                    call build%imgbatch(iptcl)%write('ptcls_stk.mrc', cnt)
+                    x = build%spproj_field%get(iptcl, 'x')
+                    y = build%spproj_field%get(iptcl, 'y')
+                    call build%imgbatch(iptcl)%fft
+                    call build%imgbatch(iptcl)%shift2Dserial(-[x,y])
+                    call build%imgbatch(iptcl)%ifft
+                    call rot_img%zero_and_flag_ft
+                    call build%imgbatch(iptcl)%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_img)
+                    call calc_cavg%add(rot_img)
+                    call ctf_img%fft
+                    call ctf_img%set_cmat(cmplx(pftcc%ctfmats(:,:,iptcl)**2))
+                    call ctf_img%shift2Dserial(-[x,y])
+                    call ctf_img%ifft
+                    call rot_img%zero_and_flag_ft
+                    call ctf_img%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_img)
+                    call rot_img%fft
+                    call ctf2_img%add(rot_img)
+                    cnt = cnt + 1
+                endif
+            enddo
         enddo
+        call img_cavg%new(ldim, smpd)
+        call img_cavg%read(cavgsstk, ICLS)
+        call img_cavg%write('cluster2D_cavg.mrc')
+        call img_cavg%kill
+        call calc_cavg%write('calc_cavg.mrc')
+        call calc_cavg%fft
+        call calc_cavg%div(ctf2_img + 0.1)
+        call calc_cavg%ifft
+        call calc_cavg%write('calc_cavg_ctf2.mrc')
+        call calc_cavg%kill
+        call rot_img%kill
+        call ctf_img%kill
+        call ctf2_img%kill
         ! end gracefully
         call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
