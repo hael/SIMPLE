@@ -21,6 +21,7 @@ integer,  parameter :: LINE_MAX_LEN = 8192
 real(sp), parameter :: PI           = acos(-1.)
 real(dp), parameter :: DPI          = acos(-1.d0)
 real(sp), parameter :: PIO2         = acos(-1.)/2.
+real(sp), parameter :: DPIO2        = acos(-1.d0)/2.d0
 real(sp), parameter :: TWOPI        = 2.*acos(-1.)
 real(dp), parameter :: DTWOPI       = 2.d0*acos(-1.d0)
 real(sp), parameter :: FOURPI       = 4.*acos(-1.)
