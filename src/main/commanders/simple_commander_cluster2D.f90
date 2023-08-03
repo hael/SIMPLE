@@ -1056,6 +1056,10 @@ contains
                 call cline_calc_sigma%set('which_iter',real(params%which_iter+1))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
+            ! print out particle parameters per iteration
+            if( trim(params%print_corrs).eq.'yes' )then
+                call build%spproj_field%write('ptcl2D_'//int2str_pad(params%which_iter,2)//'.txt')
+            endif
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
             frac_srch_space = 0.

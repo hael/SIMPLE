@@ -23,10 +23,6 @@ interface vis_mat
     module procedure vis_2Dreal_mat, vis_2Dinteger_mat, vis_3Dreal_mat, vis_3Dinteger_mat
 end interface vis_mat
 
-interface mode
-    module procedure mode_1, mode_2
-end interface mode
-
 logical, parameter, private :: warn=.false.
 
 contains
@@ -148,50 +144,31 @@ contains
         enddo
     end subroutine vis_3Dinteger_mat
 
-    ! calculates the mode of an array
-    subroutine mode_1( arr, m, npxls_at_mode )
-        integer,           intent(in)  :: arr(:)
-        integer,           intent(out) :: m ! mode
-        integer, optional, intent(out) :: npxls_at_mode
-        integer, allocatable :: counts(:)
-        integer :: i, loc(1)
-        ! initialise array to count occurrences of each value
-        allocate(counts(minval(arr):maxval(arr)), source=0)
-        ! loop over inputted array, counting occurrence of each value
-        do i=1,size(arr)
-            counts(arr(i)) = counts(arr(i)) + 1
-        end do
-        ! Find the mode
-        loc = maxloc(counts)
-        m   = loc(1)
-        if(present(npxls_at_mode)) npxls_at_mode = maxval(counts)
-    end subroutine mode_1
-
-    subroutine mode_2(arr, m, npxls_at_mode)  !REAL VECTORS
-        real, intent(in)  :: arr(:)
-        real, intent(out) :: m(1)
-        integer, optional, intent(out) :: npxls_at_mode
-        integer              :: n !the number of intervals
-        real,    allocatable :: xhist(:)
-        integer, allocatable :: yhist(:)
-        integer              :: i, j
+    subroutine mode(arr, nbins, m)
+        real,    intent(in)  :: arr(:)
+        integer, intent(in)  :: nbins
+        real,    intent(out) :: m
+        real,    allocatable :: x(:)
+        integer, allocatable :: y(:)
+        integer              :: i, j, loc
         real                 :: xmin, xmax, dx
-        xmin=minval(arr)
-        xmax=maxval(arr)
-        n = 2*(nint(xmax-xmin)+1) !this value influence the result because it determins how to approximate the steps
-        allocate(xhist(0:n-1))
-        allocate(yhist(n), source = 0 )
-        dx=(xmax+1-xmin)/n
-        do i=0,n-1
-            xhist(i)=xmin+i*dx
+        xmin = minval(arr)
+        xmax = maxval(arr)
+        allocate(x(0:nbins-1),y(nbins))
+        y  = 0
+        dx = (xmax - xmin) / real(nbins)
+        ! bin lower bound
+        do i = 0,nbins-1
+            x(i)= xmin + real(i)*dx
         end do
-        do i=1,size(arr, dim =1)
-            j = nint((arr(i)-xmin)/dx)+1
-            yhist(j)=yhist(j)+1
+        ! counting
+        do i = 1,size(arr, dim=1)
+            j    = nint((arr(i)-xmin)/dx)+1
+            y(j) = y(j) + 1
         end do
-        m(:) = xhist(maxloc(yhist)-1)
-        if(present(npxls_at_mode)) npxls_at_mode = maxval(yhist)
-    end subroutine mode_2
+        loc = maxloc(y,dim=1)
+        m = x(loc-1) + dx/2.0
+    end subroutine mode
 
     ! vector quantization
 
@@ -442,7 +419,7 @@ contains
     ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
     subroutine otsu_1( n, x, thresh )
         integer, intent(in)    :: n
-        real,    intent(inout) :: x(:)
+        real,    intent(in)    :: x(n)
         real,    intent(inout) :: thresh ! threshold for binarisation, in the old value range
         integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255, NHIST = MAX_VAL-MIN_VAL+1
         integer :: i, T, yhist(NHIST)

@@ -163,6 +163,7 @@ type :: oris
     procedure          :: fill_empty_classes
     procedure          :: remap_cls
     procedure          :: merge_classes
+    procedure          :: threshold_particles
     procedure          :: round_shifts
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
@@ -1875,6 +1876,107 @@ contains
             if(clsnr == class) call self%set(i, 'class', real(class_merged))
         end do
     end subroutine merge_classes
+
+        !>  \brief  is for merging class class into class_merged
+    subroutine threshold_particles( self, method, param, prange )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: method
+        real,             intent(in)    :: param
+        integer,          intent(in)    :: prange(2)
+        real(dp) :: A = 2.d0/DPI
+        logical, allocatable :: states(:), mask(:)
+        real :: threshold, m
+        real(dp) :: avg, sdev, m0, alpha, delta, gamma, omega, eps, muz, sigz
+        real,    allocatable :: scores(:), tmp(:)
+        integer, allocatable :: inds(:)
+        integer :: i, nptcls, threshold_index, nptcls_rejected
+        select case(trim(method))
+        case('frac','mahalanobis','skewgau','otsu')
+            ! supported
+        case DEFAULT
+            return
+        end select
+        allocate(states(self%n),source=.false.)
+        do i = prange(1),prange(2)
+            states(i) = self%o(i)%get('state') > 0.5
+        enddo
+        nptcls = count(states)
+        scores = self%get_all('corr')
+        select case(trim(method))
+        case('frac')
+            ! fraction of particles to retain
+            if( (param < 0.01) .or. (param > 0.99) ) return
+            allocate(inds(self%n), source=(/(i,i=1,self%n)/))
+            where(.not.states)
+                scores = -999.9
+            end where
+            call hpsort(scores, inds)
+            call reverse(inds)
+            threshold_index = nint(param*real(nptcls))
+            if( threshold_index < 1 ) return
+            if( threshold_index >= nptcls ) return
+            threshold_index = self%n - threshold_index + 1
+            threshold_index = inds(threshold_index)
+            threshold       = scores(threshold_index)
+        case('mahalanobis')
+            if( (param < 0.0) ) return
+            mask   = states
+            ! outliers exclusion
+            call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
+            where( scores < real(avg - 3.0*sdev) ) mask = .false.
+            where( scores > real(avg + 3.0*sdev) ) mask = .false.
+            call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
+            ! mode of distribution
+            tmp = pack(scores, mask)
+            call mode(tmp, 100, m)
+            threshold = m - param*real(sdev)
+        case('skewgau')
+            ! skewed gaussian distribution
+            if( (param < 0.0) ) return
+            mask = states
+            ! outliers exclusion
+            call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
+            where( scores < real(avg - 3.0*sdev) ) mask = .false.
+            where( scores > real(avg + 3.0*sdev) ) mask = .false.
+            call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
+            ! skewness (https://en.wikipedia.org/wiki/Skewness#Definition)
+            gamma = sum(real(scores,dp)**3,mask=mask) / real(count(mask),dp)
+            gamma = (gamma - 3.d0*avg*sdev**2.d0 - avg**3.d0) / sdev**3.d0
+            gamma = min(0.99527d0, gamma)
+            ! moments eps,omega,alpha & mode (https://en.wikipedia.org/wiki/Skew_normal_distribution)
+            delta = ( DPIO2*abs(gamma)**0.666667d0 ) / ( abs(gamma)**0.666667d0 + (2.d0-DPIO2)**0.666667d0 )
+            delta = sign(sqrt(delta), gamma)
+            alpha = delta / sqrt(1.d0 - delta**2.d0)
+            omega = sdev / sqrt(1.d0 - A*delta**2.d0)
+            eps   = avg - omega * delta * sqrt(A)
+            muz   = delta * sqrt(A)
+            sigz  = sqrt(1.d0-muz**2.d0)
+            m0    = muz - 0.5d0*gamma*sigz - sign(0.5d0*exp(-2.d0*PI/abs(alpha)), alpha)
+            m     = real(eps + omega*m0)
+            threshold = m - param*real(sdev)
+        case('otsu')
+            mask   = states
+            ! outliers exclusion
+            call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
+            where( scores < real(avg - 3.0*sdev) ) mask = .false.
+            where( scores > real(avg + 3.0*sdev) ) mask = .false.
+            tmp = pack(scores, mask)
+            call otsu(size(tmp), tmp, threshold)
+        case DEFAULT
+            return
+        end select
+        nptcls_rejected = count(states .and. (scores < threshold))
+        ! safeguard TODO
+        do i = 1,self%n
+            if( states(i) )then
+                if( scores(i) < threshold )then
+                    call self%o(i)%set('w', 0.)
+                else
+                    call self%o(i)%set('w', 1.)
+                endif
+            endif
+        enddo
+    end subroutine threshold_particles
 
     !>  \brief  for extending algndoc according to nr of symmetry ops
     subroutine symmetrize( self, nsym )
