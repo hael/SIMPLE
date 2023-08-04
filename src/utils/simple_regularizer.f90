@@ -129,8 +129,8 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
-                ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
+                ptcl_ctf_rot = ptcl_ctf(:,:,i) * shmat
+                call self%rotate_polar(             ptcl_ctf_rot, ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
@@ -229,7 +229,7 @@ contains
 
     subroutine rotate_polar_test( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(regularizer), intent(inout) :: self
-        complex(sp),        intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,            intent(in)    :: irot
         integer :: rot
