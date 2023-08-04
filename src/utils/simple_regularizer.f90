@@ -127,11 +127,11 @@ contains
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
+                shmat => self%pftcc%heap_vars(ithr)%shmat
+                call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
+                ptcl_ctf_rot = ptcl_ctf_rot * shmat
                 call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
-                shmat => self%pftcc%heap_vars(ithr)%shmat
-                call self%pftcc%gen_shmat(ithr, -real(init_xy), shmat)
-                ptcl_ctf_rot = ptcl_ctf_rot * shmat
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
             enddo
