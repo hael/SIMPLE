@@ -392,7 +392,7 @@ contains
         type(polarft_corrcalc)   :: pftcc
         type(builder)            :: build
         type(parameters)         :: params
-        type(image)              :: img_cavg, calc_cavg, rot_img, ctf2_img, ctf_img
+        type(image)              :: img_cavg, calc_cavg, rot_img, ctf2_img, ctf_img, ctf_rot_img
         integer                  :: nptcls, iptcl
         logical                  :: l_ctf
         integer                  :: ncls, n, ldim(3), j, cnt, box
@@ -421,11 +421,13 @@ contains
         cnt      = 1
         call calc_cavg%new(ldim, smpd)
         call rot_img%new(ldim, smpd)
+        call ctf_rot_img%new(ldim, smpd)
         call ctf2_img%new(ldim, smpd)
         call ctf_img%new(ldim, smpd)
         call calc_cavg%zero_and_unflag_ft
         call ctf2_img%zero_and_unflag_ft
         call ctf2_img%fft
+        call calc_cavg%fft
         do iptcl = 1, nptcls
             do j = 1, size(pinds)
                 if( pinds(j) == iptcl )then
@@ -438,15 +440,17 @@ contains
                     call build%imgbatch(iptcl)%ifft
                     call rot_img%zero_and_unflag_ft
                     call build%imgbatch(iptcl)%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_img)
-                    call calc_cavg%add(rot_img)
                     call ctf_img%fft
-                    call ctf_img%set_cmat(cmplx(pftcc%ctfmats(:,:,iptcl)**2))
+                    call ctf_img%set_cmat(cmplx(pftcc%ctfmats(:,:,iptcl)))
                     call ctf_img%shift2Dserial(-[x,y])
                     call ctf_img%ifft
-                    call rot_img%zero_and_flag_ft
-                    call ctf_img%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_img)
+                    call ctf_rot_img%zero_and_unflag_ft
+                    call ctf_img%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,ctf_rot_img)
+                    call ctf_rot_img%fft
+                    call ctf2_img%add(ctf_rot_img*ctf_rot_img)
                     call rot_img%fft
-                    call ctf2_img%add(rot_img)
+                    rot_img = rot_img * ctf_rot_img
+                    call calc_cavg%add(rot_img)
                     cnt = cnt + 1
                 endif
             enddo
@@ -455,9 +459,7 @@ contains
         call img_cavg%read(cavgsstk, ICLS)
         call img_cavg%write('cluster2D_cavg.mrc')
         call img_cavg%kill
-        call calc_cavg%write('calc_cavg.mrc')
-        call calc_cavg%fft
-        call calc_cavg%div(ctf2_img + 0.1)
+        call calc_cavg%div(ctf2_img + 0.01)
         call calc_cavg%ifft
         call calc_cavg%write('calc_cavg_ctf2.mrc')
         call calc_cavg%kill
