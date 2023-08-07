@@ -405,16 +405,18 @@ contains
         call cline%set('dir_exec', 'cavg_filter2D')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl2D')
-        call build%init_params_and_build_spproj(cline,params)
+        call build%init_params_and_build_general_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         ! reading all images
         nptcls = build%spproj%get_nptcls()
         call pftcc%new(nptcls, [1,nptcls], params%kfromto)
         call reg_obj%new(pftcc)
+        call build%spproj%os_ptcl2D%get_pinds(ICLS, 'class', pinds)
         call prepimgbatch(nptcls)
         call read_imgbatch([1, nptcls])
         call build%img_match%init_polarizer(pftcc, params%alpha)
-        do iptcl = 1, nptcls
+        do j = 1, size(pinds)
+            iptcl = pinds(j)
             ! prep
             call prepimg4align(iptcl, build%imgbatch(iptcl))
             ! transfer to polar coordinates
@@ -425,9 +427,7 @@ contains
         ! getting the ctfs
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=1).ne.'no'
         ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
         ! computing the class average (mimicking reg's cavg) and comparing to the cluster2D_cavg
         allocate(ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &ptcl_ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
@@ -440,7 +440,7 @@ contains
             iptcl = pinds(j)
             x   = build%spproj_field%get(iptcl, 'x')
             y   = build%spproj_field%get(iptcl, 'y')
-            loc = build%spproj_field%e3get(iptcl)
+            loc = pftcc%get_roind(360. - build%spproj_field%e3get(iptcl))
             if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
             shmat => pftcc%heap_vars(ithr)%shmat
             call pftcc%gen_shmat(ithr, -[x,y], shmat)
@@ -450,11 +450,11 @@ contains
             reg_denom = reg_denom +      ctf_rot**2
         enddo
         ! writing ptcl stack for current class and the cluster2D_cavg of the current class
-        call build%spproj%os_ptcl2D%get_pinds(ICLS, 'class', pinds)
         call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call find_ldim_nptcls(cavgsstk, ldim, n)
         ldim(3) = 1
         do j = 1, size(pinds)
+            call build%imgbatch(pinds(j))%ifft
             call build%imgbatch(pinds(j))%write('ptcls_stk.mrc', j)
         enddo
         call img_cavg%new(ldim, smpd)
@@ -463,7 +463,7 @@ contains
         call img_cavg%kill
         call calc_cavg%new(ldim, smpd)
         call calc_cavg%fft
-        call calc_cavg%set_cmat(cmplx(reg/(reg_denom + 0.01)))
+        call calc_cavg%set_cmat(cmplx(reg/reg_denom))
         call calc_cavg%ifft
         call calc_cavg%write('calc_cavg_ctf2.mrc')
         call calc_cavg%kill
