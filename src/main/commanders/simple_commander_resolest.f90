@@ -388,6 +388,7 @@ contains
         use simple_regularizer,         only: regularizer
         class(cavg_filter2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        complex,          allocatable :: cmat(:,:)
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: cavgsstk
         real(dp),         allocatable :: ctf_rot(:,:), ptcl_ctf_rot(:,:), reg(:,:), reg_denom(:,:)
@@ -398,7 +399,7 @@ contains
         type(parameters)              :: params
         type(image)                   :: img_cavg, calc_cavg
         type(regularizer)             :: reg_obj
-        integer  :: nptcls, iptcl
+        integer  :: nptcls, iptcl, nptcls_pftcc
         logical  :: l_ctf
         integer  :: ncls, n, ldim(3), j, cnt, box, loc, ithr
         real     :: smpd, x, y, sdev_noise
@@ -408,10 +409,12 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         ! reading all images
-        nptcls = build%spproj%get_nptcls()
-        call pftcc%new(nptcls, [1,nptcls], params%kfromto)
-        call reg_obj%new(pftcc)
         call build%spproj%os_ptcl2D%get_pinds(ICLS, 'class', pinds)
+        nptcls       = build%spproj%get_nptcls()
+        nptcls_pftcc = size(pinds)
+        call pftcc%new(nptcls_pftcc, [1,nptcls_pftcc], params%kfromto)
+        call pftcc%reallocate_ptcls(nptcls_pftcc, pinds)
+        call reg_obj%new(pftcc)
         call prepimgbatch(nptcls)
         call read_imgbatch([1, nptcls])
         call build%img_match%init_polarizer(pftcc, params%alpha)
@@ -422,10 +425,10 @@ contains
             ! transfer to polar coordinates
             call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
             ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftcc%set_eo(iptcl, .true. )
         enddo
         ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=1).ne.'no'
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
         ! computing the class average (mimicking reg's cavg) and comparing to the cluster2D_cavg
@@ -444,11 +447,13 @@ contains
             if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
             shmat => pftcc%heap_vars(ithr)%shmat
             call pftcc%gen_shmat(ithr, -[x,y], shmat)
-            call reg_obj%rotate_polar(real(pftcc%pfts_ptcls(:,:,iptcl) * pftcc%ctfmats(:,:,iptcl) * shmat), ptcl_ctf_rot, loc)
-            call reg_obj%rotate_polar(                                   pftcc%ctfmats(:,:,iptcl),               ctf_rot, loc)
+            call reg_obj%rotate_polar(real(pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)), ptcl_ctf_rot, loc)
+            call reg_obj%rotate_polar(                               pftcc%ctfmats(:,:,j),               ctf_rot, loc)
             reg       = reg       + ptcl_ctf_rot
             reg_denom = reg_denom +      ctf_rot**2
         enddo
+        pftcc%pfts_ptcls(:,:,1) = reg / reg_denom
+        call pftcc%polar2cartesian(1, .false., cmat, ldim(1))
         ! writing ptcl stack for current class and the cluster2D_cavg of the current class
         call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call find_ldim_nptcls(cavgsstk, ldim, n)
@@ -463,7 +468,8 @@ contains
         call img_cavg%kill
         call calc_cavg%new(ldim, smpd)
         call calc_cavg%fft
-        call calc_cavg%set_cmat(cmplx(reg/reg_denom))
+        call calc_cavg%set_cmat(cmat)
+        call calc_cavg%shift_phorig()
         call calc_cavg%ifft
         call calc_cavg%write('calc_cavg_ctf2.mrc')
         call calc_cavg%kill
