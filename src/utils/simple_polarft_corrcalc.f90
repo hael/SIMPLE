@@ -658,7 +658,7 @@ contains
 
     subroutine polar2cartesian_2( self, cmat_in, cmat, box )
         class(polarft_corrcalc), intent(in)    :: self
-        complex,                 intent(in)    :: cmat_in(:,:)
+        complex,                 intent(in)    :: cmat_in(self%pftsz,self%kfromto(1):self%kfromto(2))
         complex,    allocatable, intent(inout) :: cmat(:,:)
         integer,                 intent(out)   :: box
         integer, allocatable :: norm(:,:)

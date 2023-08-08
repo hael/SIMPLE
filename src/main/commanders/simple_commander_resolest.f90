@@ -391,7 +391,7 @@ contains
         complex,          allocatable :: cmat(:,:)
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: cavgsstk
-        complex(dp),      allocatable :: cls_avg(:,:), ptcl_ctf_rot(:,:)
+        complex(dp),      allocatable :: cls_avg(:,:), ptcl_ctf_rot(:,:), ptcl_ctf(:,:)
         real(dp),         allocatable :: ctf_rot(:,:), denom(:,:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
@@ -424,6 +424,7 @@ contains
         ! computing the class average (mimicking reg's cavg) and comparing to the cluster2D_cavg
         allocate(ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &ptcl_ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
+           &    ptcl_ctf(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &     cls_avg(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &       denom(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)))
         cls_avg = 0.
@@ -439,9 +440,9 @@ contains
             ! accumulating the cls_avg
             loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
             if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-            ptcl_ctf_rot = pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)
-            call reg_obj%rotate_polar(ptcl_ctf_rot,         ptcl_ctf_rot, loc)
-            call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j),      ctf_rot, loc)
+            ptcl_ctf = pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)
+            call reg_obj%rotate_polar(ptcl_ctf,        ptcl_ctf_rot, loc)
+            call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j), ctf_rot, loc)
             cls_avg = cls_avg + ptcl_ctf_rot
             denom   = denom   + ctf_rot**2
             ! writing the raw stack
