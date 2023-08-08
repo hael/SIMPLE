@@ -400,7 +400,7 @@ contains
         type(regularizer)             :: reg_obj
         integer  :: nptcls, iptcl, nptcls_cls
         logical  :: l_ctf
-        integer  :: ncls, j, box, loc, ithr
+        integer  :: ncls, j, box, loc
         real     :: smpd
         call cline%set('dir_exec', 'cavg_filter2D')
         call cline%set('mkdir',    'yes')
@@ -426,7 +426,6 @@ contains
            &ptcl_ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &     cls_avg(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &       denom(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)))
-        ithr    = omp_get_thread_num() + 1
         cls_avg = 0.
         denom   = 0.
         do j = 1, nptcls_cls
