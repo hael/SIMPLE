@@ -1353,18 +1353,19 @@ contains
         &'Different filter/data reduction of particles in cavgs',&          ! descr_short
         &'is a program for different filter/data reduction of particles in cavgs',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &0, 1, 0, 0, 0, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 1, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cavg_filter2D%set_input('parm_ios', 1, smpd)
+        call cavg_filter2D%set_input('parm_ios', 2,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call cavg_filter2D%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 3.)
         ! mask controls
         ! <empty>
         ! computer controls
