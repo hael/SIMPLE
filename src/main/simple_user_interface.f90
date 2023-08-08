@@ -1359,13 +1359,13 @@ contains
         ! <empty>
         ! parameter input/output
         call cavg_filter2D%set_input('parm_ios', 1, smpd)
-        call cavg_filter2D%set_input('parm_ios', 2,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
+        call cavg_filter2D%set_input('parm_ios', 2,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .true., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call cavg_filter2D%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 3.)
+        call cavg_filter2D%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
         ! mask controls
         ! <empty>
         ! computer controls
