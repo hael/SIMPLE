@@ -31,7 +31,7 @@ real(sp), parameter :: TINY         = 1e-10
 real(dp), parameter :: DTINY        = 1e-10
 real(sp), parameter :: SMALL        = 1e-6
 real(sp), parameter :: FTOL         = 1e-4
-real(dp), parameter :: DSMALL       = 1e-6
+real(dp), parameter :: DSMALL       = 1.d-6
 real(dp), parameter :: PISQR        = DPI*DPI
 
 ! directory-based execution model

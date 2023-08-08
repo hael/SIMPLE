@@ -913,7 +913,7 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = self%tfun%eval(spaFreqSq, ang, aadd_phshift)
-                tval      = min(1.,max(tval * tval,0.000001))
+                tval      = min(1.,max(tval * tval,SMALL))
                 prmat(i,j,1) = sqrt(tval)
             end do
         end do

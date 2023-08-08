@@ -155,7 +155,7 @@ contains
             ! exclusion
             precs(cnt)%pind = 0
             if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-            if( spproj%os_ptcl2D%get(iptcl,'w') < TINY ) cycle
+            if( spproj%os_ptcl2D%get(iptcl,'w') < SMALL ) cycle
             if( .not.pptcl_mask(iptcl)                 ) cycle
             precs(cnt)%pind = iptcl
         enddo
@@ -208,23 +208,25 @@ contains
         class(sp_project), intent(inout) :: spproj
         integer  :: pops(params_glob%ncls)
         real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls), specscores(params_glob%ncls)
-        real     :: frc05, frc0143, rstate
+        real     :: frc05, frc0143, rstate, w
         integer  :: i, iptcl, icls, pop, nptcls
         nptcls     = spproj%os_ptcl2D%get_noris()
         pops       = 0
         corrs      = 0.d0
         ws         = 0.d0
         specscores = 0.d0
-        !$omp parallel do default(shared) private(iptcl,rstate,icls) schedule(static)&
+        !$omp parallel do default(shared) private(iptcl,rstate,icls,w) schedule(static)&
         !$omp proc_bind(close) reduction(+:pops,corrs,ws,specscores)
         do iptcl=1,nptcls
             rstate = spproj%os_ptcl2D%get(iptcl,'state')
-            if( rstate < 0.5 )cycle
+            if( rstate < 0.5 ) cycle
+            w = spproj%os_ptcl2D%get(iptcl,'w')
+            if( w < SMALL ) cycle
             icls = nint(spproj%os_ptcl2D%get(iptcl,'class'))
             if( icls<1 .or. icls>params_glob%ncls )cycle
             pops(icls)       = pops(icls)      + 1
             corrs(icls)      = corrs(icls)     + spproj%os_ptcl2D%get(iptcl,'corr')
-            ws(icls)         = ws(icls)        + spproj%os_ptcl2D%get(iptcl,'w')
+            ws(icls)         = ws(icls)        + real(w,dp)
             specscores(icls) = specscores(icls)+ spproj%os_ptcl2D%get(iptcl,'specscore')
         enddo
         !$omp end parallel do

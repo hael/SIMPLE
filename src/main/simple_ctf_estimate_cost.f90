@@ -188,7 +188,7 @@ contains
             spaFreqSq = hinv * hinv
             ang       = atan2(0.,real(h))
             tval      = real(self%tfun%eval(spaFreqSq, 0., phshift),dp)
-            tvalsq    = min(1.d0,max(tval*tval,0.000001d0))
+            tvalsq    = min(1.d0,max(tval*tval,DSMALL))
             tval      = dsqrt(tvalsq)
             ! correlation sums
             ctf_sum    = ctf_sum    + tval
