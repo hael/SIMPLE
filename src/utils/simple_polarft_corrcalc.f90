@@ -658,7 +658,7 @@ contains
 
     subroutine polar2cartesian_2( self, cmat_in, cmat, box )
         class(polarft_corrcalc), intent(in)    :: self
-        complex,    allocatable, intent(in)    :: cmat_in(:,:)
+        complex,                 intent(in)    :: cmat_in(:,:)
         complex,    allocatable, intent(inout) :: cmat(:,:)
         integer,                 intent(out)   :: box
         integer, allocatable :: norm(:,:)
@@ -689,7 +689,7 @@ contains
             cmat(1,k+c) = conjg(cmat(1,c-k))
         enddo
         ! arbitrary magnitude
-        cmat(1,c) = (100.0,0.0)
+        cmat(1,c) = (0.0,0.0)
     end subroutine polar2cartesian_2
 
     subroutine print( self )

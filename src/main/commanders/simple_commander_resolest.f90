@@ -392,42 +392,31 @@ contains
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: cavgsstk
         complex(dp),      allocatable :: cls_avg(:,:), ptcl_ctf_rot(:,:)
-        real(dp),         allocatable :: ctf_rot(:,:), reg(:,:), reg_denom(:,:), denom(:,:), re_ptcl_ctf_rot(:,:)
-        integer,          parameter   :: ICLS = 3
-        complex(sp),      pointer     :: shmat(:,:)
+        real(dp),         allocatable :: ctf_rot(:,:), denom(:,:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(image)                   :: img_cavg, calc_cavg
         type(regularizer)             :: reg_obj
-        integer  :: nptcls, iptcl, nptcls_pftcc
+        integer  :: nptcls, iptcl, nptcls_cls
         logical  :: l_ctf
-        integer  :: ncls, n, ldim(3), j, cnt, box, loc, ithr
-        real     :: smpd, x, y, sdev_noise
+        integer  :: ncls, j, box, loc, ithr
+        real     :: smpd
         call cline%set('dir_exec', 'cavg_filter2D')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl2D')
         call build%init_params_and_build_general_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
-        ! reading all images
-        call build%spproj%os_ptcl2D%get_pinds(ICLS, 'class', pinds)
-        nptcls       = build%spproj%get_nptcls()
-        nptcls_pftcc = size(pinds)
-        call pftcc%new(nptcls_pftcc, [1,nptcls_pftcc], params%kfromto)
-        call pftcc%reallocate_ptcls(nptcls_pftcc, pinds)
+        ! reading all from the class 'class'
+        call build%spproj%os_ptcl2D%get_pinds(params%class, 'class', pinds)
+        nptcls     = build%spproj%get_nptcls()
+        nptcls_cls = size(pinds)
+        call pftcc%new(nptcls_cls, [1,nptcls_cls], params%kfromto)
+        call pftcc%reallocate_ptcls(nptcls_cls, pinds)
         call reg_obj%new(pftcc)
         call prepimgbatch(nptcls)
         call read_imgbatch([1, nptcls])
         call build%img_match%init_polarizer(pftcc, params%alpha)
-        do j = 1, size(pinds)
-            iptcl = pinds(j)
-            ! prep
-            call prepimg4align(iptcl, build%imgbatch(iptcl))
-            ! transfer to polar coordinates
-            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, .true. )
-        enddo
         ! getting the ctfs
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
@@ -435,90 +424,46 @@ contains
         ! computing the class average (mimicking reg's cavg) and comparing to the cluster2D_cavg
         allocate(ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &ptcl_ctf_rot(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
-           &         reg(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &     cls_avg(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
-           &   reg_denom(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)),&
            &       denom(pftcc%pftsz, pftcc%kfromto(1):pftcc%kfromto(2)))
-        ithr = omp_get_thread_num() + 1
-        reg       = 0.
-        reg_denom = 0.
-        cls_avg   = 0.
-        denom     = 0.
-        do j = 1, size(pinds)
+        ithr    = omp_get_thread_num() + 1
+        cls_avg = 0.
+        denom   = 0.
+        do j = 1, nptcls_cls
             iptcl = pinds(j)
+            ! prep
+            call prepimg4align(iptcl, build%imgbatch(iptcl))
+            ! transfer to polar coordinates
+            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, .true. )
+            ! accumulating the cls_avg
             loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
             if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-            pftcc%pfts_ptcls(:,:,j) = pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)
-            call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,j),kind=dp), ptcl_ctf_rot, loc)
-            call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j),                   ctf_rot,      loc)
-            cls_avg   = cls_avg   + ptcl_ctf_rot
-            denom     = denom     + ctf_rot**2
-            reg       = reg       + real(ptcl_ctf_rot)
-            reg_denom = reg_denom + ctf_rot**2
+            ptcl_ctf_rot = pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)
+            call reg_obj%rotate_polar(ptcl_ctf_rot,         ptcl_ctf_rot, loc)
+            call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j),      ctf_rot, loc)
+            cls_avg = cls_avg + ptcl_ctf_rot
+            denom   = denom   + ctf_rot**2
+            ! writing the raw stack
+            call build%imgbatch(pinds(j))%ifft
+            call build%imgbatch(pinds(j))%write('ptcls_stk.mrc', j)
         enddo
         ! polar class average
-        pftcc%pfts_ptcls(:,:,1) = cls_avg / denom
-        call pftcc%polar2cartesian(1, .false., cmat, box)
+        call pftcc%polar2cartesian(cmplx(cls_avg / denom, kind=sp), cmat, box)
         call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
         call calc_cavg%zero_and_flag_ft
         call calc_cavg%set_cmat(cmat)
         call calc_cavg%shift_phorig()
         call calc_cavg%ifft
         call calc_cavg%write('polar_cavg.mrc')
-        ! regularization
-        pftcc%pfts_ptcls(:,:,1) = reg / reg_denom
-        call pftcc%polar2cartesian(1, .false., cmat, box)
-        call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
-        call calc_cavg%zero_and_flag_ft
-        call calc_cavg%set_cmat(cmat)
-        call calc_cavg%shift_phorig()
-        call calc_cavg%ifft
-        call calc_cavg%write('polar_reg.mrc')
-        ! writing ptcl stack for current class and the cluster2D_cavg of the current class
+        ! writing the cluster2D_cavg of the current class
         call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call img_cavg%new([params%box,params%box,1], params%smpd)
-        call img_cavg%read(cavgsstk, ICLS)
+        call img_cavg%read(cavgsstk, params%class)
         call img_cavg%write('cluster2D_cavg.mrc')
         call img_cavg%kill
-        do j = 1, size(pinds)
-            call build%imgbatch(pinds(j))%ifft
-            call build%imgbatch(pinds(j))%write('ptcls_stk.mrc', j)
-        enddo
-        ! do j = 1, size(pinds)
-        !     iptcl = pinds(j)
-        !     x   = build%spproj_field%get(iptcl, 'x')
-        !     y   = build%spproj_field%get(iptcl, 'y')
-        !     loc = pftcc%get_roind(360. - build%spproj_field%e3get(iptcl))
-        !     if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-        !     shmat => pftcc%heap_vars(ithr)%shmat
-        !     call pftcc%gen_shmat(ithr, -[x,y], shmat)
-        !     call reg_obj%rotate_polar(real(pftcc%pfts_ptcls(:,:,j) * pftcc%ctfmats(:,:,j)), ptcl_ctf_rot, loc)
-        !     call reg_obj%rotate_polar(                               pftcc%ctfmats(:,:,j),               ctf_rot, loc)
-        !     reg       = reg       + ptcl_ctf_rot
-        !     reg_denom = reg_denom +      ctf_rot**2
-        ! enddo
-        ! pftcc%pfts_ptcls(:,:,1) = reg / reg_denom
-        ! call pftcc%polar2cartesian(1, .false., cmat, ldim(1))
-        ! ! writing ptcl stack for current class and the cluster2D_cavg of the current class
-        ! call build%spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
-        ! call find_ldim_nptcls(cavgsstk, ldim, n)
-        ! ldim(3) = 1
-        ! do j = 1, size(pinds)
-        !     call build%imgbatch(pinds(j))%ifft
-        !     call build%imgbatch(pinds(j))%write('ptcls_stk.mrc', j)
-        ! enddo
-        ! call img_cavg%new(ldim, smpd)
-        ! call img_cavg%read(cavgsstk, ICLS)
-        ! call img_cavg%write('cluster2D_cavg.mrc')
-        ! call img_cavg%kill
-        ! call calc_cavg%new(ldim, smpd)
-        ! call calc_cavg%fft
-        ! call calc_cavg%set_cmat(cmat)
-        ! call calc_cavg%shift_phorig()
-        ! call calc_cavg%ifft
-        ! call calc_cavg%write('calc_cavg_ctf2.mrc')
-        ! call calc_cavg%kill
-        ! ! end gracefully
+        ! end gracefully
         call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
 
