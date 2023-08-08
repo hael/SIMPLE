@@ -91,6 +91,7 @@ contains
         type(cmdline)    :: cline_cavgassemble
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        call cline%set('wiener', 'full')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
@@ -159,7 +160,7 @@ contains
         ! shift multiplication
         if( params%mul > 1. ) call build%spproj_field%mul_shifts(params%mul)
         ! setup weights
-        if( trim(params%ptclw).eq.'yes' )then
+        if( (trim(params%ptclw).eq.'yes') .or. (trim(params%thresh2D).ne.'no') )then
             ! weights are set at search time, so nothing to do here.
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)

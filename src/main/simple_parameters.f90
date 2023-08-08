@@ -196,6 +196,7 @@ type :: parameters
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
+    character(len=STDLEN)     :: thresh2D='no'        !< whether to apply thesholdind/weighing during 2D classification
     character(len=STDLEN)     :: vol_even=''          !< even reference volume
     character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN)     :: wfun='kb'
@@ -389,6 +390,7 @@ type :: parameters
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
+    real    :: thresh2D_param=1.
     real    :: tiltgroupmax=0
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
@@ -576,6 +578,7 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
+        call check_carg('thresh2D',       self%thresh2D)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
@@ -790,6 +793,7 @@ contains
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
+        call check_rarg('thresh2D_param', self%thresh2D_param)
         call check_rarg('total_dose',     self%total_dose)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)

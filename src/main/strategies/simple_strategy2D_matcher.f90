@@ -14,7 +14,7 @@ use simple_convergence,         only: convergence
 use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,     only: strategy2D_spec
-use simple_strategy2D_alloc,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
+use simple_strategy2D_alloc!,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
 use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
@@ -276,6 +276,14 @@ contains
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
+
+        ! PARTICLE THESHOLDING/WEIGHING
+        if( params_glob%thresh2D.ne.'no' )then
+            if( which_iter > 2 )then
+                call build_glob%spproj_field%threshold_particles(params_glob%thresh2D,&
+                & params_glob%thresh2D_param, [params_glob%fromp,params_glob%top])
+            endif
+        endif
 
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()

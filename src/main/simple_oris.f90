@@ -1885,13 +1885,13 @@ contains
         integer,          intent(in)    :: prange(2)
         real(dp) :: A = 2.d0/DPI
         logical, allocatable :: states(:), mask(:)
-        real :: threshold, m
+        real :: threshold, m, smin, w
         real(dp) :: avg, sdev, m0, alpha, delta, gamma, omega, eps, muz, sigz
         real,    allocatable :: scores(:), tmp(:)
         integer, allocatable :: inds(:)
-        integer :: i, nptcls, threshold_index, nptcls_rejected
+        integer :: i, nptcls, threshold_index, nptcls_rejected, n
         select case(trim(method))
-        case('frac','mahalanobis','skewgau','otsu')
+        case('frac','mahalanobis','skewgau','skewgauw','otsu')
             ! supported
         case DEFAULT
             return
@@ -1918,9 +1918,10 @@ contains
             threshold_index = self%n - threshold_index + 1
             threshold_index = inds(threshold_index)
             threshold       = scores(threshold_index)
+            call threshold_here
         case('mahalanobis')
             if( (param < 0.0) ) return
-            mask   = states
+            mask = states
             ! outliers exclusion
             call avg_sdev(real(scores,dp), avg, sdev, mask=mask)
             where( scores < real(avg - 3.0*sdev) ) mask = .false.
@@ -1930,7 +1931,8 @@ contains
             tmp = pack(scores, mask)
             call mode(tmp, 100, m)
             threshold = m - param*real(sdev)
-        case('skewgau')
+            call threshold_here
+        case('skewgau','skewgauw')
             ! skewed gaussian distribution
             if( (param < 0.0) ) return
             mask = states
@@ -1952,8 +1954,40 @@ contains
             muz   = delta * sqrt(A)
             sigz  = sqrt(1.d0-muz**2.d0)
             m0    = muz - 0.5d0*gamma*sigz - sign(0.5d0*exp(-2.d0*PI/abs(alpha)), alpha)
-            m     = real(eps + omega*m0)
-            threshold = m - param*real(sdev)
+            m     = real(eps + omega*m0) ! mode
+            if( trim(method) .eq.'skewgauw')then
+                ! thresholdind/weighing
+                mask = states .and. (scores < m)
+                smin = max(minval(scores, mask=mask), m-3.*real(sdev))
+                mask = states .and. (scores < m) .and. (scores > smin)
+                n    = count(mask)
+                sdev = sum((scores-m)**2, mask=mask)
+                sdev = sqrt(sdev/real(n-1,dp))
+                threshold = m-param*real(sdev)
+                nptcls_rejected = 0
+                do i = 1,self%n
+                    if( states(i) )then
+                        if( scores(i) < m )then
+                            if( scores(i) < threshold )then
+                                call self%o(i)%set('w', 0.)
+                                nptcls_rejected = nptcls_rejected +1
+                            else
+                                ! min/max weighing
+                                w = (scores(i) - threshold) / (m - threshold)
+                                call self%o(i)%set('w', w)
+                            endif
+                        else
+                            call self%o(i)%set('w', 1.)
+                        endif
+                    endif
+                enddo
+                ! print *,'alpha,mode,threshold,smin,sdev ',alpha,m,threshold,smin,sdev
+                ! print *,'nweighted,nrejected ',n,nptcls_rejected
+            else
+                ! hard thresholding
+                threshold = m - param*real(sdev)
+                call threshold_here
+            endif
         case('otsu')
             mask   = states
             ! outliers exclusion
@@ -1962,20 +1996,28 @@ contains
             where( scores > real(avg + 3.0*sdev) ) mask = .false.
             tmp = pack(scores, mask)
             call otsu(size(tmp), tmp, threshold)
+            call threshold_here
         case DEFAULT
             return
         end select
-        nptcls_rejected = count(states .and. (scores < threshold))
-        ! safeguard TODO
-        do i = 1,self%n
-            if( states(i) )then
-                if( scores(i) < threshold )then
-                    call self%o(i)%set('w', 0.)
-                else
-                    call self%o(i)%set('w', 1.)
-                endif
-            endif
-        enddo
+
+        contains
+
+            subroutine threshold_here()
+                nptcls_rejected = 0
+                do i = 1,self%n
+                    if( states(i) )then
+                        if( scores(i) < threshold )then
+                            call self%o(i)%set('w', 0.)
+                            nptcls_rejected = nptcls_rejected + 1
+                        else
+                            call self%o(i)%set('w', 1.)
+                        endif
+                    endif
+                enddo
+                ! print *,'nrejected ',nptcls_rejected
+            end subroutine threshold_here
+
     end subroutine threshold_particles
 
     !>  \brief  for extending algndoc according to nr of symmetry ops

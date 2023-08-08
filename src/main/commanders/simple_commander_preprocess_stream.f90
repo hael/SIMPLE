@@ -93,9 +93,9 @@ contains
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
         ! 2D classification
+        call cline%set('wiener', 'full')
         if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',       30.0)
         if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)
-        if( .not. cline%defined('wiener')      ) call cline%set('wiener',   'partial')
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',    'yes')
         if( .not. cline%defined('nonuniform')  ) call cline%set('nonuniform',    'no')
         if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
