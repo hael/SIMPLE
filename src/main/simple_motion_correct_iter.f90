@@ -44,7 +44,7 @@ contains
         character(len=*), optional, intent(in)    :: tseries
         type(nrtxtfile)               :: boxfile
         real,             allocatable :: boxdata(:,:)
-        character(len=:), allocatable :: fbody_here, ext, star_fname
+        character(len=:), allocatable :: fbody_here, ext, star_fname, poly_fname
         character(len=LONGSTRLEN)     :: rel_fname
         real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here, bid
         integer :: ldim(3), ldim_thumb(3), iptcl
@@ -76,6 +76,7 @@ contains
         ! shifts & star output
         patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
         star_fname          = trim(dir_out)//trim(adjustl(fbody_here))//'.star'
+        poly_fname          = trim(dir_out)//trim(adjustl(fbody_here))//'.poly'
         ! isotropic ones
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
@@ -194,6 +195,7 @@ contains
             endif
             ! STAR output
             if( .not. l_tseries )then
+                call motion_correct_write_poly(poly_fname)
                 call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
                 call motion_correct_calc_bid(patch_success, bid)
             endif

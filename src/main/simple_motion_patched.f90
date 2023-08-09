@@ -22,14 +22,10 @@ real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 5.
 integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 
-type :: rmat_ptr_type
-   real, pointer :: rmat_ptr(:,:,:)
-end type rmat_ptr_type
-
 type :: motion_patched
     private
     logical                             :: existence
-    type(imstack_type),                  allocatable :: frame_patches(:,:)
+    type(imstack_type),     allocatable :: frame_patches(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
     real,                   allocatable :: lp(:,:)
@@ -74,7 +70,7 @@ contains
     procedure, private                  :: pix2polycoords, pix2polycoordx, pix2polycoordy
     procedure                           :: set_frameweights
     procedure                           :: set_fitshifts
-    procedure                           :: set_poly_coeffs
+    procedure                           :: set_poly_coeffs, get_poly_coeffs
     procedure                           :: set_fixed_frame
     procedure                           :: set_interp_fixed_frame
     procedure                           :: set_nframes
@@ -1027,6 +1023,15 @@ contains
         real(dp),              intent(in)    :: p(PATCH_PDIM,2)
         self%poly_coeffs = p
     end subroutine set_poly_coeffs
+
+    subroutine get_poly_coeffs( self, p )
+        class(motion_patched), intent(inout) :: self
+        real(dp), allocatable, intent(inout) :: p(:)
+        if(allocated(p)) deallocate(p)
+        allocate(p(2*PATCH_PDIM),source=0.d0)
+        p(1:PATCH_PDIM) = self%poly_coeffs(:,1)
+        p(PATCH_PDIM+1:) = self%poly_coeffs(:,2)
+    end subroutine get_poly_coeffs
 
     subroutine set_fixed_frame( self, fixed_frame )
         class(motion_patched), intent(inout) :: self

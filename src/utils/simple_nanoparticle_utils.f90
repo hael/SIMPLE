@@ -86,7 +86,7 @@ contains
         real         :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
         real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
         integer      :: natoms, iatom, centerAtom,i
-        logical      :: areNearest(size(model,dim=2))
+        logical      :: areNearest(size(model,dim=2)), new_fitting = .true.
         ! sanity check
         if( size(model,dim=1) /=3 ) then
             write(logfhandle,*) 'Nonconforming input coordinates! fit_lattice'
@@ -117,13 +117,35 @@ contains
         rMaxsq     = rMax * rMax
         areNearest = .false.
         avgNNRR    = 0.
-        do iatom = 1 ,natoms
-            dist = euclid(model(:,iatom),cMid(:))
-            if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
-                areNearest(iatom) = .true.
-                avgNNRR = avgNNRR + dist
-            endif
-        enddo
+        if( DEBUG ) write(logfhandle,*) 'Determination of avgNNRR'
+        write(logfhandle,*) '>>>>> LATTICE FITTING UNDER REVISION. RESULTS MAY NOT BE ACCURATE.'
+        new_fitting = .true.
+        if (new_fitting) then
+            ! New calculation of avgNNRR: calculate distance to centerAtomCoords instead of cMid
+            ! which should give a better estimation of the avg distance to nearest neighbors
+            ! and therfore a better initial guess for D=a/2
+            do iatom = 1 ,natoms
+                dist = euclid(model(:,iatom),centerAtomCoords)
+                if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
+                    if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
+                    if( DEBUG ) write(logfhandle,*) 'dist ', dist
+                    areNearest(iatom) = .true.
+                    avgNNRR = avgNNRR + dist
+                endif
+            enddo
+        else
+            ! Old calculation of avgNNRR
+            do iatom = 1 ,natoms
+                dist = euclid(model(:,iatom),cMid(:))
+                if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
+                    if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
+                    if( DEBUG ) write(logfhandle,*) 'dist ', dist
+                    areNearest(iatom) = .true.
+                    avgNNRR = avgNNRR + dist
+                endif
+            enddo
+        end if
+
         avgNNRR = avgNNRR / real(count(areNearest))
         avgD    = sqrt(avgNNRR**2/2.)
         if( DEBUG ) write(logfhandle,*) 'avgNNRR ', avgNNRR, 'avgD ', avgD
@@ -175,6 +197,7 @@ contains
         angleUV = acos( dot_product(uN, vN) ) * 180. / PI
         angleUW = acos( dot_product(uN, wN) ) * 180. / PI
         angleVW = acos( dot_product(vN, wN) ) * 180. / PI
+        if( DEBUG ) write(logfhandle,*) 'After Loop: '
         if( DEBUG ) write(logfhandle,*) 'origin ', origin
         write(logfhandle,*) 'vector uN', uN
         write(logfhandle,*) 'vector vN', vN

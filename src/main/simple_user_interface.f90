@@ -169,6 +169,7 @@ type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
+type(simple_program), target :: tseries_make_projavgs
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: uniform_filter2D
 type(simple_program), target :: uniform_filter3D
@@ -424,6 +425,7 @@ contains
         call new_tseries_import_particles
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
+        call new_tseries_make_projavgs
         call new_tseries_swap_stack
         call new_tseries_track_particles
         call new_tseries_reconstruct3D
@@ -737,6 +739,8 @@ contains
                 ptr2prg => tseries_import_particles
             case('tseries_make_pickavg')
                 ptr2prg => tseries_make_pickavg
+            case('tseries_make_projavgs')
+                ptr2prg => tseries_make_projavgs
             case('tseries_motion_correct')
                 ptr2prg => tseries_motion_correct
             case('tseries_swap_stack')
@@ -890,6 +894,7 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
+        write(logfhandle,'(A)') tseries_make_projavgs%name
     end subroutine list_single_prgs_in_ui
 
     ! private class methods
@@ -1539,7 +1544,7 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
-        call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
+        call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         call cluster2D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
@@ -1644,6 +1649,8 @@ contains
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
         &0, 0, 0, 8, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
+        cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1653,37 +1660,57 @@ contains
         ! <empty>
         ! search controls
         call cluster2D_subsets%set_input('srch_ctrls', 1, ncls_start)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 1, submenu="cluster 2D", advanced=.false.)
         call cluster2D_subsets%set_input('srch_ctrls', 2, nptcls_per_cls)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 2, submenu="cluster 2D", advanced=.false.)       
         cluster2D_subsets%srch_ctrls(2)%required = .true.
         cluster2D_subsets%srch_ctrls(2)%rval_default = 300.
         call cluster2D_subsets%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 3, submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 4, submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 5, submenu="cluster 2D", advanced=.false.)
         call cluster2D_subsets%set_input('srch_ctrls', 6, lpthres)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 6, submenu="cluster 2D", online=.true.)
         call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 7, submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, objfun)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 8, submenu="cluster 2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 2, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 3, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 4, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 6,  reject_cls)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D", online=.true.)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
         ! computer controls
         call cluster2D_subsets%set_input('comp_ctrls', 1, nchunks)
+        call cluster2D_subsets%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
         call cluster2D_subsets%set_input('comp_ctrls', 2, nparts_chunk)
+        call cluster2D_subsets%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
         call cluster2D_subsets%set_input('comp_ctrls', 3, nparts_pool)
+        call cluster2D_subsets%set_gui_params('comp_ctrls', 3, submenu="compute", advanced=.false.)
         cluster2D_subsets%comp_ctrls(3)%required = .true.
         call cluster2D_subsets%set_input('comp_ctrls', 4, nthr)
+        call cluster2D_subsets%set_gui_params('comp_ctrls', 4, submenu="compute", advanced=.false.)
         call cluster2D_subsets%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
+        call cluster2D_subsets%set_gui_params('comp_ctrls', 5, submenu="compute")
     end subroutine new_cluster2D_subsets
 
     subroutine new_cluster3D
@@ -1868,28 +1895,39 @@ contains
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
         &'simple_exec',&                                                ! executable
         &0, 2, 0, 3, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
+        ctf_estimate%gui_submenu_list = "CTF estimation,compute"
+        ctf_estimate%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call ctf_estimate%set_input('parm_ios', 1, pspecsz)
+        call ctf_estimate%set_gui_params('parm_ios', 1, submenu="CTF estimation")
         call ctf_estimate%set_input('parm_ios', 2, ctfpatch)
+        call ctf_estimate%set_gui_params('parm_ios', 2, submenu="CTF estimation")
         ! alternative inputs
         ! <empty>
         ! search controls
         call ctf_estimate%set_input('srch_ctrls', 1, dfmin)
+        call ctf_estimate%set_gui_params('srch_ctrls', 1, submenu="CTF estimation")
         call ctf_estimate%set_input('srch_ctrls', 2, dfmax)
+        call ctf_estimate%set_gui_params('srch_ctrls', 2, submenu="CTF estimation")
         call ctf_estimate%set_input('srch_ctrls', 3, astigtol)
+        call ctf_estimate%set_gui_params('srch_ctrls', 3, submenu="CTF estimation")
         ! filter controls
         call ctf_estimate%set_input('filt_ctrls', 1, lp)
+        call ctf_estimate%set_gui_params('filt_ctrls', 1, submenu="CTF estimation")
         ctf_estimate%filt_ctrls(1)%required     = .false.
         call ctf_estimate%set_input('filt_ctrls', 2, hp)
+        call ctf_estimate%set_gui_params('filt_ctrls', 2, submenu="CTF estimation")
         ctf_estimate%filt_ctrls(2)%required     = .false.
         ! mask controls
         ! <empty>
         ! computer controls
         call ctf_estimate%set_input('comp_ctrls', 1, nparts)
+        call ctf_estimate%set_gui_params('comp_ctrls', 1, submenu="compute")
         call ctf_estimate%set_input('comp_ctrls', 2, nthr)
+        call ctf_estimate%set_gui_params('comp_ctrls', 2, submenu="compute")
     end subroutine new_ctf_estimate
 
     subroutine new_ctfops
@@ -2707,43 +2745,67 @@ contains
         & the down-scaling factor (for super-resolution movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
         &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        motion_correct%gui_submenu_list = "data,motion correction,compute"
+        motion_correct%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, gainref)
+        call motion_correct%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
         ! parameter input/output
         call motion_correct%set_input('parm_ios', 1, total_dose)
+        call motion_correct%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
         call motion_correct%set_input('parm_ios', 2, fraction_dose_target)
+        call motion_correct%set_gui_params('parm_ios', 2, submenu="data")
         call motion_correct%set_input('parm_ios', 3, max_dose)
+        call motion_correct%set_gui_params('parm_ios', 3, submenu="data")
         call motion_correct%set_input('parm_ios', 4, scale_movies)
+        call motion_correct%set_gui_params('parm_ios', 4, submenu="data")
         call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '')
+        call motion_correct%set_gui_params('parm_ios', 5, submenu="data")
         call motion_correct%set_input('parm_ios', 6, pspecsz)
+        call motion_correct%set_gui_params('parm_ios', 6, submenu="motion correction")
         call motion_correct%set_input('parm_ios', 7, eer_fraction)
+        call motion_correct%set_gui_params('parm_ios', 7, submenu="data")
         call motion_correct%set_input('parm_ios', 8, eer_upsampling)
+        call motion_correct%set_gui_params('parm_ios', 8, submenu="data")
         ! alternative inputs
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
+        call motion_correct%set_gui_params('srch_ctrls', 1, submenu="motion correction")
         motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         motion_correct%srch_ctrls(1)%rval_default      = 20.
         call motion_correct%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call motion_correct%set_gui_params('srch_ctrls', 2, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 3, mcpatch)
+        call motion_correct%set_gui_params('srch_ctrls', 3, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 4, nxpatch)
+        call motion_correct%set_gui_params('srch_ctrls', 4, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 5, nypatch)
+        call motion_correct%set_gui_params('srch_ctrls', 5, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 6, mcconvention)
+        call motion_correct%set_gui_params('srch_ctrls', 6, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 7, algorithm)
+        call motion_correct%set_gui_params('srch_ctrls', 7, submenu="motion correction")
         call motion_correct%set_input('srch_ctrls', 8, mcpatch_thres)
+        call motion_correct%set_gui_params('srch_ctrls', 8, submenu="motion correction")
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call motion_correct%set_gui_params('filt_ctrls', 1, submenu="motion correction")
         call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call motion_correct%set_gui_params('filt_ctrls', 2, submenu="motion correction")
         call motion_correct%set_input('filt_ctrls', 3, wcrit)
+        call motion_correct%set_gui_params('filt_ctrls', 3, submenu="motion correction")
         ! mask controls
         ! <empty>
         ! computer controls
         call motion_correct%set_input('comp_ctrls', 1, nparts)
+        call motion_correct%set_gui_params('comp_ctrls', 1, submenu="compute")
         call motion_correct%set_input('comp_ctrls', 2, nthr)
+        call motion_correct%set_gui_params('comp_ctrls', 2, submenu="compute")
     end subroutine new_motion_correct
 
     subroutine new_nununiform_filter2D
@@ -4565,6 +4627,33 @@ contains
         ! computer controls
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
+
+    subroutine new_tseries_make_projavgs
+        ! PROGRAM SPECIFICATION
+        call tseries_make_projavgs%new(&
+        &'tseries_make_projavgs',&                                                       ! name
+        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'is a program for aligning & averaging the first few frames of the time-series&
+        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        &'single_exec',&                                                                 ! executable
+        &0, 2, 0, 0, 0, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_make_projavgs%set_input('parm_ios', 1, nspace)
+        call tseries_make_projavgs%set_input('parm_ios', 2, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{10}', .false., 10.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_make_projavgs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_make_projavgs
 
     subroutine new_tseries_swap_stack
         ! PROGRAM SPECIFICATION

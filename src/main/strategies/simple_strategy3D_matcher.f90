@@ -206,7 +206,8 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call pftcc%regularize_refs
+                ! frc filter when e/o is on
+                call pftcc%regularize_refs( params_glob%l_lpset )
             endif
         endif
 
@@ -475,17 +476,12 @@ contains
                     &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
                 call o_tmp%kill
             end do
+            !$omp end parallel do
         end do
-        if( L_CTFROTDEV ) call pftcc%memoize_refs
+        call pftcc%memoize_refs
         ! then the Cartesian
         ! must be done here since params_glob%kfromto is dynamically set
-        call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
-        if( params_glob%l_needs_sigma )then
-            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname, params_glob%box)
-            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-        end if
+        if( params_glob%l_cartesian ) call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
     end subroutine prep_ccobjs4align
 
@@ -497,7 +493,7 @@ contains
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        if( params_glob%l_cartesian ) call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -507,20 +503,16 @@ contains
             ! transfer to polar coordinates
             call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! set Cartesian
-            call cftcc%set_ptcl(iptcl, ptcl_match_imgs(ithr))
+            if( params_glob%l_cartesian ) call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
             ! e/o flags
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-            call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            if( params_glob%l_cartesian ) call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
+        if( params_glob%l_cartesian ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        if( L_CTFROTDEV )then
-            call pftcc%memoize_ptcls
-        else
-            call pftcc%memoize_ffts
-        endif
+        call pftcc%memoize_ptcls
     end subroutine build_batch_particles
 
     subroutine reg_batch_particles( nptcls_here, pinds_here )
@@ -546,11 +538,7 @@ contains
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
-        if( L_CTFROTDEV )then
-            call pftcc%memoize_ptcls
-        else
-            call pftcc%memoize_ffts
-        endif
+        call pftcc%memoize_ptcls
         ! compute regularization terms
         select case(trim(params_glob%reg_mode))
             case('global')

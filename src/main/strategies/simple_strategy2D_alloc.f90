@@ -38,9 +38,12 @@ contains
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob
         logical :: zero_oris, ncls_diff
+        ! per-thread allocations
+        allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
+        allocate(s2D%cls_searched(params_glob%ncls,nthr_glob),source=.false.)
+        ! gather class populations
         zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
         ncls_diff = build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls
-        ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
             if( zero_oris .or. ncls_diff  )then
                 ! the ==0    is to overcome bug in shared-memory version
@@ -60,9 +63,6 @@ contains
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
-        ! per-thread allocations
-        allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
-        allocate(s2D%cls_searched(params_glob%ncls,nthr_glob),source=.false.)
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)

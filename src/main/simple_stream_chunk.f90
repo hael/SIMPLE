@@ -141,7 +141,7 @@ contains
             do iptcl = 1,inptcls
                 cnt = cnt + 1
                 call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
-                call self%spproj%os_ptcl2D%set(cnt, 'stkind', real(iiproj))
+                call self%spproj%os_ptcl2D%set_stkind(cnt, iiproj)
             enddo
             call self%spproj%os_stk%set(iiproj, 'fromp', real(fromp))
             call self%spproj%os_stk%set(iiproj, 'top',   real(fromp+inptcls-1))
@@ -374,10 +374,10 @@ contains
             ! rejects particles 2D
             do iptcl=1,self%nptcls
                 if( self%spproj%os_ptcl2D%get_state(iptcl) == 0 )cycle
-                icls = nint(self%spproj%os_ptcl2D%get(iptcl,'class'))
+                icls = self%spproj%os_ptcl2D%get_class(iptcl)
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
-                call self%spproj%os_ptcl2D%set(iptcl,'state',0.)
+                call self%spproj%os_ptcl2D%set_state(iptcl,0)
             enddo
             call debug_print('in chunk%reject '//int2str(self%id)//' '//int2str(nptcls_rejected))
             call self%spproj%write_segment_inside('ptcl2D',projfile)

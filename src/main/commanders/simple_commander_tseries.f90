@@ -35,6 +35,7 @@ public :: refine3D_nano_commander
 public :: graphene_subtr_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
+public :: tseries_make_projavgs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -122,6 +123,11 @@ type, extends(commander_base) :: tseries_reconstruct3D_distr
   contains
     procedure :: execute      => exec_tseries_reconstruct3D_distr
 end type tseries_reconstruct3D_distr
+
+type, extends(commander_base) :: tseries_make_projavgs_commander
+  contains
+    procedure :: execute      => exec_tseries_make_projavgs
+end type tseries_make_projavgs_commander
 
 contains
 
@@ -948,7 +954,7 @@ contains
         character(len=*), parameter   :: BINARY     = 'recvol_state01_BIN.mrc'
         character(len=*), parameter   :: CCS        = 'recvol_state01_CC.mrc'
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
-        character(len=*), parameter   :: FINAL_MAPS = './final_thresholded_results/'
+        character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
@@ -966,6 +972,7 @@ contains
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.9)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
@@ -996,9 +1003,8 @@ contains
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
-        if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
-            call cline_detect_atms%set('use_thres', 'no')        ! no thresholding during refinement
-        endif
+        call cline_detect_atms%set('corr_thres', 0.3)            ! mild thresholding during refinement
+        call cline_detect_atms%set('cs_thres',   2.0)            ! mild thresholding during refinement
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1047,8 +1053,6 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
-        call cline_detect_atms%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
-        call cline_detect_atms%set('use_thres', 'yes') ! use contact score threshold for final model building
         params_ptr  => params_glob
         params_glob => null()
         call xdetect_atms%execute(cline_detect_atms)
@@ -1058,10 +1062,10 @@ contains
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
         call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
-        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
-        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
-        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_CC.mrc')
+        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_ATMS.pdb')
+        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
+        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(SPLITTED, FINAL_MAPS//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
         ! clean
         call del_file(SIMVOL)
@@ -1111,8 +1115,8 @@ contains
             call xreproject%execute(cline_reproject)
             params_glob => params_ptr
             params_ptr  => null()
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-            call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+            call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
             ! re-project
             params_ptr  => params_glob
             params_glob => null()
@@ -1130,7 +1134,7 @@ contains
                     call imgs(i + 2)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,                 cnt)
                     call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-                    call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                    call imgs(i + 2)%read('reprojs_SIM.mrc',   cnt)
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
                     call imgs(i + 2)%norm
@@ -1144,9 +1148,9 @@ contains
             do i = 1,3*ncavgs,3
                 cnt = cnt + 1
                 if( state_mask(cnt) )then
-                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2    )
-                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 1)
-                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 2)
+                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2    )
+                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 1)
+                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 2)
                     call imgs(i    )%kill
                     call imgs(i + 1)%kill
                     call imgs(i + 2)%kill
@@ -1155,7 +1159,7 @@ contains
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
-        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
@@ -1232,6 +1236,7 @@ contains
         real               :: smpd, ave,var,sdev
         integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         logical            :: err
+        call cline%set('objfun','cc')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! sanity checks & dimensions
         call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
@@ -1543,5 +1548,170 @@ contains
         call build%spproj_field%kill
         call simple_end('**** SIMPLE_TSERIES_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_tseries_reconstruct3D_distr
+
+    subroutine exec_tseries_make_projavgs( self, cline )
+        use simple_strategy2D3D_common
+        class(tseries_make_projavgs_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters)               :: params
+        type(builder)                  :: build
+        type(image),       allocatable :: pavgs(:), rot_imgs(:)
+        real,              allocatable :: sumw(:), ref_weights(:,:)
+        integer,           allocatable :: pinds(:), batches(:,:)
+        logical,           allocatable :: ptcl_mask(:)
+        character(len=:),  allocatable :: stkname
+        real    :: euls_ref(3), euls(3), cc, x, y, sdev_noise, dist, dist_threshold, mindist, w
+        real    :: spiral_step
+        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, ind_in_stk, cnt
+        integer :: iptcl, iref, ibatch, nptcls2update, i, ref_ind
+        logical :: fall_over, l_cls3D
+        call cline%set('tseries', 'yes')
+        call cline%set('objfun',  'cc')
+        call cline%set('ctf',     'no')
+        call cline%set('pgrp',  'c1')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ptclw')  ) call cline%set('ptclw', 'no')
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
+        if( .not. cline%defined('athres') ) call cline%set('athres', 10.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        l_cls3D = trim(cline%get_carg('oritype')).eq.'cls3D'
+        call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_strategy3D_tbox(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case DEFAULT
+                THROW_HARD('unsupported ORITYPE')
+        end select
+        if( fall_over ) THROW_HARD('No images found!')
+        ! input orientations
+        if( l_cls3D )then
+            params%nspace  = build%spproj%os_cls3D%get_noris(consider_state=.true.)
+            call build%eulspace%new(params%nspace,.false.)
+            cnt = 0
+            do iref = 1,build%spproj%os_cls3D%get_noris()
+                if( build%spproj%os_cls3D%get_state(iref) == 0 ) cycle
+                cnt = cnt+1
+                call build%eulspace%transfer_ori(cnt, build%spproj%os_cls3D, iref)
+            enddo
+            call build%eulspace%set_all2single('e3',0.)
+        else
+            call build%eulspace%set_all2single('state',1.)
+        endif
+        ! allocations
+        allocate(pavgs(params%nspace),sumw(params%nspace))
+        sumw = 0.0
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do iref = 1,params%nspace
+            call pavgs(iref)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
+            call pavgs(iref)%zero_and_unflag_ft
+        enddo
+        !$omp end parallel do
+        ! particles mask and indices
+        allocate(ptcl_mask(params%nptcls),source=.true.)
+        !$omp parallel do default(shared) private(iptcl) proc_bind(close) schedule(static)
+        do iptcl = 1,params%nptcls
+            ptcl_mask(iptcl) = build%spproj_field%get_state(iptcl) > 0
+        enddo
+        !$omp end parallel do
+        nptcls2update = count(ptcl_mask)
+        allocate(pinds(nptcls2update))
+        i = 0
+        do iptcl = 1,params%nptcls
+            if( ptcl_mask(iptcl) )then
+                i        = i+1
+                pinds(i) = iptcl
+            endif
+        enddo
+        ! batch prep
+        batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
+        nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
+        batches     = split_nobjs_even(nptcls2update, nbatches)
+        batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
+        call prepimgbatch(batchsz_max)
+        allocate(ref_weights(batchsz_max,params%nspace),rot_imgs(batchsz_max))
+        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+        do i = 1,batchsz_max
+            call rot_imgs(i)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        ! angular threshold
+        euls_ref       = 0.
+        euls           = [0.,params%athres,0.]
+        dist_threshold = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.))
+        spiral_step    = rad2deg(3.809/sqrt(real(params%nspace)))
+        do ibatch=1,nbatches
+            call progress_gfortran(ibatch,nbatches)
+            batch_start = batches(ibatch,1)
+            batch_end   = batches(ibatch,2)
+            batchsz     = batch_end - batch_start + 1
+            ! Weights
+            ref_weights = -1.0
+            do i = 1,batchsz
+                iptcl   = pinds(batch_start+i-1)
+                euls    = build%spproj_field%get_euler(iptcl)
+                euls(3) = 0.
+                do iref = 1,params%nspace
+                    if( build%eulspace%get_state(iref) == 0 ) cycle
+                    euls_ref    = build%eulspace%get_euler(iref)
+                    euls_ref(3) = 0.
+                    dist        = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.)) ! => [0;1]
+                    if( dist > dist_threshold ) cycle
+                    w = 1. / (1. + 999.0*dist)
+                    ref_weights(i,iref) = w
+                enddo
+            enddo
+            ! Images prep
+            call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
+            !$omp parallel do default(shared) private(i,iptcl,x,y,sdev_noise) proc_bind(close) schedule(static)
+            do i = 1, batchsz
+                iptcl = pinds(batch_start+i-1)
+                call build%imgbatch(i)%norm_noise(build%lmsk, sdev_noise)
+                x = build%spproj_field%get(iptcl, 'x')
+                y = build%spproj_field%get(iptcl, 'y')
+                call build%imgbatch(i)%fft
+                call build%imgbatch(i)%shift2Dserial(-[x,y])
+                call build%imgbatch(i)%ifft
+                call rot_imgs(i)%zero_and_flag_ft
+                call build%imgbatch(i)%rtsq(-build%spproj_field%e3get(iptcl),0.,0.,rot_imgs(i))
+            enddo
+            !$omp end parallel do
+            ! Projection direction weighted sum
+            !$omp parallel do default(shared) private(i,iref,w) proc_bind(close) schedule(static)
+            do iref = 1,params%nspace
+                if( build%eulspace%get_state(iref) == 0 ) cycle
+                do i = 1,batchsz
+                    w = ref_weights(i,iref)
+                    if( w < TINY ) cycle
+                    sumw(iref) = sumw(iref) + w
+                    call pavgs(iref)%add(rot_imgs(i),w=w)
+                enddo
+            enddo
+            !$omp end parallel do
+        enddo
+        ! Weights normalization
+        !$omp parallel do default(shared) private(i,w) proc_bind(close) schedule(static)
+        do iref = 1,params%nspace
+            if( build%eulspace%get_state(iref) == 0 ) cycle
+            if( sumw(iref) > 0.001 )then
+                call pavgs(iref)%div(sumw(iref))
+            else
+                call pavgs(iref)%zero_and_unflag_ft
+            endif
+        enddo
+        !$omp end parallel do
+        ! write
+        cnt = 0
+        do iref = 1,params%nspace
+            if( build%eulspace%get_state(iref) == 0 ) cycle
+            cnt = cnt + 1
+            call pavgs(iref)%write(params%outstk,cnt)
+        enddo
+        call build%eulspace%write('projdirs.txt')
+        ! end gracefully
+        call simple_end('**** SIMPLE_MAKE_PROJAVGS NORMAL STOP ****')
+    end subroutine exec_tseries_make_projavgs
 
   end module simple_commander_tseries

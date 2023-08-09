@@ -18,6 +18,7 @@ type starproject
     type(star_file)              :: starfile
     type(tilt_info), allocatable :: tiltinfo(:)
     logical                      :: automode = .false.
+    integer                      :: rejected = 0
     !logical                      :: VERBOSE_OUTPUT =.false.
 contains
     ! constructor
@@ -37,6 +38,7 @@ contains
     procedure          :: export_iter3D
     procedure          :: export_ptcls2D
     procedure          :: export_ptcls3D
+    procedure          :: export_stream2D
     procedure, private :: export_stardata
     ! tilt
     procedure, private :: assign_initial_tiltgroups
@@ -800,6 +802,30 @@ contains
         if(allocated(relpath))    deallocate(relpath)
         if(allocated(splitline))  deallocate(splitline)
     end subroutine export_iter3D
+    
+    subroutine export_stream2D(self, ptcls, rejected)
+        class(starproject),                     intent(inout)   :: self
+        integer,                                intent(in)      :: ptcls, rejected
+        character(len=XLONGSTRLEN)                              :: cwd
+        integer                                                 :: fhandle, ios, ok
+        logical                                                 :: ex
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
+        call simple_getcwd(cwd)
+        if(.not. self%starfile%initialised) call self%initialise()
+        self%starfile%filename = "stream2D.star"
+        inquire(file=trim(adjustl(self%starfile%filename)), exist=ex)
+        if (ex) then
+            call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), position='append', iostat=ok)
+        else
+            call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), status='new', iostat=ok)
+        endif
+        write(fhandle, *) ""
+        write(fhandle, *) "data_model_general"
+        write(fhandle, *) ""
+        write(fhandle, "(A)") "_splStreamPtcls                   " // ptcls
+        write(fhandle, "(A)") "_splStreamRejectedPtcls           " // rejected
+        call fclose(fhandle)
+    end subroutine export_stream2D
 
     subroutine export_ptcls2D(self, cline, spproj)
         class(starproject), intent(inout) :: self

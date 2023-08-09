@@ -130,7 +130,7 @@ contains
         call pspec_img%init_polarizer(pftcc, KBALPHA)
         call pspec_img%fft
         call pspec_img%polarize(pftcc,1, .false., .true.)
-        call pftcc%memoize_ffts
+        call pftcc%memoize_refs
         ! cleanup
         call sheet%kill
         call cline%kill
@@ -151,7 +151,7 @@ contains
         call pspec_img%fft()
         call pspec_img%polarize(pftcc,1,.true.,.true.)
         ! rotational correlations
-        call pftcc%memoize_ffts
+        call pftcc%memoize_ptcls
         call pftcc%gencorrs(1,1,corrs)
         ! mask out non peak-shape values
         do i = 1,nrots
