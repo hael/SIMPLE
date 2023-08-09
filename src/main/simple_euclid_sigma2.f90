@@ -13,6 +13,8 @@ public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: LENSTR = 48
+
 type euclid_sigma2
     private
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
@@ -40,7 +42,7 @@ contains
     procedure, private :: update_sigma2_1, update_sigma2_2
     generic            :: update_sigma2 => update_sigma2_1, update_sigma2_2
     procedure          :: write_sigma2
-    procedure, private :: read_groups_starfile
+    procedure, private :: read_groups_starfile, read_sigma2_groups
     ! destructor
     procedure          :: kill
 end type euclid_sigma2
@@ -122,7 +124,7 @@ contains
         integer                             :: iptcl, igroup, ngroups, eo
         if( associated(pftcc_glob) ) call pftcc_glob%assign_pinds(self%pinds)
         if( associated(cftcc_glob) ) call cftcc_glob%assign_pinds(self%pinds)
-        call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, ngroups )
+        call self%read_sigma2_groups( params_glob%which_iter, self%sigma2_groups, ngroups )
         if( params_glob%l_sigma_glob )then
             if( ngroups /= 1 ) THROW_HARD('ngroups must be 1 when global sigma is estimated (params_glob%l_sigma_glob == .true.)')
             ! copy global sigma to particles
@@ -272,6 +274,7 @@ contains
         call starfile_table__delete(ostar)
     end subroutine write_groups_starfile
 
+    ! Is deprecated, kept for compatibility. cf read_sigma2_groups below
     subroutine read_groups_starfile( self, iter, group_pspecs, ngroups, fname )
         class(euclid_sigma2),          intent(inout) :: self
         integer,                       intent(in)    :: iter
@@ -338,6 +341,120 @@ contains
         deallocate(names)
     end subroutine read_groups_starfile
 
+    ! Is a much faster hard-coded fortran substitute to %read_groups_starfile
+    ! that employs the starfile library
+    subroutine read_sigma2_groups( self, iter, pspecs, ngroups, filename )
+        class(euclid_sigma2),          intent(inout) :: self
+        integer,                       intent(in)    :: iter
+        real,             allocatable, intent(out)   :: pspecs(:,:,:)
+        integer,                       intent(out)   :: ngroups
+        character(len=*), optional,    intent(in)    :: filename
+        character(len=LENSTR), allocatable :: strings(:)
+        character(len=:),      allocatable :: fname
+        character(len=LENSTR) :: line, string
+        real(dp) :: dval
+        integer  :: kfromto(2), i, l, funit, iostat, group, eo, idx, igroup, ieo
+        if( present(filename) )then
+            fname = trim(filename)
+        else
+            fname = sigma2_star_from_iter(iter)
+        endif
+        if(.not.file_exists(fname))then
+            THROW_HARD('File: '//trim(fname)//' Does not exists; read_sigma2_groups')
+        endif
+        call fopen(funit, trim(fname), action='READ',status='OLD', form='FORMATTED', iostat=iostat)
+        call fileiochk('read_sigma2_groups: '//trim(fname), iostat)
+        ! read header
+        ! # of groups
+        read(funit,fmt='(A)') line
+        read(funit,fmt='(A)') line
+        if( trim(line).ne.'data_general' )then
+            THROW_HARD('Unrecognized formatting: '//trim(fname)//'; read_sigma2_groups')
+        endif
+        read(funit,fmt='(A)') line
+        read(funit,fmt='(A)') line
+        call parse_key_int_pair(line, '_rlnNrGroups', ngroups)
+        ! sprectral range
+        read(funit,fmt='(A)') line
+        call parse_key_int_pair(line, '_rlnSpectralIndex', kfromto(1))
+        read(funit,fmt='(A)') line
+        call parse_key_int_pair(line, '_rlnSpectralIndex2', kfromto(2))
+        if( any(kfromto-self%kfromto < 0) )then
+            print *,kfromto,self%kfromto
+            THROW_HARD('Incorrect resolution range: read_groups_starfile')
+        endif
+        ! parse data
+        allocate(strings(kfromto(1):kfromto(2)), pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
+        do eo = 1,2
+            do group = 1,ngroups
+                do
+                    read(funit,fmt='(A)') line
+                    if( line(1:5).eq.'data_' ) exit
+                enddo
+                l = len_trim(line)
+                i = index(line(6:l), '_')
+                call str2int(line(6:6+i-2), iostat, ieo)
+                call fileiochk('Invalid formatting: '//trim(line)//'; read_sigma2_groups', iostat)
+                if( ieo /= eo ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                if( line(6+i-1:6+i+5).ne.'_group_')THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                i = index(line, '_', back=.true.)
+                call str2int(line(i+1:l), iostat, igroup)
+                call fileiochk('Invalid formatting: '//trim(line)//'; read_sigma2_groups', iostat)
+                if( igroup /= group ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                do
+                    read(funit,fmt='(A)') line
+                    if( trim(line).eq.'loop_' ) exit
+                enddo
+                read(funit,fmt='(A)') line
+                call parse_key_string_pair(line, '_rlnSpectralIndex', string)
+                if( trim(string).ne.'#1' ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                read(funit,fmt='(A)') line
+                call parse_key_string_pair(line, '_rlnSigma2Noise', string)
+                if( trim(string).ne.'#2' ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                ! read all frequencies
+                do i = kfromto(1),kfromto(2)
+                    read(funit,fmt='(A)') strings(i)
+                enddo
+                ! parse only relevent frequencies
+                do i = self%kfromto(1),self%kfromto(2)
+                    line = strings(i)
+                    call split(line,' ',string)
+                    read(string,*,iostat=iostat) idx
+                    call fileiochk('Unrecognized formatting: '//trim(line)//'; read_sigma2_groups', iostat)
+                    read(line,*,iostat=iostat) dval
+                    call fileiochk('Unrecognized formatting: '//trim(line)//'; read_sigma2_groups', iostat)
+                    if( i /= idx ) THROW_HARD('Invalid formatting: '//trim(line)//'; read_sigma2_groups')
+                    pspecs(eo,group,idx) = real(dval)
+                enddo
+            enddo
+        enddo
+        deallocate(strings)
+        call fclose(funit)
+        
+        contains
+        
+            subroutine parse_key_int_pair(string, key, val)
+                character(len=*), intent(in)  :: string, key
+                integer,          intent(out) :: val
+                character(len=LENSTR) :: tmp1, tmp2
+                tmp1 = trim(string)
+                call split(tmp1,' ',tmp2)
+                if( trim(tmp2).ne.trim(key) ) THROW_HARD('Unrecognized formatting: '//trim(string)//'; parse_key_int_pair')
+                call str2int(tmp1, iostat, val)
+                call fileiochk('Unrecognized formatting: '//trim(string)//'; parse_key_int_pair', iostat)
+            end subroutine parse_key_int_pair
+        
+            subroutine parse_key_string_pair(string, key, val)
+                character(len=*),   intent(in)  :: string, key
+                character(len=LENSTR), intent(out) :: val
+                character(len=LENSTR) :: tmp2
+                val = trim(string)
+                call split(val,' ',tmp2)
+                if( trim(tmp2).ne.trim(key) ) THROW_HARD('Unrecognized formatting: '//trim(string)//'; parse_key_string_pair')
+            end subroutine parse_key_string_pair
+
+    end subroutine read_sigma2_groups
+
     ! Public modifiers
 
     ! scale sigma2 magnitude, groups only
@@ -349,7 +466,7 @@ contains
         integer                       :: ngroups
         fname  = sigma2_star_from_iter(iter)
         call euclidsigma2%init_from_group_header(fname)
-        call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ngroups)
+        call euclidsigma2%read_sigma2_groups(iter, euclidsigma2%sigma2_groups, ngroups)
         euclidsigma2%sigma2_groups = euclidsigma2%sigma2_groups * scale
         call write_groups_starfile( fname, euclidsigma2%sigma2_groups, ngroups )
         call euclidsigma2%kill
@@ -362,8 +479,8 @@ contains
         integer                       :: ngroups1, ngroups2, k0
         call sigma2_1%init_from_group_header(fname1)
         call sigma2_2%init_from_group_header(fname2)
-        call sigma2_1%read_groups_starfile(0, sigma2_1%sigma2_groups, ngroups1, fname=fname1)
-        call sigma2_2%read_groups_starfile(0, sigma2_2%sigma2_groups, ngroups2, fname=fname2)
+        call sigma2_1%read_sigma2_groups(0, sigma2_1%sigma2_groups, ngroups1, filename=fname1)
+        call sigma2_2%read_sigma2_groups(0, sigma2_2%sigma2_groups, ngroups2, filename=fname2)
         if( ngroups1 /= ngroups2 ) THROW_HARD('Inconsistent dimensions; fill_sigma2_beyond_nyq')
         if( sigma2_1%kfromto(1) /= sigma2_2%kfromto(1) ) THROW_HARD('Inconsistent fourier dimensions 1; fill_sigma2_beyond_nyq')
         k0 = sigma2_1%kfromto(1)
@@ -388,7 +505,7 @@ contains
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups
         call euclidsigma2%init_from_group_header(fname)
-        call euclidsigma2%read_groups_starfile(0, euclidsigma2%sigma2_groups, ngroups, fname=fname)
+        call euclidsigma2%read_sigma2_groups(0, euclidsigma2%sigma2_groups, ngroups, filename=fname)
         if( ngroups /= size(fnames) ) THROW_HARD('Inconsistent number of groups & stacks! split_group_sigma2')
         do igroup = 1,ngroups
             allocate(sigma2_group(2,1,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),&
@@ -407,13 +524,13 @@ contains
         real,             allocatable :: sigma2_group(:,:,:)
         integer                       :: igroup, ngroups, n
         call euclidsigma2%init_from_group_header(fnames(1))
-        call euclidsigma2%read_groups_starfile(1, euclidsigma2%sigma2_groups, n, fname=fnames(1))
+        call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(1))
         ngroups = size(fnames)
         allocate(sigma2_group(2,ngroups,euclidsigma2%kfromto(1):euclidsigma2%kfromto(2)),source=0.0)
         sigma2_group(:,1,:) = euclidsigma2%sigma2_groups(:,1,:)
         call euclidsigma2%kill
         do igroup = 2,ngroups
-            call euclidsigma2%read_groups_starfile(1, euclidsigma2%sigma2_groups, n, fname=fnames(igroup))
+            call euclidsigma2%read_sigma2_groups(1, euclidsigma2%sigma2_groups, n, filename=fnames(igroup))
             sigma2_group(:,igroup,:) = euclidsigma2%sigma2_groups(:,1,:)
             call euclidsigma2%kill
         enddo
@@ -446,8 +563,8 @@ contains
     end subroutine kill
 
     subroutine test_unit
-        integer, parameter :: ngroups    = 19
-        integer, parameter :: kfromto(2) = [1,64]
+        integer, parameter :: ngroups    = 2000
+        integer, parameter :: kfromto(2) = [1,128]
         integer, parameter :: iter       = 7
         real,    parameter :: scale      = 0.3
         type(euclid_sigma2)           :: euclidsigma2
@@ -463,6 +580,9 @@ contains
             fnames(igroup) = 'test_'//int2str(igroup)//'.star'
         enddo
         allocate(sigma2(2,ngroups,kfromto(1):kfromto(2)),source=1.0)
+        ! call seed_rnd()
+        ! call random_number(sigma2)
+        ! sigma2 = sigma2 / 1.e6
         fname  = sigma2_star_from_iter(iter)
         call write_groups_starfile( fname, sigma2, ngroups )
         call scale_group_sigma2_magnitude( iter, scale )
@@ -477,12 +597,12 @@ contains
                 THROW_WARN('File does not exists for group: '//int2str(igroup))
             else
                 call euclidsigma2%init_from_group_header(fname)
-                call euclidsigma2%read_groups_starfile(iter, euclidsigma2%sigma2_groups, ng, fname=fname )
+                call euclidsigma2%read_sigma2_groups(iter, euclidsigma2%sigma2_groups, ng, filename=fname )
                 if( ng /= 1 )then
                     l_err = .true.
                     THROW_WARN('Erroneous group number for group: '//int2str(igroup))
                 endif
-                if( any(abs(euclidsigma2%sigma2_groups-scale) >  0.001) )then
+                if( any(abs(euclidsigma2%sigma2_groups-scale) >  0.000001) )then
                     l_err = .true.
                     THROW_WARN('Scaling failed for group: '//int2str(igroup))
                 endif
