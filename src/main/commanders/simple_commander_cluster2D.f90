@@ -421,7 +421,16 @@ contains
             call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
             call frcs%kill
             call frcs_sc%kill
-            call spproj%write_segment_inside('out',   params%projfile)
+            ! transfer 2D shift parameters to 3D
+            call spproj%read_segment('ptcl2D', params%projfile)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            call spproj%write(params%projfile)
+        else
+            call spproj%read_segment('ptcl2D', params%projfile)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
         endif
         call spproj%kill
         ! ranking
@@ -655,6 +664,8 @@ contains
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
         call spproj%write_segment_inside('out', params%projfile)
+        call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+        call spproj%write_segment_inside('ptcl3D', params%projfile)
         ! clean
         call spproj%kill()
         ! ranking
@@ -1484,6 +1495,7 @@ contains
                 corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
             end do
             ! use Otsu's algorithm to remove the junk
+            allocate(mask_otsu(ncls_sel))
             call otsu(ncls_sel, corrs_top_ranking, mask_otsu)
             pop1 = count(      mask_otsu)
             pop2 = count(.not. mask_otsu)

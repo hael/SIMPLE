@@ -78,7 +78,9 @@ call pftcc%shift_ptcl(8, [SHMAG,-SHMAG,0.]) ! left + up
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
-call pftcc%memoize_ffts
+call img_copy%ifft()
+call img_copy%write('shifted.mrc', 9)
+call pftcc%memoize_ptcls
 lims(1,1) = -6.
 lims(1,2) =  6.
 lims(2,1) = -6.

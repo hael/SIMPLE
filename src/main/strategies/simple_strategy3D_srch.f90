@@ -194,9 +194,9 @@ contains
         real      :: cxy(3)
         integer   :: ref, irot, loc(1)
         if( self%doshift )then
-            ! BFGS over shifts with in-plane rot exhaustive callback
             loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
             ref = loc(1)
+            ! BFGS over shifts with in-plane rot exhaustive callback
             call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
@@ -243,6 +243,7 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
+        call self%cart_shsrch_obj%kill
         call self%opeaks%kill
         call self%o_prev%kill
     end subroutine kill

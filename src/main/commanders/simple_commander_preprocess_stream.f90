@@ -435,7 +435,7 @@ contains
                         do i = 1,nptcls
                             iptcl = iptcl + 1
                             call spproj%os_ptcl2D%transfer_ori(iptcl,stream_spproj%os_ptcl2D,i)
-                            call spproj%os_ptcl2D%set(iptcl, 'stkind', real(istk))
+                            call spproj%os_ptcl2D%set_stkind(iptcl, istk)
                             call spproj%os_ptcl2D%set_state(iptcl, states(iproj))
                         enddo
                         call stream_spproj%kill

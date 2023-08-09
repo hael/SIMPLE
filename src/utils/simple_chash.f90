@@ -30,8 +30,7 @@ type :: chash
     procedure, private :: alloc_chash
     procedure, private :: realloc_chash
     procedure, private :: copy
-    procedure, private :: assign
-    generic            :: assignment(=) => assign
+    generic            :: assignment(=) => copy
     procedure          :: parse_cmdline
     procedure          :: gen_job_descr
     !< SETTERS
@@ -163,13 +162,6 @@ contains
             end do
         endif
     end subroutine copy
-
-    !>  \brief  is a polymorphic assigner
-    subroutine assign( self_out, self_in )
-        class(chash), intent(inout) :: self_out
-        class(chash), intent(in)    :: self_in
-        call self_out%copy(self_in)
-    end subroutine assign
 
     !>  \brief  parse the ke-value pairs in the command line into chash
     subroutine parse_cmdline( self )

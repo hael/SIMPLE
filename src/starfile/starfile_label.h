@@ -435,6 +435,7 @@ enum EMDLabel
     EMDL_POSTPROCESS_FSC_PART_FRACMASK,
 
     SMPL_MOVIE_FRAME_WEIGHT,
+    SMPL_MOVIE_FRAME_ALIGN,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -890,6 +891,7 @@ private:
 
         // Custom SIMPLE entries
 		EMDL::addLabel(SMPL_MOVIE_FRAME_WEIGHT, EMDL_DOUBLE, "splMovieFrameWeight", "Movie frame weight");
+		EMDL::addLabel(SMPL_MOVIE_FRAME_ALIGN,  EMDL_INT,    "splMovieFrameAlign",  "Movie frame alignment");
     }
 
     ~StaticInitialization()

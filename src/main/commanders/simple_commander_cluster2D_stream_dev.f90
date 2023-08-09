@@ -112,7 +112,7 @@ contains
         integer :: ldim(3), ichunk, maybe2D, ifoo
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
-            THROW_HARD('Missing required agrument NTHR2D')
+            THROW_HARD('Missing required argument NTHR2D')
         endif
         call check_params_for_cluster2D(cline, do2D)
         if( .not.do2D ) return
@@ -164,6 +164,9 @@ contains
         endif
         if( cline%defined('qsys_partition2D') )then
             call pool_proj%compenv%set(1,'qsys_partition', params_glob%qsys_partition2D)
+        endif
+        if( cline%defined('walltime') )then
+            call pool_proj%compenv%set(1,'walltime', real(params_glob%walltime))
         endif
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         ! initialize chunks parameters and objects
@@ -490,7 +493,7 @@ contains
                     iptcl = iptcl + 1
                     jptcl = jptcl + 1
                     call pool_proj%os_ptcl2D%transfer_ori(iptcl, converged_chunks(ichunk)%spproj%os_ptcl2D, jptcl)
-                    call pool_proj%os_ptcl2D%set(iptcl, 'stkind',    real(imic))
+                    call pool_proj%os_ptcl2D%set_stkind(iptcl, imic)
                     call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.) ! new particle
                     call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
                 enddo
@@ -538,14 +541,14 @@ contains
                         call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, box, 1), 1)
                         ! class parameters transfer
                         call pool_proj%os_cls2D%transfer_ori(icls, converged_chunks(ichunk)%spproj%os_cls2D, ind)
-                        call pool_proj%os_cls2D%set(icls, 'class', real(icls))
+                        call pool_proj%os_cls2D%set_class(icls, icls)
                         ! particles
                         call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(ind,'class',pinds,consider_w=.false.)
                         pop = size(pinds)
                         do i=1,pop
                             ii      = pinds(i)               ! in chunk
                             poolind = fromp_prev + ii - 1 ! in pool
-                            call pool_proj%os_ptcl2D%set(poolind,'class',real(icls))
+                            call pool_proj%os_ptcl2D%set_class(poolind,icls)
                         enddo
                         cls_pop(icls) = cls_pop(icls) + pop ! updates class populations
                     enddo
@@ -561,7 +564,7 @@ contains
                             do while( cls_pop(ind) == 0 )
                                 ind = irnd_uni(ncls_glob)
                             enddo
-                            call pool_proj%os_ptcl2D%set(poolind,'class',real(ind))
+                            call pool_proj%os_ptcl2D%set_class(poolind, ind)
                             cls_pop(ind) = cls_pop(ind) + 1 ! updates class populations
                         enddo
                     enddo
@@ -578,7 +581,7 @@ contains
                             icls          = irnd_uni(ncls_glob) ! stochastic labelling followed by greedy search
                             cls_pop(icls) = cls_pop(icls) + 1   ! updates populations
                             poolind       = fromp_prev + ii - 1
-                            call pool_proj%os_ptcl2D%set(poolind, 'class', real(icls))
+                            call pool_proj%os_ptcl2D%set_class(poolind, icls)
                         endif
                     enddo
                 endif
@@ -616,7 +619,7 @@ contains
                     do icls = 1,params_glob%ncls_start
                         ind = ncls_glob+icls
                         call pool_proj%os_cls2D%transfer_ori(ind, converged_chunks(ichunk)%spproj%os_cls2D, icls)
-                        call pool_proj%os_cls2D%set(ind, 'class', real(ind))
+                        call pool_proj%os_cls2D%set_class(ind, ind)
                     enddo
                 endif
                 call debug_print('in import_chunks_into_pool 7'//' '//int2str(ichunk))
@@ -624,8 +627,8 @@ contains
                 do ii = 1,converged_chunks(ichunk)%nptcls
                     if( states(ii) /= 0 )then
                         poolind = fromp_prev+ii-1
-                        icls    = ncls_glob+nint(converged_chunks(ichunk)%spproj%os_ptcl2D%get(ii,'class'))
-                        call pool_proj%os_ptcl2D%set(poolind, 'class', real(icls))
+                        icls    = ncls_glob + converged_chunks(ichunk)%spproj%os_ptcl2D%get_class(ii)
+                        call pool_proj%os_ptcl2D%set_class(poolind, icls)
                     endif
                 enddo
                 ! global # of classes
@@ -756,7 +759,7 @@ contains
             ncls_rejected = 0
             do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
-                icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                icls = pool_proj%os_ptcl2D%get_class(iptcl)
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
                 call pool_proj%os_ptcl2D%set_state(iptcl,0)
@@ -792,9 +795,13 @@ contains
                 endif
                 deallocate(cls_mask)
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
+                ! write stream2d.star with ptcl numbers post rejection 
+               ! call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), nptcls_rejected)
             endif
         else
             write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
+            ! write stream2d.star with ptcl numbers post rejection 
+            !call starproj%export_stream2D(pool_proj%os_ptcl2D%get_noris(), 0)
         endif
         call img%kill
     end subroutine reject_from_pool
@@ -816,7 +823,7 @@ contains
         if( cls2reject%get_noris() == 0 ) return
         allocate(cls_mask(ncls_glob), source=.false.)
         do i = 1,cls2reject%get_noris()
-            icls = nint(cls2reject%get(i,'class'))
+            icls = cls2reject%get_class(i)
             if( icls == 0 ) cycle
             if( icls > ncls_glob ) cycle
             if( nint(pool_proj%os_cls2D%get(icls,'pop')) == 0 ) cycle
@@ -832,7 +839,7 @@ contains
             nptcls_rejected = 0
             do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
-                jcls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                jcls = pool_proj%os_ptcl2D%get_class(iptcl)
                 if( jcls == icls )then
                     call pool_proj%os_ptcl2D%reject(iptcl)
                     nptcls_rejected = nptcls_rejected + 1
@@ -977,36 +984,36 @@ contains
 
     !> update optics groups for stks and particles from optics groups assigned to mics
     subroutine propagate_optics_groups()
-        integer                         :: nori, spori, ptclori, box
-        real                            :: fromp, top, ogid, stkbox
+        integer                         :: nori, spori, ptclori, box, ogid, stkbox
+        real                            :: fromp, top
         character(len=:), allocatable   :: stk, bsname
         write(logfhandle,'(A)')'>>> PROPAGATING OPTICS GROUPS'
         ! update stks and ptcls
         do nori = 1, pool_proj%os_stk%get_noris()
-           if(pool_proj%os_stk%isthere(nori, "stk")) then
-                stk    = trim(pool_proj%os_stk%get_static(nori, "stk"))
+           if(pool_proj%os_stk%isthere(nori, 'stk')) then
+                stk    = trim(pool_proj%os_stk%get_static(nori, 'stk'))
                 bsname = trim(get_bsname(stk))
                 spori  = match_field(pool_proj%os_mic, 'intg', bsname)
                 if(spori > 0) then
-                    if(pool_proj%os_mic%isthere(spori, "ogid")) then
-                        ogid  = pool_proj%os_mic%get(spori, "ogid")
-                        fromp = pool_proj%os_stk%get(nori,  "fromp")
-                        top   = pool_proj%os_stk%get(nori,  "top"  )
+                    if(pool_proj%os_mic%isthere(spori, 'ogid')) then
+                        ogid  = nint(pool_proj%os_mic%get(spori, 'ogid'))
+                        fromp = pool_proj%os_stk%get(nori,  'fromp')
+                        top   = pool_proj%os_stk%get(nori,  'top'  )
                         do ptclori = nint(fromp), nint(top)
-                            call pool_proj%os_ptcl2D%set(ptclori, "ogid", ogid)
-                            call pool_proj%os_ptcl3D%set(ptclori, "ogid", ogid)
+                            call pool_proj%os_ptcl2D%set_ogid(ptclori, ogid)
+                            call pool_proj%os_ptcl3D%set_ogid(ptclori, ogid)
                         end do
-                        call pool_proj%os_stk%set(nori, "ogid", ogid)
+                        call pool_proj%os_stk%set_ogid(nori, ogid)
                     end if
                 end if
             end if
-            if(pool_proj%os_stk%isthere(nori, "box") .and. pool_proj%os_stk%isthere(nori, "ogid")) then
-                ogid   = pool_proj%os_stk%get(nori, 'ogid')
-                stkbox = pool_proj%os_stk%get(nori, 'box')
-                if(ogid > 0.0 .and. stkbox > 0.0) then
-                    box = nint(pool_proj%os_optics%get(nint(ogid), 'box'))
+            if(pool_proj%os_stk%isthere(nori, 'box') .and. pool_proj%os_stk%isthere(nori, 'ogid')) then
+                ogid   = nint(pool_proj%os_stk%get(nori, 'ogid'))
+                stkbox = nint(pool_proj%os_stk%get(nori, 'box'))
+                if(ogid > 0 .and. stkbox > 0) then
+                    box = nint(pool_proj%os_optics%get(ogid, 'box'))
                     if(box == 0) then
-                        call pool_proj%os_optics%set(nint(ogid), 'box', stkbox)
+                        call pool_proj%os_optics%set(ogid, 'box', real(stkbox))
                     end if
                 end if
             end if
@@ -1067,7 +1074,7 @@ contains
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, rejection_fhandle, ok
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
         integer(timer_int_kind) :: t_tot
         if( .not.pool_available )return
@@ -1098,7 +1105,7 @@ contains
             do iptcl = fromp,top
                 if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
                     nptcls_per_stk(istk)          = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
-                    min_update_cnts_per_stk(istk) = min(min_update_cnts_per_stk(istk), nint(pool_proj%os_ptcl2D%get(iptcl,'updatecnt')))
+                    min_update_cnts_per_stk(istk) = min(min_update_cnts_per_stk(istk), pool_proj%os_ptcl2D%get_updatecnt(iptcl))
                 endif
             enddo
             if( min_update_cnts_per_stk(istk) >= STREAM_SRCHLIM )then
@@ -1109,6 +1116,10 @@ contains
         ! update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
+        if( file_exists('.rejection')) call del_file('.rejection')
+        call fopen(rejection_fhandle,file='.rejection', status='new', iostat=ok)
+        write(rejection_fhandle, '(RD,I6,I6)') nptcls_glob, nptcls_rejected_glob
+        call fclose(rejection_fhandle)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
@@ -1152,14 +1163,14 @@ contains
                 do iptcl = fromp,top
                     jptcl = jptcl+1
                     call spproj%os_ptcl2D%transfer_ori(jptcl, pool_proj%os_ptcl2D, iptcl)
-                    call spproj%os_ptcl2D%set(jptcl, 'stkind', real(i))
+                    call spproj%os_ptcl2D%set_stkind(jptcl, i)
                 enddo
                 call spproj%os_stk%set(i, 'top', real(jptcl))
             else
                 ! keeps track of skipped particles
                 do iptcl = fromp,top
                     icls = pool_proj%os_ptcl2D%get_class(iptcl)
-                    eo   = nint(pool_proj%os_ptcl2D%get(iptcl,'eo')) + 1
+                    eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
                     prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
                 enddo
             endif
@@ -2085,7 +2096,7 @@ contains
             do i = fromp,top
                 iptcl = iptcl + 1
                 call spproj_here%os_ptcl2D%transfer_ori(iptcl, sp_proj%os_ptcl2D, i)
-                call spproj_here%os_ptcl2D%set(iptcl,'stkind',1.0)
+                call spproj_here%os_ptcl2D%set_stkind(iptcl,1)
             enddo
             call spproj_here%os_ptcl2D%delete_2Dclustering
         endif
