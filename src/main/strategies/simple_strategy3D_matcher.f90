@@ -23,6 +23,7 @@ use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
 use simple_strategy3D_neigh,        only: strategy3D_neigh
+use simple_strategy3D_hybneigh,     only: strategy3D_hybneigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
@@ -246,6 +247,8 @@ contains
                         else
                             allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
+                    case('hybneigh')
+                        allocate(strategy3D_hybneigh             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc_neigh')
                         allocate(strategy3D_shc_sub              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
