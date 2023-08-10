@@ -95,7 +95,8 @@ contains
         integer  :: i, iref, iptcl, loc, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr
         real     :: euls(3), euls_ref(3), theta, cxy(3)
-        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2)
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2),&
+              &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,cur_corr,init_xy,ithr,shmat,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -129,9 +130,8 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
-                ptcl_ctf(:,:,i) = ptcl_ctf(:,:,i) * shmat
-                call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
+                call self%rotate_polar(real(ptcl_ctf(:,:,i) * shmat), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,i),          ctf_rot, loc)
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
             enddo
