@@ -2195,7 +2195,9 @@ contains
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(self%kfromto(1):self%kfromto(2))
         call self%calc_frc(iref, iptcl, irot, [0.0,0.0], frc )
-        specscore_1 = max(0.,median_nocopy(frc))
+        specscore_1 = sum(frc*self%npix_per_shell, mask=(frc > 0.0)) / sum(self%npix_per_shell)
+        ! previous implementation
+        ! specscore_1 = max(0.,median_nocopy(frc))
     end function specscore_1
 
     real function specscore_2( self, iref, iptcl, irot, shvec )
@@ -2204,7 +2206,9 @@ contains
         real,                    intent(in)    :: shvec(2)
         real :: frc(self%kfromto(1):self%kfromto(2))
         call self%calc_frc(iref, iptcl, irot, shvec, frc )
-        specscore_2 = max(0.,median_nocopy(frc))
+        specscore_2 = sum(frc*self%npix_per_shell, mask=(frc > 0.0)) / sum(self%npix_per_shell)
+        ! previous implementation
+        ! specscore_2 = max(0.,median_nocopy(frc))
     end function specscore_2
 
     ! DESTRUCTOR
