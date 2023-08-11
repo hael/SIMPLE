@@ -22,7 +22,7 @@ integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold high
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
-logical,          parameter :: ATOMS_STATS_OMIT    = .true. ! omit = shorter atoms stats output
+logical,          parameter :: ATOMS_STATS_OMIT    = .true.  ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
@@ -1040,8 +1040,8 @@ contains
         n_discard = 0
         do cc = 1, self%n_cc
             if( count(imat_cc == cc) < NVOX_THRESH )then
-                n_discard = n_discard + 1
                 where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
             endif
         end do
         ! Removing outliers based on coordination number
@@ -1101,9 +1101,11 @@ contains
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
         ! remove atoms with < NVOX_THRESH voxels
+        n_discard = 0
         do cc = 1, self%n_cc
             if( count(imat_cc == cc) < NVOX_THRESH )then
                 where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
             endif
         end do
         ! Removing outliers based on coordination number

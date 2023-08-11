@@ -176,14 +176,14 @@ contains
         if( .not. cline%defined('mcpatch_thres')   )  call cline%set('mcpatch_thres',  'yes')
         if( .not. cline%defined('algorithm')       )  call cline%set('algorithm',    'patch')
         ! ctf estimation
-        if( .not. cline%defined('pspecsz')         )  call cline%set('pspecsz',         512.)
-        if( .not. cline%defined('hp_ctf_estimate') )  call cline%set('hp_ctf_estimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') )  call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('pspecsz')         )  call cline%set('pspecsz',          512.)
+        if( .not. cline%defined('hp_ctf_estimate') )  call cline%set('hp_ctf_estimate',  HP_CTF_ESTIMATE)
+        if( .not. cline%defined('lp_ctf_estimate') )  call cline%set('lp_ctf_estimate',  LP_CTF_ESTIMATE)
         if( .not. cline%defined('dfmin')           )  call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           )  call cline%set('dfmax',            DFMAX_DEFAULT)
-        if( .not. cline%defined('ctfpatch')        )  call cline%set('ctfpatch',       'yes')
+        if( .not. cline%defined('ctfpatch')        )  call cline%set('ctfpatch',         'yes')
         if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD)
-        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold',ICEFRAC_THRESHOLD)
+        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD)
         ! picking
         if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
         ! extraction
@@ -294,7 +294,6 @@ contains
                 if( n_fail_iter > 0 )then
                     n_failed_jobs = n_failed_jobs + n_fail_iter
                     do cnt = 1,n_fail_iter
-                        THROW_WARN('Something went wrong with: '//trim(failed_jobs_clines(cnt)%get_carg('projfile'))//'. Skipping')
                         call failed_jobs_clines(cnt)%kill
                     enddo
                     deallocate(failed_jobs_clines)
@@ -303,10 +302,10 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I5)')             '>>> # MOVIES PROCESSED & IMPORTED:     ',n_imported
-                if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',nptcls_glob
-                write(logfhandle,'(A,I3,A1,I3)')       '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
-                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)')             '>>> # FAILED JOBS                :     ',n_failed_jobs
+                write(logfhandle,'(A,I5)')                         '>>> # MOVIES PROCESSED & IMPORTED    : ',n_imported
+                if( l_pick ) write(logfhandle,'(A,I8)')            '>>> # PARTICLES EXTRACTED            : ',nptcls_glob
+                write(logfhandle,'(A,I3,A1,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL: ',qenv%get_navail_computing_units(),'/',params%nparts
+                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)') '>>> # FAILED JOBS                    : ',n_failed_jobs
                 ! write project for gui, micrographs field only
                 call spproj%write(micspproj_fname)
                 last_injection = simple_gettime()

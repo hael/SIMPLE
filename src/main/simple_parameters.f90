@@ -63,7 +63,6 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: ref_reg='no'         !< apply objective regularizer to the reference(yes|no){no}
-    character(len=3)          :: sh_reg='no'          !< shifting regularization(yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -179,7 +178,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh|dev){global}
+    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|glob_neigh|neigh_ref){global}
     character(len=STDLEN)     :: eps_mode='auto'      !< reg eps mode(auto|fixed|linear){auto}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -317,7 +316,6 @@ type :: parameters
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003           !< learning rate{0.003}
-    real    :: eps_shreg=0.003     !< shift reg eps value
     real    :: eullims(3,2)=0.
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
     real    :: fny=0.
@@ -336,7 +334,7 @@ type :: parameters
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
-    real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
+    real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=1.0
@@ -344,7 +342,7 @@ type :: parameters
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
-    real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
+    real    :: lp_ctf_estimate=LP_CTF_ESTIMATE !< low-pass limit 4 ctf_estimate(in A)
     real    :: lpstart_nonuni= 30. !< optimization(search)-based low-pass limit lower bound
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
@@ -413,7 +411,6 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_ref_reg      = .false.
-    logical :: l_sh_reg       = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -540,7 +537,6 @@ contains
         call check_carg('reg_mode',       self%reg_mode)
         call check_carg('eps_mode',       self%eps_mode)
         call check_carg('ref_reg',        self%ref_reg)
-        call check_carg('sh_reg',         self%sh_reg)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -717,7 +713,6 @@ contains
         call check_rarg('e2',             self%e2)
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
-        call check_rarg('eps_shreg',      self%eps_shreg)
         call check_rarg('extr_init',      self%extr_init)
         call check_rarg('focusmsk',       self%focusmsk)
         call check_rarg('focusmskdiam',   self%focusmskdiam)
@@ -1389,8 +1384,6 @@ contains
         if( cline%defined('eps') ) self%eps_mode = 'fixed'
         ! reference regularization
         self%l_ref_reg = trim(self%ref_reg).eq.'yes'
-        ! shift regularization
-        self%l_sh_reg = trim(self%sh_reg).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

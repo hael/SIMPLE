@@ -242,18 +242,6 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         end if
-        ! shift regularization: taking the result from lbfgsb as a line search reference
-        if( found_better .and. params_glob%l_sh_reg )then
-            sh = cxy(2:) * params_glob%eps_shreg
-            call pftcc_glob%gencorrs(self%reference, self%particle, sh, corrs)
-            loc = maxloc(corrs,dim=1)
-            if( -corrs(loc) < initial_cost )then
-                cxy(1)  = - corrs(loc)
-                cxy(2:) =   sh
-                return
-            endif
-            irot = 0 ! to communicate that a better solution was not found
-        endif
     end function grad_shsrch_minimize
 
     subroutine coarse_search(self, lowest_cost, init_xy)

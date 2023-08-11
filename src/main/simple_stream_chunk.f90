@@ -77,7 +77,7 @@ contains
         self%spproj%compenv  = master_spproj%compenv
         if( params_glob%nparts_chunk == 1 )then
             ! shared memory
-            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec')
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_nthr=params_glob%nthr2D)
             call self%spproj%compenv%set(1,'qsys_name','local')
         else
             ! we need to override the qsys_name for non local distributed execution
