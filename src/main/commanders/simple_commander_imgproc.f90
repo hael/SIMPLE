@@ -89,7 +89,7 @@ contains
         type(parameters) :: params
         type(binimage)   :: img_or_vol
         type(image)      :: img_sdevs
-        integer :: igrow, iptcl
+        integer :: iptcl
         logical :: is2D, otsu, fill_holes, l_sauvola
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
@@ -135,7 +135,7 @@ contains
 
             subroutine doit(otsu)
                 type(binimage) :: cos_img
-                real :: ave, sdev, maxv, minv, thresh(3)
+                real :: ave, sdev, maxv, minv
                 logical, optional, intent(inout) :: otsu
                 otsu =  .false.
                 if( cline%defined('thres') )then
@@ -176,7 +176,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer          :: igrow, iptcl
+        integer          :: iptcl
         ! error check
         if( .not. cline%defined('stk') )then
             THROW_HARD('ERROR! stk needs to be present; exec_edge_detect')
@@ -368,7 +368,7 @@ contains
         type(tvfilter)    :: tvfilt
         real, allocatable :: fsc(:), optlp(:), res(:)
         real, parameter   :: SIGMA_DEFAULT=1.0
-        real              :: fsc05, fsc0143, sigma
+        real              :: fsc05, fsc0143
         integer           :: find
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered'//trim(STK_EXT))
@@ -478,7 +478,6 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
-        real, allocatable :: spec(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk')  .and. cline%defined('vol1') )THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
@@ -1011,7 +1010,7 @@ contains
         real,             allocatable :: peakvals(:)
         integer,          allocatable :: order(:)
         integer :: i, funit
-        real    :: thresh(3), ave, sdev, minv, mskrad
+        real    :: ave, sdev, minv, mskrad
         if( .not. cline%defined('lp_backgr') ) call cline%set('lp_backgr', 7.)
         call params%new(cline)
         mskrad = params%moldiam / params%smpd / 2.
@@ -1077,7 +1076,7 @@ contains
         type(stats_struct)          :: diamstats    ! stats struct
         real,           allocatable :: diams(:)     ! diameters
         real,           allocatable :: diams_nonzero(:)
-        integer :: funit, i, loc(1)
+        integer :: funit, i
         real    :: med_diam, thresh(3), msk_rad
         if( .not. cline%defined('lp')    ) call cline%set('lp',     7.0)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')

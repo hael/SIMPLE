@@ -59,7 +59,7 @@ contains
         ! others
         type(sp_project)                   :: orig_proj, transfer_spproj
         type(starproject)                  :: starproj
-        character(len=:),      allocatable :: spproj_list_fname, orig_projfile, carg
+        character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch

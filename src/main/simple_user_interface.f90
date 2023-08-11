@@ -81,6 +81,7 @@ type(simple_program), target :: automask2D
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
+type(simple_program), target :: cavg_filter2D
 type(simple_program), target :: ced_2D_filter
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -137,6 +138,7 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
+type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
@@ -187,6 +189,7 @@ type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: box_extract
+type(simple_input_param) :: cc_iters
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
@@ -220,6 +223,9 @@ type(simple_input_param) :: hp
 type(simple_input_param) :: icefracthreshold
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
+type(simple_input_param) :: kweight
+type(simple_input_param) :: kweight_chunk
+type(simple_input_param) :: kweight_pool
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lpstart_nonuni
@@ -239,6 +245,8 @@ type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: ml_reg
+type(simple_input_param) :: ml_reg_chunk
+type(simple_input_param) :: ml_reg_pool
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: nchunks
@@ -280,8 +288,10 @@ type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
+type(simple_input_param) :: remove_chunks
 type(simple_input_param) :: reject_cls
 type(simple_input_param) :: remap_cls
+type(simple_input_param) :: rnd_cls_init
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
@@ -340,6 +350,7 @@ contains
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
+        call new_cavg_filter2D
         call new_ced_2D_filter
         call new_center
         call new_cleanup2D
@@ -396,6 +407,7 @@ contains
         call new_print_magic_boxes
         call new_print_project_info
         call new_print_project_field
+        call new_projops
         call new_prune_project
         call new_atoms_stats
         call new_reproject
@@ -449,6 +461,7 @@ contains
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
+        call push2prg_ptr_array(cavg_filter2D)
         call push2prg_ptr_array(ced_2D_filter)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -503,6 +516,7 @@ contains
         call push2prg_ptr_array(print_magic_boxes)
         call push2prg_ptr_array(print_project_info)
         call push2prg_ptr_array(print_project_field)
+        call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
@@ -571,6 +585,8 @@ contains
                 ptr2prg => binarize
             case('calc_pspec')
                 ptr2prg => calc_pspec
+            case('cavg_filter2D')
+                ptr2prg => cavg_filter2D
             case('ced_2D_filter')
                 ptr2prg => ced_2D_filter
             case('center')
@@ -683,6 +699,8 @@ contains
                 ptr2prg => print_project_info
             case('print_project_field')
                 ptr2prg => print_project_field
+            case('projops')
+                ptr2prg => projops  
             case('prune_project')
                 ptr2prg => prune_project
             case('atoms_stats')
@@ -776,6 +794,7 @@ contains
         write(logfhandle,'(A)') automask2D%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
+        write(logfhandle,'(A)') cavg_filter2D%name
         write(logfhandle,'(A)') ced_2D_filter%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
@@ -827,6 +846,7 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
@@ -1073,10 +1093,18 @@ contains
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthres,        'lpthres',      'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         call set_param(ml_reg,         'ml_reg',       'binary', 'ML regularization', 'Regularization (ML-style) based on the signal power(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(ml_reg_chunk,   'ml_reg_chunk', 'binary', 'Subset ML regularization', 'Subset Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(ml_reg_pool,    'ml_reg_pool',  'binary', 'Pool ML regularization', 'Pool Regularization (ML-style) based on the signal power(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(rnd_cls_init,   'rnd_cls_init', 'binary', 'Initiate 2D classification from random classes', 'Initiate 2D classification from random classes vs. raw images(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
+        call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1318,6 +1346,31 @@ contains
         call calc_pspec%set_input('comp_ctrls', 2, nthr)
     end subroutine new_calc_pspec
 
+    subroutine new_cavg_filter2D
+        ! PROGRAM SPECIFICATION
+        call cavg_filter2D%new(&
+        &'cavg_filter2D',&                                                  ! name
+        &'Different filter/data reduction of particles in cavgs',&          ! descr_short
+        &'is a program for different filter/data reduction of particles in cavgs',& ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &0, 1, 0, 0, 0, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call cavg_filter2D%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call cavg_filter2D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_cavg_filter2D
+
     subroutine new_ced_2D_filter
         ! PROGRAM SPECIFICATION
         call ced_2D_filter%new(&
@@ -1482,7 +1535,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 7, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1518,6 +1571,10 @@ contains
         call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
         call cluster2D%set_input('srch_ctrls', 10, sigma_est)
         call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
+        call cluster2D%set_input('srch_ctrls', 11, rnd_cls_init)
+        call cluster2D%set_gui_params('srch_ctrls', 11, submenu="search")
+        call cluster2D%set_input('srch_ctrls', 12, cc_iters)
+        call cluster2D%set_gui_params('srch_ctrls', 12, submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
@@ -1542,6 +1599,8 @@ contains
         cluster2D%filt_ctrls(7)%descr_placeholder = '(yes|no){no}'
         cluster2D%filt_ctrls(7)%cval_default      = 'no'
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 8, kweight)
+        call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -1629,7 +1688,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D_stream%set_input('filt_ctrls', 5, wiener)
         call cluster2D_stream%set_input('filt_ctrls', 6, lplim_crit)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
@@ -1648,7 +1707,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 8, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 11, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1681,6 +1740,13 @@ contains
         call cluster2D_subsets%set_gui_params('srch_ctrls', 7, submenu="cluster 2D")
         call cluster2D_subsets%set_input('srch_ctrls', 8, objfun)
         call cluster2D_subsets%set_gui_params('srch_ctrls', 8, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 9, rnd_cls_init)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 9, submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks)
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 10, submenu="cluster2D")
+        call cluster2D_subsets%set_input('srch_ctrls', 11, cc_iters)
+        cluster2D_subsets%srch_ctrls(11)%rval_default = 5.
+        call cluster2D_subsets%set_gui_params('srch_ctrls', 11, submenu="cluster2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
@@ -1696,6 +1762,14 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 6,  reject_cls)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D", online=.true.)
+        call cluster2D_subsets%set_input('filt_ctrls', 7, kweight_chunk)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 8, kweight_pool)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 9, ml_reg_chunk)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls',10, ml_reg_pool)
+        call cluster2D_subsets%set_gui_params('filt_ctrls',10, submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
@@ -2412,10 +2486,11 @@ contains
         & accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected&
         & and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
-        &1, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        &2, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call import_movies%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+        call import_movies%set_input('img_ios', 1, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '')
+        call import_movies%set_input('img_ios', 2, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/')
         ! parameter input/output
         call import_movies%set_input('parm_ios', 1, smpd)
         call import_movies%set_input('parm_ios', 2, kv)
@@ -3679,6 +3754,32 @@ contains
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
 
+    subroutine new_projops
+        ! PROGRAM SPECIFICATION
+        call projops%new(&
+        &'projops',&                                ! name
+        &'Project manipulation tools',&             ! descr_short
+        &'Project manipulation tools',&             ! descr_long
+        &'simple_exec',&                            ! executable
+        &0, 4, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call projops%set_input('parm_ios', 1, projfile)
+        call projops%set_input('parm_ios', 2, smpd)
+        call projops%set_input('parm_ios', 3, 'randomise', 'binary', 'Randomise particles within stack', 'Randomise particles within stack(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call projops%set_input('parm_ios', 4, outstk)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_projops
+
     subroutine new_prune_project
         ! PROGRAM SPECIFICATION
         call prune_project%new(&
@@ -4636,7 +4737,7 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
         &'single_exec',&                                                                 ! executable
-        &0, 2, 0, 0, 0, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 1, 1, .true.)                                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4650,7 +4751,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        ! <empty>
+        call tseries_make_projavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call tseries_make_projavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_projavgs

@@ -98,6 +98,7 @@ type(fsc_commander)                         :: xfsc
 type(whiten_and_filter_commander)           :: xwhiten_and_filter
 type(nununiform_filter2D_commander)         :: xnununiform_filter2D
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
+type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -132,6 +133,7 @@ type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr)         :: xscale_project
+type(projops_commander)                     :: xprojops
 type(prune_project_commander_distr)         :: xprune_project
 
 ! SYSTEM INTERACTION PROGRAMS
@@ -291,6 +293,8 @@ select case(trim(prg))
         call xnununiform_filter2D%execute(cline)
     case( 'nununiform_filter3D' )
         call xnununiform_filter3D%execute(cline)
+    case( 'cavg_filter2D' )
+        call xcavg_filter2D%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -351,6 +355,8 @@ select case(trim(prg))
     ! MISCELLANEOUS WORKFLOWS
     case( 'scale_project' )
         call xscale_project%execute( cline )
+    case( 'projops' )
+        call xprojops%execute( cline )   
     case( 'prune_project' )
         call xprune_project%execute( cline )
 
@@ -369,7 +375,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('ed59bc74')
+call simple_print_git_version('a8e6bd26')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

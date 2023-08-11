@@ -77,8 +77,8 @@ contains
         logical,            intent(in)    :: fetch_comps
         real, optional,     intent(in)    :: bfac
         real, allocatable :: wh(:)
-        real    :: lp_nyq, spafreq_sq, spafreqh,spafreqk,w,wk
-        integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,sqarg
+        real    :: lp_nyq, spafreqh,spafreqk,wk
+        integer :: h,k,i,hcnt,kcnt,lplim,hplim,sqarg
         logical :: didft, l_bfac
         ! kill pre-existing object
         call self%kill

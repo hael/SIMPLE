@@ -92,7 +92,6 @@ contains
     subroutine exec_atoms_stats( self, cline )
         class(atoms_stats_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
         type(parameters)      :: params
         type(nanoparticle)    :: nano
         real                  :: a(3) ! lattice parameters

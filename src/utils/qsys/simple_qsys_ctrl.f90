@@ -4,6 +4,8 @@ include 'simple_lib.f08'
 use simple_qsys_base,  only: qsys_base
 use simple_qsys_slurm, only: qsys_slurm
 use simple_cmdline,    only: cmdline
+use simple_parameters, only: parameters
+use simple_mem_estimator
 implicit none
 
 public :: qsys_ctrl
@@ -193,13 +195,14 @@ contains
 
     ! SCRIPT GENERATORS
 
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
+    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
-        class(chash),               intent(in)    :: q_descr
+        class(chash),               intent(inout) :: q_descr
         character(len=*), optional, intent(in)    :: outfile_body
         class(chash),     optional, intent(in)    :: part_params(:)
+        type(parameters), optional, intent(in)    :: extra_params
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
         logical :: part_params_present
@@ -220,6 +223,7 @@ contains
                     call job_descr%set(key, val)
                 end do
             endif
+            if(L_USE_AUTO_MEM) call estimate_mem_usage(job_descr, q_descr, extra_params)
             call self%generate_script_1(job_descr, ipart, q_descr)
         end do
         call job_descr%delete('fromp')

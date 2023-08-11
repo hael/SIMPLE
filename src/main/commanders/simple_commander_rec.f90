@@ -42,18 +42,15 @@ contains
     subroutine exec_reconstruct3D_distr( self, cline )
         class(reconstruct3D_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: list(:)
-        character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         type(reconstruct3D_commander)          :: xrec3D_shmem
-        character(len=LONGSTRLEN) :: refine_path
         character(len=STDLEN)     :: volassemble_output, str_state, fsc_file
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
         type(cmdline)    :: cline_volassemble
         type(chash)      :: job_descr
-        integer          :: state, ipart, sz_list
+        integer          :: state
         logical          :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
@@ -178,9 +175,9 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
-        type(reconstructor_eo)        :: eorecvol_read, eoref_read
-        character(len=:), allocatable :: finished_fname, recname, volname, volname_ref
-        character(len=LONGSTRLEN)     :: eonames(2), benchfname, eonames_ref(2)
+        type(reconstructor_eo)        :: eorecvol_read
+        character(len=:), allocatable :: finished_fname, recname, volname
+        character(len=LONGSTRLEN)     :: eonames(2), benchfname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr

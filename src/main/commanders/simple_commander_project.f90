@@ -4,8 +4,11 @@ include 'simple_lib.f08'
 use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
+use simple_image,          only: image
+use simple_moviewatcher,   only: moviewatcher
+use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
+use simple_stack_io,       only: stack_io
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
@@ -24,6 +27,7 @@ public :: selection_commander
 public :: merge_stream_projects_commander
 public :: replace_project_field_commander
 public :: scale_project_commander_distr
+public :: projops_commander
 public :: prune_project_commander_distr
 public :: prune_project_commander
 private
@@ -98,6 +102,11 @@ type, extends(commander_base) :: scale_project_commander_distr
   contains
     procedure :: execute      => exec_scale_project_distr
 end type scale_project_commander_distr
+
+type, extends(commander_base) :: projops_commander
+  contains
+    procedure :: execute      => exec_projops
+end type projops_commander
 
 type, extends(commander_base) :: prune_project_commander_distr
   contains
@@ -279,10 +288,11 @@ contains
         type(sp_project)                       :: spproj
         type(oris)                             :: deftab
         type(ctfparams)                        :: ctfvars, prev_ctfvars
+        type(moviewatcher)                     :: movie_buff
         character(len=:),          allocatable :: phaseplate
         character(len=LONGSTRLEN), allocatable :: boxfnames(:), movfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
-        logical :: inputted_boxtab, inputted_deftab, first_import
+        logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -291,6 +301,11 @@ contains
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
         inputted_deftab = cline%defined('deftab')
+        inputted_dir_movies = cline%defined('dir_movies')
+        inputted_filetab    = cline%defined('filetab')
+        if(inputted_dir_movies .and. inputted_filetab)                        THROW_HARD ('dir_movies cannot be set with a filetab! exec_import_movies')
+        if(.not. inputted_dir_movies .and. .not. inputted_filetab)            THROW_HARD ('either dir_movies or filetab must be given! exec_import_movies')
+        if(inputted_dir_movies .and. ( inputted_deftab .or. inputted_boxtab)) THROW_HARD ('dir_movies cannot be set with a deftab or boxtab! exec_import_movies')
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
@@ -299,7 +314,6 @@ contains
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
         first_import = nprev_movies==0 .and. nprev_intgs==0
-        nmovf        = nlines(params%filetab)
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -347,14 +361,23 @@ contains
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
-        call read_filetable(params%filetab, movfnames)
+        nmovf = 0
+        if( inputted_filetab ) then
+            nmovf = nlines(params%filetab)
+            call read_filetable(params%filetab, movfnames)
+        else if( inputted_dir_movies) then
+            ! movie watcher init for files older that 1 second (assumed already in place at exec)
+            movie_buff = moviewatcher(1)
+            call movie_buff%watch( nmovf, movfnames )
+            call movie_buff%kill
+        endif
         if( params%mkdir.eq.'yes' )then
             ! taking care of paths
             do i=1,nmovf
                 if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
             enddo
         endif
-        if( inputted_deftab )then
+        if( inputted_deftab .and. .not. inputted_dir_movies )then
             ! micrographs with pre-determined CTF parameters
             call deftab%new(nlines(params%deftab), is_ptcl=.false.)
             call deftab%read_ctfparams_state_eo(params%deftab)
@@ -365,7 +388,7 @@ contains
             call spproj%add_movies(movfnames, ctfvars)
         endif
         ! add boxtab
-        if( inputted_boxtab )then
+        if( inputted_boxtab .and. .not. inputted_dir_movies)then
             call read_filetable(params%boxtab, boxfnames)
             nboxf = size(boxfnames)
             if( nboxf /= nmovf )then
@@ -384,7 +407,7 @@ contains
                     call spproj%os_mic%set_boxfile(nprev_intgs+i, boxfname)
                 endif
             end do
-        endif
+        endif 
         ! write project file
         call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
@@ -945,7 +968,7 @@ contains
         call job_descr%set('nthr',     int2str(1))
         call job_descr%set('nparts',   int2str(nparts))
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR, extra_params=params)
         ! delete copy in working directory
         if( gen_sc_project ) call del_file(params%projfile)
         ! clean
@@ -957,6 +980,86 @@ contains
         call build%spproj%kill
         call simple_end('**** SIMPLE_SCALE_PROJECT_DISTR NORMAL STOP ****')
     end subroutine exec_scale_project_distr
+
+    subroutine exec_projops( self, cline )
+        class(projops_commander),     intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters)            :: params
+        type(sp_project)            :: spproj
+        type(oris)                  :: oris_backup
+        type(image)                 :: img
+        type(stack_io)              :: stksrc, stkdst
+        integer, allocatable        :: randmap(:)
+        character(len=XLONGSTRLEN)  :: cwd
+        integer                     :: i, ifoo, ldim(3)
+        logical                     :: l_randomise
+        ! init
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call simple_getcwd(cwd)
+        call spproj%read( params%projfile )
+        l_randomise = trim(params_glob%randomise) .eq. 'yes'
+        if( l_randomise ) then
+            if(spproj%os_stk%get_noris() .ne. 1)    THROW_HARD('Can only randomise particles in a single stack')
+            if(spproj%os_ptcl2D%get_noris() .lt. 1) THROW_HARD('No particle information present in project file')
+            write(logfhandle,'(A)')'>>> RANDOMISING PARTICLE ORDER'
+            randmap = generate_randomisation_map(spproj%os_ptcl2D%get_noris(), 5)
+            write(logfhandle,'(A)')'>>> REMAPPING PARTICLES'
+            oris_backup = spproj%os_ptcl2D
+            do i=1, spproj%os_ptcl2D%get_noris()
+                call spproj%os_ptcl2D%transfer_ori(i, oris_backup, randmap(i))
+            enddo
+            call oris_backup%kill
+            write(logfhandle,'(A)')'>>> WRITING UPDATED STACK'
+            if(.not. file_exists(spproj%os_stk%get_static(1, 'stk'))) THROW_HARD('Stack file does not exist')
+            call find_ldim_nptcls(spproj%os_stk%get_static(1, 'stk'), ldim, ifoo)
+            ldim(3) = 1
+            call img%new(ldim, params%smpd)
+            call stkdst%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+            call stksrc%open(spproj%os_stk%get_static(1, 'stk'), params%smpd, 'read', bufsz=spproj%os_ptcl2D%get_noris())
+            call stksrc%read_whole ! can we make this better/faster/less ram intensive?
+            do i=1, spproj%os_ptcl2D%get_noris()
+                call stksrc%read(randmap(i), img)
+                call stkdst%write(i, img)
+            enddo
+            call stkdst%close
+            call stksrc%close
+            call img%kill
+            spproj%os_ptcl2D = spproj%os_ptcl3D
+            call spproj%os_stk%set(1,'stk', trim(cwd) // '/' // trim(params%outstk))
+        endif
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+        ! write project file
+        call spproj%write(basename(params%projfile))
+        ! end gracefully
+        if (allocated(randmap)) deallocate(randmap)
+        call simple_end('**** PROJOPS NORMAL STOP ****')
+        
+        contains
+        
+            function generate_randomisation_map( array_size, niter ) result( array )
+                integer, intent(in)    :: array_size, niter
+                integer, allocatable   :: array(:)
+                integer                :: i, iswap, iter, tmp
+                real                   :: rrand
+                array = [( i, i=1, array_size )]
+                do iter=1,niter
+                    do i=1, array_size
+                        call random_number(rrand)
+                        iswap = floor( array_size * rrand) + 1
+                        tmp   = array(iswap)
+                        array(iswap) = array(i)
+                        array(i)     = tmp
+                    enddo
+                enddo
+                
+            end function generate_randomisation_map
+            
+        
+    end subroutine exec_projops
 
     subroutine exec_prune_project_distr( self, cline )
         class(prune_project_commander_distr), intent(inout) :: self
@@ -1227,13 +1330,21 @@ contains
                 top_glob  = top_glob+1
                 ptcl_cnt  = ptcl_cnt+1
                 ! copy image
-                call img%read(stkname, iptcl-fromp+1)
+                if(spproj%os_ptcl2D%isthere(iptcl, 'indstk') .and. spproj%os_ptcl2D%get(iptcl, 'indstk') > 0.0) then
+                        write(logfhandle, *) "STK ", spproj%os_ptcl2D%get(iptcl,'indstk')
+                        call img%read(stkname, nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
+                else
+                        write(logfhandle, *) "STK2 " // int2str(nint(spproj%os_ptcl2D%get(iptcl,'indstk')))
+                        call img%read(stkname, iptcl-fromp+1)
+                endif
                 call img%write(newstkname, ptcl_cnt)
                 ! update orientations
                 call spproj_out%os_ptcl2D%transfer_ori(ptcl_glob, spproj%os_ptcl2D, iptcl)
                 call spproj_out%os_ptcl3D%transfer_ori(ptcl_glob, spproj%os_ptcl3D, iptcl)
                 call spproj_out%os_ptcl2D%set(ptcl_glob,'stkind',real(stkind))
                 call spproj_out%os_ptcl3D%set(ptcl_glob,'stkind',real(stkind))
+                call spproj_out%os_ptcl2D%set(ptcl_glob,'indstk',real(ptcl_cnt))
+                call spproj_out%os_ptcl3D%set(ptcl_glob,'indstk',real(ptcl_cnt))
             enddo
             ! update stack
             call make_relativepath(CWD_GLOB, newstkname, relstkname)

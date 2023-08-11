@@ -578,7 +578,6 @@ contains
         class(nanoparticle), intent(inout) :: self
         type(binimage)       :: img_bin_t
         type(binimage)       :: img_ccs_t
-        type(image)          :: pc
         type(atoms)          :: atom
         type(image)          :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
@@ -945,7 +944,7 @@ contains
         class(image),        intent(in)    :: simatms
         real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
         real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
-        real    :: maxrad, corrs(self%n_cc)
+        real    :: maxrad
         integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
         type(stats_struct) :: corr_stats
         maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
@@ -1150,15 +1149,13 @@ contains
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
         type(image)          :: simatms, fit_isotropic, fit_anisotropic
-        type(binimage)       :: img_cc_scaled
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat_raw(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
-        character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:)
-        real                 :: tmp_diam, a(3), res_fsc05, res_fsc0143, base_isotropic
-        integer              :: i, cc, cn, ios, cc_largest, max_size
+        real                 :: tmp_diam, a(3)
+        integer              :: i, cc, cn, max_size
         character(*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
 
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
@@ -1298,7 +1295,7 @@ contains
 
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
-                integer :: cc, n, n_size, n_diam
+                integer :: n
                 logical :: cn_mask(self%n_cc), size_mask(self%n_cc), adp_mask(self%n_cc)
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
@@ -1365,7 +1362,7 @@ contains
             ! as a CSV file for visualization in Python/Matlab. Output positions are the voxel
             ! positions with respect to the CC center.
             subroutine write_2D_slice()
-                integer :: cc, cc_largest, max_size, center(3), ldim_slice(3), i, j, funit
+                integer :: cc, cc_largest, max_size, center(3), i, j, funit
                 character(*), parameter :: fn_slice='cc_2D_slice.csv'
                 character(*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 ! Find largest CC for best visualization

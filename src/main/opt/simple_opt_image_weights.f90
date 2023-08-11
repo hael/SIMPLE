@@ -145,7 +145,6 @@ contains
         use simple_optimizer, only: optimizer
         class(opt_image_weights), intent(inout) :: self
         real, optional            :: w_init(self%nframes)
-        real                      :: ww(self%nframes)
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
         class(optimizer), pointer :: opt_obj
@@ -155,7 +154,7 @@ contains
         real                      :: lowest_cost
         real                      :: lowest_val
         real                      :: lowest_vec(self%nframes)
-        integer                   :: nrun, i
+        integer                   :: nrun
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_opt_image_weights: calc_opt_weights')
         end if
@@ -293,9 +292,8 @@ contains
         class(opt_image_weights), intent(inout) :: self
         real(dp),                 intent(in)    :: vec(:)
         real(dp) :: cost
-        real(dp) :: Num, tmp1, tmp2
+        real(dp) :: Num
         real(dp) :: Den
-        real(dp) :: ANum
         integer  :: i, j, k
         cost = 0._dp
         do i = 1, self%nframes
@@ -327,7 +325,7 @@ contains
         real(dp),                 intent(in)    :: vec(:)
         real(dp),                 intent(out)   :: f
         real(dp),                 intent(out)   :: grad(:)
-        real(dp) :: Num, tmp1, tmp2
+        real(dp) :: Num
         real(dp) :: Den
         real(dp) :: ANum
         real(dp) :: BNum1, BNum2
@@ -382,7 +380,7 @@ contains
         real(dp),                 intent(in)    :: vec(:)
         real(dp) :: cost
         integer  :: i, n
-        real(dp) :: val_RR, T1, T2
+        real(dp) :: val_RR
         real(dp) :: val_e(self%nframes)
         real(dp) :: val_D(self%nframes)
         ! calculate reference

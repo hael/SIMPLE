@@ -958,11 +958,11 @@ contains
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
-        real,             allocatable :: rstates(:), corrs(:), euldists(:), tmp(:)
+        real,             allocatable :: rstates(:), corrs(:), euldists(:)
         logical,          allocatable :: state_mask(:), pind_mask(:)
         character(len=:), allocatable :: iter_tag
         character(len=STDLEN) :: fbody, fbody_split
-        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind, noris, pind_plus_one
+        integer :: i, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, noris, pind_plus_one
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
@@ -1356,13 +1356,11 @@ contains
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: list(:)
-        character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:), vol_fnames(:)
         real,                      allocatable :: ccs(:,:,:), fsc(:), rstates(:)
         integer,                   allocatable :: parts(:,:)
         character(len=LONGSTRLEN)     :: fname
-        character(len=STDLEN)         :: volassemble_output, str_state, fsc_file, optlp_file
+        character(len=STDLEN)         :: volassemble_output, str_state
         type(reconstruct3D_commander) :: xrec3D_shmem
         type(parameters)              :: params
         type(builder)                 :: build
@@ -1371,7 +1369,7 @@ contains
         type(chash)                   :: job_descr
         type(image)                   :: vol1, vol2
         real                          :: w, sumw
-        integer :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
+        integer :: state, ipart, istate, iptcl, cnt, nptcls, nptcls_per_state
         integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
         logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
@@ -1559,23 +1557,18 @@ contains
         real,              allocatable :: sumw(:), ref_weights(:,:)
         integer,           allocatable :: pinds(:), batches(:,:)
         logical,           allocatable :: ptcl_mask(:)
-        character(len=:),  allocatable :: stkname
-        real    :: euls_ref(3), euls(3), cc, x, y, sdev_noise, dist, dist_threshold, mindist, w
+        real    :: euls_ref(3), euls(3), x, y, sdev_noise, dist, dist_threshold, w
         real    :: spiral_step
-        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, ind_in_stk, cnt
-        integer :: iptcl, iref, ibatch, nptcls2update, i, ref_ind
-        logical :: fall_over, l_cls3D
+        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, cnt
+        integer :: iptcl, iref, ibatch, nptcls2update, i
+        logical :: fall_over
         call cline%set('tseries', 'yes')
-        call cline%set('objfun',  'cc')
-        call cline%set('ctf',     'no')
-        call cline%set('pgrp',  'c1')
+        call cline%set('pgrp',    'c1')
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ptclw')  ) call cline%set('ptclw', 'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
         if( .not. cline%defined('athres') ) call cline%set('athres', 10.)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        l_cls3D = trim(cline%get_carg('oritype')).eq.'cls3D'
-        call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! sanity check
         fall_over = .false.
@@ -1586,20 +1579,7 @@ contains
                 THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
-        ! input orientations
-        if( l_cls3D )then
-            params%nspace  = build%spproj%os_cls3D%get_noris(consider_state=.true.)
-            call build%eulspace%new(params%nspace,.false.)
-            cnt = 0
-            do iref = 1,build%spproj%os_cls3D%get_noris()
-                if( build%spproj%os_cls3D%get_state(iref) == 0 ) cycle
-                cnt = cnt+1
-                call build%eulspace%transfer_ori(cnt, build%spproj%os_cls3D, iref)
-            enddo
-            call build%eulspace%set_all2single('e3',0.)
-        else
-            call build%eulspace%set_all2single('state',1.)
-        endif
+        call build%eulspace%set_all2single('state',1.)
         ! allocations
         allocate(pavgs(params%nspace),sumw(params%nspace))
         sumw = 0.0
@@ -1692,7 +1672,7 @@ contains
             !$omp end parallel do
         enddo
         ! Weights normalization
-        !$omp parallel do default(shared) private(i,w) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(iref,w) proc_bind(close) schedule(static)
         do iref = 1,params%nspace
             if( build%eulspace%get_state(iref) == 0 ) cycle
             if( sumw(iref) > 0.001 )then
