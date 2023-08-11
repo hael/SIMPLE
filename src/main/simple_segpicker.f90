@@ -103,9 +103,7 @@ contains
         type(binimage) :: micrograph_shrunken
         real           :: ave, sdev, maxv, minv
         real           :: ttthresh(3)
-        real           :: sigma_x, sigma_y
         integer        :: box_shrunken
-        type(image)    :: mask_img
         ! 0) Reading and saving original micrograph
         call read_micrograph(self%pickername, smpd=self%smpd, mic_out=self%mic)
         ! 1) Shrink and high pass filtering
@@ -164,7 +162,7 @@ contains
             integer,     intent(in)    :: ldim_clip(3)
             real,        intent(in)    :: smpd
             type(image) :: img, img_clip
-            integer     :: n, i, ldim(3)
+            integer     :: ldim(3)
             ldim = vol_in%get_ldim()
             ! do the work
             if( ldim_clip(1) <= ldim(1) .and. ldim_clip(2) <= ldim(2)&
@@ -216,7 +214,7 @@ contains
         class(segpicker),     intent(inout)  :: self
         real,                 intent(in)     :: saved_coord(:,:)     !Coordinates of picked particles
         logical,              intent(inout)  :: msk(:)
-        integer              :: i, j, cnt
+        integer              :: i, j
         do i = 1, self%n_particles-1           !fix one coord
             do j = i+1, self%n_particles       !fix another coord to compare
                 if(msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet

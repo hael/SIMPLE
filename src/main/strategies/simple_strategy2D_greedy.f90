@@ -5,6 +5,7 @@ use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
+use simple_parameters,       only: params_glob
 implicit none
 
 public :: strategy2D_greedy
@@ -56,6 +57,12 @@ contains
                     s2D%cls_corrs(iref,self%s%ithr) = inpl_corr
                 endif
             end do
+            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
+                ! back-calculating in-plane angle with k-weighing
+                call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
+                self%s%best_rot  = maxloc(corrs, dim=1)
+                self%s%best_corr = corrs(inpl_ind)
+            endif
             self%s%nrefs_eval = self%s%nrefs
             call self%s%inpl_srch
             call self%s%store_solution

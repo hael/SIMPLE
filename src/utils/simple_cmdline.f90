@@ -46,6 +46,7 @@ contains
     procedure          :: checkvar
     procedure          :: check
     procedure          :: printline
+    procedure          :: writeline
     procedure          :: defined
     procedure          :: get_rarg
     procedure          :: get_carg
@@ -502,6 +503,35 @@ contains
         endif
     end subroutine printline
 
+    !> \brief  for writing the command line to file
+    subroutine writeline( self, filename, tag )
+        class(cmdline),             intent(inout) :: self
+        character(len=*),           intent(in)    :: filename
+        character(len=*), optional, intent(in)    :: tag
+        integer :: i, parameters_fhandle, ok
+        if( file_exists(trim(adjustl(filename)))) call del_file(trim(adjustl(filename)))
+        call fopen(parameters_fhandle, file='.parameters', status='new', iostat=ok)
+        
+        if( present(tag) )then
+            do i=1,self%argcnt
+                if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
+                    write(parameters_fhandle, '(RD,A,A,A,A,A)') trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), ' ', trim(tag)
+                else if( self%cmds(i)%defined )then
+                    write(parameters_fhandle, '(RD,A,F12.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg, trim(tag)
+                endif
+            end do
+        else
+            do i=1,self%argcnt
+                if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
+                    write(parameters_fhandle, '(RD,A,A,A)') trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
+                else if( self%cmds(i)%defined )then
+                    write(parameters_fhandle, '(RD,A,F12.4,A)') trim(self%cmds(i)%key), self%cmds(i)%rarg
+                endif
+            end do
+        endif
+        call fclose(parameters_fhandle)
+    end subroutine writeline
+    
     !> \brief  for checking the existence of of arg
     function defined( self, key ) result( def )
         class(cmdline),   intent(in) :: self

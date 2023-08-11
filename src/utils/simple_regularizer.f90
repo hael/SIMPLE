@@ -113,14 +113,14 @@ contains
         type(oris),         intent(in)    :: eulspace
         type(oris),         intent(in)    :: ptcl_eulspace
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer  :: i, iref, iptcl, loc
+        integer  :: i, iref, iptcl, loc, loc_thres, loc_m
         real     :: inpl_corrs(self%nrots), ptcl_ref_dist, ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real     :: euls(3), euls_ref(3), theta
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         ! even/odd only when lpset is .false.
         if( params_glob%l_lpset )then
-            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta) proc_bind(close) schedule(static)
+            !$omp parallel do collapse(2) default(shared) private(i,iref,euls_ref,euls,ptcl_ref_dist,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,theta,loc_thres,loc_m) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 do i = 1, self%pftcc%nptcls
                     iptcl    = glob_pinds(i)
@@ -144,10 +144,22 @@ contains
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                     ! neighboring reg terms
+                    ptcl_ref_dist = geodesic_frobdev(euls_ref,euls)
                     euls_ref = pi / 180. * eulspace%get_euler(iref)
                     euls     = pi / 180. * ptcl_eulspace%get_euler(iptcl)
                     theta    = acos(cos(euls_ref(2))*cos(euls(2)) + sin(euls_ref(2))*sin(euls(2))*cos(euls_ref(1) - euls(1)))
                     if( theta <= params_glob%arc_thres*pi/180. .and. theta >= 0. )then
+                        loc_thres = self%nrots * params_glob%arc_thres / 360.
+                        loc       = maxloc(inpl_corrs(1:loc_thres), dim=1)
+                        loc_m     = maxloc(inpl_corrs(self%nrots-loc_thres:self%nrots), dim=1)
+                        if( inpl_corrs(loc_m) > inpl_corrs(loc) ) loc = loc_m
+                        if( inpl_corrs(loc) < TINY ) cycle
+                        ! distance & correlation weighing
+                        ptcl_ref_dist = inpl_corrs(loc) / ( 1. + ptcl_ref_dist )
+                        loc = (self%nrots+1)-(loc-1)
+                        if( loc > self%nrots ) loc = loc - self%nrots
+                        call self%rotate_polar(          ptcl_ctf(:,:,i), ptcl_ctf_rot, loc)
+                        call self%rotate_polar(self%pftcc%ctfmats(:,:,i),      ctf_rot, loc)
                         self%regs_neigh(:,:,iref)       = self%regs_neigh(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
                         self%regs_denom_neigh(:,:,iref) = self%regs_denom_neigh(:,:,iref) + ctf_rot**2
                     endif

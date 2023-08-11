@@ -67,7 +67,7 @@ contains
         class(strategy3D_snhc), intent(inout) :: self
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
-        integer    :: ref, roind, loc(1)
+        integer    :: ref, loc(1)
         if( self%ref_only )then
             ! stash prev ori
             call build_glob%spproj_field%get_ori(self%s%iptcl, o1)

@@ -73,8 +73,8 @@ contains
         real,                  intent(inout) :: medians(self%i_rad_max)
         real(kind=c_float), pointer :: rmat(:,:,:)=>null() !< image pixels in img
         integer :: npix_per_ring(self%i_rad_max), i, j, i_rad
-        real    :: ring_vals(self%i_rad_max,self%max_npix_per_ring), var
-        logical :: mask(self%i_rad_max,self%max_npix_per_ring), err
+        real    :: ring_vals(self%i_rad_max,self%max_npix_per_ring)
+        logical :: mask(self%i_rad_max,self%max_npix_per_ring)
         call img%get_rmat_ptr(rmat)
         npix_per_ring = 0
         mask          = .false.

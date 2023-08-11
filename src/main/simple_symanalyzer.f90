@@ -148,8 +148,8 @@ contains
         type(sym)             :: symobj
         character(len=STDLEN) :: errmsg
         character(len=3)      :: pgrp_sub
-        integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, isub, npeaks
-        integer :: isym, jsym, filtsz, iisym, fnr, highest_pgrp_detected
+        integer :: ncsym, icsym, cnt, idsym, ldim(3), nsub, isub, npeaks
+        integer :: isym, filtsz, fnr, highest_pgrp_detected
         real    :: smpd, means(NCLS)
         ! get info from vol_in
         smpd       = vol_in%get_smpd()

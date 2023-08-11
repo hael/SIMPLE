@@ -205,7 +205,6 @@ contains
         real,    intent(in)              :: in_buffer(:,:,:)
         integer, intent(in), optional    :: quality
         integer, intent(in), optional    :: colorspec
-        type(c_ptr)                      :: img
         integer                          :: w,h,d,c, dx, dy
         integer                          :: status, newshape(2)
         real, allocatable                :: new_buffer(:,:)
@@ -239,7 +238,6 @@ contains
         integer,          intent(in), optional :: quality
         integer,          intent(in), optional :: colorspec
         character(len=:), allocatable :: fname_here
-        type(c_ptr)           ::  img
         integer               ::  w,h,c,slice
         integer               ::  status
         character(len=STDLEN) ::  fstr
@@ -398,7 +396,7 @@ contains
         type(c_ptr)                         :: img
         integer                             :: bshape(1)
         integer                             :: i,j,w,h,c
-        integer                             :: status,pixel
+        integer                             :: status
         integer(1), dimension(:),pointer    :: imgbuffer
         character(len=:),allocatable  :: fstr
         status = 1
@@ -427,7 +425,6 @@ contains
     subroutine test_jpg_export()
         use,intrinsic :: iso_c_binding
         implicit none
-        character            :: buf(1024)
         integer, allocatable :: int32_buffer(:,:)
         real,    allocatable :: real32_buffer(:,:)
         character(len=:), allocatable :: simple_path_str

@@ -225,7 +225,7 @@ contains
         real, allocatable, intent(in)    :: model(:,:)
         integer,           intent(inout) :: contact_scores(size(model,2))
         integer :: natoms, iatom, jatom, cnt
-        real    :: dist, d, rMax
+        real    :: dist, rMax
         ! init
         rMax           = find_rMax(element)
         natoms         = size(model,2)

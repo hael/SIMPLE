@@ -209,7 +209,7 @@ contains
         integer, allocatable :: labels(:)
         logical, allocatable :: l_msk(:,:,:)
         integer  :: halfnoris, cnt1, cnt2, i, l, noris
-        real     :: cen1, cen2, sum1, sum2, sumvals, sdev, sdev_noise
+        real     :: cen1, cen2, sum1, sum2, sumvals, sdev_noise
         real     :: minmax(2), width, height, sh1(3), ang, thresh(3)
         if(params_glob%pgrp(1:1).eq.'d' .or. params_glob%pgrp(1:1).eq.'D')then
             ang = 360. / real(se%get_nsym()/2)
@@ -341,8 +341,8 @@ contains
         use simple_projector
         class(remoc_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        class(str4arr),   allocatable :: mics(:),mics_from_ptcls(:), star_movies(:)
-        character(len=:), allocatable :: fname, movie, vol_even_fname, vol_odd_fname, mask_fname, mic_fname
+        class(str4arr),   allocatable :: mics(:), star_movies(:)
+        character(len=:), allocatable :: vol_even_fname, vol_odd_fname, mask_fname
         real,             allocatable :: fsc(:), optfilter(:)
         type(parameters) :: params
         type(ctfparams)  :: ctf_glob, ctf_mic
@@ -624,7 +624,6 @@ contains
         type(CDataPoint_type) :: point
         type(parameters)      :: params
         type(sp_project)      :: first_spproj, spproj, spproj2
-        real(dp) :: rmsd, maxrmsd, minrmsd
         real     :: smpd, binning
         integer  :: i, j, k, npoints, ldim1(3), ldim2(3), nmics, nprojects, nx, ny, nframes, funit, io_stat, cnt
         logical  :: found

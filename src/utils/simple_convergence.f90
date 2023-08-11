@@ -311,9 +311,8 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:), pws(:), states(:), scores(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, score_t, lim_updatecnt
+        real    :: avg_updatecnt, percen_nonzero_pw, score_t, lim_updatecnt
         logical :: converged
-        integer :: iptcl
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
@@ -396,9 +395,7 @@ contains
     function check_conv_cluster( self, cline ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
-        integer, allocatable :: statepops(:)
         logical :: converged
-        integer :: istate
 
         converged = .false.
 

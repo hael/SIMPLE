@@ -215,7 +215,7 @@ contains
     subroutine master( self, recsz, maxpcaits )
         class(ppca_serial),         intent(inout) :: self
         integer,                    intent(in)    :: recsz, maxpcaits
-        integer  :: k, file_stat, funit2, recsz2, err, fhandle_txt
+        integer  :: k, err
         real(dp) :: p, p_prev
         if( self%doprint) write(*,'(A)') '>>> GENERATIVE ITERATIVE PCA'
         p = 0.d0

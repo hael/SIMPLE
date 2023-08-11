@@ -171,7 +171,6 @@ contains
     subroutine close( self )
         class(imgfile), target, intent(inout) :: self
         class(ImgHead), pointer :: ptr=>null()
-        integer :: ios
         ptr => self%overall_head
         select type(ptr)
             type is (TiffImgHead)
@@ -267,7 +266,7 @@ contains
         character(len=100)          :: io_message
         integer                     :: io_stat,dims(3),tmparrdims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
-        logical                     :: arr_is_ready,alloc_tmparr
+        logical                     :: alloc_tmparr
         class(ImgHead), pointer     :: ptr=>null()
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         dims       = self%overall_head%getDims()
@@ -652,8 +651,8 @@ contains
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         integer,                intent(in)    :: ldim(3)      !< Logical size of the array
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
-        integer         :: io_stat,itmp,dims(3)
-        integer(kind=8) :: first_byte,first_hedbyte,byteperpix
+        integer         :: io_stat,dims(3)
+        integer(kind=8) :: first_byte,byteperpix
         real            :: min_val,max_val
         ! Redefine the file dims (to keep track of the index of the last image of the stack)
         dims = self%overall_head%getDims()

@@ -218,7 +218,6 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         character(len=*)                  :: filename
-        integer                           :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
@@ -455,9 +454,9 @@ contains
 
     subroutine read_starheaders(self)
         class(starproject), intent(inout) :: self
-        character(len=LEN_LINE)           :: line, blockname, flagname, datastring
+        character(len=LEN_LINE)           :: line, blockname, flagname
         logical                           :: flagsopen, dataopen
-        integer                           :: ios, delimindex,flagindex, istart, iend, flagid, lineindex, fhandle
+        integer                           :: ios, delimindex,flagindex, lineindex, fhandle
         flagsopen = .false.
         dataopen  = .false.
         lineindex = 1
@@ -632,7 +631,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -653,7 +651,7 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         integer, optional,  intent(in)    :: iter
-        character(len=:), allocatable     :: stkname, relpath
+        character(len=:), allocatable     :: stkname
         integer                           :: i, ncls
         real                              :: smpd
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
@@ -698,7 +696,6 @@ contains
         character(len=LEN_LINE)                                 :: line
         character(len=LEN_LINE),    allocatable                 :: splitline(:)
         integer                                                 :: i, j, state, fhandle, ios, ok
-        real                                                    :: smpd
         real,                       allocatable                 :: fscs(:,:,:), maxres05(:), maxres0128(:)
         logical                                                 :: ex
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
@@ -807,7 +804,7 @@ contains
         class(starproject),                     intent(inout)   :: self
         integer,                                intent(in)      :: ptcls, rejected
         character(len=XLONGSTRLEN)                              :: cwd
-        integer                                                 :: fhandle, ios, ok
+        integer                                                 :: fhandle, ok
         logical                                                 :: ex
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         call simple_getcwd(cwd)
@@ -831,7 +828,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles2D.star"
         if( VERBOSE_OUTPUT )then
@@ -852,7 +848,6 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project)                 :: spproj
-        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles3D.star"
         if( VERBOSE_OUTPUT )then
@@ -1011,9 +1006,8 @@ contains
     subroutine assign_xml_tiltinfo(self, xmldir)
         class(starproject), target, intent(inout) :: self
         character(len=*),           intent(in)    :: xmldir
-        character(len=LONGSTRLEN)                 :: eputilt
         type(Node), pointer                       :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
-        integer                                   :: i, j
+        integer                                   :: i
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "reading tilt info from metadata ... "
         do i = 1,size(self%tiltinfo)
@@ -1037,7 +1031,7 @@ contains
         real,               intent(in)    :: threshold
         integer, allocatable              :: populations(:), labels(:), tiltinfopos(:)
         real,    allocatable              :: tilts(:,:), centroids(:,:)
-        integer :: i, j, k, tiltcount, groupcount, matchcount
+        integer :: i, j, tiltcount, groupcount, matchcount
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "clustering initial beamtilt groups using tilt info and a threshold of ", threshold, " ... "
         groupcount = 0
@@ -1073,26 +1067,38 @@ contains
 
     ! optics
 
-    subroutine assign_optics(self, cline, spproj)
+    subroutine assign_optics(self, cline, spproj, propagate)
         class(starproject),    intent(inout)   :: self
         class(cmdline),        intent(inout)   :: cline
         class(sp_project)                      :: spproj
-        integer                                :: i, j, element, noptics
+        logical,    optional,  intent(in)      :: propagate
+        integer                                :: i, element, noptics
         integer                                :: ptclstkid
         real                                   :: ogid, box, stkbox
         character(len=LONGSTRLEN)              :: ogname
         character(len=XLONGSTRLEN)             :: cwd
-        logical                                :: beamtilt
+        logical                                :: beamtilt, l_propagate
         beamtilt  = .true.
+        l_propagate = .true.
+        if(present(propagate)) l_propagate = propagate
         if(cline%get_carg('beamtilt') .eq. 'no') then
             beamtilt = .false.
         end if
+        if(allocated(self%tiltinfo)) deallocate(self%tiltinfo)
         allocate(self%tiltinfo(0))
         if(spproj%os_mic%get_noris() > 0) then
             call self%get_image_basename(spproj%os_mic, 'intg')
         end if
         if(spproj%os_stk%get_noris() > 0) then
-            call self%get_image_basename(spproj%os_stk, 'stk')
+            if(spproj%os_stk%get_noris() == spproj%os_mic%get_noris()) then
+                do i =1, spproj%os_mic%get_noris()
+                    if(spproj%os_mic%isthere(i, 'tind')) then
+                        call spproj%os_stk%set(i, 'tind', spproj%os_mic%get(i, 'tind'))
+                    end if
+                end do
+            else
+                call self%get_image_basename(spproj%os_stk, 'stk')
+            end if
         end if
         call self%assign_initial_tiltgroups(beamtilt)
         if(cline%get_carg("xmldir") .ne. '') then
@@ -1123,11 +1129,15 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
             do i = 1,spproj%os_mic%get_noris()
-                element = findloc(self%tiltinfo%basename, trim(adjustl(spproj%os_mic%get_static(i, "bsname"))), 1)
-                if(element > 0) then
-                    call spproj%os_mic%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
+                if(spproj%os_mic%isthere(i, "tind")) then
+                    element = nint(spproj%os_mic%get(i, "tind"))
+                    if(element > 0) then
+                        call spproj%os_mic%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
+                    else
+                        THROW_HARD('failed to locate optics info for mic ' // trim(adjustl(spproj%os_mic%get_static(i, "intg"))))
+                    end if
                 else
-                    THROW_HARD('failed to locate optics info for mic basename' // trim(adjustl(spproj%os_mic%get_static(i, "bsname"))))
+                   THROW_HARD('failed to locate tiltinfo index for mic ' // trim(adjustl(spproj%os_mic%get_static(i, "intg"))))
                 end if
             end do
         end if
@@ -1135,11 +1145,13 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating stacks in project file with updated optics groups ... "
             do i = 1, spproj%os_stk%get_noris()
-                element = findloc(self%tiltinfo%basename, trim(adjustl(spproj%os_stk%get_static(i, "bsname"))), 1)
-                if(element > 0) then
-                    call spproj%os_stk%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
-                else
-                    THROW_HARD('failed to locate optics info for stk basename' // trim(adjustl(spproj%os_stk%get_static(i, "bsname"))))
+                if(spproj%os_mic%isthere(i, "tind")) then
+                    element = nint(spproj%os_mic%get(i, "tind"))
+                    if(element > 0) then
+                        call spproj%os_stk%set(i, 'ogid', real(self%tiltinfo(element)%finaltiltgroupid))
+                    else
+                        THROW_HARD('failed to locate optics info for stk ' // trim(adjustl(spproj%os_mic%get_static(i, "intg"))))
+                    end if
                 end if
             end do
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
@@ -1156,7 +1168,7 @@ contains
                 end if
             end do
         end if
-        if(spproj%os_ptcl2D%get_noris() > 0) then
+        if(l_propagate .and. spproj%os_ptcl2D%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 2d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl2D%get_noris()
@@ -1164,7 +1176,7 @@ contains
                 call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
-        if(spproj%os_ptcl3D%get_noris() > 0) then
+        if(l_propagate .and. spproj%os_ptcl3D%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 3d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl3D%get_noris()
@@ -1172,7 +1184,6 @@ contains
                 call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
-
         if(size(self%tiltinfo) > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file ... "
@@ -1278,10 +1289,17 @@ contains
         class(starproject), intent(inout) :: self
         class(oris),        intent(inout) :: sporis
         character(len=*),   intent(in)    :: splflag
+        type(tilt_info),    allocatable   :: tiltinfotmp(:)
         type(tilt_info)            :: tiltinfo
         character(len=XLONGSTRLEN) :: path
         character(len=LONGSTRLEN)  :: filename
-        integer                    :: i, tiltind
+        integer                    :: i, itmp, ntiltinfo
+        allocate(tiltinfotmp(sporis%get_noris()))
+        ntiltinfo = size(self%tiltinfo)
+        itmp = 1
+        do i=1, sporis%get_noris()
+            call sporis%set(i, "tind", 0.0)
+        end do
         do i=1, sporis%get_noris()
             path = sporis%get_static(i, splflag)
             filename = basename(path)
@@ -1297,10 +1315,8 @@ contains
             if(index(filename, '_EER') > 0) then
                 filename = filename(:index(filename, '_EER') - 1)
             end if
-            call sporis%set(i, "bsname", trim(adjustl(filename)))
-            tiltind = findloc(self%tiltinfo%basename, filename, 1)
-            if(tiltind == 0) then
-                tiltinfo%basename = filename
+            if(sporis%get(i,"tind") == 0.0) then
+                tiltinfo%basename = trim(adjustl(filename))
                 tiltinfo%smpd     = sporis%get(i, "smpd")
                 tiltinfo%kv       = sporis%get(i, "kv")
                 tiltinfo%fraca    = sporis%get(i, "fraca")
@@ -1316,13 +1332,17 @@ contains
                 else
                     tiltinfo%tilty = 0.0
                 end if
-                self%tiltinfo     = [self%tiltinfo, tiltinfo]
+                tiltinfotmp(itmp) = tiltinfo
+                call sporis%set(i, "tind", real(ntiltinfo + itmp))
+                itmp = itmp + 1
             else
-                if(self%tiltinfo(tiltind)%box < sporis%get(i, "box")) then
-                    self%tiltinfo(tiltind)%box = sporis%get(i, "box")
+                if(self%tiltinfo(nint(sporis%get(i,"tind")))%box < sporis%get(i, "box")) then
+                    self%tiltinfo(nint(sporis%get(i,"tind")))%box = sporis%get(i, "box")
                 end if
             end if
         end do
+        if(size(tiltinfotmp) > 0) self%tiltinfo = [self%tiltinfo, tiltinfotmp(1:itmp - 1)]
+        if(allocated(tiltinfotmp)) deallocate(tiltinfotmp)
     end subroutine get_image_basename
 
     subroutine set_verbose(self)

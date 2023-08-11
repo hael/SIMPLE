@@ -67,7 +67,7 @@ contains
     subroutine statesrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: ind,iproj,iref,state,inpl,i ! neigh_projs(s%nstates), ineigh
+        integer :: iproj,iref,state ! neigh_projs(s%nstates), ineigh
         real    :: corrs(s%nstates),corrs_inpl(s%nrots), corr,mi_state,mi_proj
         corrs       = -1.
         ! neigh_projs = 0
@@ -137,7 +137,7 @@ contains
     subroutine symsrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: projs(s%nstates),iproj,iref,isym,state,iproj_sym ! ineigh
+        integer :: projs(s%nstates),iproj,iref,isym,state ! ineigh
         real    :: corrs(s%nstates),sym_corrs(s%nsym),corrs_inpl(s%nrots)
         real    :: corr,mi_state,mi_proj
         corrs = -1.

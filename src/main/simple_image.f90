@@ -231,6 +231,7 @@ contains
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: phase_corr
     procedure          :: fcorr_shift
+    procedure          :: norm_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
@@ -643,8 +644,7 @@ contains
         integer, parameter :: HDAMPWINSZ=2
         integer, parameter :: DAMPWINSZ =5
         real :: medi(self%ldim(1)),medj(self%ldim(2)),vals(DAMPWINSZ**2)
-        integer :: h,mh,k,mk,lims(3,2),ci,cj,i,j,ii,jj,cnt,l,r,u,d,n
-        real    :: sum
+        integer :: h,mh,k,mk,lims(3,2),i,j,l,r,u,d,n
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)
@@ -967,7 +967,7 @@ contains
         logical,          optional, intent(in)    :: readhead
         type(imgfile)    :: ioimg
         character(len=1) :: form
-        integer          :: ldim(3), iform, first_slice
+        integer          :: ldim(3), first_slice
         integer          :: last_slice, ii
         real             :: smpd
         logical          :: isvol
@@ -2841,7 +2841,7 @@ contains
         real, allocatable, intent(inout) :: spec(:)
         logical, optional, intent(in)    :: norm
         real, allocatable :: counts(:)
-        integer :: lims(3,2), phys(3), phys2d(2), sh, lfny, h, k, l
+        integer :: lims(3,2), phys(3), sh, lfny, h, k, l
         logical :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
@@ -3148,8 +3148,7 @@ contains
         integer,        intent(in)    :: find
         real, optional, intent(in)    :: width
         integer :: h, k, l, lims(3,2), phys(3)
-        logical :: didft, dohp, dolp
-        real    :: freq, hplim_freq, wwidth, w
+        real    :: freq, wwidth, w
         wwidth =10.
         if( present(width) ) wwidth = width
         lims = self%fit%loop_lims(2)
@@ -3464,8 +3463,8 @@ contains
         real, intent(in)    :: filt(:)
         real, allocatable   :: shifted_filt(:)
         real, allocatable   :: rmat_t(:,:,:)
-        integer :: ldim(3), sz_f(1), L1, L2, L3
-        integer :: i, j, k, m, n, o
+        integer :: ldim(3), sz_f(1), L1
+        integer :: i, j, m
         ldim = img%get_ldim()
         sz_f = shape(filt)
         L1 = sz_f(1)
@@ -3479,7 +3478,7 @@ contains
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 do m = -(L1-1)/2,(L1-1)/2
-                    rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m)
+                    rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+1,1)*shifted_filt(m)
                 enddo
             end do
         end do
@@ -3497,8 +3496,8 @@ contains
         real, intent(in)    :: filt(:,:)
         real, allocatable   :: shifted_filt(:,:)
         real, allocatable   :: rmat_t(:,:,:)
-        integer :: ldim(3), sz_f(2), L1, L2, L3
-        integer :: i, j, k, m, n, o
+        integer :: ldim(3), sz_f(2), L1, L2
+        integer :: i, j, m, n
         ldim = img%get_ldim()
         sz_f = shape(filt)
         L1 = sz_f(1)
@@ -4580,8 +4579,8 @@ contains
         complex     :: c1,c2
         real        :: w,rw,rhplim,rlplim,rsh,normsq
         real(dp)    :: sqsum1,sqsum2
-        integer     :: nrflims(3,2),phys(3),npix
-        integer     :: h,k,l,shsq, hplim, hplimsq, bphplimsq, lplim, lplimsq, bplplimsq
+        integer     :: nrflims(3,2),phys(3)
+        integer     :: h,k,l,shsq, lplim, lplimsq, bplplimsq
         if( present(border) )then
             if( self1%ldim(3) > 1 ) THROW_HARD('Border discarding not implemented for 3D')
             if( border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 )then
@@ -4706,6 +4705,18 @@ contains
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
     end subroutine prenorm4real_corr_2
 
+    !> \brief standardize image within logical mask
+    subroutine norm_within( self, mask )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: npix, ax, sxx
+        npix = real(count(mask))
+        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
+        if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
+    end subroutine norm_within
+
     !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
     !>  The image is centered and standardized
     subroutine prenorm4real_corr_3( self, err )
@@ -4765,7 +4776,6 @@ contains
     !>  both inputs are assumed centered & standardized
     real function real_corr_prenorm_3( self_ref, self_ptcl )
         class(image), intent(inout) :: self_ref, self_ptcl
-        real :: r
         real_corr_prenorm_3 = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))&
                                 & * self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)))
         real_corr_prenorm_3 = real_corr_prenorm_3 / product(self_ref%ldim)

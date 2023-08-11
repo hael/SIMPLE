@@ -534,7 +534,6 @@ contains
         integer, optional, intent(in)    :: eo
         integer :: mylab, pop, i
         logical :: cconsider_w, consider_eo
-        real    :: w
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
@@ -1206,7 +1205,7 @@ contains
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
-        integer :: i, cnt, n_nozero, ifirst, ilast, sz, mincnt
+        integer :: i, cnt, n_nozero, ifirst, ilast, mincnt
         real    :: val
         logical :: first_round
         ! gather info (states & counts & indices)
@@ -2757,7 +2756,7 @@ contains
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
         integer,     intent(inout) :: nnmat(k,self%n)
-        real      :: dists(self%n), x
+        real      :: dists(self%n)
         integer   :: inds(self%n), i, j
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
         !$omp parallel do default(shared) proc_bind(close) private(i,j,inds,dists)
@@ -2784,7 +2783,7 @@ contains
         real,        intent(in)    :: euldist_thres ! in degrees
         logical,     intent(inout) :: lnns(self%n)
         real      :: dists(self%n), euldist_thres_rad
-        integer   :: inds(self%n), j
+        integer   :: j
         euldist_thres_rad = deg2rad(euldist_thres)
         do j=1,self%n
             dists(j) = self%o(j).euldist.o
@@ -2798,7 +2797,7 @@ contains
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real, allocatable :: corrs_packed(:)
-        integer :: i, j, npeaks
+        integer :: i, npeaks
         real    :: corr_t
         corr_t = 0.0
         do i = 1,self%n

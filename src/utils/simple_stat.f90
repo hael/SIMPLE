@@ -275,7 +275,7 @@ contains
         real,    intent(in)  :: data(:)
         logical, intent(in)  :: mask(:)
         integer  :: n, i, sz
-        real     :: nr, dev, abs_var
+        real     :: nr, dev
         real(dp) :: ep_dp, var_dp
         err  = .false.
         sz   = size(data)

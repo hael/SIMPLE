@@ -176,9 +176,6 @@ contains
         integer, allocatable :: yhist(:)
         integer              :: i, j
         real                 :: xmin, xmax, dx
-        integer, dimension(:), allocatable :: counts
-        integer :: astat
-        character(len=128) :: error_str
         xmin=minval(arr)
         xmax=maxval(arr)
         n = 2*(nint(xmax-xmin)+1) !this value influence the result because it determins how to approximate the steps
@@ -250,8 +247,8 @@ contains
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
         real, allocatable  :: arr(:)
-        real    :: ts(2), smd, y
-        integer :: narr, i
+        real    :: ts(2), y
+        integer :: narr
         ts(1) = -huge(y)
         do
             narr = count(x >= ts(1))
