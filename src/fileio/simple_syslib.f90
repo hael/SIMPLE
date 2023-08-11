@@ -328,7 +328,6 @@ contains
         integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
         logical, optional,    intent(in)    :: doprint
         logical :: l_print, currently_opened
-        integer :: funit
         l_print = .false.
         currently_opened=.false.
         allocate(buffer(13), source=0)
@@ -417,7 +416,7 @@ contains
         character(len=300) :: eemsg
         character(len=:), allocatable :: targetdir
         integer :: io_status
-        logical :: dir_e, qq, check_exists
+        logical :: dir_e, check_exists
         if(present(status)) status = 1
         if(present(oldd))then
             call simple_getcwd(olddir)
@@ -459,8 +458,8 @@ contains
         character(len=*), intent(in), optional     :: errmsg
         character(kind=c_char, len=:), allocatable :: path
         character(len=STDLEN) :: tmpdir
-        integer :: io_status, lenstr, cstart
-        logical :: ignore_here,  dir_p, qq
+        integer :: io_status, lenstr
+        logical :: ignore_here
         ! check input arg
         tmpdir = trim(adjustl(dir))
         lenstr = len_trim(tmpdir)
@@ -500,7 +499,6 @@ contains
         integer                                   :: io_status
         logical                                   :: dir_e
         integer :: err, length, count
-        logical(4) qq
         io_status=0
         inquire(file=trim(adjustl(d)), exist=dir_e)
         if(dir_e) then
@@ -770,7 +768,6 @@ contains
         integer, intent (in), optional :: file_unit
         integer  :: file_unit_op
         character(len=:), allocatable :: compilation_cmd, compiler_ver
-        character(len=56)  :: str !! needed by intel
         if (present(file_unit)) then
             file_unit_op = file_unit
         else

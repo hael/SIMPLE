@@ -201,7 +201,6 @@ contains
 
     subroutine kill(self)
         class(nrtxtfile), intent(inout) :: self
-        integer :: ios
         if( is_open(self%funit) )then
             call fclose(self%funit)
         end if

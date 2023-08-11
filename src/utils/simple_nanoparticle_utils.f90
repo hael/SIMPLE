@@ -11,7 +11,7 @@ implicit none
 
 public :: phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, find_atoms_subset
+public :: remove_atoms, find_atoms_subset, find_rMax
 private
 #include "simple_local_flags.inc"
 

@@ -132,10 +132,8 @@ east, west, south, north, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(sp) :: square(3,4), lat, long, average
+    real(sp) :: square(3,4), lat, long
     real(sp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
     type(color_t), pointer :: defaultMap(:), thisColor
 
     m = size(values, 1)
@@ -259,10 +257,8 @@ east, west, south, north, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(dp) :: square(3,4), lat, long, average
+    real(dp) :: square(3,4), lat, long
     real(dp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
     type(color_t), pointer :: defaultMap(:), thisColor
 
     m = size(values, 1)
@@ -389,10 +385,8 @@ longitude, latitude, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(sp) :: square(3,4), lat, long, average
-    real(sp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
+    real(sp) :: square(3,4), average
+    real(sp) :: minvalue, valueres !resolution of input value
     type(color_t), pointer :: defaultMap(:), thisColor
 
     m = size(values, 1)
@@ -522,10 +516,8 @@ longitude, latitude, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(dp) :: square(3,4), lat, long, average
-    real(dp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
+    real(dp) :: square(3,4), average
+    real(dp) :: minvalue, valueres !resolution of input value
     type(color_t), pointer :: defaultMap(:), thisColor
 
     m = size(values, 1)
@@ -657,11 +649,9 @@ longitude, latitude, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(sp) :: square(3,4), lat, long, average
-    real(sp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
-    type(color_t), pointer :: defaultMap(:), thisColor
+    real(sp) :: square(3,4), average
+    real(sp) :: minvalue, valueres !resolution of input value
+    type(color_t), pointer :: defaultMap(:)
 
     m = size(values, 1)
     n = size(values, 2)
@@ -774,11 +764,9 @@ longitude, latitude, values, &
     character(len=*), intent(in), optional :: name
 #ifndef DUMMYLIB
     integer  :: i, ic, j, k, m, n, numcolors
-    real(dp) :: square(3,4), lat, long, average
-    real(dp) :: minvalue, lat_inc, long_inc, valueres !resolution of input value
-    character(len=15), allocatable :: styleURL(:) ! FIXME this ought to be dynamically sized,
-                                     ! but this allows up to 10^9 separate IDs in one doc.
-    type(color_t), pointer :: defaultMap(:), thisColor
+    real(dp) :: square(3,4), average
+    real(dp) :: minvalue, valueres !resolution of input value
+    type(color_t), pointer :: defaultMap(:)
 
     m = size(values, 1)
     n = size(values, 2)
@@ -896,19 +884,14 @@ longitude, latitude, values, &
       character(len=*), intent(in), optional :: dataname
 #ifndef DUMMYLIB
 
-      integer :: i, j, k, x, y
-      integer :: nx, ny, nnx, nny  ! numbers at X(long), numbers at Y(Lat)
+      integer :: i, j, k
+      integer :: nx, ny  ! numbers at X(long), numbers at Y(Lat)
 
       type(color_t), allocatable :: valuehex(:,:)
 
-      integer,dimension(4) :: xp=(/0,1,1,0/)  ! id for coordintes
-      integer,dimension(4) :: yp=(/0,0,1,1/)
 
-      character(LEN=8) :: stylecolor, colorhextmp
 
-      character(15) :: lonchar, latchar, elchar
       character(50) :: coords
-      real(dp) :: valueres
 
 !      if (present(valuescale)) then
 !      values=valuescale*values
@@ -1050,19 +1033,14 @@ longitude, latitude, values, &
       character(len=*), intent(in), optional :: dataname
 #ifndef DUMMYLIB
 
-      integer :: i, j, k, x, y
-      integer :: nx, ny, nnx, nny  ! numbers at X(long), numbers at Y(Lat)
+      integer :: i, j, k
+      integer :: nx, ny  ! numbers at X(long), numbers at Y(Lat)
 
       type(color_t), allocatable :: valuehex(:,:)
 
-      integer,dimension(4) :: xp=(/0,1,1,0/)  ! id for coordintes
-      integer,dimension(4) :: yp=(/0,0,1,1/)
 
-      character(LEN=8) :: stylecolor, colorhextmp
 
-      character(15) :: lonchar, latchar, elchar
       character(50) :: coords
-      real(sp) :: valueres
 
 !      if (present(valuescale)) then
 !      values=valuescale*values

@@ -599,9 +599,9 @@ contains
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         call cline_cluster2D_stage1%set('nonuniform', 'no')
         ! reg in the first stage
-        if( params%l_ref_reg )then
-            call cline_cluster2D_stage1%set('ref_reg',   'yes')
-            call cline_cluster2D_stage1%set('eps_mode',  'linear')
+        if( params%l_reg_ref )then
+            call cline_cluster2D_stage1%set('reg_ref',       'yes')
+            call cline_cluster2D_stage1%set('reg_eps_mode',  'linear')
             call cline_cluster2D_stage1%set('trs',       0.)
             call cline_cluster2D_stage1%set('reg_iters', real(MAXITS_STAGE1))
         endif
@@ -655,8 +655,8 @@ contains
         ! optional non-uniform filtering
         if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
         ! no reg in second stage
-        if( params%l_ref_reg )then
-            call cline_cluster2D_stage2%set('ref_reg','no')
+        if( params%l_reg_ref )then
+            call cline_cluster2D_stage2%set('reg_ref','no')
         endif
         ! execution
         if( l_shmem )then
@@ -1073,9 +1073,12 @@ contains
         type(parameters)           :: params
         type(builder), target      :: build
         type(starproject)          :: starproj
-        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc
-        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind, iter_switch2euclid
+        character(len=LONGSTRLEN)  :: finalcavgs, orig_objfun, refs_sc, fname
+        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
+        integer                    :: iter_switch2euclid, j, io_stat, funit, class_ind, class_max
         logical                    :: converged, l_stream, l_switch2euclid, l_griddingset, l_ml_reg
+        real,    allocatable       :: corrs(:), corrs_all(:), class_all(:)
+        integer, allocatable       :: order(:), class_cnt(:)
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
@@ -1134,7 +1137,24 @@ contains
                             endif
                         endif
                     else
-                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        if( trim(params%rnd_cls_init).eq.'yes' )then
+                            if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with RND_CLS_INIT=YES ')
+                            ! initialization from random classes
+                            do iptcl=1,params%nptcls
+                                if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                                call build%spproj_field%set(iptcl, 'class', real(irnd_uni(params%ncls)))
+                                call build%spproj_field%set(iptcl, 'w',     1.0)
+                                call build%spproj_field%e3set(iptcl,ran3()*360.0)
+                            end do
+                            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                            call cline_make_cavgs%set('refs', params%refs)
+                            call xmake_cavgs%execute(cline_make_cavgs)
+                        else
+                            ! initialization from raw images
+                            call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        endif
+
+                        ! call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
                     endif
                     ! scale references to box_crop
                     if( params%box_crop < params%box )then
@@ -1264,6 +1284,54 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
+            ! print CSV file of correlation vs particle number
+            if( trim(params_glob%print_corrs).eq.'yes' )then
+                class_all = build%spproj%os_ptcl2D%get_all('class')
+                class_max = int(maxval(class_all))
+                ! counting the number of particles in each class
+                allocate(class_cnt(class_max))
+                do class_ind = 1, class_max
+                    class_cnt(class_ind) = 0
+                    do j = 1, size(class_all)
+                        if( class_all(j) == class_ind ) class_cnt(class_ind) = class_cnt(class_ind) + 1
+                    enddo
+                enddo
+                ! print all sorted corrs
+                corrs_all = build%spproj%os_ptcl2D%get_all('corr')
+                order     = (/(j,j=1,size(corrs_all))/)
+                call hpsort(corrs_all, order)
+                fname = 'ptcls_vs_cavgs_corrs_iter'// int2str(params%which_iter) //'.csv'
+                call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+                call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+                do j = 1,size(corrs_all)
+                    write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs_all(j))
+                end do
+                call fclose(funit)
+                ! print sorted corrs for each class
+                do class_ind = 1, class_max
+                    if( allocated(corrs) ) deallocate(corrs)
+                    allocate(corrs(class_cnt(class_ind)), source=0.)
+                    cnt = 0
+                    do j = 1, size(corrs_all)
+                        if( class_all(j) == class_ind )then
+                            cnt = cnt + 1
+                            corrs(cnt) = corrs_all(j)
+                        endif
+                    enddo
+                    if( allocated(order) ) deallocate(order)
+                    order = (/(j,j=1,class_cnt(class_ind))/)
+                    call hpsort(corrs, order)
+                    fname = 'ptcls_vs_cavgs_corrs_cls_'// int2str(class_ind) //'.csv'
+                    call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+                    call fileiochk('cluster2D fopen failed: '//trim(fname), io_stat)
+                    write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+                    do j = 1,size(corrs)
+                        write(funit,*) int2str(order(j))//CSV_DELIM//real2str(corrs(j))
+                    end do
+                    call fclose(funit)
+                enddo
+            endif
             ! end gracefully
             call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')

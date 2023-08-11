@@ -1328,6 +1328,7 @@ contains
         call build%spproj%update_projinfo(cline)
         ! find number of selected cavgs
         call find_ldim_nptcls(params%stk2, lfoo, nsel)
+        if( cline%defined('ares') ) nsel = int(params%ares)
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
             call build%spproj%get_cavgs_stk(cavgstk, nall, smpd)

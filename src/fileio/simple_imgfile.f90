@@ -370,6 +370,7 @@ contains
             write(logfhandle,'(2a)') 'IO error message was: ', trim(io_message)
             THROW_HARD('I/O')
         endif
+        self%was_written_to = .false.
     end subroutine rSlices
 
     !>  \brief  reads a set of TIFF contiguous slices of the image file from disk into memory.

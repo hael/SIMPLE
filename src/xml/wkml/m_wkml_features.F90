@@ -139,7 +139,6 @@ contains
     real(sp), intent(in), optional :: chartdata(:)
 ! variable for extended data
     character(len=*), intent(in),optional :: dataname
-    integer :: k
     real(sp), intent(in), optional :: values(:)
 
 #ifndef DUMMYLIB
@@ -306,7 +305,6 @@ contains
     real(sp), intent(in), optional :: chartdata(:)
 ! variable for extended data
     character(len=*), intent(in),optional :: dataname
-    integer :: k
     real(sp), intent(in), optional :: values(:)
 
 #ifndef DUMMYLIB    
@@ -360,7 +358,6 @@ contains
     real(dp), intent(in), optional :: chartdata(:)
 ! variable for extended data
     character(len=*), intent(in),optional :: dataname
-    integer :: k
     real(dp), intent(in), optional :: values(:)
 
 
@@ -409,7 +406,6 @@ contains
     character(len=*), intent(in), optional :: time(:)    
 
     integer :: i, n
-    character, pointer :: tempStyleUrl(:)
 
 ! variables for kmlAddChart
     character(len=*), intent(in),optional :: charttype,chartscale,chartsize,charttitle,chartlabel
@@ -528,7 +524,6 @@ contains
     real(dp), intent(in), optional :: chartdata(:)
 ! variable for extended data
     character(len=*), intent(in),optional :: dataname
-    integer :: k
     real(dp), intent(in), optional :: values(:)
 
 #ifndef DUMMYLIB
@@ -576,7 +571,6 @@ contains
     logical, intent(in),optional :: tessellate
     real(dp), intent(in),optional :: zi,ze
 #ifndef DUMMYLIB
-    integer :: i, nodes
     character(len=1) :: palm
 
     palm="#"
@@ -891,7 +885,7 @@ contains
 
 #ifndef DUMMYLIB    
     integer :: n
-    logical :: needPlacemark, outline, fill
+    logical :: outline, fill
 
     n = size(longitude)
     outline = present(linecolor).or.present(linecolorname).or.present(linecolorhex).or.present(linewidth)
@@ -989,7 +983,7 @@ contains
 
 #ifndef DUMMYLIB    
     integer :: n
-    logical :: needPlacemark, outline, fill
+    logical :: outline, fill
 
     n = size(longitude)
     outline = present(linecolor).or.present(linecolorname).or.present(linecolorhex).or.present(linewidth)
