@@ -7,6 +7,7 @@ implicit none
 
 public :: moviewatcher
 private
+#include "simple_local_flags.inc"
 
 character(len=STDLEN), parameter :: stream_dirs = 'SIMPLE_STREAM_DIRS'
 
@@ -53,12 +54,13 @@ contains
         integer, intent(in) :: report_time  ! in seconds
         type(moviewatcher)  :: self
         call self%kill
-        if( .not. file_exists(trim(adjustl(params_glob%dir_movies))) )then
-            write(logfhandle,*) 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
-            stop
+        self%watch_dir = trim(adjustl(params_glob%dir_movies))
+        if( .not.file_exists(self%watch_dir) )then
+            THROW_HARD('Directory does not exist: '//trim(self%watch_dir))
+        else
+            write(logfhandle,'(A,A)')'>>> MOVIES WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
         endif
         self%cwd         = trim(params_glob%cwd)
-        self%watch_dir   = trim(adjustl(params_glob%dir_movies))
         self%report_time = report_time
         self%ext         = trim(adjustl(params_glob%ext))
         self%fbody       = trim(adjustl(params_glob%fbody))
@@ -228,15 +230,14 @@ contains
                 endif
             enddo
             if( new )then
-                allocate(tmp_farr(n), source=self%watch_dirs)
-                deallocate(self%watch_dirs)
+                call move_alloc(self%watch_dirs, tmp_farr)
                 allocate(self%watch_dirs(n+1))
                 self%watch_dirs(:n) = tmp_farr(:)
                 self%watch_dirs(n+1) = trim(adjustl(abs_fname))
             endif
         endif
         if( new )then
-            write(logfhandle,'(A,A,A,A)')'>>> NEW DIRECTORY ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
+            write(logfhandle,'(A,A)')'>>> MOVIES DETECTED FROM DIRECTORY: ',trim(adjustl(abs_fname))
         endif
     end subroutine add2watchdirs
 

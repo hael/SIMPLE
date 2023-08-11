@@ -10,6 +10,7 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
+use simple_regularizer,             only: regularizer
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
@@ -37,6 +38,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
+type(regularizer)              :: reg_obj
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
@@ -68,6 +70,7 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
+        character(len=STDLEN) :: reg_mode_in
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
@@ -189,16 +192,22 @@ contains
         if( params_glob%l_ref_reg )then
             select case(trim(params_glob%eps_mode))
                 case('auto')
-                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                    if( which_iter <= 2*params_glob%reg_iters )then
+                        params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
+                        reg_mode_in     = 'glob_neigh'
+                    else
+                        params_glob%eps = min( 1., max(0., 3. - real(which_iter)/params_glob%reg_iters) )
+                        reg_mode_in     = 'neigh_ref'
+                    endif
                 case('fixed')
                     ! user provided, or default value in simple_parameters
                 case('linear')
                     params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
                 case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_mode)//' unsupported')
+                    THROW_HARD('reg eps mode: '//trim(params_glob%eps_mode)//' unsupported')
             end select
             if( params_glob%eps > TINY )then
-                call pftcc%reset_regs
+                call reg_obj%reset_regs
                 ! Batch loop
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
@@ -206,8 +215,11 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                ! frc filter when e/o is on
-                call pftcc%regularize_refs( params_glob%l_lpset )
+                if( trim(params_glob%eps_mode) == 'auto' )then
+                    call reg_obj%regularize_refs(reg_mode_in)
+                else
+                    call reg_obj%regularize_refs
+                endif
             endif
         endif
 
@@ -342,6 +354,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
+            if( params_glob%l_ref_reg ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -435,6 +448,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
+        if( params_glob%l_ref_reg ) call reg_obj%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -540,16 +554,7 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! compute regularization terms
-        select case(trim(params_glob%reg_mode))
-            case('global')
-                call pftcc%ref_reg_cc(      build_glob%eulspace, build_glob%spproj_field, pinds_here)
-            case('neigh')
-                call pftcc%ref_reg_cc_neigh(build_glob%eulspace, build_glob%spproj_field, pinds_here)
-            case('dev')
-                call pftcc%ref_reg_cc_dev(  build_glob%eulspace, build_glob%spproj_field, pinds_here)
-            case DEFAULT
-                THROW_HARD('regularization mode: '//trim(params_glob%reg_mode)//' unsupported')
-        end select
+        call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher

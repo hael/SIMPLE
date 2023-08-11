@@ -205,15 +205,19 @@ contains
     end function simple_isenv
 
     !> simple_getenv gets the environment variable string and returns status
-    function simple_getenv_1( name , retval, allowfail)  result( status )
+    function simple_getenv_1( name , retval, allowfail, silent)  result( status )
         character(len=*),      intent(in)  :: name
         character(len=*),      intent(out) :: retval
         logical,     optional, intent(in)  :: allowfail
+        logical,     optional, intent(in)  :: silent
         integer                            :: length, status
+        logical                            :: l_silent
+        l_silent = .false.
+        if(present(silent)) l_silent = silent
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
         if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_1'
         if( status ==  1 )then
-            write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
+            if(.not. l_silent) write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
             retval = 'undefined'
             return
         endif

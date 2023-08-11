@@ -86,7 +86,7 @@ contains
         real         :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
         real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
         integer      :: natoms, iatom, centerAtom,i
-        logical      :: areNearest(size(model,dim=2)), new_fitting = .true.
+        logical      :: areNearest(size(model,dim=2))
         ! sanity check
         if( size(model,dim=1) /=3 ) then
             write(logfhandle,*) 'Nonconforming input coordinates! fit_lattice'
@@ -118,33 +118,16 @@ contains
         areNearest = .false.
         avgNNRR    = 0.
         if( DEBUG ) write(logfhandle,*) 'Determination of avgNNRR'
-        write(logfhandle,*) '>>>>> LATTICE FITTING UNDER REVISION. RESULTS MAY NOT BE ACCURATE.'
-        new_fitting = .true.
-        if (new_fitting) then
-            ! New calculation of avgNNRR: calculate distance to centerAtomCoords instead of cMid
-            ! which should give a better estimation of the avg distance to nearest neighbors
-            ! and therfore a better initial guess for D=a/2
-            do iatom = 1 ,natoms
-                dist = euclid(model(:,iatom),centerAtomCoords)
-                if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
-                    if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
-                    if( DEBUG ) write(logfhandle,*) 'dist ', dist
-                    areNearest(iatom) = .true.
-                    avgNNRR = avgNNRR + dist
-                endif
-            enddo
-        else
-            ! Old calculation of avgNNRR
-            do iatom = 1 ,natoms
-                dist = euclid(model(:,iatom),cMid(:))
-                if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
-                    if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
-                    if( DEBUG ) write(logfhandle,*) 'dist ', dist
-                    areNearest(iatom) = .true.
-                    avgNNRR = avgNNRR + dist
-                endif
-            enddo
-        end if
+        ! Find average nearest neighbor distance to center atom
+        do iatom = 1 ,natoms
+            dist = euclid(model(:,iatom),centerAtomCoords)
+            if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
+                if( DEBUG ) write(logfhandle,*) 'iatom ', iatom
+                if( DEBUG ) write(logfhandle,*) 'dist ', dist
+                areNearest(iatom) = .true.
+                avgNNRR = avgNNRR + dist
+            endif
+        enddo
 
         avgNNRR = avgNNRR / real(count(areNearest))
         avgD    = sqrt(avgNNRR**2/2.)

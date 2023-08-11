@@ -206,6 +206,7 @@ contains
         real,           intent(in)    :: frac_srch_space
         real    :: lplim
         integer :: lpstart_find
+        params_glob%kfromto(1) = max(2,calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
@@ -489,7 +490,7 @@ contains
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering
-        else if( params_glob%l_lpset )then
+        else if( params_glob%l_lpset .and. (.not. params_glob%l_ref_reg) )then
             ! Butterworth low-pass filter
             call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
             call vol_ptr%apply_filter(filter)

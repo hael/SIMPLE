@@ -68,7 +68,6 @@ contains
         class(ori),            intent(in)    :: omic
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
-        ! type(image) :: mic
         character(len=:), allocatable :: poly_fname
         real(dp),         allocatable :: poly(:)
         integer  :: i,iframe
@@ -184,10 +183,6 @@ contains
         endif
         ! micrograph init
         if( .not.self%l_mov ) call self%init_mic( self%box, self%l_neg)
-        ! ! generate micrograph from movie frames
-        ! call self%generate_micrograph(mic)
-        ! call mic%write(fname_new_ext(basename(self%docname),'mrc'))
-        ! call mic%kill
         ! all done
         call self%eer%kill
         self%exists = .true.

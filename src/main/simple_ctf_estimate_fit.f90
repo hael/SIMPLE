@@ -5,6 +5,7 @@ include 'simple_lib.f08'
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost4Dcont
+use simple_parameters,        only: params_glob
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
@@ -652,29 +653,6 @@ contains
         call imgmsk%kill
     end subroutine gen_resmsk
 
-    ! calculate CTF score diagnostic; deprecated
-    ! subroutine calc_ctfscore( self )
-    !     class(ctf_estimate_fit), intent(inout) :: self
-    !     type(image)       :: pspec_ctf_roavg
-    !     real, allocatable :: corrs(:)
-    !     real              :: df_avg
-    !     integer           :: filtsz, hpfind, lpfind
-    !     call pspec_ctf_roavg%new(self%ldim_box, self%smpd)
-    !     df_avg = (self%parms%dfx + self%parms%dfy) / 2.0
-    !     call self%ctf2pspecimg(pspec_ctf_roavg, df_avg, df_avg, 0.)
-    !     hpfind = self%pspec_roavg%get_find(self%hp)
-    !     lpfind = self%pspec_roavg%get_find(max(2.5,2.*self%smpd))
-    !     filtsz = self%pspec_roavg%get_filtsz()
-    !     call self%pspec_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
-    !     call pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
-    !     call self%pspec_roavg%norm_bin
-    !     call pspec_ctf_roavg%norm_bin
-    !     allocate(corrs(filtsz))
-    !     call self%pspec_roavg%frc_pspec(pspec_ctf_roavg, corrs)
-    !     !self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind-hpfind+1)
-    !     call pspec_ctf_roavg%kill
-    ! end subroutine calc_ctfscore
-
     ! calculate micrograph tilt
     subroutine calc_tilt( self, tilt )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -1076,6 +1054,7 @@ contains
         call calc_frc
         sh = max(1, ctfres_shell())
         self%ctfres = max(2.0*smpd_sc,min(smpd_sc*real(self%box)/real(sh), self%hp))
+        if( self%ctfres > self%hp-0.001 ) self%ctfres = params_glob%ctfresthreshold
         if( DEBUG_HERE )then
             print *,'self%ctfres ',glob_count, self%ctfres, sh
             call self%plot_ctf(int2str(glob_count)//'_ctf.eps', nshells, abs(ctf1d), spec1d_rank, frc, smpd_sc)
