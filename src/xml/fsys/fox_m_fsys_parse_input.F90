@@ -47,9 +47,7 @@ contains
     logical, intent(in), optional :: csv
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, length
 
     character(len=len(s)) :: s2
     logical :: csv_, eof, sp
@@ -196,9 +194,7 @@ contains
     logical, intent(out) :: data
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB 
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, length
 
 
     s_i = 1
@@ -275,9 +271,7 @@ contains
     integer, intent(out) :: data
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -351,9 +345,7 @@ contains
     real(sp), intent(out) :: data
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -427,9 +419,7 @@ contains
     real(dp), intent(out) :: data
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -504,7 +494,7 @@ contains
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: i, ij, k, s_i, err, ios, length
     real :: r, c
 
 
@@ -629,7 +619,7 @@ contains
     integer, intent(out), optional :: num, iostat
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: i, ij, k, s_i, err, ios, length
     real :: r, c
 
 
@@ -757,9 +747,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, length
 
     character(len=len(s)) :: s2
     logical :: csv_, eof
@@ -909,9 +897,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, j, ij, k, s_i, err, length
 
     character(len=len(s)) :: s2
     logical :: csv_, eof
@@ -1059,9 +1045,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, length
 
 
     s_i = 1
@@ -1140,9 +1124,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, j, ij, k, s_i, err, length
 
 
     s_i = 1
@@ -1223,9 +1205,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
     s_i = 1
     err = 0
@@ -1300,9 +1280,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
     integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
 
 
     s_i = 1
@@ -1380,9 +1358,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -1458,9 +1434,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
     integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
 
 
     s_i = 1
@@ -1538,9 +1512,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
+    integer :: i, ij, k, s_i, err, ios, length
 
 
     s_i = 1
@@ -1616,9 +1588,7 @@ contains
     integer, intent(out), optional :: iostat
 
 #ifndef DUMMYLIB
-    logical :: bracketed
     integer :: i, j, ij, k, s_i, err, ios, length
-    real :: r, c
 
 
     s_i = 1
@@ -1697,7 +1667,7 @@ contains
 
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: i, ij, k, s_i, err, ios, length
     real :: r, c
 
 
@@ -1953,7 +1923,7 @@ contains
 
 #ifndef DUMMYLIB
     logical :: bracketed
-    integer :: i, j, ij, k, s_i, err, ios, length
+    integer :: i, ij, k, s_i, err, ios, length
     real :: r, c
 
 

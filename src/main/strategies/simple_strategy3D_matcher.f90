@@ -189,23 +189,18 @@ contains
         endif
 
         ! ref regularization
-        if( params_glob%l_ref_reg )then
-            select case(trim(params_glob%eps_mode))
+        if( params_glob%l_reg_ref )then
+            select case(trim(params_glob%reg_eps_mode))
                 case('auto')
-                    if( which_iter <= 2*params_glob%reg_iters )then
-                        params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-                        reg_mode_in     = 'glob_neigh'
-                    else
-                        params_glob%eps = min( 1., max(0., 3. - real(which_iter)/params_glob%reg_iters) )
-                        reg_mode_in     = 'neigh_ref'
-                    endif
+                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
                 case('fixed')
                     ! user provided, or default value in simple_parameters
                 case('linear')
                     params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
                 case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%eps_mode)//' unsupported')
+                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_eps_mode)//' unsupported')
             end select
+            pftcc%with_ctf = .true.
             if( params_glob%eps > TINY )then
                 call reg_obj%reset_regs
                 ! Batch loop
@@ -215,12 +210,9 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                if( trim(params_glob%eps_mode) == 'auto' )then
-                    call reg_obj%regularize_refs(reg_mode_in)
-                else
-                    call reg_obj%regularize_refs
-                endif
+                call reg_obj%regularize_refs_test
             endif
+            pftcc%with_ctf = .false.
         endif
 
         ! Batch loop
@@ -354,7 +346,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( params_glob%l_ref_reg ) call reg_obj%kill
+            if( params_glob%l_reg_ref ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -448,7 +440,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_ref_reg ) call reg_obj%new(pftcc)
+        if( params_glob%l_reg_ref ) call reg_obj%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -554,7 +546,7 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! compute regularization terms
-        call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
+        call reg_obj%ref_reg_cc_test(build_glob%eulspace, build_glob%spproj_field, pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher

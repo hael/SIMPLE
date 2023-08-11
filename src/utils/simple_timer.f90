@@ -408,7 +408,7 @@ end function cast_time_char
       real(timer_int_kind), intent(in):: totaltime
       real(timer_int_kind)            :: total_avg
       real(timer_int_kind), allocatable:: avgtime_token(:)
-      integer :: ival, iloop
+      integer :: ival
 !    if (.not.present(COMMENT)) COMMENT="PROFILE"
 
       if (allocated(profile_matrix)) then

@@ -113,7 +113,7 @@ contains
         real,              intent(in)    :: smpd, kV, total_dose
         real, allocatable, intent(inout) :: weights(:,:)
         real, parameter :: A=0.245, B=-1.665, C=2.81
-        real            :: acc_doses(nframes), spaFreq, current_time
+        real            :: acc_doses(nframes), spaFreq
         real            :: twoNe, limksq, dose_per_frame
         integer         :: filtsz, iframe, k
         filtsz = fdim(box) - 1

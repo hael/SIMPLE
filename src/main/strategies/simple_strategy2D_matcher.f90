@@ -204,8 +204,8 @@ contains
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
         ! ref regularization
-        if( params_glob%l_ref_reg )then
-            select case(trim(params_glob%eps_mode))
+        if( params_glob%l_reg_ref )then
+            select case(trim(params_glob%reg_eps_mode))
                 case('auto')
                     params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
                 case('fixed')
@@ -213,7 +213,7 @@ contains
                 case('linear')
                     params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
                 case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%eps_mode)//' unsupported')
+                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_eps_mode)//' unsupported')
             end select
             if( params_glob%eps > TINY )then
                 call reg_obj%reset_regs
@@ -363,7 +363,7 @@ contains
         call eucl_sigma%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftcc%kill
-        if( params_glob%l_ref_reg ) call reg_obj%kill
+        if( params_glob%l_reg_ref ) call reg_obj%kill
         call killimgbatch
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
@@ -461,7 +461,7 @@ contains
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_ref_reg ) call reg_obj%new(pftcc)
+        if( params_glob%l_reg_ref ) call reg_obj%new(pftcc)
         ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'

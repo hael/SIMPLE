@@ -111,7 +111,7 @@ contains
         real, parameter :: CENLP_2DSTREAM = 30.
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: rarg
-        integer :: ichunk, maybe2D
+        integer :: ichunk
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
             THROW_HARD('Missing required argument NTHR2D')
@@ -198,10 +198,10 @@ contains
         call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
         if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
-        if( cline%defined('cls_rnd_init') )then
-            call cline_cluster2D_chunk%set('cls_rnd_init', params_glob%rnd_cls_init)
+        if( cline%defined('rnd_cls_init') )then
+            call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
         else
-            call cline_cluster2D_chunk%set('cls_rnd_init','no')
+            call cline_cluster2D_chunk%set('rnd_cls_init','no')
         endif
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks

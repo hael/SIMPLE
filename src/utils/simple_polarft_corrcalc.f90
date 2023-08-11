@@ -133,7 +133,8 @@ type :: polarft_corrcalc
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
     procedure          :: create_polar_absctfmats, calc_polar_ctf
-    procedure, private :: gen_shmat, gen_shmat_8
+    procedure          :: gen_shmat
+    procedure, private :: gen_shmat_8
     procedure          :: calc_corr_rot_shift
     procedure          :: genmaxcorr_comlin
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
@@ -142,6 +143,8 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure, private :: reg_gencorrs_1,       reg_gencorrs_2
+    generic            :: reg_gencorrs => reg_gencorrs_1, reg_gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -1200,6 +1203,49 @@ contains
                 call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, cc)
         end select
     end subroutine gencorrs_2
+
+    subroutine reg_gencorrs_1( self, iref, iptcl, cc, kweight )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
+        logical :: kw
+        kw = params_glob%l_kweight
+        if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+        if( kw )then
+            call self%gencorrs_weighted_cc(iptcl, iref, cc)
+        else
+            call self%gencorrs_cc(iptcl, iref, cc)
+        endif
+    end subroutine reg_gencorrs_1
+
+    subroutine reg_gencorrs_2( self, iref, iptcl, shift, cc, kweight )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(in)    :: shift(2)
+        real(sp),                intent(out)   :: cc(self%nrots)
+        logical,       optional, intent(in)    :: kweight
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
+        integer :: i, ithr
+        logical :: kw
+        ithr    = omp_get_thread_num() + 1
+        i       = self%pinds(iptcl)
+        shmat   => self%heap_vars(ithr)%shmat
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        call self%gen_shmat(ithr, shift, shmat)
+        if( self%iseven(i) )then
+            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
+        endif
+        kw = params_glob%l_kweight
+        if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
+        if( kw )then
+            call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
+        else
+            call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
+        endif
+    end subroutine reg_gencorrs_2
 
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self

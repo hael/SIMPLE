@@ -28,7 +28,7 @@ contains
     subroutine add_1( self, x )
         class(online_var), intent(inout) :: self
         real(sp),          intent(in)    :: x !< new input
-        real(dp) :: temp, delta, R
+        real(dp) :: delta
         self%sumw = self%sumw + 1.d0
         delta     = dble(x) - self%mean
         self%mean = self%mean + delta / self%sumw
@@ -103,7 +103,7 @@ contains
     subroutine test_online_var
         use simple_stat, only: moment
         use simple_rnd,  only: gasdev
-        real    :: samples(10000), ave, sdev, var, mv(2)
+        real    :: samples(10000), ave, sdev, var
         integer :: i
         logical :: err
         type(online_var) :: owv, owv2

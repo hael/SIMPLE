@@ -679,7 +679,7 @@ contains
     function plane_from_points(points) result(sol)
         real, intent(inout) :: points(:,:) !input
         real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
-        real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
+        real    :: M(size(points, dim = 2),3), b(size(points, dim = 2))
         real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
         integer :: errflg ! if manages to find inverse matrix
         integer :: p
