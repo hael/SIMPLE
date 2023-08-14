@@ -531,7 +531,7 @@ contains
                     build_glob%avg_vol = build_glob%vol
                 else
                     call build_glob%avg_vol%read('cur_avg.mrc')
-                    build_glob%avg_vol = build_glob%avg_vol + (build_glob%vol - build_glob%avg_vol) * params_glob%eps
+                    build_glob%avg_vol = build_glob%avg_vol + build_glob%vol * params_glob%eps
                 endif
                 call build_glob%avg_vol%zero_neg
                 call build_glob%avg_vol%write('cur_avg.mrc')
@@ -543,7 +543,7 @@ contains
                     build_glob%avg_vol_odd = build_glob%vol_odd
                 else
                     call build_glob%avg_vol_odd%read('cur_avg_odd.mrc')
-                    build_glob%avg_vol_odd = build_glob%avg_vol_odd + (build_glob%vol_odd - build_glob%avg_vol_odd) * params_glob%eps
+                    build_glob%avg_vol_odd = build_glob%avg_vol_odd + build_glob%vol_odd * params_glob%eps
                 endif
                 call build_glob%avg_vol_odd%zero_neg
                 call build_glob%avg_vol_odd%write('cur_avg_odd.mrc')

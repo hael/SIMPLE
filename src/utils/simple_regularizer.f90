@@ -132,8 +132,8 @@ contains
                 call self%pftcc%gen_shmat(ithr, real(init_xy), shmat)
                 call self%rotate_polar(real(ptcl_ctf(:,:,i) * shmat), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,i),          ctf_rot, loc)
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot * real(ptcl_ref_dist, dp)
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + real(ptcl_ref_dist, dp) * ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + real(ptcl_ref_dist, dp) * ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
