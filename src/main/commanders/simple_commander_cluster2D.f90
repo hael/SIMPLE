@@ -169,9 +169,9 @@ contains
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
         if( l_shmem )then
-            call build%spproj%write_segment_inside(params%oritype)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
         else
-            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype)
+            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! create class averager
         call cavger_new

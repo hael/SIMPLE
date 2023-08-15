@@ -1915,9 +1915,9 @@ contains
             threshold_index = nint(param*real(nptcls))
             if( threshold_index < 1 ) return
             if( threshold_index >= nptcls ) return
-            threshold_index = self%n - threshold_index + 1
-            threshold_index = inds(threshold_index)
-            threshold       = scores(threshold_index)
+            threshold_index = self%n - threshold_index
+            scores          = self%get_all('corr')
+            threshold       = scores(inds(threshold_index))
             call threshold_here
         case('mahalanobis')
             if( (param < 0.0) ) return
