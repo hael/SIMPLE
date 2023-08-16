@@ -1056,6 +1056,10 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
+        ! put back automatic contact thresholding after refinement
+        call cline_detect_atms%delete('corr_thres')
+        call cline_detect_atms%delete('cs_thres')
+        call cline_detect_atms%delete('use_thres') ! yes is default
         params_ptr  => params_glob
         params_glob => null()
         call xdetect_atms%execute(cline_detect_atms)
