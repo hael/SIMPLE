@@ -146,47 +146,60 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
-        integer  :: i, iind, iref, iptcl, loc(self%pftcc%nptcls), ithr, indarr(self%pftcc%nptcls)
-        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr(self%pftcc%nptcls)
+        integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
+        real,               allocatable   :: init_xy(:,:), cur_corr(:)
+        integer  :: i, j, iind, iref, iptcl, n_inpls, n_samples, inpl_ind(self%nrots), cnt, ithr
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real     :: cxy(3)
-        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2,self%pftcc%nptcls),&
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        n_inpls   = 1
+        n_samples = self%pftcc%nptcls * n_inpls
+        allocate(cur_corr(n_samples),loc(n_samples),sample_ind(n_samples),ptcl_ind(n_samples),init_xy(2,n_samples))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        !$omp parallel do default(shared) private(i,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,init_xy,ithr,shmat,cxy,indarr) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,cnt) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             ithr = omp_get_thread_num() + 1
             ! computing correlations
+            cnt = 1
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                loc(i) = maxloc(inpl_corrs, dim=1)
-                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc(i))
-                if( loc(i) > 0 )then
-                    cur_corr(i)  = cxy(1)
-                    init_xy(:,i) = cxy(2:3)
-                else
-                    loc(i)       = maxloc(inpl_corrs, dim=1)
-                    cur_corr(i)  = inpl_corrs(loc(i))
-                    init_xy(:,i) = 0.
-                endif
+                inpl_ind = (/(j,j=1,self%nrots)/)
+                call hpsort(inpl_corrs, inpl_ind)
+                call reverse(inpl_ind)
+                do j = 1, n_inpls
+                    ptcl_ind(cnt) = i
+                    loc(cnt)      = inpl_ind(j)
+                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc(cnt))
+                    if( loc(cnt) > 0 )then
+                        cur_corr(cnt)  = cxy(1)
+                        init_xy(:,cnt) = cxy(2:3)
+                    else
+                        loc(cnt)       = inpl_ind(j)
+                        cur_corr(cnt)  = inpl_corrs(loc(cnt))
+                        init_xy(:,cnt) = 0.
+                    endif
+                    cnt = cnt + 1
+                enddo
             enddo
             ! finding the sample space, based on the sorted correlations
-            indarr = (/(i,i=1,self%pftcc%nptcls)/)
-            call hpsort(cur_corr, indarr)
-            call reverse(indarr)
+            sample_ind = (/(j,j=1,n_samples)/)
+            call hpsort(cur_corr, sample_ind)
+            call reverse(sample_ind)
             ! constructing the cavgs/2D-gradient
-            do i = 1, int(self%pftcc%nptcls*0.2)
-                iind = indarr(i)
+            do i = 1, int(n_samples*0.2)
+                iind = sample_ind(i)
                 if( cur_corr(iind) < TINY ) cycle
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc(iind) = (self%nrots+1)-(loc(iind)-1)
                 if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, real(init_xy(:,iind)), shmat)
-                call self%rotate_polar(real(ptcl_ctf(:,:,iind) * shmat), ptcl_ctf_rot, loc(iind))
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,iind),          ctf_rot, loc(iind))
+                call self%rotate_polar(real(ptcl_ctf(:,:,ptcl_ind(iind)) * shmat), ptcl_ctf_rot, loc(iind))
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),          ctf_rot, loc(iind))
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + cur_corr(iind) * ptcl_ctf_rot
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + cur_corr(iind) * ctf_rot**2
             enddo
