@@ -33,6 +33,7 @@ type :: regularizer
     procedure          :: new
     ! PROCEDURES
     procedure          :: ref_reg_cc
+    procedure          :: ref_reg_cc_test
     procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
@@ -138,6 +139,60 @@ contains
         enddo
         !$omp end parallel do
     end subroutine ref_reg_cc
+
+    ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
+    subroutine ref_reg_cc_test( self, glob_pinds )
+        use simple_oris
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        complex(sp),        pointer       :: shmat(:,:)
+        integer  :: i, iind, iref, iptcl, loc(self%pftcc%nptcls), ithr, indarr(self%pftcc%nptcls)
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls), cur_corr(self%pftcc%nptcls)
+        real     :: cxy(3)
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)), init_xy(2,self%pftcc%nptcls),&
+              &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
+        !$omp parallel do default(shared) private(i,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,init_xy,ithr,shmat,cxy,indarr) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            ithr = omp_get_thread_num() + 1
+            ! computing correlations
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                loc(i) = maxloc(inpl_corrs, dim=1)
+                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc(i))
+                if( loc(i) > 0 )then
+                    cur_corr(i)  = cxy(1)
+                    init_xy(:,i) = cxy(2:3)
+                else
+                    loc(i)       = maxloc(inpl_corrs, dim=1)
+                    cur_corr(i)  = inpl_corrs(loc(i))
+                    init_xy(:,i) = 0.
+                endif
+            enddo
+            ! finding the sample space, based on the sorted correlations
+            indarr = (/(i,i=1,self%pftcc%nptcls)/)
+            call hpsort(cur_corr, indarr)
+            call reverse(indarr)
+            ! constructing the cavgs/2D-gradient
+            do i = 1, int(self%pftcc%nptcls*0.2)
+                iind = indarr(i)
+                if( cur_corr(iind) < TINY ) cycle
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc(iind) = (self%nrots+1)-(loc(iind)-1)
+                if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
+                shmat => self%pftcc%heap_vars(ithr)%shmat
+                call self%pftcc%gen_shmat(ithr, real(init_xy(:,iind)), shmat)
+                call self%rotate_polar(real(ptcl_ctf(:,:,iind) * shmat), ptcl_ctf_rot, loc(iind))
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,iind),          ctf_rot, loc(iind))
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + cur_corr(iind) * ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + cur_corr(iind) * ctf_rot**2
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine ref_reg_cc_test
 
     subroutine regularize_refs( self, ref_freq_in )
         class(regularizer), intent(inout) :: self
