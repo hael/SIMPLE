@@ -2010,47 +2010,47 @@ contains
         write(funit,601,advance='no') self%u_iso_stats%med,          CSV_DELIM ! MED_U_ISO            (29)
         write(funit,601,advance='no') self%u_iso_stats%sdev,         CSV_DELIM ! SDEV_U_ISO           (30)
         ! -- anisotropic displacement parameters major eigenvalue
-        write(funit,601,advance='no') self%u_maj_stats%avg,          CSV_DELIM ! AVG_U_MAJ
-        write(funit,601,advance='no') self%u_maj_stats%med,          CSV_DELIM ! MED_U_MAJ
-        write(funit,601,advance='no') self%u_maj_stats%sdev,         CSV_DELIM ! SDEV_U_MAJ
-        ! -- anisotropic displacement parameters medium eigenvalue
-        write(funit,601,advance='no') self%u_med_stats%avg,          CSV_DELIM ! AVG_U_MED
-        write(funit,601,advance='no') self%u_med_stats%med,          CSV_DELIM ! MED_U_MED
-        write(funit,601,advance='no') self%u_med_stats%sdev,         CSV_DELIM ! SDEV_U_MED
+        write(funit,601,advance='no') self%u_maj_stats%avg,          CSV_DELIM ! AVG_U_MAJ            (31)
+        write(funit,601,advance='no') self%u_maj_stats%med,          CSV_DELIM ! MED_U_MAJ            (32)
+        write(funit,601,advance='no') self%u_maj_stats%sdev,         CSV_DELIM ! SDEV_U_MAJ           (33)
+        ! -- anisotropic displacement parameters medium eigenvalue 
+        write(funit,601,advance='no') self%u_med_stats%avg,          CSV_DELIM ! AVG_U_MED            (34)
+        write(funit,601,advance='no') self%u_med_stats%med,          CSV_DELIM ! MED_U_MED            (35)
+        write(funit,601,advance='no') self%u_med_stats%sdev,         CSV_DELIM ! SDEV_U_MED           (36)
         ! -- anisotropic displacement parameters minor eigenvalue
-        write(funit,601,advance='no') self%u_min_stats%avg,          CSV_DELIM ! AVG_U_MIN
-        write(funit,601,advance='no') self%u_min_stats%med,          CSV_DELIM ! MED_U_MIN
-        write(funit,601,advance='no') self%u_min_stats%sdev,         CSV_DELIM ! SDEV_U_MIN
-        ! -- Azimuthal angle of major eigenvector
-        write(funit,601,advance='no') self%azimuth_stats%avg,        CSV_DELIM ! AVG_AZIMUTH
-        write(funit,601,advance='no') self%azimuth_stats%med,        CSV_DELIM ! MED_AZIMUTH
-        write(funit,601,advance='no') self%azimuth_stats%sdev,       CSV_DELIM ! SDEV_AZIMUTH
+        write(funit,601,advance='no') self%u_min_stats%avg,          CSV_DELIM ! AVG_U_MIN            (37)
+        write(funit,601,advance='no') self%u_min_stats%med,          CSV_DELIM ! MED_U_MIN            (38)
+        write(funit,601,advance='no') self%u_min_stats%sdev,         CSV_DELIM ! SDEV_U_MIN           (39)
+        ! -- Azimuthal angle of major eigenvector 
+        write(funit,601,advance='no') self%azimuth_stats%avg,        CSV_DELIM ! AVG_AZIMUTH          (40)
+        write(funit,601,advance='no') self%azimuth_stats%med,        CSV_DELIM ! MED_AZIMUTH          (41)
+        write(funit,601,advance='no') self%azimuth_stats%sdev,       CSV_DELIM ! SDEV_AZIMUTH         (42)
         ! -- Polar angle of major eigenvector
-        write(funit,601,advance='no') self%polar_stats%avg,          CSV_DELIM ! AVG_POLAR
-        write(funit,601,advance='no') self%polar_stats%med,          CSV_DELIM ! MED_POLAR
-        write(funit,601,advance='no') self%polar_stats%sdev,         CSV_DELIM ! SDEV_POLAR
+        write(funit,601,advance='no') self%polar_stats%avg,          CSV_DELIM ! AVG_POLAR            (43)
+        write(funit,601,advance='no') self%polar_stats%med,          CSV_DELIM ! MED_POLAR            (44)
+        write(funit,601,advance='no') self%polar_stats%sdev,         CSV_DELIM ! SDEV_POLAR           (45)
         ! -- degree of isotropy
-        write(funit,601,advance='no') self%doi_stats%avg,            CSV_DELIM ! AVG_DOI
-        write(funit,601,advance='no') self%doi_stats%med,            CSV_DELIM ! MED_DOI
-        write(funit,601,advance='no') self%doi_stats%sdev,           CSV_DELIM ! SDEV_DOI
+        write(funit,601,advance='no') self%doi_stats%avg,            CSV_DELIM ! AVG_DOI              (46)
+        write(funit,601,advance='no') self%doi_stats%med,            CSV_DELIM ! MED_DOI              (47)
+        write(funit,601,advance='no') self%doi_stats%sdev,           CSV_DELIM ! SDEV_DOI             (48)
         ! -- degree of isotropy minimum w/r to anisotropy average
-        write(funit,601,advance='no') self%doi_min_stats%avg,        CSV_DELIM ! AVG_DOI_MIN
-        write(funit,601,advance='no') self%doi_min_stats%med,        CSV_DELIM ! MED_DOI_MIN
-        write(funit,601,advance='no') self%doi_min_stats%sdev,       CSV_DELIM ! SDEV_DOI_MIN
+        write(funit,601,advance='no') self%doi_min_stats%avg,        CSV_DELIM ! AVG_DOI_MIN          (49)
+        write(funit,601,advance='no') self%doi_min_stats%med,        CSV_DELIM ! MED_DOI_MIN          (50)
+        write(funit,601,advance='no') self%doi_min_stats%sdev,       CSV_DELIM ! SDEV_DOI_MIN         (51)
         ! -- Isotropic displacement fit correlation
-        write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR
-        write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR
-        write(funit,601,advance='no') self%isocorr_stats%sdev,       CSV_DELIM ! SDEV_ISO_CORR
+        write(funit,601,advance='no') self%isocorr_stats%avg,        CSV_DELIM ! AVG_ISO_CORR         (52)
+        write(funit,601,advance='no') self%isocorr_stats%med,        CSV_DELIM ! MED_ISO_CORR         (53)
+        write(funit,601,advance='no') self%isocorr_stats%sdev,       CSV_DELIM ! SDEV_ISO_CORR        (54)
         ! -- Anisotropic displacement fit correlation
-        write(funit,601,advance='no') self%anisocorr_stats%avg,      CSV_DELIM ! AVG_ANISO_CORR
-        write(funit,601,advance='no') self%anisocorr_stats%med,      CSV_DELIM ! MED_ANISO_CORR
-        write(funit,601,advance='no') self%anisocorr_stats%sdev,     CSV_DELIM ! SDEV_ANISO_CORR
+        write(funit,601,advance='no') self%anisocorr_stats%avg,      CSV_DELIM ! AVG_ANISO_CORR       (55)
+        write(funit,601,advance='no') self%anisocorr_stats%med,      CSV_DELIM ! MED_ANISO_CORR       (56)
+        write(funit,601,advance='no') self%anisocorr_stats%sdev,     CSV_DELIM ! SDEV_ANISO_CORR      (57)
         ! -- radial strain
-        write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
-        write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
-        write(funit,601,advance='no') self%radial_strain_stats%sdev, CSV_DELIM ! SDEV_RADIAL_STRAIN
-        write(funit,601,advance='no') self%radial_strain_stats%minv, CSV_DELIM ! MIN_RADIAL_STRAIN
-        write(funit,602)              self%radial_strain_stats%maxv            ! MAX_RADIAL_STRAIN
+        write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN    (58)
+        write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN    (59)
+        write(funit,601,advance='no') self%radial_strain_stats%sdev, CSV_DELIM ! SDEV_RADIAL_STRAIN   (60)
+        write(funit,601,advance='no') self%radial_strain_stats%minv, CSV_DELIM ! MIN_RADIAL_STRAIN    (61)
+        write(funit,602)              self%radial_strain_stats%maxv            ! MAX_RADIAL_STRAIN    (62)
     end subroutine write_np_stats
 
     subroutine write_cn_stats( self, cn, funit )
