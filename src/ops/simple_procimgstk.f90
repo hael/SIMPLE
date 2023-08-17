@@ -629,6 +629,7 @@ contains
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img, sdevimg
         integer                      :: n, i, ldim(3)
+        real                         :: asdev
         call find_ldim_nptcls(fname2proc, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
@@ -639,7 +640,8 @@ contains
         do i=1,n
             call progress(i,n)
             call stkio_r%read(i, img)
-            call img%loc_sdev(winsz, sdevimg)
+            call img%loc_sdev(winsz, sdevimg, asdev)
+            print *, asdev
             call stkio_w%write(i, sdevimg)
         end do
         call stkio_r%close
