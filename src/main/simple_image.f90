@@ -4050,10 +4050,11 @@ contains
         mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end function minmax
 
-    subroutine loc_sdev( self, winsz, sdevimg )
-        class(image), intent(in)    :: self
-        integer,      intent(in)    :: winsz
-        class(image), intent(inout) :: sdevimg
+    subroutine loc_sdev( self, winsz, sdevimg, asdev )
+        class(image),   intent(in)    :: self
+        integer,        intent(in)    :: winsz
+        class(image),   intent(inout) :: sdevimg
+        real, optional, intent(inout) :: asdev
         real    :: avg
         integer :: i, j, ir(2), jr(2), isz, jsz, npix
         if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
@@ -4071,6 +4072,9 @@ contains
                 sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1)) 
             end do
         end do
+        if( present(asdev) )then
+            asdev = sum(sdevimg%rmat(:self%ldim(1),:self%ldim(2),1)) / real(self%ldim(1) * self%ldim(2))
+        endif
     end subroutine loc_sdev
 
     function avg_loc_sdev( self, winsz ) result( asdev )

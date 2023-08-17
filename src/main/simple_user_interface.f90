@@ -4382,7 +4382,7 @@ contains
         & If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced,&
         & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 20, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
+        &2, 21, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
@@ -4409,6 +4409,7 @@ contains
         call stackops%set_input('parm_ios', 18, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         call stackops%set_input('parm_ios', 19, 'angstep', 'num', 'Angular stepsize', 'Angular stepsize for rotational averaging(in degrees)', 'give degrees', .false., 5.)
         call stackops%set_input('parm_ios', 20, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 21, 'winsz', 'num', 'Window size for local sdev estimation', 'Window size for local sdev estimation(in pixels)', 'winsz in pixels', .false., 5.0)
         ! alternative inputs
         ! <empty>
         ! search controls
