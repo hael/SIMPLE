@@ -148,16 +148,17 @@ contains
         complex(sp),        pointer       :: shmat(:,:)
         integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
         real,               allocatable   :: init_xy(:,:), cur_corr(:)
-        integer  :: i, j, iind, iref, iptcl, n_inpls, n_samples, inpl_ind(self%nrots), cnt, ithr
+        integer,            parameter     :: N_INPLS     = 3    ! number of inpl samples
+        real,               parameter     :: SAMPLE_FRAC = 0.2  ! frac of sample space used for the reg term
+        integer  :: i, j, iind, iref, iptcl, n_samples, inpl_ind(self%nrots), cnt, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        real     :: cxy(3)
+        real     :: cxy(3), sh_xy(2,self%nrots)
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        n_inpls   = 1
-        n_samples = self%pftcc%nptcls * n_inpls
+        n_samples = self%pftcc%nptcls * N_INPLS
         allocate(cur_corr(n_samples),loc(n_samples),sample_ind(n_samples),ptcl_ind(n_samples),init_xy(2,n_samples))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        !$omp parallel do default(shared) private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,cnt) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,sh_xy,cnt) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             ithr = omp_get_thread_num() + 1
             ! computing correlations
@@ -167,21 +168,25 @@ contains
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 inpl_ind = (/(j,j=1,self%nrots)/)
+                do j = 1, size(inpl_corrs)
+                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=inpl_ind(j))
+                    if( inpl_ind(j) > 0 )then
+                        inpl_corrs(j)  = cxy(1)
+                        sh_xy(:,j)     = cxy(2:3)
+                    else
+                        inpl_ind(j)    = j
+                        inpl_corrs(j)  = inpl_corrs(j)
+                        sh_xy(:,j)     = 0.
+                    endif
+                enddo
                 call hpsort(inpl_corrs, inpl_ind)
                 call reverse(inpl_ind)
-                do j = 1, n_inpls
-                    ptcl_ind(cnt) = i
-                    loc(cnt)      = inpl_ind(j)
-                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc(cnt))
-                    if( loc(cnt) > 0 )then
-                        cur_corr(cnt)  = cxy(1)
-                        init_xy(:,cnt) = cxy(2:3)
-                    else
-                        loc(cnt)       = inpl_ind(j)
-                        cur_corr(cnt)  = inpl_corrs(loc(cnt))
-                        init_xy(:,cnt) = 0.
-                    endif
+                do j = 1, N_INPLS
+                    ptcl_ind(cnt)  = i
+                    loc(cnt)       = inpl_ind(j)
+                    init_xy(:,cnt) = sh_xy(:,inpl_ind(j))
+                    cur_corr(cnt)  = inpl_corrs(inpl_ind(j))
                     cnt = cnt + 1
                 enddo
             enddo
@@ -190,7 +195,7 @@ contains
             call hpsort(cur_corr, sample_ind)
             call reverse(sample_ind)
             ! constructing the cavgs/2D-gradient
-            do i = 1, int(n_samples*0.2)
+            do i = 1, int(n_samples * SAMPLE_FRAC)
                 iind = sample_ind(i)
                 if( cur_corr(iind) < TINY ) cycle
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
@@ -220,7 +225,7 @@ contains
             where( abs(self%regs_denom(:,k,:)) < TINY )
                 self%regs(:,k,:) = 0._dp
             elsewhere
-                self%regs(:,k,:) = real(k, dp) * self%regs(:,k,:) / self%regs_denom(:,k,:)
+                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
         !$omp end do
