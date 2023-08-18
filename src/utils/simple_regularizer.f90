@@ -28,6 +28,7 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: ref_reg_cc
     procedure          :: ref_reg_cc_test
+    procedure          :: ref_reg_cc_noshift
     procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
@@ -193,6 +194,61 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_test
 
+    ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
+    subroutine ref_reg_cc_noshift( self, glob_pinds )
+        use simple_oris
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
+        real,               allocatable   :: cur_corr(:)
+        integer,            parameter     :: N_INPLS     = 3    ! number of inpl samples
+        real,               parameter     :: SAMPLE_FRAC = 0.2  ! frac of sample space used for the reg term
+        integer  :: i, j, iind, iref, iptcl, n_samples, inpl_ind(self%nrots), cnt
+        real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+              &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        n_samples = self%pftcc%nptcls * N_INPLS
+        allocate(cur_corr(n_samples),loc(n_samples),ptcl_ind(n_samples))
+        ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp   private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,sample_ind,inpl_ind,ptcl_ind,cnt)
+        do iref = 1, self%nrefs
+            ! computing correlations
+            cnt = 1
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                inpl_ind = (/(j,j=1,self%nrots)/)
+                call hpsort(inpl_corrs, inpl_ind)
+                call reverse(inpl_ind)
+                do j = 1, N_INPLS
+                    ptcl_ind(cnt) = i
+                    loc(cnt)      = inpl_ind(j)
+                    cur_corr(cnt) = inpl_corrs(loc(cnt))
+                    cnt = cnt + 1
+                enddo
+            enddo
+            ! finding the sample space, based on the sorted correlations
+            sample_ind = (/(j,j=1,n_samples)/)
+            call hpsort(cur_corr, sample_ind)
+            call reverse(sample_ind)
+            ! constructing the cavgs/2D-gradient
+            do i = 1, int(n_samples * SAMPLE_FRAC)
+                iind = sample_ind(i)
+                if( cur_corr(iind) < TINY ) cycle
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc(iind) = (self%nrots+1)-(loc(iind)-1)
+                if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
+                call self%rotate_polar(real(ptcl_ctf(     :,:,ptcl_ind(iind))), ptcl_ctf_rot, loc(iind))
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),       ctf_rot, loc(iind))
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine ref_reg_cc_noshift
+
     subroutine regularize_refs( self, ref_freq_in )
         class(regularizer), intent(inout) :: self
         real, optional,     intent(in)    :: ref_freq_in
@@ -329,6 +385,6 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom)
+        deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj)
     end subroutine kill
 end module simple_regularizer

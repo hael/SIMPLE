@@ -536,7 +536,7 @@ contains
         call pftcc%memoize_ptcls
         ! compute regularization terms
         ! call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
-        call reg_obj%ref_reg_cc_test(pinds_here)
+        call reg_obj%ref_reg_cc_noshift(pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher
