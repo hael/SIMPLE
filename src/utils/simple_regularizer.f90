@@ -132,7 +132,7 @@ contains
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
         integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
-        real,               allocatable   :: init_xy(:,:), cur_corr(:)
+        real,               allocatable   :: init_xy(:,:), ptcl_corr(:)
         integer,            parameter     :: N_INPLS     = 3    ! number of inpl samples
         real,               parameter     :: SAMPLE_FRAC = 0.2  ! frac of sample space used for the reg term
         integer  :: i, j, iind, iref, iptcl, n_samples, inpl_ind(self%nrots), cnt, ithr
@@ -141,11 +141,11 @@ contains
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         n_samples = self%pftcc%nptcls * N_INPLS
-        allocate(cur_corr(n_samples),loc(n_samples),ptcl_ind(n_samples),init_xy(2,n_samples))
+        allocate(ptcl_corr(n_samples),loc(n_samples),ptcl_ind(n_samples),init_xy(2,n_samples))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp   private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,&
-        !$omp           cur_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,cnt,weight)
+        !$omp private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,&
+        !$omp         ptcl_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,cnt,weight)
         do iref = 1, self%nrefs
             ithr = omp_get_thread_num() + 1
             ! computing correlations
@@ -163,11 +163,11 @@ contains
                     call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                     cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc(cnt))
                     if( loc(cnt) > 0 )then
-                        cur_corr(cnt)  = cxy(1)
+                        ptcl_corr(cnt) = cxy(1)
                         init_xy(:,cnt) = cxy(2:3)
                     else
                         loc(cnt)       = inpl_ind(j)
-                        cur_corr(cnt)  = inpl_corrs(loc(cnt))
+                        ptcl_corr(cnt) = inpl_corrs(loc(cnt))
                         init_xy(:,cnt) = 0.
                     endif
                     cnt = cnt + 1
@@ -175,12 +175,12 @@ contains
             enddo
             ! finding the sample space, based on the sorted correlations
             sample_ind = (/(j,j=1,n_samples)/)
-            call hpsort(cur_corr, sample_ind)
+            call hpsort(ptcl_corr, sample_ind)
             call reverse(sample_ind)
             ! constructing the cavgs/2D-gradient
             do i = 1, int(n_samples * SAMPLE_FRAC)
                 iind = sample_ind(i)
-                if( cur_corr(iind) < TINY ) cycle
+                if( ptcl_corr(iind) < TINY ) cycle
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc(iind) = (self%nrots+1)-(loc(iind)-1)
                 if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
@@ -188,9 +188,10 @@ contains
                 call self%pftcc%gen_shmat(ithr, real(init_xy(:,iind)), shmat)
                 call self%rotate_polar(real(ptcl_ctf(:,:,ptcl_ind(iind)) * shmat), ptcl_ctf_rot, loc(iind))
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),          ctf_rot, loc(iind))
-                weight = cur_corr(iind) * exp(-sqrt(init_xy(1,iind)**2 + init_xy(2,iind)**2))
+                weight = ptcl_corr(iind) * exp(-sqrt(init_xy(1,iind)**2 + init_xy(2,iind)**2))
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
+                self%ref_corr(iref)       = self%ref_corr(iref)       + ptcl_corr(iind)
             enddo
         enddo
         !$omp end parallel do
