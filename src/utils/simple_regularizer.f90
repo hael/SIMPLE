@@ -20,6 +20,7 @@ type :: regularizer
     integer               :: kfromto(2)
     real(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
     real(dp), allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
+    real,     allocatable :: ref_corr(:)             !< total ref corr sum
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
     contains
@@ -53,10 +54,11 @@ contains
         self%kfromto = pftcc%kfromto
         ! allocation
         allocate(self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%grad_shsrch_obj(params_glob%nthr),&
+                &self%grad_shsrch_obj(params_glob%nthr),self%ref_corr(self%nrefs),&
                 &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs       = 0.d0
         self%regs_denom = 0.d0
+        self%ref_corr   = 0.
         self%pftcc      => pftcc
         lims(:,1)       = -params_glob%reg_minshift
         lims(:,2)       =  params_glob%reg_minshift
@@ -200,7 +202,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
-        real,               allocatable   :: cur_corr(:)
+        real,               allocatable   :: ptcl_corr(:)
         integer,            parameter     :: N_INPLS     = 3    ! number of inpl samples
         real,               parameter     :: SAMPLE_FRAC = 0.2  ! frac of sample space used for the reg term
         integer  :: i, j, iind, iref, iptcl, n_samples, inpl_ind(self%nrots), cnt
@@ -208,10 +210,10 @@ contains
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         n_samples = self%pftcc%nptcls * N_INPLS
-        allocate(cur_corr(n_samples),loc(n_samples),ptcl_ind(n_samples))
+        allocate(ptcl_corr(n_samples),loc(n_samples),ptcl_ind(n_samples))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp   private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,cur_corr,sample_ind,inpl_ind,ptcl_ind,cnt)
+        !$omp private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,ptcl_corr,sample_ind,inpl_ind,ptcl_ind,cnt)
         do iref = 1, self%nrefs
             ! computing correlations
             cnt = 1
@@ -225,25 +227,26 @@ contains
                 do j = 1, N_INPLS
                     ptcl_ind(cnt) = i
                     loc(cnt)      = inpl_ind(j)
-                    cur_corr(cnt) = inpl_corrs(loc(cnt))
+                    ptcl_corr(cnt) = inpl_corrs(loc(cnt))
                     cnt = cnt + 1
                 enddo
             enddo
             ! finding the sample space, based on the sorted correlations
             sample_ind = (/(j,j=1,n_samples)/)
-            call hpsort(cur_corr, sample_ind)
+            call hpsort(ptcl_corr, sample_ind)
             call reverse(sample_ind)
             ! constructing the cavgs/2D-gradient
             do i = 1, int(n_samples * SAMPLE_FRAC)
                 iind = sample_ind(i)
-                if( cur_corr(iind) < TINY ) cycle
+                if( ptcl_corr(iind) < TINY ) cycle
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc(iind) = (self%nrots+1)-(loc(iind)-1)
                 if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
                 call self%rotate_polar(real(ptcl_ctf(     :,:,ptcl_ind(iind))), ptcl_ctf_rot, loc(iind))
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),       ctf_rot, loc(iind))
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_corr(iind) * ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ptcl_corr(iind) * ctf_rot**2
+                self%ref_corr(iref)       = self%ref_corr(iref)       + ptcl_corr(iind)
             enddo
         enddo
         !$omp end parallel do
@@ -252,11 +255,13 @@ contains
     subroutine regularize_refs( self, ref_freq_in )
         class(regularizer), intent(inout) :: self
         real, optional,     intent(in)    :: ref_freq_in
+        real,               parameter     :: REF_FRAC = 0.6
+        integer,            allocatable   :: ref_ind(:)
         integer :: iref, k
         real    :: ref_freq
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        !$omp parallel default(shared) private(k,iref) proc_bind(close)
+        !$omp parallel default(shared) private(k) proc_bind(close)
         !$omp do schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
@@ -266,8 +271,15 @@ contains
             endwhere
         enddo
         !$omp end do
+        !$omp end parallel
+        ! sort ref_corr to only change refs to regs for high-score cavgs
+        ref_ind = (/(iref,iref=1,self%nrefs)/)
+        call hpsort(self%ref_corr, ref_ind)
+        call reverse(ref_ind)
+        !$omp parallel default(shared) private(k,iref) proc_bind(close)
         !$omp do schedule(static)
-        do iref = 1, self%nrefs
+        do k = 1, int(self%nrefs * REF_FRAC)
+            iref = ref_ind(k)
             if( ran3() < ref_freq )then
                 ! keep the refs
             else
@@ -285,6 +297,7 @@ contains
         class(regularizer), intent(inout) :: self
         self%regs       = 0._dp
         self%regs_denom = 0._dp
+        self%ref_corr   = 0.
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -385,6 +398,6 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj)
+        deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
     end subroutine kill
 end module simple_regularizer
