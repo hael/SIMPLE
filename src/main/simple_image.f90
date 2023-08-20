@@ -10,7 +10,7 @@ use simple_winfuns, only: winfuns
 use gnufor2
 implicit none
 
-public :: image, image_ptr, test_image, imstack_type
+public :: image, image_ptr, test_image, image_stack
 private
 #include "simple_local_flags.inc"
 
@@ -97,6 +97,7 @@ contains
     procedure          :: set_smpd
     procedure          :: get_slice
     procedure          :: set_slice
+    procedure          :: get_subimg
     procedure          :: get_lfny
     procedure          :: get_lhp
     procedure          :: get_lp
@@ -323,9 +324,9 @@ interface image
     module procedure constructor
 end interface image
 
-type :: imstack_type
+type :: image_stack
     type(image), allocatable :: stack(:)
-end type imstack_type
+end type image_stack
 
 ! CLASS PARAMETERS/VARIABLES
 logical,     parameter   :: shift_to_phase_origin=.true.
@@ -1597,6 +1598,26 @@ contains
         integer :: hpl
         hpl = self%fit%get_lhp(which)
     end function get_lhp
+
+    subroutine get_subimg(self, binning, xoffset, yoffset, img)
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: binning, xoffset, yoffset
+        class(image), intent(out) :: img
+        integer :: i,j,ii,jj,ldim(3)
+        if( .not.is_even(binning) .and. binning > 0 )then
+            THROW_HARD('Binning must be even; get_sub_img')
+        endif
+        ldim(1:2) = self%ldim(1:2) / binning
+        ldim(3)   = 1
+        call img%new(ldim, real(binning)*self%smpd)
+        do j=1,ldim(2)
+            jj = binning*(j-1) + yoffset + 1
+            do i=1,ldim(1)
+                ii = binning*(i-1) + xoffset + 1
+                img%rmat(i,j,1) = self%rmat(ii,jj,1)
+            enddo
+        enddo
+    end subroutine get_subimg
 
     pure function get_lp( self, ind ) result( lp )
         class(image), intent(in) :: self

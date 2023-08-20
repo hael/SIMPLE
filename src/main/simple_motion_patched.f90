@@ -8,7 +8,7 @@ use simple_opt_factory,                   only: opt_factory
 use simple_opt_spec,                      only: opt_spec
 use simple_opt_lbfgsb,                    only: PRINT_NEVALS
 use simple_optimizer,                     only: optimizer
-use simple_image,                         only: image, imstack_type
+use simple_image,                         only: image, image_stack
 use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use CPlot2D_wrapper_module
@@ -25,10 +25,9 @@ integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 type :: motion_patched
     private
     logical                             :: existence
-    type(imstack_type),     allocatable :: frame_patches(:,:)
+    type(image_stack),      allocatable :: frame_patches(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
-    real,                   allocatable :: lp(:,:)
     real,                   allocatable :: global_shifts(:,:)       ! isotropic solution
     real,                   allocatable :: frameweights(:)
     real,                   allocatable :: patch_centers(:,:,:)     ! patches centers
@@ -38,6 +37,7 @@ type :: motion_patched
     integer                             :: nframes
     integer                             :: ldim(3)                  ! size of entire frame, reference
     integer                             :: ldim_patch(3)            ! size of one patch
+    integer                             :: npatch(2)                ! # of patches in the x/y dimension
     integer                             :: fixed_frame        = 1   ! frame of reference for alignment
     integer                             :: interp_fixed_frame = 1   ! frame of reference for interpolation
     real                                :: smpd               = 0.
@@ -45,16 +45,15 @@ type :: motion_patched
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
     real                                :: polyfit_rmsd(2)            ! polynomial fitting goodness of fit
     real                                :: trs
+    real                                :: lp
     real, public                        :: hp
-    real                                :: resstep
     logical                             :: has_global_shifts
     logical                             :: has_frameweights  = .false.
     logical                             :: fitshifts         = .false.
 contains
     ! Constructors
     procedure                           :: new
-    procedure, private                  :: allocate_fields
-    procedure, private                  :: deallocate_fields
+    procedure, private                  :: allocate_patches, deallocate_patches
     ! Drivers & algorithms
     procedure                           :: correct
     procedure                           :: correct_poly
@@ -86,60 +85,49 @@ contains
 
     ! CONSTRUCTORS
 
-    ! subroutine new( self, motion_correct_ftol, motion_correct_gtol, trs )
-    subroutine new( self, trs )
+    subroutine new( self, npatch, trs )
         class(motion_patched), intent(inout) :: self
+        integer,               intent(in)    :: npatch(2)
         real, optional,        intent(in)    :: trs
         call self%kill()
-        self%trs = TRS_DEFAULT
+        self%npatch = npatch
+        self%trs    = TRS_DEFAULT
         if (present(trs)) self%trs = trs
-        allocate(self%lp(params_glob%nxpatch,params_glob%nypatch),&
-                &self%updateres(params_glob%nxpatch,params_glob%nypatch),&
-                &self%patch_centers(params_glob%nxpatch,params_glob%nypatch,2),&
-                &self%lims_patches(params_glob%nxpatch,params_glob%nypatch,2,2))
+        allocate(self%updateres(self%npatch(1),self%npatch(2)),&
+                &self%patch_centers(self%npatch(1),self%npatch(2),2),&
+                &self%lims_patches(self%npatch(1),self%npatch(2),2,2))
         self%updateres   = 0
         self%lp          = -1.
         self%hp          = -1.
-        self%resstep     = -1.
         self%fixed_frame = 1
         self%bfactor     = -1.
         self%existence = .true.
     end subroutine new
 
-    subroutine allocate_fields( self )
+    subroutine allocate_patches( self )
         class(motion_patched), intent(inout) :: self
-        logical :: do_allocate
         integer :: i, j
-        do_allocate = .true.
-        if (allocated(self%shifts_patches)) then
-            if (size(self%shifts_patches, dim=1) < self%nframes) then
-                do_allocate = .false.
-            else
-                call self%deallocate_fields()
-            end if
-        end if
-        if (do_allocate) then
-            allocate(self%shifts_patches   (2, self%nframes, params_glob%nxpatch, params_glob%nypatch),&
-                self%shifts_patches_for_fit(2, self%nframes, params_glob%nxpatch, params_glob%nypatch),&
-                self%frame_patches(params_glob%nxpatch, params_glob%nypatch) )
-            self%shifts_patches         = 0.
-            self%shifts_patches_for_fit = 0.
-            do i = 1, params_glob%nxpatch
-                do j = 1, params_glob%nypatch
-                    allocate( self%frame_patches(i, j)%stack(self%nframes) )
-                end do
+        call self%deallocate_patches()
+        allocate(self%shifts_patches(2,     self%nframes, self%npatch(1), self%npatch(2)),&
+            &self%shifts_patches_for_fit(2, self%nframes, self%npatch(1), self%npatch(2)),&
+            &self%frame_patches(                          self%npatch(1), self%npatch(2)))
+        self%shifts_patches         = 0.
+        self%shifts_patches_for_fit = 0.
+        do i = 1, self%npatch(1)
+            do j = 1, self%npatch(2)
+                allocate(self%frame_patches(i, j)%stack(self%nframes))
             end do
-        end if
-    end subroutine allocate_fields
+        end do
+    end subroutine allocate_patches
 
-    subroutine deallocate_fields( self )
+    subroutine deallocate_patches( self )
         class(motion_patched), intent(inout) :: self
         integer :: iframe, i, j
-        if (allocated(self%shifts_patches)) deallocate(self%shifts_patches)
+        if (allocated(self%shifts_patches))         deallocate(self%shifts_patches)
         if (allocated(self%shifts_patches_for_fit)) deallocate(self%shifts_patches_for_fit)
         if (allocated(self%frame_patches)) then
-            do j = 1, params_glob%nypatch
-                do i = 1, params_glob%nxpatch
+            do j = 1,size(self%frame_patches,dim=2)
+                do i = 1,size(self%frame_patches,dim=1)
                     do iframe = 1, self%nframes
                         call self%frame_patches(i,j)%stack(iframe)%kill()
                     end do
@@ -148,13 +136,13 @@ contains
             end do
             deallocate(self%frame_patches)
         end if
-    end subroutine deallocate_fields
+    end subroutine deallocate_patches
 
     ! DRIVERS
 
-    subroutine correct( self, hp, resstep, frames, shift_fname, global_shifts )
+    subroutine correct( self, hp, frames, shift_fname, global_shifts )
         class(motion_patched),           intent(inout) :: self
-        real,                            intent(in)    :: hp, resstep
+        real,                            intent(in)    :: hp
         type(image),        allocatable, intent(inout) :: frames(:)
         character(len=:),   allocatable, intent(inout) :: shift_fname
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
@@ -163,9 +151,8 @@ contains
         ! prep
         self%hp          = hp
         self%lp          = params_glob%lpstart
-        self%resstep     = resstep
         self%updateres   = 0
-        self%shift_fname = shift_fname // C_NULL_CHAR
+        self%shift_fname = trim(shift_fname) // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
         self%has_global_shifts = .false.
         if (present(global_shifts)) then
@@ -182,7 +169,7 @@ contains
                 THROW_HARD('error in motion_patched_correct: frame dimensions do not match reference dimension; simple_motion_patched')
             end if
         end do
-        call self%allocate_fields()
+        call self%allocate_patches()
         ! determines patch geometry
         call self%set_size_frames_ref()
         ! determine shifts for patches
@@ -213,10 +200,10 @@ contains
         shift_fname = trim(self%shift_fname) // C_NULL_CHAR
     end subroutine correct
 
-    subroutine correct_poly( self, hp, resstep, rmsd_threshold, frames, shift_fname, patched_polyn, global_shifts )
+    subroutine correct_poly( self, hp, rmsd_threshold, frames, shift_fname, patched_polyn, global_shifts )
         use simple_motion_align_poly2, only: motion_align_poly2
         class(motion_patched),           intent(inout) :: self
-        real,                            intent(in)    :: hp, resstep, rmsd_threshold
+        real,                            intent(in)    :: hp, rmsd_threshold
         type(image),        allocatable, intent(inout) :: frames(:)
         character(len=:),   allocatable, intent(inout) :: shift_fname
         real(dp),           allocatable, intent(inout) :: patched_polyn(:)
@@ -228,7 +215,6 @@ contains
         integer                  :: ldim_frames(3), iframe, i, j, fixed_frame_bak
         self%hp          = hp
         self%lp          = params_glob%lpstart
-        self%resstep     = resstep
         self%updateres   = 0
         self%shift_fname = shift_fname // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
@@ -247,12 +233,12 @@ contains
                 THROW_HARD('error in motion_patched_correct: frame dimensions do not match reference dimension; simple_motion_patched')
             end if
         end do
-        call self%allocate_fields()
+        call self%allocate_patches()
         ! determines patch geometry
         call self%set_size_frames_ref()
         ! determine shifts for patches
         self%shifts_patches = 0.
-        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch))
+        allocate(align_hybrid(self%npatch(1),self%npatch(2)))
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
         call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
@@ -263,15 +249,13 @@ contains
         write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
-        do i = 1,params_glob%nxpatch
-            do j = 1,params_glob%nypatch
+        do i = 1,self%npatch(1)
+            do j = 1,self%npatch(2)
                 ! init
-                self%lp(i,j) = params_glob%lpstart
                 call self%gen_patch(frames,i,j)
                 call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                call align_hybrid(i,j)%set_group_frames(.false.)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, params_glob%lpstop)
                 call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
@@ -296,7 +280,7 @@ contains
         !$omp end parallel do
         call ftexp_transfmat_kill
         self%shifts_patches_for_fit = self%shifts_patches
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        corr_avg = corr_avg / real(product(self%npatch))
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
         call self%fit_polynomial() ! therefore whether polynomial fit was successful is determined with central frame!
@@ -315,8 +299,8 @@ contains
             call self%fit_polynomial()
             ! refine polynomial
             call align_poly%new(self%frame_patches, self%poly_coeffs, self%patch_centers, self%ldim, self%hp, self%fixed_frame)
-            do i = 1,params_glob%nxpatch
-            do j = 1,params_glob%nypatch
+            do i = 1,self%npatch(1)
+            do j = 1,self%npatch(2)
             do iframe=1,self%nframes
                 call self%frame_patches(i,j)%stack(iframe)%kill
             end do
@@ -332,8 +316,8 @@ contains
                 self%interp_fixed_frame = 1
             case DEFAULT
                 ! need to update frame of reference & polynomial
-                do i = 1,params_glob%nxpatch
-                do j = 1,params_glob%nypatch
+                do i = 1,self%npatch(1)
+                do j = 1,self%npatch(2)
                 do iframe=1,self%nframes
                     call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2), self%shifts_patches_for_fit(:,iframe,i,j))
                 enddo
@@ -351,8 +335,8 @@ contains
             end select
             self%polyfit_rmsd = rmsd
         endif
-        do i = 1,params_glob%nxpatch
-        do j = 1,params_glob%nypatch
+        do i = 1,self%npatch(1)
+        do j = 1,self%npatch(2)
         do iframe=1,self%nframes
             call self%frame_patches(i,j)%stack(iframe)%kill
         end do
@@ -372,10 +356,8 @@ contains
         real, allocatable :: opt_shifts(:,:), res(:)
         real              :: corr_avg
         integer           :: iframe, i, j
-        logical           :: l_groupframes
-        l_groupframes = trim(params_glob%groupframes).eq.'yes'
         self%shifts_patches = 0.
-        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch))
+        allocate(align_hybrid(self%npatch(1), self%npatch(2)))
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
@@ -383,19 +365,15 @@ contains
         res      = self%frame_patches(1,1)%stack(1)%get_res()
         self%hp  = min(self%hp,res(1))
         corr_avg = 0.
-        write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
-        write(logfhandle,'(A)')'>>> PERFORMING PATCH-BASED OPTIMIZATION...'
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
-        do i = 1,params_glob%nxpatch
-            do j = 1,params_glob%nypatch
+        do i = 1,self%npatch(1)
+            do j = 1,self%npatch(2)
                 ! init
-                self%lp(i,j) = params_glob%lpstart
                 call self%gen_patch(frames,i,j)
                 call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                call align_hybrid(i,j)%set_group_frames(l_groupframes)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, params_glob%lpstop)
                 call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
@@ -419,7 +397,7 @@ contains
         end do
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        corr_avg = corr_avg / real(product(self%npatch))
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
         call ftexp_transfmat_kill
@@ -432,10 +410,8 @@ contains
         real, allocatable :: opt_shifts(:,:), res(:), shifts(:,:)
         real              :: corr_avg,s(2)
         integer           :: iframe, i, j
-        logical           :: l_groupframes
-        l_groupframes = trim(params_glob%groupframes).eq.'yes'
         self%shifts_patches = 0.
-        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch))
+        allocate(align_hybrid(self%npatch(1), self%npatch(2)))
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
         call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
@@ -446,15 +422,13 @@ contains
         write(logfhandle,'(A)')'>>> PERFORMING PATCH-BASED OPTIMIZATION...'
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
-        do i = 1,params_glob%nxpatch
-            do j = 1,params_glob%nypatch
+        do i = 1,self%npatch(1)
+            do j = 1,self%npatch(2)
                 ! init
-                self%lp(i,j) = params_glob%lpstart
                 call self%gen_patch(frames,i,j)
                 call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                call align_hybrid(i,j)%set_group_frames(l_groupframes)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp, params_glob%lpstop)
                 call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
@@ -473,16 +447,15 @@ contains
         end do
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        corr_avg = corr_avg / real(self%npatch(1)*self%npatch(2))
         allocate(shifts(self%nframes,2))
         call self%robust_fit_polynomial
         write(logfhandle,'(A)')'>>> PERFORMING PATCH-BASED REFINEMENT...'
         corr_avg = 0.0
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts,shifts,s)&
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
-        do i = 1,params_glob%nxpatch
-            do j = 1,params_glob%nypatch
-                call align_hybrid(i,j)%set_group_frames(.false.)
+        do i = 1,self%npatch(1)
+            do j = 1,self%npatch(2)
                 call align_hybrid(i,j)%set_reslims(self%hp, params_glob%lpstop, params_glob%lpstop)
                 call align_hybrid(i,j)%set_fitshifts(.false.)
                 call align_hybrid(i,j)%set_shsrch_tol(1.e-4)
@@ -509,7 +482,7 @@ contains
         end do
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        corr_avg = corr_avg / real(self%npatch(1)*self%npatch(2))
         write(logfhandle,'(A,F8.5)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
         call ftexp_transfmat_kill
@@ -524,21 +497,21 @@ contains
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq, cx,cy, sx,sy
         real     :: fitted_shift(2), threshold
         integer  :: idx, iframe, i, j, ii, jj, m, npatches, ngrid, ntot
-        npatches = params_glob%nxpatch*params_glob%nypatch
+        npatches = product(self%npatch)
         ngrid    = self%nframes*npatches
-        ntot     =(params_glob%nxpatch+2) * (params_glob%nypatch+2) * self%nframes
+        ntot     = (self%npatch(1)+2) * (self%npatch(2)+2) * self%nframes
         allocate(x(3,ntot), yx(ntot), yy(ntot), sig(ntot), source=0.d0)
-        allocate(residuals(params_glob%nxpatch+2,params_glob%nypatch+2,self%nframes),source=0.)
+        allocate(residuals(self%npatch(1)+2,self%npatch(2)+2,self%nframes),source=0.)
         ! 3D coordinates
         idx = 0
-        do i = 1, params_glob%nxpatch+2
+        do i = 1, self%npatch(1)+2
             ii = i - 1
             ii = max(1,ii)
-            ii = min(params_glob%nxpatch,ii)
-            do j = 1, params_glob%nypatch+2
+            ii = min(self%npatch(1),ii)
+            do j = 1, self%npatch(2)+2
                 jj = j - 1
                 jj = max(1,jj)
-                jj = min(params_glob%nypatch,jj)
+                jj = min(self%npatch(2),jj)
                 cx = self%pix2polycoordx(real(self%patch_centers(ii,jj,1),dp))
                 cy = self%pix2polycoordy(real(self%patch_centers(ii,jj,2),dp))
                 do iframe = 1,self%nframes
@@ -554,14 +527,14 @@ contains
         call svd_multifit(x,yx,sig,self%poly_coeffs(:,1),v,w,chisq,patch_poly)
         call svd_multifit(x,yy,sig,self%poly_coeffs(:,2),v,w,chisq,patch_poly)
         ! residuals
-        do i = 1,params_glob%nxpatch+2
+        do i = 1,self%npatch(1)+2
             ii = i - 1
             ii = max(1,ii)
-            ii = min(params_glob%nxpatch,ii)
-            do j = 1,params_glob%nypatch+2
+            ii = min(self%npatch(1),ii)
+            do j = 1,self%npatch(2)+2
                 jj = j - 1
                 jj = max(1,jj)
-                jj = min(params_glob%nypatch,jj)
+                jj = min(self%npatch(2),jj)
                 do iframe = 1,self%nframes
                     sx  = real(self%shifts_patches_for_fit(1,iframe,ii,jj),dp)
                     sy  = real(self%shifts_patches_for_fit(2,iframe,ii,jj),dp)
@@ -571,7 +544,7 @@ contains
             end do
         end do
         ! threshold
-        tmp = pack(residuals(2:params_glob%nxpatch+1,2:params_glob%nypatch+1,1:self%nframes),.true.)
+        tmp = pack(residuals(2:self%npatch(1)+1,2:self%npatch(2)+1,1:self%nframes),.true.)
         call hpsort(tmp)
         m = nint(0.9*ngrid)
         threshold = tmp(m)
@@ -581,14 +554,14 @@ contains
         allocate(x(3,ntot),yx(ntot),yy(ntot),sig(ntot),source=0.d0)
         sig = 1.d0
         idx = 0
-        do i = 1, params_glob%nxpatch+2
+        do i = 1, self%npatch(1)+2
             ii = i - 1
             ii = max(1,ii)
-            ii = min(params_glob%nxpatch,ii)
-            do j = 1, params_glob%nypatch+2
+            ii = min(self%npatch(1),ii)
+            do j = 1, self%npatch(2)+2
                 jj = j - 1
                 jj = max(1,jj)
-                jj = min(params_glob%nypatch,jj)
+                jj = min(self%npatch(2),jj)
                 cx = self%pix2polycoordx(real(self%patch_centers(ii,jj,1),dp))
                 cy = self%pix2polycoordy(real(self%patch_centers(ii,jj,2),dp))
                 do iframe = 1,self%nframes
@@ -606,8 +579,8 @@ contains
         idx = 0
         self%polyfit_rmsd = 0.
         do iframe = 1,self%nframes
-            do i = 1,params_glob%nxpatch
-                do j = 1,params_glob%nypatch
+            do i = 1,self%npatch(1)
+                do j = 1,self%npatch(2)
                     idx = idx+1
                     call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2),fitted_shift)
                     self%polyfit_rmsd(1) = self%polyfit_rmsd(1) + real((fitted_shift(1)-yx(idx))**2.)
@@ -620,10 +593,10 @@ contains
 
     subroutine fit_polynomial( self )
         class(motion_patched), intent(inout) :: self
-        real(dp) :: yx(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along x
-        real(dp) :: yy(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along y
-        real(dp) :: x(3,self%nframes*params_glob%nxpatch*params_glob%nypatch)     ! x,y,t
-        real(dp) :: sig(self%nframes*params_glob%nxpatch*params_glob%nypatch)
+        real(dp) :: yx(self%nframes*self%npatch(1)*self%npatch(2))      ! along x
+        real(dp) :: yy(self%nframes*self%npatch(1)*self%npatch(2))      ! along y
+        real(dp) :: x(3,self%nframes*self%npatch(1)*self%npatch(2))     ! x,y,t
+        real(dp) :: sig(self%nframes*self%npatch(1)*self%npatch(2))
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
         real     :: fitted_shift(2)
         integer  :: idx, iframe, i, j
@@ -631,8 +604,8 @@ contains
         sig = 1.d0
         idx = 0
         do iframe = 1, self%nframes
-            do i = 1, params_glob%nxpatch
-                do j = 1, params_glob%nypatch
+            do i = 1, self%npatch(1)
+                do j = 1, self%npatch(2)
                     idx     = idx+1
                     yx(idx) = real(self%shifts_patches_for_fit(1,iframe,i,j),dp)
                     yy(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j),dp)
@@ -647,8 +620,8 @@ contains
         idx = 0
         self%polyfit_rmsd = 0.
         do iframe = 1,self%nframes
-            do i = 1,params_glob%nxpatch
-                do j = 1,params_glob%nypatch
+            do i = 1,self%npatch(1)
+                do j = 1,self%npatch(2)
                     idx = idx+1
                     call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2),fitted_shift)
                     self%polyfit_rmsd(1) = self%polyfit_rmsd(1) + real((fitted_shift(1)-yx(idx))**2.)
@@ -656,7 +629,7 @@ contains
                 end do
             end do
         end do
-        self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*params_glob%nxpatch*params_glob%nypatch))
+        self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*self%npatch(1)*self%npatch(2)))
     end subroutine fit_polynomial
 
     subroutine plot_shifts( self )
@@ -664,8 +637,8 @@ contains
         real, parameter           :: SCALE = 40.
         type(str4arr)             :: title
         type(CPlot2D_type)        :: plot2D
-        type(CDataSet_type)       :: dataSetStart, dataSet, fit, obs, patch_start
-        type(CDataPoint_type)     :: point2, p_obs, p_fit, point
+        type(CDataSet_type)       :: dataSetStart, dataSet, fit, patch_start!, obs
+        type(CDataPoint_type)     :: point2, p_fit, point!, p_obs
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg
         integer :: l, ipx,ipy, iframe, j, iostat
         real    :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
@@ -701,8 +674,8 @@ contains
         call CDataPoint__new2(real(xcenter,c_double), real(ycenter,c_double), point2)
         call CDataSet__AddDataPoint(dataSetStart, point2)
         call CPlot2D__AddDataSet(plot2D, dataSetStart)
-        do ipx = 1, params_glob%nxpatch
-            do ipy = 1, params_glob%nypatch
+        do ipx = 1, self%npatch(1)
+            do ipy = 1, self%npatch(2)
                 cx = self%patch_centers(ipx, ipy, 1)
                 cy = self%patch_centers(ipx, ipy, 2)
                 ! centering to first frame for display only
@@ -718,32 +691,32 @@ contains
                 call CDataSet__SetMarkerSize(patch_start,5.0_c_double)
                 call CDataSet__SetDatasetColor(patch_start,1.0_c_double,0.0_c_double,0.0_c_double)
                 call CDataSet__new(fit)
-                call CDataSet__new(obs)
                 call CDataSet__SetDrawMarker(fit, C_FALSE)
                 call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
-                call CDataSet__SetDrawMarker(obs, C_FALSE)
-                call CDataSet__SetDatasetColor(obs, 0.5_c_double,0.5_c_double,0.5_c_double)
+                ! call CDataSet__new(obs)
+                ! call CDataSet__SetDrawMarker(obs, C_FALSE)
+                ! call CDataSet__SetDatasetColor(obs, 0.5_c_double,0.5_c_double,0.5_c_double)
                 call CDataPoint__new2(real(cx,c_double), real(cy, c_double), p_fit)
                 call CDataSet__AddDataPoint(patch_start, p_fit)
                 call CDataPoint__delete(p_fit)
                 do iframe = 1, self%nframes
-                    call CDataPoint__new2(real(cx + SCALE*shifts(iframe,1), c_double),&
-                                         &real(cy + SCALE*shifts(iframe,2), c_double), p_obs)
-                    call CDataSet__AddDataPoint(obs, p_obs)
+                    ! call CDataPoint__new2(real(cx + SCALE*shifts(iframe,1), c_double),&
+                    !                      &real(cy + SCALE*shifts(iframe,2), c_double), p_obs)
+                    ! call CDataSet__AddDataPoint(obs, p_obs)
                     call self%get_local_shift(iframe,cx,cy, loc_shift)
                     loc_shift = loc_shift - ref_shift
                     call CDataPoint__new2(real(cx + SCALE*loc_shift(1), c_double),&
                                          &real(cy + SCALE*loc_shift(2), c_double), p_fit)
                     call CDataSet__AddDataPoint(fit, p_fit)
                     call CDataPoint__delete(p_fit)
-                    call CDataPoint__delete(p_obs)
+                    ! call CDataPoint__delete(p_obs)
                 end do
-                call CPlot2D__AddDataSet(plot2D, obs)
+                ! call CPlot2D__AddDataSet(plot2D, obs)
                 call CPlot2D__AddDataSet(plot2D, fit)
                 call CPlot2D__AddDataSet(plot2D, patch_start)
                 call CDataSet__delete(patch_start)
                 call CDataSet__delete(fit)
-                call CDataSet__delete(obs)
+                ! call CDataSet__delete(obs)
             end do
         end do
         title%str = 'X (in pixels; trajectory scaled by '//trim(int2str(nint(SCALE)))//')'//C_NULL_CHAR
@@ -776,21 +749,21 @@ contains
     subroutine get_poly4star( self, polycoeffs, patch_shifts, patch_centers )
         class(motion_patched), intent(inout) :: self
         real(dp), allocatable, intent(inout) :: polycoeffs(:), patch_shifts(:,:,:,:), patch_centers(:,:,:)
-        real(dp) :: yx(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along x
-        real(dp) :: yy(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along y
-        real(dp) :: x(3,self%nframes*params_glob%nxpatch*params_glob%nypatch)     ! x,y,t
-        real(dp) :: sig(self%nframes*params_glob%nxpatch*params_glob%nypatch)
+        real(dp) :: yx(self%nframes*self%npatch(1)*self%npatch(2))      ! along x
+        real(dp) :: yy(self%nframes*self%npatch(1)*self%npatch(2))      ! along y
+        real(dp) :: x(3,self%nframes*self%npatch(1)*self%npatch(2))     ! x,y,t
+        real(dp) :: sig(self%nframes*self%npatch(1)*self%npatch(2))
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
         integer  :: idx, iframe, i, j
         if( allocated(polycoeffs) )    deallocate(polycoeffs)
         if( allocated(patch_shifts) )  deallocate(patch_shifts)
         if( allocated(patch_centers) ) deallocate(patch_centers)
-        allocate(polycoeffs(2*PATCH_PDIM),patch_shifts(2,self%nframes,params_glob%nxpatch,params_glob%nypatch),&
-            &patch_centers(params_glob%nxpatch,params_glob%nypatch,2),source=0.d0)
+        allocate(polycoeffs(2*PATCH_PDIM),patch_shifts(2,self%nframes,self%npatch(1),self%npatch(2)),&
+            &patch_centers(self%npatch(1),self%npatch(2),2),source=0.d0)
         idx = 0
         do iframe = 1, self%nframes
-            do i = 1, params_glob%nxpatch
-                do j = 1, params_glob%nypatch
+            do i = 1, self%npatch(1)
+                do j = 1, self%npatch(2)
                     idx     = idx+1
                     yx(idx) = real(self%shifts_patches_for_fit(1,iframe,i,j)-self%shifts_patches_for_fit(1,1,i,j),dp)
                     yy(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j)-self%shifts_patches_for_fit(2,1,i,j),dp)
@@ -941,8 +914,8 @@ contains
         class(motion_patched), intent(inout) :: self
         integer :: i,j
         real    :: cen, dist
-        self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(params_glob%nxpatch))
-        self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(params_glob%nypatch))
+        self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(self%npatch(1)))
+        self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(self%npatch(2)))
         self%ldim_patch(3) = 1
         ! fftw friendly size
         self%ldim_patch(1) = find_larger_magic_box(self%ldim_patch(1))
@@ -953,12 +926,12 @@ contains
         self%lims_patches(1,:,1,2) = self%ldim_patch(1)
         self%patch_centers(1,:,1)  = sum(self%lims_patches(1,:,1,1:2),dim=2) / 2.
         ! limits & center last patches
-        self%lims_patches(params_glob%nxpatch,:,1,1) = self%ldim(1)-self%ldim_patch(1)+1
-        self%lims_patches(params_glob%nxpatch,:,1,2) = self%ldim(1)
-        self%patch_centers(params_glob%nxpatch,:,1)  = sum(self%lims_patches(params_glob%nxpatch,:,1,1:2),dim=2) / 2.
+        self%lims_patches(self%npatch(1),:,1,1) = self%ldim(1)-self%ldim_patch(1)+1
+        self%lims_patches(self%npatch(1),:,1,2) = self%ldim(1)
+        self%patch_centers(self%npatch(1),:,1)  = sum(self%lims_patches(self%npatch(1),:,1,1:2),dim=2) / 2.
         ! adjust other patch centers to be evenly spread
-        dist = real(self%patch_centers(params_glob%nxpatch,1,1)-self%patch_centers(1,1,1)+1) / real(params_glob%nxpatch-1)
-        do i=2,params_glob%nxpatch-1
+        dist = real(self%patch_centers(self%npatch(1),1,1)-self%patch_centers(1,1,1)+1) / real(self%npatch(1)-1)
+        do i=2,self%npatch(1)-1
             cen = self%patch_centers(1,1,1) + real(i-1)*dist
             self%lims_patches(i,:,1,1) = ceiling(cen) - self%ldim_patch(1)/2
             self%lims_patches(i,:,1,2) = self%lims_patches(i,:,1,1) + self%ldim_patch(1) - 1
@@ -968,11 +941,11 @@ contains
         self%lims_patches(:,1,2,1) = 1
         self%lims_patches(:,1,2,2) = self%ldim_patch(2)
         self%patch_centers(:,1,2)  = sum(self%lims_patches(:,1,2,1:2),dim=2) / 2.
-        self%lims_patches(:,params_glob%nypatch,2,1) = self%ldim(2)-self%ldim_patch(2)+1
-        self%lims_patches(:,params_glob%nypatch,2,2) = self%ldim(2)
-        self%patch_centers(:,params_glob%nypatch,2)  = sum(self%lims_patches(:,params_glob%nypatch,2,1:2),dim=2) / 2.
-        dist = real(self%patch_centers(1,params_glob%nypatch,2)-self%patch_centers(1,1,2)+1) / real(params_glob%nypatch-1)
-        do j=2,params_glob%nypatch-1
+        self%lims_patches(:,self%npatch(2),2,1) = self%ldim(2)-self%ldim_patch(2)+1
+        self%lims_patches(:,self%npatch(2),2,2) = self%ldim(2)
+        self%patch_centers(:,self%npatch(2),2)  = sum(self%lims_patches(:,self%npatch(2),2,1:2),dim=2) / 2.
+        dist = real(self%patch_centers(1,self%npatch(2),2)-self%patch_centers(1,1,2)+1) / real(self%npatch(2)-1)
+        do j=2,self%npatch(2)-1
             cen = self%patch_centers(1,1,2) + real(j-1)*dist
             self%lims_patches(:,j,2,1) = ceiling(cen) - self%ldim_patch(2)/2
             self%lims_patches(:,j,2,2) = self%lims_patches(:,j,2,1) + self%ldim_patch(2) - 1
@@ -1061,14 +1034,15 @@ contains
 
     subroutine kill( self )
         class(motion_patched), intent(inout) :: self
-        call self%deallocate_fields()
+        call self%deallocate_patches()
         if (allocated(self%frameweights)) deallocate(self%frameweights)
         if (allocated(self%updateres)) deallocate(self%updateres)
-        if (allocated(self%lp)) deallocate(self%lp)
         if (allocated(self%patch_centers)) deallocate(self%patch_centers)
         if (allocated(self%lims_patches)) deallocate(self%lims_patches)
         self%has_frameweights = .false.
         self%existence        = .false.
+        self%npatch = 0
+        self%lp     = -1.
         call ftexp_transfmat_kill
     end subroutine kill
 

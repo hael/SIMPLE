@@ -375,6 +375,10 @@ contains
             call read_pool_xml_beamtilts()
             call assign_pool_optics(cline, propagate = .true.)
             call terminate_stream2D(.true.)
+            if( get_pool_iter() == 0 )then
+                ! iteration one was never completed so imported particles & micrographs need be written
+                call write_project
+            endif
         else
             call write_project
         endif
