@@ -21,7 +21,7 @@ public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool, is_pool_available
-public :: update_user_params, update_path, check_params_for_cluster2D
+public :: update_user_params, update_path, check_params_for_cluster2D, get_pool_iter
 public :: read_pool_xml_beamtilts, assign_pool_optics
 
 private
@@ -1268,7 +1268,7 @@ contains
             call chunks(ichunk)%terminate
         enddo
         if( .not.pool_available )then
-            pool_iter = pool_iter-1
+            pool_iter = pool_iter-1 ! iteration pool_iter not complete so fall back on previous iteration
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
             ! tricking the asynchronous master process to come to a hard stop
             call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
@@ -1559,6 +1559,10 @@ contains
     logical function is_pool_available()
         is_pool_available = pool_available
     end function is_pool_available
+
+    integer function get_pool_iter()
+        get_pool_iter = pool_iter
+    end function get_pool_iter
 
     subroutine debug_print( string )
         character(len=*), intent(in) :: string

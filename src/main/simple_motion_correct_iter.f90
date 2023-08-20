@@ -47,7 +47,7 @@ contains
         character(len=:), allocatable :: fbody_here, ext, star_fname, poly_fname
         character(len=LONGSTRLEN)     :: rel_fname
         real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here, bid
-        integer :: ldim(3), ldim_thumb(3), iptcl
+        integer :: ldim(3), ldim_thumb(3), iptcl, nxpatch, nypatch
         logical :: patch_success, l_tseries
         patch_success = .false.
         l_tseries = .false.
@@ -168,23 +168,35 @@ contains
                 case DEFAULT
                     effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
                 end select
-                call motion_correct_patched(bfac_here, effective_patch_fit_threshold, goodnessoffit)
+                nxpatch = params_glob%nxpatch
+                nypatch = params_glob%nypatch
+                call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
                 if( trim(params_glob%mcpatch_thres).eq.'no' )then
                     patch_success = .true. ! always accept patch solution
                     if( any(goodnessoffit >= effective_patch_fit_threshold) )then
-                        THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
-                        THROW_WARN('The patch-based correction will however be used')
+                        THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. The patch-based correction will however be used')
                     endif
                 else
                     patch_success = all(goodnessoffit < effective_patch_fit_threshold)
+                    if( patch_success )then
+                        ! First pass of BIM correction was successful
+                    else
+                        THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Retrying with less patches')
+                        nxpatch = max(1,nint(real(nxpatch)/2.))
+                        nypatch = max(1,nint(real(nypatch)/2.))
+                        if( nxpatch * nypatch >= 2 )then
+                            patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
+                            call motion_correct_patched(bfac_here, effective_patch_fit_threshold, [nxpatch, nypatch], goodnessoffit)
+                            patch_success = all(goodnessoffit < effective_patch_fit_threshold)
+                        endif
+                    endif
                 endif
                 ! generate sums
                 if( patch_success )then
                     call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
                 else
                     call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                    THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
-                    THROW_WARN('Only isotropic/stage-drift correction will be used')
+                    THROW_WARN('Polynomial fitting to patch-determined shifts was unsatisfactory. Stage-drift correction will be used')
                 endif
                 call orientation%set('gofx',goodnessoffit(1))
                 call orientation%set('gofy',goodnessoffit(2))
