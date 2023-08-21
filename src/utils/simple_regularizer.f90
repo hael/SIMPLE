@@ -254,11 +254,14 @@ contains
     end subroutine ref_reg_cc_noshift
 
     subroutine regularize_refs( self, ref_freq_in )
+        use simple_image
         class(regularizer), intent(inout) :: self
         real, optional,     intent(in)    :: ref_freq_in
         real,               parameter     :: REF_FRAC = 0.6
         integer,            allocatable   :: ref_ind(:)
-        integer :: iref, k
+        complex,            allocatable   :: cmat(:,:)
+        type(image) :: calc_cavg
+        integer :: iref, k, box
         real    :: ref_freq
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
@@ -277,6 +280,25 @@ contains
         ref_ind = (/(iref,iref=1,self%nrefs)/)
         call hpsort(self%ref_corr, ref_ind)
         call reverse(ref_ind)
+        ! output images for debugging
+        if( params_glob%l_reg_debug )then
+            do k = 1, int(self%nrefs * REF_FRAC)
+                iref = ref_ind(k)
+                call self%pftcc%polar2cartesian(cmplx(self%regs(:,:,iref), kind=sp), cmat, box)
+                call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+                call calc_cavg%zero_and_flag_ft
+                call calc_cavg%set_cmat(cmat)
+                call calc_cavg%shift_phorig()
+                call calc_cavg%ifft
+                call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', k)
+                call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
+                call calc_cavg%zero_and_flag_ft
+                call calc_cavg%set_cmat(cmat)
+                call calc_cavg%shift_phorig()
+                call calc_cavg%ifft
+                call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
+            enddo
+        endif
         !$omp parallel default(shared) private(k,iref) proc_bind(close)
         !$omp do schedule(static)
         do k = 1, int(self%nrefs * REF_FRAC)
@@ -292,6 +314,7 @@ contains
         !$omp end do
         !$omp end parallel
         call self%pftcc%memoize_refs
+        call calc_cavg%kill
     end subroutine regularize_refs
     
     subroutine reset_regs( self )
