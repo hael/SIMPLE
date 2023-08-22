@@ -196,11 +196,7 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                if( trim(params_glob%reg_mode) .eq. 'sto' )then
-                    call reg_obj%regularize_refs( min(1., reg_eps) )
-                else
-                    call reg_obj%regularize_refs
-                endif
+                call reg_obj%regularize_refs
             endif
         endif
 
@@ -536,7 +532,7 @@ contains
         call pftcc%memoize_ptcls
         ! compute regularization terms
         ! call reg_obj%ref_reg_cc(build_glob%eulspace, build_glob%spproj_field, pinds_here)
-        call reg_obj%ref_reg_cc_noshift(pinds_here)
+        call reg_obj%ref_reg_cc_test(pinds_here)
     end subroutine reg_batch_particles
 
 end module simple_strategy3D_matcher

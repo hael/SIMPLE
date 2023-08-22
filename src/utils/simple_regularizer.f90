@@ -133,18 +133,18 @@ contains
         complex(sp),        pointer       :: shmat(:,:)
         integer,            allocatable   :: loc(:), sample_ind(:), ptcl_ind(:)
         real,               allocatable   :: init_xy(:,:), ptcl_corr(:)
-        integer,            parameter     :: N_INPLS     = 3    ! number of inpl samples
-        real,               parameter     :: SAMPLE_FRAC = 0.2  ! frac of sample space used for the reg term
+        integer,            parameter     :: N_INPLS     = 1    ! number of inpl samples
+        real,               parameter     :: SAMPLE_FRAC = 1.   ! frac of sample space used for the reg term
         integer  :: i, j, iind, iref, iptcl, n_samples, inpl_ind(self%nrots), cnt, ithr
         real     :: inpl_corrs(self%nrots), ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        real     :: cxy(3), weight
+        real     :: cxy(3), weight, min_w, max_w
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         n_samples = self%pftcc%nptcls * N_INPLS
         allocate(ptcl_corr(n_samples),loc(n_samples),ptcl_ind(n_samples),init_xy(2,n_samples))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,&
+        !$omp private(i,j,iind,iref,iptcl,inpl_corrs,loc,ptcl_ctf_rot,ctf_rot,min_w,max_w,&
         !$omp         ptcl_corr,init_xy,ithr,shmat,cxy,sample_ind,inpl_ind,ptcl_ind,cnt,weight)
         do iref = 1, self%nrefs
             ithr = omp_get_thread_num() + 1
@@ -177,21 +177,26 @@ contains
             sample_ind = (/(j,j=1,n_samples)/)
             call hpsort(ptcl_corr, sample_ind)
             call reverse(sample_ind)
+            min_w = minval(ptcl_corr)
+            max_w = maxval(ptcl_corr)
             ! constructing the cavgs/2D-gradient
             do i = 1, int(n_samples * SAMPLE_FRAC)
                 iind = sample_ind(i)
                 if( ptcl_corr(iind) < TINY ) cycle
-                ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                loc(iind) = (self%nrots+1)-(loc(iind)-1)
-                if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
-                shmat => self%pftcc%heap_vars(ithr)%shmat
-                call self%pftcc%gen_shmat(ithr, real(init_xy(:,iind)), shmat)
-                call self%rotate_polar(real(ptcl_ctf(:,:,ptcl_ind(iind)) * shmat), ptcl_ctf_rot, loc(iind))
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),          ctf_rot, loc(iind))
-                weight = ptcl_corr(iind) * exp(-sqrt(init_xy(1,iind)**2 + init_xy(2,iind)**2))
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
-                self%ref_corr(iref)       = self%ref_corr(iref)       + ptcl_corr(iind)
+                weight = (ptcl_corr(iind) - min_w)/(max_w - min_w)
+                weight = 0.5 + real(params_glob%which_iter)/real(params_glob%reg_iters)*(weight - 0.5)
+                if( ran3() < weight )then
+                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                    loc(iind) = (self%nrots+1)-(loc(iind)-1)
+                    if( loc(iind) > self%nrots ) loc(iind) = loc(iind) - self%nrots
+                    shmat => self%pftcc%heap_vars(ithr)%shmat
+                    call self%pftcc%gen_shmat(ithr, real(init_xy(:,iind)), shmat)
+                    call self%rotate_polar(real(ptcl_ctf(:,:,ptcl_ind(iind)) * shmat), ptcl_ctf_rot, loc(iind))
+                    call self%rotate_polar(self%pftcc%ctfmats(:,:,ptcl_ind(iind)),          ctf_rot, loc(iind))
+                    self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
+                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
+                    self%ref_corr(iref)       = self%ref_corr(iref)       + ptcl_corr(iind)
+                endif
             enddo
         enddo
         !$omp end parallel do
@@ -257,7 +262,7 @@ contains
         use simple_image
         class(regularizer), intent(inout) :: self
         real, optional,     intent(in)    :: ref_freq_in
-        real,               parameter     :: REF_FRAC = 0.6
+        real,               parameter     :: REF_FRAC = 1
         integer,            allocatable   :: ref_ind(:)
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
