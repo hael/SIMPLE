@@ -123,7 +123,7 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             sum_prob = sum(self%ref_ptcl_prob(iptcl,:))
             if( sum_prob < TINY )then
-                self%ref_ptcl_prob(iptcl,:) = 1. / self%nrefs  ! uniform distribution
+                self%ref_ptcl_prob(iptcl,:) = 0.
             else
                 self%ref_ptcl_prob(iptcl,:) = self%ref_ptcl_prob(iptcl,:) / sum_prob
             endif
