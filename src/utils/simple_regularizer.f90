@@ -21,7 +21,7 @@ type :: regularizer
     real(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
     real(dp), allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real,     allocatable :: ref_corr(:)             !< total ref corr sum
-    real,     allocatable :: ref_ptcl_corr(:,:)      !< 2D corr/prob table
+    real,     allocatable :: ref_ptcl_prob(:,:)      !< 2D corr/prob table
     integer,  allocatable :: ref_ptcl_loc(:,:)       !< 2D in-plane table
     real,     allocatable :: ref_ptcl_sh(:,:,:)      !< 2D sh table
     integer,  allocatable :: ref_ptcl_ind(:,:)       !< 2D index table
@@ -81,7 +81,7 @@ contains
     subroutine init_tab( self, pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: pinds(params_glob%fromp,params_glob%top)
-        allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs),self%ref_ptcl_sh(2,params_glob%fromp:params_glob%top,self%nrefs), source=0.)
+        allocate(self%ref_ptcl_prob(params_glob%fromp:params_glob%top,self%nrefs),self%ref_ptcl_sh(2,params_glob%fromp:params_glob%top,self%nrefs), source=0.)
         allocate(self%ref_ptcl_loc( params_glob%fromp:params_glob%top,self%nrefs), self%ref_ptcl_ind(params_glob%fromp:params_glob%top,self%nrefs), source=0)
     end subroutine init_tab
 
@@ -102,11 +102,11 @@ contains
                 call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                 cxy = self%grad_shsrch_obj(ithr)%minimize(irot=self%ref_ptcl_loc(iptcl,iref))
                 if( self%ref_ptcl_loc(iptcl,iref) > 0 )then
-                    self%ref_ptcl_corr(iptcl,iref) = cxy(1)
+                    self%ref_ptcl_prob(iptcl,iref) = cxy(1)
                     self%ref_ptcl_sh(:,iptcl,iref) = cxy(2:3)
                 else
                     self%ref_ptcl_loc(iptcl,iref)  = maxloc(inpl_corrs, dim=1)
-                    self%ref_ptcl_corr(iptcl,iref) = inpl_corrs(self%ref_ptcl_loc(iptcl,iref))
+                    self%ref_ptcl_prob(iptcl,iref) = inpl_corrs(self%ref_ptcl_loc(iptcl,iref))
                     self%ref_ptcl_sh(:,iptcl,iref) = 0.
                 endif
             enddo
@@ -116,14 +116,26 @@ contains
 
     subroutine sort_tab( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, j
+        integer :: iref, j, iptcl
+        real    :: sum_prob
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_prob)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_prob = sum(self%ref_ptcl_prob(iptcl,:))
+            if( sum_prob < TINY )then
+                self%ref_ptcl_prob(iptcl,:) = 1. / self%nrefs  ! uniform distribution
+            else
+                self%ref_ptcl_prob(iptcl,:) = self%ref_ptcl_prob(iptcl,:) / sum_prob
+            endif
+        enddo
+        !$omp end parallel do
+        ! sorting the normalized prob for each iref, to sample only the best #ptcls/#refs ptcls for each iref
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
         do iref = 1, self%nrefs
-            ! finding the sample space, based on the sorted correlations
             self%ref_ptcl_ind(:,iref) = (/(j,j=params_glob%fromp,params_glob%top)/)
-            call hpsort(self%ref_ptcl_corr(:,iref), self%ref_ptcl_ind(:,iref))
+            call hpsort(self%ref_ptcl_prob(:,iref), self%ref_ptcl_ind(:,iref))
             call reverse(self%ref_ptcl_ind( :,iref))
-            call reverse(self%ref_ptcl_corr(:,iref))
+            call reverse(self%ref_ptcl_prob(:,iref))
         enddo
         !$omp end parallel do
     end subroutine sort_tab
@@ -138,17 +150,18 @@ contains
         real(dp) :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2)),&
               &ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = real(self%pftcc%pfts_ptcls * self%pftcc%ctfmats)
-        ninds    = size(self%ref_ptcl_corr, 1)
+        ninds    = size(self%ref_ptcl_prob, 1)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
         !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do iref = 1, self%nrefs
-            ! taking top sorted corrs
-            do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
+            ! taking top sorted corrs/probs
+            do i = params_glob%fromp,params_glob%top
+                if( self%ref_ptcl_prob(i, iref) < TINY ) cycle
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_ind(i, iref)
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                    if( ran3() > self%ref_ptcl_prob(i, iref) ) cycle
                     pind_here = self%pftcc%pinds(iptcl)
-                    if( self%ref_ptcl_corr(i, iref) < TINY ) cycle
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = self%ref_ptcl_loc(iptcl, iref)
                     loc = (self%nrots+1)-(loc-1)
@@ -157,10 +170,10 @@ contains
                     call self%pftcc%gen_shmat(ithr, real(self%ref_ptcl_sh(:,iptcl,iref)), shmat)
                     call self%rotate_polar(real(ptcl_ctf(:,:,pind_here) * shmat), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),          ctf_rot, loc)
-                    weight = self%ref_ptcl_corr(i, iref)
+                    weight = self%ref_ptcl_prob(i, iref)
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
-                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_corr(i, iref)
+                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_prob(i, iref)
                 endif
             enddo
         enddo
@@ -530,6 +543,6 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
-        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_loc,self%ref_ptcl_sh,self%ref_ptcl_ind)
+        if(allocated(self%ref_ptcl_prob)) deallocate(self%ref_ptcl_prob,self%ref_ptcl_loc,self%ref_ptcl_sh,self%ref_ptcl_ind)
     end subroutine kill
 end module simple_regularizer
