@@ -18,6 +18,7 @@ public :: nspace_commander
 public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
+public :: check_align_commander
 private
 #include "simple_local_flags.inc"
 
@@ -40,6 +41,11 @@ type, extends(commander_base) :: check_3Dconv_commander
   contains
     procedure :: execute      => exec_check_3Dconv
 end type check_3Dconv_commander
+
+type, extends(commander_base) :: check_align_commander
+  contains
+    procedure :: execute      => exec_check_align
+end type check_align_commander
 
 contains
 
@@ -876,5 +882,95 @@ contains
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_3Dconv
+
+    subroutine exec_check_align( self, cline )
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
+        use simple_image
+        class(check_align_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        integer,          allocatable :: pinds(:)
+        logical,          allocatable :: ptcl_mask(:)
+        complex,          allocatable :: cmat(:,:)
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(ori)                     :: o_tmp
+        type(image)                   :: img
+        integer  :: nptcls, iptcl, j, s, iref, box
+        logical  :: l_ctf, do_center
+        real     :: xyz(3)
+        call cline%set('dir_exec', 'check_align')
+        call cline%set('mkdir',    'yes')
+        call cline%set('oritype',  'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params)
+        call build%spproj%update_projinfo(cline)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &1.0, nptcls, pinds, ptcl_mask)
+        print *, 'nptcls = ', nptcls, '; fromp = ', params_glob%fromp, '; top = ', params_glob%top
+        call pftcc%new(nptcls, [1,nptcls], params%kfromto)
+        call pftcc%reallocate_ptcls(nptcls, pinds)
+        print *, 'Preparing the references ...'
+        ! PREPARATION OF REFERENCES IN PFTCC
+        ! read reference volumes and create polar projections
+        do s=1,params_glob%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1, params_glob%nspace
+                call build_glob%eulspace%get_ori(iref, o_tmp)
+                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+        end do
+        call pftcc%memoize_refs
+        ! output the reprojections
+        do iref=1, params_glob%nspace
+            call pftcc%polar2cartesian(cmplx(pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
+            call img%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+            call img%zero_and_flag_ft
+            call img%set_cmat(cmat)
+            call img%shift_phorig()
+            call img%ifft
+            call img%write('reprojs.mrc', iref)
+            call img%kill
+        enddo
+        ! PREPARATION OF PARTICLES
+        print *, 'Preparing the particles ...'
+        call prepimgbatch(nptcls)
+        call read_imgbatch([1, nptcls])
+        call build%img_match%init_polarizer(pftcc, params%alpha)
+        !$omp parallel do default(shared) private(j, iptcl) schedule(static) proc_bind(close)
+        do j = 1, nptcls
+            iptcl = pinds(j)
+            ! prep
+            call prepimg4align(iptcl, build%imgbatch(j))
+            ! transfer to polar coordinates
+            call build%img_match%polarize(pftcc, build%imgbatch(j), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, .true. )
+        enddo
+        !$omp end parallel do
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag('ptcl3D',iptcl=pinds(1)).ne.'no'
+        ! make CTFs
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl3D')
+        ! Memoize particles FFT parameters
+        call pftcc%memoize_ptcls
+        ! ALIGNMENT OF PARTICLES
+        print *, 'Aligning the particles ...'
+        call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_align
 
 end module simple_commander_refine3D
