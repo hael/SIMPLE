@@ -1049,8 +1049,8 @@ contains
                 call pftcc%gen_shmat(ithr, -real(ref_ptcl_sh(:,iptcl,iref)), shmat)
                 call reg_obj%rotate_polar(real(pftcc%pfts_ptcls(:,:,pind_here) * pftcc%ctfmats(:,:,pind_here) * shmat), ptcl_ctf_rot, loc)
                 call reg_obj%rotate_polar(     pftcc%ctfmats(:,:,pind_here),                                                 ctf_rot, loc)
-                regs(:,:,iref)       = regs(:,:,iref)       + ptcl_ctf_rot
-                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ctf_rot**2
+                regs(:,:,iref)       = regs(:,:,iref)       + ref_ptcl_prob(j, iref) * ptcl_ctf_rot
+                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ref_ptcl_prob(j, iref) * ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
