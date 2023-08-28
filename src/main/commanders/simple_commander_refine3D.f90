@@ -913,7 +913,7 @@ contains
         real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3)
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
-        call cline%set('oritype',  'ptcl3D')
+        call cline%set('oritype',  'ptcl2D')
         call build%init_params_and_build_general_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         if( allocated(pinds) )     deallocate(pinds)
@@ -973,9 +973,9 @@ contains
         enddo
         !$omp end parallel do
         ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag('ptcl3D',iptcl=pinds(1)).ne.'no'
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl3D')
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! ALIGNMENT OF PARTICLES
@@ -1036,8 +1036,8 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
         do iref = 1, params_glob%nspace
-            ! taking top sorted corrs/probs
-            do j = params_glob%fromp,params_glob%top + int(nptcls/params_glob%nspace)
+            ! taking top sorted corrs/probs (50 for now)
+            do j = params_glob%fromp,params_glob%fromp + 50
                 if( ref_ptcl_prob(j, iref) < TINY ) cycle
                 ithr      = omp_get_thread_num() + 1
                 iptcl     = ref_ptcl_ind(j, iref)
@@ -1046,20 +1046,16 @@ contains
                 loc       = (pftcc%nrots+1)-(loc-1)
                 if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
                 shmat => pftcc%heap_vars(ithr)%shmat
-                call pftcc%gen_shmat(ithr, real(ref_ptcl_sh(:,iptcl,iref)), shmat)
+                call pftcc%gen_shmat(ithr, -real(ref_ptcl_sh(:,iptcl,iref)), shmat)
                 call reg_obj%rotate_polar(real(pftcc%pfts_ptcls(:,:,pind_here) * pftcc%ctfmats(:,:,pind_here) * shmat), ptcl_ctf_rot, loc)
                 call reg_obj%rotate_polar(     pftcc%ctfmats(:,:,pind_here),                                                 ctf_rot, loc)
-                regs(:,:,iref)       = regs(:,:,iref)       + ref_ptcl_prob(j, iref) * ptcl_ctf_rot
-                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ref_ptcl_prob(j, iref) * ctf_rot**2
+                regs(:,:,iref)       = regs(:,:,iref)       + ptcl_ctf_rot
+                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ctf_rot**2
             enddo
         enddo
         !$omp end parallel do
         do iref=1, params_glob%nspace
-            where( abs(regs_denom(:,:,iref)) < TINY )
-                regs(:,:,iref) = 0._dp
-            elsewhere
-                regs(:,:,iref) = regs(:,:,iref) / regs_denom(:,:,iref)
-            endwhere
+            regs(:,:,iref) = regs(:,:,iref) / regs_denom(:,:,iref)
             call pftcc%polar2cartesian(cmplx(regs(:,:,iref), kind=sp), cmat, box)
             call img%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
             call img%zero_and_flag_ft
