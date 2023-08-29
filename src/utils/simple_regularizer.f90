@@ -167,7 +167,7 @@ contains
                     loc = (self%nrots+1)-(loc-1)
                     if( loc > self%nrots ) loc = loc - self%nrots
                     shmat => self%pftcc%heap_vars(ithr)%shmat
-                    call self%pftcc%gen_shmat(ithr, real(self%ref_ptcl_sh(:,iptcl,iref)), shmat)
+                    call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_sh(:,iptcl,iref)), shmat)
                     call self%rotate_polar(real(ptcl_ctf(:,:,pind_here) * shmat), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),          ctf_rot, loc)
                     weight = self%ref_ptcl_prob(i, iref)
