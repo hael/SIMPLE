@@ -59,6 +59,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),            allocatable :: ctfmats_b(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -131,6 +132,7 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
+    procedure          :: trick_on, trick_off
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
@@ -804,6 +806,40 @@ contains
             end do
         end do
     end subroutine setup_npix_per_shell
+
+    subroutine trick_on( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: i,k
+        if( .not.allocated(self%ctfmats_b) )then
+            allocate(self%ctfmats_b(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
+        endif
+        self%ctfmats_b = self%ctfmats
+        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
+        do i = 1,self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%ctfmats_b(:,k,i)) > TINY )
+                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) * self%ctfmats_b(:,k,i)
+                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)**2
+                endwhere
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine trick_on
+
+    subroutine trick_off( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: i,k
+        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
+        do i = 1,self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%ctfmats_b(:,k,i)) > TINY )
+                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) / self%ctfmats_b(:,k,i)
+                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)
+                endwhere
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine trick_off
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self
