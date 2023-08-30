@@ -132,7 +132,7 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
-    procedure          :: trick_on, trick_off
+    procedure          :: reg_scale, reg_descale
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
@@ -807,7 +807,7 @@ contains
         end do
     end subroutine setup_npix_per_shell
 
-    subroutine trick_on( self )
+    subroutine reg_scale( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i,k
         if( .not.allocated(self%ctfmats_b) )then
@@ -824,9 +824,9 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine trick_on
+    end subroutine reg_scale
 
-    subroutine trick_off( self )
+    subroutine reg_descale( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i,k
         !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
@@ -839,7 +839,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine trick_off
+    end subroutine reg_descale
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self

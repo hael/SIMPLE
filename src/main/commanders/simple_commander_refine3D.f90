@@ -977,7 +977,7 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
         ! trick on
-        call pftcc%trick_on
+        call pftcc%reg_scale
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
@@ -1025,7 +1025,7 @@ contains
         enddo
         !$omp end parallel do
         ! trick off
-        call pftcc%trick_off
+        call pftcc%reg_descale
         ! sorting the corrs for each iref
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
         do iref = 1, params_glob%nspace

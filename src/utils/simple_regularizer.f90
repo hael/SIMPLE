@@ -155,7 +155,7 @@ contains
         !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do iref = 1, self%nrefs
             ! taking top sorted corrs/probs
-            do i = params_glob%fromp,params_glob%top
+            do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
                 if( self%ref_ptcl_prob(i, iref) < TINY ) cycle
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_ind(i, iref)
