@@ -976,15 +976,17 @@ contains
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
-        ! trick on
-        call pftcc%reg_scale
+        ! scaling by the ctf
+        if( params_glob%l_reg_scale )then
+            call pftcc%reg_scale
+            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
+            do j = 1, nptcls
+                call pftcc%memoize_sqsum_ptcl(pinds(j))
+            enddo
+            !$omp end parallel do
+        endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
-        !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
-        do j = 1, nptcls
-            call pftcc%memoize_sqsum_ptcl(pinds(j))
-        enddo
-        !$omp end parallel do
 
         ! ALIGNMENT OF PARTICLES
         print *, 'Aligning the particles ...'
@@ -1024,8 +1026,8 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! trick off
-        call pftcc%reg_descale
+        ! descaling
+        if( params_glob%l_reg_scale ) call pftcc%reg_descale
         ! sorting the corrs for each iref
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
         do iref = 1, params_glob%nspace
@@ -1046,8 +1048,8 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
         do iref = 1, params_glob%nspace
-            ! taking top sorted corrs/probs (50 for now)
-            do j = params_glob%fromp,params_glob%fromp + 200
+            ! taking top sorted corrs/probs (100 for now)
+            do j = params_glob%fromp,params_glob%fromp + 100
                 if( ref_ptcl_prob(j, iref) < TINY ) cycle
                 ithr      = omp_get_thread_num() + 1
                 iptcl     = ref_ptcl_ind(j, iref)
