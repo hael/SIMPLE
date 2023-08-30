@@ -147,8 +147,6 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure, private :: reg_gencorrs_1,       reg_gencorrs_2
-    generic            :: reg_gencorrs => reg_gencorrs_1, reg_gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -1285,33 +1283,6 @@ contains
                 call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, cc)
         end select
     end subroutine gencorrs_2
-
-    subroutine reg_gencorrs_1( self, iref, iptcl, cc )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        call self%gencorrs_weighted_cc(iptcl, iref, cc)
-    end subroutine reg_gencorrs_1
-
-    subroutine reg_gencorrs_2( self, iref, iptcl, shift, cc )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(in)    :: shift(2)
-        real(sp),                intent(out)   :: cc(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer :: i, ithr
-        ithr    = omp_get_thread_num() + 1
-        i       = self%pinds(iptcl)
-        shmat   => self%heap_vars(ithr)%shmat
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        call self%gen_shmat(ithr, shift, shmat)
-        if( self%iseven(i) )then
-            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
-        endif
-        call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
-    end subroutine reg_gencorrs_2
 
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
