@@ -160,7 +160,6 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_ind(i, iref)
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                    if( ran3() > self%ref_ptcl_prob(i, iref) ) cycle
                     pind_here = self%pftcc%pinds(iptcl)
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = self%ref_ptcl_loc(iptcl, iref)

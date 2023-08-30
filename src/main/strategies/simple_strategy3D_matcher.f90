@@ -564,19 +564,21 @@ contains
         !$omp end parallel do
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! trick on
-        call pftcc%reg_scale
-        !$omp parallel do default(shared) private(iptcl_batch) proc_bind(close) schedule(static)
-        do iptcl_batch = 1,nptcls_here
-            call pftcc%memoize_sqsum_ptcl(pinds_here(iptcl_batch))
-        enddo
-        !$omp end parallel do
+        ! scaling by the ctf
+        if( params_glob%l_reg_scale )then
+            call pftcc%reg_scale
+            !$omp parallel do default(shared) private(iptcl_batch) proc_bind(close) schedule(static)
+            do iptcl_batch = 1,nptcls_here
+                call pftcc%memoize_sqsum_ptcl(pinds_here(iptcl_batch))
+            enddo
+            !$omp end parallel do
+        endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! compute regularization terms
         call reg_obj%fill_tab(pinds_here)
-        ! trick off
-        call pftcc%reg_descale
+        ! descaling
+        if( params_glob%l_reg_scale ) call pftcc%reg_descale
     end subroutine prob_batch_particles
 
 end module simple_strategy3D_matcher
