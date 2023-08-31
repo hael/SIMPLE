@@ -900,7 +900,7 @@ contains
         integer,          allocatable :: pinds(:), ref_ptcl_loc(:,:), ref_ptcl_ind(:,:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
-        real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:)
+        real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:), sigma2_noise(:,:)
         real(dp),         allocatable :: ctf_rot(:,:), regs_denom(:,:,:)
         complex(dp),      allocatable :: ptcl_ctf_rot(:,:), regs(:,:,:)
         type(polarft_corrcalc)        :: pftcc
@@ -909,9 +909,9 @@ contains
         type(ori)                     :: o_tmp
         type(image)                   :: img
         type(regularizer)             :: reg_obj
-        integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here
+        integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here, max_iref, max_loc
         logical  :: l_ctf, do_center
-        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3)
+        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), max_corr, max_sh(2), corr, sh(2)
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl2D')
@@ -977,17 +977,6 @@ contains
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
-        ! scaling by the ctf
-        if( params_glob%l_reg_scale )then
-            call pftcc%reg_scale
-            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
-            do j = 1, nptcls
-                call pftcc%memoize_sqsum_ptcl(pinds(j))
-            enddo
-            !$omp end parallel do
-        endif
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
 
         ! ALIGNMENT OF PARTICLES
         print *, 'Aligning the particles ...'
@@ -1005,6 +994,58 @@ contains
             call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
         enddo
+        ! using gencorrs (cc-based to estimate the sigma)
+        if( params_glob%l_needs_sigma )then
+            allocate( sigma2_noise(pftcc%kfromto(1):pftcc%kfromto(2), params_glob%fromp:params_glob%top), source=1. )
+            do j = pftcc%kfromto(1),pftcc%kfromto(2)
+                sigma2_noise(j,:) = real(j)
+            enddo
+            call pftcc%assign_sigma2_noise(sigma2_noise)
+            ! call pftcc%memoize_ptcls
+            ! params_glob%cc_objfun = OBJFUN_CC
+            ! !$omp parallel do default(shared) private(j,iref,ithr,iptcl,inpl_corrs,cxy,max_corr,max_iref,max_sh,max_loc,loc,corr,sh) proc_bind(close) schedule(static)
+            ! do j = 1, nptcls
+            !     max_corr = 0.
+            !     do iref = 1, params_glob%nspace
+            !         ithr  = omp_get_thread_num() + 1
+            !         iptcl = pinds(j)
+            !         ! find best irot/shift for this pair of iref, iptcl
+            !         call pftcc%gencorrs( iref, iptcl, inpl_corrs )
+            !         loc = maxloc(inpl_corrs, dim=1)
+            !         call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+            !         cxy = grad_shsrch_obj(ithr)%minimize(irot=loc)
+            !         if( loc > 0 )then
+            !             corr = cxy(1)
+            !             sh   = cxy(2:3)
+            !         else
+            !             loc  = maxloc(inpl_corrs, dim=1)
+            !             corr = inpl_corrs(loc)
+            !             sh   = 0.
+            !         endif
+            !         if( corr > max_corr )then
+            !             max_corr = corr
+            !             max_loc  = loc
+            !             max_sh   = sh
+            !             max_iref = iref
+            !         endif
+            !     enddo
+            !     call pftcc%update_sigma( max_iref, iptcl, max_sh, max_loc )
+            ! enddo
+            ! !$omp end parallel do
+            ! params_glob%cc_objfun = OBJFUN_EUCLID
+        endif
+        ! actual alignment using the defined cost function
+        ! scaling by the ctf
+        if( params_glob%l_reg_scale )then
+            call pftcc%reg_scale
+            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
+            do j = 1, nptcls
+                call pftcc%memoize_sqsum_ptcl(pinds(j))
+            enddo
+            !$omp end parallel do
+        endif
+        ! Memoize particles FFT parameters
+        call pftcc%memoize_ptcls
         ref_ptcl_prob = 0.
         !$omp parallel do collapse(2) default(shared) private(j,iref,ithr,iptcl,inpl_corrs,cxy) proc_bind(close) schedule(static)
         do iref = 1, params_glob%nspace
