@@ -66,6 +66,7 @@ type :: polarft_corrcalc
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
+    complex(sp),         allocatable :: pfts_ptcls_b(:,:,:)         !< 3D complex matrix of particle sections
     ! FFTW plans
     type(c_ptr)                      :: plan_fwd1, plan_bwd1
     type(c_ptr)                      :: plan_mem_r2c
@@ -807,36 +808,21 @@ contains
 
     subroutine reg_scale( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: i,k
         if( .not.allocated(self%ctfmats_b) )then
-            allocate(self%ctfmats_b(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
+            allocate(self%ctfmats_b(   self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls))
+            allocate(self%pfts_ptcls_b(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls))
         endif
-        self%ctfmats_b = self%ctfmats
-        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
-        do i = 1,self%nptcls
-            do k = self%kfromto(1),self%kfromto(2)
-                where( abs(self%ctfmats_b(:,k,i)) > TINY )
-                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) * self%ctfmats_b(:,k,i)
-                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)**2
-                endwhere
-            enddo
-        enddo
-        !$omp end parallel do
+        self%ctfmats_b    = self%ctfmats
+        self%pfts_ptcls_b = self%pfts_ptcls
+        self%ctfmats      = self%ctfmats_b**2
+        self%pfts_ptcls   = self%pfts_ptcls_b * self%ctfmats_b
     end subroutine reg_scale
 
     subroutine reg_descale( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: i,k
-        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
-        do i = 1,self%nptcls
-            do k = self%kfromto(1),self%kfromto(2)
-                where( abs(self%ctfmats_b(:,k,i)) > TINY )
-                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) / self%ctfmats_b(:,k,i)
-                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)
-                endwhere
-            enddo
-        enddo
-        !$omp end parallel do
+        self%pfts_ptcls = self%pfts_ptcls_b
+        self%ctfmats    = self%ctfmats_b
+        deallocate(self%ctfmats_b, self%pfts_ptcls_b)
     end subroutine reg_descale
 
     subroutine memoize_ptcls( self )
