@@ -992,14 +992,14 @@ contains
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         do ithr = 1, params_glob%nthr
             call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
-                &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
+                &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
         enddo
         ! using gencorrs (cc-based to estimate the sigma)
         if( params_glob%l_needs_sigma )then
             allocate( sigma2_noise(pftcc%kfromto(1):pftcc%kfromto(2), params_glob%fromp:params_glob%top), source=1. )
-            do j = pftcc%kfromto(1),pftcc%kfromto(2)
-                sigma2_noise(j,:) = real(j)
-            enddo
+            ! do j = pftcc%kfromto(1),pftcc%kfromto(2)
+            !     sigma2_noise(j,:) = real(j)
+            ! enddo
             call pftcc%assign_sigma2_noise(sigma2_noise)
             ! call pftcc%memoize_ptcls
             ! params_glob%cc_objfun = OBJFUN_CC
