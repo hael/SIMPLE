@@ -149,6 +149,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_for_rot_8
+    procedure          :: reg_gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
     procedure          :: gencorr_cc_for_rot_8
@@ -1606,6 +1607,44 @@ contains
                 gencorr_for_rot_8 = self%gencorr_prob_for_rot_8(pft_ref_tmp_8, iptcl)
         end select
     end function gencorr_for_rot_8
+
+    real(dp) function reg_gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
+        integer              :: ithr, i, k
+        i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat_8       => self%heap_vars(ithr)%shmat_8
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+        endif
+        ! shift
+        call self%gen_shmat_8(ithr, shvec, shmat_8)
+        pft_ref_8 = pft_ref_8 * shmat_8
+        ! rotation
+        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+        ! ctf
+        if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
+        reg_gencorr_for_rot_8 = 0.d0
+        if( params_glob%l_kweight_shift )then
+            do k = self%kfromto(1),self%kfromto(2)
+                reg_gencorr_for_rot_8 = reg_gencorr_for_rot_8 + real(k,kind=dp) * sum(real(pft_ref_tmp_8(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+            end do
+            reg_gencorr_for_rot_8 = reg_gencorr_for_rot_8 / self%ksqsums_ptcls(i)
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                reg_gencorr_for_rot_8 = reg_gencorr_for_rot_8 + sum(real(pft_ref_tmp_8(:,k) * conjg(self%pfts_ptcls(:,k,i)),dp))
+            end do
+            reg_gencorr_for_rot_8 = reg_gencorr_for_rot_8 / self%sqsums_ptcls(i)
+        endif
+    end function reg_gencorr_for_rot_8
 
     real(dp) function gencorr_cc_for_rot_8( self, pft_ref, i )
         class(polarft_corrcalc), intent(inout) :: self
