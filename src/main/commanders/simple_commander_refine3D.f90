@@ -911,7 +911,7 @@ contains
         type(regularizer)             :: reg_obj
         integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here, max_iref, max_loc
         logical  :: l_ctf, do_center
-        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), max_corr, max_sh(2), corr, sh(2)
+        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), max_corr, max_sh(2), corr, sh(2), sum_prob
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl2D')
@@ -1070,6 +1070,26 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_prob)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_prob = sum(ref_ptcl_prob(iptcl,:))
+            if( sum_prob < TINY )then
+                ref_ptcl_prob(iptcl,:) = 0.
+            else
+                ref_ptcl_prob(iptcl,:) = ref_ptcl_prob(iptcl,:) / sum_prob
+            endif
+        enddo
+        !$omp end parallel do
+        ! sorting the corrs for each iref
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
+        do iref = 1, params_glob%nspace
+            ref_ptcl_ind(:,iref) = (/(j,j=params_glob%fromp,params_glob%top)/)
+            call hpsort(ref_ptcl_prob(:,iref), ref_ptcl_ind(:,iref))
+            call reverse(ref_ptcl_ind( :,iref))
+            call reverse(ref_ptcl_prob(:,iref))
+        enddo
+        !$omp end parallel do
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
         ! computing 3D cavgs and output the cavgs
@@ -1081,27 +1101,27 @@ contains
         regs       = 0.
         regs_denom = 0.
         ref_cnt    = 0
-        !!$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !!$omp private(j,iref,ithr,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
-        do j = 1, nptcls
-            ithr          = omp_get_thread_num() + 1
-            iptcl         = pinds(j)
-            iref          = maxloc(ref_ptcl_prob(iptcl,:), dim=1)
-            ref_cnt(iref) = ref_cnt(iref) + 1
-            if( ref_ptcl_prob(iptcl,iref) < TINY ) cycle
-            if( ref_cnt(iref) >= 100 )             cycle
-            pind_here = pftcc%pinds(iptcl)
-            loc       = ref_ptcl_loc(iptcl, iref)
-            loc       = (pftcc%nrots+1)-(loc-1)
-            if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-            shmat => pftcc%heap_vars(ithr)%shmat
-            call pftcc%gen_shmat(ithr, -real(ref_ptcl_sh(:,iptcl,iref)), shmat)
-            call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,pind_here) * pftcc%ctfmats(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-            call reg_obj%rotate_polar(                                        pftcc%ctfmats(:,:,pind_here),                        ctf_rot, loc)
-            regs(:,:,iref)       = regs(:,:,iref)       + ref_ptcl_prob(iptcl,iref) * ptcl_ctf_rot
-            regs_denom(:,:,iref) = regs_denom(:,:,iref) + ref_ptcl_prob(iptcl,iref) * ctf_rot**2
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
+        do iref = 1, params_glob%nspace
+            ! taking top sorted corrs/probs (100 for now)
+            do j = params_glob%fromp,params_glob%fromp + 100
+                if( ref_ptcl_prob(j, iref) < TINY ) cycle
+                ithr      = omp_get_thread_num() + 1
+                iptcl     = ref_ptcl_ind(j, iref)
+                pind_here = pftcc%pinds(iptcl)
+                loc       = ref_ptcl_loc(iptcl, iref)
+                loc       = (pftcc%nrots+1)-(loc-1)
+                if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
+                shmat => pftcc%heap_vars(ithr)%shmat
+                call pftcc%gen_shmat(ithr, -real(ref_ptcl_sh(:,iptcl,iref)), shmat)
+                call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,pind_here) * pftcc%ctfmats(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                call reg_obj%rotate_polar(                                        pftcc%ctfmats(:,:,pind_here),                        ctf_rot, loc)
+                regs(:,:,iref)       = regs(:,:,iref)       + ref_ptcl_prob(j, iref) * ptcl_ctf_rot
+                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ref_ptcl_prob(j, iref) * ctf_rot**2
+            enddo
         enddo
-        !!$omp end parallel do
+        !$omp end parallel do
         do iref=1, params_glob%nspace
             regs(:,:,iref) = regs(:,:,iref) / regs_denom(:,:,iref)
             call pftcc%polar2cartesian(cmplx(regs(:,:,iref), kind=sp), cmat, box)
