@@ -74,7 +74,7 @@ contains
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, reg_eps
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
+        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, orig_objfun
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
@@ -188,6 +188,9 @@ contains
             reg_eps = 0.
             if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
             if( reg_eps < 1. )then
+                ! cc is used to get the probability
+                orig_objfun           = params_glob%cc_objfun
+                params_glob%cc_objfun = OBJFUN_CC
                 call reg_obj%reset_regs
                 call reg_obj%init_tab(pinds)
                 ! Batch loop
@@ -206,6 +209,7 @@ contains
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
                 call reg_obj%regularize_refs
+                params_glob%cc_objfun = orig_objfun
             endif
         endif
 
