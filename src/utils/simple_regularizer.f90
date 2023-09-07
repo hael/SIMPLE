@@ -34,6 +34,7 @@ type :: regularizer
     procedure          :: init_tab
     procedure          :: fill_tab
     procedure          :: sort_tab
+    procedure          :: sort_tab_ptcl
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -136,6 +137,32 @@ contains
         enddo
         !$omp end parallel do
     end subroutine sort_tab
+
+    subroutine sort_tab_ptcl( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iref, j, iptcl
+        real    :: sum_prob
+        ! normalize so prob of each ref is between [0,1] for all ptcls
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_prob)
+        do iref = 1, self%nrefs
+            sum_prob = sum(self%ref_ptcl_prob(:,iref))
+            if( sum_prob < TINY )then
+                self%ref_ptcl_prob(:,iref) = 0.
+            else
+                self%ref_ptcl_prob(:,iref) = self%ref_ptcl_prob(:,iref) / sum_prob
+            endif
+        enddo
+        !$omp end parallel do
+        ! sorting the normalized prob for each iptcl
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,j)
+        do iptcl = params_glob%fromp, params_glob%top
+            self%ref_ptcl_ind(iptcl,:) = (/(j,j=1,self%nrefs)/)
+            call hpsort( self%ref_ptcl_prob(iptcl,:), self%ref_ptcl_ind(iptcl,:))
+            call reverse(self%ref_ptcl_ind( iptcl,:))
+            call reverse(self%ref_ptcl_prob(iptcl,:))
+        enddo
+        !$omp end parallel do
+    end subroutine sort_tab_ptcl
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc_tab( self, glob_pinds )

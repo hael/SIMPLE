@@ -19,6 +19,7 @@ use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
+use simple_strategy3D_greedy_prob,  only: strategy3D_greedy_prob
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
@@ -209,6 +210,7 @@ contains
                     call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
                 call reg_obj%regularize_refs
+                if( trim(params_glob%refine) == 'greedy_prob' ) call reg_obj%sort_tab_ptcl
                 params_glob%cc_objfun = orig_objfun
             endif
         endif
@@ -281,6 +283,8 @@ contains
                         else
                             allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
+                    case('greedy_prob')
+                        allocate(strategy3D_greedy_prob          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
@@ -291,6 +295,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
+                if( trim(params_glob%refine) == 'greedy_prob' ) strategy3Dspecs(iptcl_batch)%reg_obj = reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
