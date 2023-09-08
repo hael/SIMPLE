@@ -16,8 +16,8 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    integer, pointer  :: symmat(:,:) => null()
-    type(regularizer) :: reg_obj
+    integer,           pointer :: symmat(:,:) => null()
+    type(regularizer), pointer :: reg_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
