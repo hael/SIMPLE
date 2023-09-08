@@ -47,6 +47,7 @@ contains
             iref = self%spec%reg_obj%ref_ptcl_ind(self%s%iptcl, 1)
             call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_loc(self%s%iptcl, iref),&
                         &self%spec%reg_obj%ref_ptcl_prob(self%s%iptcl, iref), self%spec%reg_obj%ref_ptcl_sh(:,self%s%iptcl, iref))
+            call self%oris_assign()
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
