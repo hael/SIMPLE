@@ -201,16 +201,19 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call prob_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call reg_obj%sort_tab
-                ! Batch loop
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-                enddo
-                call reg_obj%regularize_refs
-                if( trim(params_glob%refine) == 'greedy_prob' ) call reg_obj%sort_tab_ptcl
+                if( trim(params_glob%refine) == 'greedy_prob' )then
+                    call reg_obj%sort_tab_ptcl
+                else
+                    call reg_obj%sort_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    enddo
+                    call reg_obj%regularize_refs
+                endif
                 params_glob%cc_objfun = orig_objfun
             endif
         endif
