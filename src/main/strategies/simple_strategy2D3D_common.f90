@@ -662,7 +662,7 @@ contains
         integer, optional, intent(in)    :: which_iter
         type(fplane)     :: fpls
         type(ctfparams)  :: ctfparms
-        type(ori)        :: orientation, o_prev
+        type(ori)        :: orientation
         type(image)      :: img
         real             :: sdev_noise, shvec(2), euls(3)
         integer          :: iptcl, i, ninds, iref
@@ -679,6 +679,7 @@ contains
                 iptcl = reg_obj%ref_ptcl_ind(i, iref)
                 if( iptcl >= reg_obj%pftcc%pfromto(1) .and. iptcl <= reg_obj%pftcc%pfromto(2))then
                     ! reading image, ctf. generate the fourier plane
+                    call img%zero_and_unflag_ft
                     call read_imgbatch( iptcl, img )
                     call img%norm_noise(build_glob%lmsk, sdev_noise)
                     call img%fft
@@ -690,7 +691,6 @@ contains
                     euls(3) = 360. - reg_obj%pftcc%get_rot(reg_obj%ref_ptcl_loc(iptcl, iref))
                     call build_glob%spproj_field%set_euler(iptcl, euls)
                     ! shift
-                    call build_glob%spproj_field%get_ori(iptcl, o_prev)
                     shvec = reg_obj%ref_ptcl_sh(:,iptcl, iref)
                     where( abs(shvec) < 1e-6 ) shvec = 0.
                     call build_glob%spproj_field%set_shift(iptcl, shvec)
@@ -706,7 +706,6 @@ contains
         ! destruct
         call killrecvols()
         call orientation%kill
-        call o_prev%kill
     end subroutine calc_3Drec_reg
 
     subroutine norm_struct_facts( cline, which_iter )
