@@ -1157,14 +1157,12 @@ contains
                     call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
                     ! getting the particle orientation
                     ! Euler angle
-                    loc = ref_ptcl_loc(iptcl, iref)
-                    loc = (pftcc%nrots+1)-(loc-1)
-                    if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
+                    loc     = ref_ptcl_loc(iptcl, iref)
                     euls    = build_glob%eulspace%get_euler(iref)
                     euls(3) = 360. - pftcc%get_rot(loc)
                     call build_glob%spproj_field%set_euler(iptcl, euls)
                     ! shift
-                    shvec = -ref_ptcl_sh(:,iptcl,iref)
+                    shvec = ref_ptcl_sh(:,iptcl,iref)
                     where( abs(shvec) < 1e-6 ) shvec = 0.
                     call build_glob%spproj_field%set_shift(iptcl, shvec)
                     call build_glob%spproj_field%set(iptcl, 'w', ref_ptcl_prob(j, iref))
