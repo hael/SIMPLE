@@ -153,6 +153,7 @@ contains
             endif
         enddo
         !$omp end parallel do
+        self%ref_ptcl_prob = self%ref_ptcl_prob / maxval(self%ref_ptcl_prob)
         ! sorting the normalized prob for each iptcl
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,j)
         do iptcl = params_glob%fromp, params_glob%top
@@ -165,9 +166,8 @@ contains
     end subroutine sort_tab_ptcl
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine ref_reg_cc_tab( self, glob_pinds )
+    subroutine ref_reg_cc_tab( self )
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)

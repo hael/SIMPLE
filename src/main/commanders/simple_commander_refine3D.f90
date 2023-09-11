@@ -886,10 +886,12 @@ contains
     subroutine exec_check_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols, preprefvol
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,&
+                    &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+        use simple_fplane,              only: fplane
         use simple_image
         use simple_regularizer
         class(check_align_commander), intent(inout) :: self
@@ -897,10 +899,10 @@ contains
         type(pftcc_shsrch_grad),      allocatable   :: grad_shsrch_obj(:)  
         complex(sp),      pointer     :: shmat(:,:)
         integer,          parameter   :: MAXITS = 60
-        integer,          allocatable :: pinds(:), ref_ptcl_loc(:,:), ref_ptcl_ind(:,:), ref_cnt(:)
+        integer,          allocatable :: pinds(:), ref_ptcl_loc(:,:), ref_ptcl_ind(:,:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
-        real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:), sigma2_noise(:,:), ref_ptcl_w(:,:)
+        real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:), sigma2_noise(:,:)
         real(dp),         allocatable :: ctf_rot(:,:), regs_denom(:,:,:)
         complex(dp),      allocatable :: ptcl_ctf_rot(:,:), regs(:,:,:)
         type(polarft_corrcalc)        :: pftcc
@@ -909,13 +911,16 @@ contains
         type(ori)                     :: o_tmp
         type(image)                   :: img
         type(regularizer)             :: reg_obj
-        integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here, max_iref, max_loc
+        type(fplane)                  :: fpls
+        type(ctfparams)               :: ctfparms
+        type(ori)                     :: orientation
+        integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here
         logical  :: l_ctf, do_center
-        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), max_corr, max_sh(2), corr, sh(2), sum_prob
+        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), sum_prob, euls(3), shvec(2), sdev_noise
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
-        call cline%set('oritype',  'ptcl2D')
-        call build%init_params_and_build_general_tbox(cline,params)
+        call cline%set('oritype',  'ptcl3D')
+        call build%init_params_and_build_strategy3D_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
@@ -984,7 +989,6 @@ contains
         allocate(inpl_corrs(pftcc%nrots), grad_shsrch_obj(params_glob%nthr),&
             &ref_ptcl_prob(params_glob%fromp:params_glob%top,params_glob%nspace),&
             &ref_ptcl_ind( params_glob%fromp:params_glob%top,params_glob%nspace),&
-            &ref_ptcl_w(   params_glob%fromp:params_glob%top,params_glob%nspace),&
             &ref_ptcl_sh(2,params_glob%fromp:params_glob%top,params_glob%nspace),&
             &ref_ptcl_loc( params_glob%fromp:params_glob%top,params_glob%nspace))
         lims(:,1)       = -params_glob%reg_minshift
@@ -1066,7 +1070,6 @@ contains
                     ref_ptcl_prob(iptcl,iref) = inpl_corrs(ref_ptcl_loc(iptcl,iref))
                     ref_ptcl_sh(:,iptcl,iref) = 0.
                 endif
-                ref_ptcl_w(iptcl,iref) = pftcc%reg_gencorr_for_rot_8(iref, iptcl, real(ref_ptcl_sh(:,iptcl,iref), dp), ref_ptcl_loc(iptcl,iref))
             enddo
         enddo
         !$omp end parallel do
@@ -1092,15 +1095,15 @@ contains
         !$omp end parallel do
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
+        print *, 'Assemling the class averages ...'
         ! computing 3D cavgs and output the cavgs
         call reg_obj%new(pftcc)
         allocate(ptcl_ctf_rot(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2)),&
-                     &ctf_rot(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2)),ref_cnt(params_glob%nspace),&
+                     &ctf_rot(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2)),&
                   &regs_denom(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2),params_glob%nspace),&
                         &regs(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2),params_glob%nspace))
         regs       = 0.
         regs_denom = 0.
-        ref_cnt    = 0
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
         do iref = 1, params_glob%nspace
@@ -1133,6 +1136,50 @@ contains
             call img%write('cavgs.mrc', iref)
             call img%kill
         enddo
+        print *, 'Reconstruct the 3D volume ...'
+        ! init volumes
+        call preprecvols
+        ! prep img, fpls, ctfparms
+        call img%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+        call fpls%new(img)
+        do iref = 1, params_glob%nspace
+            ! taking top sorted corrs/probs (100 for now)
+            do j = params_glob%fromp,(params_glob%fromp + 100)
+                if( ref_ptcl_prob(j, iref) < TINY ) cycle
+                iptcl = ref_ptcl_ind(j, iref)
+                if( iptcl >= pftcc%pfromto(1) .and. iptcl <= pftcc%pfromto(2))then
+                    ! reading image, ctf. generate the fourier plane
+                    call img%zero_and_unflag_ft
+                    call read_imgbatch( iptcl, img )
+                    call img%norm_noise(build_glob%lmsk, sdev_noise)
+                    call img%fft
+                    ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                    call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
+                    ! getting the particle orientation
+                    ! Euler angle
+                    loc = ref_ptcl_loc(iptcl, iref)
+                    loc = (pftcc%nrots+1)-(loc-1)
+                    if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
+                    euls    = build_glob%eulspace%get_euler(iref)
+                    euls(3) = 360. - pftcc%get_rot(loc)
+                    call build_glob%spproj_field%set_euler(iptcl, euls)
+                    ! shift
+                    shvec = -ref_ptcl_sh(:,iptcl,iref)
+                    where( abs(shvec) < 1e-6 ) shvec = 0.
+                    call build_glob%spproj_field%set_shift(iptcl, shvec)
+                    call build_glob%spproj_field%set(iptcl, 'w', ref_ptcl_prob(j, iref))
+                    ! adding the fourier plane to the volume
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    call grid_ptcl(fpls, build_glob%pgrpsyms, orientation)
+                endif
+            enddo
+        enddo
+        ! normalise structure factors
+        call norm_struct_facts( cline )
+        ! destruct
+        call killrecvols()
+        call orientation%kill
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align
 
