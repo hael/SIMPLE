@@ -920,6 +920,7 @@ contains
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
+        call cline%set('center',   'no')
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         if( allocated(pinds) )     deallocate(pinds)
@@ -928,13 +929,14 @@ contains
         call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
             &1.0, nptcls, pinds, ptcl_mask)
         print *, 'nptcls = ', nptcls, '; fromp = ', params_glob%fromp, '; top = ', params_glob%top
-        call pftcc%new(nptcls, [1,nptcls], params%kfromto)
+        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
         print *, 'Preparing the references ...'
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s))
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
             call preprefvol(cline, s, do_center, xyz, .true.)
@@ -975,7 +977,8 @@ contains
             ! transfer to polar coordinates
             call build%img_match%polarize(pftcc, build%imgbatch(j), iptcl, .true., .true., mask=build%l_resmsk)
             ! e/o flags
-            call pftcc%set_eo(iptcl, .true. )
+            ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftcc%set_eo(iptcl, .true.)
         enddo
         !$omp end parallel do
         ! getting the ctfs
@@ -1143,12 +1146,15 @@ contains
         call img%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
         call fpls%new(img)
         do iref = 1, params_glob%nspace
+            euls = build_glob%eulspace%get_euler(iref)
             ! taking top sorted corrs/probs (100 for now)
-            do j = params_glob%fromp,(params_glob%fromp + 100)
+            do j = params_glob%fromp,(params_glob%fromp + 99)
                 if( ref_ptcl_prob(j, iref) < TINY ) cycle
                 iptcl = ref_ptcl_ind(j, iref)
                 if( iptcl >= pftcc%pfromto(1) .and. iptcl <= pftcc%pfromto(2))then
-                    ! reading image, ctf. generate the fourier plane
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    ! reading image, ctf & generate the fourier plane
                     call img%zero_and_unflag_ft
                     call read_imgbatch( iptcl, img )
                     call img%norm_noise(build_glob%lmsk, sdev_noise)
@@ -1156,20 +1162,36 @@ contains
                     ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                     call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
                     ! getting the particle orientation
-                    ! Euler angle
+                    shvec = orientation%get_2Dshift() + ref_ptcl_sh(:,iptcl,iref)
+                    call orientation%set_shift(shvec)
                     loc     = ref_ptcl_loc(iptcl, iref)
-                    euls    = build_glob%eulspace%get_euler(iref)
                     euls(3) = 360. - pftcc%get_rot(loc)
-                    call build_glob%spproj_field%set_euler(iptcl, euls)
-                    ! shift
-                    shvec = ref_ptcl_sh(:,iptcl,iref)
-                    where( abs(shvec) < 1e-6 ) shvec = 0.
-                    call build_glob%spproj_field%set_shift(iptcl, shvec)
-                    call build_glob%spproj_field%set(iptcl, 'w', ref_ptcl_prob(j, iref))
-                    ! adding the fourier plane to the volume
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
+                    call orientation%set_euler(euls)
+                    call orientation%set('w', ref_ptcl_prob(j, iref))
+                    ! insert
                     call grid_ptcl(fpls, build_glob%pgrpsyms, orientation)
+                    ! ! reading image, ctf. generate the fourier plane
+                    ! call img%zero_and_unflag_ft
+                    ! call read_imgbatch( iptcl, img )
+                    ! call img%norm_noise(build_glob%lmsk, sdev_noise)
+                    ! call img%fft
+                    ! ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                    ! call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
+                    ! ! getting the particle orientation
+                    ! ! Euler angle
+                    ! loc     = ref_ptcl_loc(iptcl, iref)
+                    ! euls    = build_glob%eulspace%get_euler(iref)
+                    ! euls(3) = 360. - pftcc%get_rot(loc)
+                    ! call build_glob%spproj_field%set_euler(iptcl, euls)
+                    ! ! shift
+                    ! shvec = ref_ptcl_sh(:,iptcl,iref)
+                    ! where( abs(shvec) < 1e-6 ) shvec = 0.
+                    ! call build_glob%spproj_field%set_shift(iptcl, shvec)
+                    ! call build_glob%spproj_field%set(iptcl, 'w', ref_ptcl_prob(j, iref))
+                    ! ! adding the fourier plane to the volume
+                    ! call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    ! if( orientation%isstatezero() ) cycle
+                    ! call grid_ptcl(fpls, build_glob%pgrpsyms, orientation)
                 endif
             enddo
         enddo
