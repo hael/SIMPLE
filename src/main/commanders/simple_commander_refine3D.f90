@@ -1038,6 +1038,7 @@ contains
         call reg_obj%init_tab
         call reg_obj%fill_tab(pinds)
         call reg_obj%sort_tab
+        call reg_obj%normalize_tab_ptcl
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
         print *, 'Assemling the class averages ...'
@@ -1080,7 +1081,7 @@ contains
                 loc     = reg_obj%ref_ptcl_loc(iptcl, iref)
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', reg_obj%ref_ptcl_prob(pind_here, iref))
+                call orientation%set('w', reg_obj%ref_ptcl_w(iptcl, iref))
                 ! insert
                 call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
