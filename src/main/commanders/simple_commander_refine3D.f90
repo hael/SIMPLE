@@ -890,21 +890,16 @@ contains
                     &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
-        use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         use simple_fplane,              only: fplane
         use simple_image
         use simple_regularizer
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(pftcc_shsrch_grad),      allocatable   :: grad_shsrch_obj(:)  
-        complex(sp),      pointer     :: shmat(:,:)
         integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
-        integer,          allocatable :: pinds(:), ref_ptcl_loc(:,:), ref_ptcl_ind(:,:)
+        integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
-        real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:), sigma2_noise(:,:)
-        real(dp),         allocatable :: ctf_rot(:,:), regs_denom(:,:,:)
-        complex(dp),      allocatable :: ptcl_ctf_rot(:,:), regs(:,:,:)
+        real,             allocatable :: sigma2_noise(:,:)
         type(fplane),     allocatable :: fpls(:)
         type(ctfparams),  allocatable :: ctfparms(:)
         type(polarft_corrcalc)        :: pftcc
@@ -914,9 +909,9 @@ contains
         type(image)                   :: img
         type(regularizer)             :: reg_obj
         type(ori)                     :: orientation
-        integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here
+        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here
         logical  :: l_ctf, do_center
-        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), sum_prob, euls(3), shvec(2)
+        real     :: xyz(3), euls(3), shvec(2)
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
@@ -931,6 +926,7 @@ contains
         print *, 'nptcls = ', nptcls, '; fromp = ', params_glob%fromp, '; top = ', params_glob%top
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
+        call reg_obj%new(pftcc)
         print *, 'Preparing the references ...'
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
@@ -987,20 +983,6 @@ contains
 
         ! ALIGNMENT OF PARTICLES
         print *, 'Aligning the particles ...'
-        ! computing the iref/iptcl corrs table
-        allocate(inpl_corrs(pftcc%nrots), grad_shsrch_obj(params_glob%nthr),&
-            &ref_ptcl_prob(params_glob%fromp:params_glob%top,params_glob%nspace),&
-            &ref_ptcl_ind( params_glob%fromp:params_glob%top,params_glob%nspace),&
-            &ref_ptcl_sh(2,params_glob%fromp:params_glob%top,params_glob%nspace),&
-            &ref_ptcl_loc( params_glob%fromp:params_glob%top,params_glob%nspace))
-        lims(:,1)       = -params_glob%reg_minshift
-        lims(:,2)       =  params_glob%reg_minshift
-        lims_init(:,1)  = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init,&
-                &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=params_glob%l_reg_opt_ang)
-        enddo
         ! using gencorrs (cc-based to estimate the sigma)
         if( params_glob%l_needs_sigma )then
             allocate( sigma2_noise(pftcc%kfromto(1):pftcc%kfromto(2), params_glob%fromp:params_glob%top), source=1. )
@@ -1053,84 +1035,16 @@ contains
         endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
-        ref_ptcl_prob = 0.
-        !$omp parallel do collapse(2) default(shared) private(j,iref,ithr,iptcl,inpl_corrs,cxy) proc_bind(close) schedule(static)
-        do iref = 1, params_glob%nspace
-            do j = 1, nptcls
-                ithr  = omp_get_thread_num() + 1
-                iptcl = pinds(j)
-                ! find best irot/shift for this pair of iref, iptcl
-                call pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                ref_ptcl_loc(iptcl,iref) = maxloc(inpl_corrs, dim=1)
-                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=ref_ptcl_loc(iptcl,iref))
-                if( ref_ptcl_loc(iptcl,iref) > 0 )then
-                    ref_ptcl_prob(iptcl,iref) = cxy(1)
-                    ref_ptcl_sh(:,iptcl,iref) = cxy(2:3)
-                else
-                    ref_ptcl_loc(iptcl,iref)  = maxloc(inpl_corrs, dim=1)
-                    ref_ptcl_prob(iptcl,iref) = inpl_corrs(ref_ptcl_loc(iptcl,iref))
-                    ref_ptcl_sh(:,iptcl,iref) = 0.
-                endif
-            enddo
-        enddo
-        !$omp end parallel do
-        ! normalize so prob of each ptcl is between [0,1] for all refs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_prob)
-        do iptcl = params_glob%fromp, params_glob%top
-            sum_prob = sum(ref_ptcl_prob(iptcl,:))
-            if( sum_prob < TINY )then
-                ref_ptcl_prob(iptcl,:) = 0.
-            else
-                ref_ptcl_prob(iptcl,:) = ref_ptcl_prob(iptcl,:) / sum_prob
-            endif
-        enddo
-        !$omp end parallel do
-        ref_ptcl_prob = ref_ptcl_prob / maxval(ref_ptcl_prob)
-        ! sorting the corrs for each iref
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
-        do iref = 1, params_glob%nspace
-            ref_ptcl_ind(:,iref) = (/(j,j=params_glob%fromp,params_glob%top)/)
-            call hpsort(ref_ptcl_prob(:,iref), ref_ptcl_ind(:,iref))
-            call reverse(ref_ptcl_ind( :,iref))
-            call reverse(ref_ptcl_prob(:,iref))
-        enddo
-        !$omp end parallel do
+        call reg_obj%init_tab
+        call reg_obj%fill_tab(pinds)
+        call reg_obj%sort_tab
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
         print *, 'Assemling the class averages ...'
-        ! computing 3D cavgs and output the cavgs
-        call reg_obj%new(pftcc)
-        allocate(ptcl_ctf_rot(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2)),&
-                     &ctf_rot(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2)),&
-                  &regs_denom(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2),params_glob%nspace),&
-                        &regs(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2),params_glob%nspace))
-        regs       = 0.
-        regs_denom = 0.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
-        !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
-        do iref = 1, params_glob%nspace
-            ! taking top sorted corrs/probs (100 for now)
-            do j = params_glob%fromp,params_glob%fromp + SORT_THRES - 1
-                if( ref_ptcl_prob(j, iref) < TINY ) cycle
-                ithr      = omp_get_thread_num() + 1
-                iptcl     = ref_ptcl_ind(j, iref)
-                pind_here = pftcc%pinds(iptcl)
-                loc       = ref_ptcl_loc(iptcl, iref)
-                loc       = (pftcc%nrots+1)-(loc-1)
-                if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-                shmat => pftcc%heap_vars(ithr)%shmat
-                call pftcc%gen_shmat(ithr, -real(ref_ptcl_sh(:,iptcl,iref)), shmat)
-                call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,pind_here) * pftcc%ctfmats(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                call reg_obj%rotate_polar(                                        pftcc%ctfmats(:,:,pind_here),                        ctf_rot, loc)
-                regs(:,:,iref)       = regs(:,:,iref)       + ref_ptcl_prob(j, iref) * ptcl_ctf_rot
-                regs_denom(:,:,iref) = regs_denom(:,:,iref) + ref_ptcl_prob(j, iref) * ctf_rot**2
-            enddo
-        enddo
-        !$omp end parallel do
+        call reg_obj%ref_reg_cc_tab
         do iref=1, params_glob%nspace
-            regs(:,:,iref) = regs(:,:,iref) / regs_denom(:,:,iref)
-            call pftcc%polar2cartesian(cmplx(regs(:,:,iref), kind=sp), cmat, box)
+            reg_obj%regs(:,:,iref) = reg_obj%regs(:,:,iref) / reg_obj%regs_denom(:,:,iref)
+            call pftcc%polar2cartesian(cmplx(reg_obj%regs(:,:,iref), kind=sp), cmat, box)
             call img%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
             call img%zero_and_flag_ft
             call img%set_cmat(cmat)
@@ -1156,17 +1070,17 @@ contains
             euls = build_glob%eulspace%get_euler(iref)
             do j = 1, SORT_THRES
                 pind_here = params_glob%fromp + j - 1
-                if( ref_ptcl_prob(pind_here, iref) < TINY ) cycle
-                iptcl = ref_ptcl_ind(pind_here, iref)
+                if( reg_obj%ref_ptcl_prob(pind_here, iref) < TINY ) cycle
+                iptcl = reg_obj%ref_ptcl_ind(pind_here, iref)
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 ! getting the particle orientation
-                shvec = orientation%get_2Dshift() + ref_ptcl_sh(:,iptcl,iref)
+                shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_sh(:,iptcl,iref)
                 call orientation%set_shift(shvec)
-                loc     = ref_ptcl_loc(iptcl, iref)
+                loc     = reg_obj%ref_ptcl_loc(iptcl, iref)
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', ref_ptcl_prob(pind_here, iref))
+                call orientation%set('w', reg_obj%ref_ptcl_prob(pind_here, iref))
                 ! insert
                 call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
