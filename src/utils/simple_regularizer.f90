@@ -76,9 +76,8 @@ contains
         enddo
     end subroutine new
 
-    subroutine init_tab( self, pinds )
+    subroutine init_tab( self )
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: pinds(params_glob%fromp,params_glob%top)
         allocate(self%ref_ptcl_prob(params_glob%fromp:params_glob%top,self%nrefs),self%ref_ptcl_sh(2,params_glob%fromp:params_glob%top,self%nrefs), source=0.)
         allocate(self%ref_ptcl_loc( params_glob%fromp:params_glob%top,self%nrefs), self%ref_ptcl_ind(params_glob%fromp:params_glob%top,self%nrefs), source=0)
     end subroutine init_tab
@@ -127,6 +126,7 @@ contains
             endif
         enddo
         !$omp end parallel do
+        self%ref_ptcl_prob = self%ref_ptcl_prob / maxval(self%ref_ptcl_prob)
         ! sorting the normalized prob for each iref, to sample only the best #ptcls/#refs ptcls for each iref
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,j)
         do iref = 1, self%nrefs
