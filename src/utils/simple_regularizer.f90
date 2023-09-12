@@ -22,6 +22,7 @@ type :: regularizer
     real(dp),    allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real,        allocatable :: ref_corr(:)             !< total ref corr sum
     real,        allocatable :: ref_ptcl_prob(:,:)      !< 2D corr/prob table
+    real,        allocatable :: ref_ptcl_w(:,:)         !< 2D 3Drec weights
     integer,     allocatable :: ref_ptcl_loc(:,:)       !< 2D in-plane table
     real,        allocatable :: ref_ptcl_sh(:,:,:)      !< 2D sh table
     integer,     allocatable :: ref_ptcl_ind(:,:)       !< 2D index table
@@ -35,6 +36,7 @@ type :: regularizer
     procedure          :: fill_tab
     procedure          :: sort_tab
     procedure          :: sort_tab_ptcl
+    procedure          :: normalize_tab_ptcl
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -78,7 +80,8 @@ contains
 
     subroutine init_tab( self )
         class(regularizer), intent(inout) :: self
-        allocate(self%ref_ptcl_prob(params_glob%fromp:params_glob%top,self%nrefs),self%ref_ptcl_sh(2,params_glob%fromp:params_glob%top,self%nrefs), source=0.)
+        allocate(self%ref_ptcl_prob(params_glob%fromp:params_glob%top,self%nrefs),self%ref_ptcl_sh(2,params_glob%fromp:params_glob%top,self%nrefs),&
+                &self%ref_ptcl_w(   params_glob%fromp:params_glob%top,self%nrefs), source=0.)
         allocate(self%ref_ptcl_loc( params_glob%fromp:params_glob%top,self%nrefs), self%ref_ptcl_ind(params_glob%fromp:params_glob%top,self%nrefs), source=0)
     end subroutine init_tab
 
@@ -115,6 +118,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, j, iptcl
         real    :: sum_prob
+        self%ref_ptcl_w = self%ref_ptcl_prob
         ! normalize so prob of each ptcl is between [0,1] for all refs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_prob)
         do iptcl = params_glob%fromp, params_glob%top
@@ -142,6 +146,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, j, iptcl
         real    :: sum_prob
+        self%ref_ptcl_w = self%ref_ptcl_prob
         ! normalize so prob of each ref is between [0,1] for all ptcls
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_prob)
         do iref = 1, self%nrefs
@@ -164,6 +169,24 @@ contains
         enddo
         !$omp end parallel do
     end subroutine sort_tab_ptcl
+
+    subroutine normalize_tab_ptcl( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iref
+        real    :: sum_prob
+        ! normalize so prob of each ref is between [0,1] for all ptcls
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_prob)
+        do iref = 1, self%nrefs
+            sum_prob = sum(self%ref_ptcl_w(:,iref))
+            if( sum_prob < TINY )then
+                self%ref_ptcl_w(:,iref) = 0.
+            else
+                self%ref_ptcl_w(:,iref) = self%ref_ptcl_w(:,iref) / sum_prob
+            endif
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_w = self%ref_ptcl_w / maxval(self%ref_ptcl_w)
+    end subroutine normalize_tab_ptcl
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc_tab( self )
@@ -194,7 +217,7 @@ contains
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_sh(:,iptcl,iref)), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = self%ref_ptcl_prob(i, iref)
+                    weight = self%ref_ptcl_w(iptcl, iref)
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                     self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_prob(i, iref)
