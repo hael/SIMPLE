@@ -614,8 +614,6 @@ contains
         call prepimgbatch(MAXIMGBATCHSZ)
         ! allocate array
         allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
-        ! prep batch imgs
-        call prepimgbatch(MAXIMGBATCHSZ)
         ! gridding batch loop
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
