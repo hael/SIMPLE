@@ -898,25 +898,25 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(pftcc_shsrch_grad),      allocatable   :: grad_shsrch_obj(:)  
         complex(sp),      pointer     :: shmat(:,:)
-        integer,          parameter   :: MAXITS = 60
+        integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
         integer,          allocatable :: pinds(:), ref_ptcl_loc(:,:), ref_ptcl_ind(:,:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: inpl_corrs(:), ref_ptcl_prob(:,:), ref_ptcl_sh(:,:,:), sigma2_noise(:,:)
         real(dp),         allocatable :: ctf_rot(:,:), regs_denom(:,:,:)
         complex(dp),      allocatable :: ptcl_ctf_rot(:,:), regs(:,:,:)
+        type(fplane),     allocatable :: fpls(:)
+        type(ctfparams),  allocatable :: ctfparms(:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
         type(image)                   :: img
         type(regularizer)             :: reg_obj
-        type(fplane)                  :: fpls
-        type(ctfparams)               :: ctfparms
         type(ori)                     :: orientation
         integer  :: nptcls, iptcl, j, s, iref, box, ithr, loc, pind_here
         logical  :: l_ctf, do_center
-        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), sum_prob, euls(3), shvec(2), sdev_noise
+        real     :: xyz(3), lims(2,2), lims_init(2,2), cxy(3), sum_prob, euls(3), shvec(2)
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
@@ -967,15 +967,14 @@ contains
         ! PREPARATION OF PARTICLES
         print *, 'Preparing the particles ...'
         call prepimgbatch(nptcls)
-        call read_imgbatch([1, nptcls])
+        call read_imgbatch([params_glob%fromp,params_glob%top])
         call build%img_match%init_polarizer(pftcc, params%alpha)
-        !$omp parallel do default(shared) private(j, iptcl) schedule(static) proc_bind(close)
-        do j = 1, nptcls
-            iptcl = pinds(j)
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = params_glob%fromp,params_glob%top
             ! prep
-            call prepimg4align(iptcl, build%imgbatch(j))
+            call prepimg4align(iptcl, build%imgbatch(iptcl))
             ! transfer to polar coordinates
-            call build%img_match%polarize(pftcc, build%imgbatch(j), iptcl, .true., .true., mask=build%l_resmsk)
+            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
             ! e/o flags
             ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
             call pftcc%set_eo(iptcl, .true.)
@@ -1108,11 +1107,11 @@ contains
                         &regs(pftcc%pftsz,pftcc%kfromto(1):pftcc%kfromto(2),params_glob%nspace))
         regs       = 0.
         regs_denom = 0.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
         !$omp private(iref,ithr,j,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here)
         do iref = 1, params_glob%nspace
             ! taking top sorted corrs/probs (100 for now)
-            do j = params_glob%fromp,params_glob%fromp + 100
+            do j = params_glob%fromp,params_glob%fromp + SORT_THRES - 1
                 if( ref_ptcl_prob(j, iref) < TINY ) cycle
                 ithr      = omp_get_thread_num() + 1
                 iptcl     = ref_ptcl_ind(j, iref)
@@ -1144,32 +1143,32 @@ contains
         ! init volumes
         call preprecvols
         ! prep img, fpls, ctfparms
-        call img%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-        call fpls%new(img)
+        allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iptcl)
+        do iptcl = params_glob%fromp,params_glob%top
+            call fpls(iptcl)%new(build%imgbatch(iptcl))
+            ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+            call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+        enddo
+        !$omp end parallel do
         do iref = 1, params_glob%nspace
             euls = build_glob%eulspace%get_euler(iref)
-            ! taking top sorted corrs/probs (100 for now)
-            do j = params_glob%fromp,(params_glob%fromp + 99)
-                if( ref_ptcl_prob(j, iref) < TINY ) cycle
-                iptcl = ref_ptcl_ind(j, iref)
+            do j = 1, SORT_THRES
+                pind_here = params_glob%fromp + j - 1
+                if( ref_ptcl_prob(pind_here, iref) < TINY ) cycle
+                iptcl = ref_ptcl_ind(pind_here, iref)
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
-                ! reading image, ctf & generate the fourier plane
-                call img%zero_and_unflag_ft
-                call read_imgbatch( iptcl, img )
-                call img%norm_noise(build_glob%lmsk, sdev_noise)
-                call img%fft
-                ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
                 ! getting the particle orientation
                 shvec = orientation%get_2Dshift() + ref_ptcl_sh(:,iptcl,iref)
                 call orientation%set_shift(shvec)
                 loc     = ref_ptcl_loc(iptcl, iref)
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', ref_ptcl_prob(j, iref))
+                call orientation%set('w', ref_ptcl_prob(pind_here, iref))
                 ! insert
-                call grid_ptcl(fpls, build_glob%pgrpsyms, orientation)
+                call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
         enddo
         ! normalise structure factors
