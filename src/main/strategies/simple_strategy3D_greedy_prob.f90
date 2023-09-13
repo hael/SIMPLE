@@ -44,9 +44,9 @@ contains
             ! prep
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
-            iref = self%spec%reg_obj%ref_ptcl_ind(self%s%iptcl, 1)
-            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_loc(self%s%iptcl, iref),&
-                        &self%spec%reg_obj%ref_ptcl_prob(self%s%iptcl, iref), self%spec%reg_obj%ref_ptcl_sh(:,self%s%iptcl, iref))
+            iref = self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%ind
+            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%loc,&
+                        &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%prob, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%sh)
             call self%oris_assign()
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
