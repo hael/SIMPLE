@@ -900,6 +900,7 @@ contains
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: sigma2_noise(:,:)
+        type(image),      allocatable :: tmp_imgs(:)
         type(fplane),     allocatable :: fpls(:)
         type(ctfparams),  allocatable :: ctfparms(:)
         type(polarft_corrcalc)        :: pftcc
@@ -909,9 +910,9 @@ contains
         type(image)                   :: img
         type(regularizer)             :: reg_obj
         type(ori)                     :: orientation
-        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here
+        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr
         logical  :: l_ctf, do_center
-        real     :: xyz(3), euls(3), shvec(2)
+        real     :: xyz(3), euls(3), shvec(2), sdev
         call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
@@ -962,15 +963,24 @@ contains
         enddo
         ! PREPARATION OF PARTICLES
         print *, 'Preparing the particles ...'
-        call prepimgbatch(nptcls)
-        call read_imgbatch([params_glob%fromp,params_glob%top])
+        call prepimgbatch(params_glob%top-params_glob%fromp+1)
+        call read_imgbatch([params_glob%fromp,params_glob%top], ptcl_mask)
         call build%img_match%init_polarizer(pftcc, params%alpha)
-        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box,params%box,1], params%smpd, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(iptcl,ithr) schedule(static) proc_bind(close)
         do iptcl = params_glob%fromp,params_glob%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            ithr = omp_get_thread_num()+1
+            call tmp_imgs(ithr)%copy_fast(build%imgbatch(iptcl))
             ! prep
-            call prepimg4align(iptcl, build%imgbatch(iptcl))
+            call prepimg4align(iptcl, tmp_imgs(ithr))
             ! transfer to polar coordinates
-            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+            call build%img_match%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
             ! e/o flags
             ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
             call pftcc%set_eo(iptcl, .true.)
@@ -1060,8 +1070,11 @@ contains
         ! prep img, fpls, ctfparms
         allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iptcl)
+        !$omp private(iptcl,sdev)
         do iptcl = params_glob%fromp,params_glob%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+            call build%imgbatch(iptcl)%fft
             call fpls(iptcl)%new(build%imgbatch(iptcl))
             ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
             call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
