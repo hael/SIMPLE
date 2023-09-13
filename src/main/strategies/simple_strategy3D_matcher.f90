@@ -201,13 +201,9 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call prob_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                if( trim(params_glob%refine) == 'greedy_prob' )then
-                    call reg_obj%sort_tab_ptcl
-                else
-                    call reg_obj%sort_tab
-                    call reg_obj%ref_reg_cc_tab
-                    call reg_obj%regularize_refs
-                endif
+                call reg_obj%sort_tab
+                call reg_obj%ref_reg_cc_tab
+                call reg_obj%regularize_refs
                 params_glob%cc_objfun = orig_objfun
             endif
         endif

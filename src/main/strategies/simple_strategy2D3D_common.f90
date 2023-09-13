@@ -12,7 +12,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts, calc_3Drec_reg
+&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts
 private
 #include "simple_local_flags.inc"
 
@@ -648,63 +648,6 @@ contains
         deallocate(fpls,ctfparms)
         call orientation%kill
     end subroutine calc_3Drec
-
-    !> volumetric 3d reconstruction
-    subroutine calc_3Drec_reg( cline, nptcls2update, pinds, reg_obj, which_iter )
-        use simple_fplane,      only: fplane
-        use simple_regularizer, only: regularizer
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls2update
-        integer,           intent(in)    :: pinds(nptcls2update)
-        type(regularizer), intent(in)    :: reg_obj
-        integer, optional, intent(in)    :: which_iter
-        type(fplane)     :: fpls
-        type(ctfparams)  :: ctfparms
-        type(ori)        :: orientation
-        type(image)      :: img
-        real             :: sdev_noise, shvec(2), euls(3)
-        integer          :: iptcl, i, ninds, iref
-        ! init volumes
-        call preprecvols
-        ninds = size(reg_obj%ref_ptcl_prob, 1)
-        ! prep img, fpls, ctfparms
-        call img%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-        call fpls%new(img)
-        do iref = 1, reg_obj%nrefs
-            ! taking top sorted corrs/probs
-            do i = params_glob%fromp,(params_glob%fromp + int(ninds / reg_obj%nrefs))
-                if( reg_obj%ref_ptcl_prob(i, iref) < TINY ) cycle
-                iptcl = reg_obj%ref_ptcl_ind(i, iref)
-                if( iptcl >= reg_obj%pftcc%pfromto(1) .and. iptcl <= reg_obj%pftcc%pfromto(2))then
-                    ! reading image, ctf. generate the fourier plane
-                    call img%zero_and_unflag_ft
-                    call read_imgbatch( iptcl, img )
-                    call img%norm_noise(build_glob%lmsk, sdev_noise)
-                    call img%fft
-                    ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                    call fpls%gen_planes(img, ctfparms, iptcl=iptcl)
-                    ! getting the particle orientation
-                    ! Euler angle
-                    euls    = build_glob%eulspace%get_euler(iref)
-                    euls(3) = 360. - reg_obj%pftcc%get_rot(reg_obj%ref_ptcl_loc(iptcl, iref))
-                    call build_glob%spproj_field%set_euler(iptcl, euls)
-                    ! shift
-                    shvec = reg_obj%ref_ptcl_sh(:,iptcl, iref)
-                    where( abs(shvec) < 1e-6 ) shvec = 0.
-                    call build_glob%spproj_field%set_shift(iptcl, shvec)
-                    ! adding the fourier plane into the volume
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
-                    call grid_ptcl(fpls, build_glob%pgrpsyms, orientation)
-                endif
-            enddo
-        enddo
-        ! normalise structure factors
-        call norm_struct_facts( cline, which_iter)
-        ! destruct
-        call killrecvols()
-        call orientation%kill
-    end subroutine calc_3Drec_reg
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
