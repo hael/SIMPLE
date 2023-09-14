@@ -14,7 +14,8 @@ private
 #include "simple_local_flags.inc"
 
 type reg_params
-    integer :: ind              !< iptcl index
+    integer :: iptcl            !< iptcl index
+    integer :: iref             !< iref index
     integer :: loc              !< inpl index
     real    :: prob, sh(2), w   !< probability, shift, and weight
 end type reg_params
@@ -38,6 +39,7 @@ type :: regularizer
     procedure          :: init_tab
     procedure          :: fill_tab
     procedure          :: sort_tab
+    procedure          :: sort_tab_ptcl
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -82,15 +84,18 @@ contains
     subroutine init_tab( self )
         class(regularizer), intent(inout) :: self
         integer :: iptcl, iref
-        allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs), source=0.)
-        allocate(self%ref_ptcl_tab( params_glob%fromp:params_glob%top,self%nrefs))
+        if( .not.(allocated(self%ref_ptcl_corr)) )then
+            allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs), source=0.)
+            allocate(self%ref_ptcl_tab( params_glob%fromp:params_glob%top,self%nrefs))
+        endif
         do iref = 1,self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
-                self%ref_ptcl_tab(iptcl,iref)%ind  = iptcl
-                self%ref_ptcl_tab(iptcl,iref)%loc  = 0
-                self%ref_ptcl_tab(iptcl,iref)%prob = 0.
-                self%ref_ptcl_tab(iptcl,iref)%sh   = 0.
-                self%ref_ptcl_tab(iptcl,iref)%w    = 0.
+                self%ref_ptcl_tab(iptcl,iref)%iptcl = iptcl
+                self%ref_ptcl_tab(iptcl,iref)%iref  = iref
+                self%ref_ptcl_tab(iptcl,iref)%loc   = 0
+                self%ref_ptcl_tab(iptcl,iref)%prob  = 0.
+                self%ref_ptcl_tab(iptcl,iref)%sh    = 0.
+                self%ref_ptcl_tab(iptcl,iref)%w     = 0.
             enddo
         enddo
     end subroutine init_tab
@@ -169,6 +174,39 @@ contains
         !$omp end parallel do
     end subroutine sort_tab
 
+    subroutine sort_tab_ptcl( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iref, iptcl
+        real    :: sum_corr, ref_ptcl_corr2(params_glob%fromp:params_glob%top,self%nrefs)
+        ref_ptcl_corr2 = self%ref_ptcl_corr
+        ! normalize so prob of each weight is between [0,1] for all ptcls
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_corr)
+        do iref = 1, self%nrefs
+            sum_corr = sum(ref_ptcl_corr2(:,iref))
+            if( sum_corr < TINY )then
+                ref_ptcl_corr2(:,iref) = 0.
+            else
+                ref_ptcl_corr2(:,iref) = ref_ptcl_corr2(:,iref) / sum_corr
+            endif
+        enddo
+        !$omp end parallel do
+        ref_ptcl_corr2 = ref_ptcl_corr2 / maxval(ref_ptcl_corr2)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref)%w    = ref_ptcl_corr2(iptcl,iref)
+                self%ref_ptcl_tab(iptcl,iref)%prob = ref_ptcl_corr2(iptcl,iref)
+            enddo
+        enddo
+        !$omp end parallel do
+        ! sorting the normalized prob for each iref, to sample only the best #ptcls/#refs ptcls for each iref
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
+        do iptcl = params_glob%fromp,params_glob%top
+            call reg_hpsort(self%ref_ptcl_tab(iptcl,:))
+        enddo
+        !$omp end parallel do
+    end subroutine sort_tab_ptcl
+
     ! reg_params heapsort from hpsort_4 (smallest last)
     subroutine reg_hpsort( rarr )
         type(reg_params), intent(inout) :: rarr(:)
@@ -227,7 +265,7 @@ contains
             do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
                 if( self%ref_ptcl_tab(i, iref)%prob < TINY ) cycle
                 ithr  = omp_get_thread_num() + 1
-                iptcl = self%ref_ptcl_tab(i, iref)%ind
+                iptcl = self%ref_ptcl_tab(i, iref)%iptcl
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                     pind_here = self%pftcc%pinds(iptcl)
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability

@@ -1083,7 +1083,7 @@ contains
             do j = 1, SORT_THRES
                 pind_here = params_glob%fromp + j - 1
                 if( reg_obj%ref_ptcl_tab(pind_here, iref)%prob < TINY ) cycle
-                iptcl = reg_obj%ref_ptcl_tab(pind_here, iref)%ind
+                iptcl = reg_obj%ref_ptcl_tab(pind_here, iref)%iptcl
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 ! getting the particle orientation
