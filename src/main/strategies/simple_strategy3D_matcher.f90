@@ -204,6 +204,19 @@ contains
                 call reg_obj%sort_tab
                 call reg_obj%ref_reg_cc_tab
                 call reg_obj%regularize_refs
+                ! generating prob table again with the new reference
+                if( trim(params_glob%refine) == 'greedy_prob' )then
+                    call reg_obj%reset_regs
+                    call reg_obj%init_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call prob_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    enddo
+                    call reg_obj%sort_tab_ptcl
+                endif
                 params_glob%cc_objfun = orig_objfun
             endif
         endif

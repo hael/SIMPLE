@@ -44,9 +44,10 @@ contains
             ! prep
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
-            iref = self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%ind
-            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%loc,&
-                        &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%prob, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%sh)
+            ! tab is sorted w.r.t iref, so the first one is the best one
+            iref = self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%iref
+            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%loc,&
+                        &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%prob, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%sh)
             call self%oris_assign()
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
