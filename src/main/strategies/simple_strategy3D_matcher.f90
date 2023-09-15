@@ -215,7 +215,6 @@ contains
                         batchsz     = batch_end - batch_start + 1
                         call prob_batch_particles(batchsz, pinds(batch_start:batch_end))
                     enddo
-                    call reg_obj%sort_tab_ptcl
                 endif
                 params_glob%cc_objfun = orig_objfun
             endif

@@ -1092,7 +1092,7 @@ contains
                 loc     = reg_obj%ref_ptcl_tab(pind_here, iref)%loc
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref)%w)
+                call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref)%prob)
                 ! insert
                 call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
