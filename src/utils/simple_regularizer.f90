@@ -104,17 +104,26 @@ contains
     subroutine fill_tab( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer  :: i, iref, iptcl
-        real     :: inpl_corrs(self%nrots)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
+        integer  :: i, iref, iptcl, ithr
+        real     :: inpl_corrs(self%nrots), cxy(3)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,ithr,iptcl,inpl_corrs,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
+                ithr  = omp_get_thread_num() + 1
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                self%ref_ptcl_tab(iptcl,iref)%sh  = 0.
                 self%ref_ptcl_tab(iptcl,iref)%loc = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iptcl,iref)%loc)
+                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=self%ref_ptcl_tab(iptcl,iref)%loc)
+                if( self%ref_ptcl_tab(iptcl,iref)%loc > 0 )then
+                    self%ref_ptcl_corr(iptcl,iref)   = cxy(1)
+                    self%ref_ptcl_tab(iptcl,iref)%sh = cxy(2:3)
+                else
+                    self%ref_ptcl_tab(iptcl,iref)%sh  = 0.
+                    self%ref_ptcl_tab(iptcl,iref)%loc = maxloc(inpl_corrs, dim=1)
+                    self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iptcl,iref)%loc)
+                endif
             enddo
         enddo
         !$omp end parallel do
@@ -230,13 +239,13 @@ contains
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        real        :: weight, cxy(3)
+        real        :: weight
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         ninds    = size(self%ref_ptcl_corr, 1)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
-        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight,cxy)
+        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do iref = 1, self%nrefs
             ! taking top sorted corrs/probs
             do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
@@ -244,14 +253,6 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_tab(i, iref)%iptcl
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                    ! finding shifts
-                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    loc = self%ref_ptcl_tab(i,iref)%loc
-                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
-                    if( loc > 0 )then
-                        self%ref_ptcl_tab(i,iref)%loc = loc
-                        self%ref_ptcl_tab(i,iref)%sh  = cxy(2:3)
-                    endif
                     pind_here = self%pftcc%pinds(iptcl)
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = self%ref_ptcl_tab(i, iref)%loc
@@ -261,15 +262,16 @@ contains
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = self%ref_ptcl_tab(i, iref)%prob
+                    weight = self%ref_ptcl_tab(i, iref)%w
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
-                    self%ref_corr(iref)       = self%ref_corr(iref)       + weight
+                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
                 endif
             enddo
         enddo
         !$omp end parallel do
     end subroutine ref_reg_cc_tab
+
 
     subroutine regularize_refs( self, ref_freq_in )
         use simple_image
