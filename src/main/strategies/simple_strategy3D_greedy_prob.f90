@@ -43,11 +43,15 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            do iref = 1, self%s%nrefs
+                call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%loc,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%prob)
+            enddo
+            ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
-            ! tab is sorted w.r.t iref, so the first one is the best one
-            iref = self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%iref
-            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%loc,&
-                        &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%prob, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, 1)%sh)
+            ! take care of the in-planes
+            call self%s%inpl_srch
+            ! prepare orientation
             call self%oris_assign()
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
