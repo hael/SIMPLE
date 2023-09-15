@@ -2,7 +2,7 @@ module simple_strategy2D_snhc
 include 'simple_lib.f08'
 use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
@@ -14,9 +14,7 @@ private
 logical, parameter :: DEBUG   = .false.
 
 type, extends(strategy2D) :: strategy2D_snhc
-    type(strategy2D_srch) :: s
-    type(strategy2D_spec) :: spec
-contains
+  contains
     procedure :: new  => new_snhc
     procedure :: srch => srch_snhc
     procedure :: kill => kill_snhc
