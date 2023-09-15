@@ -2,7 +2,7 @@ module simple_strategy2D_eval
 include 'simple_lib.f08'
 use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
 implicit none
 
@@ -12,9 +12,7 @@ private
 logical, parameter :: DEBUG   = .false.
 
 type, extends(strategy2D) :: strategy2D_eval
-    type(strategy2D_srch) :: s
-    type(strategy2D_spec) :: spec
-contains
+  contains
     procedure :: new  => new_eval
     procedure :: srch => srch_eval
     procedure :: kill => kill_eval
