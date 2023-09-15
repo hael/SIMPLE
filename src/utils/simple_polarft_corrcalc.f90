@@ -165,7 +165,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_prob_grad_for_rot_8
     procedure          :: gencorr_sigma_contrib
     procedure, private :: calc_frc
-    procedure, private :: rotate_ref
+    procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
     ! DESTRUCTOR
@@ -756,6 +756,42 @@ contains
             endif
         enddo
     end subroutine rotate_ref
+
+    ! Particle rotation
+    subroutine rotate_ptcl( self, ptcl, irot, ptcl_rot)
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: ptcl(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: irot
+        complex(sp), optional,   intent(out)   :: ptcl_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: rot, jrot
+        do jrot = 1,self%pftsz
+            rot = jrot - (irot - 1) ! reverse rotation
+            if( rot < 1 ) rot = rot + self%nrots
+            if( rot > self%pftsz )then
+                ptcl_rot(jrot,:) = conjg(ptcl(rot-self%pftsz,:))
+            else
+                ptcl_rot(jrot,:) = ptcl(rot,:)
+            endif
+        enddo
+    end subroutine rotate_ptcl
+
+    ! Particle rotation of the reference
+    subroutine rotate_ctf( self, iptcl, irot, ctf_rot)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, irot
+        real(sp), optional,      intent(out)   :: ctf_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: i, rot, jrot
+        i = self%pinds(iptcl)
+        do jrot = 1,self%pftsz
+            rot = jrot - (irot - 1) ! reverse rotation
+            if( rot < 1 ) rot = rot + self%nrots
+            if( rot > self%pftsz )then
+                ctf_rot(jrot,:) = self%ctfmats(rot-self%pftsz,:,i)
+            else
+                ctf_rot(jrot,:) = self%ctfmats(rot,:,i)
+            endif
+        enddo
+    end subroutine rotate_ctf
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
         use simple_ctf,        only: ctf
