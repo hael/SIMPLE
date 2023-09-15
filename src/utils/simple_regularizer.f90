@@ -122,8 +122,8 @@ contains
 
     subroutine sort_tab( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl, i, ithr, loc
-        real    :: sum_corr, ref_ptcl_corr2(params_glob%fromp:params_glob%top,self%nrefs), cxy(3)
+        integer :: iref, iptcl
+        real    :: sum_corr, ref_ptcl_corr2(params_glob%fromp:params_glob%top,self%nrefs)
         ref_ptcl_corr2 = self%ref_ptcl_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
@@ -161,23 +161,6 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
         do iref = 1, self%nrefs
             call reg_hpsort(self%ref_ptcl_tab(:,iref))
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,ithr,i,cxy,iptcl,loc)
-        do iref = 1, self%nrefs
-            ! taking top sorted corrs/probs to do shifts
-            do i = params_glob%fromp,(params_glob%fromp + int(size(self%ref_ptcl_corr, 1) / self%nrefs))
-                if( self%ref_ptcl_tab(i, iref)%prob < TINY ) cycle
-                ithr  = omp_get_thread_num() + 1
-                iptcl = self%ref_ptcl_tab(i, iref)%iptcl
-                call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                loc = self%ref_ptcl_tab(i,iref)%loc
-                cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
-                if( loc > 0 )then
-                    self%ref_ptcl_tab(i,iref)%loc = loc
-                    self%ref_ptcl_tab(i,iref)%sh  = cxy(2:3)
-                endif
-            enddo
         enddo
         !$omp end parallel do
     end subroutine sort_tab
@@ -247,13 +230,13 @@ contains
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        real        :: weight
+        real        :: weight, cxy(3)
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         ninds    = size(self%ref_ptcl_corr, 1)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
-        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
+        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight,cxy)
         do iref = 1, self%nrefs
             ! taking top sorted corrs/probs
             do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
@@ -261,6 +244,14 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_tab(i, iref)%iptcl
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                    ! finding shifts
+                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    loc = self%ref_ptcl_tab(i,iref)%loc
+                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
+                    if( loc > 0 )then
+                        self%ref_ptcl_tab(i,iref)%loc = loc
+                        self%ref_ptcl_tab(i,iref)%sh  = cxy(2:3)
+                    endif
                     pind_here = self%pftcc%pinds(iptcl)
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
                     loc = self%ref_ptcl_tab(i, iref)%loc
