@@ -31,7 +31,7 @@ type :: regularizer
     real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
-    type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
+    type(reg_params),        allocatable :: ref_ptcl_tab(:,:), ref_ptcl_ori(:,:)
     contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -87,6 +87,7 @@ contains
         if( .not.(allocated(self%ref_ptcl_corr)) )then
             allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs), source=0.)
             allocate(self%ref_ptcl_tab( params_glob%fromp:params_glob%top,self%nrefs))
+            allocate(self%ref_ptcl_ori( params_glob%fromp:params_glob%top,self%nrefs))
         endif
         do iref = 1,self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
@@ -133,7 +134,6 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
         real    :: sum_corr, ref_ptcl_corr2(params_glob%fromp:params_glob%top,self%nrefs)
-        ref_ptcl_corr2 = self%ref_ptcl_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
         do iptcl = params_glob%fromp, params_glob%top
@@ -145,6 +145,24 @@ contains
             endif
         enddo
         !$omp end parallel do
+        if( params_glob%which_iter > 1 )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+            do iref = 1, self%nrefs
+                do iptcl = params_glob%fromp,params_glob%top
+                    self%ref_ptcl_corr(iptcl,iref) = (self%ref_ptcl_corr(iptcl,iref) + self%ref_ptcl_ori(iptcl,iref)%prob) / 2.
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr( iptcl,iref)
+            enddo
+        enddo
+        !$omp end parallel do
+        ref_ptcl_corr2     = self%ref_ptcl_corr
+        self%ref_ptcl_ori  = self%ref_ptcl_tab
         self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         ! normalize so prob of each weight is between [0,1] for all ptcls
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_corr)
@@ -177,18 +195,25 @@ contains
     subroutine sort_tab_ptcl( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
+        real    :: sum_corr
+        ! normalize so prob of each weight is between [0,1] for all ptcls
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_corr)
+        do iref = 1, self%nrefs
+            sum_corr = sum(self%ref_ptcl_corr(:,iref))
+            if( sum_corr < TINY )then
+                self%ref_ptcl_corr(:,iref) = 0.
+            else
+                self%ref_ptcl_corr(:,iref) = self%ref_ptcl_corr(:,iref) / sum_corr
+            endif
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iref = 1, self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
                 self%ref_ptcl_tab(iptcl,iref)%w    = self%ref_ptcl_corr(iptcl,iref)
                 self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr(iptcl,iref)
             enddo
-        enddo
-        !$omp end parallel do
-        ! sorting the normalized prob for each iref, to sample only the best #ptcls/#refs ptcls for each iref
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
-        do iptcl = params_glob%fromp,params_glob%top
-            call reg_hpsort(self%ref_ptcl_tab(iptcl,:))
         enddo
         !$omp end parallel do
     end subroutine sort_tab_ptcl
@@ -262,7 +287,7 @@ contains
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = self%ref_ptcl_tab(i, iref)%w
+                    weight = self%ref_ptcl_tab(i, iref)%prob
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                     self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
@@ -443,6 +468,6 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
-        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab)
+        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori)
     end subroutine kill
 end module simple_regularizer
