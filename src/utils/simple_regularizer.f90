@@ -134,6 +134,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
         real    :: sum_corr, ref_ptcl_corr2(params_glob%fromp:params_glob%top,self%nrefs)
+        ref_ptcl_corr2 = self%ref_ptcl_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
         do iptcl = params_glob%fromp, params_glob%top
@@ -145,24 +146,6 @@ contains
             endif
         enddo
         !$omp end parallel do
-        if( params_glob%which_iter > 1 )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
-            do iref = 1, self%nrefs
-                do iptcl = params_glob%fromp,params_glob%top
-                    self%ref_ptcl_corr(iptcl,iref) = (self%ref_ptcl_corr(iptcl,iref) + self%ref_ptcl_ori(iptcl,iref)%prob) / 2.
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
-        do iref = 1, self%nrefs
-            do iptcl = params_glob%fromp,params_glob%top
-                self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr( iptcl,iref)
-            enddo
-        enddo
-        !$omp end parallel do
-        ref_ptcl_corr2     = self%ref_ptcl_corr
-        self%ref_ptcl_ori  = self%ref_ptcl_tab
         self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         ! normalize so prob of each weight is between [0,1] for all ptcls
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref, sum_corr)
@@ -184,6 +167,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        self%ref_ptcl_ori = self%ref_ptcl_tab
         ! sorting the normalized prob for each iref, to sample only the best #ptcls/#refs ptcls for each iref
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
         do iref = 1, self%nrefs

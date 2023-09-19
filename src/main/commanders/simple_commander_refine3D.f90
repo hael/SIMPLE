@@ -125,7 +125,7 @@ contains
         if( cline%defined('objfun') )then
             l_continue = .false.
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' .and. .not.l_continue )then
                 orig_objfun     = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
@@ -262,7 +262,7 @@ contains
                 deallocate(list)
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( trim(params%objfun).eq.'euclid' )then
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
@@ -376,7 +376,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -695,7 +695,7 @@ contains
             l_sigma         = .false.
             l_switch2euclid = .false.
             select case(trim(orig_objfun))
-            case('euclid','prob')
+            case('euclid')
                 l_sigma = .true.
                 call cline%set('needs_sigma','yes')
                 params%l_needs_sigma = .true.

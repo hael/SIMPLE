@@ -191,7 +191,7 @@ contains
             if( reg_eps < 1. )then
                 ! cc is used to get the probability
                 orig_objfun           = params_glob%cc_objfun
-                params_glob%cc_objfun = OBJFUN_CC
+                params_glob%cc_objfun = OBJFUN_PROB
                 call reg_obj%reset_regs
                 call reg_obj%init_tab
                 ! Batch loop
