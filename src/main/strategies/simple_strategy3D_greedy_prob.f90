@@ -44,10 +44,10 @@ contains
             ! prep
             call self%s%prep4srch
             do iref = 1, self%s%nrefs
-                call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_ori(self%s%iptcl, iref)%loc,&
-                                                &self%spec%reg_obj%ref_ptcl_ori(self%s%iptcl, iref)%w,&
-                                                &self%spec%reg_obj%ref_ptcl_ori(self%s%iptcl, iref)%sh,&
-                                                &self%spec%reg_obj%ref_ptcl_ori(self%s%iptcl, iref)%prob)
+                call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%loc,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%w,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%sh,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%prob)
             enddo
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
