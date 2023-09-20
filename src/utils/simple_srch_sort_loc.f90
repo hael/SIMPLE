@@ -554,5 +554,104 @@ contains
         goto 22
     end function selec
     
+    ! recursively sort the columns of a 2D table, w.r.t the sum of the best nrows/ncols
+    ! entries of each column
+    ! for example:
+    !    original table:
+    !                   r1          r2          r3
+    !           ------------------------------------
+    !             c1  |  2           0           6
+    !             c2  |  4           0           7
+    !             c3  |  3           1           0
+    !             c4  |  3           0           2
+    !             c5  |  0           4           7
+    !             c6  |  6           4           2
+    !   sorted table (smallest to largest):
+    !                   r2          r1          r3
+    !           ------------------------------------
+    !             c1  |  0           2           6
+    !             c4  |  0           3           2
+    !             c3  |  1           3           0
+    !             c6  |  4           6           2
+    !             c5  |  4           0           7
+    !             c2  |  0           4           7
+    !
+    ! based on this uniformly sorted table, one can cluster:
+    !            (c2, c5) -> r3, (c6, c3) -> r1, (c1, c4) -> r2
+    subroutine cluster_sort( nrows, ncols, tab, to_ii, to_ir, cur_id, cur_ir )
+        integer, intent(in)    :: nrows, ncols
+        real,    intent(in)    :: tab(nrows, ncols)
+        integer, intent(in)    :: to_ii
+        integer, intent(in)    :: to_ir
+        integer, intent(inout) :: cur_id(nrows)
+        integer, intent(inout) :: cur_ir(ncols)
+        integer :: ir, ip, tmp_id(to_ii), tmp_i, orig_id(to_ii), ir_best, num
+        real    :: best_sum, sum_prob
+        num = int(nrows/ncols)
+        if( to_ii <= num ) return
+        best_sum = 0.
+        orig_id  = cur_id(1:to_ii)
+        ir_best  = to_ir
+        do ir = 1,to_ir
+            tmp_id = (/(ip, ip=1,to_ii)/)
+            call hpsort_ind(tmp_id, tab(orig_id,cur_ir(ir)))
+            sum_prob = sum(tab(orig_id(tmp_id(to_ii-num+1:to_ii)),cur_ir(ir)))
+            if( sum_prob > best_sum )then
+                best_sum        = sum_prob
+                cur_id(1:to_ii) = orig_id(tmp_id)
+                ir_best         = ir
+            endif
+        enddo
+        ! swapping the last with the current best ir
+        tmp_i           = cur_ir(to_ir)
+        cur_ir(to_ir)   = cur_ir(ir_best)
+        cur_ir(ir_best) = tmp_i
+        call cluster_sort( nrows, ncols, tab, to_ii - num, to_ir - 1, cur_id, cur_ir )
+    end subroutine cluster_sort
+
+    ! sorting rarr, but only keep the sorted indeces
+    subroutine hpsort_ind( iarr, rarr )
+        integer, intent(inout) :: iarr(:)
+        real,    intent(in)    :: rarr(:)
+        integer :: i, ir, j, l, ia, n
+        real    :: ra
+        n = size(rarr)
+        if( n /= size(iarr) )&
+        &call simple_exception('nonconforming array sizes; hpsort_6', __FILENAME__ , __LINE__)
+        if( n < 2 ) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ia = iarr(l)
+                ra = rarr(ia)
+            else
+                ia = iarr(ir)
+                ra = rarr(ia)
+                iarr(ir) = iarr(1)
+                ir = ir-1
+                if(ir == 1)then
+                    iarr(1) = ia
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(rarr(iarr(j)) < rarr(iarr(j+1))) j = j+1
+                endif
+                if(ra < rarr(iarr(j)))then
+                    iarr(i) = iarr(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                iarr(i) = ia
+            end do
+        end do
+    end subroutine hpsort_ind
 end module simple_srch_sort_loc
     
