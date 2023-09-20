@@ -512,21 +512,23 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
+        type(image),      allocatable :: tmp_imgs(:)
         complex(dp),      allocatable :: cls_avg(:,:), cls_avg_even(:,:), cls_avg_odd(:,:), num_even(:,:), num_odd(:,:), diff(:,:)
         complex(sp),      allocatable :: ptcl(:,:), ptcl_rot(:,:)
         real(dp),         allocatable :: denom_even(:,:), denom_odd(:,:), R2s(:), RmI2s(:), weights(:)
         real(sp), target, allocatable :: sig2(:,:)
         real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:)
-        real(sp),         allocatable :: kweights(:,:), frc(:), sig2_even(:), sig2_odd(:), tmp(:)
+        real(sp),         allocatable :: kweights(:,:), frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
+        character(len=:), allocatable :: cavgsstk
         real(dp) :: rmi2
         real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu
-        integer  :: nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end, ibatch, batchsz, ibin
+        integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end, ibatch, batchsz, ibin
         integer  :: ncls, i, j, fnr, istart,iend, irot, nptcls_sel, pop, nbatches, batchsz_max, ithr
         logical  :: l_ctf, l_groundtruth
         call cline%set('oritype', 'ptcl2D')
         call cline%set('mkdir',   'yes')
-        call cline%set('objfun',  'cc')
+        if( .not.cline%defined('objfun') ) call cline%set('objfun',  'cc')
         call build%init_params_and_build_general_tbox(cline, params)
         ncls       = build%spproj_field%get_n('class')
         states     = nint( build%spproj_field%get_all('state'))
@@ -547,13 +549,18 @@ contains
             call build%spproj_field%set_all('state', real(states))
             deallocate(states)
         endif
+        nstks = build%spproj%get_nstks()
         params%l_kweight_rot   = .false.
         params%l_kweight_shift = .false.
-        allocate(grad_shsrch_objs(params%nthr))
+        allocate(grad_shsrch_objs(params%nthr),tmp_imgs(params%nthr))
         lims(:,1)       = -MINSHIFT
         lims(:,2)       =  MINSHIFT
         lims_init(:,1)  = -MINSHIFT/2.
         lims_init(:,2)  =  MINSHIFT/2.
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
+        enddo
+        call build%spproj%get_cavgs_stk(cavgsstk, params%ncls, params%smpd, imgkind='cavg', fail=.false.)
         ! Class loop
         do icls = 1,ncls
             call build%spproj_field%get_pinds(icls, 'class', pinds)
@@ -567,7 +574,7 @@ contains
             if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
             do ithr = 1, params%nthr
                 call grad_shsrch_objs(ithr)%new(lims, lims_init=lims_init,&
-                &shbarrier=params%shbarrier, maxits=60, opt_angle=.false.)
+                &shbarrier=params%shbarrier, maxits=60, opt_angle=.true.)
             enddo
             if( .not.allocated(ptcl) )then
                 ! One-time allocations
@@ -583,17 +590,13 @@ contains
                 &denom_odd(pftcc%pftsz,params%kfromto(1):params%kfromto(2)),&
                 &diff(pftcc%pftsz,params%kfromto(1):params%kfromto(2)),&
                 &inpl_corrs(pftcc%nrots),frc(params%kfromto(1):params%kfromto(2)),&
-                !&kweights(pftcc%pftsz,params%kfromto(1):params%kfromto(2)),&
-                &sig2_even(params%kfromto(1):params%kfromto(2)),&
-                &sig2_odd(params%kfromto(1):params%kfromto(2)),purity(0:NITERS))
+                &purity(0:NITERS))
                 call build%img_match%init_polarizer(pftcc, params_glob%alpha)
                 if( (params%cc_objfun==OBJFUN_EUCLID) )then
-                    allocate(sig2(params%kfromto(1):params%kfromto(2),nptcls),source=1.0)
-                    call pftcc%assign_sigma2_noise(sig2)
+                    allocate(sig2(params%kfromto(1):params%kfromto(2),nptcls),&
+                    &sig2_even(params%kfromto(1):params%kfromto(2),nstks),&
+                    &sig2_odd(params%kfromto(1):params%kfromto(2),nstks))
                 endif
-                ! do k = params%kfromto(1),params%kfromto(2)
-                !     kweights(:,k) = sqrt(real(k)) 
-                ! enddo
             endif
             if( allocated(corrs) ) deallocate(corrs,order,weights,R2s,RmI2s,rots,shifts)
             allocate(corrs(pop),order(pop),weights(pop),R2s(nbins),RmI2s(nbins),rots(pop),shifts(2,pop))
@@ -613,12 +616,14 @@ contains
                 batchsz     = batch_end - batch_start + 1
                 !print *,icls,batchsz_max,batch_start,batch_end,batchsz,nbatches,pop
                 call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
-                !$omp parallel do private(j,i,iptcl) default(shared) proc_bind(close)
+                !$omp parallel do private(j,i,iptcl,ithr) default(shared) proc_bind(close)
                 do j = batch_start,batch_end
+                    ithr  = omp_get_thread_num()+1
                     i     = j - batch_start +  1
                     iptcl = pinds(j)
-                    call prepimg4align(iptcl, build%imgbatch(i))
-                    call build%img_match%polarize(pftcc, build%imgbatch(i), iptcl, .true., .true., mask=build%l_resmsk)
+                    call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
+                    call prepimg4align(iptcl, tmp_imgs(ithr))
+                    call build%img_match%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true.)
                     call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
                 enddo
                 !$omp end parallel do
@@ -627,7 +632,7 @@ contains
             !$omp parallel do private(i,iptcl) default(shared) proc_bind(close)
             do i = 1,pop
                 iptcl       = pinds(i)
-                rots(i)     = pftcc%get_roind(build%spproj_field%e3get(iptcl))
+                rots(i)     = pftcc%get_roind(360.-build%spproj_field%e3get(iptcl))
                 shifts(:,i) = 0.
                 corrs(i)    = build%spproj_field%get(iptcl,'corr')
                 weights(i)  = 1.d0
@@ -644,20 +649,24 @@ contains
             endif
             ! References & noise power in pftcc
             call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
-            ! call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
-            pftcc%pfts_refs_even(:,:,1) = cmplx(cls_avg_even)
-            pftcc%pfts_refs_odd(:,:,1)  = cmplx(cls_avg_odd)
+            call write_cls(cls_avg,      'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
+            call write_cls(cls_avg_even, 'cls_even_'//int2str_pad(icls,3)//'_iter.mrc', 1)
+            call write_cls(cls_avg_odd,  'cls_odd_'//int2str_pad(icls,3)//'_iter.mrc', 1)
+            pftcc%pfts_refs_even(:,:,1) = cmplx(cls_avg_even,kind=sp)
+            pftcc%pfts_refs_odd(:,:,1)  = cmplx(cls_avg_odd, kind=sp)
             call pftcc%memoize_refs
             call pftcc%memoize_ptcls
             call update_sigmas(1)
             ! to calculate first scores
-            ! !$omp parallel do private(i,iptcl) default(shared) proc_bind(close)
-            ! do i = 1,pop
-            !     iptcl = pinds(i)
-            !     corrs(i) = real(pftcc%gencorr_for_rot_8(1,iptcl,[0.d0,0.d0],rots(i)))
-            !     order(i) = i
-            ! enddo
-            ! !$omp end parallel do
+            tmp = corrs
+            !$omp parallel do private(i,iptcl,inpl_corrs) default(shared) proc_bind(close)
+            do i = 1,pop
+                iptcl = pinds(i)
+                ! call pftcc%gencorrs(1, iptcl, inpl_corrs)
+                ! corrs(i) = maxval(inpl_corrs)
+                tmp(i) = real(pftcc%gencorr_for_rot_8(1, iptcl, [0.d0,0.d0], rots(i)))
+            enddo
+            !$omp end parallel do
             do iter = 1,NITERS
                 ! ranking
                 call hpsort(corrs,order)
@@ -669,18 +678,20 @@ contains
                     if( iend == pop ) istart = iend - NPTCLS_PER_BIN + 1
                     weights(order(istart:iend)) = 1.d0
                     call restore_cavgs(pop, weights)
-                    ! call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'.mrc', ibin)
+                    call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'.mrc', ibin)
                     R2s(ibin) = sum(csq_fast(cls_avg))
                     rmi2 = 0.d0
-                    !$omp parallel do private(i,j,ithr,diff,ptcl,ptcl_rot,ctf_rot)&
+                    !$omp parallel do private(i,j,ithr,irot,diff,ptcl,ptcl_rot,ctf_rot)&
                     !$omp reduction(+:rmi2) default(shared) proc_bind(close)
                     do i = istart,iend
                         ithr = omp_get_thread_num()+1
                         j    = order(i)
                         call pftcc%gen_shmat(ithr, -real(shifts(:,j)), pftcc%heap_vars(ithr)%shmat)
                         ptcl = pftcc%pfts_ptcls(:,:,j) * pftcc%heap_vars(ithr)%shmat
-                        call pftcc%rotate_ptcl(ptcl,    rots(j), ptcl_rot)
-                        call pftcc%rotate_ctf(pinds(j), rots(j), ctf_rot)
+                        irot = pftcc%nrots+2-rots(j)
+                        if(irot > pftcc%nrots ) irot = irot - pftcc%nrots
+                        call pftcc%rotate_ptcl(ptcl,    irot, ptcl_rot)
+                        call pftcc%rotate_ctf(pinds(j), irot, ctf_rot)
                         diff = ctf_rot * cls_avg - ptcl_rot
                         RmI2 = RmI2 + sum(csq_fast(diff))
                     enddo
@@ -695,7 +706,8 @@ contains
                 ! threshold = median(tmp(nbins-4:nbins)) / 2.
                 ! threshold = median(tmp(nbins-4:nbins)) / 3.
                 ! threshold = median(tmp(nbins-4:nbins)) / 4.
-                threshold = sum(tmp(nbins-4:nbins)) / 5. / 3.
+                ! threshold = sum(tmp(nbins-4:nbins)) / 5. / 3.
+                threshold = median(tmp(floor(real(nbins)*0.9):nbins)) / 3.
                 if( (iter==1) .and. (count(R2s<threshold)==0) )then
                     ! making sure the weaker bin is deactivated on first iteration
                     R2s(minloc(R2s,dim=1)) = threshold - 1.
@@ -704,6 +716,7 @@ contains
                     istart = (ibin-1)*NPTCLS_PER_BIN+1
                     iend   = min(pop, istart+NPTCLS_PER_BIN-1)
                     if( iend == pop ) istart = iend - NPTCLS_PER_BIN + 1
+                    pu = 0.
                     do i = istart,iend
                         j     = order(i)
                         iptcl = pinds(j)
@@ -714,7 +727,9 @@ contains
                             weights(j) = 1.d0
                             call build%spproj_field%set_state(iptcl,1)
                         endif
+                        pu = pu + real(labels(iptcl))
                     enddo
+                    ! print *,icls,iter,ibin,pu,R2s(ibin), threshold
                 enddo
                 if( l_groundtruth )then
                     purity(iter) = 0.
@@ -725,48 +740,45 @@ contains
                 endif
                 ! New class
                 call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
-                ! call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', iter+1)
+                call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', iter+1)
                 print *,icls,iter,threshold,purity(iter),count(weights>0.5d0),pop
                 if ( iter == NITERS ) exit
                 pftcc%pfts_refs_even(:,:,iter) = cmplx(cls_avg_even)
                 pftcc%pfts_refs_odd(:,:,iter)  = cmplx(cls_avg_odd)
                 call pftcc%memoize_refs
-                ! try kweights, needs rotation!!
-                ! r2 = sum(csq_fast(cls_avg))
-                ! do i = 1,pop
-                !     diff = (num_even + num_odd - pftcc%pfts_ptcls(:,:,i)*pftcc%ctfmats(:,:,i))
-                !     diff = diff / (1.d-6+denom_even+denom_odd-pftcc%ctfmats(:,:,i)**2)
-                !     corrs(i) = r2 - sum(csq_fast(diff))
-                !     order(i)  = i
-                ! enddo
                 !$omp parallel do private(i,ithr,irot,iptcl,inpl_corrs,cxy) default(shared) proc_bind(close)
                 do i = 1,pop
-                    ithr  = omp_get_thread_num()+1
-                    iptcl = pinds(i)
-                    ! call pftcc%gencorrs(iter, iptcl, inpl_corrs)
-                    ! irot = maxloc(inpl_corrs, dim=1)
-                    ! call grad_shsrch_objs(ithr)%set_indices(iter, iptcl)
-                    ! cxy = grad_shsrch_objs(ithr)%minimize(irot=irot)
-                    ! if( irot > 0 )then
-                    !     corrs(i)    = cxy(1)
-                    !     shifts(:,i) = cxy(2:3)
-                    ! else
-                    !     irot        = maxloc(inpl_corrs, dim=1)
-                    !     corrs(i)    = inpl_corrs(irot)
-                    !     shifts(:,i) = 0.
-                    ! endif
-                    ! rots(i)  = pftcc%get_roind(360.-pftcc%get_rot(irot))
-                    ! order(i) = i
-                    call pftcc%gencorrs(iter, iptcl, inpl_corrs)
-                    irot     = maxloc(inpl_corrs,dim=1)
-                    corrs(i) = inpl_corrs(irot)
-                    rots(i)  = pftcc%get_roind(360.-pftcc%get_rot(irot))
+                    ithr     = omp_get_thread_num()+1
+                    iptcl    = pinds(i)
                     order(i) = i
+                    ! rotation + shift
+                    call pftcc%gencorrs(iter, iptcl, inpl_corrs)
+                    irot = maxloc(inpl_corrs, dim=1)
+                    call grad_shsrch_objs(ithr)%set_indices(iter, iptcl)
+                    cxy = grad_shsrch_objs(ithr)%minimize(irot=irot)
+                    if( irot > 0 )then
+                        corrs(i)    = cxy(1)
+                        shifts(:,i) = cxy(2:3)
+                    else
+                        irot        = maxloc(inpl_corrs, dim=1)
+                        corrs(i)    = inpl_corrs(irot)
+                        shifts(:,i) = 0.
+                    endif
+                    rots(i)  = irot
+                    ! rotation
+                    ! call pftcc%gencorrs(iter, iptcl, inpl_corrs)
+                    ! irot     = maxloc(inpl_corrs,dim=1)
+                    ! corrs(i) = inpl_corrs(irot)
+                    ! rots(i)  = irot
+                    ! nothing
+                    ! irot = pftcc%get_roind(360.-build%spproj_field%e3get(iptcl))
+                    ! corrs(i) = real(pftcc%gencorr_for_rot_8(iter,iptcl, [0.d0,0.d0], irot))
+
                 enddo
                 !$omp end parallel do
                 call update_sigmas(iter)
             enddo
-            ! transfer of in-class alignment parameters is not a good idea
+            ! transfer of in-class alignment parameters is not a good idea with correlations
             ! do i = 1,pop
             !     shifts(:,i) = shifts(:,i) + build%spproj_field%get_2Dshift(pinds(i))
             !     call build%spproj_field%set_shift(pinds(i),shifts(:,i))
@@ -794,27 +806,36 @@ contains
             subroutine update_sigmas( iref )
                 integer, intent(in) :: iref
                 real    :: sig2_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-                integer :: i, iptcl
+                integer :: i, iptcl, k, istk, neven(nstks), nodd(nstks)
                 if( params%cc_objfun /= OBJFUN_EUCLID ) return
+                call pftcc%assign_sigma2_noise(sig2)
                 sig2_even = 0.d0
                 sig2_odd  = 0.d0
+                neven = 0
+                nodd  = 0
                 do i =1,pop
                     iptcl = pinds(i)
                     call pftcc%gencorr_sigma_contrib(iref, iptcl, shifts(:,i), rots(i), sig2_contrib)
+                    istk = nint(build%spproj_field%get(iptcl,'stkind'))
                     if( pftcc%iseven(i) )then
-                        sig2_even = sig2_even + sig2_contrib
+                        neven(istk) = neven(istk) + 1
+                        sig2_even(:,istk) = sig2_even(:,istk) + sig2_contrib
                     else
-                        sig2_odd  = sig2_odd  + sig2_contrib
+                        nodd(istk) = nodd(istk) + 1
+                        sig2_odd(:,istk)  = sig2_odd(:,istk)  + sig2_contrib
                     endif
                 enddo
-                sig2_even = sig2_even / real(count(pftcc%iseven))
-                sig2_odd  = sig2_odd  / real(count(.not.pftcc%iseven))
+                do istk = 1,nstks
+                    sig2_even(:,istk) = sig2_even(:,istk) / real(neven(istk))
+                    sig2_odd(:,istk)  = sig2_odd(:,istk)  / real(nodd(istk))
+                enddo
                 do i = 1,pop
                     iptcl = pinds(i)
+                    istk  = nint(build%spproj_field%get(iptcl,'stkind'))
                     if( pftcc%iseven(i) )then
-                        pftcc%sigma2_noise(:,iptcl) = sig2_even
+                        pftcc%sigma2_noise(:,iptcl) = sig2_even(:,istk)
                     else
-                        pftcc%sigma2_noise(:,iptcl) = sig2_odd
+                        pftcc%sigma2_noise(:,iptcl) = sig2_odd(:,istk)
                     endif
                     call pftcc%memoize_sqsum_ptcl(iptcl)
                 enddo
@@ -830,15 +851,17 @@ contains
                 denom_even = 0.d0
                 num_odd    = 0.d0
                 denom_odd  = 0.d0
-                !$omp parallel do private(i,w,ithr,ptcl,ptcl_rot,ctf_rot) default(shared) proc_bind(close)&
+                !$omp parallel do private(i,w,ithr,ptcl,ptcl_rot,ctf_rot,irot) default(shared) proc_bind(close)&
                 !$omp reduction(+:num_even,num_odd,denom_even,denom_odd)
                 do i = 1,n
                     ithr = omp_get_thread_num()+1
                     w    = weights(i)
                     call pftcc%gen_shmat(ithr, -real(shifts(:,i)), pftcc%heap_vars(ithr)%shmat)
                     ptcl = pftcc%pfts_ptcls(:,:,i) * pftcc%heap_vars(ithr)%shmat
-                    call pftcc%rotate_ptcl(ptcl, rots(i), ptcl_rot)
-                    call pftcc%rotate_ctf(pinds(i), rots(i), ctf_rot)
+                    irot = pftcc%nrots+2-rots(i)
+                    if(irot > pftcc%nrots ) irot = irot - pftcc%nrots
+                    call pftcc%rotate_ptcl(ptcl, irot, ptcl_rot)
+                    call pftcc%rotate_ctf(pinds(i), irot, ctf_rot)
                     if(pftcc%iseven(i))then
                         num_even   = num_even   + w * ptcl_rot * ctf_rot
                         denom_even = denom_even + w * ctf_rot**2
@@ -855,9 +878,9 @@ contains
                 num_odd(:,params%kfromto(1):k)    = num_even(:,params%kfromto(1):k)
                 denom_odd(:,params%kfromto(1):k)  = denom_even(:,params%kfromto(1):k)
                 ! restoration & frc
-                cls_avg_even = num_even / (denom_even+1.d-8)
-                cls_avg_odd  = num_odd / (denom_odd+1.d-8)
-                cls_avg      = (num_even+num_odd) / (denom_even+denom_odd+1.d-8)
+                cls_avg_even = num_even / (denom_even)
+                cls_avg_odd  = num_odd / (denom_odd)
+                cls_avg      = (num_even+num_odd) / (denom_even+denom_odd)
                 do k = params%kfromto(1),params%kfromto(2)
                     frc(k) = sum(real(cls_avg_even(:,k)*conjg(cls_avg_odd(:,k))))
                     frc(k) = frc(k) / sqrt(sum(csq_fast(cls_avg_even(:,k))) * sum(csq_fast(cls_avg_odd(:,k))))
@@ -868,6 +891,7 @@ contains
                         do k = params%kfromto(1),params%kfromto(2)
                             cc = max(frc(k),0.)
                             g  = max(0.d0, min(2.*cc/(1.d0+cc), 1.d0))
+                            if( cc < 0.143 ) g=0.d0
                             cls_avg(:,k)      = cls_avg(:,k)      * g
                             cls_avg_even(:,k) = cls_avg_even(:,k) * g
                             cls_avg_odd(:,k)  = cls_avg_odd(:,k)  * g
@@ -882,7 +906,7 @@ contains
                 integer,          intent(in) :: idx
                 complex, allocatable :: cmat(:,:)
                 integer :: box
-                call pftcc%polar2cartesian(cmplx(cls_avg_odd, kind=sp), cmat, box)
+                call pftcc%polar2cartesian(cmplx(I, kind=sp), cmat, box)
                 call build%img%new([box,box,1], params%smpd*real(params%box)/real(box))
                 call build%img%zero_and_flag_ft
                 call build%img%set_cmat(cmat)
