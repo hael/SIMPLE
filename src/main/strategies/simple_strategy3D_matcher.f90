@@ -20,11 +20,9 @@ use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
 use simple_strategy3D_greedy_prob,  only: strategy3D_greedy_prob
-use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
 use simple_strategy3D_neigh,        only: strategy3D_neigh
-use simple_strategy3D_hybneigh,     only: strategy3D_hybneigh
 use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
@@ -270,8 +268,6 @@ contains
                         else
                             allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
-                    case('hybneigh')
-                        allocate(strategy3D_hybneigh             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc_neigh')
                         allocate(strategy3D_shc_sub              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
@@ -289,12 +285,6 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('greedy_neigh')
-                        if( ran3() < GLOB_FREQ )then
-                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
-                        endif
                     case('greedy_prob')
                         allocate(strategy3D_greedy_prob          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
