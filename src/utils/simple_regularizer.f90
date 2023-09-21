@@ -40,6 +40,7 @@ type :: regularizer
     procedure          :: fill_tab
     procedure          :: sort_tab
     procedure          :: sort_tab_ptcl
+    procedure          :: sort_tab_no_norm
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -176,6 +177,26 @@ contains
         !$omp end parallel do
     end subroutine sort_tab
 
+    ! sorting each ref column without normalization
+    subroutine sort_tab_no_norm( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iref, iptcl
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref)%w    = self%ref_ptcl_corr(iptcl,iref)
+                self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr(iptcl,iref)
+            enddo
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_ori = self%ref_ptcl_tab
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
+        do iref = 1, self%nrefs
+            call reg_hpsort(self%ref_ptcl_tab(:,iref))
+        enddo
+        !$omp end parallel do
+    end subroutine sort_tab_no_norm
+
     subroutine sort_tab_ptcl( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
@@ -280,7 +301,6 @@ contains
         enddo
         !$omp end parallel do
     end subroutine ref_reg_cc_tab
-
 
     subroutine regularize_refs( self, ref_freq_in )
         use simple_image
