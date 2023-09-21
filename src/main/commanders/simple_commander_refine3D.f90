@@ -1047,7 +1047,11 @@ contains
         call pftcc%memoize_ptcls
         call reg_obj%init_tab
         call reg_obj%fill_tab(pinds)
-        call reg_obj%sort_tab
+        if( params_glob%l_reg_ref )then
+            call reg_obj%sort_tab
+        else
+            call reg_obj%sort_tab_no_norm
+        endif
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
         print *, 'Assembling the class averages ...'
