@@ -913,7 +913,6 @@ contains
         integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr
         logical  :: l_ctf, do_center
         real     :: xyz(3), euls(3), shvec(2), sdev
-        call cline%set('dir_exec', 'check_align')
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
         call cline%set('center',   'no')
@@ -929,6 +928,11 @@ contains
         call pftcc%reallocate_ptcls(nptcls, pinds)
         call reg_obj%new(pftcc)
         print *, 'Preparing the references ...'
+        ! e/o partioning
+        if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
+            call build%spproj%os_ptcl3D%partition_eo
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         do s=1,params_glob%nstates
