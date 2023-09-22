@@ -1391,7 +1391,7 @@ contains
         &'Alignment check of class averages vs reprojection',&              ! descr_short
         &'is a program to check the alignment to form class averages vs the reprojection',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 1, 0, 0, 1, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call check_align%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')

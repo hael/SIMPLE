@@ -119,12 +119,12 @@ contains
                 call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                 cxy = self%grad_shsrch_obj(ithr)%minimize(irot=self%ref_ptcl_tab(iptcl,iref)%loc)
                 if( self%ref_ptcl_tab(iptcl,iref)%loc > 0 )then
-                    self%ref_ptcl_corr(iptcl,iref)   = cxy(1)
+                    self%ref_ptcl_corr(iptcl,iref)   = max(0.,cxy(1))
                     self%ref_ptcl_tab(iptcl,iref)%sh = cxy(2:3)
                 else
                     self%ref_ptcl_tab(iptcl,iref)%sh  = 0.
                     self%ref_ptcl_tab(iptcl,iref)%loc = maxloc(inpl_corrs, dim=1)
-                    self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iptcl,iref)%loc)
+                    self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iptcl,iref)%loc))
                 endif
             enddo
         enddo
@@ -264,8 +264,9 @@ contains
     end subroutine reg_hpsort
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine ref_reg_cc_tab( self )
+    subroutine ref_reg_cc_tab( self, np )
         class(regularizer), intent(inout) :: self
+        integer,  optional, intent(in)    :: np
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -273,8 +274,12 @@ contains
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
-        ninds    = size(self%ref_ptcl_corr, 1)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2)&
+        if( present(np) )then
+            ninds = np
+        else
+            ninds = size(self%ref_ptcl_corr, 1)
+        endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do iref = 1, self%nrefs
             ! taking top sorted corrs/probs
