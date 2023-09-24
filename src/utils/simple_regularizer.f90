@@ -209,7 +209,7 @@ contains
         np       = params_glob%top-params_glob%fromp+1
         best_ir  = (/(iref,  iref =1,self%nrefs)/)
         best_ip  = (/(iptcl, iptcl=1,np)/)
-        call self%reg_cluster_sort(np, self%nrefs, np, self%nrefs, best_ip, best_ir)
+        call self%reg_cluster_sort(np, self%nrefs, params_glob%reg_num, np, self%nrefs, best_ip, best_ir)
         ! rearranging the tab
         best_ip  = best_ip + params_glob%fromp - 1
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
@@ -221,47 +221,42 @@ contains
     end subroutine cluster_sort_tab
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine form_cavgs( self, np )
+    subroutine form_cavgs( self )
         class(regularizer), intent(inout) :: self
-        integer,  optional, intent(in)    :: np
         complex(sp),        pointer       :: shmat(:,:)
-        integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here, ind, to_ind, from_ind, num
+        integer     :: i, iptcl, iref, ir, ithr, loc, pind_here, ind, to_ind, from_ind, num
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real        :: weight
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
-        if( present(np) )then
-            ninds = np
-        else
-            ninds = size(self%ref_ptcl_corr, 1)
-        endif
-        num = int(ninds / self%nrefs)
+        num      = params_glob%reg_num
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight,ind,to_ind,from_ind)
-        do iref = 1, self%nrefs
-            ind      = self%nrefs-iref
+        !$omp private(ir,iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight,ind,to_ind,from_ind)
+        do ir = 1, self%nrefs
+            ind      = self%nrefs-ir
             to_ind   = params_glob%top-ind*num
             from_ind = to_ind-num+1
             ! taking top sorted corrs/probs
             do i = from_ind, to_ind
-                if( self%ref_ptcl_tab(i, iref)%prob < TINY ) cycle
+                if( self%ref_ptcl_tab(i, ir)%prob < TINY ) cycle
                 ithr  = omp_get_thread_num() + 1
-                iptcl = self%ref_ptcl_tab(i, iref)%iptcl
+                iptcl = self%ref_ptcl_tab(i, ir)%iptcl
+                iref  = self%ref_ptcl_tab(i, ir)%iref
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                     pind_here = self%pftcc%pinds(iptcl)
                     ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                    loc = self%ref_ptcl_tab(i, iref)%loc
+                    loc = self%ref_ptcl_tab(i, ir)%loc
                     loc = (self%nrots+1)-(loc-1)
                     if( loc > self%nrots ) loc = loc - self%nrots
                     shmat => self%pftcc%heap_vars(ithr)%shmat
-                    call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
+                    call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, ir)%sh), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = self%ref_ptcl_tab(i, iref)%prob
+                    weight = self%ref_ptcl_tab(i, ir)%prob
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
-                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
+                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, ir)%prob
                 endif
             enddo
         enddo
@@ -338,16 +333,16 @@ contains
     !
     ! based on this uniformly sorted table, one can cluster:
     !            (c2, c5) -> r3, (c6, c3) -> r1, (c1, c4) -> r2
-    subroutine reg_cluster_sort( self, nrows, ncols, to_ii, to_ir, cur_id, cur_ir )
+    subroutine reg_cluster_sort( self, nrows, ncols, num, to_ii, to_ir, cur_id, cur_ir )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: nrows, ncols
+        integer,            intent(in)    :: num
         integer,            intent(in)    :: to_ii
         integer,            intent(in)    :: to_ir
         integer,            intent(inout) :: cur_id(nrows)
         integer,            intent(inout) :: cur_ir(ncols)
-        integer :: ir, ip, tmp_id(to_ii), tmp_i, orig_id(to_ii), ir_best, num
-        real    :: best_sum, sum_prob
-        num = int(nrows/ncols)
+        integer :: ir, ip, tmp_id(to_ii), tmp_i, orig_id(to_ii), ir_best
+        real    :: best_sum, sum_prob, sum_corr
         if( to_ii <= num ) return
         best_sum = 0.
         orig_id  = cur_id(1:to_ii)
@@ -366,7 +361,20 @@ contains
         tmp_i           = cur_ir(to_ir)
         cur_ir(to_ir)   = cur_ir(ir_best)
         cur_ir(ir_best) = tmp_i
-        call self%reg_cluster_sort( nrows, ncols, to_ii - num, to_ir - 1, cur_id, cur_ir )
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ip, ir, sum_corr)
+        do ip = 1, to_ii-num
+            sum_corr = 0.
+            do ir = 1, to_ir-1
+                sum_corr = sum_corr + self%ref_ptcl_tab(cur_id(ip),cur_ir(ir))%prob
+            enddo
+            if( sum_corr > TINY )then
+                do ir = 1, to_ir-1
+                    self%ref_ptcl_tab(cur_id(ip),cur_ir(ir))%prob = self%ref_ptcl_tab(cur_id(ip),cur_ir(ir))%prob / sum_corr
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+        call self%reg_cluster_sort( nrows, ncols, num, to_ii - num, to_ir - 1, cur_id, cur_ir )
     end subroutine reg_cluster_sort
 
     ! sorting rarr, but only keep the sorted indeces
