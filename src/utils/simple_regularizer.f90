@@ -41,6 +41,9 @@ type :: regularizer
     procedure          :: sort_tab
     procedure          :: sort_tab_ptcl
     procedure          :: sort_tab_no_norm
+    procedure          :: reg_cluster_sort
+    procedure          :: cluster_sort_tab
+    procedure          :: form_cavgs
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -177,6 +180,94 @@ contains
         !$omp end parallel do
     end subroutine sort_tab
 
+    subroutine cluster_sort_tab( self )
+        class(regularizer), intent(inout) :: self
+        integer,            allocatable   :: best_ip(:), best_ir(:)
+        integer :: iref, iptcl, np
+        real    :: sum_corr
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
+            if( sum_corr < TINY )then
+                self%ref_ptcl_corr(iptcl,:) = 0.
+            else
+                self%ref_ptcl_corr(iptcl,:) = self%ref_ptcl_corr(iptcl,:) / sum_corr
+            endif
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr(iptcl,iref)
+            enddo
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_ori = self%ref_ptcl_tab
+        ! sorted clustering
+        np       = params_glob%top-params_glob%fromp+1
+        best_ir  = (/(iref,  iref =1,self%nrefs)/)
+        best_ip  = (/(iptcl, iptcl=1,np)/)
+        call self%reg_cluster_sort(np, self%nrefs, np, self%nrefs, best_ip, best_ir)
+        ! rearranging the tab
+        best_ip  = best_ip + params_glob%fromp - 1
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref) = self%ref_ptcl_ori(best_ip(iptcl),best_ir(iref))
+            enddo
+        enddo
+    end subroutine cluster_sort_tab
+
+    ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
+    subroutine form_cavgs( self, np )
+        class(regularizer), intent(inout) :: self
+        integer,  optional, intent(in)    :: np
+        complex(sp),        pointer       :: shmat(:,:)
+        integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here, ind, to_ind, from_ind, num
+        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        real        :: weight
+        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
+        if( present(np) )then
+            ninds = np
+        else
+            ninds = size(self%ref_ptcl_corr, 1)
+        endif
+        num = int(ninds / self%nrefs)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight,ind,to_ind,from_ind)
+        do iref = 1, self%nrefs
+            ind      = self%nrefs-iref
+            to_ind   = params_glob%top-ind*num
+            from_ind = to_ind-num+1
+            ! taking top sorted corrs/probs
+            do i = from_ind, to_ind
+                if( self%ref_ptcl_tab(i, iref)%prob < TINY ) cycle
+                ithr  = omp_get_thread_num() + 1
+                iptcl = self%ref_ptcl_tab(i, iref)%iptcl
+                if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                    pind_here = self%pftcc%pinds(iptcl)
+                    ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                    loc = self%ref_ptcl_tab(i, iref)%loc
+                    loc = (self%nrots+1)-(loc-1)
+                    if( loc > self%nrots ) loc = loc - self%nrots
+                    shmat => self%pftcc%heap_vars(ithr)%shmat
+                    call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
+                    call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                    call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
+                    weight = self%ref_ptcl_tab(i, iref)%prob
+                    self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
+                    self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
+                    self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine form_cavgs
+
     ! sorting each ref column without normalization
     subroutine sort_tab_no_norm( self )
         class(regularizer), intent(inout) :: self
@@ -222,6 +313,106 @@ contains
         enddo
         !$omp end parallel do
     end subroutine sort_tab_ptcl
+
+    ! recursively sort the columns of a 2D table, w.r.t the sum of the best nrows/ncols
+    ! entries of each column
+    ! for example:
+    !    original table:
+    !                   r1          r2          r3
+    !           ------------------------------------
+    !             c1  |  2           0           6
+    !             c2  |  4           0           7
+    !             c3  |  3           1           0
+    !             c4  |  3           0           2
+    !             c5  |  0           4           7
+    !             c6  |  6           4           2
+    !   sorted table (smallest to largest):
+    !                   r2          r1          r3
+    !           ------------------------------------
+    !             c1  |  0           2           6
+    !             c4  |  0           3           2
+    !             c3  |  1           3           0
+    !             c6  |  4           6           2
+    !             c5  |  4           0           7
+    !             c2  |  0           4           7
+    !
+    ! based on this uniformly sorted table, one can cluster:
+    !            (c2, c5) -> r3, (c6, c3) -> r1, (c1, c4) -> r2
+    subroutine reg_cluster_sort( self, nrows, ncols, to_ii, to_ir, cur_id, cur_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: nrows, ncols
+        integer,            intent(in)    :: to_ii
+        integer,            intent(in)    :: to_ir
+        integer,            intent(inout) :: cur_id(nrows)
+        integer,            intent(inout) :: cur_ir(ncols)
+        integer :: ir, ip, tmp_id(to_ii), tmp_i, orig_id(to_ii), ir_best, num
+        real    :: best_sum, sum_prob
+        num = int(nrows/ncols)
+        if( to_ii <= num ) return
+        best_sum = 0.
+        orig_id  = cur_id(1:to_ii)
+        ir_best  = to_ir
+        do ir = 1,to_ir
+            tmp_id = (/(ip, ip=1,to_ii)/)
+            call reg_hpsort_ind(tmp_id, self%ref_ptcl_tab(orig_id,cur_ir(ir)))
+            sum_prob = sum(self%ref_ptcl_tab(orig_id(tmp_id(to_ii-num+1:to_ii)),cur_ir(ir))%prob)
+            if( sum_prob > best_sum )then
+                best_sum        = sum_prob
+                cur_id(1:to_ii) = orig_id(tmp_id)
+                ir_best         = ir
+            endif
+        enddo
+        ! swapping the last with the current best ir
+        tmp_i           = cur_ir(to_ir)
+        cur_ir(to_ir)   = cur_ir(ir_best)
+        cur_ir(ir_best) = tmp_i
+        call self%reg_cluster_sort( nrows, ncols, to_ii - num, to_ir - 1, cur_id, cur_ir )
+    end subroutine reg_cluster_sort
+
+    ! sorting rarr, but only keep the sorted indeces
+    subroutine reg_hpsort_ind( iarr, rarr )
+        integer,          intent(inout) :: iarr(:)
+        type(reg_params), intent(in)    :: rarr(:)
+        type(reg_params) :: ra
+        integer          :: i, ir, j, l, ia, n
+        n = size(rarr)
+        if( n /= size(iarr) )&
+        &call simple_exception('nonconforming array sizes; hpsort_6', __FILENAME__ , __LINE__)
+        if( n < 2 ) return
+        l  = n/2+1
+        ir = n
+        do
+            if(l > 1)then
+                l  = l-1
+                ia = iarr(l)
+                ra = rarr(ia)
+            else
+                ia = iarr(ir)
+                ra = rarr(ia)
+                iarr(ir) = iarr(1)
+                ir = ir-1
+                if(ir == 1)then
+                    iarr(1) = ia
+                    return
+                endif
+            endif
+            i = l
+            j = l+l
+            do while(j <= ir)
+                if(j < ir) then
+                    if(rarr(iarr(j))%prob < rarr(iarr(j+1))%prob) j = j+1
+                endif
+                if(ra%prob < rarr(iarr(j))%prob)then
+                    iarr(i) = iarr(j)
+                    i = j
+                    j = j+j
+                else
+                    j = ir+1
+                endif
+                iarr(i) = ia
+            end do
+        end do
+    end subroutine reg_hpsort_ind
 
     ! reg_params heapsort from hpsort_4 (smallest last)
     subroutine reg_hpsort( rarr )

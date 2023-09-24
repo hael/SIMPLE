@@ -954,17 +954,6 @@ contains
             !$omp end parallel do
         end do
         call pftcc%memoize_refs
-        ! output the reprojections
-        do iref=1, params_glob%nspace
-            call pftcc%polar2cartesian(cmplx(pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
-            call img%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-            call img%zero_and_flag_ft
-            call img%set_cmat(cmat)
-            call img%shift_phorig()
-            call img%ifft
-            call img%write('reprojs.mrc', iref)
-            call img%kill
-        enddo
         ! PREPARATION OF PARTICLES
         print *, 'Preparing the particles ...'
         call prepimgbatch(params_glob%top-params_glob%fromp+1)
@@ -1051,26 +1040,24 @@ contains
         call pftcc%memoize_ptcls
         call reg_obj%init_tab
         call reg_obj%fill_tab(pinds)
-        if( params_glob%l_reg_ref )then
-            call reg_obj%sort_tab
-        else
-            call reg_obj%sort_tab_no_norm
-        endif
+        print *, 'Assembling the class averages with'
+        select case(trim(params_glob%reg_mode))
+            case('tab')
+                print *, 'soft-sorting the tab...'
+                call reg_obj%sort_tab_no_norm
+                call reg_obj%ref_reg_cc_tab
+            case('normtab')
+                print *, 'normalizing and soft-sorting...'
+                call reg_obj%sort_tab
+                call reg_obj%ref_reg_cc_tab
+            case('hard')
+                print *, 'hard-sorting the tab...'
+                call reg_obj%cluster_sort_tab
+                call reg_obj%form_cavgs
+        end select
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
-        print *, 'Assembling the class averages ...'
-        call reg_obj%ref_reg_cc_tab
-        do iref=1, params_glob%nspace
-            reg_obj%regs(:,:,iref) = reg_obj%regs(:,:,iref) / reg_obj%regs_denom(:,:,iref)
-            call pftcc%polar2cartesian(cmplx(reg_obj%regs(:,:,iref), kind=sp), cmat, box)
-            call img%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-            call img%zero_and_flag_ft
-            call img%set_cmat(cmat)
-            call img%shift_phorig()
-            call img%ifft
-            call img%write('cavgs.mrc', iref)
-            call img%kill
-        enddo
+        call reg_obj%regularize_refs
         print *, 'Reconstructing the 3D volume ...'
         ! init volumes
         call preprecvols
