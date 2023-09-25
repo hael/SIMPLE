@@ -1105,6 +1105,44 @@ contains
                 ! destruct
                 call killrecvols()
                 call orientation%kill
+            case('unihard')
+                print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
+                ! init volumes
+                call preprecvols
+                ! prep img, fpls, ctfparms
+                allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+                do iptcl = params_glob%fromp,params_glob%top
+                    if( .not.ptcl_mask(iptcl) ) cycle
+                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+                    call build%imgbatch(iptcl)%fft
+                    call fpls(iptcl)%new(build%imgbatch(iptcl))
+                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+                enddo
+                !$omp end parallel do
+                do j = params_glob%fromp,params_glob%top
+                    iref  = best_ir(j)
+                    iptcl = best_ip(j)
+                    if( reg_obj%ref_ptcl_tab(iptcl, iref)%prob < TINY ) cycle
+                    euls = build_glob%eulspace%get_euler(iref)
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    ! getting the particle orientation
+                    shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iptcl,iref)%sh
+                    call orientation%set_shift(shvec)
+                    loc     = reg_obj%ref_ptcl_tab(iptcl, iref)%loc
+                    euls(3) = 360. - pftcc%get_rot(loc)
+                    call orientation%set_euler(euls)
+                    call orientation%set('w', reg_obj%ref_ptcl_tab(iptcl, iref)%prob)
+                    ! insert
+                    call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
+                enddo
+                ! normalise structure factors
+                call norm_struct_facts( cline )
+                ! destruct
+                call killrecvols()
+                call orientation%kill
         end select
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align
