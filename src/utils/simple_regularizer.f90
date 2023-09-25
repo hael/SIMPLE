@@ -29,6 +29,7 @@ type :: regularizer
     real(dp),    allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real,        allocatable :: ref_corr(:)             !< total ref corr sum
     real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
+    real,        allocatable :: ptcl_ref_map(:)         !< hard-alignment tab
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(pftcc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:), ref_ptcl_ori(:,:)
@@ -40,6 +41,7 @@ type :: regularizer
     procedure          :: fill_tab
     procedure          :: sort_tab
     procedure          :: sort_tab_ptcl
+    procedure          :: map_ptcl_ref
     procedure          :: sort_tab_no_norm
     procedure          :: reg_cluster_sort
     procedure          :: cluster_sort_tab
@@ -95,6 +97,7 @@ contains
             allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs), source=0.)
             allocate(self%ref_ptcl_tab( params_glob%fromp:params_glob%top,self%nrefs))
             allocate(self%ref_ptcl_ori( params_glob%fromp:params_glob%top,self%nrefs))
+            allocate(self%ptcl_ref_map( params_glob%fromp:params_glob%top))
         endif
         do iref = 1,self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
@@ -225,7 +228,7 @@ contains
 
     subroutine uniform_cavgs( self, best_ip, best_ir )
         class(regularizer), intent(inout) :: self
-        integer,            intent(inout) :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
+        integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -258,6 +261,17 @@ contains
         enddo
         !$omp end parallel do
     end subroutine uniform_cavgs
+
+    subroutine map_ptcl_ref( self, best_ip, best_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
+        integer :: i
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
+        do i = params_glob%fromp, params_glob%top
+            self%ptcl_ref_map(best_ip(i)) = best_ir(i)
+        enddo
+        !$omp end parallel do
+    end subroutine map_ptcl_ref
 
     subroutine uniform_sort_tab( self, out_ip, out_ir )
         class(regularizer), intent(inout) :: self
@@ -791,6 +805,6 @@ contains
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
         deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
-        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori)
+        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori,self%ptcl_ref_map)
     end subroutine kill
 end module simple_regularizer
