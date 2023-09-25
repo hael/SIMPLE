@@ -896,7 +896,7 @@ contains
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
-        integer,          allocatable :: pinds(:)
+        integer,          allocatable :: pinds(:), best_ip(:), best_ir(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: sigma2_noise(:,:)
@@ -1054,6 +1054,11 @@ contains
                 print *, 'hard-sorting the tab...'
                 call reg_obj%cluster_sort_tab
                 call reg_obj%form_cavgs
+            case('unihard')
+                print *, 'uniformly-hard-sorting the tab...'
+                allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
+                call reg_obj%uniform_sort_tab(best_ip, best_ir)
+                call reg_obj%uniform_cavgs(best_ip, best_ir)
         end select
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale

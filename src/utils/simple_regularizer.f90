@@ -43,6 +43,9 @@ type :: regularizer
     procedure          :: sort_tab_no_norm
     procedure          :: reg_cluster_sort
     procedure          :: cluster_sort_tab
+    procedure          :: reg_uniform_sort
+    procedure          :: uniform_sort_tab
+    procedure          :: uniform_cavgs
     procedure          :: form_cavgs
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
@@ -208,7 +211,7 @@ contains
         ! sorted clustering
         np       = params_glob%top-params_glob%fromp+1
         best_ir  = (/(iref,  iref =1,self%nrefs)/)
-        best_ip  = (/(iptcl, iptcl=1,np)/)
+        best_ip  = (/(iptcl, iptcl=params_glob%fromp,params_glob%top)/)
         call self%reg_cluster_sort(np, self%nrefs, params_glob%reg_num, np, self%nrefs, best_ip, best_ir)
         ! rearranging the tab
         best_ip  = best_ip + params_glob%fromp - 1
@@ -219,6 +222,118 @@ contains
             enddo
         enddo
     end subroutine cluster_sort_tab
+
+    subroutine uniform_cavgs( self, best_ip, best_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(inout) :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
+        complex(sp),        pointer       :: shmat(:,:)
+        integer     :: i, iptcl, iref, ithr, loc, pind_here
+        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        real        :: weight
+        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
+        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+        !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
+        do i = params_glob%fromp, params_glob%top
+            iref  = best_ir(i)
+            iptcl = best_ip(i)
+            if( self%ref_ptcl_tab(iptcl, iref)%prob < TINY ) cycle
+            ithr  = omp_get_thread_num() + 1
+            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                pind_here = self%pftcc%pinds(iptcl)
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = self%ref_ptcl_tab(iptcl, iref)%loc
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                shmat => self%pftcc%heap_vars(ithr)%shmat
+                call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref)%sh), shmat)
+                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
+                weight = self%ref_ptcl_tab(iptcl, iref)%prob
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
+                self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(iptcl, iref)%prob
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine uniform_cavgs
+
+    subroutine uniform_sort_tab( self, out_ip, out_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(inout) :: out_ip(params_glob%fromp:params_glob%top), out_ir(params_glob%fromp:params_glob%top)
+        integer,            allocatable   :: best_ip(:), best_ir(:)
+        logical,            allocatable   :: mask_ir(:)
+        integer :: iref, iptcl, np
+        real    :: sum_corr
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
+            if( sum_corr < TINY )then
+                self%ref_ptcl_corr(iptcl,:) = 0.
+            else
+                self%ref_ptcl_corr(iptcl,:) = self%ref_ptcl_corr(iptcl,:) / sum_corr
+            endif
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp,params_glob%top
+                self%ref_ptcl_tab(iptcl,iref)%prob = self%ref_ptcl_corr(iptcl,iref)
+            enddo
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_ori = self%ref_ptcl_tab
+        ! sorted clustering
+        np       = params_glob%top-params_glob%fromp+1
+        best_ip  = (/(iptcl, iptcl=params_glob%fromp,params_glob%top)/)
+        allocate(best_ir(np), mask_ir(self%nrefs))
+        mask_ir  = .false.
+        best_ir  = 1
+        call self%reg_uniform_sort(np, self%nrefs, best_ip, best_ir, mask_ir)
+        ! rearranging the tab
+        out_ip   = best_ip
+        out_ir   = best_ir
+    end subroutine uniform_sort_tab
+
+    subroutine reg_uniform_sort( self, nrows, ncols, cur_id, cur_ir, mask_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: nrows, ncols
+        integer,            intent(inout) :: cur_id(nrows)
+        integer,            intent(inout) :: cur_ir(nrows)
+        logical,            intent(inout) :: mask_ir(ncols)
+        integer :: ir, ip, tmp_i, max_ind_ir, max_ind_ip, to_ii
+        real    :: max_ir(ncols), max_ip(ncols)
+        to_ii = nrows
+        do
+            if( to_ii < 1 ) return
+            if( .not.(any(mask_ir)) ) mask_ir = .true.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+            do ir = 1, ncols
+                if( mask_ir(ir) )then
+                    max_ir(ir) = 0.
+                    do ip = 1, to_ii
+                        if( self%ref_ptcl_tab(cur_id(ip), ir)%prob > max_ir(ir) )then
+                            max_ir(ir) = self%ref_ptcl_tab(cur_id(ip), ir)%prob
+                            max_ip(ir) = ip
+                        endif
+                    enddo
+                endif
+            enddo
+            !$omp end parallel do
+            max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+            max_ind_ip = max_ip(max_ind_ir)
+            ! swapping max_ind_ip
+            tmp_i               = cur_id(to_ii)
+            cur_id(to_ii)       = cur_id(max_ind_ip)
+            cur_id(max_ind_ip)  = tmp_i
+            cur_ir(to_ii)       = max_ind_ir
+            mask_ir(max_ind_ir) = .false.
+            to_ii = to_ii - 1
+        enddo
+    end subroutine reg_uniform_sort
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine form_cavgs( self )
