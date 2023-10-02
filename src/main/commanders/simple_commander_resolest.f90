@@ -504,9 +504,11 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
+        use simple_ctf,                 only: ctf
         class(prune_cavgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer, parameter :: NITERS         = 3
+        integer, parameter :: NDFPARTS       = 3
         integer, parameter :: NPTCLS_PER_BIN = 50
         type(pftcc_shsrch_grad), allocatable :: grad_shsrch_objs(:)
         type(polarft_corrcalc)        :: pftcc
@@ -517,15 +519,19 @@ contains
         complex(sp),      allocatable :: ptcl(:,:), ptcl_rot(:,:)
         real(dp),         allocatable :: denom_even(:,:), denom_odd(:,:), R2s(:), RmI2s(:), weights(:)
         real(sp), target, allocatable :: sig2(:,:)
-        real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:)
+        real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), scores(:), dfs(:)
         real(sp),         allocatable :: kweights(:,:), frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:)
-        integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
+        integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:), df_order(:)
+        integer,          allocatable :: bin_inds(:,:), bins(:)
         character(len=:), allocatable :: cavgsstk
+        type(ctf)       :: tfun
+        type(ctfparams) :: ctfparms
         real(dp) :: rmi2
-        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu
+        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu,var, ccmax, ice_score,df
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end, ibatch, batchsz, ibin
-        integer  :: ncls, i, j, fnr, istart,iend, irot, nptcls_sel, pop, nbatches, batchsz_max, ithr
-        logical  :: l_ctf, l_groundtruth
+        integer  :: ncls, i, j, k,fnr, istart,iend, irot, nptcls_sel, pop, nbatches, batchsz_max, ithr, ngoodice, nbadice, n, nb, ng
+        integer  :: ndfbins, binpop
+        logical  :: l_ctf, l_groundtruth, l_corr_ranking
         call cline%set('oritype', 'ptcl2D')
         call cline%set('mkdir',   'yes')
         if( .not.cline%defined('objfun') ) call cline%set('objfun',  'cc')
@@ -534,7 +540,8 @@ contains
         states     = nint( build%spproj_field%get_all('state'))
         nptcls     = size(states)
         nptcls_sel = count(states==1)
-        l_groundtruth = cline%defined('infile')
+        l_groundtruth  = cline%defined('infile')
+        l_corr_ranking = .true.
         if( l_groundtruth )then
             n_lines = nlines(trim(params%infile))
             allocate(labels(n_lines))
@@ -560,13 +567,16 @@ contains
         do ithr = 1,nthr_glob
             call tmp_imgs(ithr)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
         enddo
-        call build%spproj%get_cavgs_stk(cavgsstk, params%ncls, params%smpd, imgkind='cavg', fail=.false.)
+        n = 0
+        nb = 0
+        ng = 0
         ! Class loop
         do icls = 1,ncls
             call build%spproj_field%get_pinds(icls, 'class', pinds)
             pop   = size(pinds)
             nbins = ceiling(real(pop)/real(NPTCLS_PER_BIN))
             if( nbins < 5 ) cycle
+            ndfbins  = ceiling(real(pop)/real(NDFPARTS))
             ! pftcc init
             call pftcc%new(NITERS, [1,pop], params%kfromto)
             call pftcc%reallocate_ptcls(pop, pinds)
@@ -598,9 +608,12 @@ contains
                     &sig2_odd(params%kfromto(1):params%kfromto(2),nstks))
                 endif
             endif
-            if( allocated(corrs) ) deallocate(corrs,order,weights,R2s,RmI2s,rots,shifts)
-            allocate(corrs(pop),order(pop),weights(pop),R2s(nbins),RmI2s(nbins),rots(pop),shifts(2,pop))
-            batchsz_max = min(pop,params_glob%nthr*BATCHTHRSZ)
+            if( allocated(corrs) ) deallocate(corrs,order,weights,R2s,RmI2s,rots,shifts,df_order,dfs,&
+            &bin_inds,bins)
+            allocate(corrs(pop),order(pop),weights(pop),R2s(nbins),RmI2s(nbins),rots(pop),shifts(2,pop),df_order(pop),&
+                &dfs(pop),bin_inds(nbins,ndfbins),bins(pop))
+            ! batchsz_max = min(pop,params_glob%nthr*BATCHTHRSZ)
+            batchsz_max = pop
             nbatches    = ceiling(real(pop)/real(batchsz_max))
             batches     = split_nobjs_even(pop, nbatches)
             batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
@@ -628,6 +641,44 @@ contains
                 enddo
                 !$omp end parallel do
             enddo
+            ! !$omp parallel do private(i,iptcl,tfun,ctfparms,ice_score) default(shared) proc_bind(close)
+            ! do i = 1,pop
+            !     iptcl = pinds(i)
+            !     ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+            !     tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+            !     call build%imgbatch(i)%fft
+            !     call tfun%calc_line_frac(build%imgbatch(i), ctfparms, ice_score)
+            !     call build%spproj_field%set(iptcl,'specscore',ice_score)
+            ! enddo
+            ! !$omp end parallel do
+            ! ngoodice = 0 
+            ! nbadice  = 0
+            ! pu = 0.
+            ! j = 0
+            ! do i =1,pop
+            !     iptcl = pinds(i)
+            !     call build%imgbatch(i)%ifft
+            !     if( build%spproj_field%get(iptcl,'specscore') > 0.85 )then
+            !         if( labels(iptcl)==1 )then
+            !             ng = ng + 1
+            !             ngoodice = ngoodice+1
+            !             call build%imgbatch(i)%write('gice.mrc',ng)
+            !         endif
+            !         if( labels(iptcl)==0 )then
+            !             nb = nb + 1
+            !             nbadice = nbadice+1
+            !             call build%imgbatch(i)%write('bice.mrc',nb)
+            !             print *,nb,i,build%spproj_field%get(iptcl,'specscore')
+            !         endif
+            !         n = n + 1
+            !     else
+            !         j = j+1
+            !         call build%imgbatch(i)%write('no_ice_'//int2str_pad(icls,3)//'.mrc',j)
+            !     endif
+            !     pu = pu + real(labels(iptcl))
+            ! enddo
+            ! print *,icls, pop, 100.*pu/pop, ngoodice, nbadice, 100.*ngoodice/pop, 100.*nbadice/pop, 100.*(ngoodice+nbadice)/pop
+            ! cycle
             ! more init
             !$omp parallel do private(i,iptcl) default(shared) proc_bind(close)
             do i = 1,pop
@@ -635,8 +686,10 @@ contains
                 rots(i)     = pftcc%get_roind(360.-build%spproj_field%e3get(iptcl))
                 shifts(:,i) = 0.
                 corrs(i)    = build%spproj_field%get(iptcl,'corr')
+                dfs(i)      = (build%spproj_field%get_dfx(iptcl)+build%spproj_field%get_dfx(iptcl))/2.
                 weights(i)  = 1.d0
                 order(i)    = i
+                df_order(i) = i
             enddo
             !$omp end parallel do
             if( l_groundtruth )then
@@ -647,6 +700,7 @@ contains
                 purity(0) = purity(0) *100./real(pop)
                 print *, icls,purity(0)
             endif
+            if( .not.l_corr_ranking ) call hpsort(dfs,df_order)
             ! References & noise power in pftcc
             call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
             call write_cls(cls_avg,      'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
@@ -658,34 +712,29 @@ contains
             call pftcc%memoize_ptcls
             call update_sigmas(1)
             ! to calculate first scores
-            tmp = corrs
             !$omp parallel do private(i,iptcl,inpl_corrs) default(shared) proc_bind(close)
             do i = 1,pop
                 iptcl = pinds(i)
-                ! call pftcc%gencorrs(1, iptcl, inpl_corrs)
-                ! corrs(i) = maxval(inpl_corrs)
-                tmp(i) = real(pftcc%gencorr_for_rot_8(1, iptcl, [0.d0,0.d0], rots(i)))
+                corrs(i) = real(pftcc%gencorr_for_rot_8(1, iptcl, [0.d0,0.d0], rots(i)))
             enddo
             !$omp end parallel do
             do iter = 1,NITERS
-                ! ranking
-                call hpsort(corrs,order)
+                call partition_cls
                 ! bin-based thesholding
                 do ibin = 1,nbins
+                    binpop = count(bins==ibin)
                     weights = 0.d0
-                    istart = (ibin-1)*NPTCLS_PER_BIN+1
-                    iend   = min(pop, istart+NPTCLS_PER_BIN-1)
-                    if( iend == pop ) istart = iend - NPTCLS_PER_BIN + 1
-                    weights(order(istart:iend)) = 1.d0
+                    where( bins == ibin ) weights = 1.d0
                     call restore_cavgs(pop, weights)
                     call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'.mrc', ibin)
                     R2s(ibin) = sum(csq_fast(cls_avg))
                     rmi2 = 0.d0
                     !$omp parallel do private(i,j,ithr,irot,diff,ptcl,ptcl_rot,ctf_rot)&
                     !$omp reduction(+:rmi2) default(shared) proc_bind(close)
-                    do i = istart,iend
+                    do i = 1,binpop
+                        j = bin_inds(ibin,i)
+                        if( j == 0 ) cycle
                         ithr = omp_get_thread_num()+1
-                        j    = order(i)
                         call pftcc%gen_shmat(ithr, -real(shifts(:,j)), pftcc%heap_vars(ithr)%shmat)
                         ptcl = pftcc%pfts_ptcls(:,:,j) * pftcc%heap_vars(ithr)%shmat
                         irot = pftcc%nrots+2-rots(j)
@@ -695,7 +744,7 @@ contains
                         diff = ctf_rot * cls_avg - ptcl_rot
                         RmI2 = RmI2 + sum(csq_fast(diff))
                     enddo
-                    !$omp end parallel do 
+                    !$omp end parallel do
                     RmI2s(ibin) = rmi2
                     RmI2s(ibin) = RmI2s(ibin) / (pop-1)
                 enddo
@@ -713,12 +762,11 @@ contains
                     R2s(minloc(R2s,dim=1)) = threshold - 1.
                 endif
                 do ibin = 1,nbins
-                    istart = (ibin-1)*NPTCLS_PER_BIN+1
-                    iend   = min(pop, istart+NPTCLS_PER_BIN-1)
-                    if( iend == pop ) istart = iend - NPTCLS_PER_BIN + 1
+                    binpop = count(bins==ibin)
                     pu = 0.
-                    do i = istart,iend
-                        j     = order(i)
+                    do i = 1,binpop
+                        j = bin_inds(ibin,i)
+                        if(j == 0) cycle
                         iptcl = pinds(j)
                         if( R2s(ibin) < threshold )then
                             weights(j) = 0.d0
@@ -729,7 +777,7 @@ contains
                         endif
                         pu = pu + real(labels(iptcl))
                     enddo
-                    ! print *,icls,iter,ibin,pu,R2s(ibin), threshold
+                    ! print *,icls,iter,ibin,100.*pu/real(binpop),R2s(ibin), threshold
                 enddo
                 if( l_groundtruth )then
                     purity(iter) = 0.
@@ -778,15 +826,20 @@ contains
                 !$omp end parallel do
                 call update_sigmas(iter)
             enddo
-            ! transfer of in-class alignment parameters is not a good idea with correlations
-            ! do i = 1,pop
-            !     shifts(:,i) = shifts(:,i) + build%spproj_field%get_2Dshift(pinds(i))
-            !     call build%spproj_field%set_shift(pinds(i),shifts(:,i))
-                ! call build%spproj_field%e3set(iptcl, pftcc%get_rot(rots(i)))
-            ! enddo
         enddo
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         states = nint(build%spproj_field%get_all('state'))
+        ! scores = build%spproj_field%get_all('specscore')
+        ! itmp = states
+        ! where( (scores>1.) ) states = 0
+        ! call build%spproj_field%set_all('state', real(states))
+        ! call build%spproj%write('all_expunged.simple')
+        ! states = itmp
+        ! itmp = states
+        ! where( (scores>1.) .or. (labels == 0) ) states = 0
+        ! call build%spproj_field%set_all('state', real(states))
+        ! call build%spproj%write('good_expunged.simple')
+        ! states = itmp
         print *,'NREJECTED     : ', count(states==0), count(states==1)
         if( l_groundtruth )then
             print *,'TRUE REJECTED : ', count(states==0 .and. labels==0)
@@ -802,6 +855,55 @@ contains
         call build%spproj%write('inverted.simple')
         call simple_end('**** SIMPLE_PRUNE_CAVGS NORMAL STOP ****')
         contains
+
+            subroutine partition_cls()
+                real,    allocatable :: tmp(:)
+                integer, allocatable :: dfbins(:,:), dfcorrs_bins(:,:), corrbins(:,:)
+                integer :: curr_ind(nbins), dfbin, ibin, ndf, i, j, k
+                bin_inds = 0
+                bins     = 0
+                if( l_corr_ranking )then
+                    ! is equivalent to NDFPARTS=1
+                    call hpsort(corrs,order)
+                    corrbins = split_nobjs_even(pop, nbins)
+                    do ibin = 1,nbins
+                        j = 0
+                        do i = corrbins(ibin,1),corrbins(ibin,2)
+                            j = j + 1
+                            k = order(i)
+                            bin_inds(ibin,j) = k
+                            bins(k) = ibin
+                        enddo
+                    enddo
+                else
+                    curr_ind = 0
+                    dfbins   = split_nobjs_even(pop, NDFPARTS)
+                    do dfbin = 1,NDFPARTS
+                        ndf = dfbins(dfbin,2)-dfbins(dfbin,1)+1
+                        if(allocated(tmp)  )deallocate(tmp)
+                        if(allocated(order))deallocate(order)
+                        allocate(tmp(ndf),order(ndf))
+                        k = 0
+                        do i = dfbins(dfbin,1),dfbins(dfbin,2)
+                            k        = k + 1
+                            j        = df_order(i)
+                            tmp(k)   = corrs(j)
+                            order(k) = j
+                        enddo
+                        call hpsort(tmp,order)
+                        dfcorrs_bins = split_nobjs_even(ndf, nbins)
+                        do ibin = 1,nbins
+                            do i = dfcorrs_bins(ibin,1),dfcorrs_bins(ibin,2)
+                                j = curr_ind(ibin) + 1
+                                k = order(i)
+                                bin_inds(ibin,j) = k
+                                curr_ind(ibin)   = j
+                                bins(k) = ibin
+                            enddo
+                        enddo
+                    enddo
+                endif
+            end subroutine partition_cls
 
             subroutine update_sigmas( iref )
                 integer, intent(in) :: iref

@@ -64,7 +64,7 @@ contains
     procedure          :: write_jpg
     ! GETTERS/SETTERS
     procedure          :: get_array_shape
-    procedure          :: get_ldim
+    procedure          :: get_ldim, get_box
     procedure          :: get_smpd
     procedure          :: get_nyq
     procedure          :: get_filtsz
@@ -1154,6 +1154,12 @@ contains
         integer :: ldim(3)
         ldim = self%ldim
     end function get_ldim
+
+    !> \brief get_ldim  is a getter
+    pure integer function get_box( self )
+        class(image), intent(in) :: self
+        get_box = self%ldim(1)
+    end function get_box
 
     !> \brief get_smpd  is a getter
     pure function get_smpd( self ) result( smpd )
