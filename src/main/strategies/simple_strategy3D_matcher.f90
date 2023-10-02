@@ -206,23 +206,9 @@ contains
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
-                        call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%ref_reg_cc_tab
                     enddo
-                    call reg_obj%regularize_refs
-                    call pftcc%memoize_refs
-                    if( trim(params_glob%refine) == 'greedy_prob' )then
-                        call reg_obj%reset_regs
-                        call reg_obj%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        enddo
-                        call reg_obj%sort_tab_ptcl
-                    endif
-                    params_glob%cc_objfun = orig_objfun
                 case('unihard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
                     call reg_obj%uniform_sort_tab(best_ip, best_ir)
@@ -231,25 +217,37 @@ contains
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
-                        call reg_batch_particles(batchsz, pinds(batch_start:batch_end), best_ip, best_ir)
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%uniform_cavgs(best_ip, best_ir)
                     enddo
-                    call reg_obj%regularize_refs
-                    call pftcc%memoize_refs
-                    if( trim(params_glob%refine) == 'prob' )then
-                        call reg_obj%reset_regs
-                        call reg_obj%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        enddo
-                        call reg_obj%uniform_sort_tab(best_ip, best_ir)
-                        call reg_obj%map_ptcl_ref(best_ip, best_ir)
-                    endif
-                    params_glob%cc_objfun = orig_objfun
             end select
+            call reg_obj%regularize_refs
+            call pftcc%memoize_refs
+            if( trim(params_glob%refine) == 'prob' )then
+                call reg_obj%reset_regs
+                call reg_obj%init_tab
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                call reg_obj%uniform_sort_tab(best_ip, best_ir)
+                call reg_obj%map_ptcl_ref(best_ip, best_ir)
+            elseif( trim(params_glob%refine) == 'greedy_prob' )then
+                call reg_obj%reset_regs
+                call reg_obj%init_tab
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
+                enddo
+                call reg_obj%sort_tab_ptcl
+            endif
+            params_glob%cc_objfun = orig_objfun
         endif
 
         ! Batch loop
@@ -594,39 +592,4 @@ contains
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
     end subroutine fill_batch_particles
-
-    subroutine reg_batch_particles( nptcls_here, pinds_here, best_ip, best_ir )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer,           intent(in) :: nptcls_here
-        integer,           intent(in) :: pinds_here(nptcls_here)
-        integer, optional, intent(in) :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
-        integer :: iptcl_batch, iptcl
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
-            ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        ! make CTFs
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
-        ! compute regularization terms
-        select case(trim(params_glob%reg_mode))
-            case('tab')
-            case('normtab')
-                call reg_obj%ref_reg_cc_tab
-            case('unihard')
-                call reg_obj%uniform_cavgs(best_ip, best_ir)
-        end select
-    end subroutine reg_batch_particles
-
 end module simple_strategy3D_matcher

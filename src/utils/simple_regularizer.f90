@@ -611,7 +611,7 @@ contains
         !$omp private(iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do iref = 1, self%nrefs
             ! taking top sorted corrs/probs
-            do i = params_glob%fromp,(params_glob%fromp + int(ninds / self%nrefs))
+            do i = params_glob%fromp,(params_glob%fromp + params_glob%reg_num)
                 if( self%ref_ptcl_tab(i, iref)%prob < TINY ) cycle
                 ithr  = omp_get_thread_num() + 1
                 iptcl = self%ref_ptcl_tab(i, iref)%iptcl
