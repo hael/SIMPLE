@@ -69,7 +69,7 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
-        integer,               allocatable :: batches(:,:), best_ip(:), best_ir(:)
+        integer,               allocatable :: batches(:,:), best_ip(:), best_ir(:), best_irot(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
@@ -210,15 +210,16 @@ contains
                         call reg_obj%ref_reg_cc_tab
                     enddo
                 case('unihard')
-                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
-                    call reg_obj%uniform_sort_tab(best_ip, best_ir)
+                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
+                            &best_irot(params_glob%fromp:params_glob%top))
+                    call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir)
+                        call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
                     enddo
             end select
             call reg_obj%regularize_refs
@@ -233,8 +234,12 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call reg_obj%uniform_sort_tab(best_ip, best_ir)
-                call reg_obj%map_ptcl_ref(best_ip, best_ir)
+                if( .not. allocated(best_ir) )then
+                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
+                            &best_irot(params_glob%fromp:params_glob%top))
+                endif
+                call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
+                call reg_obj%map_ptcl_ref(best_ip, best_ir, best_irot)
             elseif( trim(params_glob%refine) == 'greedy_prob' )then
                 call reg_obj%reset_regs
                 call reg_obj%init_tab
