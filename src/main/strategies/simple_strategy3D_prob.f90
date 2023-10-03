@@ -48,10 +48,11 @@ contains
             do ir = 1, self%s%nrefs
                 call self%s%store_solution(ir, 1, 0.)
             enddo
-            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(iptcl, iref)%loc,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref)%prob,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref)%sh,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref)%prob)
+            ! NEED CONSTANTS FIXED
+            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%loc,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%prob,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%sh,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%prob)
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! prepare orientation
