@@ -234,6 +234,7 @@ contains
     procedure          :: phase_corr
     procedure          :: fcorr_shift
     procedure          :: norm_within
+    procedure          :: moments_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
@@ -4765,6 +4766,17 @@ contains
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
     end subroutine norm_within
+
+    subroutine moments_within( self, mask, mean, sdev )
+        class(image), intent(in)  :: self
+        real,         intent(out) :: mean, sdev
+        logical,      intent(in) :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: npix
+        npix = real(count(mask))
+        mean = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
+        sdev = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2, mask=mask) / npix
+        if( sdev > TINY ) sdev = sqrt(sdev)
+    end subroutine moments_within
 
     !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
     !>  The image is centered and standardized
