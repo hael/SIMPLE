@@ -513,8 +513,9 @@ contains
         real,               parameter     :: REF_FRAC = 1
         integer,            allocatable   :: ref_ind(:)
         complex,            allocatable   :: cmat(:,:)
+        complex(dp),        allocatable   :: regs_tmp(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box
+        integer :: iref, k, box, irot
         real    :: ref_freq
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
@@ -535,21 +536,25 @@ contains
         call reverse(ref_ind)
         ! output images for debugging
         if( params_glob%l_reg_debug )then
-            do k = 1, int(self%nrefs * REF_FRAC)
-                iref = ref_ind(k)
-                call self%pftcc%polar2cartesian(cmplx(self%regs(:,:,iref,1), kind=sp), cmat, box) ! CONSTANT FIX
-                call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', k)
-                call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
+            allocate(regs_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)))
+            do irot = 1, self%reg_nrots
+                do k = 1, int(self%nrefs * REF_FRAC)
+                    iref = ref_ind(k)
+                    call self%pftcc%polar2cartesian(cmplx(self%regs(:,:,iref,irot), kind=sp), cmat, box)
+                    call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+                    call calc_cavg%zero_and_flag_ft
+                    call calc_cavg%set_cmat(cmat)
+                    call calc_cavg%shift_phorig()
+                    call calc_cavg%ifft
+                    call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', k)
+                    call self%pftcc%rotate_ref(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=dp), self%rot_inds(irot), regs_tmp)
+                    call self%pftcc%polar2cartesian(cmplx(regs_tmp, kind=sp), cmat, box)
+                    call calc_cavg%zero_and_flag_ft
+                    call calc_cavg%set_cmat(cmat)
+                    call calc_cavg%shift_phorig()
+                    call calc_cavg%ifft
+                    call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
+                enddo
             enddo
         endif
         !$omp parallel default(shared) private(k,iref) proc_bind(close)
