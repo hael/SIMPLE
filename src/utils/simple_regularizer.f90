@@ -105,9 +105,10 @@ contains
             allocate(self%ref_ptcl_ori( params_glob%fromp:params_glob%top,self%nrefs,self%reg_nrots))
             allocate(self%ptcl_ref_map( params_glob%fromp:params_glob%top),self%ptcl_loc_map( params_glob%fromp:params_glob%top))
         endif
-        do iref = 1,self%nrefs
-            do iptcl = params_glob%fromp,params_glob%top
-                do irot = 1,self%reg_nrots
+        !$omp parallel do collapse(3) default(shared) private(iptcl,irot,iref) proc_bind(close) schedule(static)
+        do irot = 1,self%reg_nrots
+            do iref = 1,self%nrefs
+                do iptcl = params_glob%fromp,params_glob%top
                     self%ref_ptcl_tab(iptcl,iref,irot)%iptcl = iptcl
                     self%ref_ptcl_tab(iptcl,iref,irot)%iref  = iref
                     self%ref_ptcl_tab(iptcl,iref,irot)%loc   = self%rot_inds(irot)
@@ -117,6 +118,7 @@ contains
                 enddo
             enddo
         enddo
+        !$omp end parallel do
     end subroutine init_tab
 
     ! filling prob/corr 2D table
@@ -191,14 +193,14 @@ contains
         integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         integer,            intent(in)    :: best_irot(params_glob%fromp:params_glob%top)
         complex(sp),        pointer       :: shmat(:,:)
-        integer     :: i, iptcl, iref, ithr, loc, pind_here, irot
+        integer     :: i, iptcl, iref, ithr, pind_here, irot
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real        :: weight
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(irot,iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
+        !$omp private(irot,iref,ithr,i,iptcl,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
         do i = params_glob%fromp, params_glob%top
             iref  = best_ir(i)
             irot  = best_irot(i)
@@ -208,14 +210,11 @@ contains
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                 pind_here = self%pftcc%pinds(iptcl)
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                loc = self%ref_ptcl_tab(iptcl, iref, irot)%loc
-                loc = (self%nrots+1)-(loc-1)
-                if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref, irot)%sh), shmat)
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                weight = self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
+                ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
+                weight       = self%ref_ptcl_tab(iptcl, iref, irot)%prob
                 self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                 self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
                 self%ref_corr(iref)            = self%ref_corr(iref)       + self%ref_ptcl_tab(iptcl, iref, irot)%prob
@@ -466,7 +465,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer,  optional, intent(in)    :: np
         complex(sp),        pointer       :: shmat(:,:)
-        integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here, irot
+        integer     :: i, iptcl, iref, ithr, ninds, pind_here, irot
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         real        :: weight
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -478,25 +477,21 @@ contains
             ninds = size(self%ref_ptcl_corr, 1)
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(irot,iref,ithr,i,iptcl,loc,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
-        do iref = 1, self%nrefs
-            ! taking top sorted corrs/probs
-            do i = params_glob%fromp,(params_glob%fromp + params_glob%reg_num)
-                do irot = 1, self%reg_nrots
+        !$omp private(irot,iref,ithr,i,iptcl,ptcl_ctf_rot,ctf_rot,shmat,pind_here,weight)
+        do irot = 1, self%reg_nrots
+            do iref = 1, self%nrefs
+                ! taking top sorted corrs/probs
+                do i = params_glob%fromp,(params_glob%fromp + params_glob%reg_num)
                     if( self%ref_ptcl_tab(i, iref, irot)%prob < TINY ) cycle
                     ithr  = omp_get_thread_num() + 1
                     iptcl = self%ref_ptcl_tab(i, iref, irot)%iptcl
                     if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                         pind_here = self%pftcc%pinds(iptcl)
-                        ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                        loc = self%ref_ptcl_tab(i, iref, irot)%loc
-                        loc = (self%nrots+1)-(loc-1)
-                        if( loc > self%nrots ) loc = loc - self%nrots
                         shmat => self%pftcc%heap_vars(ithr)%shmat
                         call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref, irot)%sh), shmat)
-                        call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                        call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                        weight = self%ref_ptcl_tab(i, iref, irot)%prob
+                        ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
+                        ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
+                        weight       = self%ref_ptcl_tab(i, iref, irot)%prob
                         self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                         self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
                         self%ref_corr(iref)            = self%ref_corr(iref)            + self%ref_ptcl_tab(i, iref,irot)%prob
@@ -533,15 +528,15 @@ contains
         !$omp end parallel
         ! sort ref_corr to only change refs to regs for high-score cavgs
         ref_ind = (/(iref,iref=1,self%nrefs)/)
-        call hpsort(self%ref_corr, ref_ind)
-        call reverse(ref_ind)
+        ! call hpsort(self%ref_corr, ref_ind)
+        ! call reverse(ref_ind)
         ! output images for debugging
         if( params_glob%l_reg_debug )then
             allocate(regs_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)))
             cnt = 1
-            do irot = 1, self%reg_nrots
-                do k = 1, int(self%nrefs * REF_FRAC)
-                    iref = ref_ind(k)
+            do k = 1, int(self%nrefs * REF_FRAC)
+                iref = ref_ind(k)
+                do irot = 1, self%reg_nrots
                     call self%pftcc%polar2cartesian(cmplx(self%regs(:,:,iref,irot), kind=sp), cmat, box)
                     call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
                     call calc_cavg%zero_and_flag_ft
