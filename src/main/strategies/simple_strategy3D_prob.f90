@@ -37,7 +37,7 @@ contains
     subroutine srch_prob( self, ithr )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, iptcl, ir
+        integer :: iref, iptcl, ir, irot
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -45,14 +45,14 @@ contains
             call self%s%prep4srch
             iptcl = self%s%iptcl
             iref  = self%spec%reg_obj%ptcl_ref_map(iptcl)
+            irot  = self%spec%reg_obj%ptcl_loc_map(iptcl)
             do ir = 1, self%s%nrefs
                 call self%s%store_solution(ir, 1, 0.)
             enddo
-            ! NEED CONSTANTS FIXED
-            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%loc,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%prob,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%sh,&
-                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, 1)%prob)
+            call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%loc,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%sh,&
+                                            &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob)
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! prepare orientation
