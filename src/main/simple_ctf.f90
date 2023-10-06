@@ -747,10 +747,10 @@ contains
         sinsum = 0.
         cossum = 0.
         do sh = 2,filtsz
-            if( res(sh) < 10. ) cycle
+            if( res(sh) < 8. ) cycle
             spaFreqSq = (real(sh) / real(box))**2
             tval      = self%eval(spaFreqSq, 0., phshift)
-            if( (abs(tval) > 0.3) .and. (maxs(sh) > 8.) )then
+            if( (abs(tval) > 0.2) .and. (maxs(sh) > 10.) )then
                 nks    = nks + 1
                 ang    = atan2(real(ks(sh)), real(hs(sh)))
                 sinsum = sinsum + sin(ang)
