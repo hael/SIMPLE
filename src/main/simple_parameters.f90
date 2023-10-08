@@ -239,7 +239,6 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: reg_iters=30        !< # iters regularization scheme
     integer :: reg_num=30          !< # uniform num of ptcls for each class in reg
-    integer :: reg_nrots=1         !< # inplane rotation samples
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxnchunks=0
@@ -670,7 +669,6 @@ contains
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('reg_iters',      self%reg_iters)
         call check_iarg('reg_num'  ,      self%reg_num)
-        call check_iarg('reg_nrots',      self%reg_nrots)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxnchunks',     self%maxnchunks)

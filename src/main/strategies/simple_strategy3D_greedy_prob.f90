@@ -44,11 +44,10 @@ contains
             ! prep
             call self%s%prep4srch
             do iref = 1, self%s%nrefs
-                ! NEED CONSTANT FIXED
-                call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref, 1)%loc,&
-                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref, 1)%w,&
-                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref, 1)%sh,&
-                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref, 1)%prob)
+                call self%s%store_solution(iref, self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%loc,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%w,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%sh,&
+                                                &self%spec%reg_obj%ref_ptcl_tab(self%s%iptcl, iref)%prob)
             enddo
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
