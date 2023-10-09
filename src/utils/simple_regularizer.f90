@@ -468,7 +468,7 @@ contains
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = self%ref_ptcl_tab(i, iref)%prob
+                    weight = 1. - self%ref_ptcl_tab(i, iref)%prob
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                     self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
@@ -503,8 +503,8 @@ contains
         !$omp end parallel
         ! sort ref_corr to only change refs to regs for high-score cavgs
         ref_ind = (/(iref,iref=1,self%nrefs)/)
-        call hpsort(self%ref_corr, ref_ind)
-        call reverse(ref_ind)
+        ! call hpsort(self%ref_corr, ref_ind)
+        ! call reverse(ref_ind)
         ! output images for debugging
         if( params_glob%l_reg_debug )then
             do k = 1, int(self%nrefs * REF_FRAC)
@@ -532,8 +532,8 @@ contains
                 ! keep the refs
             else
                 ! using the reg terms as refs
-                self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
-                self%pftcc%pfts_refs_odd( :,:,iref) = self%regs(:,:,iref)
+                self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
+                self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
             endif
         enddo
         !$omp end do
