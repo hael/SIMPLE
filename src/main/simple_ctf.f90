@@ -46,7 +46,7 @@ type ctf
     procedure          :: eval_and_apply, eval_and_apply_before_first_zero
     procedure, private :: kV2wl
     procedure          :: apply_convention
-    procedure          :: calc_ice_frac, calc_line_frac
+    procedure          :: calc_ice_frac
 end type ctf
 
 interface ctf
@@ -697,71 +697,5 @@ contains
         score = ice_avg / peak_avg
         if( score > 0.5 ) score = (ice_avg - 0.5*peak_avg) / peak_avg
     end subroutine calc_ice_frac
-
-    subroutine calc_line_frac( self, img, ctfparms, score )
-        use simple_image, only: image
-        class(ctf),       intent(inout) :: self
-        class(image),     intent(in)    :: img
-        class(ctfparams), intent(in)    :: ctfparms
-        real,             intent(out)   :: score
-        real,    allocatable :: res(:), pspec(:), maxs(:)
-        integer, allocatable :: counts(:), hs(:), ks(:)
-        complex :: c
-        real    :: phshift, mag, angsum, sinsum, cossum, eps, tval, ang, spaFreqSq
-        integer :: lims(3,2), box, filtsz, nks, h,k, sh
-        if( abs(self%smpd-ctfparms%smpd) > 1.d-4) THROW_HARD('Inconsistent SMPD; calc_ice_frac')
-        score = 0.
-        if( self%smpd > (ICE_BAND1/2.) ) return
-        if( .not.img%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_frac')
-        box    = img%get_box()
-        filtsz = img%get_filtsz()
-        res    = get_resarr(box, self%smpd)
-        lims   = img%loop_lims(2)
-        allocate(pspec(filtsz),maxs(filtsz),hs(filtsz),ks(filtsz),counts(filtsz))
-        counts = 0
-        pspec  = 0.
-        maxs   = -1
-        hs     = -1
-        ks     = -1
-        do k=lims(2,1),lims(2,2)
-            do h=lims(1,1),lims(1,2)
-                sh = nint(hyp(h,k))
-                if( sh == 0 .or. sh > filtsz ) cycle
-                mag = csq_fast(img%get_fcomp2D(h,k))
-                pspec(sh)  = pspec(sh)  + mag
-                counts(sh) = counts(sh) + 1
-                if( mag > maxs(sh) )then
-                    maxs(sh) = mag
-                    hs(sh)   = h
-                    ks(sh)   = k
-                endif
-            end do
-        end do
-        pspec  = pspec  - maxs
-        counts = counts - 1
-        where( counts > 0 ) pspec = pspec / real(counts)
-        maxs = maxs / pspec
-        call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
-        phshift = merge(ctfparms%phshift, 0. ,ctfparms%l_phaseplate)
-        nks    = 0
-        sinsum = 0.
-        cossum = 0.
-        do sh = 2,filtsz
-            if( res(sh) < 8. ) cycle
-            spaFreqSq = (real(sh) / real(box))**2
-            tval      = self%eval(spaFreqSq, 0., phshift)
-            if( (abs(tval) > 0.2) .and. (maxs(sh) > 10.) )then
-                nks    = nks + 1
-                ang    = atan2(real(ks(sh)), real(hs(sh)))
-                sinsum = sinsum + sin(ang)
-                cossum = cossum + cos(ang)
-            endif
-        enddo
-        if( nks < 5 ) return
-        sinsum = sinsum / real(nks)
-        cossum = cossum / real(nks)
-        eps    = sqrt(1. - (sinsum**2+cossum**2))
-        score  = 1. - asin(eps) * (1. + eps**3*(2./sqrt(3.)-1)) / (PI/sqrt(3.))
-    end subroutine calc_line_frac
 
 end module simple_ctf
