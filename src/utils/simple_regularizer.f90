@@ -210,7 +210,7 @@ contains
                 call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref)%sh), shmat)
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                weight = self%ref_ptcl_tab(iptcl, iref)%prob
+                weight = 1. - self%ref_ptcl_tab(iptcl, iref)%prob
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                 self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(iptcl, iref)%prob
