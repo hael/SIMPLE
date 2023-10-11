@@ -224,6 +224,7 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
+    procedure          :: calc_line_score
     procedure          :: gradient
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
@@ -4354,6 +4355,63 @@ contains
         if(present(Dr)) Dr = Ddr
         call img_p%kill
     end subroutine calc_gradient
+
+    real function calc_line_score( self )
+        class(image),       intent(inout) :: self
+        real,    allocatable :: res(:), pspec(:), maxs(:)
+        integer, allocatable :: counts(:), hs(:), ks(:)
+        complex :: c
+        real    :: mag, sinsum, cossum, eps, ang
+        integer :: lims(3,2), box, filtsz, nks, h,k, sh
+        calc_line_score = 0.
+        if( self%smpd > (ICE_BAND1/2.) ) return
+        if( .not.self%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_frac')
+        box    = self%ldim(1)
+        filtsz = self%get_filtsz()
+        res    = get_resarr(box, self%smpd)
+        lims   = self%loop_lims(2)
+        allocate(pspec(filtsz),maxs(filtsz),hs(filtsz),ks(filtsz),counts(filtsz))
+        counts = 0
+        pspec  = 0.
+        maxs   = -1
+        hs     = -1
+        ks     = -1
+        do k=lims(2,1),lims(2,2)
+            do h=lims(1,1),lims(1,2)
+                sh = nint(hyp(h,k))
+                if( sh == 0 .or. sh > filtsz ) cycle
+                mag = csq_fast(self%get_fcomp2D(h,k))
+                pspec(sh)  = pspec(sh)  + mag
+                counts(sh) = counts(sh) + 1
+                if( mag > maxs(sh) )then
+                    maxs(sh) = mag
+                    hs(sh)   = h
+                    ks(sh)   = k
+                endif
+            end do
+        end do
+        pspec  = pspec  - maxs
+        counts = counts - 1
+        where( counts > 0 ) pspec = pspec / real(counts)
+        maxs = maxs / pspec
+        nks    = 0
+        sinsum = 0.
+        cossum = 0.
+        do sh = 2,filtsz
+            if( res(sh) < 10. ) cycle
+            if( (maxs(sh) > 10.) )then
+                nks    = nks + 1
+                ang    = atan2(real(ks(sh)), real(hs(sh)))
+                sinsum = sinsum + sin(ang)
+                cossum = cossum + cos(ang)
+            endif
+        enddo
+        if( nks < 5 ) return
+        sinsum = sinsum / real(nks)
+        cossum = cossum / real(nks)
+        eps    = sqrt(1. - (sinsum**2+cossum**2))
+        calc_line_score = 1. - asin(eps) * (1. + eps**3*(2./sqrt(3.)-1)) / (PI/sqrt(3.))
+    end function calc_line_score
 
     ! This function returns the derivates row, column, and z as outputs,
     ! together with the optional gradient matrix/volume.
