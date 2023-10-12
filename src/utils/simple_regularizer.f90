@@ -185,9 +185,10 @@ contains
         !$omp end parallel do
     end subroutine sort_tab
 
-    subroutine uniform_cavgs( self, best_ip, best_ir )
+    subroutine uniform_cavgs( self, best_ip, best_ir, is_gradient )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
+        logical,  optional, intent(in)    :: is_gradient
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -210,7 +211,11 @@ contains
                 call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref)%sh), shmat)
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                weight = 1. - self%ref_ptcl_tab(iptcl, iref)%prob
+                if( present(is_gradient) .and. is_gradient )then
+                    weight = 1. - self%ref_ptcl_tab(iptcl, iref)%prob
+                else
+                    weight = self%ref_ptcl_tab(iptcl, iref)%prob
+                endif
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                 self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(iptcl, iref)%prob
@@ -531,9 +536,10 @@ contains
     end subroutine reg_hpsort
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine ref_reg_cc_tab( self, np )
+    subroutine ref_reg_cc_tab( self, np, is_gradient )
         class(regularizer), intent(inout) :: self
         integer,  optional, intent(in)    :: np
+        logical,  optional, intent(in)    :: is_gradient
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -564,7 +570,11 @@ contains
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                    weight = 1. - self%ref_ptcl_tab(i, iref)%prob
+                    if( present(is_gradient) .and. is_gradient )then
+                        weight = 1. - self%ref_ptcl_tab(i, iref)%prob
+                    else
+                        weight = self%ref_ptcl_tab(i, iref)%prob
+                    endif
                     self%regs(:,:,iref)       = self%regs(:,:,iref)       + weight * ptcl_ctf_rot
                     self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + weight * ctf_rot**2
                     self%ref_corr(iref)       = self%ref_corr(iref)       + self%ref_ptcl_tab(i, iref)%prob
@@ -574,10 +584,11 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_tab
 
-    subroutine regularize_refs( self, ref_freq_in )
+    subroutine regularize_refs( self, ref_freq_in, is_gradient )
         use simple_image
         class(regularizer), intent(inout) :: self
-        real, optional,     intent(in)    :: ref_freq_in
+        real,     optional, intent(in)    :: ref_freq_in
+        logical,  optional, intent(in)    :: is_gradient
         real,               parameter     :: REF_FRAC = 1
         integer,            allocatable   :: ref_ind(:)
         complex,            allocatable   :: cmat(:,:)
@@ -628,8 +639,13 @@ contains
                 ! keep the refs
             else
                 ! using the reg terms as refs
-                self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
-                self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
+                if( present(is_gradient) .and. is_gradient )then
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
+                else
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%regs(:,:,iref)
+                endif
             endif
         enddo
         !$omp end do
