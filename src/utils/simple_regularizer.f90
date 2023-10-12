@@ -586,6 +586,7 @@ contains
 
     subroutine regularize_refs( self, ref_freq_in, is_gradient )
         use simple_image
+        use simple_opt_filter, only: butterworth_filter
         class(regularizer), intent(inout) :: self
         real,     optional, intent(in)    :: ref_freq_in
         logical,  optional, intent(in)    :: is_gradient
@@ -593,12 +594,11 @@ contains
         integer,            allocatable   :: ref_ind(:)
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box
-        real    :: ref_freq
+        integer :: iref, k, box, find
+        real    :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        !$omp parallel default(shared) private(k) proc_bind(close)
-        !$omp do schedule(static)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
                 self%regs(:,k,:) = 0._dp
@@ -606,8 +606,15 @@ contains
                 self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%regs(:,k,:) = filt(k) * self%regs(:,k,:)
+        enddo
+        !$omp end parallel do
         ! sort ref_corr to only change refs to regs for high-score cavgs
         ref_ind = (/(iref,iref=1,self%nrefs)/)
         ! call hpsort(self%ref_corr, ref_ind)
@@ -631,8 +638,7 @@ contains
                 call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
             enddo
         endif
-        !$omp parallel default(shared) private(k,iref) proc_bind(close)
-        !$omp do schedule(static)
+        !$omp parallel do default(shared) private(k,iref) proc_bind(close) schedule(static)
         do k = 1, int(self%nrefs * REF_FRAC)
             iref = ref_ind(k)
             if( ran3() < ref_freq )then
@@ -648,8 +654,7 @@ contains
                 endif
             endif
         enddo
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
         call self%pftcc%memoize_refs
         call calc_cavg%kill
     end subroutine regularize_refs
