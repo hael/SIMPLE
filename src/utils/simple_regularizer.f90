@@ -39,6 +39,7 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: init_tab
     procedure          :: fill_tab
+    procedure          :: fill_tab_noshift
     procedure          :: sort_tab
     procedure          :: sort_tab_ptcl
     procedure          :: cluster_sort_tab
@@ -139,6 +140,25 @@ contains
         !$omp end parallel do
     end subroutine fill_tab
 
+    subroutine fill_tab_noshift( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer  :: i, iref, iptcl
+        real     :: inpl_corrs(self%nrots)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                self%ref_ptcl_tab(iptcl,iref)%sh  = 0.
+                self%ref_ptcl_tab(iptcl,iref)%loc = maxloc(inpl_corrs, dim=1)
+                self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iptcl,iref)%loc))
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine fill_tab_noshift
+
     subroutine sort_tab( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
@@ -209,8 +229,9 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref)%sh), shmat)
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
+                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
+                ptcl_ctf_rot = ptcl_ctf_rot * shmat
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
                 if( present(is_gradient) .and. is_gradient )then
                     weight = 1. - self%ref_ptcl_tab(iptcl, iref)%prob
                 else
@@ -568,8 +589,9 @@ contains
                     if( loc > self%nrots ) loc = loc - self%nrots
                     shmat => self%pftcc%heap_vars(ithr)%shmat
                     call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref)%sh), shmat)
-                    call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                    call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
+                    call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
+                    ptcl_ctf_rot = ptcl_ctf_rot * shmat
+                    call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
                     if( present(is_gradient) .and. is_gradient )then
                         weight = 1. - self%ref_ptcl_tab(i, iref)%prob
                     else
@@ -598,15 +620,19 @@ contains
         real    :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%regs(:,k,:) = 0._dp
-            elsewhere
-                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
-            endwhere
-        enddo
-        !$omp end parallel do
+        if( present(is_gradient) .and. is_gradient )then
+            ! keep regs
+        else
+            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%regs_denom(:,k,:)) < TINY )
+                    self%regs(:,k,:) = 0._dp
+                elsewhere
+                    self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+                endwhere
+            enddo
+            !$omp end parallel do
+        endif
         ! applying butterworth filter at cut-off = lp
         find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
         call butterworth_filter(find, self%kfromto, filt)
