@@ -207,18 +207,18 @@ contains
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%ref_reg_cc_tab
+                        call reg_obj%ref_reg_cc_tab(is_gradient=.true.)
                     enddo
                 case('hard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
-                    call reg_obj%uniform_sort_tab(best_ip, best_ir)
+                    call reg_obj%cluster_sort_tab(best_ip, best_ir)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir)
+                        call reg_obj%uniform_cavgs(best_ip, best_ir, is_gradient=.true.)
                     enddo
                 case('unihard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
@@ -229,10 +229,10 @@ contains
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir)
+                        call reg_obj%uniform_cavgs(best_ip, best_ir, is_gradient=.true.)
                     enddo
             end select
-            call reg_obj%regularize_refs
+            call reg_obj%regularize_refs(is_gradient=.true.)
             call pftcc%memoize_refs
             if( trim(params_glob%refine) == 'prob' )then
                 call reg_obj%reset_regs
