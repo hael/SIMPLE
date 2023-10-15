@@ -205,10 +205,9 @@ contains
         !$omp end parallel do
     end subroutine sort_tab
 
-    subroutine uniform_cavgs( self, best_ip, best_ir, is_gradient )
+    subroutine uniform_cavgs( self, best_ip, best_ir )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top), best_ir(params_glob%fromp:params_glob%top)
-        logical,  optional, intent(in)    :: is_gradient
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -232,7 +231,7 @@ contains
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
                 ptcl_ctf_rot = ptcl_ctf_rot * shmat
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
-                if( present(is_gradient) .and. is_gradient )then
+                if( params_glob%l_reg_grad )then
                     weight = 1. - self%ref_ptcl_tab(iptcl, iref)%prob
                 else
                     weight = self%ref_ptcl_tab(iptcl, iref)%prob
@@ -557,10 +556,9 @@ contains
     end subroutine reg_hpsort
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
-    subroutine ref_reg_cc_tab( self, np, is_gradient )
+    subroutine ref_reg_cc_tab( self, np )
         class(regularizer), intent(inout) :: self
         integer,  optional, intent(in)    :: np
-        logical,  optional, intent(in)    :: is_gradient
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -592,7 +590,7 @@ contains
                     call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
                     ptcl_ctf_rot = ptcl_ctf_rot * shmat
                     call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
-                    if( present(is_gradient) .and. is_gradient )then
+                    if( params_glob%l_reg_grad )then
                         weight = 1. - self%ref_ptcl_tab(i, iref)%prob
                     else
                         weight = self%ref_ptcl_tab(i, iref)%prob
@@ -606,12 +604,11 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_tab
 
-    subroutine regularize_refs( self, ref_freq_in, is_gradient )
+    subroutine regularize_refs( self, ref_freq_in )
         use simple_image
         use simple_opt_filter, only: butterworth_filter
         class(regularizer), intent(inout) :: self
         real,     optional, intent(in)    :: ref_freq_in
-        logical,  optional, intent(in)    :: is_gradient
         real,               parameter     :: REF_FRAC = 1
         integer,            allocatable   :: ref_ind(:)
         complex,            allocatable   :: cmat(:,:)
@@ -620,7 +617,7 @@ contains
         real    :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        if( present(is_gradient) .and. is_gradient )then
+        if( params_glob%l_reg_grad )then
             ! keep regs
         else
             !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
@@ -671,7 +668,7 @@ contains
                 ! keep the refs
             else
                 ! using the reg terms as refs
-                if( present(is_gradient) .and. is_gradient )then
+                if( params_glob%l_reg_grad )then
                     self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
                     self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
                 else
