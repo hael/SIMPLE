@@ -193,6 +193,7 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: reg_mode='tab'       !< reg mode(tab|normtab|hard){tab}
+    character(len=STDLEN)     :: reg_grad='no'        !< reg gradient to be used
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -429,6 +430,7 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
+    logical :: l_reg_grad     = .false.
     logical :: l_reg_opt_ang  = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_debug    = .false.
@@ -566,6 +568,7 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
+        call check_carg('reg_grad',       self%reg_grad)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
@@ -1435,6 +1438,7 @@ contains
         ! optimal angle in the reg
         self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
         ! randomized ories and zero shifts in reg shceme
+        self%l_reg_grad  = trim(self%reg_grad ).eq.'yes'
         self%l_reg_init  = trim(self%reg_init ).eq.'yes'
         self%l_reg_debug = trim(self%reg_debug).eq.'yes'
         self%l_reg_scale = trim(self%reg_scale).eq.'yes'
