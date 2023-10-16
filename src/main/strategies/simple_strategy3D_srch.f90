@@ -7,7 +7,7 @@ use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
-use simple_regularizer,        only: regularizer
+use simple_regularizer_inpl,   only: regularizer
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
