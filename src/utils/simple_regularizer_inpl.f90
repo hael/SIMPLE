@@ -122,23 +122,40 @@ contains
     end subroutine init_tab
 
     ! filling prob/corr 2D table
-    subroutine fill_tab( self, glob_pinds )
+    subroutine fill_tab( self, glob_pinds, use_reg )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        logical,  optional, intent(in)    :: use_reg
         integer  :: i, iref, iptcl, irot, loc
-        !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc) proc_bind(close) schedule(static)
-        do irot = 1, self%reg_nrots
-            do iref = 1, self%nrefs
-                do i = 1, self%pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    loc   = self%rot_inds(irot)
-                    self%ref_ptcl_tab(iptcl,iref,irot)%loc = loc
-                    self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
-                    self%ref_ptcl_corr(iptcl,iref,irot)    = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc)))
+        if( present(use_reg) .and. use_reg )then
+            !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc) proc_bind(close) schedule(static)
+            do irot = 1, self%reg_nrots
+                do iref = 1, self%nrefs
+                    do i = 1, self%pftcc%nptcls
+                        iptcl = glob_pinds(i)
+                        loc   = self%rot_inds(irot)
+                        self%ref_ptcl_tab(iptcl,iref,irot)%loc = loc
+                        self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
+                        self%ref_ptcl_corr(iptcl,iref,irot)    = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, self%regs(:,:,iref,irot))))
+                    enddo
                 enddo
             enddo
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc) proc_bind(close) schedule(static)
+            do irot = 1, self%reg_nrots
+                do iref = 1, self%nrefs
+                    do i = 1, self%pftcc%nptcls
+                        iptcl = glob_pinds(i)
+                        loc   = self%rot_inds(irot)
+                        self%ref_ptcl_tab(iptcl,iref,irot)%loc = loc
+                        self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
+                        self%ref_ptcl_corr(iptcl,iref,irot)    = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc)))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine fill_tab
 
     subroutine sort_tab( self )
@@ -285,7 +302,7 @@ contains
             if( .not.(any(mask_irr)) ) mask_irr = .true.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(irot,ir,ip)
             do ir = 1, ncols
-                do irot = 1, self%reg_nrots
+                do irot = 1, nz
                     if( mask_irr(ir,irot) )then
                         max_ir(ir,irot) = 0.
                         do ip = 1, to_ii
