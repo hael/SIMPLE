@@ -670,32 +670,55 @@ contains
         class(ctfparams), intent(in)    :: ctfparms
         real,             intent(out)   :: score
         real, allocatable :: res(:)
-        real    :: pspec(img%get_filtsz()), phshift, start_freq, end_freq, peak_avg, ice_avg
-        integer :: box, start_find, end_find, peak_maxind, ice_maxind
+        real    :: phshift, start_freq, end_freq, ice_avg, band_avg, mag_max, mag, g
+        integer :: lims(3,2), box, sh, h,k, start_find, end_find, peak_maxind, ice_maxind, hmax, kmax, cnt
+        score = 0.
         if( abs(self%smpd-ctfparms%smpd) > 1.d-4) THROW_HARD('Inconsistent SMPD; calc_ice_frac')
-        if( self%smpd > (ICE_BAND1/2.) )then
-            score = 0.
-            return
-        endif
+        if( self%smpd > (ICE_BAND1/2.) ) return
         if( .not.img%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_frac')
         box = img%get_box()
         res = get_resarr(box, self%smpd)
+        lims = img%loop_lims(2)
         call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
         phshift    = merge(ctfparms%phshift, 0. ,ctfparms%l_phaseplate)
         start_freq = sqrt(self%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast)))
         end_freq   = sqrt(self%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast)))
-        start_find = nint(start_freq * real(box))
-        end_find   = nint(end_freq   * real(box))
-        call img%power_spectrum(pspec)
-        peak_maxind  = maxloc(pspec(start_find:end_find),dim=1) + start_find - 1
         call get_find_at_crit(size(res), res, ICE_BAND1, ice_maxind)
         start_find = max(1,     ice_maxind - 3)
         end_find   = min(box/2, ice_maxind + 3)
-        ice_maxind = maxloc(pspec(start_find:end_find),DIM=1) + start_find - 1
-        peak_avg   = sum(pspec(peak_maxind-1:peak_maxind+1))   / 3.
-        ice_avg    = sum(pspec(ice_maxind-1:ice_maxind+1)) / 3.
-        score = ice_avg / peak_avg
-        if( score > 0.5 ) score = (ice_avg - 0.5*peak_avg) / peak_avg
+        hmax     = -1
+        kmax     = -1
+        mag_max  = -1.
+        band_avg = 0.
+        cnt      = 0
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
+                sh = nint(hyp(h,k))
+                g  = real(sh) / real(box)
+                if( g > start_freq .and. g < end_freq )then
+                    band_avg = band_avg + csq_fast(img%get_fcomp2D(h,k))
+                    cnt      = cnt + 1
+                else if( sh >= start_find .and. sh < end_find )then
+                    mag = csq_fast(img%get_fcomp2D(h,k))
+                    if( mag > mag_max )then
+                        hmax = h
+                        kmax = k
+                        mag_max = mag
+                    endif
+                endif
+            end do
+        end do
+        if( cnt < 1 ) return
+        band_avg = band_avg / real(cnt)
+        ice_avg  = 0.
+        do k = kmax-1,kmax+1
+            do h = hmax-1,hmax+1
+                ice_avg = ice_avg + csq_fast(img%get_fcomp2D(h,k))
+            enddo
+        enddo
+        ice_avg = ice_avg / 9.
+        score   = ice_avg / band_avg
+        if( score > 0.5 ) score = (ice_avg - 0.5*band_avg) / band_avg
     end subroutine calc_ice_frac
 
 end module simple_ctf
