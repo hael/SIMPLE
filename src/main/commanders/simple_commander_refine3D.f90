@@ -19,6 +19,7 @@ public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
 public :: check_align_commander
+public :: check_align_inpl_commander
 private
 #include "simple_local_flags.inc"
 
@@ -46,6 +47,11 @@ type, extends(commander_base) :: check_align_commander
   contains
     procedure :: execute      => exec_check_align
 end type check_align_commander
+
+type, extends(commander_base) :: check_align_inpl_commander
+  contains
+    procedure :: execute      => exec_check_align_inpl
+end type check_align_inpl_commander
 
 contains
 
@@ -1147,5 +1153,270 @@ contains
         end select
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align
+
+    subroutine exec_check_align_inpl( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,&
+                    &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
+        use simple_fplane,              only: fplane
+        use simple_image
+        use simple_regularizer_inpl
+        class(check_align_inpl_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
+        integer,          allocatable :: pinds(:), best_ip(:), best_ir(:), best_irot(:)
+        logical,          allocatable :: ptcl_mask(:)
+        complex,          allocatable :: cmat(:,:)
+        real,             allocatable :: sigma2_noise(:,:)
+        type(image),      allocatable :: tmp_imgs(:)
+        type(fplane),     allocatable :: fpls(:)
+        type(ctfparams),  allocatable :: ctfparms(:)
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(ori)                     :: o_tmp
+        type(image)                   :: img
+        type(regularizer)             :: reg_obj
+        type(ori)                     :: orientation
+        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr, irot
+        logical  :: l_ctf, do_center
+        real     :: xyz(3), euls(3), shvec(2), sdev
+        call cline%set('mkdir',    'yes')
+        call cline%set('oritype',  'ptcl3D')
+        call cline%set('center',   'no')
+        call build%init_params_and_build_strategy3D_tbox(cline,params)
+        call build%spproj%update_projinfo(cline)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &1.0, nptcls, pinds, ptcl_mask)
+        print *, 'nptcls = ', nptcls, '; fromp = ', params_glob%fromp, '; top = ', params_glob%top
+        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
+        call pftcc%reallocate_ptcls(nptcls, pinds)
+        call reg_obj%new(pftcc)
+        print *, 'Preparing the references ...'
+        ! e/o partioning
+        if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
+            call build%spproj%os_ptcl3D%partition_eo
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
+        ! PREPARATION OF REFERENCES IN PFTCC
+        ! read reference volumes and create polar projections
+        do s=1,params_glob%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s))
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1, params_glob%nspace
+                call build_glob%eulspace%get_ori(iref, o_tmp)
+                call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    (s - 1) * params_glob%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+        end do
+        call pftcc%memoize_refs
+        ! PREPARATION OF PARTICLES
+        print *, 'Preparing the particles ...'
+        call prepimgbatch(params_glob%top-params_glob%fromp+1)
+        call read_imgbatch([params_glob%fromp,params_glob%top], ptcl_mask)
+        call build%img_match%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box,params%box,1], params%smpd, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(iptcl,ithr) schedule(static) proc_bind(close)
+        do iptcl = params_glob%fromp,params_glob%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            ithr = omp_get_thread_num()+1
+            call tmp_imgs(ithr)%copy_fast(build%imgbatch(iptcl))
+            ! prep
+            call prepimg4align(iptcl, tmp_imgs(ithr))
+            ! transfer to polar coordinates
+            call build%img_match%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftcc%set_eo(iptcl, .true.)
+        enddo
+        !$omp end parallel do
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
+        ! make CTFs
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+
+        ! ALIGNMENT OF PARTICLES
+        print *, 'Aligning the particles ...'
+        ! using gencorrs (cc-based to estimate the sigma)
+        if( params_glob%l_needs_sigma )then
+            allocate( sigma2_noise(pftcc%kfromto(1):pftcc%kfromto(2), params_glob%fromp:params_glob%top), source=1. )
+            ! do j = pftcc%kfromto(1),pftcc%kfromto(2)
+            !     sigma2_noise(j,:) = real(j)
+            ! enddo
+            call pftcc%assign_sigma2_noise(sigma2_noise)
+            ! call pftcc%memoize_ptcls
+            ! params_glob%cc_objfun = OBJFUN_CC
+            ! !$omp parallel do default(shared) private(j,iref,ithr,iptcl,inpl_corrs,cxy,max_corr,max_iref,max_sh,max_loc,loc,corr,sh) proc_bind(close) schedule(static)
+            ! do j = 1, nptcls
+            !     max_corr = 0.
+            !     do iref = 1, params_glob%nspace
+            !         ithr  = omp_get_thread_num() + 1
+            !         iptcl = pinds(j)
+            !         ! find best irot/shift for this pair of iref, iptcl
+            !         call pftcc%gencorrs( iref, iptcl, inpl_corrs )
+            !         loc = maxloc(inpl_corrs, dim=1)
+            !         call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+            !         cxy = grad_shsrch_obj(ithr)%minimize(irot=loc)
+            !         if( loc > 0 )then
+            !             corr = cxy(1)
+            !             sh   = cxy(2:3)
+            !         else
+            !             loc  = maxloc(inpl_corrs, dim=1)
+            !             corr = inpl_corrs(loc)
+            !             sh   = 0.
+            !         endif
+            !         if( corr > max_corr )then
+            !             max_corr = corr
+            !             max_loc  = loc
+            !             max_sh   = sh
+            !             max_iref = iref
+            !         endif
+            !     enddo
+            !     call pftcc%update_sigma( max_iref, iptcl, max_sh, max_loc )
+            ! enddo
+            ! !$omp end parallel do
+            ! params_glob%cc_objfun = OBJFUN_EUCLID
+        endif
+        ! actual alignment using the defined cost function
+        ! scaling by the ctf
+        if( params_glob%l_reg_scale )then
+            call pftcc%reg_scale
+            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
+            do j = 1, nptcls
+                call pftcc%memoize_sqsum_ptcl(pinds(j))
+            enddo
+            !$omp end parallel do
+        endif
+        ! Memoize particles FFT parameters
+        call pftcc%memoize_ptcls
+        call reg_obj%init_tab
+        call reg_obj%fill_tab(pinds)
+        print *, 'Assembling the class averages with'
+        select case(trim(params_glob%reg_mode))
+            case('tab')
+                print *, 'soft-sorting the tab...'
+                call reg_obj%sort_tab_no_norm
+                call reg_obj%ref_reg_cc_tab
+            case('normtab')
+                print *, 'normalizing and soft-sorting...'
+                call reg_obj%sort_tab
+                call reg_obj%ref_reg_cc_tab
+            case('unihard')
+                print *, 'uniformly-hard-sorting the tab...'
+                allocate(best_ir(params_glob%fromp:params_glob%top),&
+                        &best_ip(params_glob%fromp:params_glob%top),&
+                        &best_irot(params_glob%fromp:params_glob%top))
+                call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
+                call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+        end select
+        ! descaling
+        if( params_glob%l_reg_scale ) call pftcc%reg_descale
+        call reg_obj%regularize_refs
+        select case(trim(params_glob%reg_mode))
+            case('tab')
+            case('normtab')
+                print *, 'Reconstructing the 3D volume ...'
+                ! init volumes
+                call preprecvols
+                ! prep img, fpls, ctfparms
+                allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+                do iptcl = params_glob%fromp,params_glob%top
+                    if( .not.ptcl_mask(iptcl) ) cycle
+                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+                    call build%imgbatch(iptcl)%fft
+                    call fpls(iptcl)%new(build%imgbatch(iptcl))
+                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+                enddo
+                !$omp end parallel do
+                do irot = 1, reg_obj%reg_nrots
+                    do iref = 1, params_glob%nspace
+                        euls = build_glob%eulspace%get_euler(iref)
+                        do j = 1, SORT_THRES
+                            pind_here = params_glob%fromp + j - 1
+                            if( reg_obj%ref_ptcl_tab(pind_here, iref, irot)%prob < TINY ) cycle
+                            iptcl = reg_obj%ref_ptcl_tab(pind_here, iref, irot)%iptcl
+                            call build_glob%spproj_field%get_ori(iptcl, orientation)
+                            if( orientation%isstatezero() ) cycle
+                            ! getting the particle orientation
+                            shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(pind_here,iref,irot)%sh
+                            call orientation%set_shift(shvec)
+                            loc     = reg_obj%ref_ptcl_tab(pind_here, iref, irot)%loc
+                            euls(3) = 360. - pftcc%get_rot(loc)
+                            call orientation%set_euler(euls)
+                            call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref, irot)%prob)
+                            ! insert
+                            call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
+                        enddo
+                    enddo
+                enddo
+                ! normalise structure factors
+                call norm_struct_facts( cline )
+                ! destruct
+                call killrecvols()
+                call orientation%kill
+            case('unihard')
+                print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
+                ! init volumes
+                call preprecvols
+                ! prep img, fpls, ctfparms
+                allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+                do iptcl = params_glob%fromp,params_glob%top
+                    if( .not.ptcl_mask(iptcl) ) cycle
+                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+                    call build%imgbatch(iptcl)%fft
+                    call fpls(iptcl)%new(build%imgbatch(iptcl))
+                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+                enddo
+                !$omp end parallel do
+                do j = params_glob%fromp,params_glob%top
+                    iref  = best_ir(j)
+                    iptcl = best_ip(j)
+                    irot  = best_irot(j)
+                    if( reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob < TINY ) cycle
+                    euls = build_glob%eulspace%get_euler(iref)
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    ! getting the particle orientation
+                    shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iptcl,iref,irot)%sh
+                    call orientation%set_shift(shvec)
+                    loc     = reg_obj%ref_ptcl_tab(iptcl, iref, irot)%loc
+                    euls(3) = 360. - pftcc%get_rot(loc)
+                    call orientation%set_euler(euls)
+                    call orientation%set('w', reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob)
+                    ! insert
+                    call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
+                enddo
+                ! normalise structure factors
+                call norm_struct_facts( cline )
+                ! destruct
+                call killrecvols()
+                call orientation%kill
+        end select
+        call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_check_align_inpl
 
 end module simple_commander_refine3D
