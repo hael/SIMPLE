@@ -901,7 +901,7 @@ contains
         use simple_regularizer
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
+        integer,          parameter   :: MAXITS = 60
         integer,          allocatable :: pinds(:), best_ip(:), best_ir(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
@@ -1090,7 +1090,7 @@ contains
                 !$omp end parallel do
                 do iref = 1, params_glob%nspace
                     euls = build_glob%eulspace%get_euler(iref)
-                    do j = 1, SORT_THRES
+                    do j = 1, params_glob%reg_num
                         pind_here = params_glob%fromp + j - 1
                         if( reg_obj%ref_ptcl_tab(pind_here, iref)%prob < TINY ) cycle
                         iptcl = reg_obj%ref_ptcl_tab(pind_here, iref)%iptcl
@@ -1166,7 +1166,7 @@ contains
         use simple_regularizer_inpl
         class(check_align_inpl_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        integer,          parameter   :: MAXITS = 60, SORT_THRES = 100
+        integer,          parameter   :: MAXITS = 60
         integer,          allocatable :: pinds(:), best_ip(:), best_ir(:), best_irot(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
@@ -1353,7 +1353,7 @@ contains
                 do irot = 1, reg_obj%reg_nrots
                     do iref = 1, params_glob%nspace
                         euls = build_glob%eulspace%get_euler(iref)
-                        do j = 1, SORT_THRES
+                        do j = 1, params_glob%reg_num
                             pind_here = params_glob%fromp + j - 1
                             if( reg_obj%ref_ptcl_tab(pind_here, iref, irot)%prob < TINY ) cycle
                             iptcl = reg_obj%ref_ptcl_tab(pind_here, iref, irot)%iptcl

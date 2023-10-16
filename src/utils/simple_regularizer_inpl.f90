@@ -125,25 +125,16 @@ contains
     subroutine fill_tab( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer  :: i, iref, iptcl, ithr, irot, loc
-        real     :: inpl_corrs(self%nrots), cxy(3)
-        !$omp parallel do collapse(3) default(shared) private(i,irot,iref,ithr,iptcl,inpl_corrs,cxy,loc) proc_bind(close) schedule(static)
+        integer  :: i, iref, iptcl, irot, loc
+        !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc) proc_bind(close) schedule(static)
         do irot = 1, self%reg_nrots
             do iref = 1, self%nrefs
                 do i = 1, self%pftcc%nptcls
-                    ithr  = omp_get_thread_num() + 1
                     iptcl = glob_pinds(i)
                     loc   = self%rot_inds(irot)
                     self%ref_ptcl_tab(iptcl,iref,irot)%loc = loc
-                    call self%grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    cxy = self%grad_shsrch_obj(ithr)%minimize(irot=loc)
-                    if( loc > 0 )then
-                        self%ref_ptcl_corr(iptcl,iref,irot)   = max(0.,cxy(1))
-                        self%ref_ptcl_tab(iptcl,iref,irot)%sh = cxy(2:3)
-                    else
-                        self%ref_ptcl_corr(iptcl,iref,irot)   = self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc)
-                        self%ref_ptcl_tab(iptcl,iref,irot)%sh = 0.
-                    endif
+                    self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
+                    self%ref_ptcl_corr(iptcl,iref,irot)    = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc)))
                 enddo
             enddo
         enddo
