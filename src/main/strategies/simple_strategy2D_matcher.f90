@@ -278,14 +278,6 @@ contains
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
-        ! PARTICLE THESHOLDING/WEIGHING
-        if( params_glob%thresh2D.ne.'no' )then
-            if( which_iter > 2 )then
-                call build_glob%spproj_field%threshold_particles(params_glob%thresh2D,&
-                & params_glob%thresh2D_param, [params_glob%fromp,params_glob%top])
-            endif
-        endif
-
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &

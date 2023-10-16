@@ -523,20 +523,30 @@ contains
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
         integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:)
         logical,          allocatable :: selected(:)
-        type(ctf)       :: tfun
-        type(ctfparams) :: ctfparms
+        character(len=:), allocatable :: cavgs_stk
+        type(ctf)        :: tfun
+        type(ctfparams)  :: ctfparms
         real(dp) :: rmi2, r2
-        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu, ice_score
-        real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr
+        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu, ice_score, score
+        real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end
-        integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel
+        integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel, ini_pop, cavgs_ncls
         integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel
-        logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_weighted_init
+        logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_weighted_init, l_write
         call cline%set('oritype', 'ptcl2D')
         call cline%set('mkdir',   'yes')
         if( .not.cline%defined('objfun') )     call cline%set('objfun',  'cc')
         if( .not.cline%defined('reject_cls') ) call cline%set('reject_cls',  'no')
         call build%init_params_and_build_general_tbox(cline, params)
+        call build%spproj%get_cavgs_stk(cavgs_stk, cavgs_ncls, cavgs_smpd)
+        ! class-based fracture identification
+        ! do icls = 1,cavgs_ncls
+        !     call build%img%read(cavgs_stk,icls)
+        !     call build%img%mask(real(params%box)/2.-COSMSKHALFWIDTH,'soft')
+        !     call build%img%fft
+        !     call build%img%calc_line_score(ice_score)
+        !     print *,icls, ice_score
+        ! enddo
         ncls       = build%spproj_field%get_n('class')
         states     = nint( build%spproj_field%get_all('state'))
         nptcls     = size(states)
@@ -544,6 +554,7 @@ contains
         l_groundtruth   = cline%defined('infile')
         l_corr_ranking  = .true.
         l_weighted_init = .true.
+        l_write         = .true.
         if( l_groundtruth )then
             n_lines = nlines(trim(params%infile))
             allocate(labels(n_lines))
@@ -599,8 +610,9 @@ contains
         do icls = 1,ncls
             ! indices
             call build%spproj_field%get_pinds(icls, 'class', pinds)
-            pop   = size(pinds)
-            nbins = ceiling(real(pop)/real(NPTCLS_PER_BIN))
+            pop     = size(pinds)
+            ini_pop = pop
+            nbins   = ceiling(real(pop)/real(NPTCLS_PER_BIN))
             if( nbins < 1 ) cycle
             ! images
             batchsz_max = pop   ! batchsz_max = min(pop,params_glob%nthr*BATCHTHRSZ)
@@ -638,7 +650,7 @@ contains
                     tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                     call tfun%calc_ice_frac(tmp_imgs(ithr), ctfparms, ice_score)
                     call build%spproj_field%set(iptcl,'ice',ice_score)
-                    if( ice_score > 0.9 )then
+                    if( ice_score > 4.0 )then
                         pinds(i)      = 0
                         cls2batch(i)  = 0
                         states(iptcl) = 0
@@ -681,6 +693,28 @@ contains
             ! indexing update
             cls2batch = pack(cls2batch,mask=(pinds>0))
             pinds     = pack(pinds,mask=(pinds>0))
+            if( l_write )then
+                j = 0
+                if( cls2batch(1) > 1 )then
+                    do i = 1,cls2batch(1)-1
+                        j = j+1
+                        call build%imgbatch(i)%write('ice_'//int2str_pad(icls,3)//'.mrc',j)
+                    enddo
+                endif
+                do i = 1,pop-1
+                    if( cls2batch(i+1) == cls2batch(i)+1 ) cycle
+                    do k = cls2batch(i)+1,cls2batch(i+1)-1,1
+                        j = j+1
+                        call build%imgbatch(k)%write('ice_'//int2str_pad(icls,3)//'.mrc',j)
+                    enddo
+                enddo
+                if( cls2batch(pop) < ini_pop )then
+                    do i = cls2batch(pop)+1,ini_pop
+                        j = j+1
+                        call build%imgbatch(i)%write('ice_'//int2str_pad(icls,3)//'.mrc',j)
+                    enddo
+                endif
+            endif
             ! class allocations
             if( allocated(corrs) ) deallocate(corrs,order,weights,R2s,RmI2s,rots,shifts,dfs,&
                 &bin_inds,bins,selected)
@@ -708,32 +742,40 @@ contains
             cc_df_corrs = sum(dfs*tmp) / real(pop)
             if( trim(params%reject_cls).eq.'yes' )then
                 ! rejecting entire classes with zero and less correlation
-                if( cc_df_corrs < 0.001 )then
+                if( cc_df_corrs < 0.0 )then
                     states(pinds(:)) = 0
                     cycle
                 endif
             endif
             ! References & noise power in pftcc
             call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
-            ! call write_cls(cls_avg,      'cls_'//int2str_pad(icls,3)//'_iter0.mrc', 1)
             if( l_weighted_init )then
                 r2  = sum(csq_fast(cls_avg))
+                !$omp parallel do private(i,irot,ptcl_rot,ctf_rot,diff) default(shared) proc_bind(close)
                 do i = 1,pop
                     irot = pftcc%nrots+2-rots(i)
                     if(irot > pftcc%nrots ) irot = irot - pftcc%nrots
                     call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,i), irot, ptcl_rot)
                     call pftcc%rotate_ctf(pinds(i), irot, ctf_rot)
                     diff = ctf_rot * cls_avg - ptcl_rot
-                    selected(i) = sum(csq_fast(diff)) / r2 < 0.9
+                    selected(i) = (sum(csq_fast(diff)) / r2) < 0.9
                 enddo
+                !$omp end parallel do
                 pop_sel = count(selected)
-                print *,'Deselected: ',icls,pop-pop_sel
+                print *,'Deselected    : ',icls,pop-pop_sel
                 if( pop_sel < pop )then
                     nbins = ceiling(real(pop_sel)/real(NPTCLS_PER_BIN))
                     deallocate(R2s,RmI2s,bin_inds)
                     allocate(R2s(nbins),RmI2s(nbins),bin_inds(nbins,NPTCLS_PER_BIN))
+                    j = 0
                     do i = 1,pop
-                        if(.not.selected(i)) states(pinds(i)) = 0
+                        if(.not.selected(i))then
+                            states(pinds(i)) = 0
+                            if( l_write )then
+                                j = j+1
+                                call build%imgbatch(i)%write('bad_'//int2str_pad(icls,3)//'.mrc',j)
+                            endif
+                        endif
                     enddo
                 endif
             else
@@ -758,6 +800,36 @@ contains
                 endif
             enddo
             !$omp end parallel do
+            ! negative correlations
+            if( count(selected .and.(corrs<1.e-6)) > 0 )then
+                if( l_write )then
+                    j = 0
+                    do i = 1,pop
+                        if( corrs(i) < 0. .and. selected(i))then
+                            j = j+1
+                            print *,icls,i,cls2batch(i), corrs(i), labels(pinds(i))
+                            call build%imgbatch(cls2batch(i))%write('neg_'//int2str_pad(icls,3)//'.mrc',j)
+                        endif
+                    enddo
+                endif
+                where( selected .and.(corrs<1.e-6) ) selected = .false.
+                pop_sel = count(selected)
+                print *,'Deselected neg: ',icls,pop-pop_sel
+                nbins = ceiling(real(pop_sel)/real(NPTCLS_PER_BIN))
+                if( nbins < 3 ) cycle
+                deallocate(R2s,RmI2s,bin_inds)
+                allocate(R2s(nbins),RmI2s(nbins),bin_inds(nbins,NPTCLS_PER_BIN))
+                where(.not. selected)
+                    states(pinds(:)) = 0
+                    weights(:) = 0.d0
+                end where
+                call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
+                call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
+                pftcc%pfts_refs_even(:,:,1) = cmplx(cls_avg_even,kind=sp)
+                pftcc%pfts_refs_odd(:,:,1)  = cmplx(cls_avg_odd, kind=sp)
+                call pftcc%memoize_refs
+                call update_sigmas(1)
+            endif
             ! Iteration loop
             prev_threshold = huge(threshold)
             prev_nsel      = 0
@@ -799,7 +871,7 @@ contains
                 ! threshold = median(tmp(nbins-4:nbins)) / 3.
                 ! threshold = median(tmp(nbins-4:nbins)) / 4.
                 ! threshold = sum(tmp(nbins-4:nbins)) / 5. / 3.
-                threshold = median(tmp(floor(real(nbins)*0.9):nbins)) / 3.
+                threshold = median(tmp(floor(real(nbins)*0.9):nbins)) / 4.
                 if( (iter==1) .and. (count(R2s<threshold)==0) )then
                     ! making sure the weaker bin is deactivated on first iteration
                     R2s(minloc(R2s,dim=1)) = threshold - 1.
@@ -889,6 +961,16 @@ contains
                 enddo
                 !$omp end parallel do
                 call update_sigmas(iter)
+            enddo
+            k = 0
+            do ibin = 1,nbins
+                binpop = count(bins==ibin)
+                do i = 1,binpop
+                    j = bin_inds(ibin,i)
+                    if( j==0 ) cycle
+                    k = k+1
+                    call build%imgbatch(cls2batch(j))%write('ptcls_'//int2str_pad(icls,3)//'.mrc',k)
+                enddo
             enddo
         enddo
         call build%spproj_field%set_all('state', real(states))
