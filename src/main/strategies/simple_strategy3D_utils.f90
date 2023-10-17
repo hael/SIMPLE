@@ -22,6 +22,7 @@ contains
         integer   :: state, neff_states, loc(1), nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
         logical   :: l_multistates
+        s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
