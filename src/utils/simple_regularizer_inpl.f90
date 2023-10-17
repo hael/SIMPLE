@@ -126,9 +126,10 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         logical,  optional, intent(in)    :: use_reg
-        integer  :: i, iref, iptcl, irot, loc
+        complex(dp) :: ref_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer     :: i, iref, iptcl, irot, loc
         if( present(use_reg) .and. use_reg )then
-            !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc) proc_bind(close) schedule(static)
+            !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc,ref_rot) proc_bind(close) schedule(static)
             do irot = 1, self%reg_nrots
                 do iref = 1, self%nrefs
                     do i = 1, self%pftcc%nptcls
@@ -136,7 +137,16 @@ contains
                         loc   = self%rot_inds(irot)
                         self%ref_ptcl_tab(iptcl,iref,irot)%loc = loc
                         self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
-                        self%ref_ptcl_corr(iptcl,iref,irot)    = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, self%regs(:,:,iref,irot))))
+                        if( params_glob%l_reg_grad )then
+                            if( self%pftcc%iseven(i) )then
+                                call self%rotate_polar(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=dp), ref_rot, loc)
+                            else
+                                call self%rotate_polar(cmplx(self%pftcc%pfts_refs_odd( :,:,iref), kind=dp), ref_rot, loc)
+                            endif
+                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, ref_rot + self%regs(:,:,iref,irot))))
+                        else
+                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, self%regs(:,:,iref,irot))))
+                        endif
                     enddo
                 enddo
             enddo
@@ -220,7 +230,11 @@ contains
                 call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iptcl, iref, irot)%sh), shmat)
                 ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
                 ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
-                weight       = self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                if( params_glob%l_reg_grad )then
+                    weight = 1. - self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                else
+                    weight = self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                endif
                 self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                 self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
                 self%ref_corr(iref)            = self%ref_corr(iref)       + self%ref_ptcl_tab(iptcl, iref, irot)%prob
@@ -520,17 +534,21 @@ contains
         real    :: ref_freq
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        !$omp parallel default(shared) private(k) proc_bind(close)
-        !$omp do schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:,:)) < TINY )
-                self%regs(:,k,:,:) = 0._dp
-            elsewhere
-                self%regs(:,k,:,:) = self%regs(:,k,:,:) / self%regs_denom(:,k,:,:)
-            endwhere
-        enddo
-        !$omp end do
-        !$omp end parallel
+        if( params_glob%l_reg_grad )then
+            ! keep regs
+        else
+            !$omp parallel default(shared) private(k) proc_bind(close)
+            !$omp do schedule(static)
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%regs_denom(:,k,:,:)) < TINY )
+                    self%regs(:,k,:,:) = 0._dp
+                elsewhere
+                    self%regs(:,k,:,:) = self%regs(:,k,:,:) / self%regs_denom(:,k,:,:)
+                endwhere
+            enddo
+            !$omp end do
+            !$omp end parallel
+        endif
         ! sort ref_corr to only change refs to regs for high-score cavgs
         ref_ind = (/(iref,iref=1,self%nrefs)/)
         ! call hpsort(self%ref_corr, ref_ind)
