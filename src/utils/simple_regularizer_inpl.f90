@@ -139,9 +139,9 @@ contains
                         self%ref_ptcl_tab(iptcl,iref,irot)%sh  = 0.
                         if( params_glob%l_reg_grad )then
                             if( self%pftcc%iseven(i) )then
-                                call self%rotate_polar(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=dp), ref_rot, loc)
+                                call self%pftcc%rotate_ref(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=dp), loc, ref_rot)
                             else
-                                call self%rotate_polar(cmplx(self%pftcc%pfts_refs_odd( :,:,iref), kind=dp), ref_rot, loc)
+                                call self%pftcc%rotate_ref(cmplx(self%pftcc%pfts_refs_odd( :,:,iref), kind=dp), loc, ref_rot)
                             endif
                             self%ref_ptcl_corr(iptcl,iref,irot) = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, ref_rot + self%regs(:,:,iref,irot))))
                         else
@@ -523,6 +523,7 @@ contains
 
     subroutine regularize_refs( self, ref_freq_in )
         use simple_image
+        use simple_opt_filter, only: butterworth_filter
         class(regularizer), intent(inout) :: self
         real, optional,     intent(in)    :: ref_freq_in
         real,               parameter     :: REF_FRAC = 1
@@ -530,8 +531,8 @@ contains
         complex,            allocatable   :: cmat(:,:)
         complex(dp),        allocatable   :: regs_tmp(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box, irot, cnt
-        real    :: ref_freq
+        integer :: iref, k, box, irot, cnt, find
+        real    :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
         if( params_glob%l_reg_grad )then
@@ -549,6 +550,14 @@ contains
             !$omp end do
             !$omp end parallel
         endif
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%regs(:,k,:,:) = filt(k) * self%regs(:,k,:,:)
+        enddo
+        !$omp end parallel do
         ! sort ref_corr to only change refs to regs for high-score cavgs
         ref_ind = (/(iref,iref=1,self%nrefs)/)
         ! call hpsort(self%ref_corr, ref_ind)
