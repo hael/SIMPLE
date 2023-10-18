@@ -9,7 +9,7 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 implicit none
 
-public :: regularizer
+public :: regularizer_inpl
 private
 #include "simple_local_flags.inc"
 
@@ -20,7 +20,7 @@ type reg_params
     real    :: prob, sh(2), w   !< probability, shift, and weight
 end type reg_params
 
-type :: regularizer
+type :: regularizer_inpl
     integer                  :: nrots
     integer                  :: nrefs
     integer                  :: pftsz
@@ -59,13 +59,13 @@ type :: regularizer
     generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_test
     ! DESTRUCTOR
     procedure          :: kill
-end type regularizer
+end type regularizer_inpl
 
 contains
     ! CONSTRUCTORS
 
     subroutine new( self, pftcc )
-        class(regularizer),      target, intent(inout) :: self
+        class(regularizer_inpl), target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
@@ -99,7 +99,7 @@ contains
     end subroutine new
 
     subroutine init_tab( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         integer :: iptcl, iref, irot
         if( .not.(allocated(self%ref_ptcl_corr)) )then
             allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs,self%reg_nrots), source=0.)
@@ -125,9 +125,9 @@ contains
 
     ! filling prob/corr 2D table
     subroutine fill_tab( self, glob_pinds, use_reg )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        logical,  optional, intent(in)    :: use_reg
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        logical,       optional, intent(in)    :: use_reg
         complex(dp) :: ref_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer     :: i, iref, iptcl, irot, loc
         if( present(use_reg) .and. use_reg )then
@@ -171,7 +171,7 @@ contains
     end subroutine fill_tab
 
     subroutine sort_tab( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         integer :: iref, iptcl, irot
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
@@ -208,7 +208,7 @@ contains
     end subroutine sort_tab
 
     subroutine uniform_cavgs( self, best_ip, best_ir, best_irot )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top)
         integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         integer,            intent(in)    :: best_irot(params_glob%fromp:params_glob%top)
@@ -245,10 +245,10 @@ contains
     end subroutine uniform_cavgs
 
     subroutine map_ptcl_ref( self, best_ip, best_ir, best_irot )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: best_ip(params_glob%fromp:params_glob%top)
-        integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
-        integer,            intent(in)    :: best_irot(params_glob%fromp:params_glob%top)
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: best_ip(params_glob%fromp:params_glob%top)
+        integer,                 intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
+        integer,                 intent(in)    :: best_irot(params_glob%fromp:params_glob%top)
         integer :: i
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)
         do i = params_glob%fromp, params_glob%top
@@ -259,12 +259,12 @@ contains
     end subroutine map_ptcl_ref
 
     subroutine uniform_sort_tab( self, out_ip, out_ir, out_irot )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
-        integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
-        integer,            intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
-        integer,            allocatable   :: best_ip(:), best_ir(:), best_irot(:)
-        logical,            allocatable   :: mask_ir(:,:)
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
+        integer,                 intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
+        integer,                 intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
+        integer, allocatable :: best_ip(:), best_ir(:), best_irot(:)
+        logical, allocatable :: mask_ir(:,:)
         integer :: iref, iptcl, np, irot
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
@@ -304,12 +304,12 @@ contains
     end subroutine uniform_sort_tab
 
     subroutine cluster_sort_tab( self, out_ip, out_ir, out_irot )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
-        integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
-        integer,            intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
-        integer,            allocatable   :: best_ip(:), best_ir(:), best_irot(:)
-        logical,            allocatable   :: mask_ir(:,:)
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
+        integer,                 intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
+        integer,                 intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
+        integer, allocatable :: best_ip(:), best_ir(:), best_irot(:)
+        logical, allocatable :: mask_ir(:,:)
         integer :: iref, iptcl, np, from_ind, to_ind, ind, irot
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
@@ -372,12 +372,12 @@ contains
     ! based on this uniformly sorted table, one can cluster:
     !            (c2, c5) -> r3, (c6, c3) -> r1, (c1, c4) -> r2
     subroutine reg_cluster_sort( self, nrows, ncols, nz, cur_id, cur_ir, cur_irot, mask_ir )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: nrows, ncols, nz
-        integer,            intent(inout) :: cur_id(nrows)
-        integer,            intent(inout) :: cur_ir(nrows)
-        integer,            intent(inout) :: cur_irot(nrows)
-        logical,            intent(inout) :: mask_ir(ncols, nz)
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: nrows, ncols, nz
+        integer,                 intent(inout) :: cur_id(nrows)
+        integer,                 intent(inout) :: cur_ir(nrows)
+        integer,                 intent(inout) :: cur_irot(nrows)
+        logical,                 intent(inout) :: mask_ir(ncols, nz)
         integer :: ir, tmp_id(nrows), max_ind_ir(2), to_ii, num, irot
         real    :: max_ir(ncols,nz)
         num     = params_glob%reg_num
@@ -387,9 +387,9 @@ contains
         do
             if( to_ii < 1 ) return
             if( .not.(any(mask_ir)) ) return
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,irot,tmp_id)
-            do ir = 1, ncols
-                do irot = 1, nz
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(ir,irot,tmp_id)
+            do irot = 1, nz
+                do ir = 1, ncols
                     if( mask_ir(ir, irot) )then
                         ! sum of 'num' best ptcls
                         tmp_id(1:to_ii) = cur_id(1:to_ii)
@@ -411,12 +411,12 @@ contains
     end subroutine reg_cluster_sort
 
     subroutine reg_uniform_sort( self, nrows, ncols, nz, cur_id, cur_ir, cur_irot, mask_irr )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: nrows, ncols, nz
-        integer,            intent(inout) :: cur_id(nrows)
-        integer,            intent(inout) :: cur_ir(nrows)
-        integer,            intent(inout) :: cur_irot(nrows)
-        logical,            intent(inout) :: mask_irr(ncols, nz)
+        class(regularizer_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: nrows, ncols, nz
+        integer,                 intent(inout) :: cur_id(nrows)
+        integer,                 intent(inout) :: cur_ir(nrows)
+        integer,                 intent(inout) :: cur_irot(nrows)
+        logical,                 intent(inout) :: mask_irr(ncols, nz)
         integer :: irot, ir, ip, tmp_i, max_ind_ir(2), max_ind_ip, to_ii
         real    :: max_ir(ncols,nz), max_ip(ncols,nz)
         to_ii = nrows
@@ -453,7 +453,7 @@ contains
 
     ! sorting each ref column without normalization
     subroutine sort_tab_no_norm( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         integer :: iref, iptcl, irot
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(3) private(irot,iref,iptcl)
         do irot = 1, self%reg_nrots
@@ -476,7 +476,7 @@ contains
     end subroutine sort_tab_no_norm
 
     subroutine sort_tab_ptcl( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         integer :: iref, iptcl, irot
         real    :: sum_corr
         ! normalize so prob of each weight is between [0,1] for all ptcls
@@ -588,8 +588,8 @@ contains
 
     ! accumulating reference reg terms for each batch of particles, with cc-based global objfunc
     subroutine ref_reg_cc_tab( self, np )
-        class(regularizer), intent(inout) :: self
-        integer,  optional, intent(in)    :: np
+        class(regularizer_inpl), intent(inout) :: self
+        integer,       optional, intent(in)    :: np
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: i, iptcl, iref, ithr, ninds, pind_here, irot
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -618,9 +618,9 @@ contains
                         ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
                         ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
                         if( params_glob%l_reg_grad )then
-                                weight = 1. - self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                                weight = 1. - self%ref_ptcl_tab(i, iref, irot)%prob
                         else
-                                weight = self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                                weight = self%ref_ptcl_tab(i, iref, irot)%prob
                         endif
                         self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                         self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
@@ -635,15 +635,15 @@ contains
     subroutine regularize_refs( self, ref_freq_in )
         use simple_image
         use simple_opt_filter, only: butterworth_filter
-        class(regularizer), intent(inout) :: self
-        real, optional,     intent(in)    :: ref_freq_in
-        real,               parameter     :: REF_FRAC = 1
-        integer,            allocatable   :: ref_ind(:)
-        complex,            allocatable   :: cmat(:,:)
-        complex(dp),        allocatable   :: regs_tmp(:,:)
+        class(regularizer_inpl), intent(inout) :: self
+        real,      optional,     intent(in)    :: ref_freq_in
+        real,        parameter   :: REF_FRAC = 1
+        integer,     allocatable :: ref_ind(:)
+        complex,     allocatable :: cmat(:,:)
+        complex(dp), allocatable :: regs_tmp(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box, irot, cnt, find
-        real    :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
+        integer     :: iref, k, box, irot, cnt, find
+        real        :: ref_freq, filt(self%kfromto(1):self%kfromto(2))
         ref_freq = 0.
         if( present(ref_freq_in) ) ref_freq = ref_freq_in
         if( params_glob%l_reg_grad )then
@@ -717,17 +717,17 @@ contains
     end subroutine regularize_refs
     
     subroutine reset_regs( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         self%regs       = 0._dp
         self%regs_denom = 0._dp
         self%ref_corr   = 0.
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        real(sp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
+        class(regularizer_inpl), intent(inout) :: self
+        real(sp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: irot
         integer :: rot
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -744,10 +744,10 @@ contains
     end subroutine rotate_polar_real
 
     subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        complex(dp),        intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),        intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
+        class(regularizer_inpl), intent(inout) :: self
+        complex(dp),             intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),             intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: irot
         integer :: rot
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -768,10 +768,10 @@ contains
     end subroutine rotate_polar_complex
 
     subroutine rotate_polar_test( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        real(dp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
+        class(regularizer_inpl), intent(inout) :: self
+        real(dp),                intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp),                intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: irot
         integer :: rot
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -789,10 +789,10 @@ contains
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )
-        class(regularizer), intent(inout) :: self
-        complex(sp),        intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),        intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real,               intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
+        class(regularizer_inpl), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real,                    intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
         real(dp) :: num, denom
         integer  :: k
         do k = self%kfromto(1),self%kfromto(2)
@@ -808,9 +808,9 @@ contains
 
     ! Calculates normalized PFT power spectrum
     subroutine calc_pspec( self, pft, pspec )
-        class(regularizer), intent(inout) :: self
-        complex(dp),        intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real,               intent(out)   :: pspec(self%kfromto(1):self%kfromto(2))
+        class(regularizer_inpl), intent(inout) :: self
+        complex(dp),             intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real,                    intent(out)   :: pspec(self%kfromto(1):self%kfromto(2))
         integer :: k
         do k = self%kfromto(1),self%kfromto(2)
             pspec(k) = real( real(sum(pft(:,k)*conjg(pft(:,k))),dp) / real(self%pftsz,dp) )
@@ -820,7 +820,7 @@ contains
     ! DESTRUCTOR
 
     subroutine kill( self )
-        class(regularizer), intent(inout) :: self
+        class(regularizer_inpl), intent(inout) :: self
         deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
         if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori,self%ptcl_ref_map)
     end subroutine kill

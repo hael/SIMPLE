@@ -897,8 +897,8 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
+        use simple_regularizer,         only: regularizer
         use simple_image
-        use simple_regularizer
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60
@@ -1162,8 +1162,8 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
+        use simple_regularizer_inpl,    only: regularizer_inpl
         use simple_image
-        use simple_regularizer_inpl
         class(check_align_inpl_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60
@@ -1179,7 +1179,7 @@ contains
         type(parameters)              :: params
         type(ori)                     :: o_tmp
         type(image)                   :: img
-        type(regularizer)             :: reg_obj
+        type(regularizer_inpl)        :: reg_inpl
         type(ori)                     :: orientation
         integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr, irot
         logical  :: l_ctf, do_center
@@ -1197,7 +1197,7 @@ contains
         print *, 'nptcls = ', nptcls, '; fromp = ', params_glob%fromp, '; top = ', params_glob%top
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
-        call reg_obj%new(pftcc)
+        call reg_inpl%new(pftcc)
         print *, 'Preparing the references ...'
         ! e/o partioning
         if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
@@ -1309,36 +1309,36 @@ contains
         endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
-        call reg_obj%init_tab
-        call reg_obj%fill_tab(pinds)
+        call reg_inpl%init_tab
+        call reg_inpl%fill_tab(pinds)
         print *, 'Assembling the class averages with'
         select case(trim(params_glob%reg_mode))
             case('tab')
                 print *, 'soft-sorting the tab...'
-                call reg_obj%sort_tab_no_norm
-                call reg_obj%ref_reg_cc_tab
+                call reg_inpl%sort_tab_no_norm
+                call reg_inpl%ref_reg_cc_tab
             case('normtab')
                 print *, 'normalizing and soft-sorting...'
-                call reg_obj%sort_tab
-                call reg_obj%ref_reg_cc_tab
+                call reg_inpl%sort_tab
+                call reg_inpl%ref_reg_cc_tab
             case('hard')
                 print *, 'cluster-hard-sorting the tab...'
                 allocate(best_ir(params_glob%fromp:params_glob%top),&
                         &best_ip(params_glob%fromp:params_glob%top),&
                         &best_irot(params_glob%fromp:params_glob%top))
-                call reg_obj%cluster_sort_tab(best_ip, best_ir, best_irot)
-                call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+                call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
+                call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
             case('unihard')
                 print *, 'uniformly-hard-sorting the tab...'
                 allocate(best_ir(params_glob%fromp:params_glob%top),&
                         &best_ip(params_glob%fromp:params_glob%top),&
                         &best_irot(params_glob%fromp:params_glob%top))
-                call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
-                call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+                call reg_inpl%uniform_sort_tab(best_ip, best_ir, best_irot)
+                call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
         end select
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
-        call reg_obj%regularize_refs
+        call reg_inpl%regularize_refs
         select case(trim(params_glob%reg_mode))
             case('tab')
             case('normtab')
@@ -1357,22 +1357,22 @@ contains
                     call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
                 enddo
                 !$omp end parallel do
-                do irot = 1, reg_obj%reg_nrots
+                do irot = 1, reg_inpl%reg_nrots
                     do iref = 1, params_glob%nspace
                         euls = build_glob%eulspace%get_euler(iref)
                         do j = 1, params_glob%reg_num
                             pind_here = params_glob%fromp + j - 1
-                            if( reg_obj%ref_ptcl_tab(pind_here, iref, irot)%prob < TINY ) cycle
-                            iptcl = reg_obj%ref_ptcl_tab(pind_here, iref, irot)%iptcl
+                            if( reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%prob < TINY ) cycle
+                            iptcl = reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%iptcl
                             call build_glob%spproj_field%get_ori(iptcl, orientation)
                             if( orientation%isstatezero() ) cycle
                             ! getting the particle orientation
-                            shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(pind_here,iref,irot)%sh
+                            shvec = orientation%get_2Dshift() + reg_inpl%ref_ptcl_tab(pind_here,iref,irot)%sh
                             call orientation%set_shift(shvec)
-                            loc     = reg_obj%ref_ptcl_tab(pind_here, iref, irot)%loc
+                            loc     = reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%loc
                             euls(3) = 360. - pftcc%get_rot(loc)
                             call orientation%set_euler(euls)
-                            call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref, irot)%prob)
+                            call orientation%set('w', reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%prob)
                             ! insert
                             call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
                         enddo
@@ -1403,17 +1403,17 @@ contains
                     iref  = best_ir(j)
                     iptcl = best_ip(j)
                     irot  = best_irot(j)
-                    if( reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob < TINY ) cycle
+                    if( reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%prob < TINY ) cycle
                     euls = build_glob%eulspace%get_euler(iref)
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
                     if( orientation%isstatezero() ) cycle
                     ! getting the particle orientation
-                    shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iptcl,iref,irot)%sh
+                    shvec = orientation%get_2Dshift() + reg_inpl%ref_ptcl_tab(iptcl,iref,irot)%sh
                     call orientation%set_shift(shvec)
-                    loc     = reg_obj%ref_ptcl_tab(iptcl, iref, irot)%loc
+                    loc     = reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%loc
                     euls(3) = 360. - pftcc%get_rot(loc)
                     call orientation%set_euler(euls)
-                    call orientation%set('w', reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob)
+                    call orientation%set('w', reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%prob)
                     ! insert
                     call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
                 enddo

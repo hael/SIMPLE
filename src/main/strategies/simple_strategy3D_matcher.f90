@@ -10,7 +10,7 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
-use simple_regularizer_inpl,        only: regularizer
+use simple_regularizer_inpl,        only: regularizer_inpl
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
@@ -38,7 +38,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(regularizer),      target :: reg_obj
+type(regularizer_inpl), target :: reg_inpl
 type(cartft_corrcalc),  target :: cftcc
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
@@ -187,8 +187,8 @@ contains
             ! cc is used to get the probability
             orig_objfun           = params_glob%cc_objfun
             params_glob%cc_objfun = OBJFUN_PROB
-            call reg_obj%reset_regs
-            call reg_obj%init_tab
+            call reg_inpl%reset_regs
+            call reg_inpl%init_tab
             ! Batch loop
             do ibatch=1,nbatches
                 batch_start = batches(ibatch,1)
@@ -199,44 +199,44 @@ contains
             select case(trim(params_glob%reg_mode))
                 case('tab')
                 case('normtab')
-                    call reg_obj%sort_tab
+                    call reg_inpl%sort_tab
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%ref_reg_cc_tab
+                        call reg_inpl%ref_reg_cc_tab
                     enddo
                 case('hard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
                             &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_obj%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+                        call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
                     enddo
                 case('unihard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
                             &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
+                    call reg_inpl%uniform_sort_tab(best_ip, best_ir, best_irot)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+                        call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
                     enddo
             end select
-            call reg_obj%regularize_refs
+            call reg_inpl%regularize_refs
             call pftcc%memoize_refs
             if( trim(params_glob%refine) == 'prob_inpl' )then
-                    call reg_obj%init_tab
+                    call reg_inpl%init_tab
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
@@ -246,8 +246,8 @@ contains
                     enddo
                     if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
                                                            &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_obj%uniform_sort_tab(best_ip, best_ir, best_irot)
-                    call reg_obj%map_ptcl_ref(best_ip, best_ir, best_irot)
+                    call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    call reg_inpl%map_ptcl_ref(best_ip, best_ir, best_irot)
             endif
             params_glob%cc_objfun = orig_objfun
         endif
@@ -324,7 +324,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( trim(params_glob%refine) == 'prob_inpl' )   strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
+                if( trim(params_glob%refine) == 'prob_inpl' )   strategy3Dspecs(iptcl_batch)%reg_inpl => reg_inpl
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -384,7 +384,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( params_glob%l_reg_ref ) call reg_obj%kill
+            if( params_glob%l_reg_ref ) call reg_inpl%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -474,7 +474,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_reg_ref ) call reg_obj%new(pftcc)
+        if( params_glob%l_reg_ref ) call reg_inpl%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -589,9 +589,9 @@ contains
         call pftcc%memoize_ptcls
         ! filling the prob table
         if( present(use_reg) .and. use_reg )then
-            call reg_obj%fill_tab(pinds_here, use_reg=.true.)
+            call reg_inpl%fill_tab(pinds_here, use_reg=.true.)
         else
-            call reg_obj%fill_tab(pinds_here)
+            call reg_inpl%fill_tab(pinds_here)
         endif
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale

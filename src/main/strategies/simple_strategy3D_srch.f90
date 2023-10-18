@@ -7,7 +7,7 @@ use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
-use simple_regularizer_inpl,   only: regularizer
+use simple_regularizer_inpl,   only: regularizer_inpl
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
@@ -16,8 +16,8 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    integer,           pointer :: symmat(:,:) => null()
-    type(regularizer), pointer :: reg_obj
+    integer,                pointer :: symmat(:,:) => null()
+    type(regularizer_inpl), pointer :: reg_inpl
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.

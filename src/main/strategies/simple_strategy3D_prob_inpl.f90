@@ -44,13 +44,13 @@ contains
             ! prep
             call self%s%prep4srch
             iptcl = self%s%iptcl
-            iref  = self%spec%reg_obj%ptcl_ref_map(iptcl)
-            irot  = self%spec%reg_obj%ptcl_loc_map(iptcl)
+            iref  = self%spec%reg_inpl%ptcl_ref_map(iptcl)
+            irot  = self%spec%reg_inpl%ptcl_loc_map(iptcl)
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
             ! prepare orientation
-            call assign_ori(self%s, iref, self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%loc,&
-                                         &self%spec%reg_obj%ref_ptcl_tab(iptcl, iref, irot)%prob)
+            call assign_ori(self%s, iref, self%spec%reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%loc,&
+                                         &self%spec%reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%prob)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
