@@ -9,7 +9,7 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 implicit none
 
-public :: regularizer_inpl
+public :: regularizer_inpl, reg_params
 private
 #include "simple_local_flags.inc"
 
@@ -303,11 +303,12 @@ contains
         out_irot = best_irot
     end subroutine uniform_sort_tab
 
-    subroutine cluster_sort_tab( self, out_ip, out_ir, out_irot )
+    subroutine cluster_sort_tab( self, out_ip, out_ir, out_irot, cur_tab )
         class(regularizer_inpl), intent(inout) :: self
         integer,                 intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
         integer,                 intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
         integer,                 intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
+        type(reg_params), optional, intent(inout) :: cur_tab(:,:,:)
         integer, allocatable :: best_ip(:), best_ir(:), best_irot(:)
         logical, allocatable :: mask_ir(:,:)
         integer :: iref, iptcl, np, from_ind, to_ind, ind, irot
@@ -323,7 +324,7 @@ contains
             endif
         enddo
         !$omp end parallel do
-        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        ! self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(3) private(irot,iref,iptcl)
         do irot = 1, self%reg_nrots
             do iref = 1, self%nrefs
@@ -333,6 +334,21 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        if( present(cur_tab) )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(3) private(irot,iref,iptcl)
+            do irot = 1, self%reg_nrots
+                do iref = 1, self%nrefs
+                    do iptcl = params_glob%fromp,params_glob%top
+                        if( cur_tab(iptcl,iref,irot)%prob > self%ref_ptcl_tab(iptcl,iref,irot)%prob )then
+                            self%ref_ptcl_tab(iptcl,iref,irot)%prob = cur_tab(iptcl,iref,irot)%prob
+                        else
+                            cur_tab(iptcl,iref,irot)%prob = self%ref_ptcl_tab(iptcl,iref,irot)%prob
+                        endif
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
         self%ref_ptcl_ori = self%ref_ptcl_tab
         ! sorted clustering
         np       = params_glob%top-params_glob%fromp+1
@@ -821,7 +837,7 @@ contains
 
     subroutine kill( self )
         class(regularizer_inpl), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr)
-        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori,self%ptcl_ref_map)
+        deallocate(self%regs,self%regs_denom,self%grad_shsrch_obj,self%ref_corr,self%rot_inds)
+        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ref_ptcl_ori,self%ptcl_ref_map,self%ptcl_loc_map)
     end subroutine kill
 end module simple_regularizer_inpl

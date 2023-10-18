@@ -674,8 +674,10 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
+        use simple_regularizer_inpl,   only: reg_params
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
+        type(reg_params),          allocatable   :: cur_tab(:,:,:)
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
         type(parameters)                  :: params
@@ -733,6 +735,8 @@ contains
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
             corr               = -1.
+            allocate(cur_tab(params%fromp:params%top,params%nspace,params%reg_nrots))
+            cur_tab(:,:,:)%prob = 0.
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -760,7 +764,7 @@ contains
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
                 endif
                 ! in strategy3D_matcher:
-                call refine3D_exec(cline, params%which_iter, converged)
+                call refine3D_exec(cline, params%which_iter, converged, cur_tab)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
