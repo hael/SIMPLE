@@ -444,7 +444,7 @@ contains
         integer,            intent(inout) :: cur_id(nrows)
         integer,            intent(inout) :: cur_ir(nrows)
         logical,            intent(inout) :: mask_ir(ncols)
-        integer :: ir, ip, tmp_id(nrows), max_ind_ir, to_ii, num
+        integer :: ir, tmp_id(nrows), max_ind_ir, to_ii, num
         real    :: max_ir(ncols)
         num     = params_glob%reg_num
         to_ii   = nrows
@@ -452,7 +452,7 @@ contains
         cur_ir  = 1
         do
             if( .not.(any(mask_ir)) ) return
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip,tmp_id)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,tmp_id)
             do ir = 1, ncols
                 if( mask_ir(ir) )then
                     ! sum of 'num' best ptcls
