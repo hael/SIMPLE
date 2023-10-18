@@ -10,7 +10,7 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
-use simple_regularizer_inpl,        only: regularizer_inpl
+use simple_regularizer_inpl,        only: regularizer_inpl, reg_params
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
@@ -52,10 +52,11 @@ character(len=STDLEN)          :: benchfname
 
 contains
 
-    subroutine refine3D_exec( cline, which_iter, converged )
+    subroutine refine3D_exec( cline, which_iter, converged, cur_tab )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
+        type(reg_params), optional, intent(inout) :: cur_tab(:,:,:)
         integer, target, allocatable  :: symmat(:,:)
         logical,         allocatable  :: het_mask(:)
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
@@ -246,7 +247,11 @@ contains
                     enddo
                     if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
                                                            &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    if( present(cur_tab) )then
+                        call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot, cur_tab)
+                    else
+                        call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    endif
                     call reg_inpl%map_ptcl_ref(best_ip, best_ir, best_irot)
             endif
             params_glob%cc_objfun = orig_objfun
