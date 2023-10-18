@@ -48,6 +48,8 @@ type :: regularizer
     procedure          :: sort_tab_no_norm
     procedure          :: reg_uniform_sort
     procedure          :: uniform_sort_tab
+    procedure          :: cluster_sort_tab
+    procedure          :: reg_cluster_sort
     procedure          :: uniform_cavgs
     procedure          :: ref_reg_cc_tab
     procedure          :: regularize_refs
@@ -301,6 +303,113 @@ contains
         out_irot = best_irot
     end subroutine uniform_sort_tab
 
+    subroutine cluster_sort_tab( self, out_ip, out_ir, out_irot )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(inout) :: out_ip(params_glob%fromp:params_glob%top)
+        integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
+        integer,            intent(inout) :: out_irot(params_glob%fromp:params_glob%top)
+        integer,            allocatable   :: best_ip(:), best_ir(:), best_irot(:)
+        logical,            allocatable   :: mask_ir(:,:)
+        integer :: iref, iptcl, np, from_ind, to_ind, ind, irot
+        real    :: sum_corr
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_corr = sum(self%ref_ptcl_corr(iptcl,:,:))
+            if( sum_corr < TINY )then
+                self%ref_ptcl_corr(iptcl,:,:) = 0.
+            else
+                self%ref_ptcl_corr(iptcl,:,:) = self%ref_ptcl_corr(iptcl,:,:) / sum_corr
+            endif
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(3) private(irot,iref,iptcl)
+        do irot = 1, self%reg_nrots
+            do iref = 1, self%nrefs
+                do iptcl = params_glob%fromp,params_glob%top
+                    self%ref_ptcl_tab(iptcl,iref,irot)%prob = self%ref_ptcl_corr(iptcl,iref,irot)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%ref_ptcl_ori = self%ref_ptcl_tab
+        ! sorted clustering
+        np       = params_glob%top-params_glob%fromp+1
+        best_ip  = (/(iptcl, iptcl=params_glob%fromp,params_glob%top)/)
+        allocate(best_ir(np), best_irot(np), mask_ir(self%nrefs,self%reg_nrots))
+        mask_ir  = .false.
+        best_ir  = 1
+        best_irot = 1
+        call self%reg_cluster_sort(np, self%nrefs, self%reg_nrots, best_ip, best_ir, best_irot, mask_ir)
+        out_ip   = best_ip
+        out_ir   = best_ir
+        out_irot = best_irot
+    end subroutine cluster_sort_tab
+
+    ! recursively sort the columns of a 2D table, w.r.t the sum of the best nrows/ncols
+    ! entries of each column
+    ! for example:
+    !    original table:
+    !                   r1          r2          r3
+    !           ------------------------------------
+    !             c1  |  2           0           6
+    !             c2  |  4           0           7
+    !             c3  |  3           1           0
+    !             c4  |  3           0           2
+    !             c5  |  0           4           7
+    !             c6  |  6           4           2
+    !   sorted table (smallest to largest):
+    !                   r2          r1          r3
+    !           ------------------------------------
+    !             c1  |  0           2           6
+    !             c4  |  0           3           2
+    !             c3  |  1           3           0
+    !             c6  |  4           6           2
+    !             c5  |  4           0           7
+    !             c2  |  0           4           7
+    !
+    ! based on this uniformly sorted table, one can cluster:
+    !            (c2, c5) -> r3, (c6, c3) -> r1, (c1, c4) -> r2
+    subroutine reg_cluster_sort( self, nrows, ncols, nz, cur_id, cur_ir, cur_irot, mask_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: nrows, ncols, nz
+        integer,            intent(inout) :: cur_id(nrows)
+        integer,            intent(inout) :: cur_ir(nrows)
+        integer,            intent(inout) :: cur_irot(nrows)
+        logical,            intent(inout) :: mask_ir(ncols, nz)
+        integer :: ir, tmp_id(nrows), max_ind_ir(2), to_ii, num, irot
+        real    :: max_ir(ncols,nz)
+        num     = params_glob%reg_num
+        to_ii   = nrows
+        mask_ir = .true.
+        cur_ir  = 1
+        do
+            if( to_ii < 1 ) return
+            if( .not.(any(mask_ir)) ) return
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,irot,tmp_id)
+            do ir = 1, ncols
+                do irot = 1, nz
+                    if( mask_ir(ir, irot) )then
+                        ! sum of 'num' best ptcls
+                        tmp_id(1:to_ii) = cur_id(1:to_ii)
+                        call reg_hpsort_ind(tmp_id(1:to_ii), self%ref_ptcl_tab(:,ir,irot))
+                        max_ir(ir,irot) = sum(self%ref_ptcl_tab(tmp_id(to_ii-num+1:to_ii),ir,irot)%prob)
+                    endif
+                enddo
+            enddo
+            !$omp end parallel do
+            max_ind_ir      = maxloc(max_ir, mask=mask_ir)
+            tmp_id(1:to_ii) = cur_id(1:to_ii)
+            call reg_hpsort_ind(tmp_id(1:to_ii), self%ref_ptcl_tab(:,max_ind_ir(1),max_ind_ir(2)))
+            mask_ir(max_ind_ir(1),max_ind_ir(2)) = .false.
+            cur_id(1:to_ii)                      = tmp_id(1:to_ii)
+            cur_ir(to_ii-num+1:to_ii)            = max_ind_ir(1)
+            cur_irot(to_ii-num+1:to_ii)          = max_ind_ir(2)
+            to_ii = to_ii - num
+        enddo
+    end subroutine reg_cluster_sort
+
     subroutine reg_uniform_sort( self, nrows, ncols, nz, cur_id, cur_ir, cur_irot, mask_irr )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: nrows, ncols, nz
@@ -400,9 +509,7 @@ contains
         type(reg_params), intent(in)    :: rarr(:)
         type(reg_params) :: ra
         integer          :: i, ir, j, l, ia, n
-        n = size(rarr)
-        if( n /= size(iarr) )&
-        &call simple_exception('nonconforming array sizes; hpsort_6', __FILENAME__ , __LINE__)
+        n = size(iarr)
         if( n < 2 ) return
         l  = n/2+1
         ir = n
@@ -510,7 +617,11 @@ contains
                         call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref, irot)%sh), shmat)
                         ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
                         ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
-                        weight       = self%ref_ptcl_tab(i, iref, irot)%prob
+                        if( params_glob%l_reg_grad )then
+                                weight = 1. - self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                        else
+                                weight = self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                        endif
                         self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                         self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
                         self%ref_corr(iref)            = self%ref_corr(iref)            + self%ref_ptcl_tab(i, iref,irot)%prob

@@ -1321,6 +1321,13 @@ contains
                 print *, 'normalizing and soft-sorting...'
                 call reg_obj%sort_tab
                 call reg_obj%ref_reg_cc_tab
+            case('hard')
+                print *, 'cluster-hard-sorting the tab...'
+                allocate(best_ir(params_glob%fromp:params_glob%top),&
+                        &best_ip(params_glob%fromp:params_glob%top),&
+                        &best_irot(params_glob%fromp:params_glob%top))
+                call reg_obj%cluster_sort_tab(best_ip, best_ir, best_irot)
+                call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
             case('unihard')
                 print *, 'uniformly-hard-sorting the tab...'
                 allocate(best_ir(params_glob%fromp:params_glob%top),&
@@ -1376,7 +1383,7 @@ contains
                 ! destruct
                 call killrecvols()
                 call orientation%kill
-            case('unihard')
+            case('hard', 'unihard')
                 print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
                 ! init volumes
                 call preprecvols

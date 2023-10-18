@@ -208,17 +208,18 @@ contains
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                         call reg_obj%ref_reg_cc_tab
                     enddo
-                ! case('hard')
-                !     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
-                !     call reg_obj%cluster_sort_tab(best_ip, best_ir)
-                !     ! Batch loop
-                !     do ibatch=1,nbatches
-                !         batch_start = batches(ibatch,1)
-                !         batch_end   = batches(ibatch,2)
-                !         batchsz     = batch_end - batch_start + 1
-                !         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                !         call reg_obj%uniform_cavgs(best_ip, best_ir)
-                !     enddo
+                case('hard')
+                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
+                            &best_irot(params_glob%fromp:params_glob%top))
+                    call reg_obj%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%uniform_cavgs(best_ip, best_ir, best_irot)
+                    enddo
                 case('unihard')
                     allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
                             &best_irot(params_glob%fromp:params_glob%top))
