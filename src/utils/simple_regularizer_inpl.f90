@@ -18,6 +18,7 @@ type reg_params
     integer :: iref             !< iref index
     integer :: loc              !< inpl index
     real    :: prob, sh(2), w   !< probability, shift, and weight
+    real    :: sum
 end type reg_params
 
 type :: regularizer_inpl
@@ -130,6 +131,8 @@ contains
         logical,       optional, intent(in)    :: use_reg
         complex(dp) :: ref_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer     :: i, iref, iptcl, irot, loc
+        real        :: eps
+        eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
         if( present(use_reg) .and. use_reg )then
             !$omp parallel do collapse(3) default(shared) private(i,irot,iref,iptcl,loc,ref_rot) proc_bind(close) schedule(static)
             do irot = 1, self%reg_nrots
@@ -145,9 +148,13 @@ contains
                             else
                                 call self%pftcc%rotate_ref(cmplx(self%pftcc%pfts_refs_odd( :,:,iref), kind=dp), loc, ref_rot)
                             endif
-                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, ref_rot + self%regs(:,:,iref,irot))))
+                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0.,&
+                                &real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc,&
+                                     &eps*ref_rot + (1. - eps)*self%regs(:,:,iref,irot))))
                         else
-                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0., real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc, self%regs(:,:,iref,irot))))
+                            self%ref_ptcl_corr(iptcl,iref,irot) = max(0., &
+                                &real(self%pftcc%gencorr_for_rot_8(iref, iptcl, [0._dp,0._dp], loc,&
+                                     &self%regs(:,:,iref,irot))))
                         endif
                     enddo
                 enddo
@@ -233,7 +240,7 @@ contains
                 ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
                 ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
                 if( params_glob%l_reg_grad )then
-                    weight = 1. - self%ref_ptcl_tab(iptcl, iref, irot)%prob
+                    weight = 1./self%ref_ptcl_tab(iptcl, iref, irot)%w - 1./self%ref_ptcl_tab(iptcl, iref, irot)%sum
                 else
                     weight = self%ref_ptcl_tab(iptcl, iref, irot)%prob
                 endif
@@ -317,6 +324,8 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
         do iptcl = params_glob%fromp, params_glob%top
             sum_corr = sum(self%ref_ptcl_corr(iptcl,:,:))
+            self%ref_ptcl_tab(iptcl,:,:)%sum = sum_corr
+            self%ref_ptcl_tab(iptcl,:,:)%w   = self%ref_ptcl_corr(iptcl,:,:)
             if( sum_corr < TINY )then
                 self%ref_ptcl_corr(iptcl,:,:) = 0.
             else
@@ -324,7 +333,7 @@ contains
             endif
         enddo
         !$omp end parallel do
-        ! self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(3) private(irot,iref,iptcl)
         do irot = 1, self%reg_nrots
             do iref = 1, self%nrefs
@@ -633,11 +642,7 @@ contains
                         call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(i, iref, irot)%sh), shmat)
                         ptcl_ctf_rot = cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp)
                         ctf_rot      = self%pftcc%ctfmats(:,:,pind_here)
-                        if( params_glob%l_reg_grad )then
-                                weight = 1. - self%ref_ptcl_tab(i, iref, irot)%prob
-                        else
-                                weight = self%ref_ptcl_tab(i, iref, irot)%prob
-                        endif
+                        weight       = self%ref_ptcl_tab(i, iref, irot)%prob
                         self%regs(:,:,iref,irot)       = self%regs(:,:,iref,irot)       + weight * ptcl_ctf_rot
                         self%regs_denom(:,:,iref,irot) = self%regs_denom(:,:,iref,irot) + weight * ctf_rot**2
                         self%ref_corr(iref)            = self%ref_corr(iref)            + self%ref_ptcl_tab(i, iref,irot)%prob
