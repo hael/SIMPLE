@@ -261,6 +261,7 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    call orientation%set_shift(strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec) ! incremental shift
                     call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'class')
                 end if
                 ! cleanup
@@ -423,7 +424,7 @@ contains
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
                 select case(params_glob%cc_objfun)
-                    case(OBJFUN_EUCLID,OBJFUN_PROB)
+                    case(OBJFUN_EUCLID)
                         call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
                 end select
             endif

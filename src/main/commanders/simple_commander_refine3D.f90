@@ -125,7 +125,7 @@ contains
         if( cline%defined('objfun') )then
             l_continue = .false.
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( (trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' .and. .not.l_continue )then
                 orig_objfun     = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
@@ -262,7 +262,7 @@ contains
                 deallocate(list)
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( trim(params%objfun).eq.'euclid' )then
                 call cline%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
@@ -376,7 +376,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -695,7 +695,7 @@ contains
             l_sigma         = .false.
             l_switch2euclid = .false.
             select case(trim(orig_objfun))
-            case('euclid','prob')
+            case('euclid')
                 l_sigma = .true.
                 call cline%set('needs_sigma','yes')
                 params%l_needs_sigma = .true.
@@ -1046,10 +1046,9 @@ contains
         call reg_obj%init_tab
         call reg_obj%fill_tab(pinds)
         call reg_obj%sort_tab
-        call reg_obj%normalize_tab_ptcl
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
-        print *, 'Assemling the class averages ...'
+        print *, 'Assembling the class averages ...'
         call reg_obj%ref_reg_cc_tab
         do iref=1, params_glob%nspace
             reg_obj%regs(:,:,iref) = reg_obj%regs(:,:,iref) / reg_obj%regs_denom(:,:,iref)
@@ -1062,13 +1061,12 @@ contains
             call img%write('cavgs.mrc', iref)
             call img%kill
         enddo
-        print *, 'Reconstruct the 3D volume ...'
+        print *, 'Reconstructing the 3D volume ...'
         ! init volumes
         call preprecvols
         ! prep img, fpls, ctfparms
         allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
-        !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-        !$omp private(iptcl,sdev)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
         do iptcl = params_glob%fromp,params_glob%top
             if( .not.ptcl_mask(iptcl) ) cycle
             call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
@@ -1082,17 +1080,17 @@ contains
             euls = build_glob%eulspace%get_euler(iref)
             do j = 1, SORT_THRES
                 pind_here = params_glob%fromp + j - 1
-                if( reg_obj%ref_ptcl_prob(pind_here, iref) < TINY ) cycle
-                iptcl = reg_obj%ref_ptcl_ind(pind_here, iref)
+                if( reg_obj%ref_ptcl_tab(pind_here, iref)%prob < TINY ) cycle
+                iptcl = reg_obj%ref_ptcl_tab(pind_here, iref)%iptcl
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 ! getting the particle orientation
-                shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_sh(:,iptcl,iref)
+                shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(pind_here,iref)%sh
                 call orientation%set_shift(shvec)
-                loc     = reg_obj%ref_ptcl_loc(iptcl, iref)
+                loc     = reg_obj%ref_ptcl_tab(pind_here, iref)%loc
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', reg_obj%ref_ptcl_w(iptcl, iref))
+                call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref)%prob)
                 ! insert
                 call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
