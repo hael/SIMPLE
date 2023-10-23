@@ -64,6 +64,7 @@ type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
+
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
@@ -80,6 +81,7 @@ type(cluster3D_refine_commander)            :: xcluster3D_refine
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
 type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(cluster_cavgs_commander)               :: xcluster_cavgs
+type(prune_cavgs_commander)                 :: xprune_cavgs
 type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
 type(symmetry_test_commander)               :: xsymtst
@@ -260,6 +262,8 @@ select case(trim(prg))
         call xmap_cavgs_states%execute(cline)
     case('cluster_cavgs')
         call xcluster_cavgs%execute(cline)
+    case('prune_cavgs')
+        call xprune_cavgs%execute(cline)
     case('write_classes')
         call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
@@ -378,7 +382,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('02648750')
+call simple_print_git_version('127dce5c')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

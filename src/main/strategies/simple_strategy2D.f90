@@ -1,4 +1,5 @@
 module simple_strategy2D
+use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
 implicit none
 
 public :: strategy2D, strategy2D_per_ptcl
@@ -6,6 +7,8 @@ private
 
 ! abstract strategy2D base class
 type, abstract :: strategy2D
+  type(strategy2D_srch) :: s
+  type(strategy2D_spec) :: spec
   contains
     procedure(generic_new),  deferred :: new
     procedure(generic_srch), deferred :: srch

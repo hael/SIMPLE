@@ -302,7 +302,7 @@ contains
         ! objfun = euclid
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
+            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
@@ -558,7 +558,7 @@ contains
         ! noise power estimates for objfun = euclid at original sampling
         l_euclid = .false.
         if( cline%defined('objfun') )then
-            l_euclid = ( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )
+            l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
                 call cline_calc_pspec_distr%delete('scale')
@@ -756,7 +756,7 @@ contains
         l_griddingset   = cline%defined('gridding')
         l_switch2euclid = .false.
         if( cline%defined('objfun') )then
-            if( trim(cline%get_carg('objfun')).eq.'euclid' .or. trim(cline%get_carg('objfun')).eq.'prob' )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' )then
                 orig_objfun     = trim(cline%get_carg('objfun'))
                 l_ptclw         = trim(cline%get_carg('ptclw')).eq.'yes'
                 l_switch2euclid = .true.
@@ -1184,7 +1184,7 @@ contains
             endif
             ! objective functions
             select case(params%cc_objfun)
-                case(OBJFUN_EUCLID,OBJFUN_PROB)
+                case(OBJFUN_EUCLID)
                     l_switch2euclid = .true.
                 case DEFAULT
                     l_switch2euclid = .false.

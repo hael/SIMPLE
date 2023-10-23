@@ -2,7 +2,7 @@ module simple_strategy2D_tseries
 include 'simple_lib.f08'
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
+use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
@@ -15,9 +15,7 @@ private
 integer, parameter :: TRSSTEP = 2
 
 type, extends(strategy2D) :: strategy2D_tseries
-    type(strategy2D_srch) :: s
-    type(strategy2D_spec) :: spec
-contains
+  contains
     procedure :: new  => new_tseries
     procedure :: srch => srch_tseries
     procedure :: kill => kill_tseries
