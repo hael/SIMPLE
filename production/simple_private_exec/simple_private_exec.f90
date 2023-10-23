@@ -70,6 +70,7 @@ type(edge_detect_commander)             :: xdetector
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)                 :: xmasscen
 type(kstest_commander)                  :: xkstst
+type(pearsn_commander)                  :: xpearsn
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)            :: xrotmats2oris
@@ -197,6 +198,8 @@ select case(prg)
         call xmasscen%execute(cline)
     case( 'kstest' )
         call xkstst%execute(cline)
+    case( 'pearsn' )
+        call xpearsn%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
     case( 'rotmats2oris' )

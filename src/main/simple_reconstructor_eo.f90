@@ -24,7 +24,7 @@ type :: reconstructor_eo
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: smpd, msk, fny
     real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
-    integer             :: box=0, boxpd=0
+    integer             :: ldim(3), box=0, boxpd=0
     integer             :: nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
@@ -52,6 +52,7 @@ type :: reconstructor_eo
     procedure, private :: write_odd
     ! readers
     procedure          :: read_eos
+    procedure, private :: read_eos_parallel_io
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
@@ -94,18 +95,19 @@ contains
         ! overall magnitude correction (interpolation padding + downscaling)
         self%mag_correction = real(params_glob%box)                                        ! insertion of 2D slice into 3D
         self%mag_correction = self%mag_correction * (real(self%boxpd) / real(self%box))**3 ! 3D padding factor
+        self%ldim           = [self%boxpd,self%boxpd,self%boxpd]
         ! create composites
         if( self%automsk )then
             call self%envmask%new([self%box,self%box,self%box],self%smpd)
             call self%envmask%read(params_glob%mskfile)
         endif
-        call self%even%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
+        call self%even%new(self%ldim, params_glob%smpd)
         call self%even%alloc_rho(spproj)
         call self%even%set_ft(.true.)
-        call self%odd%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
+        call self%odd%new(self%ldim, params_glob%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
-        call self%eosum%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
+        call self%eosum%new(self%ldim, params_glob%smpd)
         call self%eosum%alloc_rho(spproj, expand=.false.)
         ! set existence
         self%exists = .true.
@@ -222,9 +224,72 @@ contains
     subroutine read_eos( self, fbody )
         class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        call self%read_even(fbody)
-        call self%read_odd(fbody)
+        logical, parameter :: SERIAL_READ = .false.
+        if( SERIAL_READ )then
+            call self%read_even(fbody)
+            call self%read_odd(fbody)
+        else
+            call self%read_eos_parallel_io(fbody)
+        endif
     end subroutine read_eos
+
+    !>  \brief read the even and odd reconstructions
+    subroutine read_eos_parallel_io( self, fbody )
+        use simple_imgfile, only: imgfile
+        class(reconstructor_eo), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        character(len=:),          allocatable :: even_vol, even_rho, odd_vol, odd_rho
+        real(kind=c_float),            pointer :: rmat_ptr(:,:,:) => null() !< image pixels/voxels (in data)
+        real(kind=c_float),            pointer :: rho_ptr(:,:,:)  => null() !< sampling+CTF**2 density
+        integer       :: fhandle_rho_e, fhandle_rho_o, i, ierr
+        type(imgfile) :: ioimg_e, ioimg_o
+        logical       :: here(4)
+        even_vol = trim(adjustl(fbody))//'_even'//self%ext
+        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
+        odd_vol  = trim(adjustl(fbody))//'_odd'//self%ext
+        odd_rho  = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        here(1)  = file_exists(even_vol)
+        here(2)  = file_exists(even_rho)
+        here(3)  = file_exists(odd_vol)
+        here(4)  = file_exists(odd_rho)
+        if( all(here) )then
+            call ioimg_e%open(even_vol, self%ldim, self%even%get_smpd(), formatchar='M', readhead=.false., rwaction='read')
+            call ioimg_o%open(odd_vol,  self%ldim, self%odd%get_smpd(),  formatchar='M', readhead=.false., rwaction='read')
+            call fopen(fhandle_rho_e, file=trim(even_rho), status='OLD', action='READ', access='STREAM', iostat=ierr)
+            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(even_rho), ierr)
+            call fopen(fhandle_rho_o, file=trim(odd_rho),  status='OLD', action='READ', access='STREAM', iostat=ierr)
+            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(odd_rho),  ierr)
+            !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+            do i = 1, 4
+                select case(i)
+                    case(1)
+                        call self%even%get_rmat_ptr(rmat_ptr)
+                        call ioimg_e%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                    case(2)
+                        call self%odd%get_rmat_ptr(rmat_ptr)
+                        call ioimg_o%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                    case(3)
+                        call self%even%get_rho_ptr(rho_ptr)
+                        read(fhandle_rho_e, pos=1, iostat=ierr) rho_ptr
+                        if( ierr .ne. 0 )&
+                            &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
+                    case(4)
+                        call self%odd%get_rho_ptr(rho_ptr)
+                        read(fhandle_rho_o, pos=1, iostat=ierr) rho_ptr
+                        if( ierr .ne. 0 )&
+                            &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
+                end select
+            end do
+            !$omp end parallel do
+            call ioimg_e%close
+            call ioimg_o%close
+            call fclose(fhandle_rho_e)
+            call fclose(fhandle_rho_o)
+        else
+            call self%reset_even
+            call self%reset_odd
+        endif
+    end subroutine read_eos_parallel_io
 
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )

@@ -41,6 +41,7 @@ type :: parameters
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
+    character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=3)          :: makemovie='no'
     character(len=3)          :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -70,6 +71,9 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
     character(len=3)          :: reg_opt_ang='no'     !< opt angle in the reg terms (yes|no){no}
+    character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
+    character(len=3)          :: reg_debug='no'       !< output images for debugging in reg (yes|no){no}
+    character(len=3)          :: reg_scale='no'       !< scaling by the ctf factor in reg-alignment (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -188,13 +192,13 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|glob_neigh|neigh_ref){global}
-    character(len=STDLEN)     :: reg_eps_mode='auto'  !< reg eps mode(auto|fixed|linear){auto}
+    character(len=STDLEN)     :: reg_mode='global'    !< reg mode(global|neigh){global}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
+    character(len=STDLEN)     :: thresh2D='no'        !< whether to apply thesholdind/weighing during 2D classification
     character(len=STDLEN)     :: vol_even=''          !< even reference volume
     character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN)     :: wfun='kb'
@@ -377,6 +381,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
+    real    :: reg_minshift=5.     !< shift limit in reg scheme
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -389,6 +394,7 @@ type :: parameters
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
+    real    :: thresh2D_param=1.
     real    :: tiltgroupmax=0
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
@@ -425,6 +431,9 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
     logical :: l_reg_opt_ang  = .false.
+    logical :: l_reg_init     = .false.
+    logical :: l_reg_debug    = .false.
+    logical :: l_reg_scale    = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -509,6 +518,7 @@ contains
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
         call check_carg('keepvol',        self%keepvol)
+        call check_carg('loc_sdev',       self%loc_sdev)
         call check_carg('kweight',        self%kweight)
         call check_carg('kweight_chunk',  self%kweight_chunk)
         call check_carg('kweight_pool',   self%kweight_pool)
@@ -557,10 +567,12 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
-        call check_carg('reg_eps_mode',   self%reg_eps_mode)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
+        call check_carg('reg_init',       self%reg_init)
+        call check_carg('reg_debug',      self%reg_debug)
+        call check_carg('reg_scale',      self%reg_scale)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -568,11 +580,13 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
+        call check_carg('split_mode',     self%split_mode)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
+        call check_carg('thresh2D',       self%thresh2D)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
@@ -778,6 +792,7 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
+        call check_rarg('reg_minshift',   self%reg_minshift)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -787,6 +802,7 @@ contains
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
+        call check_rarg('thresh2D_param', self%thresh2D_param)
         call check_rarg('total_dose',     self%total_dose)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
@@ -1439,12 +1455,14 @@ contains
         case DEFAULT
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! reg eps mode
-        if( cline%defined('eps') ) self%reg_eps_mode = 'fixed'
         ! reference regularization
         self%l_reg_ref = trim(self%reg_ref).eq.'yes'
         ! optimal angle in the reg
         self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
+        ! randomized ories and zero shifts in reg shceme
+        self%l_reg_init  = trim(self%reg_init ).eq.'yes'
+        self%l_reg_debug = trim(self%reg_debug).eq.'yes'
+        self%l_reg_scale = trim(self%reg_scale).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

@@ -944,6 +944,11 @@ contains
             call build%spproj_field%write('image_statistics.txt')
             goto 999
         endif
+        ! produce local standard deviations
+        if( params%loc_sdev .eq. 'yes' )then
+            call loc_sdev_imgfile(params%stk, params%outstk, nint(params%winsz), params%smpd)
+            goto 999
+        endif
         ! create frame averages
         if( params%nframesgrp > 0 )then
             call frameavg_stack(params%stk, params%outstk, params%nframesgrp, params%smpd)

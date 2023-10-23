@@ -82,6 +82,7 @@ type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavg_filter2D
+type(simple_program), target :: check_align
 type(simple_program), target :: ced_2D_filter
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -351,6 +352,7 @@ contains
         call new_binarize
         call new_calc_pspec
         call new_cavg_filter2D
+        call new_check_align
         call new_ced_2D_filter
         call new_center
         call new_cleanup2D
@@ -462,6 +464,7 @@ contains
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(cavg_filter2D)
+        call push2prg_ptr_array(check_align)
         call push2prg_ptr_array(ced_2D_filter)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -587,6 +590,8 @@ contains
                 ptr2prg => calc_pspec
             case('cavg_filter2D')
                 ptr2prg => cavg_filter2D
+            case('check_align')
+                ptr2prg => check_align
             case('ced_2D_filter')
                 ptr2prg => ced_2D_filter
             case('center')
@@ -795,6 +800,7 @@ contains
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') cavg_filter2D%name
+        write(logfhandle,'(A)') check_align%name
         write(logfhandle,'(A)') ced_2D_filter%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
@@ -1353,23 +1359,49 @@ contains
         &'Different filter/data reduction of particles in cavgs',&          ! descr_short
         &'is a program for different filter/data reduction of particles in cavgs',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &0, 1, 0, 0, 0, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 1, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cavg_filter2D%set_input('parm_ios', 1, smpd)
+        call cavg_filter2D%set_input('parm_ios', 2,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .true., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call cavg_filter2D%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
         ! mask controls
         ! <empty>
         ! computer controls
         call cavg_filter2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cavg_filter2D
+
+    subroutine new_check_align
+        ! PROGRAM SPECIFICATION
+        call check_align%new(&
+        &'check_align',&                                                    ! name
+        &'Alignment check of class averages vs reprojection',&              ! descr_short
+        &'is a program to check the alignment to form class averages vs the reprojection',& ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &1, 1, 0, 0, 1, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call check_align%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call check_align%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call check_align%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call check_align%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_check_align
 
     subroutine new_ced_2D_filter
         ! PROGRAM SPECIFICATION
@@ -1436,7 +1468,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 6, 5, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 4, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         cleanup2D%gui_submenu_list = "search,mask,filter,compute"
         cleanup2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1470,13 +1502,11 @@ contains
         call cleanup2D%set_gui_params('filt_ctrls', 2, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cleanup2D%set_gui_params('filt_ctrls', 3, submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 4, wiener)
+        call cleanup2D%set_input('filt_ctrls', 4, ml_reg)
+        cleanup2D%filt_ctrls(4)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cleanup2D%filt_ctrls(4)%descr_placeholder = '(yes|no){no}'
+        cleanup2D%filt_ctrls(4)%cval_default      = 'no'
         call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call cleanup2D%set_input('filt_ctrls', 5, ml_reg)
-        cleanup2D%filt_ctrls(5)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
-        cleanup2D%filt_ctrls(5)%descr_placeholder = '(yes|no){no}'
-        cleanup2D%filt_ctrls(5)%cval_default      = 'no'
-        call cleanup2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         call cleanup2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -1535,7 +1565,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 12, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 7, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter,compute"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1590,17 +1620,15 @@ contains
         call cluster2D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
         call cluster2D%set_gui_params('filt_ctrls', 4, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 5,  wiener)
+        call cluster2D%set_input('filt_ctrls', 5,  graphene_filt)
         call cluster2D%set_gui_params('filt_ctrls', 5, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 6,  graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 6, ml_reg)
+        cluster2D%filt_ctrls(6)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
+        cluster2D%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
+        cluster2D%filt_ctrls(6)%cval_default      = 'no'
         call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 7, ml_reg)
-        cluster2D%filt_ctrls(7)%descr_long        = 'Regularization (ML-style) based on the signal power(yes|no){no}'
-        cluster2D%filt_ctrls(7)%descr_placeholder = '(yes|no){no}'
-        cluster2D%filt_ctrls(7)%cval_default      = 'no'
+        call cluster2D%set_input('filt_ctrls', 7, kweight)
         call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 8, kweight)
-        call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -1658,7 +1686,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 6, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 5, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1688,8 +1716,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5, wiener)
-        call cluster2D_stream%set_input('filt_ctrls', 6, lplim_crit)
+        call cluster2D_stream%set_input('filt_ctrls', 5, lplim_crit)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1707,7 +1734,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 11, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 11, 9, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1758,18 +1785,16 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 3, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 4, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 5,  wiener)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 6,  reject_cls)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D", online=.true.)
-        call cluster2D_subsets%set_input('filt_ctrls', 7, kweight_chunk)
+        call cluster2D_subsets%set_input('filt_ctrls', 5,  reject_cls)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D", online=.true.)
+        call cluster2D_subsets%set_input('filt_ctrls', 6, kweight_chunk)
+        call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D")
+        call cluster2D_subsets%set_input('filt_ctrls', 7, kweight_pool)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 8, kweight_pool)
+        call cluster2D_subsets%set_input('filt_ctrls', 8, ml_reg_chunk)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 9, ml_reg_chunk)
+        call cluster2D_subsets%set_input('filt_ctrls', 9, ml_reg_pool)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls',10, ml_reg_pool)
-        call cluster2D_subsets%set_gui_params('filt_ctrls',10, submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
@@ -2600,7 +2625,7 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         & for cluster2D execution',&               ! descr_long
         &'simple_exec',&                           ! executable
-        &1, 3, 0, 0, 1, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 3, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -2615,7 +2640,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call make_cavgs%set_input('filt_ctrls', 1, wiener)
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3248,7 +3273,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 17, 0, 24, 10, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 17, 0, 24, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3386,12 +3411,10 @@ contains
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 8,  wiener)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 9, ctfresthreshold)
+        call preprocess_stream_dev%set_input('filt_ctrls', 8, ctfresthreshold)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="CTF estimation")
+        call preprocess_stream_dev%set_input('filt_ctrls', 9, icefracthreshold)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 9, submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('filt_ctrls', 10, icefracthreshold)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 10, submenu="CTF estimation")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
@@ -4390,7 +4413,7 @@ contains
         & If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced,&
         & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 20, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
+        &2, 21, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
@@ -4417,6 +4440,7 @@ contains
         call stackops%set_input('parm_ios', 18, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
         call stackops%set_input('parm_ios', 19, 'angstep', 'num', 'Angular stepsize', 'Angular stepsize for rotational averaging(in degrees)', 'give degrees', .false., 5.)
         call stackops%set_input('parm_ios', 20, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 21, 'winsz', 'num', 'Window size for local sdev estimation', 'Window size for local sdev estimation(in pixels)', 'winsz in pixels', .false., 5.0)
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -40,8 +40,9 @@ type, extends(image) :: reconstructor
     procedure          :: reset_exp
     procedure          :: apply_weight
     procedure          :: set_sh_lim
-    ! GETTER
+    ! GETTERS
     procedure          :: get_kbwin
+    procedure          :: get_rho_ptr
     ! I/O
     procedure          :: write_rho, write_rho_as_mrc
     procedure          :: read_rho
@@ -195,6 +196,12 @@ contains
         type(kbinterpol) :: wf                      !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
+
+    subroutine get_rho_ptr( self, rho_ptr )
+        class(reconstructor), target, intent(in)  :: self
+        real(kind=c_float), pointer,  intent(out) :: rho_ptr(:,:,:)
+        rho_ptr => self%rho
+    end subroutine get_rho_ptr
 
     ! I/O
     !>Write reconstructed image

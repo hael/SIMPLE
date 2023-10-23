@@ -92,6 +92,7 @@ contains
         type(cmdline)    :: cline_cavgassemble
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        call cline%set('wiener', 'full')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
@@ -158,7 +159,7 @@ contains
             call build%spproj_field%proj2class
         endif
         ! setup weights
-        if( trim(params%ptclw).eq.'yes' )then
+        if( (trim(params%ptclw).eq.'yes') .or. (trim(params%thresh2D).ne.'no') )then
             ! weights are set at search time, so nothing to do here.
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
@@ -167,9 +168,9 @@ contains
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
         if( l_shmem )then
-            call build%spproj%write_segment_inside(params%oritype)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
         else
-            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype)
+            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! create class averager
         call cavger_new
@@ -598,13 +599,6 @@ contains
         call cline_cluster2D_stage1%set('ptclw',      'no')
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         call cline_cluster2D_stage1%set('nonuniform', 'no')
-        ! reg in the first stage
-        if( params%l_reg_ref )then
-            call cline_cluster2D_stage1%set('reg_ref',       'yes')
-            call cline_cluster2D_stage1%set('reg_eps_mode',  'linear')
-            call cline_cluster2D_stage1%set('trs',       0.)
-            call cline_cluster2D_stage1%set('reg_iters', real(MAXITS_STAGE1))
-        endif
         if( params%l_frac_update )then
             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -654,9 +648,9 @@ contains
         call cline_cluster2D_stage2%set('trs', trs_stage2)
         ! optional non-uniform filtering
         if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
-        ! no reg in second stage
-        if( params%l_reg_ref )then
-            call cline_cluster2D_stage2%set('reg_ref','no')
+        ! for testing
+        if( cline%defined('extr_iter') )then
+            call cline_cluster2D_stage2%set('extr_iter', cline_cluster2D_stage1%get_rarg('extr_iter'))
         endif
         ! execution
         if( l_shmem )then
@@ -977,6 +971,10 @@ contains
             if( params%l_needs_sigma )then
                 call cline_calc_sigma%set('which_iter',real(params%which_iter+1))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
+            endif
+            ! print out particle parameters per iteration
+            if( trim(params%print_corrs).eq.'yes' )then
+                call build%spproj_field%write('ptcl2D_'//int2str_pad(params%which_iter,2)//'.txt')
             endif
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)

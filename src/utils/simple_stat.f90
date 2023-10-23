@@ -20,6 +20,7 @@ interface avg_sdev
     module procedure avg_sdev_1
     module procedure avg_sdev_2
     module procedure avg_sdev_3
+    module procedure avg_sdev_4
 end interface avg_sdev
 
 interface moment
@@ -129,6 +130,32 @@ contains
             sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
         endif
     end subroutine avg_sdev_3
+
+    subroutine avg_sdev_4( vec, avg, sdev, mask )
+        real(dp),          intent(in)    :: vec(:)
+        real(dp),          intent(inout) :: avg, sdev
+        logical, optional, intent(in)    :: mask(:)
+        real(dp) :: rn
+        logical  :: present_mask
+        integer  :: n
+        present_mask = present(mask)
+        if( present_mask )then
+            n = count(mask)
+        else
+            n = size(vec)
+        endif
+        avg  = 0.d0
+        sdev = 0.d0
+        if( n < 2 ) return
+        rn   = real(n,dp)
+        if( present_mask )then
+            avg  = sum(vec, mask=mask) / rn
+            sdev = sqrt(sum((vec - avg)**2.d0, mask=mask) / (rn-1.d0))
+        else
+            avg  = sum(vec) / rn
+            sdev = sqrt(sum((vec - avg)**2.d0) / (rn - 1.d0))
+        endif
+    end subroutine avg_sdev_4
 
     subroutine moment_1( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var

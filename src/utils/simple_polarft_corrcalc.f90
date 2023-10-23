@@ -59,6 +59,7 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),            allocatable :: ctfmats_b(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
@@ -122,13 +123,15 @@ type :: polarft_corrcalc
     procedure          :: print
     procedure          :: vis_ptcl
     procedure          :: vis_ref
-    procedure          :: polar2cartesian
+    procedure, private :: polar2cartesian_1, polar2cartesian_2
+    generic            :: polar2cartesian => polar2cartesian_1, polar2cartesian_2
     ! MODIFIERS
     procedure          :: shift_ptcl
     ! MEMOIZER
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
+    procedure          :: reg_scale, reg_descale
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
@@ -143,8 +146,6 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure, private :: reg_gencorrs_1,       reg_gencorrs_2
-    generic            :: reg_gencorrs => reg_gencorrs_1, reg_gencorrs_2
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -607,7 +608,7 @@ contains
         endif
     end subroutine vis_ref
 
-    subroutine polar2cartesian( self, i, isref, cmat, box )
+    subroutine polar2cartesian_1( self, i, isref, cmat, box )
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: i
         logical,                 intent(in)    :: isref
@@ -645,8 +646,44 @@ contains
             cmat(1,k+c) = conjg(cmat(1,c-k))
         enddo
         ! arbitrary magnitude
-        cmat(1,c) = (100.0,0.0)
-    end subroutine polar2cartesian
+        cmat(1,c) = (0.0,0.0)
+    end subroutine polar2cartesian_1
+
+    subroutine polar2cartesian_2( self, cmat_in, cmat, box )
+        class(polarft_corrcalc), intent(in)    :: self
+        complex,                 intent(in)    :: cmat_in(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex,    allocatable, intent(inout) :: cmat(:,:)
+        integer,                 intent(out)   :: box
+        integer, allocatable :: norm(:,:)
+        complex :: comp
+        integer :: k,c,irot,physh,physk
+        if( allocated(cmat) ) deallocate(cmat)
+        box = 2*self%kfromto(2)
+        c   = box/2+1
+        allocate(cmat(box/2+1,box),source=cmplx(0.0,0.0))
+        allocate(norm(box/2+1,box),source=0)
+        do irot=1,self%pftsz
+            do k=self%kfromto(1),self%kfromto(2)
+                ! Nearest-neighbour interpolation
+                physh = nint(self%polar(irot,k)) + 1
+                physk = nint(self%polar(irot+self%nrots,k)) + c
+                if( physk > box ) cycle
+                comp              = cmat_in(irot,k)
+                cmat(physh,physk) = cmat(physh,physk) + comp
+                norm(physh,physk) = norm(physh,physk) + 1
+            end do
+        end do
+        ! normalization
+        where(norm>0)
+            cmat = cmat / real(norm)
+        end where
+        ! irot = self%pftsz+1, eg. angle=180.
+        do k = 1,box/2-1
+            cmat(1,k+c) = conjg(cmat(1,c-k))
+        enddo
+        ! arbitrary magnitude
+        cmat(1,c) = (0.0,0.0)
+    end subroutine polar2cartesian_2
 
     subroutine print( self )
         class(polarft_corrcalc), intent(in) :: self
@@ -760,6 +797,40 @@ contains
             end do
         end do
     end subroutine setup_npix_per_shell
+
+    subroutine reg_scale( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: i,k
+        if( .not.allocated(self%ctfmats_b) )then
+            allocate(self%ctfmats_b(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
+        endif
+        self%ctfmats_b = self%ctfmats
+        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
+        do i = 1,self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%ctfmats_b(:,k,i)) > TINY )
+                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) * self%ctfmats_b(:,k,i)
+                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)**2
+                endwhere
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine reg_scale
+
+    subroutine reg_descale( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer :: i,k
+        !$omp parallel do collapse(2) private(i,k) default(shared) proc_bind(close) schedule(static)
+        do i = 1,self%nptcls
+            do k = self%kfromto(1),self%kfromto(2)
+                where( abs(self%ctfmats_b(:,k,i)) > TINY )
+                    self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) / self%ctfmats_b(:,k,i)
+                    self%ctfmats(:,k,i)    = self%ctfmats_b(:,k,i)
+                endwhere
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine reg_descale
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1203,49 +1274,6 @@ contains
                 call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, cc)
         end select
     end subroutine gencorrs_2
-
-    subroutine reg_gencorrs_1( self, iref, iptcl, cc, kweight )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        logical,       optional, intent(in)    :: kweight
-        logical :: kw
-        kw = params_glob%l_kweight
-        if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-        if( kw )then
-            call self%gencorrs_weighted_cc(iptcl, iref, cc)
-        else
-            call self%gencorrs_cc(iptcl, iref, cc)
-        endif
-    end subroutine reg_gencorrs_1
-
-    subroutine reg_gencorrs_2( self, iref, iptcl, shift, cc, kweight )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(in)    :: shift(2)
-        real(sp),                intent(out)   :: cc(self%nrots)
-        logical,       optional, intent(in)    :: kweight
-        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        integer :: i, ithr
-        logical :: kw
-        ithr    = omp_get_thread_num() + 1
-        i       = self%pinds(iptcl)
-        shmat   => self%heap_vars(ithr)%shmat
-        pft_ref => self%heap_vars(ithr)%pft_ref
-        call self%gen_shmat(ithr, shift, shmat)
-        if( self%iseven(i) )then
-            pft_ref = shmat * self%pfts_refs_even(:,:,iref)
-        else
-            pft_ref = shmat * self%pfts_refs_odd(:,:,iref)
-        endif
-        kw = params_glob%l_kweight
-        if( present(kweight)) kw = kweight ! overrides params_glob%l_kweight
-        if( kw )then
-            call self%gencorrs_shifted_weighted_cc(pft_ref, iptcl, iref, cc)
-        else
-            call self%gencorrs_shifted_cc(pft_ref, iptcl, iref, cc)
-        endif
-    end subroutine reg_gencorrs_2
 
     subroutine gencorrs_cc( self, iptcl, iref, corrs)
         class(polarft_corrcalc), intent(inout) :: self
@@ -2165,7 +2193,9 @@ contains
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(self%kfromto(1):self%kfromto(2))
         call self%calc_frc(iref, iptcl, irot, [0.0,0.0], frc )
-        specscore_1 = max(0.,median_nocopy(frc))
+        specscore_1 = sum(frc*self%npix_per_shell, mask=(frc > 0.0)) / sum(self%npix_per_shell)
+        ! previous implementation
+        ! specscore_1 = max(0.,median_nocopy(frc))
     end function specscore_1
 
     real function specscore_2( self, iref, iptcl, irot, shvec )
@@ -2174,7 +2204,9 @@ contains
         real,                    intent(in)    :: shvec(2)
         real :: frc(self%kfromto(1):self%kfromto(2))
         call self%calc_frc(iref, iptcl, irot, shvec, frc )
-        specscore_2 = max(0.,median_nocopy(frc))
+        specscore_2 = sum(frc*self%npix_per_shell, mask=(frc > 0.0)) / sum(self%npix_per_shell)
+        ! previous implementation
+        ! specscore_2 = max(0.,median_nocopy(frc))
     end function specscore_2
 
     ! DESTRUCTOR
