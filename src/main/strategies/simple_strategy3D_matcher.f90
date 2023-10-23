@@ -19,6 +19,7 @@ use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
+use simple_strategy3D_greedy_prob,  only: strategy3D_greedy_prob
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
@@ -39,7 +40,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(regularizer)              :: reg_obj
+type(regularizer),      target :: reg_obj
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
@@ -75,7 +76,7 @@ contains
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, reg_eps
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
+        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, orig_objfun
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
@@ -193,8 +194,11 @@ contains
             reg_eps = 0.
             if( trim(params_glob%reg_mode) .eq. 'sto' ) reg_eps = real(which_iter)/real(params_glob%reg_iters)
             if( reg_eps < 1. )then
+                ! cc is used to get the probability
+                orig_objfun           = params_glob%cc_objfun
+                params_glob%cc_objfun = OBJFUN_CC
                 call reg_obj%reset_regs
-                call reg_obj%init_tab(pinds)
+                call reg_obj%init_tab
                 ! Batch loop
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
@@ -202,15 +206,14 @@ contains
                     batchsz     = batch_end - batch_start + 1
                     call prob_batch_particles(batchsz, pinds(batch_start:batch_end))
                 enddo
-                call reg_obj%sort_tab
-                ! Batch loop
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call reg_batch_particles(batchsz, pinds(batch_start:batch_end))
-                enddo
-                call reg_obj%regularize_refs
+                if( trim(params_glob%refine) == 'greedy_prob' )then
+                    call reg_obj%sort_tab_ptcl
+                else
+                    call reg_obj%sort_tab
+                    call reg_obj%ref_reg_cc_tab
+                    call reg_obj%regularize_refs
+                endif
+                params_glob%cc_objfun = orig_objfun
             endif
         endif
 
@@ -282,6 +285,8 @@ contains
                         else
                             allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
+                    case('greedy_prob')
+                        allocate(strategy3D_greedy_prob          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
@@ -292,6 +297,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
+                if( trim(params_glob%refine) == 'greedy_prob' ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -525,34 +531,6 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
     end subroutine build_batch_particles
-
-    subroutine reg_batch_particles( nptcls_here, pinds_here )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl, ithr
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
-            ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        ! make CTFs
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
-        ! compute regularization terms
-        call reg_obj%ref_reg_cc_tab(pinds_here)
-    end subroutine reg_batch_particles
 
     subroutine prob_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align

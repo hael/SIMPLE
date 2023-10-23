@@ -7,6 +7,7 @@ use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
+use simple_regularizer,        only: regularizer
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
@@ -15,7 +16,8 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    integer, pointer :: symmat(:,:) => null()
+    integer,           pointer :: symmat(:,:) => null()
+    type(regularizer), pointer :: reg_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
@@ -230,10 +232,12 @@ contains
         endif
     end subroutine inpl_srch_peaks
 
-    subroutine store_solution( self, ref, inpl_ind, corr )
+    subroutine store_solution( self, ref, inpl_ind, corr, sh )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
+        real,       optional,   intent(in)    :: sh(2)
+        if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         s3D%proj_space_inplinds(self%ithr,ref) = inpl_ind
         s3D%proj_space_euls(3,ref,self%ithr)   = 360. - pftcc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(self%ithr,ref)    = corr
