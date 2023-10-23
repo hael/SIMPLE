@@ -59,7 +59,6 @@ integer :: eer_fraction   = 0
 real    :: total_dose     = 0.                            !< total dose in e/A2
 real    :: hp             = 0.                            !< high-pass limit
 real    :: lp             = 0.                            !< low-pass limit
-real    :: resstep        = 0.                            !< resolution step size (in angstrom)
 real    :: smpd           = 0.                            !< sampling distance
 real    :: smpd_scaled    = 0.                            !< sampling distance
 real    :: kV             = 300.                          !< acceleration voltage
@@ -176,7 +175,6 @@ contains
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
         hp      = min(dimo4,1000.)
         lp      = params_glob%lpstart
-        resstep = (params_glob%lpstart - params_glob%lpstop) / 3.
         ! allocate abstract data structures
         allocate( movie_frames(nframes), movie_frames_scaled(nframes) )
         allocate( shifts_toplot(nframes, 2), source=0. )
@@ -293,7 +291,6 @@ contains
         if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
         if( l_BENCH ) t_correct_iso_align = tic()
         call hybrid_srch%new(movie_frames_scaled)
-        call hybrid_srch%set_group_frames(.false.)
         call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
         call hybrid_srch%set_bfactor(bfactor)
         call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
@@ -324,10 +321,7 @@ contains
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
-        write(logfhandle,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
-        write(logfhandle,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
-        write(logfhandle,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
-        write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
+        write(logfhandle,'(a,7x,4f7.4)') '>>> WEIGHTS AVE/SDEV/MIN/MAX :', ave, sdev, minw, maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
         if( L_BENCH )then
@@ -565,9 +559,10 @@ contains
 
     !>  patch-based motion_correction of DDD movie
     !>  movie_frames_scaled assumed shifted, in Fourier domain
-    subroutine motion_correct_patched( bfac, rmsd_threshold, rmsd )
-        real, intent(in)  :: bfac, rmsd_threshold
-        real, intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
+    subroutine motion_correct_patched( bfac, rmsd_threshold, npatch, rmsd )
+        real,    intent(in)  :: bfac, rmsd_threshold
+        integer, intent(in)  :: npatch(2)
+        real,    intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
         integer :: iframe
         if( l_BENCH ) t_patched = tic()
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
@@ -576,18 +571,18 @@ contains
         end do
         !$omp end parallel do
         rmsd = huge(rmsd(1))
-        call motion_patch%new(params_glob%scale*params_glob%trs)
-        write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',params_glob%nxpatch,' x ',params_glob%nypatch,')'
+        call motion_patch%new(npatch, params_glob%scale*params_glob%trs)
+        write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',npatch(1),' x ',npatch(2),')'
         call motion_patch%set_fitshifts(FITSHIFTS)
         call motion_patch%set_frameweights(frameweights)
         call motion_patch%set_fixed_frame(fixed_frame)
         call motion_patch%set_interp_fixed_frame(fixed_frame)
         call motion_patch%set_bfactor(bfac)
         if( trim(params_glob%algorithm).eq.'poly2' )then
-            call motion_patch%correct_poly(hp, resstep, rmsd_threshold, movie_frames_scaled, patched_shift_fname, patched_polyn, shifts_toplot)
+            call motion_patch%correct_poly(hp, rmsd_threshold, movie_frames_scaled, patched_shift_fname, patched_polyn,  global_shifts=shifts_toplot)
             rmsd = motion_patch%get_polyfit_rmsd()
         else
-            call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
+            call motion_patch%correct(hp, movie_frames_scaled, patched_shift_fname, global_shifts=shifts_toplot)
             rmsd = motion_patch%get_polyfit_rmsd()
             call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
         endif
@@ -697,11 +692,8 @@ contains
         call align_obj%get_weights(frameweights)
         shifts_toplot = iso_shifts
         call moment(frameweights, ave, sdev, var, err_stat)
-        write(logfhandle,'(A,F7.4)')    '>>> AVERAGE PATCH & FRAMES CORRELATION: ', align_obj%get_corr()
-        write(logfhandle,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
-        write(logfhandle,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
-        write(logfhandle,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minval(frameweights)
-        write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxval(frameweights)
+        write(logfhandle,'(A,F7.4)') '>>> AVERAGE PATCH & FRAMES CORRELATION: ', align_obj%get_corr()
+        write(logfhandle,'(A,4F7.4)')'>>> FRAME WEIGHTS AVE/SDEV/MIN/MAX    : ', ave, sdev, minval(frameweights), maxval(frameweights)
         ! shift frames
         !$omp parallel do schedule(guided) default(shared) private(t) proc_bind(close)
         do t=1,nframes
@@ -712,7 +704,7 @@ contains
         !$omp end parallel do
         if( aniso_success )then
             ! dummy init to access interpolation routine
-            call motion_patch%new(0.)
+            call motion_patch%new([params_glob%nxpatch, params_glob%nypatch],0.)
             call motion_patch%set_nframes(nframes)
             call motion_patch%set_fixed_frame(fixed_frame)
             call motion_patch%set_interp_fixed_frame(fixed_frame)
@@ -913,7 +905,6 @@ contains
         logical :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
         if( l_BENCH ) t_cure = tic()
-        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
         ! sum
         do iframe = 1,nframes
             call frames(iframe)%get_rmat_ptr(prmat)
@@ -938,8 +929,7 @@ contains
         ! cure
         noutliers = count(outliers)
         if( noutliers > 0 )then
-            write(logfhandle,'(a,1x,i10)') '>>> # DEAD/HOT PIXELS:', noutliers
-            write(logfhandle,'(a,1x,2f10.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
+            write(logfhandle,'(a,1x,i10,2f10.1)') '>>> # DEAD/HOT PIXELS / AVE / SDEV:', noutliers, ave, sdev
             winsz = 2*HWINSZ+1
             nvals = winsz*winsz
             allocate(pos_outliers(2,noutliers))
@@ -1027,6 +1017,8 @@ contains
                 enddo
             enddo
             !$omp end parallel do
+        else
+            write(logfhandle,'(a)') '>>> NO DEAD/HOT PIXELS DETECTED'
         endif
     end subroutine cure_outliers
 

@@ -5,7 +5,6 @@ module simple_strategy2D_matcher
 include 'simple_lib.f08'
 use simple_binoris_io
 use simple_polarft_corrcalc,    only: polarft_corrcalc
-use simple_regularizer,         only: regularizer
 use simple_cmdline,             only: cmdline
 use simple_builder,             only: build_glob
 use simple_parameters,          only: params_glob
@@ -15,7 +14,7 @@ use simple_convergence,         only: convergence
 use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,     only: strategy2D_spec
-use simple_strategy2D_alloc,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
+use simple_strategy2D_alloc!,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
 use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
@@ -32,7 +31,6 @@ private
 #include "simple_local_flags.inc"
 
 type(polarft_corrcalc)       :: pftcc
-type(regularizer)            :: reg_obj
 type(euclid_sigma2)          :: eucl_sigma
 type(image),     allocatable :: ptcl_match_imgs(:)
 logical,         allocatable :: ptcl_mask(:)
@@ -203,31 +201,6 @@ contains
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
-        ! ref regularization
-        if( params_glob%l_reg_ref )then
-            select case(trim(params_glob%reg_eps_mode))
-                case('auto')
-                    params_glob%eps = min( 1., max(0., 2. - real(which_iter)/params_glob%reg_iters) )
-                case('fixed')
-                    ! user provided, or default value in simple_parameters
-                case('linear')
-                    params_glob%eps = max(0., 1. - real(which_iter)/params_glob%reg_iters)
-                case DEFAULT
-                    THROW_HARD('reg eps mode: '//trim(params_glob%reg_eps_mode)//' unsupported')
-            end select
-            if( params_glob%eps > TINY )then
-                call reg_obj%reset_regs
-                ! Batch loop
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call reg_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-                enddo
-                call reg_obj%regularize_refs_2D
-            endif
-        endif
-        
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -311,6 +284,14 @@ contains
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
+        ! PARTICLE THESHOLDING/WEIGHING
+        if( params_glob%thresh2D.ne.'no' )then
+            if( which_iter > 2 )then
+                call build_glob%spproj_field%threshold_particles(params_glob%thresh2D,&
+                & params_glob%thresh2D_param, [params_glob%fromp,params_glob%top])
+            endif
+        endif
+
         ! OUTPUT ORIENTATIONS
         if( L_BENCH_GLOB ) t_projio = tic()
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &
@@ -363,7 +344,6 @@ contains
         call eucl_sigma%kill
         ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         call pftcc%kill
-        if( params_glob%l_reg_ref ) call reg_obj%kill
         call killimgbatch
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
@@ -421,34 +401,6 @@ contains
         call pftcc%memoize_ptcls
     end subroutine build_pftcc_batch_particles
 
-    !>  \brief  prepares batch particle images for regularization
-    subroutine reg_pftcc_batch_particles( nptcls_here, pinds )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds(nptcls_here)
-        integer :: iptcl_batch, iptcl, ithr
-        call read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
-        !$omp schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds(iptcl_batch)
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
-            ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flag
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        ! Memoize particles FFT parameters
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-        call pftcc%memoize_ptcls
-        ! accumulating regularization term
-        call reg_obj%ref_reg_cc_2D(pinds)
-    end subroutine reg_pftcc_batch_particles
-
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftcc4align( which_iter )
         use simple_strategy2D3D_common, only: prep2dref
@@ -461,7 +413,6 @@ contains
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
         call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_reg_ref ) call reg_obj%new(pftcc)
         ! objective functions & sigma
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'

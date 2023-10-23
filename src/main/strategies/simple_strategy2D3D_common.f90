@@ -211,18 +211,24 @@ contains
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
         else
-            if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
-                lplim = build_glob%clsfrcs%estimate_lp_for_align()
-                if( trim(params_glob%stream).eq.'yes' )then
-                    if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
-                endif
-            else
-                if( which_iter < LPLIM1ITERBOUND )then
-                    lplim = params_glob%lplims2D(1)
-                else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-                    lplim = params_glob%lplims2D(3)
+            if( trim(params_glob%stream).eq.'yes' )then
+                if( file_exists(params_glob%frcs) )then
+                    lplim = build_glob%clsfrcs%estimate_lp_for_align()
                 else
-                    lplim = params_glob%lplims2D(2)
+                    lplim = params_glob%lplims2D(3)
+                endif
+                if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
+            else
+                if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
+                    lplim = build_glob%clsfrcs%estimate_lp_for_align()
+                else
+                    if( which_iter < LPLIM1ITERBOUND )then
+                        lplim = params_glob%lplims2D(1)
+                    else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+                        lplim = params_glob%lplims2D(3)
+                    else
+                        lplim = params_glob%lplims2D(2)
+                    endif
                 endif
             endif
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
@@ -427,6 +433,10 @@ contains
         ! ensure correct build_glob%vol dimensions
         call build_glob%vol%read_and_crop(    fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        if( cline%defined('eps') )then
+            call build_glob%vol%zero_neg
+            call build_glob%vol_odd%zero_neg
+        endif
         if( params_glob%l_nonuniform )then
             if( params_glob%l_filemsk )then
                 call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
@@ -490,7 +500,7 @@ contains
         filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering
-        else if( params_glob%l_lpset .and. (.not. params_glob%l_reg_ref) )then
+        else if( params_glob%l_lpset )then
             ! Butterworth low-pass filter
             ! call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
             ! call vol_ptr%apply_filter(filter)
@@ -522,6 +532,34 @@ contains
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then
             call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
+        endif
+        if( cline%defined('eps') )then
+            call vol_ptr%zero_neg
+            if( iseven )then
+                call build_glob%avg_vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+                if( params_glob%which_iter == 1 )then
+                    build_glob%avg_vol = build_glob%vol
+                else
+                    call build_glob%avg_vol%read('cur_avg.mrc')
+                    build_glob%avg_vol = (build_glob%avg_vol + build_glob%vol) * params_glob%eps
+                endif
+                call build_glob%avg_vol%zero_neg
+                call build_glob%avg_vol%write('cur_avg.mrc')
+                build_glob%vol = build_glob%avg_vol
+                vol_ptr => build_glob%vol
+            else
+                call build_glob%avg_vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+                if( params_glob%which_iter == 1 )then
+                    build_glob%avg_vol_odd = build_glob%vol_odd
+                else
+                    call build_glob%avg_vol_odd%read('cur_avg_odd.mrc')
+                    build_glob%avg_vol_odd = (build_glob%avg_vol_odd + build_glob%vol_odd) * params_glob%eps
+                endif
+                call build_glob%avg_vol_odd%zero_neg
+                call build_glob%avg_vol_odd%write('cur_avg_odd.mrc')
+                build_glob%vol_odd = build_glob%avg_vol_odd
+                vol_ptr => build_glob%vol_odd
+            endif
         endif
         ! FT volume
         call vol_ptr%fft()

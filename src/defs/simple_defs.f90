@@ -21,6 +21,7 @@ integer,  parameter :: LINE_MAX_LEN = 8192
 real(sp), parameter :: PI           = acos(-1.)
 real(dp), parameter :: DPI          = acos(-1.d0)
 real(sp), parameter :: PIO2         = acos(-1.)/2.
+real(sp), parameter :: DPIO2        = acos(-1.d0)/2.d0
 real(sp), parameter :: TWOPI        = 2.*acos(-1.)
 real(dp), parameter :: DTWOPI       = 2.d0*acos(-1.d0)
 real(sp), parameter :: FOURPI       = 4.*acos(-1.)
@@ -30,7 +31,7 @@ real(sp), parameter :: TINY         = 1e-10
 real(dp), parameter :: DTINY        = 1e-10
 real(sp), parameter :: SMALL        = 1e-6
 real(sp), parameter :: FTOL         = 1e-4
-real(dp), parameter :: DSMALL       = 1e-6
+real(dp), parameter :: DSMALL       = 1.d-6
 real(dp), parameter :: PISQR        = DPI*DPI
 
 ! directory-based execution model

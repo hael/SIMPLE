@@ -2,7 +2,7 @@ module simple_motion_align_poly2
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,           only: image, imstack_type
+use simple_image,           only: image, image_stack
 use simple_ft_expanded_dp,  only: ft_expanded_dp
 use simple_parameters,      only: params_glob
 use simple_timer
@@ -61,13 +61,13 @@ end type motion_align_poly2
 contains
 
     subroutine new( self, frames_patches_ptr, poly_coeffs, patch_centers, ldim, hp, fixed_frame )
-        class(motion_align_poly2),         intent(inout)    :: self
-        type(imstack_type), allocatable, target, intent(inout) :: frames_patches_ptr(:,:)
-        real(dp),                                intent(in) :: poly_coeffs(:,:)
-        real,                                    intent(in)    :: patch_centers(:,:,:)
-        integer,                                 intent(in) :: ldim(3)
-        real,                             intent(in)    :: hp
-        integer,                          intent(in)    :: fixed_frame
+        class(motion_align_poly2),              intent(inout) :: self
+        type(image_stack), allocatable, target, intent(inout) :: frames_patches_ptr(:,:)
+        real(dp),                               intent(in)    :: poly_coeffs(:,:)
+        real,                                   intent(in)    :: patch_centers(:,:,:)
+        integer,                                intent(in)    :: ldim(3)
+        real,                                   intent(in)    :: hp
+        integer,                                intent(in)    :: fixed_frame
         integer :: i,j,t,ithr, itmp(2), ldim_patch(3)
         call self%kill
         self%nframes     =  size(frames_patches_ptr(1,1)%stack, 1)

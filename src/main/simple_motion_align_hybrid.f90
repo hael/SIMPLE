@@ -55,7 +55,6 @@ type :: motion_align_hybrid
     integer                        :: px=0 , py=0                       !< patch x/y id
     integer                        :: lp_updates       = 1              !< # of resolution updates performed [0;3]
     logical                        :: l_bfac           = .false.        !< whether to use b-factor weights
-    logical                        :: group_frames     = .false.        !< whether to group frames
     logical                        :: fitshifts        = .false.        ! whether to perform iterative incremental shifts fitting
     logical                        :: rand_init_shifts = .false.        !< randomize initial condition?
     logical                        :: existence        = .false.
@@ -80,8 +79,6 @@ contains
     procedure, private :: align_dcorr
     procedure, private :: align_corr
     procedure, private :: gen_weights
-    procedure, private :: gen_frames_group
-    procedure, private :: calc_group_weight
     procedure, private :: recenter_shifts
     procedure, private :: calc_rmsd
     ! Trajectory fitting related
@@ -104,7 +101,6 @@ contains
     procedure          :: get_coords
     procedure          :: is_fitshifts
     procedure          :: set_bfactor
-    procedure          :: set_group_frames
     ! Destructor
     procedure          :: kill
 end type motion_align_hybrid
@@ -145,7 +141,6 @@ contains
         self%corrs            = -1.
         self%frameweights     = 1./real(self%nframes)
         self%fitshifts        = .false.
-        self%group_frames     = .false.
         self%rand_init_shifts = .false.
         self%l_bfac           = .false.
         self%existence        = .true.
@@ -216,7 +211,6 @@ contains
     subroutine init_ftexps( self )
         class(motion_align_hybrid), intent(inout) :: self
         integer :: iframe
-        real    :: w,w1,sumw
         call self%dealloc_ftexps
         allocate(self%frames_ftexp(self%nframes),self%frames_ftexp_sh(self%nframes),self%references_ftexp(self%nframes))
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
@@ -226,38 +220,6 @@ contains
             call self%frames_ftexp_sh(iframe)%new(self%frames_orig(iframe), self%hp, self%lp, .false.)
         end do
         !$omp end parallel do
-        if( .not.self%group_frames ) return
-        w1 = self%calc_group_weight()
-        !$omp parallel do default(shared) private(iframe,sumw,w) proc_bind(close) schedule(static)
-        do iframe=1,self%nframes
-            sumw = 1.
-            call self%frames_ftexp_sh(iframe)%add(self%frames_ftexp(iframe))
-            if( iframe > 1 )then
-                w = w1
-                if( iframe == self%nframes ) w = 2.*w
-                sumw = sumw + w
-                call add_shifted_frame(iframe,iframe-1,w)
-            endif
-            if( iframe < self%nframes )then
-                w = w1
-                if( iframe == 1 ) w = 2.*w
-                sumw = sumw + w
-                call add_shifted_frame(iframe,iframe+1,w1)
-            endif
-            call self%frames_ftexp_sh(iframe)%div(sumw)
-            call self%frames_ftexp(iframe)%copy(self%frames_ftexp_sh(iframe))
-        enddo
-        !$omp end parallel do
-        contains
-
-            subroutine add_shifted_frame(i, j, w)
-                integer, intent(in) :: i,j
-                real,    intent(in) :: w
-                real :: shvec(2)
-                if( w < 1.e-8 )return
-                shvec = self%opt_shifts(i,:) - self%opt_shifts(j,:)
-                call self%frames_ftexp(j)%shift_and_add(-shvec, w, self%frames_ftexp_sh(i))
-            end subroutine add_shifted_frame
     end subroutine init_ftexps
 
     subroutine dealloc_ftexps( self )
@@ -385,7 +347,7 @@ contains
         ! convenience matrix
         cmat_sum = self%reference%get_cmat()
         cmat_sum = cmplx(0.,0.)
-        ! init shifts & generate groups
+        ! init shifts
         self%opt_shifts = 0.
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
         if ( self%rand_init_shifts ) then
@@ -412,8 +374,6 @@ contains
                     call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
                 enddo
             endif
-            ! optional frames grouping
-            call self%gen_frames_group
             ! recenter shifts
             call self%recenter_shifts(self%opt_shifts)
             ! shift frames, generate reference
@@ -577,46 +537,6 @@ contains
         deallocate(ftexp_srch)
     end subroutine align_corr
 
-    ! shifts frames, generate reference and calculates correlations
-    subroutine gen_frames_group( self )
-        class(motion_align_hybrid), intent(inout) :: self
-        real    :: w,w1,sumw
-        integer :: iframe
-        if( .not.self%group_frames ) return
-        w1 = self%calc_group_weight()
-        !$omp parallel do default(shared) private(iframe,sumw,w) proc_bind(close) schedule(static)
-        do iframe = 1,self%nframes
-            sumw = 1.
-            call self%frames_orig(iframe)%clip(self%frames(iframe))
-            if( iframe > 1 )then
-                w = w1
-                if( iframe == self%nframes ) w = 2.*w
-                sumw = sumw + w
-                call add_shifted_weighed_frame(iframe, iframe-1, w)
-            endif
-            if( iframe < self%nframes )then
-                w = w1
-                if( iframe == 1 ) w = 2.*w
-                sumw = sumw + w
-                call add_shifted_weighed_frame(iframe, iframe+1, w)
-            endif
-            call self%frames(iframe)%div(sumw)
-        enddo
-        !$omp end parallel do
-        contains
-
-            subroutine add_shifted_weighed_frame(i,j,w)
-                integer, intent(in) :: i,j
-                real,    intent(in) :: w
-                real :: dsh(2)
-                if( w < 1.e-8 )return
-                call self%frames_orig(j)%clip(self%frames_sh(i))
-                dsh = self%opt_shifts(i,:) - self%opt_shifts(j,:)
-                call self%frames_sh(i)%shift2Dserial(-dsh)
-                call self%frames(i)%add(self%frames_sh(i),w)
-            end subroutine add_shifted_weighed_frame
-    end subroutine gen_frames_group
-
     ! identifies interpolated shifts within search range, frame destroyed on exit
     subroutine calc_shifts( self, iframe )
         class(motion_align_hybrid), intent(inout) :: self
@@ -739,19 +659,6 @@ contains
         calc_rmsd = sqrt(calc_rmsd/real(self%nframes))
     end function calc_rmsd
 
-    real function calc_group_weight( self )
-        class(motion_align_hybrid), intent(in)  :: self
-        integer :: lp_update
-        if( self%px == 0 .and. self%py == 0 )then
-            ! iso
-            calc_group_weight = 0.0
-        else
-            ! aniso
-            lp_update = min(self%lp_updates,NRESUPDATES)
-            calc_group_weight = 0.4*exp(-real(lp_update))
-        endif
-    end function calc_group_weight
-
     ! Getters/setters
 
     subroutine set_reslims( self, hp, lpstart, lpstop )
@@ -870,12 +777,6 @@ contains
         self%l_bfac = bfac > 1.e-6
         if( self%l_bfac ) self%bfactor = bfac
     end subroutine set_bfactor
-
-    subroutine set_group_frames( self, group_frames )
-        class(motion_align_hybrid), intent(inout) :: self
-        logical,                    intent(in)    :: group_frames
-        self%group_frames = group_frames
-    end subroutine set_group_frames
 
     ! FITTING RELATED
 

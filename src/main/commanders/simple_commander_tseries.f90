@@ -636,6 +636,7 @@ contains
         if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
+        if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
@@ -741,6 +742,7 @@ contains
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
+        if( .not. cline%defined('kweight')        ) call cline%set('kweight',  'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         ! set shared-memory flag
@@ -911,7 +913,7 @@ contains
         call cline%set('dir_exec', 'refine3D_nano')
         ! dynamic parameters
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no') ! since Graphene subtraction is part of the workflow
         if( .not. cline%defined('keepvol')        ) call cline%set('keepvol',       'yes')
         if( .not. cline%defined('hp')             ) call cline%set('hp',              3.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',              1.0)
@@ -919,13 +921,14 @@ contains
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          30.)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
-        if( .not. cline%defined('nonuniform')     ) call cline%set('nonuniform',     'no')
+        if( .not. cline%defined('nonuniform')     ) call cline%set('nonuniform',     'no') ! nonuniform filtering does not work for this kind of data
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
         if( .not. cline%defined('ptclw')          ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun
+        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun for this kind of data
+        if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
-        if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global')
+        if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
@@ -1053,6 +1056,10 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
+        ! put back automatic contact thresholding after refinement
+        call cline_detect_atms%delete('corr_thres')
+        call cline_detect_atms%delete('cs_thres')
+        call cline_detect_atms%delete('use_thres') ! yes is default
         params_ptr  => params_glob
         params_glob => null()
         call xdetect_atms%execute(cline_detect_atms)
