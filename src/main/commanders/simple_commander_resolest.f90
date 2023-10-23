@@ -514,12 +514,12 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(image),      allocatable :: tmp_imgs(:)
-        complex(dp),      allocatable :: cls_avg(:,:), cls_avg_even(:,:), cls_avg_odd(:,:), num_even(:,:), num_odd(:,:)
+        complex(dp),      allocatable :: cls_avg_bak(:,:),cls_avg(:,:), cls_avg_even(:,:), cls_avg_odd(:,:), num_even(:,:), num_odd(:,:)
         complex(sp),      allocatable :: ptcl(:,:), ptcl_rot(:,:), diff(:,:)
         real(dp),         allocatable :: denom_even(:,:), denom_odd(:,:), R2s(:), RmI2s(:), weights(:)
         real(sp), target, allocatable :: sig2(:,:)
-        real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), dfs(:)
-        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:)
+        real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), dfs(:), bindiff(:)
+        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:), means(:), sdevs(:), binccs(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
         integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:)
         logical,          allocatable :: selected(:)
@@ -527,8 +527,8 @@ contains
         type(ctf)        :: tfun
         type(ctfparams)  :: ctfparms
         real(dp) :: rmi2, r2
-        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu, ice_score, score
-        real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd
+        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu, ice_score, score, mean, sdev
+        real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd, sdev_noise
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end
         integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel, ini_pop, cavgs_ncls
         integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel
@@ -630,6 +630,7 @@ contains
                 purity(0) = purity(0) * 100. / real(pop)
                 print *, icls,pop,purity(0)
             endif
+            allocate(means(ini_pop),sdevs(ini_pop))
             do ibatch=1,nbatches
                 ! read
                 batch_start = batches(ibatch,1)
@@ -638,13 +639,15 @@ contains
                 call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
                 cls2batch = (/(i,i=batch_start,batch_end)/)
                 ! flags bad ice
-                !$omp parallel do private(j,i,iptcl,ithr,ctfparms,tfun,ice_score) default(shared)&
+                !$omp parallel do private(j,i,iptcl,ithr,ctfparms,tfun,ice_score,sdev_noise) default(shared)&
                 !$omp proc_bind(close)
                 do j = batch_start,batch_end
                     ithr  = omp_get_thread_num()+1
                     i     = j - batch_start +  1
                     iptcl = pinds(j)
                     call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
+                    call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
+                    call tmp_imgs(ithr)%mask(real(params%box)/2.-COSMSKHALFWIDTH-1., 'soft', backgr=0.)
                     call tmp_imgs(ithr)%fft
                     ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
                     tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
@@ -655,9 +658,21 @@ contains
                         cls2batch(i)  = 0
                         states(iptcl) = 0
                     endif
+
+                    call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
+                    call tmp_imgs(ithr)%fft
+                    call tmp_imgs(ithr)%shift2Dserial(-build%spproj_field%get_2Dshift(iptcl))
+                    call tfun%apply_serial(tmp_imgs(ithr), 'flip', ctfparms)
+                    call tmp_imgs(ithr)%bp(0.,4.)
+                    call tmp_imgs(ithr)%ifft
+                    call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
+                    call tmp_imgs(ithr)%moments_within(build%lmsk, means(i), sdevs(i))
+                    call build%spproj_field%set(iptcl,'mean',means(i))
+                    call build%spproj_field%set(iptcl,'sdev',sdevs(i))
                 enddo
                 !$omp end parallel do
             enddo
+            deallocate(means,sdevs)
             print *,icls,' Ice rejection: ', count(pinds==0)
             if( l_groundtruth )then
                 purity(0) = real(sum(labels(pinds(:)),mask=(pinds>0)))
@@ -717,9 +732,9 @@ contains
             endif
             ! class allocations
             if( allocated(corrs) ) deallocate(corrs,order,weights,R2s,RmI2s,rots,shifts,dfs,&
-                &bin_inds,bins,selected)
+                &bin_inds,bins,selected,binccs,bindiff)
             allocate(corrs(pop),order(pop),weights(pop),R2s(nbins),RmI2s(nbins),rots(pop),shifts(2,pop),&
-                &dfs(pop),bin_inds(nbins,NPTCLS_PER_BIN),bins(pop),selected(pop))
+                &dfs(pop),bin_inds(nbins,NPTCLS_PER_BIN),bins(pop),selected(pop),binccs(nbins),bindiff(nbins))
             ! alignement inititialization
             !$omp parallel do private(j,i,iptcl,ithr) default(shared) proc_bind(close)
             do i = 1,pop
@@ -831,6 +846,7 @@ contains
                 call update_sigmas(1)
             endif
             ! Iteration loop
+            cls_avg_bak    = cls_avg
             prev_threshold = huge(threshold)
             prev_nsel      = 0
             do iter = 1,NITERS
@@ -862,8 +878,14 @@ contains
                     enddo
                     !$omp end parallel do
                     RmI2s(ibin) = rmi2 / (binpop-1)
+                    binccs(ibin) = real(sum(cls_avg_bak*conjg(cls_avg))) / sqrt(sum(csq_fast(cls_avg_bak)) * sum(csq_fast(cls_avg)))
+                    bindiff(ibin) = sum(csq_fast(cls_avg_bak-cls_avg))
                 enddo
                 R2s = R2s / RmI2s
+                where( binccs < 0. ) R2s = 0.
+                mean = sum(bindiff,mask=(binccs>0.)) / real(count(binccs>0.))
+                sdev = sqrt(sum((bindiff-mean)**2,mask=(binccs>0.))/real(count(binccs>0.)))
+                where( bindiff > mean+2.*sdev ) R2s = 0.
                 ! Threshold
                 tmp = real(R2s)
                 call hpsort(tmp)
@@ -881,7 +903,7 @@ contains
                 do ibin = 1,nbins
                     binpop = count(bins==ibin)
                     pu = 0.
-                    df = 0.0
+                    ! df = 0.0
                     ! cc = 0.0
                     do i = 1,binpop
                         j = bin_inds(ibin,i)
@@ -892,12 +914,12 @@ contains
                         else
                             weights(j) = 1.d0
                         endif
-                        df = df + build%spproj_field%get(iptcl,'dfx')
+                        ! df = df + build%spproj_field%get(iptcl,'dfx')
                         if( l_groundtruth ) pu = pu + real(labels(iptcl))
                         ! k = k + 1
                         ! cc = cc + corrs(k)
                     enddo
-                    ! print *,icls,iter,ibin,100.*pu/real(binpop),R2s(ibin), RmI2s(ibin), df/binpop!, cc/binpop
+                    print *,icls,iter,ibin,100.*pu/real(binpop),R2s(ibin), RmI2s(ibin), binccs(ibin),  bindiff(ibin)
                 enddo
                 nsel = count(weights > 0.5d0)        
                 if( l_groundtruth )then
@@ -924,6 +946,7 @@ contains
                 prev_nsel      = nsel
                 ! re-scoring
                 call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
+                cls_avg_bak = cls_avg
                 call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', iter+1)
                 pftcc%pfts_refs_even(:,:,iter) = cmplx(cls_avg_even)
                 pftcc%pfts_refs_odd(:,:,iter)  = cmplx(cls_avg_odd)
