@@ -22,7 +22,7 @@ integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold high
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
-logical,          parameter :: ATOMS_STATS_OMIT    = .true.  ! omit = shorter atoms stats output
+logical,          parameter :: ATOMS_STATS_OMIT    = .false. ! omit = shorter atoms stats output
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3

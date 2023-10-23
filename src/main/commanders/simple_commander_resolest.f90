@@ -449,6 +449,14 @@ contains
             ! writing the raw stack
             call build%imgbatch(pinds(j))%ifft
             call build%imgbatch(pinds(j))%write('ptcls_stk.mrc', j)
+            ! writing the ctf stack
+            call pftcc%polar2cartesian(cmplx(pftcc%ctfmats(:,:,j), kind=sp), cmat, box)
+            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('ctfs_stk.mrc', j)
         enddo
         ! polar class average
         call pftcc%polar2cartesian(cmplx(cls_avg / denom, kind=sp), cmat, box)

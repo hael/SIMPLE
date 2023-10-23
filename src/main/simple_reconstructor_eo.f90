@@ -105,6 +105,7 @@ contains
         call self%even%alloc_rho(spproj)
         call self%even%set_ft(.true.)
         call self%odd%new(self%ldim, params_glob%smpd)
+        call self%odd%new(self%ldim, params_glob%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
         call self%eosum%new(self%ldim, params_glob%smpd)
