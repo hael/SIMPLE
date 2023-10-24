@@ -9,7 +9,7 @@ public :: picker_utils
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5.
+real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5., BOX_EXP_FAC = 0.111
 integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
 integer, parameter :: MAXNREFS     = 100
 real,    parameter :: DIST_THRES   = real(OFFSET), NDEV_DEFAULT = 2.5
@@ -32,7 +32,6 @@ type picker_utils
     character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
     logical                       :: refpick = .false.
-    logical                       :: hybrid  = .false.
     logical                       :: exists  = .false.
   contains
     procedure          :: new
@@ -86,7 +85,7 @@ contains
         self%ldim_shrink2(2) = round2even(real(self%ldim_raw(2)) * scale2)
         self%ldim_shrink2(3) = 1
         ! set logical dimensions of boxes
-        self%maxdiam         = moldiam + moldiam * 0.111
+        self%maxdiam         = moldiam + moldiam * BOX_EXP_FAC
         self%ldim_box(1)     = round2even(self%maxdiam / self%smpd_raw)
         self%ldim_box(2)     = self%ldim_box(1)
         self%ldim_box(3)     = 1
@@ -146,16 +145,13 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine set_refs( self, imgs, mskdiam, hybrid )
+    subroutine set_refs( self, imgs, mskdiam )
         class(picker_utils), intent(inout) :: self
         class(image),        intent(inout) :: imgs(:)
         real,                intent(in)    :: mskdiam
-        logical, optional,   intent(in)    :: hybrid
         type(image) :: img_rot
         integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
         real        :: scale1, scale2, mskrad1, mskrad2, pixrad_shrink1, pixrad_shrink2, smpd, ang, rot
-        self%hybrid = .false.
-        if( present(hybrid) ) self%hybrid = hybrid
         smpd        = imgs(1)%get_smpd()
         ldim        = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
@@ -163,25 +159,25 @@ contains
         nrots       = nint(real(MAXNREFS) / real(nimgs))
         self%nrefs  = nimgs * nrots
         ! set shrunken logical dimensions of boxes
-        scale1               = smpd / SMPD_SHRINK1
-        scale2               = smpd / SMPD_SHRINK2
-        self%ldim_box1(1)    = round2even(real(ldim(1)) * scale1)
-        self%ldim_box1(2)    = round2even(real(ldim(2)) * scale1)
-        self%ldim_box1(3)    = 1
-        self%ldim_box2(1)    = round2even(real(ldim(1)) * scale2)
-        self%ldim_box2(2)    = round2even(real(ldim(2)) * scale2)
-        self%ldim_box2(3)    = 1
+        scale1            = smpd / SMPD_SHRINK1
+        scale2            = smpd / SMPD_SHRINK2
+        self%ldim_box1(1) = round2even(real(ldim(1)) * scale1)
+        self%ldim_box1(2) = round2even(real(ldim(2)) * scale1)
+        self%ldim_box1(3) = 1
+        self%ldim_box2(1) = round2even(real(ldim(1)) * scale2)
+        self%ldim_box2(2) = round2even(real(ldim(2)) * scale2)
+        self%ldim_box2(3) = 1
         ! set # pixels in x/y for both box sizes
-        self%nx1             = self%ldim_shrink1(1) - self%ldim_box1(1)
-        self%ny1             = self%ldim_shrink1(2) - self%ldim_box1(2)
-        self%nx2             = self%ldim_shrink2(1) - self%ldim_box2(1)
-        self%ny2             = self%ldim_shrink2(2) - self%ldim_box2(2)
+        self%nx1          = self%ldim_shrink1(1) - self%ldim_box1(1)
+        self%ny1          = self%ldim_shrink1(2) - self%ldim_box1(2)
+        self%nx2          = self%ldim_shrink2(1) - self%ldim_box2(1)
+        self%ny2          = self%ldim_shrink2(2) - self%ldim_box2(2)
         ! set Gaussians
-        self%maxdiam         = mskdiam
-        pixrad_shrink1       = (self%maxdiam / 2.) / SMPD_SHRINK1
-        pixrad_shrink2       = (self%maxdiam / 2.) / SMPD_SHRINK2
-        self%sig_shrink1     = pixrad_shrink1 / GAUSIG
-        self%sig_shrink2     = pixrad_shrink2 / GAUSIG
+        self%maxdiam      = mskdiam
+        pixrad_shrink1    = (self%maxdiam / 2.) / SMPD_SHRINK1
+        pixrad_shrink2    = (self%maxdiam / 2.) / SMPD_SHRINK2
+        self%sig_shrink1  = pixrad_shrink1 / GAUSIG
+        self%sig_shrink2  = pixrad_shrink2 / GAUSIG
         call self%imgau_shrink1%new(self%ldim_box1, SMPD_SHRINK1)
         call self%imgau_shrink1%gauimg2D(self%sig_shrink1, self%sig_shrink1)
         call self%imgau_shrink2%new(self%ldim_box2, SMPD_SHRINK2)
@@ -454,7 +450,7 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
-        if( self%refpick .and. .not. self%hybrid )then
+        if( self%refpick )then
             !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset

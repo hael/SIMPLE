@@ -33,7 +33,6 @@ type :: builder
     type(image)                         :: img_tmp                !< -"-
     type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
-    type(projector)                     :: avg_vol, avg_vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
@@ -272,7 +271,7 @@ contains
             call self%img_copy%new( [params%box,params%box,1],params%smpd,  wthreads=.false.)
             call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
-            call self%img_pad%new(  [params%boxpd,params%boxpd,1],params%smpd)
+            call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
@@ -287,8 +286,6 @@ contains
                 call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call self%avg_vol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call self%avg_vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             endif
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill
@@ -325,10 +322,6 @@ contains
             call self%vol%kill
             call self%vol_odd%kill_expanded
             call self%vol_odd%kill
-            call self%avg_vol%kill_expanded
-            call self%avg_vol%kill
-            call self%avg_vol_odd%kill_expanded
-            call self%avg_vol_odd%kill
             call self%vol2%kill
             if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
             if( allocated(self%fsc)           ) deallocate(self%fsc)
