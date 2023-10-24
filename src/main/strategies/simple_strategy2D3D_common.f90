@@ -596,7 +596,7 @@ contains
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch,sdev_noise) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
