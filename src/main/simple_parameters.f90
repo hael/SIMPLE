@@ -1246,7 +1246,10 @@ contains
             self%msk     = msk_default
         endif
         if( self%box > 0 )then
-            if( .not.cline%defined('msk_crop') ) self%msk_crop = self%msk * real(self%box_crop) / real(self%box)
+            if( .not.cline%defined('msk_crop') )then
+                self%msk_crop = min(round2even((real(self%box_crop)-COSMSKHALFWIDTH)/2.),&
+                    &round2even(self%msk * real(self%box_crop) / real(self%box)))
+            endif
         endif
         ! automasking options
         self%l_filemsk = .false.
