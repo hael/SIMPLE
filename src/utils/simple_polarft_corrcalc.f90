@@ -1574,11 +1574,12 @@ contains
         corrs = real(self%heap_vars(ithr)%kcorrs)
     end subroutine gencorrs_shifted_prob
 
-    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
+    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot, pfts_refs)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
+        complex(dp), optional,   intent(in)    :: pfts_refs(:,:)
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
         integer              :: ithr, i
         i    =  self%pinds(iptcl)
@@ -1586,16 +1587,20 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( self%iseven(i) )then
-            pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        if( present(pfts_refs) )then
+            pft_ref_tmp_8 = pfts_refs
         else
-            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            if( self%iseven(i) )then
+                pft_ref_8 = self%pfts_refs_even(:,:,iref)
+            else
+                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
+            endif
+            ! shift
+            call self%gen_shmat_8(ithr, shvec, shmat_8)
+            pft_ref_8 = pft_ref_8 * shmat_8
+            ! rotation
+            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
         endif
-        ! shift
-        call self%gen_shmat_8(ithr, shvec, shmat_8)
-        pft_ref_8 = pft_ref_8 * shmat_8
-        ! rotation
-        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gencorr_for_rot_8 = 0.d0
