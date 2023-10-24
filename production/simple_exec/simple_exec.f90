@@ -102,6 +102,7 @@ type(nununiform_filter2D_commander)         :: xnununiform_filter2D
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(check_align_commander)                 :: xcheck_align
+type(check_align_inpl_commander)            :: xcheck_align_inpl
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -302,6 +303,8 @@ select case(trim(prg))
         call xcavg_filter2D%execute(cline)
     case( 'check_align' )
         call xcheck_align%execute(cline)
+    case( 'check_align_inpl' )
+        call xcheck_align_inpl%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -382,7 +385,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('05251ee0')
+call simple_print_git_version('373b7b3b')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

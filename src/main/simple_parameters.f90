@@ -193,12 +193,12 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
     character(len=STDLEN)     :: reg_mode='tab'       !< reg mode(tab|normtab|hard){tab}
+    character(len=STDLEN)     :: reg_grad='no'        !< reg gradient to be used
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: tag=''               !< just a tag
-    character(len=STDLEN)     :: thresh2D='no'        !< whether to apply thesholdind/weighing during 2D classification
     character(len=STDLEN)     :: vol_even=''          !< even reference volume
     character(len=STDLEN)     :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN)     :: wfun='kb'
@@ -396,7 +396,6 @@ type :: parameters
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
-    real    :: thresh2D_param=1.
     real    :: tiltgroupmax=0
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
@@ -432,6 +431,7 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
+    logical :: l_reg_grad     = .false.
     logical :: l_reg_opt_ang  = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_debug    = .false.
@@ -569,6 +569,7 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('reg_mode',       self%reg_mode)
+        call check_carg('reg_grad',       self%reg_grad)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
@@ -588,7 +589,6 @@ contains
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
-        call check_carg('thresh2D',       self%thresh2D)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
@@ -806,7 +806,6 @@ contains
         call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
-        call check_rarg('thresh2D_param', self%thresh2D_param)
         call check_rarg('total_dose',     self%total_dose)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
@@ -1462,6 +1461,7 @@ contains
         ! optimal angle in the reg
         self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
         ! randomized ories and zero shifts in reg shceme
+        self%l_reg_grad  = trim(self%reg_grad ).eq.'yes'
         self%l_reg_init  = trim(self%reg_init ).eq.'yes'
         self%l_reg_debug = trim(self%reg_debug).eq.'yes'
         self%l_reg_scale = trim(self%reg_scale).eq.'yes'
