@@ -609,6 +609,39 @@ contains
         call cluster_sort( nrows, ncols, tab, to_ii - num, to_ir - 1, cur_id, cur_ir )
     end subroutine cluster_sort
 
+    subroutine uniform_sort( nrows, ncols, tab, to_ii, cur_id, cur_ir, mask_ir )
+        integer,            intent(in)    :: nrows, ncols
+        real,               intent(in)    :: tab(nrows, ncols)
+        integer,            intent(in)    :: to_ii
+        integer,            intent(inout) :: cur_id(nrows)
+        integer,            intent(inout) :: cur_ir(nrows)
+        logical,            intent(inout) :: mask_ir(ncols)
+        integer :: ir, ip, tmp_i, max_ind_ir, max_ind_ip
+        real    :: max_ir(ncols), max_ip(ncols)
+        if( to_ii < 1 ) return
+        if( .not.(any(mask_ir)) ) mask_ir = .true.
+        do ir = 1, ncols
+            if( mask_ir(ir) )then
+                max_ir(ir) = 0.
+                do ip = 1, to_ii
+                    if( tab(cur_id(ip), ir) > max_ir(ir) )then
+                        max_ir(ir) = tab(cur_id(ip), ir)
+                        max_ip(ir) = ip
+                    endif
+                enddo
+            endif
+        enddo
+        max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+        max_ind_ip = max_ip(max_ind_ir)
+        ! swapping max_ind_ip
+        tmp_i               = cur_id(to_ii)
+        cur_id(to_ii)       = cur_id(max_ind_ip)
+        cur_id(max_ind_ip)  = tmp_i
+        cur_ir(to_ii)       = max_ind_ir
+        mask_ir(max_ind_ir) = .false.
+        call uniform_sort(nrows, ncols, tab, to_ii-1, cur_id, cur_ir, mask_ir)
+    end subroutine uniform_sort
+
     ! sorting rarr, but only keep the sorted indeces
     subroutine hpsort_ind( iarr, rarr )
         integer, intent(inout) :: iarr(:)

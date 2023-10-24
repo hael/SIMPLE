@@ -33,7 +33,6 @@ contains
         character(len=LONGSTRLEN), intent(out)   :: boxfile
         integer,                   intent(out)   :: nptcls_out
         character(len=*),          intent(in)    :: dir_out
-        type(image)        :: micimg
         type(picker_utils) :: putils
         integer            :: ldim(3), ifoo
         if( .not. file_exists(moviename_intg) ) write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
@@ -54,8 +53,6 @@ contains
             case('new')
                 ! read micrograph
                 call find_ldim_nptcls(moviename_intg, ldim, ifoo)
-                call micimg%new(ldim, smpd)
-                call micimg%read(moviename_intg)
                 call putils%new(moviename_intg, params_glob%pcontrast, smpd, params_glob%moldiam)
                 if( cline%defined('pickrefs') )then
                     if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')  
@@ -68,7 +65,6 @@ contains
                 endif
                 call putils%exec_picker(boxfile, nptcls_out, dir_out=dir_out)
                 call putils%kill
-                call micimg%kill
         end select
     end subroutine iterate
 
