@@ -638,6 +638,12 @@ contains
         logical, optional, intent(in) :: use_inpl
         logical, optional, intent(in) :: use_reg
         integer :: iptcl_batch, iptcl, ithr
+        logical :: l_use_inpl, l_use_reg
+        ! optional arguments
+        l_use_inpl = .false.
+        l_use_reg  = .false.
+        if( present(use_inpl) ) l_use_inpl = use_inpl
+        if( present(use_reg)  ) l_use_reg  = use_reg
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
@@ -667,14 +673,14 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! filling the prob table
-        if( present(use_inpl) .and. use_inpl )then
-            if( present(use_reg) .and. use_reg )then
+        if( l_use_inpl )then
+            if( l_use_reg )then
                 call reg_inpl%fill_tab(pinds_here, use_reg=.true.)
             else
                 call reg_inpl%fill_tab(pinds_here)
             endif
         else
-            if( present(use_reg) .and. use_reg )then
+            if( l_use_reg )then
                 ! not an option yet
             else
                 call reg_obj%fill_tab_noshift(pinds_here)

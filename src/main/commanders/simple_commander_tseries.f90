@@ -1238,7 +1238,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
-        type(image)        :: ave_pre, ave_post, tmp
+        type(image)        :: ave_pre, ave_post, img_tmp, img_tmp2, img_tmp3
         real,  allocatable :: angles1(:), angles2(:)
         real               :: smpd, ave,var,sdev
         integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
@@ -1264,9 +1264,9 @@ contains
         call init_graphene_subtr(params%box,params%smpd)
         ! init images
         call build%img%new(ldim,params%smpd)       ! particle
-        call build%img_tmp%new(ldim,params%smpd)   ! nn background
-        call build%img_copy%new(ldim,params%smpd)
-        call tmp%new(ldim,params%smpd)
+        call img_tmp%new(ldim,params%smpd)
+        call img_tmp2%new(ldim,params%smpd)   ! nn background
+        call img_tmp3%new(ldim,params%smpd)
         call ave_pre%new(ldim,params%smpd)
         call ave_post%new(ldim,params%smpd)
         ave_pre  = 0.
@@ -1278,15 +1278,15 @@ contains
             call build%img%read(params%stk,iptcl)
             call build%img%norm()
             ! neighbours background
-            call build%img_tmp%read(params%stk2,iptcl)
+            call img_tmp2%read(params%stk2,iptcl)
             ! detection
-            call calc_peaks(build%img_tmp, angles1(iptcl), angles2(iptcl))
+            call calc_peaks(img_tmp2, angles1(iptcl), angles2(iptcl))
             ! pre-subtraction average
-            call build%img_copy%copy(build%img)
-            call build%img_copy%zero_edgeavg
-            call build%img_copy%fft()
-            call build%img_copy%ft2img('sqrt', tmp)
-            call ave_pre%add(tmp)
+            call img_tmp3%copy(build%img)
+            call img_tmp3%zero_edgeavg
+            call img_tmp3%fft()
+            call img_tmp3%ft2img('sqrt', img_tmp)
+            call ave_pre%add(img_tmp)
             ! subtraction
             call remove_lattices(build%img, angles1(iptcl), angles2(iptcl))
             call build%img%norm()
@@ -1294,8 +1294,8 @@ contains
             ! graphene subtracted average
             call build%img%zero_edgeavg
             call build%img%fft()
-            call build%img%ft2img('sqrt', tmp)
-            call ave_post%add(tmp)
+            call build%img%ft2img('sqrt', img_tmp)
+            call ave_post%add(img_tmp)
         enddo
         call progress(iptcl,nptcls)
         call ave_pre%div(real(nptcls))
@@ -1314,7 +1314,9 @@ contains
         ! cleanup
         call build%kill_general_tbox
         call kill_graphene_subtr
-        call tmp%kill
+        call img_tmp%kill
+        call img_tmp2%kill
+        call img_tmp3%kill
         call ave_pre%kill
         call ave_post%kill
         ! end gracefully

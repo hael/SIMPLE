@@ -17,7 +17,6 @@ type, extends(image) :: polarizer
     private
     type(image)           :: instrfun_img          !< weights to divide with in real-space
     real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
-    real,    allocatable  :: gridweights(:,:)      !< weights to divide with in real-space
     integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer               :: wdim = 0              !< dimension of K-B window
