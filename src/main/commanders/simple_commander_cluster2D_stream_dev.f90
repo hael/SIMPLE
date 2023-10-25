@@ -124,7 +124,7 @@ contains
         call seed_rnd
         ! general parameters
         mskdiam             = cline%get_rarg('mskdiam')
-        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
+        call mskdiam2lplimits(mskdiam, lpstart, lpstop, lpcen)
         if( cline%defined('lp2D') ) lpstart = params_glob%lp2D
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
         l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
@@ -261,7 +261,7 @@ contains
         scale_factor          = 1.0
         params_glob%smpd_crop = orig_smpd
         params_glob%box_crop  = orig_box
-        params_glob%msk_crop  = params_glob%msk
+        params_glob%msk_crop  = mskdiam / orig_smpd / 2.
         if( l_scaling .and. orig_box >= MINBOXSZ )then
             call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
             l_scaling = box < orig_box
@@ -269,9 +269,11 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
                 params_glob%smpd_crop = smpd
                 params_glob%box_crop  = box
-                params_glob%msk_crop  = round2even(params_glob%msk * scale_factor)
             endif
         endif
+        smpd = params_glob%smpd_crop
+        box  = params_glob%box_crop
+        params_glob%msk_crop = round2even(mskdiam / smpd / 2.)
         boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
         ! Crooping-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', smpd)
