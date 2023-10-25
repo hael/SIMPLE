@@ -30,8 +30,6 @@ type :: builder
     type(image)                         :: img                    !< individual image/projector objects
     type(polarizer)                     :: img_crop_polarizer     !< polarizer for cropped image
     type(image)                         :: img_pad                !< -"-
-    type(image)                         :: img_tmp                !< -"-
-    type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
@@ -267,9 +265,7 @@ contains
         endif
         if( params%box > 0 )then
             ! build image objects
-            call self%img%new(      [params%box,params%box,1],params%smpd,       wthreads=.false.)
-            call self%img_copy%new( [params%box,params%box,1],params%smpd,  wthreads=.false.)
-            call self%img_tmp%new(  [params%box,params%box,1],params%smpd,   wthreads=.false.)
+            call self%img%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
@@ -315,8 +311,6 @@ contains
             call self%img%kill
             call self%img_crop_polarizer%kill_polarizer
             call self%img_crop_polarizer%kill
-            call self%img_copy%kill
-            call self%img_tmp%kill
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
