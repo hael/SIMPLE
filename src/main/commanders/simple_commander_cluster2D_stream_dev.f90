@@ -1880,6 +1880,7 @@ contains
             call update_pool_status
             call update_pool
             call reject_from_pool
+            call reject_from_pool_user
             if( l_converged )then
                 if( pool_available ) exit
             else
