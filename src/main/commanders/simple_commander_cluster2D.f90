@@ -96,6 +96,13 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
+        if( (.not.cline%defined('ncls')) .and. (.not.cline%defined('nspace')) )then
+            THROW_HARD('NCLS or NSPACE need be defined!')
+        endif
+        if( (cline%defined('ncls')).and. cline%defined('nspace') )then
+            THROW_HARD('NCLS and NSPACE cannot be both defined!')
+        endif
+        if( cline%defined('nspace') ) call cline%set('ncls', cline%get_rarg('nspace'))
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -121,8 +128,9 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: ncls_here
-        logical :: l_shmem
+        logical :: l_shmem, l_3d
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        l_3d = cline%defined('nspace')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -138,24 +146,34 @@ contains
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
-        ncls_here = build%spproj_field%get_n('class')
-        if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
-        if( params%l_remap_cls )then
-            call build%spproj_field%remap_cls()
-            if( cline%defined('ncls') )then
-                if( params%ncls < ncls_here ) THROW_HARD('inputted ncls < ncls_in_oritab not allowed!')
-                if( params%ncls > ncls_here )then
-                    call build%spproj_field%expand_classes(params%ncls)
+        if( l_3d )then
+            ! 3D class averages
+            call build%eulspace%new(params%nspace, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(build%eulspace)
+            call build%spproj%os_ptcl3D%set_projs(build%eulspace)
+            call build%spproj%os_ptcl3D%proj2class
+            build%spproj%os_ptcl2D = build%spproj%os_ptcl3D
+        else
+            ! 2D
+            ncls_here = build%spproj_field%get_n('class')
+            if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
+            if( params%l_remap_cls )then
+                call build%spproj_field%remap_cls()
+                if( cline%defined('ncls') )then
+                    if( params%ncls < ncls_here ) THROW_HARD('inputted ncls < ncls_in_oritab not allowed!')
+                    if( params%ncls > ncls_here )then
+                        call build%spproj_field%expand_classes(params%ncls)
+                    endif
                 endif
+            else if( params%tseries .eq. 'yes' )then
+                if( .not. cline%defined('ncls') )then
+                    THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
+                endif
+                call build%spproj_field%ini_tseries(params%ncls, 'class')
+                call build%spproj_field%partition_eo
+            else if( params%proj_is_class.eq.'yes' )then
+                call build%spproj_field%proj2class
             endif
-        else if( params%tseries .eq. 'yes' )then
-            if( .not. cline%defined('ncls') )then
-                THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
-            endif
-            call build%spproj_field%ini_tseries(params%ncls, 'class')
-            call build%spproj_field%partition_eo
-        else if( params%proj_is_class.eq.'yes' )then
-            call build%spproj_field%proj2class
         endif
         ! shift multiplication
         if( params%mul > 1. ) call build%spproj_field%mul_shifts(params%mul)
