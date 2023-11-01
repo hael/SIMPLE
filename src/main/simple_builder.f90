@@ -153,7 +153,7 @@ contains
         logical,         optional, intent(in)    :: wthreads
         call params%new(cline)
         call self%build_spproj(params, cline, wthreads=wthreads)
-        call self%build_general_tbox(params, cline, do3d=.false., wthreads=wthreads)
+        call self%build_general_tbox(params, cline, do3d=.false.)
         call self%build_strategy2D_tbox(params)
         build_glob => self
     end subroutine init_params_and_build_strategy2D_tbox
@@ -224,11 +224,11 @@ contains
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 
-    subroutine build_general_tbox( self, params, cline, do3d, wthreads )
+    subroutine build_general_tbox( self, params, cline, do3d)
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
-        logical, optional,      intent(in)    :: do3d, wthreads
+        logical, optional,      intent(in)    :: do3d
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
@@ -264,6 +264,7 @@ contains
                 end do
                 !$omp end parallel do
                 call eulspace_sub%kill
+                call o%kill
             endif
         endif
         if( params%box > 0 )then

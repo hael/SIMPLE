@@ -1533,7 +1533,7 @@ contains
 
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
-        class(oris), intent(inout) :: e_space
+        class(oris), intent(in)    :: e_space
         integer :: i
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
