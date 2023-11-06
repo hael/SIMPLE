@@ -858,6 +858,7 @@ contains
             enddo
             if( nptcls_rejected > 0 )then
                 ncls_rejected = ncls_rejected + 1
+                call pool_proj%os_cls2D%set_state(icls,0)
                 call pool_proj%os_cls2D%set(icls,'pop',0.)
                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
                 call img%write(trim(POOL_DIR)//trim(refs_glob),icls)

@@ -522,7 +522,7 @@ contains
         real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), dfs(:), bindiff(:)
         real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:), means(:), sdevs(:), binccs(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
-        integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:)
+        integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:), cls_pops(:)
         logical,          allocatable :: selected(:)
         character(len=:), allocatable :: cavgs_stk
         type(ctf)        :: tfun
@@ -556,6 +556,9 @@ contains
         l_corr_ranking  = .true.
         l_weighted_init = .true.
         l_write         = .true.
+        call build%spproj_field%get_pops(cls_pops, 'class', maxn=ncls)
+        ! class based outlier detection
+        call detect_class_outliers(cavgs_stk)
         if( l_groundtruth )then
             n_lines = nlines(trim(params%infile))
             allocate(labels(n_lines))
@@ -659,7 +662,6 @@ contains
                         cls2batch(i)  = 0
                         states(iptcl) = 0
                     endif
-
                     call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
                     call tmp_imgs(ithr)%fft
                     call tmp_imgs(ithr)%shift2Dserial(-build%spproj_field%get_2Dshift(iptcl))
@@ -824,7 +826,7 @@ contains
                         if( corrs(i) < 0. .and. selected(i))then
                             j = j+1
                             print *,icls,i,cls2batch(i), corrs(i), labels(pinds(i))
-                            call build%imgbatch(cls2batch(i))%write('neg_'//int2str_pad(icls,3)//'.mrc',j)
+                            call build%imgbatch(cls2batch(i))%write('negcorr_'//int2str_pad(icls,3)//'.mrc',j)
                         endif
                     enddo
                 endif
@@ -1151,6 +1153,71 @@ contains
                 call build%img%ifft
                 call build%img%write(fname,idx)
             end subroutine write_cls
+
+            subroutine detect_class_outliers(stkname)
+                character(len=*), intent(in) :: stkname
+                integer, parameter :: NHISTBINS = 256
+                real,    parameter :: NSIG = 4.
+                type(image)          :: tmpimg
+                real,        pointer :: prmat(:,:,:)
+                logical, allocatable :: lmsk(:,:,:), cls_mask(:)
+                real    :: p(NHISTBINS), ps(NHISTBINS,ncls), vals(ncls), minmax(2)
+                real    :: overall_min, overall_max, dr, hrange, mean, std, threshold
+                integer :: icls,i,j,b,zerobin,n
+                cls_mask = cls_pops > 0
+                n = count(cls_mask)
+                ! build histograms
+                call tmpimg%disc([params%box,params%box,1],params%smpd,real(params%box)/2.-COSMSKHALFWIDTH,lmsk)
+                call tmpimg%kill
+                overall_min =  999.
+                overall_max = -999.
+                do icls = 1,ncls
+                    if( .not.cls_mask(icls) ) cycle
+                    call build%img%read(stkname,icls)
+                    call build%img%mask(real(params%box)/2.-COSMSKHALFWIDTH, 'hard')
+                    minmax = build%img%minmax()
+                    overall_min = min(minmax(1),overall_min)
+                    overall_max = max(minmax(2),overall_max)
+                enddo
+                dr = (overall_max-overall_min) / real(NHISTBINS)
+                call build%img%get_rmat_ptr(prmat)
+                ps = 0.
+                do icls = 1,cavgs_ncls
+                    if( .not.cls_mask(icls) ) cycle
+                    call build%img%read(stkname,icls)
+                    call build%img%mask(real(params%box)/2.-COSMSKHALFWIDTH, 'hard')
+                    do i = 1,NHISTBINS
+                        minmax(1) = overall_min + real(i-1)*dr
+                        minmax(2) = minmax(1) + dr
+                        p(i) = real(count(lmsk(:,:,1) .and. (prmat(1:params%box,1:params%box,1) > minmax(1))&
+                            &.and. (prmat(1:params%box,1:params%box,1) < minmax(2)) ))
+                    enddo
+                    p = p / sum(p)
+                    ps(:,icls) = p
+                enddo
+                ! overall histogram
+                p = 0.
+                do icls = 1,cavgs_ncls
+                    if( .not.cls_mask(icls) ) cycle
+                    p = p + ps(:,icls)
+                enddo
+                p = p / real(n)
+                zerobin = ceiling(-overall_min/dr)
+                ! outliers
+                vals = 0.
+                do icls = 1,cavgs_ncls
+                    if( .not.cls_mask(icls) ) cycle
+                    vals(icls) = sum(abs(ps(:,icls)-p(:)))
+                enddo
+                mean = sum(vals,mask=cls_mask) / real(n)
+                std  = sqrt(sum((vals-mean)**2,mask=cls_mask)/real(n))
+                print *, 'Brightness mean/std/threshold: ', mean, std, threshold
+                threshold = mean + NSIG * std
+                do icls = 1,cavgs_ncls
+                    if( .not.cls_mask(icls) ) cycle
+                    if( abs(vals(icls)) > threshold ) print *,'Bright class to reject: ',icls, vals(icls)
+                enddo
+            end subroutine detect_class_outliers
 
     end subroutine exec_prune_cavgs
 
