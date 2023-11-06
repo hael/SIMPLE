@@ -2662,16 +2662,19 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         & for cluster2D execution',&               ! descr_long
         &'simple_exec',&                           ! executable
-        &1, 3, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 4, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
         &'Output 2D references', 'xxx.mrc file with references', .false., '')
         ! parameter input/output
         call make_cavgs%set_input('parm_ios', 1, ncls)
+        make_cavgs%parm_ios(1)%required = .false.
         call make_cavgs%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%set_input('parm_ios', 3, remap_cls)
+        call make_cavgs%set_input('parm_ios', 4, nspace)
+        make_cavgs%parm_ios(4)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls

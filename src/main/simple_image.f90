@@ -208,8 +208,8 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: NLmean
-    procedure          :: NLmean3D
+    procedure          :: NLmean, NLmean3D
+    procedure          :: DoG2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
@@ -3939,6 +3939,34 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
 
+    ! Difference of Gaussian filter
+    subroutine DoG2D( self, sig1, sig2 )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: sig1, sig2 ! unit is spatial frequency
+        real, parameter :: A = sqrt(TWOPI)
+        real    :: ghsq, gk, gsq, B1, B2, gau1, gau2
+        integer :: phys(2), lims(3,2), h, k
+        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
+        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
+        B1 = 2. * sig1**2
+        B2 = 2. * sig2**2
+        lims = self%fit%loop_lims(2)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,ghsq,k,gk,gsq,phys,gau1,gau2)
+        do h = lims(1,1),lims(1,2)
+            ghsq = (real(h) / real(self%ldim(1)))**2
+            do k = lims(2,1),lims(2,2)
+                gk   = real(k) / real(self%ldim(2))
+                gsq  = ghsq + gk*gk
+                gau1 = exp(-gsq/B1) / sig1
+                gau2 = exp(-gsq/B2) / sig2
+                phys = self%comp_addr_phys(h,k)
+                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * (gau1-gau2)/A
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine DoG2D
+
     ! CALCULATORS
 
     !> \brief stats  is for providing foreground/background statistics
@@ -4368,7 +4396,6 @@ contains
         real,    parameter   :: FREQ_LIM = 15.
         real,    allocatable :: res(:), pspec(:), maxs(:)
         integer, allocatable :: counts(:), hs(:), ks(:)
-        complex :: c
         real    :: mag, sinsum, cossum, eps, ang
         integer :: lims(3,2), box, filtsz, nks, h,k, sh, shlim
         score = 0.
