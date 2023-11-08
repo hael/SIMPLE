@@ -216,7 +216,6 @@ contains
                         call reg_obj%form_cavgs(best_ir)
                     enddo
                     call reg_obj%regularize_refs
-                    call pftcc%memoize_refs
                     if( trim(params_glob%refine) == 'prob' )then
                         call reg_obj%init_tab
                         ! Batch loop
@@ -255,7 +254,6 @@ contains
                         call reg_inpl%form_cavgs(best_ir, best_irot)
                     enddo
                     call reg_inpl%compute_regs
-                    call pftcc%memoize_refs
                     if( trim(params_glob%refine) == 'prob_inpl' )then
                         ! using reg/inpl to do alignment for updating 3D volume
                         call reg_inpl%init_tab
