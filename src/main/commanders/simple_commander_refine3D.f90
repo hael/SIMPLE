@@ -1033,15 +1033,6 @@ contains
             ! params%cc_objfun = OBJFUN_EUCLID
         endif
         ! actual alignment using the defined cost function
-        ! scaling by the ctf
-        if( params%l_reg_scale )then
-            call pftcc%reg_scale
-            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
-            do j = 1, nptcls
-                call pftcc%memoize_sqsum_ptcl(pinds(j))
-            enddo
-            !$omp end parallel do
-        endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         call reg_obj%init_tab
@@ -1049,11 +1040,7 @@ contains
         print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
         allocate(best_ir(params_glob%fromp:params_glob%top))
         call reg_obj%reg_uniform_cluster(best_ir)
-        ! call reg_obj%partition_refs
-        ! call reg_obj%reg_uniform_cluster(best_ir, neigh=.true.)
         call reg_obj%form_cavgs(best_ir)
-        ! descaling
-        if( params%l_reg_scale ) call pftcc%reg_descale
         call reg_obj%regularize_refs
         print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
         ! init volumes
@@ -1238,15 +1225,6 @@ contains
             ! params%cc_objfun = OBJFUN_EUCLID
         endif
         ! actual alignment using the defined cost function
-        ! scaling by the ctf
-        if( params%l_reg_scale )then
-            call pftcc%reg_scale
-            !$omp parallel do default(shared) private(j) proc_bind(close) schedule(static)
-            do j = 1, nptcls
-                call pftcc%memoize_sqsum_ptcl(pinds(j))
-            enddo
-            !$omp end parallel do
-        endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         call reg_inpl%init_tab
@@ -1255,8 +1233,6 @@ contains
         allocate(best_ir(params_glob%fromp:params_glob%top), best_irot(params_glob%fromp:params_glob%top))
         call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
         call reg_inpl%form_cavgs(best_ir, best_irot)
-        ! descaling
-        if( params_glob%l_reg_scale ) call pftcc%reg_descale
         call reg_inpl%compute_regs
         print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
         ! init volumes
