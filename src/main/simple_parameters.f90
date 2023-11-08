@@ -70,7 +70,7 @@ type :: parameters
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
-    character(len=3)          :: reg_opt_ang='no'     !< opt angle in the reg terms (yes|no){no}
+    character(len=3)          :: reg_anneal='no'      !< annealing between reproj and regs (yes|no){no}
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reg_debug='no'       !< output images for debugging in reg (yes|no){no}
     character(len=3)          :: reg_neigh='no'       !< neighborhood option in reg (yes|no){no}
@@ -433,7 +433,7 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_ref      = .false.
     logical :: l_reg_grad     = .false.
-    logical :: l_reg_opt_ang  = .false.
+    logical :: l_reg_anneal   = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_debug    = .false.
     logical :: l_reg_neigh    = .false.
@@ -573,7 +573,7 @@ contains
         call check_carg('reg_grad',       self%reg_grad)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_ref',        self%reg_ref)
-        call check_carg('reg_opt_ang',    self%reg_opt_ang)
+        call check_carg('reg_anneal',     self%reg_anneal)
         call check_carg('reg_init',       self%reg_init)
         call check_carg('reg_debug',      self%reg_debug)
         call check_carg('reg_neigh',      self%reg_neigh)
@@ -1461,15 +1461,13 @@ contains
         case DEFAULT
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
-        ! reference regularization
-        self%l_reg_ref = trim(self%reg_ref).eq.'yes'
-        ! optimal angle in the reg
-        self%l_reg_opt_ang = trim(self%reg_opt_ang).eq.'yes'
-        ! randomized ories and zero shifts in reg shceme
-        self%l_reg_grad  = trim(self%reg_grad ).eq.'yes'
-        self%l_reg_init  = trim(self%reg_init ).eq.'yes'
-        self%l_reg_debug = trim(self%reg_debug).eq.'yes'
-        self%l_reg_neigh = trim(self%reg_neigh).eq.'yes'
+        ! reg options
+        self%l_reg_ref    = trim(self%reg_ref   ).eq.'yes'
+        self%l_reg_anneal = trim(self%reg_anneal).eq.'yes'
+        self%l_reg_grad   = trim(self%reg_grad  ).eq.'yes'
+        self%l_reg_init   = trim(self%reg_init  ).eq.'yes'
+        self%l_reg_debug  = trim(self%reg_debug ).eq.'yes'
+        self%l_reg_neigh  = trim(self%reg_neigh ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

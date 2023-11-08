@@ -28,6 +28,7 @@ type :: regularizer
     integer                  :: pftsz
     integer                  :: kfromto(2)
     complex(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
+    complex(dp), allocatable :: regs_grad(:,:,:)        !< -"-, reg terms
     real(dp),    allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
     real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
     integer,     allocatable :: ptcl_ref_map(:)         !< hard-alignment tab
@@ -63,16 +64,16 @@ contains
     subroutine new( self, pftcc )
         class(regularizer),      target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
-        integer, parameter :: MAXITS = 60
-        integer :: iref
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
         allocate(self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_grad(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs       = 0.d0
+        self%regs_grad  = 0.d0
         self%regs_denom = 0.d0
         self%pftcc      => pftcc
         if( params_glob%l_reg_neigh ) call self%partition_refs
@@ -123,6 +124,7 @@ contains
         real    :: eul2, eul1
         self%nneighs = params_glob%reg_nneighs
         if( self%nneighs > self%nrefs ) THROW_HARD('reg partition_refs: nneighs > nrefs')
+        if( .not.(allocated(self%ref_neigh_map)) ) allocate(self%ref_neigh_map(self%nrefs))
         sqn = int(sqrt(real(self%nneighs)))
         cnt = 1
         do i1 = 1, sqn
@@ -148,9 +150,9 @@ contains
         complex(sp),        pointer       :: shmat(:,:)
         integer     :: iptcl, iref, ithr, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        real        :: weight
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        type(ori)   :: o_prev
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         do iptcl = params_glob%fromp, params_glob%top
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
@@ -162,17 +164,13 @@ contains
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
-                call self%pftcc%gen_shmat(ithr, -real(self%ref_ptcl_tab(iref, iptcl)%sh), shmat)
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
-                ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
-                if( params_glob%l_reg_grad )then
-                    weight = 1. - self%ref_ptcl_tab(iref, iptcl)%prob
-                else
-                    weight = self%ref_ptcl_tab(iref, iptcl)%prob
-                endif
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                call build_glob%spproj_field%get_ori(iptcl, o_prev)           ! previous ori
+                call self%pftcc%gen_shmat(ithr, o_prev%get_2Dshift(), shmat)
+                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot *       self%ref_ptcl_tab(iref, iptcl)%prob
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2   *       self%ref_ptcl_tab(iref, iptcl)%prob
+                self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref)  + ptcl_ctf_rot * (1. - self%ref_ptcl_tab(iref, iptcl)%prob)
             endif
         enddo
     end subroutine form_cavgs
@@ -364,29 +362,22 @@ contains
     end subroutine uniform_cluster_sort_dyn
 
 
-    subroutine regularize_refs( self, ref_freq_in )
+    subroutine regularize_refs( self )
         use simple_image
         class(regularizer), intent(inout) :: self
-        real,     optional, intent(in)    :: ref_freq_in
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box, find
-        real    :: ref_freq
-        ref_freq = 0.
-        if( present(ref_freq_in) ) ref_freq = ref_freq_in
-        if( params_glob%l_reg_grad )then
-            ! keep regs
-        else
-            !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-            do k = self%kfromto(1),self%kfromto(2)
-                where( abs(self%regs_denom(:,k,:)) < TINY )
-                    self%regs(:,k,:) = 0._dp
-                elsewhere
-                    self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
-                endwhere
-            enddo
-            !$omp end parallel do
-        endif
+        integer :: iref, k, box
+        real    :: eps
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                self%regs(:,k,:) = 0._dp
+            elsewhere
+                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+            endwhere
+        enddo
+        !$omp end parallel do
         ! output images for debugging
         if( params_glob%l_reg_debug )then
             do iref = 1, self%nrefs
@@ -405,22 +396,25 @@ contains
                 call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
             enddo
         endif
-        !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            if( ran3() < ref_freq )then
-                ! keep the refs
-            else
-                ! using the reg terms as refs
-                if( params_glob%l_reg_grad )then
-                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
-                else
-                    self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = self%regs(:,:,iref)
-                endif
-            endif
-        enddo
-        !$omp end parallel do
+        if( params_glob%l_reg_anneal )then
+            eps = real(params_glob%which_iter) / real(params_glob%reg_iters)
+            eps = min(1., eps)
+            if( params_glob%l_reg_grad ) self%regs = eps * self%regs + (1. - eps) * real(self%regs_grad)
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
+                self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs(:,:,iref)
+            enddo
+            !$omp end parallel do
+        else
+            if( params_glob%l_reg_grad ) self%regs = self%regs + real(self%regs_grad)
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
+                self%pftcc%pfts_refs_odd( :,:,iref) = self%regs(:,:,iref)
+            enddo
+            !$omp end parallel do
+        endif
         call self%pftcc%memoize_refs
         call calc_cavg%kill
     end subroutine regularize_refs
@@ -428,6 +422,7 @@ contains
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
         self%regs       = 0._dp
+        self%regs_grad  = 0._dp
         self%regs_denom = 0._dp
     end subroutine reset_regs
 
@@ -529,7 +524,8 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom,self%ref_neigh_map)
+        deallocate(self%regs,self%regs_denom,self%regs_grad)
+        if(allocated(self%ref_neigh_map)) deallocate(self%ref_neigh_map)
         if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill
 end module simple_regularizer
