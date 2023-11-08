@@ -132,7 +132,6 @@ type :: polarft_corrcalc
     procedure          :: memoize_sqsum_ptcl
     procedure, private :: setup_npix_per_shell
     procedure          :: memoize_ptcls, memoize_refs
-    procedure          :: reg_scale, reg_descale
     procedure, private :: kill_memoized_ptcls, kill_memoized_refs
     procedure, private :: allocate_ptcls_memoization, allocate_refs_memoization
     ! CALCULATORS
@@ -835,25 +834,6 @@ contains
             end do
         end do
     end subroutine setup_npix_per_shell
-
-    subroutine reg_scale( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        if( .not.allocated(self%ctfmats_b) )then
-            allocate(self%ctfmats_b(   self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls))
-            allocate(self%pfts_ptcls_b(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls))
-        endif
-        self%ctfmats_b    = self%ctfmats
-        self%pfts_ptcls_b = self%pfts_ptcls
-        self%ctfmats      = self%ctfmats_b**2
-        self%pfts_ptcls   = self%pfts_ptcls_b * self%ctfmats_b
-    end subroutine reg_scale
-
-    subroutine reg_descale( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        self%pfts_ptcls = self%pfts_ptcls_b
-        self%ctfmats    = self%ctfmats_b
-        deallocate(self%ctfmats_b, self%pfts_ptcls_b)
-    end subroutine reg_descale
 
     subroutine memoize_ptcls( self )
         class(polarft_corrcalc), intent(inout) :: self

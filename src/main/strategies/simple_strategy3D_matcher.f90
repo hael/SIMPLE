@@ -206,8 +206,7 @@ contains
                     enddo
                     if( allocated(best_ir) ) deallocate(best_ir)
                     allocate(best_ir(params_glob%fromp:params_glob%top))
-                    call reg_obj%partition_refs
-                    call reg_obj%reg_uniform_cluster(best_ir, neigh=.true.)
+                    call reg_obj%reg_uniform_cluster(best_ir)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
@@ -220,7 +219,6 @@ contains
                     call pftcc%memoize_refs
                     if( trim(params_glob%refine) == 'prob' )then
                         call reg_obj%init_tab
-                        call reg_obj%partition_refs
                         ! Batch loop
                         do ibatch=1,nbatches
                             batch_start = batches(ibatch,1)
@@ -627,15 +625,6 @@ contains
         !$omp end parallel do
         ! make CTFs
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! scaling by the ctf
-        if( params_glob%l_reg_scale )then
-            call pftcc%reg_scale
-            !$omp parallel do default(shared) private(iptcl_batch) proc_bind(close) schedule(static)
-            do iptcl_batch = 1,nptcls_here
-                call pftcc%memoize_sqsum_ptcl(pinds_here(iptcl_batch))
-            enddo
-            !$omp end parallel do
-        endif
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! filling the prob table
@@ -652,8 +641,6 @@ contains
                 call reg_obj%fill_tab_noshift(pinds_here)
             endif
         endif
-        ! descaling
-        if( params_glob%l_reg_scale ) call pftcc%reg_descale
     end subroutine fill_batch_particles
 
 end module simple_strategy3D_matcher

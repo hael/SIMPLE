@@ -75,12 +75,7 @@ contains
         self%regs       = 0.d0
         self%regs_denom = 0.d0
         self%pftcc      => pftcc
-        ! default ref neigh map
-        self%nneighs = self%nrefs
-        allocate(self%ref_neigh_map(self%nrefs))
-        do iref = 1, self%nrefs
-            self%ref_neigh_map(iref) = iref
-        enddo
+        if( params_glob%l_reg_neigh ) call self%partition_refs
     end subroutine new
 
     subroutine init_tab( self )
@@ -223,10 +218,9 @@ contains
         !$omp end parallel do
     end subroutine map_ptcl_ref
 
-    subroutine reg_uniform_cluster( self, out_ir, neigh )
+    subroutine reg_uniform_cluster( self, out_ir )
         class(regularizer), intent(inout) :: self
         integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
-        logical, optional,  intent(in)    :: neigh
         integer :: iref, iptcl
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
@@ -250,7 +244,7 @@ contains
         !$omp end parallel do
         ! sorted clustering
         out_ir = 1
-        if( present(neigh) )then
+        if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn(self%nrefs, out_ir)
         else
             call self%uniform_cluster_sort(self%nrefs, out_ir)
