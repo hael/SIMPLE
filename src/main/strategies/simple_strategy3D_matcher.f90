@@ -16,11 +16,13 @@ use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
 use simple_strategy3D_shc,          only: strategy3D_shc
+use simple_strategy3D_shc3,         only: strategy3D_shc3
 use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
 use simple_strategy3D_prob_inpl,    only: strategy3D_prob_inpl
+use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
 use simple_strategy3D_neigh,        only: strategy3D_neigh
@@ -55,11 +57,10 @@ character(len=STDLEN)          :: benchfname
 
 contains
 
-    subroutine refine3D_exec( cline, which_iter, converged, cur_tab )
+    subroutine refine3D_exec( cline, which_iter, converged )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        type(reg_params), optional, intent(inout) :: cur_tab(:,:,:)
         integer, target, allocatable  :: symmat(:,:)
         logical,         allocatable  :: het_mask(:)
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
@@ -72,12 +73,12 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
-        integer,               allocatable :: batches(:,:), best_ip(:), best_ir(:), best_irot(:)
+        integer,               allocatable :: batches(:,:), best_ir(:), best_irot(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, orig_objfun
+        integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
@@ -192,130 +193,90 @@ contains
 
         ! ref regularization
         if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            ! cc is used to get the probability
-            orig_objfun           = params_glob%cc_objfun
-            params_glob%cc_objfun = OBJFUN_PROB
-            ! using reg (no inpl) to get high-resolution references to form the gradient
-            params_glob%l_reg_grad = .false.    ! no gradient computation here
-            call reg_obj%reset_regs
-            call reg_obj%init_tab
-            ! Batch loop
-            do ibatch=1,nbatches
-                batch_start = batches(ibatch,1)
-                batch_end   = batches(ibatch,2)
-                batchsz     = batch_end - batch_start + 1
-                call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
-            enddo
             select case(trim(params_glob%reg_mode))
-                case('tab')
-                case('normtab')
-                    call reg_obj%sort_tab
+                case('so2')
+                    call reg_obj%reset_regs
+                    call reg_obj%init_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    enddo
+                    if( allocated(best_ir) ) deallocate(best_ir)
+                    allocate(best_ir(params_glob%fromp:params_glob%top))
+                    call reg_obj%partition_refs
+                    call reg_obj%reg_uniform_cluster(best_ir, neigh=.true.)
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%ref_reg_cc_tab
+                        call reg_obj%form_cavgs(best_ir)
                     enddo
-                case('hard')
-                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
-                    call reg_obj%cluster_sort_tab(best_ip, best_ir)
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir)
-                    enddo
-                case('unihard')
-                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top))
-                    call reg_obj%uniform_sort_tab(best_ip, best_ir)
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%uniform_cavgs(best_ip, best_ir)
-                    enddo
-            end select
-            call reg_obj%regularize_refs
-            call pftcc%memoize_refs
-            ! using reg/inpl to do alignment for updating 3D volume
-            params_glob%l_reg_grad = trim(params_glob%reg_grad ).eq.'yes' ! needed gradient computation here
-            call reg_inpl%reset_regs
-            call reg_inpl%init_tab
-            ! Batch loop
-            do ibatch=1,nbatches
-                batch_start = batches(ibatch,1)
-                batch_end   = batches(ibatch,2)
-                batchsz     = batch_end - batch_start + 1
-                call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true.)
-            enddo
-            select case(trim(params_glob%reg_mode))
-                case('tab')
-                case('normtab')
-                    call reg_inpl%sort_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_inpl%ref_reg_cc_tab
-                    enddo
-                case('hard')
-                    if( allocated(best_ir) ) deallocate(best_ir, best_ip)
-                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
-                            &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
-                    enddo
-                case('unihard')
-                    if( allocated(best_ir) ) deallocate(best_ir, best_ip)
-                    allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
-                            &best_irot(params_glob%fromp:params_glob%top))
-                    call reg_inpl%uniform_sort_tab(best_ip, best_ir, best_irot)
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
-                    enddo
-            end select
-            params_glob%l_reg_debug = .false.
-            call reg_inpl%regularize_refs
-            params_glob%l_reg_debug = trim(params_glob%reg_debug).eq.'yes'
-            call pftcc%memoize_refs
-            if( trim(params_glob%refine) == 'prob_inpl' )then
+                    call reg_obj%regularize_refs
+                    call pftcc%memoize_refs
+                    if( trim(params_glob%refine) == 'prob' )then
+                        call reg_obj%init_tab
+                        call reg_obj%partition_refs
+                        ! Batch loop
+                        do ibatch=1,nbatches
+                            batch_start = batches(ibatch,1)
+                            batch_end   = batches(ibatch,2)
+                            batchsz     = batch_end - batch_start + 1
+                            call fill_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        enddo
+                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
+                        call reg_obj%reg_uniform_cluster(best_ir)
+                        call reg_obj%map_ptcl_ref(best_ir)
+                    elseif( trim(params_glob%refine) == 'prob_inpl' )then
+                        THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
+                    endif
+                case('so3')
+                    ! using reg/inpl to do alignment for updating 3D volume
+                    call reg_inpl%reset_regs
                     call reg_inpl%init_tab
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
-                        call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true., use_reg=.true.)
+                        call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true.)
                     enddo
-                    if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top), best_ip(params_glob%fromp:params_glob%top),&
-                                                           &best_irot(params_glob%fromp:params_glob%top))
-                    if( present(cur_tab) )then
-                        call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot, cur_tab)
-                    else
-                        call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
+                    if( allocated(best_ir) ) deallocate(best_ir,best_irot)
+                    allocate(best_ir(params_glob%fromp:params_glob%top),best_irot(params_glob%fromp:params_glob%top))
+                    call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_inpl%form_cavgs(best_ir, best_irot)
+                    enddo
+                    call reg_inpl%compute_regs
+                    call pftcc%memoize_refs
+                    if( trim(params_glob%refine) == 'prob_inpl' )then
+                        ! using reg/inpl to do alignment for updating 3D volume
+                        call reg_inpl%init_tab
+                        ! Batch loop
+                        do ibatch=1,nbatches
+                            batch_start = batches(ibatch,1)
+                            batch_end   = batches(ibatch,2)
+                            batchsz     = batch_end - batch_start + 1
+                            call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true., use_reg=.true.)
+                        enddo
+                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top),best_irot(params_glob%fromp:params_glob%top))
+                        call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
+                        call reg_inpl%map_ptcl_ref(best_ir, best_irot)
+                    elseif( trim(params_glob%refine) == 'prob' )then
+                        THROW_HARD('refine mode of so3 should be prob_inpl, not prob!')
                     endif
-                    call reg_inpl%map_ptcl_ref(best_ip, best_ir, best_irot)
-            endif
-            params_glob%cc_objfun = orig_objfun
+                case DEFAULT
+                    THROW_HARD('reg_mode mode: '//trim(params_glob%reg_mode)//' unsupported')
+            end select
         endif
 
         ! Batch loop
@@ -349,6 +310,8 @@ contains
                                 allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('shc3')
+                        allocate(strategy3D_shc3                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shcc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedyc          :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -378,6 +341,8 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('prob')
+                        allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob_inpl')
                         allocate(strategy3D_prob_inpl            :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
@@ -391,6 +356,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
                 if( trim(params_glob%refine) == 'prob_inpl' )   strategy3Dspecs(iptcl_batch)%reg_inpl => reg_inpl
+                if( trim(params_glob%refine) == 'prob' )        strategy3Dspecs(iptcl_batch)%reg_obj  => reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search

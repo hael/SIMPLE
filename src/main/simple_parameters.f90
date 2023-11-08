@@ -192,7 +192,7 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='tab'       !< reg mode(tab|normtab|hard){tab}
+    character(len=STDLEN)     :: reg_mode='so2'       !< reg mode(so2|so3){so2}
     character(len=STDLEN)     :: reg_grad='no'        !< reg gradient to be used
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -241,6 +241,7 @@ type :: parameters
     integer :: reg_iters=30        !< # iters regularization scheme
     integer :: reg_num=30          !< # uniform num of ptcls for each class in reg
     integer :: reg_nrots=1         !< # inplane rotation samples
+    integer :: reg_nneighs=25      !< # partitions of neighborhood in reg
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxnchunks=0
@@ -673,6 +674,7 @@ contains
         call check_iarg('reg_iters',      self%reg_iters)
         call check_iarg('reg_num'  ,      self%reg_num)
         call check_iarg('reg_nrots',      self%reg_nrots)
+        call check_iarg('reg_nneighs',    self%reg_nneighs)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxnchunks',     self%maxnchunks)
