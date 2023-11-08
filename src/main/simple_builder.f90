@@ -28,11 +28,8 @@ type :: builder
     type(oris)                          :: eulspace               !< discrete projection direction search space
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
-    type(polarizer)                     :: img_match              !< polarizer for particles
-    type(polarizer)                     :: ref_polarizer          !< polarizer for references
+    type(polarizer)                     :: img_crop_polarizer     !< polarizer for cropped image
     type(image)                         :: img_pad                !< -"-
-    type(image)                         :: img_tmp                !< -"-
-    type(image)                         :: img_copy               !< -"-
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(image),            allocatable :: imgbatch(:)            !< batch of images
@@ -40,7 +37,6 @@ type :: builder
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
-    real,                   allocatable :: diams(:)               !< class average diameters
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
@@ -48,6 +44,7 @@ type :: builder
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
+    logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
@@ -232,7 +229,7 @@ contains
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
         type(ori)   :: o
-        integer     :: lfny, cyc_lims(3,2), i
+        integer     :: lfny, i
         logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
@@ -269,30 +266,29 @@ contains
         endif
         if( params%box > 0 )then
             ! build image objects
-            call self%img%new([params%box,params%box,1],params%smpd,       wthreads=.false.)
-            call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
-            call self%ref_polarizer%new([params%box,params%box,1],params%smpd, wthreads=.false.)
-            call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
-            call self%img%construct_thread_safe_tmp_imgs(params%nthr) ! for thread safety in the image class
-            call self%img_tmp%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
+            call self%img%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
-            if( ddo3d )then
-                call self%vol%new([params%box,params%box,params%box], params%smpd)
-                call self%vol_odd%new([params%box,params%box,params%box], params%smpd)
-                call self%vol2%new([params%box,params%box,params%box], params%smpd)
-            endif
-            ! build arrays
-            lfny       = self%img%get_lfny(1)
-            cyc_lims   = self%img_pad%loop_lims(3)
-            allocate( self%fsc(params%nstates,lfny) )
-            self%fsc  = 0.
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
             ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
             self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
             if( .not. params%l_graphene ) self%l_resmsk = .true.            
+        endif
+        if( params%box_crop > 0 )then
+            ! build image objects
+            call self%img_crop_polarizer%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
+            if( ddo3d )then
+                call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            endif
+            call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
+            call mskimg%kill
+            ! build arrays
+            lfny = self%img_crop_polarizer%get_lfny(1)
+            allocate( self%fsc(params%nstates,lfny), source = 0.0 )
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -314,12 +310,8 @@ contains
             call self%spproj%kill
             call self%eulspace%kill
             call self%img%kill
-            call self%img_match%kill_polarizer
-            call self%img_match%kill
-            call self%ref_polarizer%kill_polarizer
-            call self%ref_polarizer%kill
-            call self%img_copy%kill
-            call self%img_tmp%kill
+            call self%img_crop_polarizer%kill_polarizer
+            call self%img_crop_polarizer%kill
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
@@ -329,6 +321,7 @@ contains
             if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
             if( allocated(self%fsc)           ) deallocate(self%fsc)
             if( allocated(self%lmsk)          ) deallocate(self%lmsk)
+            if( allocated(self%lmsk_crop)     ) deallocate(self%lmsk_crop)
             if( allocated(self%l_resmsk)      ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
@@ -359,11 +352,10 @@ contains
         class(parameters),      intent(inout) :: params
         integer :: i
         call self%kill_strategy2D_tbox
-        call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
-        allocate(self%env_masks(params%ncls), self%diams(params%ncls))
-        self%diams = 0.
+        call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
+        allocate(self%env_masks(params%ncls))
         do i = 1,params%ncls
-            call self%env_masks(i)%new([params%box,params%box,1], params%smpd)
+            call self%env_masks(i)%new([params%box_crop,params%box_crop,1], params%smpd_crop)
         end do
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
@@ -381,7 +373,6 @@ contains
                 end do
                 deallocate(self%env_masks)
             endif
-            if( allocated(self%diams) ) deallocate(self%diams)
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox

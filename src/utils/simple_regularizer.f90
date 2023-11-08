@@ -604,6 +604,7 @@ contains
         !$omp end parallel do
     end subroutine ref_reg_cc_tab
 
+
     subroutine regularize_refs( self, ref_freq_in )
         use simple_image
         use simple_opt_filter, only: butterworth_filter

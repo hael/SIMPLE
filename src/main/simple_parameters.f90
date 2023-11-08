@@ -213,6 +213,7 @@ type :: parameters
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
+    integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
     integer :: box_extract
     integer :: boxpd=0
     integer :: cc_iters=1          !< number of iterations with objfun=cc before switching to another objective function
@@ -387,6 +388,7 @@ type :: parameters
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
+    real    :: smpd_crop=2.        !< sampling distance, same as EMANs apix(in A), refers to cropped cavg/volume
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
@@ -798,6 +800,7 @@ contains
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
+        call check_rarg('smpd_crop',      self%smpd_crop)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)
@@ -955,15 +958,18 @@ contains
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. cline%defined('vol_even') )then
             call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         else if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
         ! no stack given, no vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
-            self%box  = self%ldim(1)
+            self%box      = self%ldim(1)
+            if( .not.cline%defined('box_crop') ) self%box_crop = self%box
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
@@ -1011,9 +1017,9 @@ contains
                     call spproj%read_segment('out', self%projfile)
                     call spproj%get_imginfo_from_osout(smpd, box, nptcls)
                     call spproj%kill
-                    if( .not.cline%defined('smpd'))   self%smpd   = smpd
-                    if( .not.cline%defined('box'))    self%box    = box
-                    if( .not.cline%defined('nptcls')) self%nptcls = nptcls
+                    if( .not.cline%defined('smpd'))     self%smpd      = smpd
+                    if( .not.cline%defined('box'))      self%box       = box
+                    if( .not.cline%defined('nptcls'))   self%nptcls    = nptcls
                 else
                     call bos%open(trim(self%projfile)) ! projfile opened here
                     ! nptcls
@@ -1029,6 +1035,15 @@ contains
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
+                endif
+                ! smpd_crop/box_crop
+                if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
+                if( .not.cline%defined('smpd_crop') )then
+                    if( cline%defined('box_crop') )then
+                        self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
+                    else
+                        self%smpd_crop = self%smpd
+                    endif
                 endif
             else
                 ! nothing to do for streaming, values set at runtime
@@ -1080,7 +1095,12 @@ contains
                 if( .not. cline%defined('box') )then
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
-                    self%box = self%ldim(1)
+                    self%box     = self%ldim(1)
+                endif
+                if( .not. cline%defined('box_crop') )then
+                    call find_ldim_nptcls(self%refs, self%ldim, ifoo)
+                    self%ldim(3)  = 1
+                    self%box_crop = self%ldim(1)
                 endif
             else
                 ! we don't check for existence of refs as they can be output as well as input (cavgassemble)
@@ -1091,8 +1111,9 @@ contains
         call double_check_file_formats
         ! make file names
         call mkfnames
-        ! check box
-        if( self%box > 0 .and. self%box < 26 ) THROW_HARD('box size need to be larger than 26')
+        ! check box, box_crop
+        if( self%box > 0 .and. self%box < 26 )           THROW_HARD('box needs to be larger than 26')
+        if( self%box_crop > 0 .and. self%box_crop < 26 ) THROW_HARD('box_crop needs to be larger than 26')
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -1181,8 +1202,9 @@ contains
 
         !>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
-        self%xdimpd = round2even(self%alpha*real(self%box/2))
-        self%boxpd  = 2*self%xdimpd
+        self%xdimpd     = round2even(self%alpha*real(self%box/2))
+        self%boxpd      = 2*self%xdimpd
+        self%box_croppd = 2*round2even(self%alpha*real(self%box_crop/2))
         ! set derived Fourier related variables
         self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
         self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT
@@ -1206,7 +1228,7 @@ contains
         if( self%scale < 0.00001 ) THROW_HARD('scale out if range, should be > 0; new')
         ! set default msk value
         if( cline%defined('msk') )then
-            THROW_HARD('msk (mask radius in pixels) is depreciated! Use mskdiam (mask diameter in A)')
+            THROW_HARD('msk (mask radius in pixels) is deprecated! Use mskdiam (mask diameter in A)')
         endif
         mskdiam_default = (real(self%box) - COSMSKHALFWIDTH) * self%smpd
         msk_default     = round2even((real(self%box) - COSMSKHALFWIDTH) / 2.)
@@ -1222,6 +1244,12 @@ contains
         else
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
+        endif
+        if( self%box > 0 )then
+            if( .not.cline%defined('msk_crop') )then
+                self%msk_crop = min(round2even((real(self%box_crop)-COSMSKHALFWIDTH)/2.),&
+                    &round2even(self%msk * real(self%box_crop) / real(self%box)))
+            endif
         endif
         ! automasking options
         self%l_filemsk = .false.
@@ -1278,7 +1306,7 @@ contains
         ! focused masking
         self%l_focusmsk = .false.
         if( cline%defined('focusmsk') )then
-            THROW_HARD('focusmsk (focused mask radius in pixels) is depreciated! Use focusmskdiam (focused mask diameter in A)')
+            THROW_HARD('focusmsk (focused mask radius in pixels) is deprecated! Use focusmskdiam (focused mask diameter in A)')
         endif
         if( cline%defined('focusmskdiam') )then
             if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmskdiam')
@@ -1770,6 +1798,7 @@ contains
                         call find_ldim_nptcls(self%stk, self%ldim, ifoo)
                         self%ldim(3) = 1
                         self%box     = self%ldim(1)
+                        if( .not.cline%defined('box_crop') ) self%box_crop = self%box
                     endif
                 else
                     write(logfhandle,'(a)')      'simple_parameters :: set_ldim_box_from_stk'

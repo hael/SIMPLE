@@ -55,7 +55,7 @@ contains
         box_pd       = find_larger_magic_box(box + 2 * smooth_ext)
         ldim_pd      = [box_pd, box_pd, 1]
         frcs_fname   = trim(params_glob%frcs)
-        smpd         = params_glob%smpd
+        smpd         = even(1)%get_smpd()
         nptcls       = size(even)
         lpstart      = params_glob%lpstart
         hpind_fsc    = params_glob%hpind_fsc
@@ -392,7 +392,7 @@ contains
         if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, params_glob%smpd)
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
         ub          = (/ box-ext, box-ext, 1/)
@@ -462,7 +462,7 @@ contains
         if( ldim(3) > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         ext         = params_glob%smooth_ext
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, params_glob%smpd)
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb          = (/ ext+1  , ext+1  , 1/)
         ub          = (/ box-ext, box-ext, 1/)
@@ -562,8 +562,8 @@ contains
         smooth_ext = params_glob%smooth_ext
         box        = ldim(1)
         fsc_fname  = trim(params_glob%fsc)
-        smpd       = params_glob%smpd
-        find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, smpd)
+        smpd       = even%get_smpd()
+        find_start = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         if( present(lpstop) )then
             find_stop = calc_fourier_index(lpstop, box, smpd)
         else
@@ -700,7 +700,7 @@ contains
         ldim              = odd%get_ldim()
         box               = ldim(1)
         fsc_fname         = trim(params_glob%fsc)
-        smpd              = params_glob%smpd
+        smpd              = even%get_smpd()
         present_cuofindeo = present(cutoff_finds_eo)
         present_mskimg    = present(mskimg)
         ! calculate Fourier index limits for search
@@ -840,7 +840,7 @@ contains
         dim3        = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This nonuni_filt2D is strictly for 2D!')
         find_stop   = optf2Dvars%lplim_hres
-        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, params_glob%smpd)
+        find_start  = calc_fourier_index(params_glob%lpstart_nonuni, box, even%get_smpd())
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
@@ -898,7 +898,7 @@ contains
         ldim(3)      = 1 ! because we operate on stacks
         box          = ldim(1)
         frcs_fname   = trim(params_glob%frcs)
-        smpd         = params_glob%smpd
+        smpd         = even(1)%get_smpd()
         nptcls       = size(even)
         lpstart      = params_glob%lpstart
         hpind_fsc    = params_glob%hpind_fsc

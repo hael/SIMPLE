@@ -292,6 +292,7 @@ contains
     generic            :: pad_mirr => pad_mirr_1, pad_mirr_2
     procedure          :: clip
     procedure          :: clip_inplace
+    procedure          :: read_and_crop
     procedure          :: scale_pixels
     procedure          :: mirror
     procedure          :: norm
@@ -320,6 +321,7 @@ contains
     procedure          :: fft_noshift
     ! DESTRUCTOR
     procedure :: kill
+    procedure :: kill_thread_safe_tmp_imgs
 end type image
 
 interface image
@@ -2709,16 +2711,20 @@ contains
         integer :: ithr
         ! get thread index
         ithr = omp_get_thread_num() + 1
-        ! copy rmat
-        thread_safe_tmp_imgs(ithr)%rmat = self%rmat
-        thread_safe_tmp_imgs(ithr)%ft   = .false.
-        call thread_safe_tmp_imgs(ithr)%fft()
-        call thread_safe_tmp_imgs(ithr)%bp(0., lp)
-        call thread_safe_tmp_imgs(ithr)%ifft()
-        call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
-        where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
-        call thread_safe_tmp_imgs(ithr)%norm_bin
-        call thread_safe_tmp_imgs(ithr)%masscen(xyz)
+        if( all(self%ldim == thread_safe_tmp_imgs(ithr)%ldim) )then
+            ! copy rmat
+            thread_safe_tmp_imgs(ithr)%rmat = self%rmat
+            thread_safe_tmp_imgs(ithr)%ft   = .false.
+            call thread_safe_tmp_imgs(ithr)%fft()
+            call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+            call thread_safe_tmp_imgs(ithr)%ifft()
+            call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+            where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
+            call thread_safe_tmp_imgs(ithr)%norm_bin
+            call thread_safe_tmp_imgs(ithr)%masscen(xyz)
+        else
+            THROW_HARD('Incompatible dimensions bwetween self and thread_safe_tmp_imgs; calc_shiftcen_serial')
+        endif
     end function calc_shiftcen_serial
 
     !>  \brief bin_inv inverts a binary image
@@ -6765,7 +6771,7 @@ contains
                     end do
                 endif
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
+                call self_out%set_smpd(self_in%smpd*ratio) ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.
             else
                 starts = (self_in%ldim-self_out%ldim)/2+1
@@ -6790,6 +6796,49 @@ contains
         call self%copy(tmp)
         call tmp%kill()
     end subroutine clip_inplace
+
+    subroutine read_and_crop( self, volfname, box, smpd, box_crop, smpd_crop, ismask )
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: volfname
+        integer,           intent(in)    :: box, box_crop
+        real,              intent(in)    :: smpd, smpd_crop
+        logical, optional, intent(in)    :: ismask
+        real    :: crop_factor, smpd_here
+        integer :: ldim(3), ifoo
+        logical :: l_mask
+        l_mask = .false.
+        if( present(ismask) ) l_mask = ismask
+        crop_factor = real(box) / real(box_crop)
+        call find_ldim_nptcls(volfname, ldim, ifoo, smpd=smpd_here)
+        if( box == box_crop )then
+            ! read
+            if( all(ldim == box) )then
+                call self%new([box,box,box],smpd)
+                call self%read(volfname)
+            else
+                THROW_HARD('Erroneous volume dimensions 1; read_and_crop')
+            endif
+        else
+            if( all(ldim == box) )then
+                ! read & crop
+                call self%new([box,box,box],smpd)
+                call self%read(volfname)
+                call self%fft
+                call self%clip_inplace([box_crop,box_crop,box_crop])
+                call self%ifft
+                if( l_mask )then
+                    where( self%rmat < TINY ) self%rmat = 0.0
+                    where( self%rmat > 1.0 )  self%rmat = 1.0
+                endif
+            elseif( all(ldim == box_crop) )then
+                ! read
+                call self%new([box_crop,box_crop,box_crop],smpd_crop)
+                call self%read(volfname)
+            else
+                THROW_HARD('Erroneous volume dimensions 2; read_and_crop')
+            endif
+        endif
+    end subroutine read_and_crop
 
     ! This subroutine rescales the pixel intensities to a new input range.
     subroutine scale_pixels(self, new_range, ssc, oold_range)
@@ -7534,5 +7583,17 @@ contains
             self%existence = .false.
         endif
     end subroutine kill
+
+    subroutine kill_thread_safe_tmp_imgs( self )
+        class(image), intent(in) :: self
+        integer :: i, sz, ldim(3)
+        logical :: do_allocate
+        if( allocated(thread_safe_tmp_imgs) )then
+            do i=1,size(thread_safe_tmp_imgs)
+                call thread_safe_tmp_imgs(i)%kill
+            end do
+            deallocate(thread_safe_tmp_imgs)
+        endif
+    end subroutine kill_thread_safe_tmp_imgs
 
 end module simple_image

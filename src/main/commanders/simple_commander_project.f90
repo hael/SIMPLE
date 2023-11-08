@@ -208,7 +208,7 @@ contains
         allocate(keys_present(nargs))
         do ikey=1,nargs
             if( trim(args(ikey)).eq.'eulnorm' )then
-                keys_present(ikey) = os%isthere('e1') .and. os%isthere('e1')
+                keys_present(ikey) = os%isthere('e1') .and. os%isthere('e2')
             else
                 keys_present(ikey) = os%isthere(trim(args(ikey)))
             endif

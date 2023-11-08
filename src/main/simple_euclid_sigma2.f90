@@ -8,7 +8,7 @@ use simple_starfile_wrappers
 implicit none
 
 public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
-public :: split_sigma2_into_groups, consolidate_sigma2_groups, scale_group_sigma2_magnitude
+public :: split_sigma2_into_groups, consolidate_sigma2_groups
 public :: sigma2_star_from_iter, fill_sigma2_before_nyq, test_unit
 private
 #include "simple_local_flags.inc"
@@ -457,21 +457,6 @@ contains
 
     ! Public modifiers
 
-    ! scale sigma2 magnitude, groups only
-    subroutine scale_group_sigma2_magnitude( iter, scale )
-        integer,          intent(in)  :: iter
-        real,             intent(in)  :: scale
-        type(euclid_sigma2)           :: euclidsigma2
-        character(len=:), allocatable :: fname
-        integer                       :: ngroups
-        fname  = sigma2_star_from_iter(iter)
-        call euclidsigma2%init_from_group_header(fname)
-        call euclidsigma2%read_sigma2_groups(iter, euclidsigma2%sigma2_groups, ngroups)
-        euclidsigma2%sigma2_groups = euclidsigma2%sigma2_groups * scale
-        call write_groups_starfile( fname, euclidsigma2%sigma2_groups, ngroups )
-        call euclidsigma2%kill
-    end subroutine scale_group_sigma2_magnitude
-
     ! Updates the lowest resolution info of the file with most frequencies with the other & overwrites it
     subroutine fill_sigma2_before_nyq( fname1, fname2 )
         character(len=*), intent(in)  :: fname1, fname2
@@ -585,7 +570,6 @@ contains
         ! sigma2 = sigma2 / 1.e6
         fname  = sigma2_star_from_iter(iter)
         call write_groups_starfile( fname, sigma2, ngroups )
-        call scale_group_sigma2_magnitude( iter, scale )
         call split_sigma2_into_groups( fname, fnames )
         fname  = sigma2_star_from_iter(666)
         call consolidate_sigma2_groups( fname, fnames)

@@ -29,13 +29,13 @@ p%kfromto(1) = 2
 p%kfromto(2) = 100
 call b%build_general_tbox(p, cline)
 call pftcc%new(p%nptcls, [1, p%nptcls], p%kfromto)
-call b%img_match%init_polarizer(pftcc, p%alpha)
+call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
 do iptcl=1,p%nptcls
-    call b%img_match%read(p%stk, iptcl)
-    call b%img_match%fft()
+    call b%img_crop_polarizer%read(p%stk, iptcl)
+    call b%img_crop_polarizer%fft()
     ! transfer to polar coordinates
-    call b%img_match%polarize(pftcc, iptcl, isptcl=.false., iseven=.true., mask=b%l_resmsk)
-    call b%img_match%polarize(pftcc, iptcl, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+    call b%img_crop_polarizer%polarize(pftcc, iptcl, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+    call b%img_crop_polarizer%polarize(pftcc, iptcl, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 end do
 allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
 

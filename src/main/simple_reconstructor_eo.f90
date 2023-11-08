@@ -22,8 +22,10 @@ type :: reconstructor_eo
     character(len=4)    :: ext
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
-    real                :: smpd, msk, fny, pad_correction=1.
-    integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0, ldim(3)
+    real                :: smpd, msk, fny
+    real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
+    integer             :: ldim(3), box=0, boxpd=0
+    integer             :: nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
     logical             :: exists     = .false.
@@ -79,31 +81,35 @@ contains
         ! set constants
         neg = .false.
         if( params_glob%neg .eq. 'yes' ) neg = .true.
-        self%box        = params_glob%box
-        self%smpd       = params_glob%smpd
+        self%box        = params_glob%box_crop
+        self%boxpd      = params_glob%box_croppd
+        self%smpd       = params_glob%smpd_crop
+        self%fny        = 2.*self%smpd
         self%nstates    = params_glob%nstates
-        self%fny        = params_glob%fny
         self%ext        = params_glob%ext
         self%numlen     = params_glob%numlen
-        self%msk        = params_glob%msk
+        self%msk        = params_glob%msk_crop
         self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
-        self%ldim       = [params_glob%boxpd,params_glob%boxpd,params_glob%boxpd]
-        self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
+        ! overall magnitude correction (interpolation padding + downscaling)
+        self%mag_correction = real(params_glob%box)                                        ! insertion of 2D slice into 3D
+        self%mag_correction = self%mag_correction * (real(self%boxpd) / real(self%box))**3 ! 3D padding factor
+        self%ldim           = [self%boxpd,self%boxpd,self%boxpd]
         ! create composites
         if( self%automsk )then
-            call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
+            call self%envmask%new([self%box,self%box,self%box],self%smpd)
             call self%envmask%read(params_glob%mskfile)
         endif
         call self%even%new(self%ldim, params_glob%smpd)
-        call self%even%alloc_rho( spproj)
+        call self%even%alloc_rho(spproj)
         call self%even%set_ft(.true.)
+        call self%odd%new(self%ldim, params_glob%smpd)
         call self%odd%new(self%ldim, params_glob%smpd)
         call self%odd%alloc_rho(spproj)
         call self%odd%set_ft(.true.)
         call self%eosum%new(self%ldim, params_glob%smpd)
-        call self%eosum%alloc_rho( spproj, expand=.false.)
+        call self%eosum%alloc_rho(spproj, expand=.false.)
         ! set existence
         self%exists = .true.
     end subroutine new
@@ -404,7 +410,7 @@ contains
             deallocate(cmat)
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
-            call even%div(self%pad_correction)
+            call even%div(self%mag_correction)
             if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
@@ -414,7 +420,7 @@ contains
             deallocate(cmat)
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
-            call odd%div(self%pad_correction)
+            call odd%div(self%mag_correction)
             if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
             ! masking
             if( self%automsk )then
@@ -437,7 +443,7 @@ contains
             call self%even%ifft
             call even%zero_and_unflag_ft
             call self%even%clip(even)
-            call even%div(self%pad_correction)
+            call even%div(self%mag_correction)
             call even%write(trim(fname_even), del_if_exists=.true.)
             call self%even%set_cmat(cmat)
             call even%kill
@@ -448,7 +454,7 @@ contains
             call self%odd%ifft
             call odd%zero_and_unflag_ft
             call self%odd%clip(odd)
-            call odd%div(self%pad_correction)
+            call odd%div(self%mag_correction)
             call odd%write(trim(fname_odd), del_if_exists=.true.)
             call self%odd%set_cmat(cmat)
             call odd%kill
@@ -467,8 +473,8 @@ contains
             call self%even%clip(even)
             call self%odd%clip(odd)
             ! FFTW padding correction
-            call even%div(self%pad_correction)
-            call odd%div(self%pad_correction)
+            call even%div(self%mag_correction)
+            call odd%div(self%mag_correction)
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
@@ -521,7 +527,7 @@ contains
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
         call self%eosum%ifft()
-        call self%eosum%div(self%pad_correction)
+        call self%eosum%div(self%mag_correction)
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
 

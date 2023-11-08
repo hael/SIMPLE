@@ -226,7 +226,7 @@ contains
         params_glob%kfromto(1) = max(2,calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
         else
             if( trim(params_glob%stream).eq.'yes' )then
                 if( file_exists(params_glob%frcs) )then
@@ -248,11 +248,11 @@ contains
                     endif
                 endif
             endif
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
             ! to avoid pathological cases, fall-back on lpstart
-            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
+            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box_crop, params_glob%smpd_crop)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-            lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box, params_glob%smpd)
+            lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box_crop, params_glob%smpd_crop)
         endif
         ! update low-pas limit in project
         call build_glob%spproj_field%set_all2single('lp',lplim)
@@ -260,48 +260,60 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img )
-        use simple_ctf,       only: ctf
+    subroutine prepimg4align( iptcl, img, img_out )
+        use simple_ctf, only: ctf
         integer,      intent(in)    :: iptcl
         class(image), intent(inout) :: img
+        class(image), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: x, y, sdev_noise
-        x = build_glob%spproj_field%get(iptcl, 'x')
-        y = build_glob%spproj_field%get(iptcl, 'y')
-        ! CTF parameters
-        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-        ! normalise
+        real            :: x, y, sdev_noise, crop_factor
+        ! Normalise
         call img%norm_noise(build_glob%lmsk, sdev_noise)
-        ! move to Fourier space
+        ! Fourier cropping
         call img%fft()
-        ! Shift image to rotational origin & phase-flipping
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img%shift2Dserial([-x,-y])
+        call img%clip(img_out)
+        ! alternatively:
+        ! call img%fft
+        ! call img%clip(img_out)
+        ! call img_out%ifft
+        ! call img_out%norm_noise(build_glob%lmsk_crop, sdev_noise)
+        ! call img_out%fft
+        ! Shift image to rotational origin
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
+        x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
+        y = build_glob%spproj_field%get(iptcl, 'y') * crop_factor
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH)then
+            call img_out%shift2Dserial([-x,-y])
+        endif
+        ! Phase-flipping
+        ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
-                ! all good
-            case(CTFFLAG_YES) ! phase flip
+                ! nothing to do
+            case(CTFFLAG_YES)
+                ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                call tfun%apply_serial(img, 'flip', ctfparms)
+                call tfun%apply_serial(img_out, 'flip', ctfparms)
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
-        ! back to real-space
-        call img%ifft()
-        ! soft-edged mask
+        ! Back to real space
+        call img_out%ifft
+        ! Soft-edged mask
         if( params_glob%l_focusmsk )then
-            call img%mask(params_glob%focusmsk, 'soft')
+            call img_out%mask(params_glob%focusmsk*crop_factor, 'soft')
         else
             if( params_glob%l_needs_sigma )then
-                call img%mask(params_glob%msk, 'softavg')
+                call img_out%mask(params_glob%msk_crop, 'softavg')
             else
-                call img%mask(params_glob%msk, 'soft')
+                call img_out%mask(params_glob%msk_crop, 'soft')
             endif
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%img_match%div_by_instrfun(img)
-        ! return in Fourier space
-        call img%fft()
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
+        ! return to Fourier space
+        call img_out%fft()
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -314,12 +326,13 @@ contains
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
         integer :: filtsz
-        real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real    :: xyz(3), sharg
+        real    :: frc(img_out%get_filtsz()), filter(img_out%get_filtsz())
+        real    :: xyz(3), sharg, crop_factor
         logical :: do_center
-        filtsz = build_glob%img%get_filtsz()
-        do_center = (params_glob%center .eq. 'yes')
+        filtsz = img_in%get_filtsz()
+        crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         ! centering only performed if params_glob%center.eq.'yes'
+        do_center = (params_glob%center .eq. 'yes')
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
             if( present(xyz_in) )then
@@ -330,13 +343,13 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk)
+                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk_crop)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
                     call img_in%fft()
                     call img_in%shift2Dserial(xyz(1:2))
-                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2))
+                    call build_glob%spproj_field%add_shift2class(icls, -xyz(1:2) / crop_factor)
                 endif
                 if( present(xyz_out) ) xyz_out = xyz
             endif
@@ -356,9 +369,9 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        call img_out%mask(params_glob%msk, 'soft', backgr=0.0)
+        call img_out%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' ) call build_glob%ref_polarizer%div_by_instrfun(img_out)
+        if( params_glob%gridding.eq.'yes' ) call build_glob%img_crop_polarizer%div_by_instrfun(img_out)
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
@@ -367,15 +380,13 @@ contains
     subroutine preprecvols( wcluster )
         real, optional, intent(in)    :: wcluster
         character(len=:), allocatable :: part_str
-        real,    allocatable :: resarr(:)
         integer, allocatable :: pops(:)
         integer :: istate
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
-        resarr    = build_glob%img%get_res()
         do istate = 1, params_glob%nstates
             if( pops(istate) > 0)then
-                call build_glob%eorecvols(istate)%new( build_glob%spproj)
+                call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
                 if( params_glob%l_frac_update )then
                     call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
@@ -386,7 +397,7 @@ contains
                 endif
             endif
         end do
-        deallocate(pops,resarr)
+        deallocate(pops)
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
@@ -405,10 +416,10 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
+        real    :: crop_factor, smpd_here
+        integer :: ldim_here(3), ifoo
         logical :: has_been_searched
-        do_center = .true.
-        ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        do_center   = .true.
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
@@ -417,8 +428,10 @@ contains
             xyz       = 0.
             return
         endif
-        call build_glob%vol%read(volfname)
-        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk)
+        ! taking care of volume dimensions
+        call build_glob%vol%read_and_crop(volfname, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        ! offset
+        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk_crop)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -427,7 +440,10 @@ contains
         endif
         ! map back to particle oritentations
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
-        if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
+        if( has_been_searched )then
+            crop_factor = real(params_glob%box) / real(params_glob%box_crop)
+            call build_glob%spproj_field%map3dshift22d(-xyz(:)*crop_factor, state=s)
+        endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
@@ -435,20 +451,19 @@ contains
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image) :: mskvol
-        real        :: filter(build_glob%img%get_filtsz())
-        ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        call build_glob%vol%read(fname_even)
-        call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        call build_glob%vol_odd%read(fname_odd)
+        type(image)       :: mskvol
+        real, allocatable :: filter(:)
+        ! ensure correct build_glob%vol dimensions
+        call build_glob%vol%read_and_crop(    fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
         if( params_glob%l_nonuniform )then
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             if( params_glob%l_filemsk )then
-                call mskvol%read(params_glob%mskfile)
+                call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
+                    &params_glob%box_crop, params_glob%smpd_crop, ismask=.true.)
             else
+                call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
                 mskvol = 1.0
-                call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
+                call mskvol%mask(params_glob%msk_crop, 'soft', backgr=0.0)
             endif
             call mskvol%one_at_edge ! to expand before masking of reference
             if( params_glob%l_lpset )then ! nanocrystal refinement
@@ -457,7 +472,8 @@ contains
                     call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
                 else
                     ! applying uniform Butterworth filter at the cut-off frequency = lp
-                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd), filter)
+                    allocate(filter(build_glob%vol%get_filtsz()))
+                    call butterworth_filter(calc_fourier_index(params_glob%lp, params_glob%box_crop, params_glob%smpd_crop), filter)
                     call build_glob%vol%fft
                     call build_glob%vol_odd%fft
                     call build_glob%vol%apply_filter(filter)
@@ -488,7 +504,7 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz())
+        real    :: filter(build_glob%vol%get_filtsz())
         integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
@@ -500,7 +516,7 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz = build_glob%img%get_filtsz()
+        filtsz = build_glob%vol%get_filtsz()
         if( params_glob%l_ml_reg )then
             ! no filtering
         else if( params_glob%l_lpset )then
@@ -523,7 +539,7 @@ contains
         ! masking
         if( params_glob%l_filemsk )then
             ! envelope masking
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%new([params_glob%box_crop,params_glob%box_crop,params_glob%box_crop],params_glob%smpd_crop)
             call mskvol%read(params_glob%mskfile)
             call vol_ptr%zero_env_background(mskvol)
             call vol_ptr%mul(mskvol)
@@ -586,7 +602,7 @@ contains
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch,sdev_noise) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
@@ -630,9 +646,9 @@ contains
         logical               :: which_iter_present
         which_iter_present = present(which_iter)
         ! init
-        ldim = [params_glob%box,params_glob%box,params_glob%box]
-        call build_glob%vol%new(ldim,params_glob%smpd)
-        call build_glob%vol2%new(ldim,params_glob%smpd)
+        ldim = [params_glob%box_crop,params_glob%box_crop,params_glob%box_crop]
+        call build_glob%vol%new(ldim,params_glob%smpd_crop)
+        call build_glob%vol2%new(ldim,params_glob%smpd_crop)
         res0143s = 0.
         res05s   = 0.
         ! cycle through states
@@ -744,7 +760,7 @@ contains
                         params_glob%mskfile = mskfile
                     endif
                     if( params_glob%l_filemsk )then
-                        call envmsk%new(ldim, params_glob%smpd)
+                        call envmsk%new(ldim, params_glob%smpd_crop)
                         call envmsk%read(params_glob%mskfile)
                     endif
                     call build_glob%vol%zero_background
@@ -755,7 +771,7 @@ contains
                     endif
                     call envmsk%kill
                 else
-                    call build_glob%vol%mask(params_glob%msk, 'soft')
+                    call build_glob%vol%mask(params_glob%msk_crop, 'soft')
                 endif
                 ! write
                 call build_glob%vol%write(pprocvol)

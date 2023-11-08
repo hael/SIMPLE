@@ -402,7 +402,7 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(image)                   :: img_cavg, calc_cavg
+        type(image)                   :: img_cavg, calc_cavg, ptcl_match
         type(regularizer)             :: reg_obj
         integer  :: nptcls, iptcl, nptcls_cls
         logical  :: l_ctf
@@ -420,9 +420,10 @@ contains
         call pftcc%new(nptcls_cls, [1,nptcls_cls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls_cls, pinds)
         call reg_obj%new(pftcc)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
+        call ptcl_match%new([params%box_crop, params%box_crop, 1], params%smpd_crop)
         call prepimgbatch(nptcls)
         call read_imgbatch([1, nptcls])
-        call build%img_match%init_polarizer(pftcc, params%alpha)
         ! getting the ctfs
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
@@ -437,9 +438,9 @@ contains
         do j = 1, nptcls_cls
             iptcl = pinds(j)
             ! prep
-            call prepimg4align(iptcl, build%imgbatch(iptcl))
+            call prepimg4align(iptcl, build%imgbatch(iptcl), ptcl_match)
             ! transfer to polar coordinates
-            call build%img_match%polarize(pftcc, build%imgbatch(iptcl), iptcl, .true., .true., mask=build%l_resmsk)
+            call build%img_crop_polarizer%polarize(pftcc, ptcl_match, iptcl, .true., .true., mask=build%l_resmsk)
             ! e/o flags
             call pftcc%set_eo(iptcl, .true. )
             ! accumulating the cls_avg
@@ -581,7 +582,7 @@ contains
         lims_init(:,1)  = -MINSHIFT/2.
         lims_init(:,2)  =  MINSHIFT/2.
         do ithr = 1,nthr_glob
-            call tmp_imgs(ithr)%new([params%box,params%box,1],params%smpd,wthreads=.false.)
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1],params%smpd_crop,wthreads=.false.)
         enddo
         ! Allocations
         call pftcc%new(NITERS, [1,1], params%kfromto)
@@ -598,7 +599,7 @@ contains
         &diff(pftcc%pftsz,params%kfromto(1):params%kfromto(2)),&
         &inpl_corrs(pftcc%nrots),frc(params%kfromto(1):params%kfromto(2)),&
         &purity(0:NITERS))
-        call build%img_match%init_polarizer(pftcc, params_glob%alpha)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( (params%cc_objfun==OBJFUN_EUCLID) )then
             allocate(sig2(params%kfromto(1):params%kfromto(2),nptcls),&
             &sig2_even(params%kfromto(1):params%kfromto(2),nstks),&
@@ -702,8 +703,8 @@ contains
                 iptcl = pinds(i)
                 if(iptcl == 0) cycle
                 call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
-                call prepimg4align(iptcl, tmp_imgs(ithr))
-                call build%img_match%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true.)
+                call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
+                call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true.)
                 call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
             enddo
             !$omp end parallel do

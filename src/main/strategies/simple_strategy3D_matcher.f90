@@ -42,6 +42,7 @@ type(polarft_corrcalc), target :: pftcc
 type(regularizer_inpl), target :: reg_inpl
 type(regularizer),      target :: reg_obj
 type(cartft_corrcalc),  target :: cftcc
+type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 type(sym)                      :: c1_symop
@@ -163,6 +164,7 @@ contains
         endif
 
         call prep_ccobjs4align(cline, batchsz_max)
+        call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
         if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
@@ -175,8 +177,11 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
-        if( pftcc%exists() )call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         call prepimgbatch(batchsz_max)
+        allocate(ptcl_match_imgs(params_glob%nthr))
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%new([params_glob%box_crop, params_glob%box_crop, 1], params_glob%smpd_crop, wthreads=.false.)
+        enddo
 
         ! STOCHASTIC IMAGE ALIGNMENT
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
@@ -454,6 +459,10 @@ contains
         call orientation%kill
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)
+        do ithr = 1,params_glob%nthr
+            call ptcl_match_imgs(ithr)%kill
+        enddo
+        deallocate(ptcl_match_imgs)
 
         ! OUTPUT ORIENTATIONS
         select case(trim(params_glob%refine))
@@ -596,18 +605,19 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
-        integer :: iptcl_batch, iptcl
+        integer :: iptcl_batch, iptcl, ithr
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
         if( params_glob%l_cartesian ) call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! set Cartesian
             if( params_glob%l_cartesian ) call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
             ! e/o flags
@@ -627,17 +637,24 @@ contains
         integer, intent(in) :: pinds_here(nptcls_here)
         logical, optional, intent(in) :: use_inpl
         logical, optional, intent(in) :: use_reg
-        integer :: iptcl_batch, iptcl
+        integer :: iptcl_batch, iptcl, ithr
+        logical :: l_use_inpl, l_use_reg
+        ! optional arguments
+        l_use_inpl = .false.
+        l_use_reg  = .false.
+        if( present(use_inpl) ) l_use_inpl = use_inpl
+        if( present(use_reg)  ) l_use_reg  = use_reg
         call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
+            ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch))
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
-            call build_glob%img_match%polarize(pftcc, build_glob%imgbatch(iptcl_batch), iptcl, .true., .true., mask=build_glob%l_resmsk)
+            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flags
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -656,14 +673,14 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         ! filling the prob table
-        if( present(use_inpl) .and. use_inpl )then
-            if( present(use_reg) .and. use_reg )then
+        if( l_use_inpl )then
+            if( l_use_reg )then
                 call reg_inpl%fill_tab(pinds_here, use_reg=.true.)
             else
                 call reg_inpl%fill_tab(pinds_here)
             endif
         else
-            if( present(use_reg) .and. use_reg )then
+            if( l_use_reg )then
                 ! not an option yet
             else
                 call reg_obj%fill_tab_noshift(pinds_here)
@@ -672,4 +689,5 @@ contains
         ! descaling
         if( params_glob%l_reg_scale ) call pftcc%reg_descale
     end subroutine fill_batch_particles
+
 end module simple_strategy3D_matcher

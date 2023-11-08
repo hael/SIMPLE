@@ -67,6 +67,7 @@ contains
     procedure          :: get_fsc
     procedure          :: get_frcs
     procedure          :: get_imginfo_from_osout
+    procedure          :: get_imgdims_from_osout
     ! getters
     procedure          :: get_n_insegment
     procedure          :: get_n_insegment_state
@@ -1845,6 +1846,42 @@ contains
             endif
         end do
     end subroutine get_imginfo_from_osout
+
+    ! returns cavg/volume dimensions based on segment
+    subroutine get_imgdims_from_osout( self, iseg, smpd, box)
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: iseg
+        real,              intent(out)   :: smpd
+        integer,           intent(out)   :: box
+        character(len=LONGSTRLEN) :: imgkind_target
+        integer :: i, nos
+        smpd   = 0.
+        box    = 0
+        nos    = self%os_out%get_noris()
+        if( nos == 0 )return
+        select case(iseg)
+        case(PTCL2D_SEG)
+            imgkind_target = 'cavg'
+        case(CLS3D_SEG)
+            imgkind_target = 'vol_cavg'
+        case(PTCL3D_SEG)
+            imgkind_target = 'vol'
+        case DEFAULT
+            return
+        end select
+        ! last record first
+        do i = nos,1,-1
+            if( self%os_out%isthere(i,'imgkind') )then
+                if( trim(self%os_out%get_static(i,'imgkind')) .eq. trim(imgkind_target))then
+                    if( self%os_out%isthere(i,'smpd').and.self%os_out%isthere(i,'box') )then
+                        smpd = self%os_out%get(i,'smpd')
+                        box  = nint(self%os_out%get(i,'box'))
+                        return
+                    endif
+                endif
+            endif
+        end do
+    end subroutine get_imgdims_from_osout
 
     ! getters
 
@@ -3766,6 +3803,7 @@ contains
         call self%projinfo%kill
         call self%jobproc%kill
         call self%compenv%kill
+        call self%bos%close
     end subroutine kill
 
     ! private supporting subroutines / functions

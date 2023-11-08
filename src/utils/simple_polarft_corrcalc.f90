@@ -109,7 +109,6 @@ type :: polarft_corrcalc
     procedure          :: get_nrots
     procedure          :: get_pdim
     procedure          :: get_pftsz
-    procedure          :: get_box
     procedure          :: get_rot
     procedure          :: get_roind
     procedure          :: get_coord
@@ -223,9 +222,9 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
-        self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
-        self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
-        self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
+        self%nrefs = nrefs                                   !< the number of references (logically indexded [1,nrefs])
+        self%pftsz = magic_pftsz(nint(params_glob%msk_crop)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%nrots = 2 * self%pftsz                          !< number of in-plane rotations for one pft  (pftsz*2)
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -493,12 +492,6 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         get_pftsz = self%pftsz
     end function get_pftsz
-
-    pure function get_box( self ) result( box )
-        class(polarft_corrcalc), intent(in) :: self
-        integer :: box
-        box = self%ldim(1)
-    end function get_box
 
     !>  \brief is for getting the continuous in-plane rotation
     !!         corresponding to in-plane rotation index roind
@@ -1050,8 +1043,7 @@ contains
         type(ctfparams) :: ctfparms(nthr_glob)
         type(ctf)       :: tfuns(nthr_glob)
         real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)        :: inv_ldim(3),hinv,kinv
+        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%kfromto(2)), hinv,kinv
         integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
@@ -1060,12 +1052,11 @@ contains
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls), source=1.)
         if(.not. self%with_ctf ) return
-        inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
             do k=self%kfromto(1),self%kfromto(2)
-                hinv = self%polar(irot,k) * inv_ldim(1)
-                kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
+                hinv = self%polar(irot,k) / self%ldim(1)
+                kinv = self%polar(irot+self%nrots,k) / self%ldim(2)
                 spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
                 ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
             end do

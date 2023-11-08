@@ -245,7 +245,7 @@ contains
         type(ori) :: o_sym
         complex   :: comp, oshift
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
-        real      :: vec(3), loc(3), odists(3), dists(3), shconst_here(2), scale, arg, ctfval
+        real      :: vec(3), loc(3), odists(3), dists(3), shconst_here(2), arg, ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3), floc(3), cloc(3)
         if( pwght < TINY )return
@@ -260,21 +260,20 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! scale & memoize for origin shifting
-        scale        = real(self%ldim_img(1)) / real(fpl%ldim(1))
+        ! memoize for origin shifting
         shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
             !$omp private(h,k,sh,comp,arg,oshift,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
-                do h=fpl%frlims(1,1),fpl%frlims(1,2)
-                    do k=fpl%frlims(2,1),fpl%frlims(2,2)
+                do h=fpl%frlims_crop(1,1),fpl%frlims_crop(1,2)
+                    do k=fpl%frlims_crop(2,1),fpl%frlims_crop(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fpl%nyq ) cycle
+                        if( sh > fpl%nyq_crop ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = scale * matmul(vec, rotmats(isym,:,:))
+                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         floc = floor(loc)
                         cloc = floc + 1
@@ -324,13 +323,13 @@ contains
             !$omp proc_bind(close)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
-                do h=fpl%frlims(1,1),fpl%frlims(1,2)
-                    do k=fpl%frlims(2,1),fpl%frlims(2,2)
+                do h=fpl%frlims_crop(1,1),fpl%frlims_crop(1,2)
+                    do k=fpl%frlims_crop(2,1),fpl%frlims_crop(2,2)
                         sh = nint(sqrt(real(h*h + k*k)))
-                        if( sh > fpl%nyq ) cycle
+                        if( sh > fpl%nyq_crop ) cycle
                         vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = scale * matmul(vec, rotmats(isym,:,:))
+                        loc  = self%alpha * matmul(vec, rotmats(isym,:,:))
                         ! window
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
@@ -618,7 +617,7 @@ contains
         ssnr = 0.0
         tau2 = 0.0
         sig2 = 0.0
-        scale = real(params_glob%box) / real(params_glob%boxpd)
+        scale = real(params_glob%box_crop) / real(params_glob%box_croppd)
         pad_factor = 1.0 / scale**3
         ! SSNR
         do k = 1,sz
@@ -655,7 +654,7 @@ contains
         tau2 = ssnr * sig2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box_crop, params_glob%smpd_crop))
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)

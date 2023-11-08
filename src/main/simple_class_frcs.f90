@@ -74,8 +74,7 @@ contains
         self%file_header(4) = real(self%nstates)
         self%headsz         = sizeof(self%file_header)
         ! alloc
-        allocate( self%frcs(self%nstates,self%nprojs,self%filtsz) )
-        self%frcs   = 0.0
+        allocate(self%frcs(self%nstates,self%nprojs,self%filtsz), source=0.0)
         self%exists = .true.
     end subroutine new
 

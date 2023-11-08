@@ -44,7 +44,6 @@ integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
-character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
 character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/'
 character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
@@ -83,7 +82,7 @@ real                  :: orig_smpd, smpd, scale_factor, mskdiam     ! dimensions
 integer               :: orig_box, box, boxpd
 real                  :: lpstart, lpstop, lpcen                     ! resolution limits
 integer               :: max_ncls, nptcls_per_chunk, ncls_glob, nmics_last
-logical               :: l_wfilt, do_autoscale
+logical               :: l_wfilt, l_scaling
 logical               :: l_update_sigmas = .false.
 
 contains
@@ -125,10 +124,10 @@ contains
         call seed_rnd
         ! general parameters
         mskdiam             = cline%get_rarg('mskdiam')
-        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
+        call mskdiam2lplimits(mskdiam, lpstart, lpstop, lpcen)
         if( cline%defined('lp2D') ) lpstart = params_glob%lp2D
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
-        do_autoscale        = trim(params_glob%autoscale) .eq. 'yes'
+        l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
         max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
         nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start         ! # of particles in each chunk
         ncls_glob           = 0
@@ -153,7 +152,6 @@ contains
         refs_glob      = 'start_cavgs'//params_glob%ext
         pool_available = .true.
         pool_iter      = 0
-        call simple_mkdir(SCALE_DIR)
         call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(trim(SNAPSHOT_DIR))
@@ -259,32 +257,35 @@ contains
         endif
         ! auto-scaling
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
-        if( do_autoscale )then
-            if( orig_box < MINBOXSZ )then
-                do_autoscale = .false.
-            else
-                call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor)
-                if( box < MINBOXSZ )then
-                    SMPD_TARGET = orig_smpd * real(orig_box) / real(MINBOXSZ)
-                    call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor)
-                endif
-                if( box >= orig_box )then
-                    do_autoscale = .false.
-                else
-                    write(logfhandle,'(A,I5,F5.2)') '>>> 2D CLASSIFICATION DOWNSCALED IMAGE SIZE & PIXEL SIZE (IN A): ', box, smpd
-                endif
+        ! scaling (fourier cropping)
+        scale_factor          = 1.0
+        params_glob%smpd_crop = orig_smpd
+        params_glob%box_crop  = orig_box
+        params_glob%msk_crop  = mskdiam / orig_smpd / 2.
+        if( l_scaling .and. orig_box >= MINBOXSZ )then
+            call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < orig_box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
+                params_glob%smpd_crop = smpd
+                params_glob%box_crop  = box
             endif
         endif
-        if( .not. do_autoscale )then
-            smpd         = orig_smpd
-            box          = orig_box
-            scale_factor = 1.
-        endif
-        boxpd = 2 * round2even(params_glob%alpha * real(box/2)) ! logics from parameters
-        call cline_cluster2D_chunk%set('box',  real(box))
-        call cline_cluster2D_chunk%set('smpd', smpd)
-        call cline_cluster2D_pool%set('box',   real(box))
-        call cline_cluster2D_pool%set('smpd',  smpd)
+        smpd = params_glob%smpd_crop
+        box  = params_glob%box_crop
+        params_glob%msk_crop = round2even(mskdiam / smpd / 2.)
+        boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
+        ! Crooping-related command lines update
+        call cline_cluster2D_chunk%set('smpd_crop', smpd)
+        call cline_cluster2D_chunk%set('box_crop',  real(box))
+        call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
+        call cline_cluster2D_chunk%set('box',       real(orig_box))
+        call cline_cluster2D_chunk%set('smpd',      orig_smpd)
+        call cline_cluster2D_pool%set('smpd_crop',  smpd)
+        call cline_cluster2D_pool%set('box_crop',   real(box))
+        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
+        call cline_cluster2D_pool%set('box',        real(orig_box))
+        call cline_cluster2D_pool%set('smpd',       orig_smpd)
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
         ! module variables
@@ -1131,10 +1132,9 @@ contains
     subroutine write_project_stream2D( snapshot )
         logical,           intent(in) :: snapshot
         type(class_frcs)              :: frcs, frcs_sc
-        type(oris)                    :: os_backup2, os_backup3
+        type(oris)                    :: os_backup3
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
-        integer :: istk
         logical :: do_write
         do_write = .not.snapshot
         if( snapshot )then
@@ -1155,7 +1155,7 @@ contains
         call pool_proj%projinfo%set(1,'projfile', projfile)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-        if( snapshot .and. do_autoscale )then
+        if( snapshot .and. l_scaling )then
             cavgsfname = trim(SNAPSHOT_DIR)//trim(cavgsfname)
             frcsfname  = trim(SNAPSHOT_DIR)//trim(frcsfname)
             if( (trim(prev_snapshot_cavgs) /= '') )then
@@ -1178,9 +1178,8 @@ contains
         endif
         write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
-        if( do_autoscale )then
+        if( l_scaling )then
             os_backup3 = pool_proj%os_cls2D
-            os_backup2 = pool_proj%os_stk
             ! rescale classes
             if( l_wfilt )then
                 src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
@@ -1215,13 +1214,6 @@ contains
             call frcs%kill
             call frcs_sc%kill
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
-            ! project updates to original scale
-            call pool_proj%os_stk%set_all2single('box', real(orig_box))
-            call pool_proj%os_stk%set_all2single('smpd',orig_smpd)
-            call pool_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
-            do istk = 1,pool_proj%os_stk%get_noris()
-                call pool_proj%os_stk%set(istk,'stk',imported_stks(istk))
-            enddo
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
@@ -1231,10 +1223,6 @@ contains
             endif
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
-            ! preserve down-scaling
-            call pool_proj%os_ptcl2D%mul_shifts( scale_factor )
-            pool_proj%os_stk = os_backup2
-            call os_backup2%kill
         else
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
@@ -1285,7 +1273,6 @@ contains
             call rank_cavgs
         endif
         ! cleanup
-        call simple_rmdir(SCALE_DIR)
         call simple_rmdir(SIGMAS_DIR)
         if( .not.debug_here )then
             ! call qsys_cleanup
@@ -1634,11 +1621,30 @@ contains
         orig_projfile = trim(params%projfile)
         call cline%set('mkdir','no')
         ! init
-        do_autoscale     = params%autoscale .eq. 'yes'
-        max_ncls         = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
-        nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start         ! # of particles in each chunk
-        ncls_glob        = 0
+        l_scaling         = params%autoscale .eq. 'yes'
+        max_ncls          = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
+        nptcls_per_chunk  = params%nptcls_per_cls*params%ncls_start         ! # of particles in each chunk
+        ncls_glob         = 0
         prev_snapshot_cavgs = ''
+        ! scaling (fourier crooping)
+        scale_factor     = 1.0
+        orig_smpd        = params%smpd
+        orig_box         = params%box
+        mskdiam          = params%mskdiam
+        params%smpd_crop = orig_smpd
+        params%box_crop  = orig_box
+        params%msk_crop  = params%msk
+        if( l_scaling .and. orig_box >= MINBOXSZ )then
+            call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < orig_box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
+                params%smpd_crop = smpd
+                params%box_crop  = box
+                params%msk_crop  = params%msk * scale_factor
+            endif
+        endif
+        boxpd = 2 * round2even(params%alpha * real(params%box_crop/2)) ! logics from parameters
         ! init command-lines
         call cline%delete('lp')
         call cline%delete('refine')
@@ -1709,6 +1715,17 @@ contains
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call cline_cluster2D_pool%delete('lpstop')
+        ! Crooping-related command lines update
+        call cline_cluster2D_chunk%set('smpd_crop', smpd)
+        call cline_cluster2D_chunk%set('box_crop',  real(box))
+        call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
+        call cline_cluster2D_chunk%set('box',       real(orig_box))
+        call cline_cluster2D_chunk%set('smpd',      orig_smpd)
+        call cline_cluster2D_pool%set('smpd_crop',  smpd)
+        call cline_cluster2D_pool%set('box_crop',   real(box))
+        call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
+        call cline_cluster2D_pool%set('box',        real(orig_box))
+        call cline_cluster2D_pool%set('smpd',       orig_smpd)
         ! read strictly required fields project
         call master_spproj%read_non_data_segments(params%projfile)
         call master_spproj%read_segment('mic',   params%projfile)
@@ -1751,7 +1768,6 @@ contains
         pool_available = .true.
         pool_iter      = 0
         minits         = huge(minits)
-        call simple_mkdir(SCALE_DIR)
         if( trim(POOL_DIR) /= '' ) call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(dir_preprocess)
@@ -1764,36 +1780,6 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
-        ! auto-scaling
-        orig_box  = params%box
-        orig_smpd = params%smpd
-        if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
-        if( do_autoscale )then
-            if( orig_box < MINBOXSZ )then
-                do_autoscale = .false.
-            else
-                call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor)
-                if( box < MINBOXSZ )then
-                    SMPD_TARGET = orig_smpd * real(orig_box) / real(MINBOXSZ)
-                    call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor)
-                endif
-                if( box >= orig_box )then
-                    do_autoscale = .false.
-                else
-                    write(logfhandle,'(A,I5,F5.2)') '>>> 2D CLASSIFICATION DOWNSCALED IMAGE SIZE & PIXEL SIZE (IN A): ', box, smpd
-                endif
-            endif
-        endif
-        if( .not. do_autoscale )then
-            smpd         = orig_smpd
-            box          = orig_box
-            scale_factor = 1.
-        endif
-        boxpd = 2 * round2even(params%alpha * real(box/2)) ! logics from parameters
-        call cline_cluster2D_chunk%set('box',  real(box))
-        call cline_cluster2D_chunk%set('smpd', smpd)
-        call cline_cluster2D_pool%set('box',   real(box))
-        call cline_cluster2D_pool%set('smpd',  smpd)
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
         ! initialize chunks
@@ -1829,9 +1815,9 @@ contains
             endif
         enddo
         nptcls_tot = sum(stk_nptcls)
-        write(logfhandle,'(A,I6)')'>>> # OF STACKS   : ', nstks
-        write(logfhandle,'(A,I6)')'>>> # OF PARTICLES: ', nptcls_tot
-        write(logfhandle,'(A,I6)')'>>> # OF CHUNKS   : ', ntot_chunks
+        write(logfhandle,'(A,I8)')'>>> # OF STACKS   : ', nstks
+        write(logfhandle,'(A,I8)')'>>> # OF PARTICLES: ', nptcls_tot
+        write(logfhandle,'(A,I8)')'>>> # OF CHUNKS   : ', ntot_chunks
         ! chunks/stacks map
         allocate(chunks_map(ntot_chunks,2))
         cnt    = 0
@@ -1941,10 +1927,6 @@ contains
             call master_spproj%os_stk%getter(istk,'stk',fname)
             orig_stack_fname = basename(fname)
             stack_fname = trim(orig_stack_fname)
-            if( do_autoscale )then
-                ext = '.'//trim(fname2ext(orig_stack_fname))
-                stack_fname = add2fbody(orig_stack_fname,ext,SCALE_SUFFIX)
-            endif
             do jstk = 1,pool_nstks
                 if( pool_stk_mask(jstk) )then
                     if( trim(stack_fname) == pool_stacks(jstk) )then
@@ -1963,9 +1945,7 @@ contains
         ! rescale class-averages & parameters
         refs_glob = trim(POOL_DIR)//trim(refs_glob)
         frcsfname = trim(POOL_DIR)//trim(FRCS_FILE)
-        if( do_autoscale )then
-            ! parameters
-            call master_spproj%os_ptcl2D%mul_shifts(1.0/scale_factor)
+        if( l_scaling )then
             ! classes
             call rescale_cavgs(refs_glob, refs_glob)
             src  = add2fbody(refs_glob, params%ext,'_even')
