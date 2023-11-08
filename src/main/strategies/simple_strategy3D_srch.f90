@@ -8,6 +8,7 @@ use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_regularizer_inpl,   only: regularizer_inpl
+use simple_regularizer,        only: regularizer
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
@@ -18,6 +19,7 @@ private
 type strategy3D_spec
     integer,                pointer :: symmat(:,:) => null()
     type(regularizer_inpl), pointer :: reg_inpl
+    type(regularizer),      pointer :: reg_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
@@ -136,8 +138,10 @@ contains
         call prep_strategy3D_thread(self%ithr)
         ! search order
         ! -- > full space
-        call s3D%rts(self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
-        call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
+        call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
+        call s3D%rts_inpl(self%ithr)%ne_ran_iarr(s3D%inpl_order(self%ithr,:))
+        call put_last(self%prev_roind, s3D%inpl_order(self%ithr,:))
+        call put_last(self%prev_ref,   s3D%srch_order(self%ithr,:))
         ! --> subspace
         if( self%l_neigh )then
             call s3D%rts_sub(self%ithr)%ne_ran_iarr(tmp_inds)

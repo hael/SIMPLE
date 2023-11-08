@@ -677,7 +677,6 @@ contains
         use simple_regularizer_inpl,   only: reg_params
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(reg_params),          allocatable   :: cur_tab(:,:,:)
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
         type(parameters)                  :: params
@@ -735,8 +734,6 @@ contains
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
             corr               = -1.
-            allocate(cur_tab(params%fromp:params%top,params%nspace,params%reg_nrots))
-            cur_tab(:,:,:)%prob = 0.
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -764,7 +761,7 @@ contains
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
                 endif
                 ! in strategy3D_matcher:
-                call refine3D_exec(cline, params%which_iter, converged, cur_tab)
+                call refine3D_exec(cline, params%which_iter, converged)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
@@ -904,7 +901,7 @@ contains
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60
-        integer,          allocatable :: pinds(:), best_ip(:), best_ir(:)
+        integer,          allocatable :: pinds(:), best_ir(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: sigma2_noise(:,:)
@@ -1047,112 +1044,52 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
         call reg_obj%init_tab
-        call reg_obj%fill_tab(pinds)
-        print *, 'Assembling the class averages with'
-        select case(trim(params%reg_mode))
-            case('tab')
-                print *, 'soft-sorting the tab...'
-                call reg_obj%sort_tab_no_norm
-                call reg_obj%ref_reg_cc_tab
-            case('normtab')
-                print *, 'normalizing and soft-sorting...'
-                call reg_obj%sort_tab
-                call reg_obj%ref_reg_cc_tab
-            case('hard')
-                print *, 'cluster-hard-sorting the tab...'
-                allocate(best_ir(params%fromp:params%top), best_ip(params%fromp:params%top))
-                call reg_obj%cluster_sort_tab(best_ip, best_ir)
-                call reg_obj%uniform_cavgs(best_ip, best_ir)
-            case('unihard')
-                print *, 'uniformly-hard-sorting the tab...'
-                allocate(best_ir(params%fromp:params%top), best_ip(params%fromp:params%top))
-                call reg_obj%uniform_sort_tab(best_ip, best_ir)
-                call reg_obj%uniform_cavgs(best_ip, best_ir)
-        end select
+        call reg_obj%fill_tab_noshift(pinds)
+        print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
+        allocate(best_ir(params_glob%fromp:params_glob%top))
+        call reg_obj%reg_uniform_cluster(best_ir)
+        ! call reg_obj%partition_refs
+        ! call reg_obj%reg_uniform_cluster(best_ir, neigh=.true.)
+        call reg_obj%form_cavgs(best_ir)
         ! descaling
         if( params%l_reg_scale ) call pftcc%reg_descale
         call reg_obj%regularize_refs
-        select case(trim(params%reg_mode))
-            case('tab')
-            case('normtab')
-                print *, 'Reconstructing the 3D volume ...'
-                ! init volumes
-                call preprecvols
-                ! prep img, fpls, ctfparms
-                allocate(fpls(params%fromp:params%top),ctfparms(params%fromp:params%top))
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
-                do iptcl = params%fromp,params%top
-                    if( .not.ptcl_mask(iptcl) ) cycle
-                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
-                    call build%imgbatch(iptcl)%fft
-                    call fpls(iptcl)%new(build%imgbatch(iptcl))
-                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params%oritype, iptcl)
-                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
-                enddo
-                !$omp end parallel do
-                do iref = 1, params%nspace
-                    euls = build_glob%eulspace%get_euler(iref)
-                    do j = 1, params%reg_num
-                        pind_here = params%fromp + j - 1
-                        if( reg_obj%ref_ptcl_tab(pind_here, iref)%prob < TINY ) cycle
-                        iptcl = reg_obj%ref_ptcl_tab(pind_here, iref)%iptcl
-                        call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        if( orientation%isstatezero() ) cycle
-                        ! getting the particle orientation
-                        shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(pind_here,iref)%sh
-                        call orientation%set_shift(shvec)
-                        loc     = reg_obj%ref_ptcl_tab(pind_here, iref)%loc
-                        euls(3) = 360. - pftcc%get_rot(loc)
-                        call orientation%set_euler(euls)
-                        call orientation%set('w', reg_obj%ref_ptcl_tab(pind_here, iref)%prob)
-                        ! insert
-                        call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
-                    enddo
-                enddo
-                ! normalise structure factors
-                call norm_struct_facts( cline )
-                ! destruct
-                call killrecvols()
-                call orientation%kill
-            case('hard','unihard')
-                print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
-                ! init volumes
-                call preprecvols
-                ! prep img, fpls, ctfparms
-                allocate(fpls(params%fromp:params%top),ctfparms(params%fromp:params%top))
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
-                do iptcl = params%fromp,params%top
-                    if( .not.ptcl_mask(iptcl) ) cycle
-                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
-                    call build%imgbatch(iptcl)%fft
-                    call fpls(iptcl)%new(build%imgbatch(iptcl))
-                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params%oritype, iptcl)
-                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
-                enddo
-                !$omp end parallel do
-                do j = params%fromp,params%top
-                    iref  = best_ir(j)
-                    iptcl = best_ip(j)
-                    if( reg_obj%ref_ptcl_tab(iptcl, iref)%prob < TINY ) cycle
-                    euls = build_glob%eulspace%get_euler(iref)
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
-                    ! getting the particle orientation
-                    shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iptcl,iref)%sh
-                    call orientation%set_shift(shvec)
-                    loc     = reg_obj%ref_ptcl_tab(iptcl, iref)%loc
-                    euls(3) = 360. - pftcc%get_rot(loc)
-                    call orientation%set_euler(euls)
-                    call orientation%set('w', reg_obj%ref_ptcl_tab(iptcl, iref)%prob)
-                    ! insert
-                    call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
-                enddo
-                ! normalise structure factors
-                call norm_struct_facts( cline )
-                ! destruct
-                call killrecvols()
-                call orientation%kill
-        end select
+        print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
+        ! init volumes
+        call preprecvols
+        ! prep img, fpls, ctfparms
+        allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+        do iptcl = params_glob%fromp,params_glob%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+            call build%imgbatch(iptcl)%fft
+            call fpls(iptcl)%new(build%imgbatch(iptcl))
+            ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+            call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+        enddo
+        !$omp end parallel do
+        do iptcl = params_glob%fromp,params_glob%top
+            iref = best_ir(iptcl)
+            if( reg_obj%ref_ptcl_tab(iref, iptcl)%prob < TINY ) cycle
+            euls = build_glob%eulspace%get_euler(iref)
+            call build_glob%spproj_field%get_ori(iptcl, orientation)
+            if( orientation%isstatezero() ) cycle
+            ! getting the particle orientation
+            shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iref,iptcl)%sh
+            call orientation%set_shift(shvec)
+            loc     = reg_obj%ref_ptcl_tab(iref,iptcl)%loc
+            euls(3) = 360. - pftcc%get_rot(loc)
+            call orientation%set_euler(euls)
+            call orientation%set('w', reg_obj%ref_ptcl_tab(iref,iptcl)%prob)
+            ! insert
+            call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
+        enddo
+        ! normalise structure factors
+        call norm_struct_facts( cline )
+        ! destruct
+        call killrecvols()
+        call orientation%kill
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align
 
@@ -1168,7 +1105,7 @@ contains
         class(check_align_inpl_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60
-        integer,          allocatable :: pinds(:), best_ip(:), best_ir(:), best_irot(:)
+        integer,          allocatable :: pinds(:), best_ir(:), best_irot(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: sigma2_noise(:,:)
@@ -1312,118 +1249,50 @@ contains
         call pftcc%memoize_ptcls
         call reg_inpl%init_tab
         call reg_inpl%fill_tab(pinds)
-        print *, 'Assembling the class averages with'
-        select case(trim(params%reg_mode))
-            case('tab')
-                print *, 'soft-sorting the tab...'
-                call reg_inpl%sort_tab_no_norm
-                call reg_inpl%ref_reg_cc_tab
-            case('normtab')
-                print *, 'normalizing and soft-sorting...'
-                call reg_inpl%sort_tab
-                call reg_inpl%ref_reg_cc_tab
-            case('hard')
-                print *, 'cluster-hard-sorting the tab...'
-                allocate(best_ir(params%fromp:params%top),&
-                        &best_ip(params%fromp:params%top),&
-                        &best_irot(params%fromp:params%top))
-                call reg_inpl%cluster_sort_tab(best_ip, best_ir, best_irot)
-                call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
-            case('unihard')
-                print *, 'uniformly-hard-sorting the tab...'
-                allocate(best_ir(params%fromp:params%top),&
-                        &best_ip(params%fromp:params%top),&
-                        &best_irot(params%fromp:params%top))
-                call reg_inpl%uniform_sort_tab(best_ip, best_ir, best_irot)
-                call reg_inpl%uniform_cavgs(best_ip, best_ir, best_irot)
-        end select
+        print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
+        allocate(best_ir(params_glob%fromp:params_glob%top), best_irot(params_glob%fromp:params_glob%top))
+        call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
+        call reg_inpl%form_cavgs(best_ir, best_irot)
         ! descaling
-        if( params%l_reg_scale ) call pftcc%reg_descale
-        call reg_inpl%regularize_refs
-        select case(trim(params%reg_mode))
-            case('tab')
-            case('normtab')
-                print *, 'Reconstructing the 3D volume ...'
-                ! init volumes
-                call preprecvols
-                ! prep img, fpls, ctfparms
-                allocate(fpls(params%fromp:params%top),ctfparms(params%fromp:params%top))
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
-                do iptcl = params%fromp,params%top
-                    if( .not.ptcl_mask(iptcl) ) cycle
-                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
-                    call build%imgbatch(iptcl)%fft
-                    call fpls(iptcl)%new(build%imgbatch(iptcl))
-                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params%oritype, iptcl)
-                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
-                enddo
-                !$omp end parallel do
-                do irot = 1, reg_inpl%reg_nrots
-                    do iref = 1, params%nspace
-                        euls = build_glob%eulspace%get_euler(iref)
-                        do j = 1, params%reg_num
-                            pind_here = params%fromp + j - 1
-                            if( reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%prob < TINY ) cycle
-                            iptcl = reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%iptcl
-                            call build_glob%spproj_field%get_ori(iptcl, orientation)
-                            if( orientation%isstatezero() ) cycle
-                            ! getting the particle orientation
-                            shvec = orientation%get_2Dshift() + reg_inpl%ref_ptcl_tab(pind_here,iref,irot)%sh
-                            call orientation%set_shift(shvec)
-                            loc     = reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%loc
-                            euls(3) = 360. - pftcc%get_rot(loc)
-                            call orientation%set_euler(euls)
-                            call orientation%set('w', reg_inpl%ref_ptcl_tab(pind_here, iref, irot)%prob)
-                            ! insert
-                            call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
-                        enddo
-                    enddo
-                enddo
-                ! normalise structure factors
-                call norm_struct_facts( cline )
-                ! destruct
-                call killrecvols()
-                call orientation%kill
-            case('hard', 'unihard')
-                print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
-                ! init volumes
-                call preprecvols
-                ! prep img, fpls, ctfparms
-                allocate(fpls(params%fromp:params%top),ctfparms(params%fromp:params%top))
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
-                do iptcl = params%fromp,params%top
-                    if( .not.ptcl_mask(iptcl) ) cycle
-                    call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
-                    call build%imgbatch(iptcl)%fft
-                    call fpls(iptcl)%new(build%imgbatch(iptcl))
-                    ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params%oritype, iptcl)
-                    call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
-                enddo
-                !$omp end parallel do
-                do j = params%fromp,params%top
-                    iref  = best_ir(j)
-                    iptcl = best_ip(j)
-                    irot  = best_irot(j)
-                    if( reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%prob < TINY ) cycle
-                    euls = build_glob%eulspace%get_euler(iref)
-                    call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( orientation%isstatezero() ) cycle
-                    ! getting the particle orientation
-                    shvec = orientation%get_2Dshift() + reg_inpl%ref_ptcl_tab(iptcl,iref,irot)%sh
-                    call orientation%set_shift(shvec)
-                    loc     = reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%loc
-                    euls(3) = 360. - pftcc%get_rot(loc)
-                    call orientation%set_euler(euls)
-                    call orientation%set('w', reg_inpl%ref_ptcl_tab(iptcl, iref, irot)%prob)
-                    ! insert
-                    call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
-                enddo
-                ! normalise structure factors
-                call norm_struct_facts( cline )
-                ! destruct
-                call killrecvols()
-                call orientation%kill
-        end select
+        if( params_glob%l_reg_scale ) call pftcc%reg_descale
+        call reg_inpl%compute_regs
+        print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
+        ! init volumes
+        call preprecvols
+        ! prep img, fpls, ctfparms
+        allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+        do iptcl = params_glob%fromp,params_glob%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
+            call build%imgbatch(iptcl)%fft
+            call fpls(iptcl)%new(build%imgbatch(iptcl))
+            ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+            call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+        enddo
+        !$omp end parallel do
+        do iptcl = params_glob%fromp,params_glob%top
+            iref = best_ir(iptcl)
+            irot = best_irot(iptcl)
+            if( reg_inpl%ref_ptcl_tab(iref, irot, iptcl)%prob < TINY ) cycle
+            euls = build_glob%eulspace%get_euler(iref)
+            call build_glob%spproj_field%get_ori(iptcl, orientation)
+            if( orientation%isstatezero() ) cycle
+            ! getting the particle orientation
+            shvec = orientation%get_2Dshift() + reg_inpl%ref_ptcl_tab(iref,irot,iptcl)%sh
+            call orientation%set_shift(shvec)
+            loc     = reg_inpl%ref_ptcl_tab(iref, irot, iptcl)%loc
+            euls(3) = 360. - pftcc%get_rot(loc)
+            call orientation%set_euler(euls)
+            call orientation%set('w', reg_inpl%ref_ptcl_tab(iref, irot, iptcl)%prob)
+            ! insert
+            call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
+        enddo
+        ! normalise structure factors
+        call norm_struct_facts( cline )
+        ! destruct
+        call killrecvols()
+        call orientation%kill
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align_inpl
 

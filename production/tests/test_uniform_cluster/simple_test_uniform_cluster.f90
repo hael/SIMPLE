@@ -1,10 +1,9 @@
 program simple_test_uniform_cluster
 include 'simple_lib.f08'
 implicit none
-integer, parameter :: FROM_IP=2, TO_IP=8, FROM_IR=3, TO_IR=5, NP=TO_IP-FROM_IP+1, NR=TO_IR-FROM_IR+1
+integer, parameter :: FROM_IP=2, TO_IP=8, FROM_IR=1, TO_IR=3, NP=TO_IP-FROM_IP+1, NR=TO_IR-FROM_IR+1
 real    :: ori_tab(FROM_IP:TO_IP, FROM_IR:TO_IR), norm_tab(FROM_IP:TO_IP, FROM_IR:TO_IR), tmp_sum
-integer :: iptcl, iref, best_ip(FROM_IP:TO_IP), best_ir(FROM_IR:TO_IR), num, ind, from_ind, to_ind
-num = int(NP/NR)
+integer :: iptcl, best_ir(FROM_IP:TO_IP)
 call random_number(ori_tab)
 print *, 'Original table:'
 do iptcl = FROM_IP,TO_IP
@@ -19,23 +18,42 @@ print *, 'Normalized table:'
 do iptcl = FROM_IP,TO_IP
     print *, norm_tab(iptcl,:)
 enddo
-best_ir  = (/(iref,  iref =1,NR)/)
-best_ip  = (/(iptcl, iptcl=1,NP)/)
-call cluster_sort(NP, NR, norm_tab, NP, NR, best_ip, best_ir)
-best_ip  = best_ip + FROM_IP - 1
-best_ir  = best_ir + FROM_IR - 1
-print *, best_ir
-print *, best_ip
-print *, 'Sorted table:'
-do iptcl = FROM_IP,TO_IP
-    print *, norm_tab(best_ip(iptcl),best_ir)
+best_ir = 1
+call reg_uniform_sort(NR, best_ir)
+do iptcl = FROM_IP, TO_IP
+    print *, iptcl, ' -> ', best_ir(iptcl)
 enddo
-print *, 'total prob of best ', num, 'entries:'
-do iref = FROM_IR,TO_IR
-    ind      = TO_IR-iref
-    to_ind   = TO_IP-ind*num
-    from_ind = to_ind-num+1
-    print *, from_ind, to_ind
-    print *, sum(norm_tab(best_ip(from_ind:to_ind), best_ir(iref)))
-enddo
+contains
+    subroutine reg_uniform_sort( ncols, cur_ir )
+        integer, intent(in)    :: ncols
+        integer, intent(inout) :: cur_ir(FROM_IP:TO_IP)
+        logical :: mask_ir(ncols), mask_ip(FROM_IP:TO_IP)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols)
+        real    :: max_ir(ncols)
+        mask_ir = .false.
+        mask_ip = .true.
+        do
+            if( .not.(any(mask_ip)) ) return
+            if( .not.(any(mask_ir)) ) mask_ir = .true.
+            max_ir = 0.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+            do ir = 1, ncols
+                if( mask_ir(ir) )then
+                    do ip = FROM_IP, TO_IP
+                        if( mask_ip(ip) .and. norm_tab(ip, ir) > max_ir(ir) )then
+                            max_ir(ir) = norm_tab(ip, ir)
+                            max_ip(ir) = ip
+                        endif
+                    enddo
+                endif
+            enddo
+            !$omp end parallel do
+            max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+            max_ind_ip = max_ip(max_ind_ir)
+            cur_ir( max_ind_ip) = max_ind_ir
+            mask_ip(max_ind_ip) = .false.
+            mask_ir(max_ind_ir) = .false.
+            print *, max_ind_ip, ' ----> ', max_ind_ir
+        enddo
+    end subroutine reg_uniform_sort
 end program simple_test_uniform_cluster
