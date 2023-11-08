@@ -1685,6 +1685,7 @@ contains
         if (majvector(2) < 0.) then
             majvector = -1. * majvector
         end if
+        write(*, '(i4, 3f8.2)') cc, majvector(:3)
         self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))
         if (majvector(1) > 0.) then
             self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))

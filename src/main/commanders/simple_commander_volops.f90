@@ -644,6 +644,8 @@ contains
             smpd         = build%vol%get_smpd()
             params%msk   = round2even(scale * params%msk)
             params%width = scale * params%width
+        else
+            smpd         = build%vol%get_smpd()
         endif
         ! low-pass limit safety
         params%lp = max(2. * smpd, params%lp)

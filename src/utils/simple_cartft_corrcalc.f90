@@ -16,7 +16,6 @@ type :: cartft_corrcalc
     type(projector),               pointer     :: vol_even => null(), vol_odd => null() ! prepared e/o vols
     real,                          pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
     integer                                    :: nptcls     = 1         !< # particles in partition (logically indexded [fromp,top])
-    integer                                    :: filtsz     = 0         !< Nyqvist limit
     integer                                    :: pfromto(2) = 0         !< particle index range
     integer                                    :: ldim(3)    = 0         !< logical dimensions of original cartesian image
     integer                                    :: lims(2,2)  = 0         !< resolution mask limits
@@ -43,7 +42,6 @@ type :: cartft_corrcalc
     procedure          :: set_ptcl
     procedure          :: set_eo
     ! GETTERS
-    procedure          :: get_box
     procedure          :: exists
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
@@ -123,7 +121,6 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
-        self%filtsz       = fdim(params_glob%box) - 1
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
@@ -215,8 +212,6 @@ contains
             write(logfhandle,*) 'self%ldim: ', self%ldim
             THROW_HARD ('only even logical dims supported; new')
         endif
-        ! set constants
-        self%filtsz = fdim(params_glob%box) - 1
         self%nptcls = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
@@ -294,17 +289,17 @@ contains
         integer :: ldim(3), h, k, phys1, phys2
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         ldim = img%get_ldim()
-        if( .not. all(self%ldim .eq. ldim) )then
+        if( .not. all([params_glob%box_crop,params_glob%box_crop,1] .eq. ldim) )then
             THROW_HARD('inconsistent image dimensions, input vs class internal')
         endif
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 if( h .ge. 0 )then
                     phys1 = h + 1
-                    phys2 = k + 1 + merge(self%ldim(2), 0, k < 0)
+                    phys2 = k + 1 + merge(params_glob%box_crop, 0, k < 0)
                 else
                     phys1 = -h + 1
-                    phys2 = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+                    phys2 = -k + 1 + MERGE(params_glob%box_crop,0, -k < 0)
                 endif
                 self%particles(h,k,self%pinds(iptcl)) = img%get_cmat_at(phys1, phys2, 1)
             end do
@@ -319,12 +314,6 @@ contains
     end subroutine set_eo
 
     ! GETTERS
-
-    pure function get_box( self ) result( box )
-        class(cartft_corrcalc), intent(in) :: self
-        integer :: box
-        box = self%ldim(1)
-    end function get_box
 
     logical function exists( self )
         class(cartft_corrcalc), intent(in) :: self
