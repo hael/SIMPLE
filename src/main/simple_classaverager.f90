@@ -149,16 +149,18 @@ contains
     subroutine cavger_transf_oridat( spproj )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
-        type(ctfparams)   :: ctfvars(nthr_glob)
-        integer           :: i, icls, cnt, iptcl, ithr, stkind
+        class(oris), pointer :: spproj_field
+        type(ctfparams)      :: ctfvars(nthr_glob)
+        integer              :: i, icls, cnt, iptcl, ithr, stkind
+        call spproj%ptr2oritype(params_glob%oritype, spproj_field)
         ! build index map
         cnt = 0
         do iptcl=istart,iend
             cnt = cnt + 1
             ! exclusion
             precs(cnt)%pind = 0
-            if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-            if( spproj%os_ptcl2D%get(iptcl,'w') < SMALL ) cycle
+            if( spproj_field%get_state(iptcl) == 0 ) cycle
+            if( spproj_field%get(iptcl,'w') < SMALL ) cycle
             if( .not.pptcl_mask(iptcl)                 ) cycle
             precs(cnt)%pind = iptcl
         enddo
@@ -168,8 +170,8 @@ contains
             iptcl              = precs(cnt)%pind
             if( iptcl == 0 ) cycle
             ithr               = omp_get_thread_num() + 1
-            precs(cnt)%eo      = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
-            precs(cnt)%pw      = spproj%os_ptcl2D%get(iptcl,'w')
+            precs(cnt)%eo      = nint(spproj_field%get(iptcl,'eo'))
+            precs(cnt)%pw      = spproj_field%get(iptcl,'w')
             ctfvars(ithr)      = spproj%get_ctfparams('ptcl2D',iptcl)
             precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
             precs(cnt)%dfx     = ctfvars(ithr)%dfx
@@ -177,9 +179,9 @@ contains
             precs(cnt)%angast  = ctfvars(ithr)%angast
             precs(cnt)%phshift = 0.
             if( phaseplate ) precs(cnt)%phshift = ctfvars(ithr)%phshift
-            precs(cnt)%class   = spproj%os_ptcl2D%get_class(iptcl)
-            precs(cnt)%e3      = spproj%os_ptcl2D%e3get(iptcl)
-            precs(cnt)%shift   = spproj%os_ptcl2D%get_2Dshift(iptcl)
+            precs(cnt)%class   = spproj_field%get_class(iptcl)
+            precs(cnt)%e3      = spproj_field%e3get(iptcl)
+            precs(cnt)%shift   = spproj_field%get_2Dshift(iptcl)
             call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do

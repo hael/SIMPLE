@@ -93,7 +93,6 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         call cline%set('wiener', 'full')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
@@ -103,7 +102,15 @@ contains
         if( (cline%defined('ncls')).and. cline%defined('nspace') )then
             THROW_HARD('NCLS and NSPACE cannot be both defined!')
         endif
-        if( cline%defined('nspace') ) call cline%set('ncls', cline%get_rarg('nspace'))
+        if( cline%defined('nspace') )then
+            if( trim(cline%get_carg('oritype')).eq.'ptcl2D' )then
+                THROW_HARD('NSPACE & PTCL2D are incompatible!')
+            endif
+            call cline%set('oritype', 'ptcl3D')
+            call cline%set('ncls',    cline%get_rarg('nspace'))
+        else
+            call cline%set('oritype', 'ptcl2D')
+        endif
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -129,9 +136,8 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: ncls_here
-        logical :: l_shmem, l_3d
+        logical :: l_shmem
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        l_3d = cline%defined('nspace')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -147,13 +153,12 @@ contains
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
-        if( l_3d )then
+        if( trim(params%oritype).eq.'ptcl3D' )then
             ! 3D class averages
             call build%eulspace%new(params%nspace, is_ptcl=.false.)
             call build%pgrpsyms%build_refspiral(build%eulspace)
             call build%spproj%os_ptcl3D%set_projs(build%eulspace)
             call build%spproj%os_ptcl3D%proj2class
-            build%spproj%os_ptcl2D = build%spproj%os_ptcl3D
         else
             ! 2D
             ncls_here = build%spproj_field%get_n('class')
@@ -1364,7 +1369,7 @@ contains
         real, allocatable :: states(:)
         logical           :: l_stream
         integer           :: iterstr_start, iterstr_end, iter, io_stat
-        call cline%set('oritype', 'ptcl2D')
+        if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
@@ -1409,7 +1414,9 @@ contains
         call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
         states = build%spproj%os_cls2D%get_all('state')
         call build%spproj%os_cls3D%set_all('state',states)
-        call build%spproj%write_segment_inside('cls2D', params%projfile)
+        if( trim(params%oritype).eq.'ptcl2D' )then
+            call build%spproj%write_segment_inside('cls2D', params%projfile)
+        endif
         call build%spproj%write_segment_inside('cls3D', params%projfile)
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
