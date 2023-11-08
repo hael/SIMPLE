@@ -895,6 +895,7 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,&
                     &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
         use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
         use simple_regularizer,         only: regularizer
         use simple_image
@@ -1099,6 +1100,7 @@ contains
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,&
                     &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
         use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
         use simple_regularizer_inpl,    only: regularizer_inpl
         use simple_image
