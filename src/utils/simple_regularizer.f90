@@ -19,6 +19,7 @@ type reg_params
     integer :: iref             !< iref index
     integer :: loc              !< inpl index
     real    :: prob, sh(2), w   !< probability, shift, and weight
+    real    :: sum
 end type reg_params
 
 type :: regularizer
@@ -33,6 +34,7 @@ type :: regularizer
     real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
     integer,     allocatable :: ptcl_ref_map(:)         !< hard-alignment tab
     integer,     allocatable :: ref_neigh_map(:)        !< mapping ref to neighborhood
+    logical,     allocatable :: ref_neigh_tab(:,:)      !< athres-neighborhood map
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -42,6 +44,7 @@ type :: regularizer
     procedure          :: init_tab
     procedure          :: fill_tab_noshift
     procedure          :: partition_refs
+    procedure          :: make_neigh_tab
     procedure          :: map_ptcl_ref
     procedure          :: uniform_cluster_sort
     procedure          :: uniform_cluster_sort_neigh
@@ -71,13 +74,42 @@ contains
         ! allocation
         allocate(self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_grad(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
+                &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%ref_neigh_tab(self%nrefs,self%nrefs))
         self%regs       = 0.d0
         self%regs_grad  = 0.d0
         self%regs_denom = 0.d0
         self%pftcc      => pftcc
-        if( params_glob%l_reg_neigh ) call self%partition_refs
+        if( params_glob%l_reg_neigh )then
+            call self%partition_refs
+            call self%make_neigh_tab
+        endif
     end subroutine new
+
+    ! setting up ref neigh tab
+    subroutine make_neigh_tab( self, athres_in )
+        class(regularizer), target, intent(inout) :: self
+        real,             optional, intent(in)    :: athres_in
+        type(ori) :: o
+        real      :: athres
+        integer   :: iref, iref2
+        logical   :: lnns(self%nrefs)
+        self%ref_neigh_tab = .false.
+        athres             = params_glob%athres
+        if( present(athres_in) ) athres = athres_in
+        do iref = 1, self%nrefs
+            lnns = .false.
+            call build_glob%eulspace%get_ori(iref, o)
+            call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, athres, lnns)
+            do iref2 = 1, self%nrefs
+                if( iref2 /= iref .and. lnns(iref2) )then
+                    self%ref_neigh_tab(iref,  iref2) = .true.
+                    self%ref_neigh_tab(iref2, iref ) = .true.
+                endif
+            enddo
+            self%ref_neigh_tab(iref, iref) = .true.
+        enddo
+    end subroutine make_neigh_tab
 
     subroutine init_tab( self )
         class(regularizer), intent(inout) :: self
@@ -95,6 +127,7 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
                 self%ref_ptcl_tab(iref,iptcl)%w     = 0.
+                self%ref_ptcl_tab(iref,iptcl)%sum   = 0.
             enddo
         enddo
     end subroutine init_tab
@@ -102,14 +135,16 @@ contains
     subroutine fill_tab_noshift( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer  :: i, iref, iptcl
-        real     :: inpl_corrs(self%nrots)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
+        integer   :: i, iref, iptcl
+        real      :: inpl_corrs(self%nrots)
+        type(ori) :: o_prev
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs, o_prev) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
+                call build_glob%spproj_field%get_ori(iptcl, o_prev) ! previous ori
                 ! find best irot/shift for this pair of iref, iptcl
-                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                call self%pftcc%gencorrs( iref, iptcl, -o_prev%get_2Dshift(), inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
                 self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
@@ -148,11 +183,12 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         complex(sp),        pointer       :: shmat(:,:)
-        integer     :: iptcl, iref, ithr, loc, pind_here
+        integer     :: iptcl, iref, ithr, loc, pind_here, iref2
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         type(ori)   :: o_prev
+        real        :: grad_w
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         do iptcl = params_glob%fromp, params_glob%top
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
@@ -168,9 +204,19 @@ contains
                 call self%pftcc%gen_shmat(ithr, o_prev%get_2Dshift(), shmat)
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot *       self%ref_ptcl_tab(iref, iptcl)%prob
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2   *       self%ref_ptcl_tab(iref, iptcl)%prob
-                self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref)  + ptcl_ctf_rot * (1. - self%ref_ptcl_tab(iref, iptcl)%prob)
+                grad_w = 1./self%ref_ptcl_tab(iref, iptcl)%sum - self%ref_ptcl_tab(iref, iptcl)%w/self%ref_ptcl_tab(iref, iptcl)%sum**2
+                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
+                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref)  + ptcl_ctf_rot * grad_w
+                do iref2 = 1, self%nrefs
+                    if( iref2 /= iref )then
+                        loc = self%ref_ptcl_tab(iref2, iptcl)%loc
+                        loc = (self%nrots+1)-(loc-1)
+                        if( loc > self%nrots ) loc = loc - self%nrots
+                        call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                        self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref) - ptcl_ctf_rot * self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
+                    endif
+                enddo
             endif
         enddo
     end subroutine form_cavgs
@@ -226,9 +272,13 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
             if( sum_corr < TINY )then
-                self%ref_ptcl_corr(iptcl,:) = 0.
+                self%ref_ptcl_tab(:,iptcl)%sum = 1.
+                self%ref_ptcl_tab(:,iptcl)%w   = 0.
+                self%ref_ptcl_corr(iptcl,:)    = 0.
             else
-                self%ref_ptcl_corr(iptcl,:) = self%ref_ptcl_corr(iptcl,:) / sum_corr
+                self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
+                self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
+                self%ref_ptcl_corr(iptcl,:)    = self%ref_ptcl_corr(iptcl,:) / sum_corr
             endif
         enddo
         !$omp end parallel do
@@ -323,10 +373,9 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: ncols
         integer,            intent(inout) :: cur_ir(params_glob%fromp:params_glob%top)
-        type(ori) :: o
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols)
-        real      :: max_ir(ncols)
-        logical   :: mask_ir(ncols), lnns(ncols), mask_neigh(ncols), mask_ip(params_glob%fromp:params_glob%top)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols), iref
+        real    :: max_ir(ncols)
+        logical :: mask_ir(ncols), mask_neigh(ncols), mask_ip(params_glob%fromp:params_glob%top)
         mask_ip    = .true.
         mask_ir    = .false.
         mask_neigh = .false.
@@ -354,10 +403,9 @@ contains
             mask_ir(max_ind_ir) = .false.
             mask_neigh(max_ind_ir) = .false.
             ! flag all the neighbors of max_ind_ir
-            lnns = .false.
-            call build_glob%eulspace%get_ori(max_ind_ir, o)
-            call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
-            where( lnns ) mask_neigh = .false.
+            do iref = 1, self%nrefs
+                if( self%ref_neigh_tab(max_ind_ir, iref) ) mask_neigh(iref) = .false.
+            enddo
         enddo
     end subroutine uniform_cluster_sort_dyn
 
@@ -524,7 +572,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom,self%regs_grad)
+        deallocate(self%regs,self%regs_denom,self%regs_grad,self%ref_neigh_tab)
         if(allocated(self%ref_neigh_map)) deallocate(self%ref_neigh_map)
         if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill

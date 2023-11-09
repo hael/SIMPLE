@@ -195,6 +195,7 @@ contains
         if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             select case(trim(params_glob%reg_mode))
                 case('so2')
+                    params_glob%cc_objfun = OBJFUN_PROB
                     call reg_obj%reset_regs
                     call reg_obj%init_tab
                     ! Batch loop
@@ -231,6 +232,7 @@ contains
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
+                    params_glob%cc_objfun = OBJFUN_CC
                 case('so3')
                     ! using reg/inpl to do alignment for updating 3D volume
                     call reg_inpl%reset_regs
