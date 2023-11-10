@@ -355,7 +355,7 @@ contains
         character(len=XLONGSTRLEN) :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: icls, ncls_here
+        integer               :: icls, ncls_here, i
         call debug_print('in chunk%reject '//int2str(self%id))
         projfile = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
@@ -366,6 +366,15 @@ contains
         cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls_here), source=.true.)
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, cls_mask, ndev)
+        if( L_CLS_REJECT_DEV )then
+            do icls = 1,ncls_here
+                if( cls_mask(icls) )then
+                    if( self%spproj%os_cls2D%isthere(icls,'score') )then
+                        cls_mask(icls) = self%spproj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
+                    endif
+                endif
+            enddo
+        endif
         ncls_rejected = count(.not.cls_mask)
         if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls_here,nint(real(ncls_here)*FRAC_SKIP_REJECTION)) )then
             ! no or too many classes to reject
@@ -392,8 +401,14 @@ contains
             call self%spproj%write_segment_inside('cls2D',projfile)
             ! updates class averages
             call img%new([box,box,1],smpd_here)
+            i = 0
             do icls=1,ncls_here
                 if( cls_mask(icls) ) cycle
+                if( L_CLS_REJECT_DEV )then
+                    i = i+1
+                    call img%read(cavgs,icls)
+                    call img%write('cls_rejected_chunk_'//int2str_pad(self%id,3)//'.mrc',i)
+                endif
                 img = 0.
                 call img%write(cavgs,icls)
             enddo

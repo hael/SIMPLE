@@ -1767,6 +1767,7 @@ contains
         use simple_particle_extractor,  only: ptcl_extractor
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
+        logical, parameter :: L_DEV = .false.
         type(builder)                           :: build
         type(parameters)                        :: params
         type(ptcl_extractor)                    :: extractor
@@ -1781,13 +1782,13 @@ contains
         character(len=:),           allocatable :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         integer,                    allocatable :: ptcl_inds(:)
-        logical,                    allocatable :: oris_mask(:), mics_mask(:)
+        logical,                    allocatable :: oris_mask(:), mics_mask(:), icemask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         character(len=STDLEN)     :: ext
-        real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
+        real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog,score
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, box_first, i, iptcl_g
-        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
+        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract, j
         logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
@@ -2001,11 +2002,46 @@ contains
                     call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), build%imgbatch,&
                         &stk_min,stk_max,stk_mean,stk_sdev)
                 endif
-                ! write stack
-                call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
-                do i = 1,nptcls2extract
-                    call stkio_w%write(i, build%imgbatch(i))
-                enddo
+                if( L_DEV .and. (2.*params%smpd < ICE_BAND1+0.1) )then
+                    if(allocated(icemask)) deallocate(icemask)
+                    allocate(icemask(nptcls2extract),source=.true.)
+                    !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+                    !$omp private(i,score)
+                    do i = 1,nptcls2extract
+                        call build%imgbatch(i)%fft
+                        call build%imgbatch(i)%calc_ice_score(score)
+                        call build%imgbatch(i)%ifft
+                        icemask(i) = score < 4.
+                    enddo
+                    !$omp end parallel do
+                    if( count(icemask) /= nptcls2extract )then
+                        nptcls2extract = count(icemask)
+                        call build%spproj_field%set(imic, 'nptcls', real(nptcls2extract))
+                        if( nptcls2extract == 0 ) cycle
+                        ptcl_inds = pack(ptcl_inds,mask=icemask)
+                        ! write stack
+                        call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                        j = 0
+                        do i = 1,size(icemask)
+                            if( icemask(i) )then
+                                j = j+1
+                                call stkio_w%write(j, build%imgbatch(i))
+                            endif
+                        enddo
+                    else
+                        ! write stack
+                        call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                        do i = 1,nptcls2extract
+                            call stkio_w%write(i, build%imgbatch(i))
+                        enddo
+                    endif
+                else
+                    ! write stack
+                    call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
+                    do i = 1,nptcls2extract
+                        call stkio_w%write(i, build%imgbatch(i))
+                    enddo
+                endif
                 call stkio_w%close
                 ! update stack stats
                 call build%img%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])

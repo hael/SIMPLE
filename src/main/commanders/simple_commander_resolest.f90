@@ -532,7 +532,7 @@ contains
         real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd, sdev_noise
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end
         integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel, ini_pop, cavgs_ncls
-        integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel
+        integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel, fromc, toc
         logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_weighted_init, l_write
         call cline%set('oritype', 'ptcl2D')
         call cline%set('mkdir',   'yes')
@@ -548,7 +548,14 @@ contains
         !     call build%img%calc_line_score(ice_score)
         !     print *,icls, ice_score
         ! enddo
-        ncls       = build%spproj_field%get_n('class')
+        ncls = build%spproj_field%get_n('class')
+        if( cline%defined('class') )then
+            fromc = params%class
+            toc   = params%class
+        else
+            fromc = 1
+            toc   = ncls
+        endif
         states     = nint( build%spproj_field%get_all('state'))
         nptcls     = size(states)
         nptcls_sel = count(states==1)
@@ -611,7 +618,7 @@ contains
         enddo
         ! Class loop
         states = nint(build%spproj_field%get_all('state'))
-        do icls = 1,ncls
+        do icls = fromc,toc
             ! indices
             call build%spproj_field%get_pinds(icls, 'class', pinds)
             pop     = size(pinds)
@@ -640,6 +647,7 @@ contains
                 batch_start = batches(ibatch,1)
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
+                print *,'Reading batch ',ibatch
                 call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
                 cls2batch = (/(i,i=batch_start,batch_end)/)
                 ! flags bad ice
@@ -704,6 +712,7 @@ contains
                 if(iptcl == 0) cycle
                 call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
                 call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
+                call build%imgbatch(i)%ifft
                 call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true.)
                 call pftcc%set_eo(iptcl, (build%spproj_field%get_eo(iptcl)==0))
             enddo
@@ -1211,8 +1220,8 @@ contains
                 enddo
                 mean = sum(vals,mask=cls_mask) / real(n)
                 std  = sqrt(sum((vals-mean)**2,mask=cls_mask)/real(n))
-                print *, 'Brightness mean/std/threshold: ', mean, std, threshold
                 threshold = mean + NSIG * std
+                print *, 'Brightness mean/std/threshold: ', mean, std, threshold
                 do icls = 1,cavgs_ncls
                     if( .not.cls_mask(icls) ) cycle
                     if( abs(vals(icls)) > threshold ) print *,'Bright class to reject: ',icls, vals(icls)
