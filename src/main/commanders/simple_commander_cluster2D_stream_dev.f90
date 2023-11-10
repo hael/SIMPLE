@@ -69,7 +69,7 @@ character(len=LONGSTRLEN), allocatable :: imported_stks(:)
 character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
-integer                                :: nptcls_glob=0, nptcls_rejected_glob=0
+integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
 integer                                :: origproj_time, n_spprojs_glob = 0
 logical                                :: initiated       = .false.
 ! Global parameters to avoid conflict with preprocess_stream
@@ -113,7 +113,6 @@ contains
         logical,           intent(inout) :: do2D
         character(len=:), allocatable :: carg
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        real    :: rarg
         integer :: ichunk
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
@@ -131,6 +130,7 @@ contains
         max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
         nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start         ! # of particles in each chunk
         ncls_glob           = 0
+        ncls_rejected_glob  = 0
         prev_snapshot_cavgs = ''
         orig_projfile       = trim(params_glob%projfile)
         projfile4gui        = trim(projfilegui)
@@ -765,6 +765,14 @@ contains
         ! correlation & resolution
         ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,cls_mask,ndev_here)
+        if( L_CLS_REJECT_DEV )then
+            do icls = 1,ncls_glob
+                if( cls_mask(icls) ) cycle
+                if( pool_proj%os_cls2D%isthere(icls,'score') )then
+                    cls_mask(icls) = pool_proj%os_cls2D%get(icls,'score') > CLS_REJECT_THRESHOLD
+                endif
+            enddo
+        endif
         ncls2reject = count(cls_mask)
         if( ncls2reject > 1 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
@@ -788,9 +796,10 @@ contains
                 do icls=1,ncls_glob
                     if( cls_mask(icls) ) cycle
                     cnt = cnt+1
-                    if( debug_here )then
+                    ncls_rejected_glob = ncls_rejected_glob + 1
+                    if( debug_here .or. L_CLS_REJECT_DEV )then
                         call img%read(trim(POOL_DIR)//trim(refs_glob),icls)
-                        call img%write(trim(POOL_DIR)//'rejected_pool_'//int2str(pool_iter)//'.mrc',cnt)
+                        call img%write(trim(POOL_DIR)//'cls_rejected_pool.mrc',ncls_rejected_glob)
                     endif
                     img = 0.
                     call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
@@ -1009,6 +1018,8 @@ contains
         nstks_tot  = pool_proj%os_stk%get_noris()
         allocate(nptcls_per_stk(nstks_tot), min_update_cnts_per_stk(nstks_tot), source=0)
         nptcls_old = 0
+        !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
+        !$omp default(shared) reduction(+:nptcls_old)
         do istk = 1,nstks_tot
             fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
             top   = nint(pool_proj%os_stk%get(istk,'top'))
@@ -1023,6 +1034,7 @@ contains
                 nptcls_old = nptcls_old + nptcls_per_stk(istk)
             endif
         enddo
+        !$omp end parallel do
         nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
         ! update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
@@ -1576,7 +1588,7 @@ contains
         type(oris)                             :: os_mic
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:), tmp_fnames(:), pool_stacks(:)
         character(len=:),          allocatable :: one_projfile, one_projname, fname, stack_fname
-        character(len=:),          allocatable :: frcsfname, src, ext, orig_stack_fname
+        character(len=:),          allocatable :: frcsfname, src, orig_stack_fname
         integer,                   allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         logical,                   allocatable :: pool_stk_mask(:)
         integer :: ichunk, istk, imic, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top
@@ -1621,10 +1633,11 @@ contains
         orig_projfile = trim(params%projfile)
         call cline%set('mkdir','no')
         ! init
-        l_scaling         = params%autoscale .eq. 'yes'
-        max_ncls          = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
-        nptcls_per_chunk  = params%nptcls_per_cls*params%ncls_start         ! # of particles in each chunk
-        ncls_glob         = 0
+        l_scaling           = params%autoscale .eq. 'yes'
+        max_ncls            = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
+        nptcls_per_chunk    = params%nptcls_per_cls*params%ncls_start         ! # of particles in each chunk
+        ncls_glob           = 0
+        ncls_rejected_glob  = 0
         prev_snapshot_cavgs = ''
         ! scaling (fourier crooping)
         scale_factor     = 1.0

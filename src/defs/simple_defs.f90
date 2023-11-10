@@ -53,6 +53,7 @@ logical,          parameter   :: L_DEV_GLOB         = .false.  !< global develop
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
 integer,          parameter   :: AUTOMSK_FREQ       = 3        !< frequency of automasking
+logical,          parameter   :: L_CLS_REJECT_DEV   = .false.
 
 ! type for arrays of allocatable strings
 type str4arr
@@ -167,6 +168,7 @@ real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
 real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
+real, parameter    :: CLS_REJECT_THRESHOLD = 4.0
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2

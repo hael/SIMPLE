@@ -224,7 +224,7 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
-    procedure          :: calc_line_score
+    procedure          :: calc_ice_score
     procedure          :: gradient
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
@@ -4390,70 +4390,66 @@ contains
         call img_p%kill
     end subroutine calc_gradient
 
-    subroutine calc_line_score( self, score )
-        class(image), intent(inout) :: self
-        real,         intent(out)   :: score
-        real,    parameter   :: FREQ_LIM = 15.
-        real,    allocatable :: res(:), pspec(:), maxs(:)
-        integer, allocatable :: counts(:), hs(:), ks(:)
-        real    :: mag, sinsum, cossum, eps, ang
-        integer :: lims(3,2), box, filtsz, nks, h,k, sh, shlim
+    subroutine calc_ice_score( self, score )
+        class(image), intent(in)  :: self
+        real,         intent(out) :: score
+        real,   parameter :: START_FREQ = 10.
+        real,   parameter :: END_FREQ   = 6.
+        real, allocatable :: res(:), tmp(:)
+        real    :: powspec(fdim(self%ldim(1)) - 1)
+        real    :: g, gs, ge, mag, mag_max, band_max, band_avg, ice_avg
+        integer :: lims(3,2), ice_maxind, start_find, end_find
+        integer :: nbands, s, e, h, k, hmax, kmax, sh, cnt
         score = 0.
         if( self%smpd > (ICE_BAND1/2.) ) return
-        if( .not.self%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_frac')
-        box    = self%ldim(1)
-        filtsz = self%get_filtsz()
-        res    = get_resarr(box, self%smpd)
-        shlim  = filtsz
-        do k = 1,filtsz
-            if( res(k) < FREQ_LIM )then
-                shlim = k
-                exit
-            endif
-        enddo
-        lims   = self%loop_lims(2)
-        allocate(pspec(shlim),maxs(shlim),hs(shlim),ks(shlim),counts(shlim))
-        counts = 0
-        pspec  = 0.
-        maxs   = -1
-        hs     = -1
-        ks     = -1
-        do k=lims(2,1),lims(2,2)
-            do h=lims(1,1),lims(1,2)
+        if( .not.self%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_score')
+        lims = self%loop_lims(2)
+        res  = get_resarr(self%ldim(1), self%smpd)
+        call get_find_at_crit(size(res), res, ICE_BAND1,  ice_maxind)
+        call get_find_at_crit(size(res), res, START_FREQ, start_find)
+        call get_find_at_crit(size(res), res, END_FREQ,   end_find)
+        call self%power_spectrum(powspec)
+        nbands = end_find-start_find+1
+        tmp = powspec(start_find:end_find)
+        call hpsort(tmp)
+        e = nbands
+        s = nint(0.5 *real(nbands))
+        band_avg = sum(tmp(s:e)) / real(e-s+1)
+        ! location of maximum in ice band
+        mag_max = -1.
+        gs = real(max(            1,   ice_maxind-3)) / real(self%ldim(1))
+        ge = real(min(size(powspec)-1, ice_maxind+3)) / real(self%ldim(1))
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
                 sh = nint(hyp(h,k))
-                if( sh == 0 .or. sh > shlim ) cycle
-                mag = csq_fast(self%get_fcomp2D(h,k))
-                pspec(sh)  = pspec(sh)  + mag
-                counts(sh) = counts(sh) + 1
-                if( mag > maxs(sh) )then
-                    maxs(sh) = mag
-                    hs(sh)   = h
-                    ks(sh)   = k
+                g  = real(sh) / real(self%ldim(1))
+                if( g > gs .and. g < ge )then
+                    mag = csq_fast(self%get_fcomp2D(h,k))
+                    if( mag > mag_max )then
+                        hmax = h
+                        kmax = k
+                        mag_max = mag
+                    endif
                 endif
             end do
         end do
-        pspec  = pspec  - 2.*maxs
-        counts = counts - 2
-        where( counts > 0 ) pspec = pspec / real(counts)
-        maxs = maxs / pspec
-        nks    = 0
-        sinsum = 0.
-        cossum = 0.
-        do sh = 2,shlim
-            if( res(sh) < FREQ_LIM ) cycle
-            if( (maxs(sh) > 9.) )then
-                nks    = nks + 1
-                ang    = atan2(real(ks(sh)), real(hs(sh)))
-                sinsum = sinsum + sin(ang)
-                cossum = cossum + cos(ang)
-            endif
+        ! ice peak
+        ice_avg = 0.
+        cnt     = 0
+        do k = kmax-1,kmax+1
+            do h = hmax-1,hmax+1
+                sh = nint(hyp(h,k))
+                g  = real(sh) / real(self%ldim(1))
+                if( g < 0.5 )then
+                    ice_avg = ice_avg + csq_fast(self%get_fcomp2D(h,k))
+                    cnt     = cnt+1
+                endif
+            enddo
         enddo
-        if( nks < ceiling(real(shlim)/3.) ) return
-        sinsum = sinsum / real(nks)
-        cossum = cossum / real(nks)
-        eps    = sqrt(1. - (sinsum**2+cossum**2))
-        score = 1. - asin(eps) * (1. + eps**3*(2./sqrt(3.)-1)) / (PI/sqrt(3.))
-    end subroutine calc_line_score
+        ice_avg = ice_avg / real(cnt)
+        score   = ice_avg / (band_avg + TINY)
+        ! print *,band_avg,ice_avg,hmax,kmax
+    end subroutine calc_ice_score
 
     ! This function returns the derivates row, column, and z as outputs,
     ! together with the optional gradient matrix/volume.
