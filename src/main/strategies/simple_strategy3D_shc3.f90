@@ -36,7 +36,7 @@ contains
     subroutine srch_shc3( self, ithr )
         class(strategy3D_shc3), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, isample, iloc, loc
+        integer :: iref, isample, iso3, loc
         real    :: inpl_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
@@ -47,22 +47,21 @@ contains
             ! initialize, ctd
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
-            do isample=1,self%s%nrefs
-                iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
+            do isample=1,self%s%nrefs * pftcc_glob%nrots
+                iso3 = s3D%so3_order(self%s%ithr,isample)  ! set the stochastic reference index
+                iref = ceiling(real(iso3) / real(pftcc_glob%nrots))
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    do iloc = 1, pftcc_glob%nrots
-                        loc = s3D%inpl_order(self%s%ithr,iloc)
-                        call self%s%store_solution(iref, loc, inpl_corrs(loc))
-                        ! update nbetter to keep track of how many improving solutions we have identified
-                        if( inpl_corrs(loc) > self%s%prev_corr )then
-                            self%s%nbetter = self%s%nbetter + 1
-                            exit
-                        endif
-                    enddo
+                    loc  = mod(iso3, self%s%nrefs) + 1
+                    call self%s%store_solution(iref, loc, inpl_corrs(loc))
+                    ! update nbetter to keep track of how many improving solutions we have identified
+                    if( inpl_corrs(loc) > self%s%prev_corr )then
+                        self%s%nbetter = self%s%nbetter + 1
+                        exit
+                    endif
                     ! keep track of how many references we are evaluating
-                    self%s%nrefs_eval = self%s%nrefs_eval + 1
+                    self%s%nrefs_eval = self%s%nrefs
                 end if
                 ! exit condition
                 if( self%s%nbetter > 0 ) exit
