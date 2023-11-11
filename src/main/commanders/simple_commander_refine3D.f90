@@ -1042,6 +1042,7 @@ contains
         call reg_obj%reg_uniform_cluster(best_ir)
         call reg_obj%form_cavgs(best_ir)
         call reg_obj%regularize_refs
+        call reg_obj%map_ptcl_ref(best_ir)
         print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
         ! init volumes
         call preprecvols
@@ -1234,6 +1235,7 @@ contains
         call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
         call reg_inpl%form_cavgs(best_ir, best_irot)
         call reg_inpl%compute_regs
+        call reg_inpl%map_ptcl_ref(best_ir, best_irot)
         print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
         ! init volumes
         call preprecvols
