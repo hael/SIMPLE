@@ -265,21 +265,28 @@ contains
     subroutine reg_uniform_cluster( self, out_ir )
         class(regularizer), intent(inout) :: self
         integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
-        integer :: iref, iptcl
+        integer :: iref, iptcl, jref
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iptcl,iref,jref,sum_corr)
         do iptcl = params_glob%fromp, params_glob%top
-            sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
-            if( sum_corr < TINY )then
-                self%ref_ptcl_tab(:,iptcl)%sum = 1.
-                self%ref_ptcl_tab(:,iptcl)%w   = 0.
-                self%ref_ptcl_corr(iptcl,:)    = 0.
-            else
-                self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
-                self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
-                self%ref_ptcl_corr(iptcl,:)    = self%ref_ptcl_corr(iptcl,:) / sum_corr
-            endif
+            do iref = 1, self%nrefs
+                sum_corr = 0.
+                do jref = 1, self%nrefs
+                    if( self%ref_neigh_tab(iref, jref) )then
+                        sum_corr = sum_corr + self%ref_ptcl_corr(iptcl, jref)
+                    endif
+                enddo
+                if( sum_corr < TINY )then
+                    self%ref_ptcl_tab(iref,iptcl)%sum = 1.
+                    self%ref_ptcl_tab(iref,iptcl)%w   = 0.
+                    self%ref_ptcl_corr(iptcl,iref)    = 0.
+                else
+                    self%ref_ptcl_tab(iref,iptcl)%sum = sum_corr
+                    self%ref_ptcl_tab(iref,iptcl)%w   = self%ref_ptcl_corr(iptcl,iref)
+                    self%ref_ptcl_corr(iptcl,iref)    = self%ref_ptcl_corr(iptcl,iref) / sum_corr
+                endif
+            enddo
         enddo
         !$omp end parallel do
         self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
@@ -408,7 +415,6 @@ contains
             enddo
         enddo
     end subroutine uniform_cluster_sort_dyn
-
 
     subroutine regularize_refs( self )
         use simple_image
