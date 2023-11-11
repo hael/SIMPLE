@@ -268,25 +268,27 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
         integer :: iref, iptcl, jref
-        real    :: sum_corr
+        real    :: sum_corr(self%nrefs)
         ! normalize so prob of each ptcl is between [0,1] for all refs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iptcl,iref,jref,sum_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,iref,jref)
         do iptcl = params_glob%fromp, params_glob%top
             do iref = 1, self%nrefs
-                sum_corr = 0.
+                sum_corr(iref) = 0.
                 do jref = 1, self%nrefs
                     if( self%ref_neigh_tab(iref, jref) )then
-                        sum_corr = sum_corr + self%ref_ptcl_corr(iptcl, jref)
+                        sum_corr(iref) = sum_corr(iref) + self%ref_ptcl_corr(iptcl, jref)
                     endif
                 enddo
-                if( sum_corr < TINY )then
+            enddo
+            do iref = 1, self%nrefs
+                if( sum_corr(iref) < TINY )then
                     self%ref_ptcl_tab(iref,iptcl)%sum = 1.
                     self%ref_ptcl_tab(iref,iptcl)%w   = 0.
                     self%ref_ptcl_corr(iptcl,iref)    = 0.
                 else
-                    self%ref_ptcl_tab(iref,iptcl)%sum = sum_corr
+                    self%ref_ptcl_tab(iref,iptcl)%sum = sum_corr(iref)
                     self%ref_ptcl_tab(iref,iptcl)%w   = self%ref_ptcl_corr(iptcl,iref)
-                    self%ref_ptcl_corr(iptcl,iref)    = self%ref_ptcl_corr(iptcl,iref) / sum_corr
+                    self%ref_ptcl_corr(iptcl,iref)    = self%ref_ptcl_corr(iptcl,iref) / sum_corr(iref)
                 endif
             enddo
         enddo
