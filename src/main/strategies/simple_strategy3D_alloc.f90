@@ -86,7 +86,7 @@ contains
                 &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%so3_order(nthr_glob,pftcc_glob%nrots*nrefs))
                 do ithr=1,nthr_glob
                     s3D%rts(ithr)      = ran_tabu(nrefs)
-                    s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%nrots)
+                    s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%nrots * nrefs)
                     s3D%rts_sub(ithr)  = ran_tabu(nrefs_sub)
                 end do
                 srch_order_allocated = .true.
