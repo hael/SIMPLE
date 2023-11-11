@@ -83,6 +83,8 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%partition_refs
             call self%make_neigh_tab
+        else
+            self%ref_neigh_tab = .true.
         endif
     end subroutine new
 
@@ -453,7 +455,7 @@ contains
         if( params_glob%l_reg_anneal )then
             eps = real(params_glob%which_iter) / real(params_glob%reg_iters)
             eps = min(1., eps)
-            if( params_glob%l_reg_grad ) self%regs = eps * self%regs + (1. - eps) * real(self%regs_grad)
+            if( params_glob%l_reg_grad ) self%regs = eps * self%regs + (1. - eps) * self%regs_grad
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
@@ -461,7 +463,7 @@ contains
             enddo
             !$omp end parallel do
         else
-            if( params_glob%l_reg_grad ) self%regs = self%regs + real(self%regs_grad)
+            if( params_glob%l_reg_grad ) self%regs = self%regs + self%regs_grad
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
