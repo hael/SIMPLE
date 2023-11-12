@@ -47,6 +47,8 @@ type :: regularizer
     procedure          :: make_neigh_tab
     procedure          :: map_ptcl_ref
     procedure          :: uniform_cluster_sort
+    procedure          :: neigh_cluster_sort
+    procedure          :: find_closest_iref
     procedure          :: uniform_cluster_sort_neigh
     procedure          :: uniform_cluster_sort_dyn
     procedure          :: reg_uniform_cluster
@@ -268,27 +270,27 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(inout) :: out_ir(params_glob%fromp:params_glob%top)
         integer :: iref, iptcl, jref
-        real    :: sum_corr(self%nrefs)
+        real    :: sum_corr(params_glob%fromp:params_glob%top,self%nrefs)
         ! normalize so prob of each ptcl is between [0,1] for all refs
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,iref,jref)
         do iptcl = params_glob%fromp, params_glob%top
             do iref = 1, self%nrefs
-                sum_corr(iref) = 0.
+                sum_corr(iptcl,iref) = 0.
                 do jref = 1, self%nrefs
                     if( self%ref_neigh_tab(iref, jref) )then
-                        sum_corr(iref) = sum_corr(iref) + self%ref_ptcl_corr(iptcl, jref)
+                        sum_corr(iptcl,iref) = sum_corr(iptcl,iref) + self%ref_ptcl_corr(iptcl, jref)
                     endif
                 enddo
             enddo
             do iref = 1, self%nrefs
-                if( sum_corr(iref) < TINY )then
+                if( sum_corr(iptcl,iref) < TINY )then
                     self%ref_ptcl_tab(iref,iptcl)%sum = 1.
                     self%ref_ptcl_tab(iref,iptcl)%w   = 0.
                     self%ref_ptcl_corr(iptcl,iref)    = 0.
                 else
-                    self%ref_ptcl_tab(iref,iptcl)%sum = sum_corr(iref)
+                    self%ref_ptcl_tab(iref,iptcl)%sum = sum_corr(iptcl,iref)
                     self%ref_ptcl_tab(iref,iptcl)%w   = self%ref_ptcl_corr(iptcl,iref)
-                    self%ref_ptcl_corr(iptcl,iref)    = self%ref_ptcl_corr(iptcl,iref) / sum_corr(iref)
+                    self%ref_ptcl_corr(iptcl,iref)    = self%ref_ptcl_corr(iptcl,iref) / sum_corr(iptcl,iref)
                 endif
             enddo
         enddo
@@ -306,7 +308,7 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn(self%nrefs, out_ir)
         else
-            call self%uniform_cluster_sort(self%nrefs, out_ir)
+            call self%neigh_cluster_sort(self%nrefs, out_ir)
         endif
     end subroutine reg_uniform_cluster
 
@@ -342,6 +344,71 @@ contains
             mask_ir(max_ind_ir) = .false.
         enddo
     end subroutine uniform_cluster_sort
+
+    subroutine neigh_cluster_sort( self, ncols, cur_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: ncols
+        integer,            intent(inout) :: cur_ir(params_glob%fromp:params_glob%top)
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols), next_ir
+        real      :: max_ir(ncols)
+        logical   :: mask_ir(ncols), mask_ip(params_glob%fromp:params_glob%top)
+        mask_ir = .false.
+        mask_ip = .true.
+        do
+            if( .not.(any(mask_ip)) ) return
+            if( .not.(any(mask_ir)) ) mask_ir = .true.
+            if( all(mask_ir) )then
+                max_ir = -1.
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+                do ir = 1, ncols
+                    if( mask_ir(ir) )then
+                        do ip = params_glob%fromp, params_glob%top
+                            if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
+                                max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
+                                max_ip(ir) = ip
+                            endif
+                        enddo
+                    endif
+                enddo
+                !$omp end parallel do
+                max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+                max_ind_ip = max_ip(max_ind_ir)
+                cur_ir( max_ind_ip) = max_ind_ir
+                mask_ip(max_ind_ip) = .false.
+                mask_ir(max_ind_ir) = .false.
+                next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
+            else
+                max_ir(next_ir) = -1
+                do ip = params_glob%fromp, params_glob%top
+                    if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
+                        max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
+                        max_ind_ip = ip
+                    endif
+                enddo
+                cur_ir( max_ind_ip) = next_ir
+                mask_ip(max_ind_ip) = .false.
+                mask_ir(next_ir)    = .false.
+                next_ir = self%find_closest_iref(next_ir, mask_ir)
+            endif
+        enddo
+    end subroutine neigh_cluster_sort
+
+    function find_closest_iref( self, iref, mask_ir ) result( closest )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: iref
+        logical,            intent(in)    :: mask_ir(self%nrefs)
+        real    :: dists(self%nrefs)
+        integer :: closest, i
+        type(ori) :: oi, oiref
+        call build_glob%eulspace%get_ori(iref, oiref)
+        do i = 1, self%nrefs
+            if( i /= iref .and. mask_ir(i) )then
+                call build_glob%eulspace%get_ori(i, oi)
+                dists(i) = oi.euldist.oiref
+            endif
+        end do
+        closest = minloc( dists, dim=1 )
+    end function find_closest_iref
 
     subroutine uniform_cluster_sort_neigh( self, ncols, cur_ir )
         class(regularizer), intent(inout) :: self
