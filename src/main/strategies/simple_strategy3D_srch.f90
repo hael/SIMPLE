@@ -139,8 +139,7 @@ contains
         ! search order
         ! -- > full space
         call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
-        call s3D%rts_inpl(self%ithr)%ne_ran_iarr(s3D%so3_order( self%ithr,:))
-        call put_last(self%prev_ref*pftcc_glob%nrots + self%prev_roind, s3D%so3_order(self%ithr,:))
+        call s3D%rts_inpl(self%ithr)%ne_ran_iarr(s3D%inpl_order(self%ithr,:))
         call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
         ! --> subspace
         if( self%l_neigh )then
