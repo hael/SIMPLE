@@ -352,44 +352,41 @@ contains
         integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols), next_ir
         real      :: max_ir(ncols)
         logical   :: mask_ir(ncols), mask_ip(params_glob%fromp:params_glob%top)
-        mask_ir = .false.
+        mask_ir = .true.
         mask_ip = .true.
+        max_ir  = -1.
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+        do ir = 1, ncols
+            if( mask_ir(ir) )then
+                do ip = params_glob%fromp, params_glob%top
+                    if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
+                        max_ip(ir) = ip
+                    endif
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+        max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+        max_ind_ip = max_ip(max_ind_ir)
+        cur_ir( max_ind_ip) = max_ind_ir
+        mask_ip(max_ind_ip) = .false.
+        mask_ir(max_ind_ir) = .false.
+        next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
         do
             if( .not.(any(mask_ip)) ) return
             if( .not.(any(mask_ir)) ) mask_ir = .true.
-            if( all(mask_ir) )then
-                max_ir = -1.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
-                do ir = 1, ncols
-                    if( mask_ir(ir) )then
-                        do ip = params_glob%fromp, params_glob%top
-                            if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
-                                max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
-                                max_ip(ir) = ip
-                            endif
-                        enddo
-                    endif
-                enddo
-                !$omp end parallel do
-                max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
-                max_ind_ip = max_ip(max_ind_ir)
-                cur_ir( max_ind_ip) = max_ind_ir
-                mask_ip(max_ind_ip) = .false.
-                mask_ir(max_ind_ir) = .false.
-                next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
-            else
-                max_ir(next_ir) = -1
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
-                        max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
-                        max_ind_ip = ip
-                    endif
-                enddo
-                cur_ir( max_ind_ip) = next_ir
-                mask_ip(max_ind_ip) = .false.
-                mask_ir(next_ir)    = .false.
-                next_ir = self%find_closest_iref(next_ir, mask_ir)
-            endif
+            max_ir(next_ir) = -1
+            do ip = params_glob%fromp, params_glob%top
+                if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
+                    max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
+                    max_ind_ip = ip
+                endif
+            enddo
+            cur_ir( max_ind_ip) = next_ir
+            mask_ip(max_ind_ip) = .false.
+            mask_ir(next_ir)    = .false.
+            next_ir = self%find_closest_iref(next_ir, mask_ir)
         enddo
     end subroutine neigh_cluster_sort
 
@@ -401,6 +398,7 @@ contains
         integer :: closest, i
         type(ori) :: oi, oiref
         call build_glob%eulspace%get_ori(iref, oiref)
+        dists = huge(dists(1))
         do i = 1, self%nrefs
             if( i /= iref .and. mask_ir(i) )then
                 call build_glob%eulspace%get_ori(i, oi)
