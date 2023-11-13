@@ -56,10 +56,7 @@ contains
                     loc  = mod(iso3, self%s%nrefs) + 1
                     call self%s%store_solution(iref, loc, inpl_corrs(loc))
                     ! update nbetter to keep track of how many improving solutions we have identified
-                    if( inpl_corrs(loc) > self%s%prev_corr )then
-                        self%s%nbetter = self%s%nbetter + 1
-                        exit
-                    endif
+                    if( inpl_corrs(loc) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                     ! keep track of how many references we are evaluating
                     self%s%nrefs_eval = self%s%nrefs
                 end if
