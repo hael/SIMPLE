@@ -443,11 +443,12 @@ contains
 
     subroutine regularize_refs( self )
         use simple_image
+        use simple_opt_filter, only: butterworth_filter
         class(regularizer), intent(inout) :: self
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box
-        real    :: eps
+        integer :: iref, k, box, find
+        real    :: eps, filt(self%kfromto(1):self%kfromto(2))
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
@@ -475,10 +476,23 @@ contains
                 call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
             enddo
         endif
+        if( params_glob%l_reg_anneal ) eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
+        if( params_glob%l_reg_grad )then
+            if( params_glob%l_reg_anneal )then
+                self%regs = eps * self%regs + (1. - eps) * self%regs_grad
+            else
+                self%regs = self%regs + self%regs_grad
+            endif
+        endif
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%regs(:,k,:) = filt(k) * self%regs(:,k,:)
+        enddo
+        !$omp end parallel do
         if( params_glob%l_reg_anneal )then
-            eps = real(params_glob%which_iter) / real(params_glob%reg_iters)
-            eps = min(1., eps)
-            if( params_glob%l_reg_grad ) self%regs = eps * self%regs + (1. - eps) * real(self%regs_grad)
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
@@ -486,7 +500,6 @@ contains
             enddo
             !$omp end parallel do
         else
-            if( params_glob%l_reg_grad ) self%regs = self%regs + real(self%regs_grad)
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
