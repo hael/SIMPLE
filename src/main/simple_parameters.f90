@@ -379,7 +379,7 @@ type :: parameters
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
-    real    :: ndev2D=1.5          !< # deviations for 2D class selection/rejection
+    real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}

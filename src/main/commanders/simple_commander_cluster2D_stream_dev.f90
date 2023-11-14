@@ -767,28 +767,34 @@ contains
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,cls_mask,ndev_here)
         if( L_CLS_REJECT_DEV )then
             do icls = 1,ncls_glob
-                if( cls_mask(icls) ) cycle
-                if( pool_proj%os_cls2D%isthere(icls,'score') )then
-                    cls_mask(icls) = pool_proj%os_cls2D%get(icls,'score') > CLS_REJECT_THRESHOLD
+                if( cls_mask(icls) )then
+                    if( pool_proj%os_cls2D%isthere(icls,'score') )then
+                        cls_mask(icls) = pool_proj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
+                    endif
                 endif
             enddo
         endif
-        ncls2reject = count(cls_mask)
-        if( ncls2reject > 1 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
+        ncls2reject = count(.not.cls_mask)
+        if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
-            do iptcl=1,pool_proj%os_ptcl2D%get_noris()
+            !$omp parallel do private(iptcl,icls) reduction(+:ncls_rejected) proc_bind(close)
+            do iptcl = 1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                 icls = pool_proj%os_ptcl2D%get_class(iptcl)
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
                 call pool_proj%os_ptcl2D%set_state(iptcl,0)
             enddo
+            !$omp end parallel do
             if( nptcls_rejected > 0 )then
                 do icls=1,ncls_glob
                     if( .not.cls_mask(icls) )then
                         if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 ) ncls_rejected = ncls_rejected+1
-                        call pool_proj%os_cls2D%set(icls,'pop',0.)
-                        call pool_proj%os_cls2D%set(icls,'corr',-1.)
+                        call pool_proj%os_cls2D%set(icls, 'pop',         0.)
+                        call pool_proj%os_cls2D%set(icls, 'corr',       -1.)
+                        call pool_proj%os_cls2D%set_state(icls,          0 )
+                        call pool_proj%os_cls2D%set(icls,'prev_pop_even',0.)
+                        call pool_proj%os_cls2D%set(icls,'prev_pop_odd', 0.)
                     endif
                 enddo
                 cnt = 0
@@ -857,7 +863,8 @@ contains
         do icls = 1,ncls_glob
             if( .not.cls_mask(icls) ) cycle
             nptcls_rejected = 0
-            do iptcl=1,pool_proj%os_ptcl2D%get_noris()
+            !$omp parallel do private(iptcl,jcls) reduction(+:nptcls_rejected) proc_bind(close)
+            do iptcl = 1,pool_proj%os_ptcl2D%get_noris()
                 if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                 jcls = pool_proj%os_ptcl2D%get_class(iptcl)
                 if( jcls == icls )then
@@ -865,11 +872,14 @@ contains
                     nptcls_rejected = nptcls_rejected + 1
                 endif
             enddo
+            !$omp end parallel do
             if( nptcls_rejected > 0 )then
                 ncls_rejected = ncls_rejected + 1
                 call pool_proj%os_cls2D%set_state(icls,0)
                 call pool_proj%os_cls2D%set(icls,'pop',0.)
                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
+                call pool_proj%os_cls2D%set(icls,'prev_pop_even',0.)
+                call pool_proj%os_cls2D%set(icls,'prev_pop_odd', 0.)
                 call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
                 if( l_wfilt )then
                     call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), icls)
