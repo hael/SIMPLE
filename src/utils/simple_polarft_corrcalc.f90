@@ -1520,7 +1520,7 @@ contains
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             self%heap_vars(ithr)%kcorrs(1:self%nrots) = self%heap_vars(ithr)%kcorrs(1:self%nrots) + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
         end do
-        corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots))
+        corrs = real(self%heap_vars(ithr)%kcorrs(1:self%nrots)) / real(2*self%nrots,dp)
     end subroutine gencorrs_prob
 
     subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, corrs)
@@ -1551,7 +1551,7 @@ contains
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
         end do
-        corrs = real(self%heap_vars(ithr)%kcorrs)
+        corrs = real(self%heap_vars(ithr)%kcorrs) / real(2*self%nrots,dp)
     end subroutine gencorrs_shifted_prob
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot, pfts_refs)
