@@ -209,7 +209,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: DoG2D
+    procedure          :: DoG2D, Gau2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
@@ -3966,6 +3966,31 @@ contains
         enddo
         !$omp end parallel do
     end subroutine DoG2D
+
+    subroutine Gau2D( self, sig)
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: sig
+        real, parameter :: A = sqrt(TWOPI)
+        real    :: ghsq, gk, gsq, B, gau
+        integer :: phys(2), lims(3,2), h, k
+        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
+        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
+        B = 2. * sig**2
+        lims = self%fit%loop_lims(2)
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,ghsq,k,gk,gsq,phys,gau)
+        do h = lims(1,1),lims(1,2)
+            ghsq = (real(h) / real(self%ldim(1)))**2
+            do k = lims(2,1),lims(2,2)
+                gk   = real(k) / real(self%ldim(2))
+                gsq  = ghsq + gk*gk
+                gau  = exp(-gsq/B) / sig
+                phys = self%comp_addr_phys(h,k)
+                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * gau/A
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine Gau2D
 
     ! CALCULATORS
 
