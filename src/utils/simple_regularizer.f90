@@ -53,6 +53,7 @@ type :: regularizer
     procedure          :: reg_uniform_cluster
     procedure          :: prev_cavgs
     procedure          :: form_cavgs
+    procedure          :: compute_grad
     procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
@@ -184,7 +185,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         complex(sp),        pointer       :: shmat(:,:)
-        integer     :: iptcl, iref, ithr, loc, pind_here, iref2
+        integer     :: iptcl, iref, ithr, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -209,18 +210,41 @@ contains
                 self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
                 self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
                 self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref)  + ptcl_ctf_rot * grad_w
-                do iref2 = 1, self%nrefs
-                    if( iref2 /= iref )then
-                        loc = self%ref_ptcl_tab(iref2, iptcl)%loc
-                        loc = (self%nrots+1)-(loc-1)
-                        if( loc > self%nrots ) loc = loc - self%nrots
-                        call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                        self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref) - ptcl_ctf_rot * self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
-                    endif
-                enddo
             endif
         enddo
     end subroutine form_cavgs
+
+    subroutine compute_grad( self, best_ir )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
+        complex(sp),        pointer       :: shmat(:,:)
+        integer     :: iptcl, iref, ithr, loc, pind_here, iref2
+        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        type(ori)   :: o_prev
+        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
+        do iref = 1, self%nrefs
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,loc,ithr,shmat,pind_here,iref2,ptcl_ctf_rot,o_prev)
+            do iptcl = params_glob%fromp, params_glob%top
+                if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                    iref2 = best_ir(iptcl)
+                    if( iref2 /= iref )then
+                        ithr      = omp_get_thread_num() + 1
+                        pind_here = self%pftcc%pinds(iptcl)
+                        loc = self%ref_ptcl_tab(iref2, iptcl)%loc
+                        loc = (self%nrots+1)-(loc-1)
+                        if( loc > self%nrots ) loc = loc - self%nrots
+                        shmat => self%pftcc%heap_vars(ithr)%shmat
+                        call build_glob%spproj_field%get_ori(iptcl, o_prev)           ! previous ori
+                        call self%pftcc%gen_shmat(ithr, o_prev%get_2Dshift(), shmat)
+                        call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                        self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref) - ptcl_ctf_rot * self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
+                    endif
+                endif
+            enddo
+            !$omp end parallel do
+        enddo
+    end subroutine compute_grad
 
     subroutine prev_cavgs( self )
         class(regularizer), intent(inout) :: self
@@ -304,7 +328,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: ncols
         integer,            intent(inout) :: cur_ir(params_glob%fromp:params_glob%top)
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols), next_ir
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(ncols), next_ir, back_ir
         real      :: max_ir(ncols)
         logical   :: mask_ir(ncols), mask_ip(params_glob%fromp:params_glob%top)
         mask_ir = .true.
@@ -327,10 +351,14 @@ contains
         cur_ir( max_ind_ip) = max_ind_ir
         mask_ip(max_ind_ip) = .false.
         mask_ir(max_ind_ir) = .false.
+        back_ir = max_ind_ir
         next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
         do
             if( .not.(any(mask_ip)) ) return
-            if( .not.(any(mask_ir)) ) mask_ir = .true.
+            if( .not.(any(mask_ir)) )then
+                mask_ir = .true.
+                next_ir = back_ir
+            endif
             max_ir(next_ir) = -1
             do ip = params_glob%fromp, params_glob%top
                 if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
@@ -454,7 +482,7 @@ contains
             where( abs(self%regs_denom(:,k,:)) < TINY )
                 self%regs(:,k,:) = 0._dp
             elsewhere
-                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+                self%regs(:,k,:) = real(k) * self%regs(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
@@ -484,14 +512,6 @@ contains
                 self%regs = self%regs + self%regs_grad
             endif
         endif
-        ! applying butterworth filter at cut-off = lp
-        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
-        call butterworth_filter(find, self%kfromto, filt)
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            self%regs(:,k,:) = filt(k) * self%regs(:,k,:)
-        enddo
-        !$omp end parallel do
         if( params_glob%l_reg_anneal )then
             !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs

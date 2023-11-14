@@ -195,7 +195,6 @@ contains
         if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             select case(trim(params_glob%reg_mode))
                 case('so2')
-                    params_glob%cc_objfun = OBJFUN_PROB
                     call reg_obj%reset_regs
                     call reg_obj%init_tab
                     ! Batch loop
@@ -216,6 +215,14 @@ contains
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                         call reg_obj%form_cavgs(best_ir)
                     enddo
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%compute_grad(best_ir)
+                    enddo
                     call reg_obj%regularize_refs
                     if( trim(params_glob%refine) == 'prob' )then
                         call reg_obj%init_tab
@@ -232,7 +239,6 @@ contains
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
-                    params_glob%cc_objfun = OBJFUN_CC
                 case('so3')
                     ! using reg/inpl to do alignment for updating 3D volume
                     call reg_inpl%reset_regs
