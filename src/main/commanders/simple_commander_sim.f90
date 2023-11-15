@@ -137,12 +137,15 @@ contains
             call progress(cnt,ntot)
             ! extract ori
             call build%spproj_field%get_ori(i, orientation)
+            ! project vol
+            call build%img_pad%zero_and_flag_ft
+            call vol_pad%fproject(orientation, build%img_pad)
+            ! shift
+            call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
             if( l_ptcl_frames )then
-                ! project, ctf, simulate noise & enveloppe factor
+                ! ctf, simulate noise & enveloppe
                 do j = 1,params%nframes
-                    call build%imgbatch(j)%zero_and_flag_ft
-                    call vol_pad%fproject(orientation, build%imgbatch(j))
-                    call build%imgbatch(j)%shift([orientation%get('x'),orientation%get('y'),0.])
+                    call build%imgbatch(j)%copy_fast(build%img_pad)
                     if( cline%defined('bfac') )then
                         bfacerr = ran3()*params%bfacerr
                         if( ran3() < 0.5 )then
@@ -165,12 +168,7 @@ contains
                 call build%img_pad%clip(build%img)
                 call build%img%write(params%outstk, cnt)
             else
-                call build%img_pad%zero_and_flag_ft
                 call build%img%zero_and_unflag_ft
-                ! project vol
-                call vol_pad%fproject(orientation, build%img_pad)
-                ! shift
-                call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
                 if( cline%defined('bfac') )then
                     ! calculate bfactor
                     bfacerr = ran3()*params%bfacerr

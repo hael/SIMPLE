@@ -4355,7 +4355,7 @@ contains
         & then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed&
         & before the remaining 80% of the noise (white noise) is added',& ! descr_long
         &'simple_exec',&                                                  ! executable
-        &1, 16, 0, 1, 2, 1, 1, .false.)                                   ! # entries in each group, requires sp_project
+        &1, 17, 0, 1, 2, 1, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
@@ -4377,6 +4377,7 @@ contains
         call simulate_particles%set_input('parm_ios', 14, dferr)
         call simulate_particles%set_input('parm_ios', 15, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0.)
         call simulate_particles%set_input('parm_ios', 16, ctf)
+        call simulate_particles%set_input('parm_ios', 17, 'nframes', 'num', '# of particle frames', '# of lower SNR particle frames', '{1}', .false., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
