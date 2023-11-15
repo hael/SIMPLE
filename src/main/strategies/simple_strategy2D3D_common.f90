@@ -29,9 +29,10 @@ type(stack_io)  :: stkio_r
 contains
 
     !>  \brief  prepares a batch of image
-    subroutine prepimgbatch( batchsz )
-        integer,        intent(in)    :: batchsz
-        integer :: currsz, ibatch
+    subroutine prepimgbatch( batchsz, box )
+        integer,           intent(in) :: batchsz
+        integer, optional, intent(in) :: box
+        integer :: currsz, ibatch, box_here
         logical :: doprep
         if( .not. allocated(build_glob%imgbatch) )then
             doprep = .true.
@@ -45,10 +46,12 @@ contains
             endif
         endif
         if( doprep )then
+            box_here = params_glob%box
+            if( present(box) ) box_here = box
             allocate(build_glob%imgbatch(batchsz))
             !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
             do ibatch = 1,batchsz
-                call build_glob%imgbatch(ibatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                call build_glob%imgbatch(ibatch)%new([box_here, box_here, 1], params_glob%smpd, wthreads=.false.)
             end do
             !$omp end parallel do
         endif
