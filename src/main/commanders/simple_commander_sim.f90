@@ -70,7 +70,8 @@ contains
     end subroutine exec_simulate_noise
 
     subroutine exec_simulate_particles( self, cline )
-        use simple_projector,  only: projector
+        use simple_projector,           only: projector
+        use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
         class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
@@ -79,8 +80,8 @@ contains
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
         real             :: bfac, bfacerr
-        integer          :: i, cnt, ntot
-        logical          :: apply_ctf
+        integer          :: i, j, cnt, ntot
+        logical          :: apply_ctf, l_ptcl_frames
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
         if( .not. cline%defined('dferr')    ) call cline%set('dferr',    1.5)
@@ -92,7 +93,8 @@ contains
         call cline%set('alpha',  2.)
         call cline%set('eo', '  no')
         call build%init_params_and_build_general_tbox(cline,params)
-        apply_ctf = trim(params%ctf) .eq. 'yes'
+        apply_ctf     = trim(params%ctf) .eq. 'yes'
+        l_ptcl_frames = cline%defined('nframes') .and. (params%nframes > 1)
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -122,43 +124,77 @@ contains
         call build%vol%pad(vol_pad)
         call vol_pad%fft
         call vol_pad%expand_cmat(params%alpha)
+        if( l_ptcl_frames )then
+            if( cline%defined('part') ) THROW_HARD('PART is not supported together with NFRAMES')
+            call prepimgbatch(params%nframes,box=params%boxpd)
+            params%snr = params%snr / real(params%nframes)
+        endif
         write(logfhandle,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
         ntot = params%top-params%fromp+1
         do i=params%fromp,params%top
             cnt = cnt+1
             call progress(cnt,ntot)
-            ! zero images
-            build%img_pad = cmplx(0.,0.)
-            build%img = 0.
             ! extract ori
             call build%spproj_field%get_ori(i, orientation)
-            ! project vol
-            call vol_pad%fproject(orientation, build%img_pad)
-            ! shift
-            call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
-            if( cline%defined('bfac') )then
-                ! calculate bfactor
-                bfacerr = ran3()*params%bfacerr
-                if( ran3() < 0.5 )then
-                    bfac = params%bfac-bfacerr
+            if( l_ptcl_frames )then
+                ! project, ctf, simulate noise & enveloppe factor
+                do j = 1,params%nframes
+                    call build%imgbatch(j)%zero_and_flag_ft
+                    call vol_pad%fproject(orientation, build%imgbatch(j))
+                    call build%imgbatch(j)%shift([orientation%get('x'),orientation%get('y'),0.])
+                    if( cline%defined('bfac') )then
+                        bfacerr = ran3()*params%bfacerr
+                        if( ran3() < 0.5 )then
+                            bfac = params%bfac-bfacerr
+                        else
+                            bfac = params%bfac+bfacerr
+                        endif
+                        call simimg(build%imgbatch(j), orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
+                    else
+                        call simimg(build%imgbatch(j), orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
+                    endif
+                enddo
+                ! write particle frames & average
+                call build%img_pad%zero_and_unflag_ft
+                do j = 1,params%nframes
+                    call build%img_pad%add(build%imgbatch(j))
+                    call build%imgbatch(j)%clip(build%img)
+                    call build%img%write('simulated_particle_frame_'//int2str_pad(i,6)//params%ext, j)
+                enddo
+                call build%img_pad%clip(build%img)
+                call build%img%write(params%outstk, cnt)
+            else
+                call build%img_pad%zero_and_flag_ft
+                call build%img%zero_and_unflag_ft
+                ! project vol
+                call vol_pad%fproject(orientation, build%img_pad)
+                ! shift
+                call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
+                if( cline%defined('bfac') )then
+                    ! calculate bfactor
+                    bfacerr = ran3()*params%bfacerr
+                    if( ran3() < 0.5 )then
+                        bfac = params%bfac-bfacerr
+                    else
+                        bfac = params%bfac+bfacerr
+                    endif
+                    call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
                 else
-                    bfac = params%bfac+bfacerr
+                    call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
                 endif
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
-            else
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
-            endif
-            ! clip
-            call build%img_pad%clip(build%img)
-            ! write to stack
-            if( cline%defined('part') )then
-                call build%img%write('simulated_particles_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
-            else
-                call build%img%write(params%outstk, i)
+                ! clip
+                call build%img_pad%clip(build%img)
+                ! write to stack
+                if( cline%defined('part') )then
+                    call build%img%write('simulated_particles_part'//int2str_pad(params%part,params%numlen)//params%ext, cnt)
+                else
+                    call build%img%write(params%outstk, i)
+                endif
             endif
         end do
         call vol_pad%kill_expanded
+        call killimgbatch
         call orientation%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')
