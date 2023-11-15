@@ -477,12 +477,13 @@ contains
         type(image) :: calc_cavg
         integer :: iref, k, box, find
         real    :: eps, filt(self%kfromto(1):self%kfromto(2))
+        ! form the cavgs
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
             where( abs(self%regs_denom(:,k,:)) < TINY )
                 self%regs(:,k,:) = 0._dp
             elsewhere
-                self%regs(:,k,:) = real(k) * self%regs(:,k,:) / self%regs_denom(:,k,:)
+                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
@@ -504,28 +505,62 @@ contains
                 call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
             enddo
         endif
+        ! k-weight
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%regs(:,k,:)      = real(k) * self%regs(:,k,:)
+            self%regs_grad(:,k,:) = real(k) * self%regs_grad(:,k,:)
+        enddo
+        !$omp end parallel do
+
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            self%regs(:,k,:)      = filt(k) * self%regs(:,k,:)
+            self%regs_grad(:,k,:) = filt(k) * self%regs_grad(:,k,:)
+        enddo
+        !$omp end parallel do
+
+        ! taking the real part only (since the global cost function takes only real part)
+        self%regs      = real(self%regs, dp)
+        self%regs_grad = real(self%regs_grad, dp)
+
+        ! annealing and different grad styles
         if( params_glob%l_reg_anneal ) eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
-        if( params_glob%l_reg_grad )then
-            if( params_glob%l_reg_anneal )then
-                self%regs = eps * self%regs + (1. - eps) * self%regs_grad
-            else
-                self%regs = self%regs + self%regs_grad
-            endif
-        endif
         if( params_glob%l_reg_anneal )then
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
-                self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs(:,:,iref)
-            enddo
-            !$omp end parallel do
+            if( params_glob%l_reg_grad )then
+                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs_grad(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs_grad(:,:,iref)
+                enddo
+                !$omp end parallel do
+            else
+                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs(:,:,iref)
+                enddo
+                !$omp end parallel do
+            endif
         else
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%pftcc%pfts_refs_even(:,:,iref) = self%regs(:,:,iref)
-                self%pftcc%pfts_refs_odd( :,:,iref) = self%regs(:,:,iref)
-            enddo
-            !$omp end parallel do
+            if( params_glob%l_reg_grad )then
+                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad(:,:,iref)
+                enddo
+                !$omp end parallel do
+            else
+                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                do iref = 1, self%nrefs
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
+                enddo
+                !$omp end parallel do
+            endif
         endif
         call self%pftcc%memoize_refs
         call calc_cavg%kill
