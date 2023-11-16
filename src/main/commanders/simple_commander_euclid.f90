@@ -192,12 +192,6 @@ contains
         kfromto(1) = 1
         kfromto(2) = nyq
         binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
-        ! taking account scaling of images
-        if( cline%defined('scale') .and. abs(params%scale-1.0) > 0.01 )then
-            !$omp workshare
-            sigma2 = sigma2 * params%scale
-            !$omp end workshare
-        endif
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
         call killimgbatch

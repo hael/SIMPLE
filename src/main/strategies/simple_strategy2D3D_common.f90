@@ -1,18 +1,19 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_strategy2D3D_common
 include 'simple_lib.f08'
-use simple_image,            only: image
-use simple_cmdline,          only: cmdline
-use simple_builder,          only: build_glob
-use simple_parameters,       only: params_glob
-use simple_stack_io,         only: stack_io
-use simple_polarft_corrcalc, only: pftcc_glob
-use simple_cartft_corrcalc,  only: cftcc_glob
+use simple_image,             only: image
+use simple_cmdline,           only: cmdline
+use simple_builder,           only: build_glob
+use simple_parameters,        only: params_glob
+use simple_stack_io,          only: stack_io
+use simple_discrete_stack_io, only: dstack_io
+use simple_polarft_corrcalc,  only: pftcc_glob
+use simple_cartft_corrcalc,   only: cftcc_glob
 implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts
+&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts, discrete_read_imgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -135,6 +136,20 @@ contains
         call stkio_r%read(ind_in_stk, img)
         call stkio_r%close
     end subroutine read_imgbatch_3
+
+    subroutine discrete_read_imgbatch( n, pinds, batchlims )
+        integer,          intent(in)  :: n, pinds(n), batchlims(2)
+        type(dstack_io)               :: dstkio_r
+        character(len=:), allocatable :: stkname
+        integer :: ind_in_stk, i, ii
+        call dstkio_r%new(params_glob%smpd, params_glob%box)
+        do i=batchlims(1),batchlims(2)
+            ii = i - batchlims(1) + 1
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
+            call dstkio_r%read(stkname, ind_in_stk, build_glob%imgbatch(ii))
+        end do
+        call dstkio_r%kill
+    end subroutine discrete_read_imgbatch
 
     subroutine set_bp_range( cline )
         class(cmdline), intent(inout) :: cline
