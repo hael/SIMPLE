@@ -584,7 +584,6 @@ contains
             l_euclid = trim(cline%get_carg('objfun')).eq.'euclid'
             if( l_euclid )then
                 cline_calc_pspec_distr  = cline
-                call cline_calc_pspec_distr%delete('scale')
                 call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )
                 call spproj%os_ptcl2D%set_all2single('w', 1.0)
                 call spproj%write_segment_inside(params%oritype)

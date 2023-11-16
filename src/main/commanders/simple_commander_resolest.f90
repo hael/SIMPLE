@@ -502,7 +502,7 @@ contains
     end subroutine exec_cavg_filter2D
 
     subroutine exec_prune_cavgs( self, cline )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch, prepimg4align
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
         use simple_ctf,                 only: ctf
@@ -648,7 +648,7 @@ contains
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
                 print *,'Reading batch ',ibatch
-                call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
+                call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
                 cls2batch = (/(i,i=batch_start,batch_end)/)
                 ! flags bad ice
                 !$omp parallel do private(j,i,iptcl,ithr,ctfparms,tfun,ice_score,sdev_noise) default(shared)&
