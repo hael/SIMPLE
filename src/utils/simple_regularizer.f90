@@ -53,7 +53,8 @@ type :: regularizer
     procedure          :: reg_uniform_cluster
     procedure          :: prev_cavgs
     procedure          :: form_cavgs
-    procedure          :: compute_grad
+    procedure          :: compute_grad_ptcl
+    procedure          :: compute_grad_cavg
     procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
@@ -215,7 +216,7 @@ contains
         enddo
     end subroutine form_cavgs
 
-    subroutine compute_grad( self, best_ir )
+    subroutine compute_grad_ptcl( self, best_ir )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         complex(sp),        pointer       :: shmat(:,:)
@@ -245,7 +246,41 @@ contains
             enddo
             !$omp end parallel do
         enddo
-    end subroutine compute_grad
+    end subroutine compute_grad_ptcl
+
+    subroutine compute_grad_cavg( self )
+        class(regularizer), intent(inout) :: self
+        complex(dp) :: cavgs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sum_cavgs(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer     :: k, iref
+        real(dp)    :: cc(self%nrefs), sum_cc
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom(:,k,:)) < TINY )
+                cavgs(:,k,:) = 0._dp
+            elsewhere
+                cavgs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+            endwhere
+        enddo
+        !$omp end parallel do
+        ! computing cc between avgs and refs
+        cc = 0.d0
+        !$omp parallel do default(shared) private(iref,k) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do k = self%kfromto(1),self%kfromto(2)
+                cc(iref) = cc(iref) + real(k,dp) * sum(real(self%pftcc%pfts_refs_even(:,k,iref) * conjg(cavgs(:,k,iref)),dp))
+            end do
+        enddo
+        !$omp end parallel do
+        sum_cc = sum(cc)
+        ! computing the gradient
+        sum_cavgs = 0.
+        do iref = 1, self%nrefs
+            sum_cavgs = sum_cavgs + cc(iref) * cavgs(:,:,iref) / sum_cc**2
+        enddo
+        do iref = 1, self%nrefs
+            self%regs_grad(:,:,iref) = cavgs(:,:,iref)/sum_cc - sum_cavgs
+        enddo
+    end subroutine compute_grad_cavg
 
     subroutine prev_cavgs( self )
         class(regularizer), intent(inout) :: self
