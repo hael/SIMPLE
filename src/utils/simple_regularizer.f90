@@ -153,6 +153,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        call o_prev%kill
     end subroutine fill_tab_noshift
 
     subroutine partition_refs( self )
@@ -496,13 +497,13 @@ contains
                 call calc_cavg%set_cmat(cmat)
                 call calc_cavg%shift_phorig()
                 call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', k)
+                call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
                 call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
                 call calc_cavg%zero_and_flag_ft
                 call calc_cavg%set_cmat(cmat)
                 call calc_cavg%shift_phorig()
                 call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', k)
+                call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
             enddo
         endif
         ! k-weight

@@ -939,6 +939,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
         do iter = 1,N_ITERS
+            params%which_iter = iter
             print *, 'Preparing the references ...'
             ! PREPARATION OF REFERENCES IN PFTCC
             ! read reference volumes and create polar projections
