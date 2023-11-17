@@ -148,6 +148,7 @@ contains
                 call build_glob%spproj_field%get_ori(iptcl, o_prev) ! previous ori
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, -o_prev%get_2Dshift(), inpl_corrs )
+                ! call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
                 self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))

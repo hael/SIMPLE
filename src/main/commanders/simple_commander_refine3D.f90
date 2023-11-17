@@ -921,7 +921,7 @@ contains
         real     :: xyz(3), euls(3), shvec(2), sdev
         call cline%set('mkdir',    'yes')
         call cline%set('oritype',  'ptcl3D')
-        call cline%set('center',   'no')
+        if( .not.cline%defined('center') ) call cline%set('center', 'no')
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         call build%spproj%update_projinfo(cline)
         if( allocated(pinds) )     deallocate(pinds)
@@ -938,6 +938,15 @@ contains
             call build%spproj%os_ptcl3D%partition_eo
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
+        ! more prep
+        call prepimgbatch(params%top-params%fromp+1)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
         do iter = 1,N_ITERS
             params%which_iter = iter
             print *, 'Preparing the references ...'
@@ -964,15 +973,7 @@ contains
             call pftcc%memoize_refs
             ! PREPARATION OF PARTICLES
             print *, 'Preparing the particles ...'
-            call prepimgbatch(params%top-params%fromp+1)
             call read_imgbatch([params%fromp,params%top], ptcl_mask)
-            call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
-            if( .not.allocated(tmp_imgs) ) allocate(tmp_imgs(nthr_glob))
-            !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-            do ithr = 1,nthr_glob
-                call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
-            enddo
-            !$omp end parallel do
             !$omp parallel do default(shared) private(iptcl,ithr) schedule(static) proc_bind(close)
             do iptcl = params%fromp,params%top
                 if( .not.ptcl_mask(iptcl) ) cycle
@@ -1019,11 +1020,12 @@ contains
             enddo
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top
+                if( .not.ptcl_mask(iptcl) ) cycle
                 iref = best_ir(iptcl)
                 if( reg_obj%ref_ptcl_tab(iref, iptcl)%prob < TINY ) cycle
-                euls = build_glob%eulspace%get_euler(iref)
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
+                euls = build_glob%eulspace%get_euler(iref)
                 ! getting the particle orientation
                 shvec = orientation%get_2Dshift() + reg_obj%ref_ptcl_tab(iref,iptcl)%sh
                 call orientation%set_shift(shvec)
@@ -1031,9 +1033,13 @@ contains
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
                 call orientation%set('w', reg_obj%ref_ptcl_tab(iref,iptcl)%prob)
+                ! update doc
+                call build_glob%spproj_field%set_euler(iptcl, euls)
                 ! insert
                 call grid_ptcl(fpls(iptcl), build_glob%pgrpsyms, orientation)
             enddo
+            ! write doc
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
             ! normalise structure factors
             call norm_struct_facts( cline, iter )
             ! destruct
