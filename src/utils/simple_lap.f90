@@ -36,6 +36,7 @@ contains
         self%pathRow0 = 0
         self%pathCol0 = 0
         self%n        = size(mat, 1)
+        print *, self%n
         allocate( self%CC(self%n,self%n) )
         self%CC = mat
     end subroutine new
@@ -55,7 +56,7 @@ contains
         allocate(self%rowCover(self%n))     ! to keep track of covered rows
         allocate(self%colCover(self%n))     ! to keep track of covered columns
         do i = 1, self%n
-            self%M(:,i)      = 0
+            self%M(i,:)      = 0
             self%rowCover(i) = 0
             self%colCover(i) = 0
         enddo
@@ -77,7 +78,7 @@ contains
                     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j) collapse(2)
                     do i = 1, self%n
                         do j = 1, self%n
-                            if (self%M(j,i) == 1) jSol(i) = j
+                            if (self%M(i,j) == 1) jSol(i) = j
                         enddo
                     enddo
                     !$omp end parallel do
@@ -119,7 +120,7 @@ contains
         do i = 1,self% n
             do j = 1, self%n
                 if( self%CC(j,i) == 0 .and. self%rowCover(i) == 0 .and. self%colCover(j) == 0 )then
-                    self%M(j,i) = 1
+                    self%M(i,j) = 1
                     self%rowCover(i) = 1
                     self%colCover(j) = 1
                 endif
@@ -145,7 +146,7 @@ contains
         do i = 1, self%n
             do j = 1, self%n
                 ! if starred and column is uncovered
-                if( self%M(j,i) == 1 .and. self%colCover(j) == 0 )then
+                if( self%M(i,j) == 1 .and. self%colCover(j) == 0 )then
                     self%colCover(j) = 1
                     colCount         = colCount + 1
                 endif
@@ -185,10 +186,10 @@ contains
                 done = .true.
                 step = 6
             else
-                self%M(col,row) = 2 !primed zero
+                self%M(row,col) = 2 !primed zero
                 ! search if there is a starred zero in the same row
                 do j = 1, self%n
-                    if (self%M(j,row) == 1) then
+                    if (self%M(row,j) == 1) then
                         starInRow = .true.
                         col = j
                     endif
@@ -228,7 +229,7 @@ contains
             row = 0
             col = path(pathCount,2)
             do i = 1, self%n
-                if( self%M(col,i) == 1 ) row = i
+                if( self%M(i,col) == 1 ) row = i
             enddo
             if (row /= 0) then ! update path
                 pathCount = pathCount + 1
@@ -240,7 +241,7 @@ contains
             if( .not. done )then
                 ! search for a prime zero in row
                 do j = 1, self%n
-                    if( self%M(j,row) == 2 ) col = j
+                    if( self%M(row,j) == 2 ) col = j
                 enddo
                 ! update path
                 pathCount = pathCount + 1
@@ -250,10 +251,10 @@ contains
         enddo
         ! augment path
         do i = 1, pathCount
-            if( self%M(path(i,2),path(i,1) ) == 1 )then
-                self%M(path(i,2),path(i,1)) = 0
+            if( self%M(path(i,1),path(i,2) ) == 1 )then
+                self%M(path(i,1),path(i,2)) = 0
             else
-                self%M(path(i,2),path(i,1)) = 1
+                self%M(path(i,1),path(i,2)) = 1
             endif
         enddo
         ! clear covers and erase primes
@@ -261,7 +262,7 @@ contains
             self%rowCover(i) = 0
             self%colCover(i) = 0
             do j = 1, self%n
-                if(self%M(j,i) == 2 ) self%M(j,i) = 0
+                if(self%M(i,j) == 2 ) self%M(i,j) = 0
             enddo
         enddo
         step = 3
