@@ -51,6 +51,7 @@ type :: regularizer
     procedure          :: uniform_cluster_sort_neigh
     procedure          :: uniform_cluster_sort_dyn
     procedure          :: reg_uniform_cluster
+    procedure          :: reg_lap
     procedure          :: prev_cavgs
     procedure          :: form_cavgs
     procedure          :: compute_grad_ptcl
@@ -357,9 +358,34 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn(self%nrefs, out_ir)
         else
-            call self%uniform_cluster_sort(self%nrefs, out_ir)
+            call self%reg_lap(self%nrefs, out_ir)
         endif
     end subroutine reg_uniform_cluster
+
+    subroutine reg_lap( self, ncols, cur_ir )
+        use simple_lap, only: lap
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: ncols
+        integer,            intent(inout) :: cur_ir(params_glob%fromp:params_glob%top)
+        type(lap) :: lap_obj
+        integer   :: sol(params_glob%fromp:params_glob%top), iptcl, iref, n_dup, idup
+        real      :: mat(self%nrefs,params_glob%fromp:params_glob%top)
+        real      :: cost_mat(params_glob%fromp:params_glob%top,params_glob%fromp:params_glob%top)
+        n_dup = ((params_glob%top - params_glob%fromp) + 1)/self%nrefs
+        do iref = 1, self%nrefs
+            do iptcl = params_glob%fromp, params_glob%top
+                mat(iref, iptcl) = self%ref_ptcl_tab(iref,iptcl)%prob
+            enddo
+        enddo
+        do idup = 1, n_dup
+            cost_mat((idup-1)*self%nrefs+1:idup*self%nrefs,:) = mat
+        enddo
+        call lap_obj%new(cost_mat)
+        call lap_obj%solve_lap(sol)
+        do iptcl = params_glob%fromp, params_glob%top
+            cur_ir(iptcl) = mod(sol(iptcl)-1, 3) + 1
+        enddo
+    end subroutine reg_lap
 
     subroutine uniform_cluster_sort( self, ncols, cur_ir )
         class(regularizer), intent(inout) :: self
