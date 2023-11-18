@@ -1,7 +1,7 @@
 program simple_test_lap
 use simple_lap, only: lap
 implicit none  ! Ensures all variables must have an explicit type (all modern Fortran programs should include this statement)
-integer, parameter :: N_PTCLS = 2000, N_REFS = 3
+integer, parameter :: N_PTCLS = 100, N_REFS = 3
 type(lap) :: lap_obj
 integer   :: sol(N_PTCLS), i
 real      :: mat(N_REFS,N_PTCLS), total, cost_mat(N_PTCLS,N_PTCLS)

@@ -358,7 +358,7 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn(self%nrefs, out_ir)
         else
-            call self%reg_lap(self%nrefs, out_ir)
+            call self%uniform_cluster_sort(self%nrefs, out_ir)
         endif
     end subroutine reg_uniform_cluster
 
