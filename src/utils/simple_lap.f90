@@ -10,7 +10,7 @@ public :: lap
 private
 type :: lap
     ! norm for matrix representation C(j,i) : j = columns, i = rows
-    integer, allocatable :: CC(:,:)   ! cost matrix (min sum)
+    real,    allocatable :: CC(:,:)   ! cost matrix (min sum)
     integer, allocatable :: M(:,:)    ! mask matrix
     integer, allocatable :: rowCover(:), colCover(:) !cover row and cols
     integer :: n      ! dimension of C - assumed to be a (nxn) square matrix
@@ -30,15 +30,14 @@ end type lap
 
 contains
     ! CONSTRUCTORS
-    subroutine new( self )
+    subroutine new( self, mat )
         class(lap), target, intent(inout) :: self
+        real,               intent(in)    :: mat(:,:)
         self%pathRow0 = 0
         self%pathCol0 = 0
-        self%n        = 3
-        allocate( self%CC(3,3) )
-        self%CC(1,:) = [3, 6, 4]
-        self%CC(2,:) = [3, 2, 7]
-        self%CC(3,:) = [1, 5, 8]
+        self%n        = size(mat, 1)
+        allocate( self%CC(self%n,self%n) )
+        self%CC = mat
     end subroutine new
 
     subroutine solve_lap(self, jSol)
@@ -93,7 +92,8 @@ contains
     subroutine step1( self, step )
         class(lap), target, intent(inout) :: self
         integer,            intent(out)   :: step
-        integer :: minVal, i, j
+        integer :: i, j
+        real    :: minVal
         do i = 1, self%n
             minVal = self%CC(1,i)
             do j = 1, self%n
@@ -266,8 +266,9 @@ contains
     subroutine step6( self, step )
         class(lap), target, intent(inout) :: self
         integer,            intent(out)   :: step
-        integer :: i, j, minVal
-        minVal = huge(i)
+        integer :: i, j
+        real    :: minVal
+        minVal = huge(minVal)
         do i = 1, self%n
             do j = 1, self%n
                 if( self%rowCover(i) == 0 .and. self%colCover(j) == 0 .and. self%CC(j,i) < minVal )then
