@@ -74,11 +74,13 @@ contains
                 case(6)
                     call self%step6(step)
                 case default ! done
+                    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j) collapse(2)
                     do i = 1, self%n
                         do j = 1, self%n
                             if (self%M(j,i) == 1) jSol(i) = j
                         enddo
                     enddo
+                    !$omp end parallel do
                     done = .true.
             end select
         enddo
@@ -94,6 +96,7 @@ contains
         integer,            intent(out)   :: step
         integer :: i, j
         real    :: minVal
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j,minVal)
         do i = 1, self%n
             minVal = self%CC(1,i)
             do j = 1, self%n
@@ -101,6 +104,7 @@ contains
             enddo
             self%CC(:,i) = self%CC(:,i) - minVal
         enddo
+        !$omp end parallel do
         step = 2
     end subroutine step1
     
@@ -111,6 +115,7 @@ contains
         class(lap), target, intent(inout) :: self
         integer,            intent(out)   :: step
         integer :: i, j
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,j)
         do i = 1,self% n
             do j = 1, self%n
                 if( self%CC(j,i) == 0 .and. self%rowCover(i) == 0 .and. self%colCover(j) == 0 )then
@@ -120,6 +125,7 @@ contains
                 endif
             enddo
         enddo
+        !$omp end parallel do
         ! uncovers
         do i = 1, self%n
             self%rowCover(i) = 0
@@ -166,15 +172,15 @@ contains
             row       = 0
             col       = 0
             starInRow = .false.
-            loop1: do i = 1, self%n
-                loop2: do j = 1, self%n
+            do i = 1, self%n
+                do j = 1, self%n
                     if( self%CC(j,i) == 0 .and. self%rowCover(i) == 0 .and. self%colCover(j) == 0 )then
                         row = i
                         col = j
-                        exit loop1
+                        exit
                     endif
-                enddo loop2
-            enddo loop1
+                enddo
+            enddo
             if (row == 0) then !no zero uncoverred left
                 done = .true.
                 step = 6
