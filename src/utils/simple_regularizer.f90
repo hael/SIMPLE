@@ -383,7 +383,7 @@ contains
         call lap_obj%new(cost_mat)
         call lap_obj%solve_lap(sol)
         do iptcl = params_glob%fromp, params_glob%top
-            cur_ir(iptcl) = mod(sol(iptcl)-1, 3) + 1
+            cur_ir(iptcl) = mod(sol(iptcl)-1, self%nrefs) + 1
         enddo
     end subroutine reg_lap
 
