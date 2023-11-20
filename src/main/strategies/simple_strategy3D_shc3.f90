@@ -81,7 +81,7 @@ contains
     end subroutine oris_assign_shc3
 
     subroutine kill_shc3( self )
-        class(strategy3D_shc3),   intent(inout) :: self
+        class(strategy3D_shc3), intent(inout) :: self
         call self%s%kill
     end subroutine kill_shc3
 
