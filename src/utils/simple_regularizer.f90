@@ -28,9 +28,12 @@ type :: regularizer
     integer                  :: nneighs
     integer                  :: pftsz
     integer                  :: kfromto(2)
-    complex(dp), allocatable :: regs(:,:,:)             !< -"-, reg terms
-    complex(dp), allocatable :: regs_grad(:,:,:)        !< -"-, reg terms
-    real(dp),    allocatable :: regs_denom(:,:,:)       !< -"-, reg denom
+    complex(dp), allocatable :: regs_odd(:,:,:)             !< -"-, reg terms
+    complex(dp), allocatable :: regs_even(:,:,:)            !< -"-, reg terms
+    complex(dp), allocatable :: regs_grad_odd(:,:,:)        !< -"-, reg terms
+    complex(dp), allocatable :: regs_grad_even(:,:,:)       !< -"-, reg terms
+    real(dp),    allocatable :: regs_denom_odd(:,:,:)       !< -"-, reg denom
+    real(dp),    allocatable :: regs_denom_even(:,:,:)      !< -"-, reg denom
     real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
     integer,     allocatable :: ptcl_ref_map(:)         !< hard-alignment tab
     integer,     allocatable :: ref_neigh_map(:)        !< mapping ref to neighborhood
@@ -76,13 +79,19 @@ contains
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
-        allocate(self%regs_denom(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_grad(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+        allocate(self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_denom_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_grad_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_grad_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%regs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%ref_neigh_tab(self%nrefs,self%nrefs))
-        self%regs       = 0.d0
-        self%regs_grad  = 0.d0
-        self%regs_denom = 0.d0
+        self%regs_odd        = 0.d0
+        self%regs_even       = 0.d0
+        self%regs_grad_odd   = 0.d0
+        self%regs_grad_even  = 0.d0
+        self%regs_denom_odd  = 0.d0
+        self%regs_denom_even = 0.d0
         self%pftcc      => pftcc
         if( params_glob%l_reg_neigh )then
             call self%partition_refs
@@ -211,9 +220,15 @@ contains
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),                    ctf_rot, loc)
                 grad_w = 1./self%ref_ptcl_tab(iref, iptcl)%sum - self%ref_ptcl_tab(iref, iptcl)%w/self%ref_ptcl_tab(iref, iptcl)%sum**2
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
-                self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref)  + ptcl_ctf_rot * grad_w
+                if( self%pftcc%ptcl_iseven(iptcl) )then
+                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
+                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                    self%regs_grad_even(:,:,iref)  = self%regs_grad_even(:,:,iref)  + ptcl_ctf_rot * grad_w
+                else
+                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
+                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                    self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot * grad_w
+                endif
             endif
         enddo
     end subroutine form_cavgs
@@ -242,7 +257,13 @@ contains
                         call build_glob%spproj_field%get_ori(iptcl, o_prev)           ! previous ori
                         call self%pftcc%gen_shmat(ithr, o_prev%get_2Dshift(), shmat)
                         call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
-                        self%regs_grad(:,:,iref)  = self%regs_grad(:,:,iref) - ptcl_ctf_rot * self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
+                        if( self%pftcc%ptcl_iseven(iptcl) )then
+                            self%regs_grad_even(:,:,iref) = self%regs_grad_even(:,:,iref) - ptcl_ctf_rot * &
+                                &self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
+                        else
+                            self%regs_grad_odd(:,:,iref) = self%regs_grad_odd(:,:,iref) - ptcl_ctf_rot * &
+                                &self%ref_ptcl_tab(iref2, iptcl)%w/self%ref_ptcl_tab(iref2, iptcl)%sum**2
+                        endif
                     endif
                 endif
             enddo
@@ -252,35 +273,53 @@ contains
 
     subroutine compute_grad_cavg( self )
         class(regularizer), intent(inout) :: self
-        complex(dp) :: cavgs(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs), sum_cavgs(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: cavgs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                      &cavgs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                      &sum_cavgs_even(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                      &sum_cavgs_odd( self%pftsz,self%kfromto(1):self%kfromto(2))
         integer     :: k, iref
-        real(dp)    :: cc(self%nrefs), sum_cc
+        real(dp)    :: cc_odd(self%nrefs), cc_even(self%nrefs), sum_cc_odd, sum_cc_even
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                cavgs(:,k,:) = 0._dp
+            where( abs(self%regs_denom_odd(:,k,:)) < TINY )
+                cavgs_odd(:,k,:) = 0._dp
             elsewhere
-                cavgs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+                cavgs_odd(:,k,:) = self%regs_odd(:,k,:) / self%regs_denom_odd(:,k,:)
+            endwhere
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom_even(:,k,:)) < TINY )
+                cavgs_even(:,k,:) = 0._dp
+            elsewhere
+                cavgs_even(:,k,:) = self%regs_even(:,k,:) / self%regs_denom_even(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
         ! computing cc between avgs and refs
-        cc = 0.d0
+        cc_odd  = 0.d0
+        cc_even = 0.d0
         !$omp parallel do default(shared) private(iref,k) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do k = self%kfromto(1),self%kfromto(2)
-                cc(iref) = cc(iref) + real(k,dp) * sum(real(self%pftcc%pfts_refs_even(:,k,iref) * conjg(cavgs(:,k,iref)),dp))
+                cc_odd(iref)  = cc_odd(iref)  + real(k,dp) * sum(real(self%pftcc%pfts_refs_odd( :,k,iref) * conjg(cavgs_odd( :,k,iref)),dp))
+                cc_even(iref) = cc_even(iref) + real(k,dp) * sum(real(self%pftcc%pfts_refs_even(:,k,iref) * conjg(cavgs_even(:,k,iref)),dp))
             end do
         enddo
         !$omp end parallel do
-        sum_cc = sum(cc)
+        sum_cc_odd  = sum(cc_odd)
+        sum_cc_even = sum(cc_even)
         ! computing the gradient
-        sum_cavgs = 0.
+        sum_cavgs_even = 0.
+        sum_cavgs_odd  = 0.
         do iref = 1, self%nrefs
-            sum_cavgs = sum_cavgs + cc(iref) * cavgs(:,:,iref) / sum_cc**2
+            sum_cavgs_even = sum_cavgs_even + cc_even(iref) * cavgs_even(:,:,iref) / sum_cc_even**2
+            sum_cavgs_odd  = sum_cavgs_odd  + cc_odd( iref) * cavgs_odd( :,:,iref) / sum_cc_odd**2
         enddo
         do iref = 1, self%nrefs
-            self%regs_grad(:,:,iref) = cavgs(:,:,iref)/sum_cc - sum_cavgs
+            self%regs_grad_odd( :,:,iref) = cavgs_odd( :,:,iref)/sum_cc_odd  - sum_cavgs_odd
+            self%regs_grad_even(:,:,iref) = cavgs_even(:,:,iref)/sum_cc_even - sum_cavgs_even
         enddo
     end subroutine compute_grad_cavg
 
@@ -305,11 +344,15 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 shmat => self%pftcc%heap_vars(ithr)%shmat
                 call self%pftcc%gen_shmat(ithr, o_prev%get_2Dshift(), shmat)
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
-                ptcl_ctf_rot = ptcl_ctf_rot * shmat
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
-                self%regs(:,:,iref)       = self%regs(:,:,iref)       + ptcl_ctf_rot
-                self%regs_denom(:,:,iref) = self%regs_denom(:,:,iref) + ctf_rot**2
+                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here) * shmat, kind=dp), ptcl_ctf_rot, loc)
+                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here), ctf_rot, loc)
+                if( self%pftcc%ptcl_iseven(iptcl) )then
+                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
+                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                else
+                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
+                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                endif
             endif
         enddo
     end subroutine prev_cavgs
@@ -543,36 +586,62 @@ contains
         ! form the cavgs
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            where( abs(self%regs_denom(:,k,:)) < TINY )
-                self%regs(:,k,:) = 0._dp
+            where( abs(self%regs_denom_odd(:,k,:)) < TINY )
+                self%regs_odd(:,k,:) = 0._dp
             elsewhere
-                self%regs(:,k,:) = self%regs(:,k,:) / self%regs_denom(:,k,:)
+                self%regs_odd(:,k,:) = self%regs_odd(:,k,:) / self%regs_denom_odd(:,k,:)
+            endwhere
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            where( abs(self%regs_denom_even(:,k,:)) < TINY )
+                self%regs_even(:,k,:) = 0._dp
+            elsewhere
+                self%regs_even(:,k,:) = self%regs_even(:,k,:) / self%regs_denom_even(:,k,:)
             endwhere
         enddo
         !$omp end parallel do
         ! output images for debugging
         if( params_glob%l_reg_debug )then
             do iref = 1, self%nrefs
-                call self%pftcc%polar2cartesian(cmplx(self%regs(:,:,iref), kind=sp), cmat, box)
+                ! odd
+                call self%pftcc%polar2cartesian(cmplx(self%regs_odd(:,:,iref), kind=sp), cmat, box)
                 call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
                 call calc_cavg%zero_and_flag_ft
                 call calc_cavg%set_cmat(cmat)
                 call calc_cavg%shift_phorig()
                 call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+                call calc_cavg%write('odd_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+                call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_odd(:,:,iref), kind=sp), cmat, box)
+                call calc_cavg%zero_and_flag_ft
+                call calc_cavg%set_cmat(cmat)
+                call calc_cavg%shift_phorig()
+                call calc_cavg%ifft
+                call calc_cavg%write('odd_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+                !even
+                call self%pftcc%polar2cartesian(cmplx(self%regs_even(:,:,iref), kind=sp), cmat, box)
+                call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+                call calc_cavg%zero_and_flag_ft
+                call calc_cavg%set_cmat(cmat)
+                call calc_cavg%shift_phorig()
+                call calc_cavg%ifft
+                call calc_cavg%write('even_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
                 call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
                 call calc_cavg%zero_and_flag_ft
                 call calc_cavg%set_cmat(cmat)
                 call calc_cavg%shift_phorig()
                 call calc_cavg%ifft
-                call calc_cavg%write('polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+                call calc_cavg%write('even_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
             enddo
         endif
         ! k-weight
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            self%regs(:,k,:)      = real(k) * self%regs(:,k,:)
-            self%regs_grad(:,k,:) = real(k) * self%regs_grad(:,k,:)
+            self%regs_odd( :,k,:)      = real(k) * self%regs_odd( :,k,:)
+            self%regs_even(:,k,:)      = real(k) * self%regs_even(:,k,:)
+            self%regs_grad_odd( :,k,:) = real(k) * self%regs_grad_odd( :,k,:)
+            self%regs_grad_even(:,k,:) = real(k) * self%regs_grad_even(:,k,:)
         enddo
         !$omp end parallel do
 
@@ -581,14 +650,18 @@ contains
         call butterworth_filter(find, self%kfromto, filt)
         !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
         do k = self%kfromto(1),self%kfromto(2)
-            self%regs(:,k,:)      = filt(k) * self%regs(:,k,:)
-            self%regs_grad(:,k,:) = filt(k) * self%regs_grad(:,k,:)
+            self%regs_odd( :,k,:)      = filt(k) * self%regs_odd( :,k,:)
+            self%regs_even(:,k,:)      = filt(k) * self%regs_even(:,k,:)
+            self%regs_grad_odd( :,k,:) = filt(k) * self%regs_grad_odd( :,k,:)
+            self%regs_grad_even(:,k,:) = filt(k) * self%regs_grad_even(:,k,:)
         enddo
         !$omp end parallel do
 
         ! taking the real part only (since the global cost function takes only real part)
-        self%regs      = real(self%regs, dp)
-        self%regs_grad = real(self%regs_grad, dp)
+        self%regs_odd       = real(self%regs_odd,  dp)
+        self%regs_even      = real(self%regs_even, dp)
+        self%regs_grad_odd  = real(self%regs_grad_odd,  dp)
+        self%regs_grad_even = real(self%regs_grad_even, dp)
 
         ! annealing and different grad styles
         if( params_glob%l_reg_anneal ) eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
@@ -596,15 +669,15 @@ contains
             if( params_glob%l_reg_grad )then
                 !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
-                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs_grad(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs_grad(:,:,iref)
+                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs_grad_even(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs_grad_odd( :,:,iref)
                 enddo
                 !$omp end parallel do
             else
                 !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
-                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_even(:,:,iref) = eps * self%pftcc%pfts_refs_even(:,:,iref) + (1. - eps) * self%regs_even(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = eps * self%pftcc%pfts_refs_odd( :,:,iref) + (1. - eps) * self%regs_odd( :,:,iref)
                 enddo
                 !$omp end parallel do
             endif
@@ -612,15 +685,15 @@ contains
             if( params_glob%l_reg_grad )then
                 !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
-                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad(:,:,iref)
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad_even(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad_odd( :,:,iref)
                 enddo
                 !$omp end parallel do
             else
                 !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
-                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs(:,:,iref)
+                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_even(:,:,iref)
+                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_odd( :,:,iref)
                 enddo
                 !$omp end parallel do
             endif
@@ -631,9 +704,12 @@ contains
     
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
-        self%regs       = 0._dp
-        self%regs_grad  = 0._dp
-        self%regs_denom = 0._dp
+        self%regs_odd        = 0._dp
+        self%regs_even       = 0._dp
+        self%regs_grad_odd   = 0._dp
+        self%regs_grad_even  = 0._dp
+        self%regs_denom_odd  = 0._dp
+        self%regs_denom_even = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -734,7 +810,8 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs,self%regs_denom,self%regs_grad,self%ref_neigh_tab)
+        deallocate(self%regs_odd, self%regs_denom_odd, self%regs_grad_odd,self%ref_neigh_tab,&
+                  &self%regs_even,self%regs_denom_even,self%regs_grad_even)
         if(allocated(self%ref_neigh_map)) deallocate(self%ref_neigh_map)
         if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill
