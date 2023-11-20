@@ -163,12 +163,8 @@ contains
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! prep corr
-        if( params_glob%l_reg_ref )then
-            corr = max(0._dp, pftcc_glob%gencorr_for_rot_8(self%prev_ref, self%iptcl, -real(self%prev_shvec, dp), self%prev_roind))
-        else
-            call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-            corr = max(0.,maxval(corrs))
-        endif
+        call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
+        corr = max(0.,maxval(corrs))
         self%prev_corr = corr
         call o_prev%kill
     end subroutine prep4srch

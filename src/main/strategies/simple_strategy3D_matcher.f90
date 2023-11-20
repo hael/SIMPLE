@@ -298,7 +298,15 @@ contains
                             endif
                         endif
                     case('shc3')
-                        allocate(strategy3D_shc3                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( .not. has_been_searched )then
+                            allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            if( ran3() < GREEDY_FREQ )then
+                                allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
+                            else
+                                allocate(strategy3D_shc3         :: strategy3Dsrch(iptcl_batch)%ptr)
+                            endif
+                        endif
                     case('shcc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedyc          :: strategy3Dsrch(iptcl_batch)%ptr)
