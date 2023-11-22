@@ -259,6 +259,11 @@ contains
         call self%gauconv_mics
         if( L_REGION_REJECTION )then
             call self%flag_ice
+            if( count(self%l_mic_mask1) > nint(0.98*product(self%ldim_shrink1)) )then
+                nptcls      = 0
+                boxname_out = ''
+                return
+            endif
         endif
         call self%set_positions
         call self%analyze_boximgs1
