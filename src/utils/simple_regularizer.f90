@@ -14,11 +14,14 @@ public :: regularizer
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: N_SAMPLES = 5
+
 type reg_params
-    integer :: iptcl            !< iptcl index
-    integer :: iref             !< iref index
-    integer :: loc              !< inpl index
-    real    :: prob, sh(2), w   !< probability, shift, and weight
+    integer :: iptcl                !< iptcl index
+    integer :: iref                 !< iref index
+    integer :: loc                  !< inpl index
+    integer :: loc_smpl(N_SAMPLES)  !< inpl samplings
+    real    :: prob, sh(2), w       !< probability, shift, and weight
     real    :: sum
 end type reg_params
 
@@ -59,6 +62,7 @@ type :: regularizer
     procedure          :: reg_lap
     procedure          :: prev_cavgs
     procedure          :: form_cavgs
+    procedure          :: compute_grad_smpl
     procedure          :: compute_grad_ptcl
     procedure          :: compute_grad_cavg
     procedure          :: regularize_refs
@@ -150,9 +154,9 @@ contains
     subroutine fill_tab_noshift( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl
+        integer   :: i, iref, iptcl, indxarr(self%nrots), j
         real      :: inpl_corrs(self%nrots)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -161,6 +165,10 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
                 self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
+                indxarr = (/(j,j=1,self%nrots)/)
+                call hpsort(inpl_corrs, indxarr)
+                call reverse(indxarr)
+                self%ref_ptcl_tab(iref,iptcl)%loc_smpl = indxarr(1:N_SAMPLES)
             enddo
         enddo
         !$omp end parallel do
@@ -173,7 +181,7 @@ contains
         real      :: inpl_corrs(self%nrots,self%nrefs), sum_corrs(self%nrots)
         do i = 1, self%pftcc%nptcls
             iptcl = glob_pinds(i)
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(iref,irot) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs(:,iref) )
                 do irot = 1, self%nrots
@@ -259,6 +267,31 @@ contains
             endif
         enddo
     end subroutine form_cavgs
+
+    subroutine compute_grad_smpl( self )
+        class(regularizer), intent(inout) :: self
+        integer     :: iptcl, iref, loc, pind_here, irot
+        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
+        do iptcl = params_glob%fromp, params_glob%top
+            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                iref      = self%prev_ptcl_ref(iptcl)
+                pind_here = self%pftcc%pinds(iptcl)
+                do irot = 1, N_SAMPLES
+                    loc = self%ref_ptcl_tab(iref, iptcl)%loc_smpl(irot)
+                    loc = (self%nrots+1)-(loc-1)
+                    if( loc > self%nrots ) loc = loc - self%nrots
+                    call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
+                    if( self%pftcc%ptcl_iseven(iptcl) )then
+                        self%regs_grad_even(:,:,iref) = self%regs_grad_even(:,:,iref) + ptcl_ctf_rot
+                    else
+                        self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot
+                    endif
+                enddo
+            endif
+        enddo
+    end subroutine compute_grad_smpl
 
     subroutine compute_grad_ptcl( self, best_ir )
         class(regularizer), intent(inout) :: self
