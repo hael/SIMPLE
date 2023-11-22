@@ -1151,7 +1151,7 @@ contains
         call imgs(2)%kill
         call imgs(3)%kill
         deallocate(imgs)
-        ! call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* cavgs3D*mrc reproject_oris.txt cavgs_oris.txt stderrout')
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* cavgs3D*mrc reproject_oris.txt cavgs_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
