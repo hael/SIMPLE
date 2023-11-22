@@ -635,7 +635,7 @@ contains
             if( l_use_reg )then
                 ! not an option yet
             else
-                call reg_obj%fill_tab_noshift(pinds_here)
+                call reg_obj%fill_tab_prob(pinds_here)
             endif
         endif
     end subroutine fill_batch_particles
