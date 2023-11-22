@@ -37,9 +37,8 @@ contains
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
-    procedure          :: set_1
-    procedure          :: set_2
-    generic            :: set => set_1, set_2
+    procedure, private :: set_1, set_2, set_3
+    generic            :: set => set_1, set_2, set_3
     procedure, private :: lookup
     procedure          :: get_keys
     procedure          :: delete
@@ -410,6 +409,14 @@ contains
             self%cmds(which)%carg = trim(carg)
         endif
     end subroutine set_2
+
+    !> \brief  for setting an integer valued command line argument as a real
+    subroutine set_3( self, key, iarg )
+        class(cmdline),   intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer,          intent(in)    :: iarg
+        call self%set_1(key, real(iarg))
+    end subroutine set_3
 
     !> \brief for removing a command line argument
     subroutine delete( self, key )

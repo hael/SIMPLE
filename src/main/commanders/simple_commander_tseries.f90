@@ -943,8 +943,9 @@ contains
         type(detect_atoms_commander)  :: xdetect_atms
         type(reproject_commander)     :: xreproject
         type(vizoris_commander)       :: xvizoris
+        type(make_cavgs_commander)    :: xmake_cavgs
         type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
-        type(cmdline)                 :: cline_refine3D_cavgs, cline_vizoris
+        type(cmdline)                 :: cline_vizoris, cline_make_cavgs
         type(ori)                     :: o1, o2
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
@@ -959,13 +960,14 @@ contains
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
         character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
+        integer,          parameter   :: NSPACE_CLS3D = 1000
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
         real,             allocatable :: rstates(:), corrs(:), euldists(:)
         logical,          allocatable :: state_mask(:), pind_mask(:)
         character(len=:), allocatable :: iter_tag
         character(len=STDLEN) :: fbody, fbody_split
-        integer :: i, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, noris, pind_plus_one
+        integer :: i, iter, cnt, cnt2, funit, io_stat, endit, noris, pind_plus_one
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
@@ -1000,7 +1002,7 @@ contains
         call cline_refine3D_nano%set('prg',     'refine3D_nano')
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we need to keep track of project file
         call cline_refine3D_nano%set('keepvol',  'yes')
-        call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
+        call cline_refine3D_nano%set('maxits',   params%maxits_between) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
         call cline_refine3D_nano%set('silence_fsc', 'yes')       ! to avoid excessive printing
         ! then update cline_detect_atoms accordingly
@@ -1080,93 +1082,76 @@ contains
         call del_file(BINARY)
         call del_file(CCS)
         call del_file(SPLITTED)
-        ! retrieve cavgs stack
-        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
-        if( ncavgs /= 0 )then
-            ! update cline_refine3D_cavgs accordingly
-            call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
-            call cline_refine3D_cavgs%set('vol1', FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
-            call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
-            call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
-            call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
-            call cline_refine3D_cavgs%set('mkdir',               'no')
-            call cline_refine3D_cavgs%set('maxits',                1.)
-            call cline_refine3D_cavgs%set('projfile', params%projfile)
-            call cline_refine3D_cavgs%set('oritype',          'cls3D')
-            call cline_refine3D_cavgs%set('objfun',              'cc')
-            call cline_refine3D_cavgs%set('lp',                   1.5)
-            call cline_refine3D_cavgs%set('silence_fsc',        'yes')
-            ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D_nano%execute(cline_refine3D_cavgs)
-            params_glob => params_ptr
-            params_ptr  => null()
-            ! cavgs vs RECVOL reprojs vs SIMVOL reprojs if cavgs exist in projfile
-            ! align cavgs to the final RECVOL
-            call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
-            ! ...so write out its content
-            call spproj%os_cls3D%write('cavgs_oris.txt')
-            ! ...and get the state flags
-            if( allocated(rstates) ) deallocate(rstates)
-            rstates = spproj%os_cls3D%get_all('state')
-            ! prepare for re-projection
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
-            call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
-            call cline_reproject%set('smpd',            params%smpd)
-            call cline_reproject%set('oritab',     'cavgs_oris.txt')
-            call cline_reproject%set('pgrp',            params%pgrp)
-            call cline_reproject%set('nthr',      real(params%nthr))
-            params_ptr  => params_glob
-            params_glob => null()
-            call xreproject%execute(cline_reproject)
-            params_glob => params_ptr
-            params_ptr  => null()
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
-            call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
-            ! re-project
-            params_ptr  => params_glob
-            params_glob => null()
-            call xreproject%execute(cline_reproject)
-            params_glob => params_ptr
-            params_ptr  => null()
-            ! write cavgs & reprojections in triplets
-            allocate(imgs(3*ncavgs), state_mask(ncavgs))
-            cnt = 0
-            do i = 1,3*ncavgs,3
-                cnt = cnt + 1
-                if( rstates(cnt) > 0.5 )then
-                    call imgs(i    )%new([params%box,params%box,1], smpd)
-                    call imgs(i + 1)%new([params%box,params%box,1], smpd)
-                    call imgs(i + 2)%new([params%box,params%box,1], smpd)
-                    call imgs(i    )%read(cavgs_stk,                 cnt)
-                    call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-                    call imgs(i + 2)%read('reprojs_SIM.mrc',   cnt)
-                    call imgs(i    )%norm
-                    call imgs(i + 1)%norm
-                    call imgs(i + 2)%norm
-                    state_mask(cnt) = .true.
-                else
-                    state_mask(cnt) = .false.
-                endif
-            end do
-            cnt  = 0
-            cnt2 = 1 ! needed because we have omissions
-            do i = 1,3*ncavgs,3
-                cnt = cnt + 1
-                if( state_mask(cnt) )then
-                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2    )
-                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 1)
-                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 2)
-                    call imgs(i    )%kill
-                    call imgs(i + 1)%kill
-                    call imgs(i + 2)%kill
-                    cnt2 = cnt2 + 3
-                endif
-            end do
-            deallocate(imgs)
-        endif ! end of class average-based validation
-        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
+        ! generate 3d classes
+        cavgs_stk = 'cavgs3D.mrc'
+        call cline_make_cavgs%set('prg',      'make_cavgs')
+        call cline_make_cavgs%set('nspace',   NSPACE_CLS3D)
+        call cline_make_cavgs%set('pgrp',     params%pgrp)
+        call cline_make_cavgs%set('projfile', params%projfile)
+        call cline_make_cavgs%set('nthr',     params%nthr)
+        call cline_make_cavgs%set('mkdir',    'no')
+        call cline_make_cavgs%set('refs',     cavgs_stk)
+        call cline_make_cavgs%set('outfile',  'cavgs_oris.txt')
+        call cline_make_cavgs%set('ml_reg',   'no')
+        params_ptr  => params_glob
+        params_glob => null()
+        call xmake_cavgs%execute(cline_make_cavgs)
+        params_glob => params_ptr
+        params_ptr  => null()
+        call spproj%os_cls3D%new(NSPACE_CLS3D, is_ptcl=.false.)
+        call spproj%os_cls3D%read('cavgs_oris.txt') ! will not be written as part of document
+        if( allocated(rstates) ) deallocate(rstates)
+        rstates = spproj%os_cls3D%get_all('state')
+        ! prepare for re-projection
+        call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
+        call cline_reproject%set('smpd',   params%smpd)
+        call cline_reproject%set('oritab', 'cavgs_oris.txt')
+        call cline_reproject%set('pgrp',   params%pgrp)
+        call cline_reproject%set('nthr',   real(params%nthr))
+        params_ptr  => params_glob
+        params_glob => null()
+        call xreproject%execute(cline_reproject)
+        params_glob => params_ptr
+        params_ptr  => null()
+        call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
+        call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
+        ! re-project
+        params_ptr  => params_glob
+        params_glob => null()
+        call xreproject%execute(cline_reproject)
+        params_glob => params_ptr
+        params_ptr  => null()
+        ! write cavgs & reprojections in triplets
+        allocate(imgs(3), state_mask(NSPACE_CLS3D))
+        call imgs(1)%new([params%box,params%box,1], smpd)
+        call imgs(2)%new([params%box,params%box,1], smpd)
+        call imgs(3)%new([params%box,params%box,1], smpd)
+        cnt  = 0
+        cnt2 = 1
+        do i = 1,3*NSPACE_CLS3D,3
+            cnt = cnt + 1
+            if( rstates(cnt) > 0.5 )then
+                state_mask(cnt) = .true.
+                call imgs(1)%read(cavgs_stk,            cnt)
+                call imgs(2)%read('reprojs_recvol.mrc', cnt)
+                call imgs(3)%read('reprojs_SIM.mrc',    cnt)
+                call imgs(1)%norm
+                call imgs(2)%norm
+                call imgs(3)%norm
+                call imgs(1)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2    )
+                call imgs(2)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 1)
+                call imgs(3)%write('cavgs_vs_reprojections_rec_and_sim.mrc', cnt2 + 2)
+                cnt2 = cnt2 + 3
+            else
+                state_mask(cnt) = .false.
+            endif
+        end do
+        call imgs(1)%kill
+        call imgs(2)%kill
+        call imgs(3)%kill
+        deallocate(imgs)
+        ! call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* cavgs3D*mrc reproject_oris.txt cavgs_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
@@ -1174,7 +1159,7 @@ contains
         call spproj%os_ptcl3D%write('ptcls_oris.txt')
         call cline_vizoris%set('oritab', 'ptcls_oris.txt')
         call cline_vizoris%set('pgrp',        params%pgrp)
-        call cline_vizoris%set('nspace',           10000.)
+        call cline_vizoris%set('nspace',     NSPACE_CLS3D)
         call cline_vizoris%set('tseries',           'yes')
         params_ptr  => params_glob
         params_glob => null()
