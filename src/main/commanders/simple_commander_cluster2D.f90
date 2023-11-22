@@ -107,7 +107,6 @@ contains
                 THROW_HARD('NSPACE & PTCL2D are incompatible!')
             endif
             call cline%set('oritype', 'ptcl3D')
-            call cline%set('ncls',    cline%get_rarg('nspace'))
         else
             call cline%set('oritype', 'ptcl2D')
         endif
@@ -120,7 +119,10 @@ contains
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
-        call cline_cavgassemble%set('prg', 'cavgassemble')
+        call cline_cavgassemble%set('prg',  'cavgassemble')
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call cline_cavgassemble%set('ncls', params%nspace)
+        endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         ! assemble class averages
@@ -135,9 +137,23 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: ncls_here
+        integer :: ncls_here, icls
         logical :: l_shmem
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( (.not.cline%defined('ncls')) .and. (.not.cline%defined('nspace')) )then
+            THROW_HARD('NCLS or NSPACE need be defined!')
+        endif
+        if( (cline%defined('ncls')).and. cline%defined('nspace') )then
+            THROW_HARD('NCLS and NSPACE cannot be both defined!')
+        endif
+        if( cline%defined('nspace') )then
+            if( trim(cline%get_carg('oritype')).eq.'ptcl2D' )then
+                THROW_HARD('NSPACE & PTCL2D are incompatible!')
+            endif
+            call cline%set('oritype', 'ptcl3D')
+            call cline%set('ncls',    cline%get_rarg('nspace'))
+        else
+            call cline%set('oritype', 'ptcl2D')
+        endif
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -211,8 +227,23 @@ contains
             call cavger_write(trim(params%refs),      'merged')
             call cavger_write(trim(params%refs_even), 'even'  )
             call cavger_write(trim(params%refs_odd),  'odd'   )
+            select case(trim(params%oritype))
+            case('ptcl2D')
+                ! all done
+            case('ptcl3D')
+                do icls = 1,params%nspace
+                    call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+                enddo
+                if( cline%defined('outfile') )then
+                    call build%spproj%os_cls3D%write(params%outfile)
+                else
+                    call build%spproj%os_cls3D%write('cls3D_oris.txt')
+                endif
+            case DEFAULT
+                THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+            end select
         else
-            ! write partital sums
+            ! write partial sums
             call cavger_readwrite_partial_sums('write')
             call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
         endif
@@ -1367,7 +1398,7 @@ contains
         type(starproject) :: starproj
         real, allocatable :: states(:)
         logical           :: l_stream
-        integer           :: iterstr_start, iterstr_end, iter, io_stat
+        integer           :: iterstr_start, iterstr_end, iter, io_stat, icls
         if( .not.cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -1409,14 +1440,31 @@ contains
         call cavger_write(trim(params%refs_even), 'even'  )
         call cavger_write(trim(params%refs_odd),  'odd'   )
         call cavger_kill()
-        ! write project: cls2D and state congruent cls3D
-        call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
-        states = build%spproj%os_cls2D%get_all('state')
-        call build%spproj%os_cls3D%set_all('state',states)
-        if( trim(params%oritype).eq.'ptcl2D' )then
-            call build%spproj%write_segment_inside('cls2D', params%projfile)
-        endif
-        call build%spproj%write_segment_inside('cls3D', params%projfile)
+        ! write project
+        select case(trim(params%oritype))
+        case('ptcl2D')
+            ! cls2D and state congruent cls3D
+            call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+            states = build%spproj%os_cls2D%get_all('state')
+            call build%spproj%os_cls3D%set_all('state',states)
+            if( trim(params%oritype).eq.'ptcl2D' )then
+                call build%spproj%write_segment_inside('cls2D', params%projfile)
+            endif
+            call build%spproj%write_segment_inside('cls3D', params%projfile)
+        case('ptcl3D')
+            call build%eulspace%new(params%nspace, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(build%eulspace)
+            do icls = 1,params%ncls
+                call build%spproj%os_cls3D%set_euler(icls, build%eulspace%get_euler(icls))
+            enddo
+            if( cline%defined('outfile') )then
+                call build%spproj%os_cls3D%write(params%outfile)
+            else
+                call build%spproj%os_cls3D%write('cls3D_oris.txt')
+            endif
+        case DEFAULT
+            THROW_HARD('Unsupported ORITYPE: '//trim(params%oritype))
+        end select
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

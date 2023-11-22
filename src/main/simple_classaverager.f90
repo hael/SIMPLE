@@ -172,7 +172,7 @@ contains
             ithr               = omp_get_thread_num() + 1
             precs(cnt)%eo      = nint(spproj_field%get(iptcl,'eo'))
             precs(cnt)%pw      = spproj_field%get(iptcl,'w')
-            ctfvars(ithr)      = spproj%get_ctfparams('ptcl2D',iptcl)
+            ctfvars(ithr)      = spproj%get_ctfparams(params_glob%oritype,iptcl)
             precs(cnt)%tfun    = ctf(params_glob%smpd_crop, ctfvars(ithr)%kv, ctfvars(ithr)%cs, ctfvars(ithr)%fraca)
             precs(cnt)%dfx     = ctfvars(ithr)%dfx
             precs(cnt)%dfy     = ctfvars(ithr)%dfy
@@ -210,12 +210,23 @@ contains
     !!         poulation, average correlation and weight
     subroutine cavger_gen2Dclassdoc( spproj )
         use simple_sp_project, only: sp_project
-        class(sp_project), intent(inout) :: spproj
+        class(sp_project), target, intent(inout) :: spproj
+        class(oris), pointer :: ptcl_field, cls_field
         integer  :: pops(params_glob%ncls)
         real(dp) :: corrs(params_glob%ncls), ws(params_glob%ncls), specscores(params_glob%ncls)
         real     :: frc05, frc0143, rstate, w
         integer  :: i, iptcl, icls, pop, nptcls
-        nptcls     = spproj%os_ptcl2D%get_noris()
+        select case(trim(params_glob%oritype))
+        case('ptcl2D')
+            ptcl_field => spproj%os_ptcl2D
+            cls_field  => spproj%os_cls2D
+        case('ptcl3D')
+            ptcl_field => spproj%os_ptcl3D
+            cls_field  => spproj%os_cls3D
+        case DEFAULT
+            THROW_HARD('Unsupported ORITYPE: '//trim(params_glob%oritype))
+        end select
+        nptcls     = ptcl_field%get_noris()
         pops       = 0
         corrs      = 0.d0
         ws         = 0.d0
@@ -223,29 +234,29 @@ contains
         !$omp parallel do default(shared) private(iptcl,rstate,icls,w) schedule(static)&
         !$omp proc_bind(close) reduction(+:pops,corrs,ws,specscores)
         do iptcl=1,nptcls
-            rstate = spproj%os_ptcl2D%get(iptcl,'state')
+            rstate = ptcl_field%get(iptcl,'state')
             if( rstate < 0.5 ) cycle
-            w = spproj%os_ptcl2D%get(iptcl,'w')
+            w = ptcl_field%get(iptcl,'w')
             if( w < SMALL ) cycle
-            icls = nint(spproj%os_ptcl2D%get(iptcl,'class'))
+            icls = nint(ptcl_field%get(iptcl,'class'))
             if( icls<1 .or. icls>params_glob%ncls )cycle
             pops(icls)       = pops(icls)      + 1
-            corrs(icls)      = corrs(icls)     + spproj%os_ptcl2D%get(iptcl,'corr')
+            corrs(icls)      = corrs(icls)     + ptcl_field%get(iptcl,'corr')
             ws(icls)         = ws(icls)        + real(w,dp)
-            specscores(icls) = specscores(icls)+ spproj%os_ptcl2D%get(iptcl,'specscore')
+            specscores(icls) = specscores(icls)+ ptcl_field%get(iptcl,'specscore')
         enddo
         !$omp end parallel do
-        if( l_stream  .and. spproj%os_cls2D%get_noris()==ncls .and. params_glob%update_frac<.99 )then
+        if( l_stream  .and. cls_field%get_noris()==ncls .and. params_glob%update_frac<.99 )then
             do i = 1,ncls
-                icls = nint(spproj%os_cls2D%get(i,'class'))
-                if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
-                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'prev_pop_even'))
-                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'prev_pop_odd'))
+                icls = nint(cls_field%get(i,'class'))
+                if( .not.cls_field%isthere(i,'prev_pop_even') ) cycle
+                prev_eo_pops(icls,1) = nint(cls_field%get(i,'prev_pop_even'))
+                prev_eo_pops(icls,2) = nint(cls_field%get(i,'prev_pop_odd'))
                 pop = sum(prev_eo_pops(icls,:))
                 if( pop == 0 ) cycle
-                corrs(icls)      = corrs(icls)      + real(pop) * spproj%os_cls2D%get(i,'corr')
-                ws(icls)         = ws(icls)         + real(pop) * spproj%os_cls2D%get(i,'w')
-                specscores(icls) = specscores(icls) + real(pop) * spproj%os_cls2D%get(i,'specscore')
+                corrs(icls)      = corrs(icls)      + real(pop) * cls_field%get(i,'corr')
+                ws(icls)         = ws(icls)         + real(pop) * cls_field%get(i,'w')
+                specscores(icls) = specscores(icls) + real(pop) * cls_field%get(i,'specscore')
                 pops(icls)       = pops(icls) + pop
             enddo
         endif
@@ -258,23 +269,23 @@ contains
             ws         = 0.
             specscores = 0.
         end where
-        call spproj%os_cls2D%new(params_glob%ncls, is_ptcl=.false.)
+        call cls_field%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls
             pop = pops(icls)
             call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
-            call spproj%os_cls2D%set(icls, 'class',     real(icls))
-            call spproj%os_cls2D%set(icls, 'pop',       real(pop))
-            call spproj%os_cls2D%set(icls, 'res',       frc0143)
-            call spproj%os_cls2D%set(icls, 'corr',      real(corrs(icls)))
-            call spproj%os_cls2D%set(icls, 'w',         real(ws(icls)))
-            call spproj%os_cls2D%set(icls, 'specscore', real(specscores(icls)))
+            call cls_field%set(icls, 'class',     real(icls))
+            call cls_field%set(icls, 'pop',       real(pop))
+            call cls_field%set(icls, 'res',       frc0143)
+            call cls_field%set(icls, 'corr',      real(corrs(icls)))
+            call cls_field%set(icls, 'w',         real(ws(icls)))
+            call cls_field%set(icls, 'specscore', real(specscores(icls)))
             if( pop > 0 )then
-                call spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
+                call cls_field%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
             else
-                call spproj%os_cls2D%set(icls, 'state', 0.0) ! exclusion
+                call cls_field%set(icls, 'state', 0.0) ! exclusion
             endif
         end do
-        call score_classes(spproj%os_cls2D)
+        call score_classes(cls_field)
     end subroutine cavger_gen2Dclassdoc
 
     !>  \brief  is for initialization of the sums
