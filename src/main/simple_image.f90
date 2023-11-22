@@ -801,6 +801,7 @@ contains
         fromc = coord + 1         ! compensate for the c-range that starts at 0
         toc   = fromc + (box - 1) ! the lower left corner is 1,1
         self_out%rmat = 0.
+        self_out%ft   = .false.
         outside = .false.
         if( fromc(1) < 1 .or. fromc(2) < 1 .or. toc(1) > self_in%ldim(1) .or. toc(2) > self_in%ldim(2) )then
             outside = .true.
@@ -4418,7 +4419,7 @@ contains
     subroutine calc_ice_score( self, score )
         class(image), intent(in)  :: self
         real,         intent(out) :: score
-        real,   parameter :: START_FREQ = 10.
+        real,   parameter :: START_FREQ = 15.
         real,   parameter :: END_FREQ   = 6.
         real, allocatable :: res(:), tmp(:)
         real    :: powspec(fdim(self%ldim(1)) - 1)
@@ -4473,7 +4474,6 @@ contains
         enddo
         ice_avg = ice_avg / real(cnt)
         score   = ice_avg / (band_avg + TINY)
-        ! print *,band_avg,ice_avg,hmax,kmax
     end subroutine calc_ice_score
 
     ! This function returns the derivates row, column, and z as outputs,
