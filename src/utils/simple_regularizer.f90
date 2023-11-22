@@ -47,6 +47,7 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: init_tab
     procedure          :: fill_tab_noshift
+    procedure          :: fill_tab_prob
     procedure          :: partition_refs
     procedure          :: make_neigh_tab
     procedure          :: map_ptcl_ref
@@ -164,6 +165,41 @@ contains
         enddo
         !$omp end parallel do
     end subroutine fill_tab_noshift
+
+    subroutine fill_tab_prob( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer   :: i, iref, iptcl, irot
+        real      :: inpl_corrs(self%nrots,self%nrefs), sum_corrs(self%nrots)
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs(:,iref) )
+                do irot = 1, self%nrots
+                    inpl_corrs(irot, iref) = max(0., inpl_corrs(irot, iref))
+                enddo
+            enddo
+            !$omp end parallel do
+            sum_corrs = 0.
+            !$omp parallel do default(shared) private(irot,iref) proc_bind(close) schedule(static)
+            do irot = 1, self%nrots
+                do iref = 1, self%nrefs
+                    sum_corrs(irot) = sum_corrs(irot) + inpl_corrs(irot, iref)
+                enddo
+                inpl_corrs(irot,:) = inpl_corrs(irot,:)/sum_corrs(irot)
+            enddo
+            !$omp end parallel do
+            inpl_corrs = inpl_corrs/maxval(inpl_corrs)
+            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs(:,iref), dim=1)
+                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc, iref)
+            enddo
+            !$omp end parallel do
+        enddo
+    end subroutine fill_tab_prob
 
     subroutine partition_refs( self )
         class(regularizer), intent(inout) :: self
