@@ -14,6 +14,7 @@ integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
 integer, parameter :: MAXNREFS     = 100
 real,    parameter :: DIST_THRES   = real(OFFSET), NDEV_DEFAULT = 2.5
 logical, parameter :: L_WRITE      = .false.
+logical, parameter :: L_REGION_REJECTION = .false.
 
 type picker_utils
     private
@@ -28,7 +29,7 @@ type picker_utils
     type(image),      allocatable :: boximgs1(:), boximgs2(:), boxrefs(:,:)
     integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
     real,             allocatable :: box_scores1(:)
-    logical,          allocatable :: l_err_refs(:,:)
+    logical,          allocatable :: l_err_refs(:,:), l_mic_mask1(:,:)
     character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
     logical                       :: refpick = .false.
@@ -50,6 +51,7 @@ type picker_utils
     procedure          :: refine_positions
     procedure          :: remove_outliers
     procedure          :: peak_vs_nonpeak_stats
+    procedure, private :: flag_ice
     procedure          :: kill
 end type picker_utils
 
@@ -136,6 +138,8 @@ contains
         call self%mic_raw%ifft
         call self%mic_shrink1%ifft
         call self%mic_shrink2%ifft
+        ! init mask
+        allocate(self%l_mic_mask1(self%ldim_shrink1(1),self%ldim_shrink1(2)),source=.true.)
         if( L_WRITE )then
             call self%mic_shrink1%write('mic_shrink1.mrc')
             call self%mic_shrink2%write('mic_shrink2.mrc')
@@ -253,27 +257,130 @@ contains
             self%boxname = trim(dir_out)//trim(self%boxname)
         endif
         call self%gauconv_mics
+        if( L_REGION_REJECTION )then
+            call self%flag_ice
+        endif
         call self%set_positions
         call self%analyze_boximgs1
-        call self%center_filter
-        call self%distance_filter
-        call self%refine_positions
-        call self%remove_outliers
-        call self%peak_vs_nonpeak_stats
-        ! # ptcls
-        nptcls          = self%nboxes2
-        ! bring back coordinates to original sampling
-        shrink2         = SMPD_SHRINK2 / self%smpd_raw
-        self%positions2 = nint(shrink2 * real(self%positions2))
-        ! write coordinates
-        box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
-        if( L_WRITE )then
-            call self%extract_boximgs2(box)
-            call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+        if( self%nboxes1 > 0 )then
+            call self%center_filter
+            call self%distance_filter
+            call self%refine_positions
+            call self%remove_outliers
+            call self%peak_vs_nonpeak_stats
+            ! # ptcls
+            nptcls          = self%nboxes2
+            ! bring back coordinates to original sampling
+            shrink2         = SMPD_SHRINK2 / self%smpd_raw
+            self%positions2 = nint(shrink2 * real(self%positions2))
+            ! write coordinates
+            box = find_larger_magic_box(nint(shrink2 * self%ldim_box2(1)))
+            if( L_WRITE )then
+                call self%extract_boximgs2(box)
+                call write_boximgs(self%nboxes2, self%boximgs2, trim(self%fbody)//'_raw.mrcs')
+            endif
+            call write_boxfile(self%nboxes2, self%positions2, box, self%boxname)
+            call make_relativepath(CWD_GLOB, self%boxname, boxname_out) ! returns absolute path
+        else
+            ! no particles found
+            nptcls      = 0
+            boxname_out = ''
         endif
-        call write_boxfile(self%nboxes2, self%positions2, box, self%boxname)
-        call make_relativepath(CWD_GLOB, self%boxname, boxname_out) ! returns absolute path
     end subroutine exec_picker
+
+    subroutine flag_ice( self )
+        class(picker_utils), intent(inout) :: self
+        real, parameter      :: THRESHOLD = 5.
+        real, parameter      :: SMPD_ICE  = ICE_BAND1/2. - 0.15
+        integer, parameter   :: BOX = 128
+        type(image)          :: boximgs_heap(nthr_glob), img
+        real,    allocatable :: scores(:,:)
+        integer, allocatable :: counts(:,:)
+        real        :: score, scale, radius
+        integer     :: ldim(3), i,j,ithr,ii,jj, cnt
+        logical     :: outside
+        if( self%smpd_raw > SMPD_ICE )then
+            self%l_mic_mask1 = .true.
+            return
+        endif
+        scale   = self%smpd_raw / SMPD_ICE
+        ldim(1) = round2even(real(self%ldim_raw(1)) * scale)
+        ldim(2) = round2even(real(self%ldim_raw(2)) * scale)
+        ldim(3) = 1
+        radius  = real(BOX)/2.- COSMSKHALFWIDTH
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new([BOX,BOX,1], SMPD_ICE, wthreads=.false.)
+        end do
+        call img%new(ldim,SMPD_ICE)
+        call img%set_ft(.true.)
+        call self%mic_raw%fft
+        call self%mic_raw%clip(img)
+        call self%mic_raw%ifft
+        call img%ifft
+        allocate(scores(ldim(1),ldim(2)),source=0.)
+        allocate(counts(ldim(1),ldim(2)),source=0)
+        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            do j = 1,ldim(2)-BOX+1,BOX/2
+                ithr = omp_get_thread_num() + 1
+                call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+                call boximgs_heap(ithr)%mask(radius,'soft')
+                call boximgs_heap(ithr)%fft
+                call boximgs_heap(ithr)%calc_ice_score(score)
+                scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+                counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+            end do
+        end do
+        !$omp end parallel do
+        i = ldim(1)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(j,ithr,outside,score) proc_bind(close)
+        do j = 1,ldim(2)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+        enddo
+        !$omp end parallel do
+        j = ldim(2)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(i,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+        enddo
+        !$omp end parallel do
+        where( counts > 0 ) scores = scores / real(counts)
+        scale = real(ldim(1)) / real(self%ldim_shrink1(1))
+        do i = 1,self%ldim_shrink1(1)
+            ii = min(ldim(1), max(1, nint(scale*real(i))))
+            do j = 1,self%ldim_shrink1(2)
+                jj = min(ldim(2), max(1, nint(scale*real(j))))
+                self%l_mic_mask1(i,j) = scores(ii,jj) < THRESHOLD
+            enddo
+        enddo
+        if( .not.all(self%l_mic_mask1(:,:)) )then
+            call img%norm
+            cnt = 0
+            do i = 1,ldim(1),2
+                do j = 1,ldim(2),2
+                    if( scores(i,j) > THRESHOLD ) call img%set([i,j,1], 0.)
+                end do
+            end do
+            call img%write(trim(self%fbody)//'_ice.mrc')
+            print *,'% ice water: ',100.-100.*count(self%l_mic_mask1(:,:))/real(product(self%ldim_shrink1))
+        endif
+        call img%kill
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
+    end subroutine flag_ice
 
     subroutine set_positions_1( self )
         class(picker_utils), intent(inout) :: self
@@ -282,7 +389,7 @@ contains
 
     subroutine set_positions_2( self, box_raw, box12 )
         class(picker_utils), intent(inout) :: self
-        real,                intent(in)    :: box_raw, box12(2)
+        integer,             intent(in)    :: box_raw, box12(2)
         ! set logical dimensions of boxes
         self%ldim_box(1)  = box_raw
         self%ldim_box(2)  = self%ldim_box(1)
@@ -313,13 +420,14 @@ contains
             do yind = 0,self%ny1,OFFSET
                 self%nboxes1   = self%nboxes1   + 1
                 self%ny_offset = self%ny_offset + 1
+                if( self%l_mic_mask1(xind+1,yind+1) ) self%nboxes1 = self%nboxes1 + 1
             end do
         end do
         ! count # boxes, upper bound
         self%nboxes_ub = 0
         do xind = 0,self%nx1,OFFSET_UB
             do yind = 0,self%ny1,OFFSET_UB
-                self%nboxes_ub   = self%nboxes_ub + 1
+                if( self%l_mic_mask1(xind+1,yind+1) ) self%nboxes_ub = self%nboxes_ub + 1
             end do
         end do
         ! allocate and set positions1 
@@ -335,10 +443,12 @@ contains
             self%nx_offset = self%nx_offset + 1
             self%ny_offset = 0
             do yind = 0,self%ny1,OFFSET
-                self%nboxes1   = self%nboxes1 + 1
                 self%ny_offset = self%ny_offset + 1
-                self%positions1(self%nboxes1,:) = [xind,yind]
-                self%inds_offset(self%nx_offset,self%ny_offset) = self%nboxes1
+                if( self%l_mic_mask1(xind+1,yind+1) )then
+                    self%nboxes1 = self%nboxes1 + 1
+                    self%positions1(self%nboxes1,:) = [xind,yind]
+                    self%inds_offset(self%nx_offset,self%ny_offset) = self%nboxes1
+                endif
             end do
         end do
     end subroutine set_pos_priv
@@ -454,21 +564,30 @@ contains
             !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
-                    ithr = omp_get_thread_num() + 1
-                    pos  = self%positions1(self%inds_offset(ioff,joff),:)
-                    call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
-                    call boximgs_heap(ithr)%prenorm4real_corr(l_err)
-                    if( l_err )then
-                        box_scores(ioff,joff,1) = 0.
+                    if( self%inds_offset(ioff,joff) == 0 )then
+                        box_scores(ioff,joff,1) = -1.
                     else
-                        do iref = 1,self%nrefs
-                            if( self%l_err_refs(iref,1) )then
-                                scores(iref) = 0.
+                        pos = self%positions1(self%inds_offset(ioff,joff),:)
+                        if( self%l_mic_mask1(pos(1)+1,pos(2)+1) )then
+                            ithr = omp_get_thread_num() + 1
+                            pos  = self%positions1(self%inds_offset(ioff,joff),:)
+                            call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
+                            call boximgs_heap(ithr)%prenorm4real_corr(l_err)
+                            if( l_err )then
+                                box_scores(ioff,joff,1) = 0.
                             else
-                                scores(iref) = self%boxrefs(iref,1)%real_corr_prenorm(boximgs_heap(ithr))
+                                do iref = 1,self%nrefs
+                                    if( self%l_err_refs(iref,1) )then
+                                        scores(iref) = 0.
+                                    else
+                                        scores(iref) = self%boxrefs(iref,1)%real_corr_prenorm(boximgs_heap(ithr))
+                                    endif
+                                end do
+                                box_scores(ioff,joff,1) = maxval(scores)
                             endif
-                        end do
-                        box_scores(ioff,joff,1) = maxval(scores)
+                        else
+                            box_scores(ioff,joff,1) = -1.
+                        endif
                     endif
                 end do
             end do
@@ -477,17 +596,26 @@ contains
             !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
-                    ithr = omp_get_thread_num() + 1
-                    pos  = self%positions1(self%inds_offset(ioff,joff),:)
-                    call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
-                    box_scores(ioff,joff,1) = self%imgau_shrink1%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink1)
+                    if( self%inds_offset(ioff,joff) == 0 )then
+                        box_scores(ioff,joff,1) = -1.
+                    else
+                        pos = self%positions1(self%inds_offset(ioff,joff),:)
+                        if( self%l_mic_mask1(pos(1)+1,pos(2)+1) )then
+                            ithr = omp_get_thread_num() + 1
+                            call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), boximgs_heap(ithr), outside)
+                            box_scores(ioff,joff,1) = self%imgau_shrink1%real_corr_prenorm(boximgs_heap(ithr), self%sxx_shrink1)
+                        else
+                            box_scores(ioff,joff,1) = -1.
+                        endif
+                    endif
                 end do
             end do
             !$omp end parallel do
         endif
-        tmp = pack(box_scores, mask=.true.)
-        call detect_peak_thres(self%nx_offset * self%ny_offset, int(self%nboxes_ub), tmp, t)
+        tmp = pack(box_scores, mask=(box_scores>-1.+TINY))
+        call detect_peak_thres(size(tmp), int(self%nboxes_ub), tmp, t)
         deallocate(tmp)
+        t = max(0.,t)
         is_peak = .false.
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
@@ -495,29 +623,31 @@ contains
             end do
         end do
         npeaks = count(is_peak)
-        write(logfhandle,'(a,1x,I5)') '# positions considered               : ', self%nx_offset * self%ny_offset
-        ! update positions1 and box_scores1
-        if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
-        allocate(positions_tmp(npeaks,2), self%box_scores1(npeaks))
-        positions_tmp    = 0
-        self%box_scores1 = 0.
-        cnt              = 0
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                if( is_peak(ioff,joff,1) )then
-                    cnt = cnt + 1
-                    positions_tmp(cnt,:)  = self%positions1(self%inds_offset(ioff,joff),:)
-                    self%box_scores1(cnt) = box_scores(ioff,joff,1)
-                endif
-            end do
-        end do
-        deallocate(self%positions1)
+        write(logfhandle,'(a,1x,I5)') '# positions considered               : ', self%nboxes1
         self%nboxes1 = npeaks
-        allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
-        deallocate(positions_tmp)
-        call self%extract_boximgs1
-        if( L_WRITE )then
-            call write_boximgs(int(self%nboxes1), self%boximgs1, trim(self%fbody)//'_before_filters.mrcs')
+        if( self%nboxes1 > 0 )then
+            ! update positions1 and box_scores1
+            if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
+            allocate(positions_tmp(self%nboxes1,2), self%box_scores1(self%nboxes1))
+            positions_tmp    = 0
+            self%box_scores1 = 0.
+            cnt              = 0
+            do ioff = 1,self%nx_offset
+                do joff = 1,self%ny_offset
+                    if( is_peak(ioff,joff,1) )then
+                        cnt = cnt + 1
+                        positions_tmp(cnt,:)  = self%positions1(self%inds_offset(ioff,joff),:)
+                        self%box_scores1(cnt) = box_scores(ioff,joff,1)
+                    endif
+                end do
+            end do
+            deallocate(self%positions1)
+            allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
+            deallocate(positions_tmp)
+            call self%extract_boximgs1
+            if( L_WRITE )then
+                call write_boximgs(int(self%nboxes1), self%boximgs1, trim(self%fbody)//'_before_filters.mrcs')
+            endif
         endif
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -880,6 +1010,7 @@ contains
             if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
             if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
             if( allocated(self%fbody)       ) deallocate(self%fbody)
+            if( allocated(self%l_mic_mask1) ) deallocate(self%l_mic_mask1)
         endif
 
         contains
