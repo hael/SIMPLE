@@ -154,9 +154,9 @@ contains
     subroutine fill_tab_noshift( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl, indxarr(self%nrots), j
+        integer   :: i, iref, iptcl
         real      :: inpl_corrs(self%nrots)
-        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -165,10 +165,6 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
                 self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
-                indxarr = (/(j,j=1,self%nrots)/)
-                call hpsort(inpl_corrs, indxarr)
-                call reverse(indxarr)
-                self%ref_ptcl_tab(iref,iptcl)%loc_smpl = indxarr(1:N_SAMPLES)
             enddo
         enddo
         !$omp end parallel do
@@ -177,36 +173,26 @@ contains
     subroutine fill_tab_prob( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl, irot
-        real      :: inpl_corrs(self%nrots,self%nrefs), sum_corrs(self%nrots)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            !$omp parallel do default(shared) private(iref,irot) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs(:,iref) )
-                do irot = 1, self%nrots
-                    inpl_corrs(irot, iref) = max(0., inpl_corrs(irot, iref))
-                enddo
+        integer   :: i, iref, iptcl, indxarr(self%nrots), j
+        real      :: inpl_corrs(self%nrots)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                where( inpl_corrs < TINY ) inpl_corrs = 0.
+                indxarr = (/(j,j=1,self%nrots)/)
+                call hpsort(inpl_corrs, indxarr)
+                call reverse(indxarr)
+                call reverse(inpl_corrs)
+                self%ref_ptcl_tab(iref,iptcl)%loc_smpl = indxarr(1:N_SAMPLES)
+                self%ref_ptcl_tab(iref,iptcl)%sh       = 0.
+                self%ref_ptcl_tab(iref,iptcl)%loc      = maxloc(inpl_corrs, dim=1)
+                self%ref_ptcl_corr(iptcl,iref)         = sum(inpl_corrs(1:N_SAMPLES))
             enddo
-            !$omp end parallel do
-            sum_corrs = 0.
-            !$omp parallel do default(shared) private(irot,iref) proc_bind(close) schedule(static)
-            do irot = 1, self%nrots
-                do iref = 1, self%nrefs
-                    sum_corrs(irot) = sum_corrs(irot) + inpl_corrs(irot, iref)
-                enddo
-                inpl_corrs(irot,:) = inpl_corrs(irot,:)/sum_corrs(irot)
-            enddo
-            !$omp end parallel do
-            inpl_corrs = inpl_corrs/maxval(inpl_corrs)
-            !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs(:,iref), dim=1)
-                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc, iref)
-            enddo
-            !$omp end parallel do
         enddo
+        !$omp end parallel do
     end subroutine fill_tab_prob
 
     subroutine partition_refs( self )
