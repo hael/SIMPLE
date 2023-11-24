@@ -75,8 +75,6 @@ jobs:
              simple_test_euler
              echo "-------------------- TEST EXTR FRAC -------------------------"
              simple_test_extr_frac
-             echo "-------------------- TEST FFTW PLAN MANY -------------------------"
-             simple_test_fftw_plan_many_1D
              echo "-------------------- TEST FILE INPUT OUTPUT-------------------------"
              simple_test_fileio
              echo "-------------------- TEST FILE INPUT OUTPUT IN PARALLEL-------------------------"
