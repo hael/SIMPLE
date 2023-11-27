@@ -750,7 +750,7 @@ contains
 
     subroutine reject_from_pool
         type(image)          :: img
-        logical, allocatable :: cls_mask(:)
+        logical, allocatable :: cls_mask(:), tvd_mask(:), corres_mask(:)
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
@@ -761,19 +761,24 @@ contains
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         ncls_rejected   = 0
         nptcls_rejected = 0
-        allocate(cls_mask(ncls_glob), source=.true.)
-        ! correlation & resolution
-        ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
-        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,cls_mask,ndev_here)
+        allocate(cls_mask(ncls_glob),tvd_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
+        ! total variation distance
         if( L_CLS_REJECT_DEV )then
             do icls = 1,ncls_glob
-                if( cls_mask(icls) )then
+                if( tvd_mask(icls) )then
                     if( pool_proj%os_cls2D%isthere(icls,'score') )then
-                        cls_mask(icls) = pool_proj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
+                        tvd_mask(icls) = pool_proj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
                     endif
                 endif
             enddo
         endif
+        ! correlation & resolution
+        corres_mask = tvd_mask
+        ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
+        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
+        ! overall class rejection
+        cls_mask = tvd_mask .and. corres_mask
+        ! rejecting associated particles
         ncls2reject = count(.not.cls_mask)
         if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
             ncls_rejected = 0
