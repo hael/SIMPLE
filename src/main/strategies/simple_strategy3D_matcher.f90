@@ -204,7 +204,16 @@ contains
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                         call reg_obj%prev_cavgs
-                        call reg_obj%fill_tab_prob(pinds(batch_start:batch_end))
+                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
+                    enddo
+                    call reg_obj%compute_grad_const
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%compute_grad_prev
                     enddo
                     ! Batch loop
                     do ibatch=1,nbatches
@@ -212,7 +221,7 @@ contains
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%compute_grad_smpl
+                        call reg_obj%compute_grad_ptcl
                     enddo
                     call reg_obj%regularize_refs
                     if( trim(params_glob%refine) == 'prob' )then
@@ -223,7 +232,7 @@ contains
                             batch_end   = batches(ibatch,2)
                             batchsz     = batch_end - batch_start + 1
                             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                            call reg_obj%fill_tab_prob(pinds(batch_start:batch_end))
+                            call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
                         enddo
                         if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
                         call reg_obj%reg_uniform_cluster(best_ir)

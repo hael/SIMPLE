@@ -50,6 +50,8 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: init_tab
     procedure          :: fill_tab_noshift
+    procedure          :: compute_grad_const
+    procedure          :: compute_grad_prev
     procedure          :: fill_tab_prob
     procedure          :: partition_refs
     procedure          :: make_neigh_tab
@@ -164,11 +166,29 @@ contains
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_corr(iptcl,iref)    = max(0.,inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
+                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc)
             enddo
         enddo
         !$omp end parallel do
     end subroutine fill_tab_noshift
+
+    subroutine compute_grad_const( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iptcl
+        real    :: sum_corr
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+        do iptcl = params_glob%fromp, params_glob%top
+            sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
+            if( sum_corr < TINY )then
+                self%ref_ptcl_tab(:,iptcl)%sum = 1.
+                self%ref_ptcl_tab(:,iptcl)%w   = 1.
+            else
+                self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
+                self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine compute_grad_const
 
     subroutine fill_tab_prob( self, glob_pinds )
         class(regularizer), intent(inout) :: self
@@ -279,9 +299,8 @@ contains
         enddo
     end subroutine compute_grad_smpl
 
-    subroutine compute_grad_ptcl( self, best_ir )
+    subroutine compute_grad_ptcl( self )
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: best_ir(params_glob%fromp:params_glob%top)
         integer     :: iptcl, iref, loc, pind_here, iref2
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -290,7 +309,7 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,loc,pind_here,iref2,ptcl_ctf_rot)
             do iptcl = params_glob%fromp, params_glob%top
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                    iref2 = best_ir(iptcl)
+                    iref2 = self%prev_ptcl_ref(iptcl)
                     if( iref2 /= iref )then
                         pind_here = self%pftcc%pinds(iptcl)
                         loc = self%ref_ptcl_tab(iref2, iptcl)%loc
@@ -401,6 +420,32 @@ contains
             endif
         enddo
     end subroutine prev_cavgs
+
+    subroutine compute_grad_prev( self )
+        class(regularizer), intent(inout) :: self
+        integer     :: iptcl, iref, loc, pind_here
+        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
+        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real        :: grad_w
+        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
+        do iptcl = params_glob%fromp, params_glob%top
+            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
+                iref      = self%prev_ptcl_ref(iptcl)
+                pind_here = self%pftcc%pinds(iptcl)
+                ! computing the reg terms as the gradients w.r.t 2D references of the probability
+                loc = self%ref_ptcl_tab(iref, iptcl)%loc
+                loc = (self%nrots+1)-(loc-1)
+                if( loc > self%nrots ) loc = loc - self%nrots
+                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
+                grad_w = 1./self%ref_ptcl_tab(iref, iptcl)%sum - self%ref_ptcl_tab(iref, iptcl)%w/self%ref_ptcl_tab(iref, iptcl)%sum**2
+                if( self%pftcc%ptcl_iseven(iptcl) )then
+                    self%regs_grad_even(:,:,iref) = self%regs_grad_even(:,:,iref) + ptcl_ctf_rot * grad_w
+                else
+                    self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot * grad_w
+                endif
+            endif
+        enddo
+    end subroutine compute_grad_prev
 
     subroutine map_ptcl_ref( self, best_ir )
         class(regularizer), intent(inout) :: self
@@ -627,7 +672,7 @@ contains
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
         integer :: iref, k, box, find
-        real    :: eps, filt(self%kfromto(1):self%kfromto(2))
+        real    :: eps, filt(self%kfromto(1):self%kfromto(2)), rnd_num
         ! form the cavgs
         where( abs(self%regs_denom_odd) < TINY )
             self%regs_odd = 0._dp
@@ -702,6 +747,7 @@ contains
 
         ! annealing and different grad styles
         if( params_glob%l_reg_anneal ) eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
+        call seed_rnd
         if( params_glob%l_reg_anneal )then
             if( params_glob%l_reg_grad )then
                 !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
@@ -720,10 +766,13 @@ contains
             endif
         else
             if( params_glob%l_reg_grad )then
-                !$omp parallel do default(shared) private(iref) proc_bind(close) schedule(static)
+                !$omp parallel do default(shared) private(iref,rnd_num) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
-                    self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad_even(:,:,iref)
-                    self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad_odd( :,:,iref)
+                    call random_number(rnd_num)
+                    if( rnd_num < 0.5 )then
+                        self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad_even(:,:,iref)
+                        self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad_odd( :,:,iref)
+                    endif
                 enddo
                 !$omp end parallel do
             else
