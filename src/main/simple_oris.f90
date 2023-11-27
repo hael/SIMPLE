@@ -2691,7 +2691,7 @@ contains
         real    :: ave, sdev, res, res_threshold, corr_threshold
         integer :: icls, nincl
         logical :: has_res, has_corr
-        allocate(msk(self%n), source=.true.)
+        msk = cls_mask
         if( self%isthere('pop') )then
             do icls=1,self%n
                 if(self%get(icls,'pop')<0.5) msk(icls) = .false.

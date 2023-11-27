@@ -347,40 +347,46 @@ contains
 
     subroutine reject( self, res_thresh, ndev, box )
         class(stream_chunk), intent(inout) :: self
-        real,          intent(in)    :: res_thresh, ndev
-        integer,       intent(in)    :: box
-        type(image) :: img
-        logical,          allocatable :: cls_mask(:)
+        real,              intent(in) :: res_thresh, ndev
+        integer,           intent(in) :: box
+        type(image)                   :: img
+        logical,          allocatable :: cls_mask(:), tvd_mask(:), corres_mask(:)
         character(len=:), allocatable :: cavgs
-        character(len=XLONGSTRLEN) :: projfile
+        character(len=XLONGSTRLEN)    :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: icls, ncls_here, i
+        integer               :: icls, ncls, i
         call debug_print('in chunk%reject '//int2str(self%id))
-        projfile = trim(self%path)//self%projfile_out
+        projfile        = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
         nptcls_rejected = 0
         call self%spproj%read_segment('cls2D',projfile)
         call self%spproj%read_segment('out',  projfile)
-        call self%spproj%get_cavgs_stk(cavgs, ncls_here, smpd_here)
+        call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
-        allocate(cls_mask(ncls_here), source=.true.)
-        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, cls_mask, ndev)
+        allocate(cls_mask(ncls),tvd_mask(ncls),corres_mask(ncls),source=.true.)
+        ! total variation distance
         if( L_CLS_REJECT_DEV )then
-            do icls = 1,ncls_here
-                if( cls_mask(icls) )then
+            do icls = 1,ncls
+                if( tvd_mask(icls) )then
                     if( self%spproj%os_cls2D%isthere(icls,'score') )then
-                        cls_mask(icls) = self%spproj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
+                        tvd_mask(icls) = self%spproj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
                     endif
                 endif
             enddo
         endif
+        ! correlation and resolution
+        corres_mask = tvd_mask
+        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
+        ! overall class rejection
+        cls_mask      = tvd_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)
-        if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls_here,nint(real(ncls_here)*FRAC_SKIP_REJECTION)) )then
+        if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls,nint(real(ncls)*FRAC_SKIP_REJECTION)) )then
             ! no or too many classes to reject
         else
             call self%spproj%read_segment('ptcl2D',projfile)
             ! rejects particles 2D
+            !$omp parallel do private(iptcl,icls) reduction(+:ncls_rejected) proc_bind(close)
             do iptcl=1,self%nptcls
                 if( self%spproj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                 icls = self%spproj%os_ptcl2D%get_class(iptcl)
@@ -388,10 +394,11 @@ contains
                 nptcls_rejected = nptcls_rejected+1
                 call self%spproj%os_ptcl2D%set_state(iptcl,0)
             enddo
+            !$omp end parallel do
             call debug_print('in chunk%reject '//int2str(self%id)//' '//int2str(nptcls_rejected))
             call self%spproj%write_segment_inside('ptcl2D',projfile)
             ! updates cls2D field
-            do icls=1,ncls_here
+            do icls=1,ncls
                 if( .not.cls_mask(icls) )then
                     call self%spproj%os_cls2D%set(icls,'pop',   0.)
                     call self%spproj%os_cls2D%set(icls,'state', 0.)
@@ -402,7 +409,7 @@ contains
             ! updates class averages
             call img%new([box,box,1],smpd_here)
             i = 0
-            do icls=1,ncls_here
+            do icls=1,ncls
                 if( cls_mask(icls) ) cycle
                 if( L_CLS_REJECT_DEV )then
                     i = i+1
@@ -412,8 +419,8 @@ contains
                 img = 0.
                 call img%write(cavgs,icls)
             enddo
-            call img%read(cavgs, ncls_here)
-            call img%write(cavgs,ncls_here)
+            call img%read(cavgs, ncls)
+            call img%write(cavgs,ncls)
             write(logfhandle,'(A,I6,A,I6,A,I6,A,I6,A)')'>>> REJECTED FROM CHUNK ',self%id,': ',&
                 &nptcls_rejected,' / ',self%nptcls,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
         endif

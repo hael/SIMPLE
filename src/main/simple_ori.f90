@@ -47,9 +47,8 @@ type :: ori
     procedure          :: swape1e3
     procedure          :: set_shift
     procedure          :: set_dfx, set_dfy
-    procedure, private :: set_1
-    procedure, private :: set_2
-    generic            :: set => set_1, set_2
+    procedure, private :: set_1, set_2, set_3
+    generic            :: set => set_1, set_2, set_3
     procedure          :: set_state
     procedure          :: set_class
     procedure          :: set_stkind
@@ -456,28 +455,35 @@ contains
         endif
     end subroutine set_dfy
 
-    subroutine set_1( self, key, val )
+    subroutine set_1( self, key, rval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
-        real,             intent(in)    :: val
+        real,             intent(in)    :: rval
         integer :: ind
         if( self%is_ptcl )then
             ind = get_oriparam_ind(key)
             if( ind == 0 )then
-                call self%htab%set(key, val)
+                call self%htab%set(key, rval)
             else
-                self%pparms(ind) = val
+                self%pparms(ind) = rval
             endif
         else
-            call self%htab%set(key, val)
+            call self%htab%set(key, rval)
         endif
     end subroutine set_1
 
-    subroutine set_2( self, key, val )
+    subroutine set_2( self, key, cval )
         class(ori),       intent(inout) :: self
-        character(len=*), intent(in)    :: key, val
-        call self%chtab%set(key, val)
+        character(len=*), intent(in)    :: key, cval
+        call self%chtab%set(key, cval)
     end subroutine set_2
+
+    subroutine set_3( self, key, ival )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer,          intent(in)    :: ival
+        call self%set_1(key, real(ival))
+    end subroutine set_3
 
     subroutine set_state( self, state )
         class(ori), intent(inout) :: self

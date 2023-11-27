@@ -61,6 +61,7 @@ type :: parameters
     character(len=3)          :: pad='no'
     character(len=3)          :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
+    character(len=3)          :: pick_roi='no'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: print_corrs='no'     !< exporting corrs during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
@@ -553,6 +554,7 @@ contains
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
+        call check_carg('pick_roi',       self%pick_roi)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('print_corrs',    self%print_corrs)
