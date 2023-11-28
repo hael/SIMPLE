@@ -496,7 +496,38 @@ contains
         call img_cavg%new([params%box,params%box,1], params%smpd)
         call img_cavg%read(cavgsstk, params%class)
         call img_cavg%write('cluster2D_cavg.mrc')
+        ! taking in the corresponding denoised stk
+        cls_avg = 0.
+        denom   = 0.
+        call img_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
+        if( cline%defined('stk2') )then
+            print *, nptcls_cls, box
+            do j = 1, nptcls_cls
+                iptcl = pinds(j)
+                call img_cavg%read(trim(params%stk2), j)
+                call img_cavg%fft
+                ! transfer to polar coordinates
+                call build%img_crop_polarizer%polarize(pftcc, img_cavg, iptcl, .true., .true.)
+                ! e/o flags
+                call pftcc%set_eo(iptcl, .true. )
+                ! accumulating the cls_avg
+                loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
+                if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
+                call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j), ctf_rot, loc)
+                cls_avg = cls_avg + ctf_rot * cmplx(pftcc%pfts_ptcls(:,:,j), kind=dp)
+                denom   = denom   + ctf_rot**2
+            enddo
+            ! polar class average
+            call pftcc%polar2cartesian(cmplx(cls_avg / denom, kind=sp), cmat, box)
+            call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('polar_cavg_kPCA.mrc')
+        endif
         call img_cavg%kill
+        call calc_cavg%kill
         ! end gracefully
         call simple_end('**** SIMPLE_cavg_filter2D NORMAL STOP ****')
     end subroutine exec_cavg_filter2D
