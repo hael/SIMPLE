@@ -142,6 +142,7 @@ contains
             allocate(self%ref_ptcl_tab( self%nrefs,params_glob%fromp:params_glob%top))
             allocate(self%ptcl_ref_map( params_glob%fromp:params_glob%top))
         endif
+        self%ref_ptcl_corr = 0.
         do iref = 1,self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
                 self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
@@ -381,20 +382,20 @@ contains
         do iref = 1, self%nrefs
             do iref2 = 1, self%nrefs
                 if( iref2 /= iref )then
-                    if( sum_cc_even(iref2) > DTINY )then
+                    if( sum_cc_even(iref2)**2 > DTINY )then
                         sum_cavgs_even(:,:,iref) = sum_cavgs_even(:,:,iref) + cc_even(iref2) * cavgs_even(:,:,iref2) / sum_cc_even(iref2)**2
                     endif
-                    if( sum_cc_odd(iref2) > DTINY )then
+                    if( sum_cc_odd(iref2)**2 > DTINY )then
                         sum_cavgs_odd( :,:,iref) = sum_cavgs_odd( :,:,iref) + cc_odd( iref2) * cavgs_odd( :,:,iref2) / sum_cc_odd( iref2)**2
                     endif
                 endif
             enddo
         enddo
         do iref = 1, self%nrefs
-            if( sum_cc_even(iref) > DTINY )then
+            if( sum_cc_even(iref)**2 > DTINY )then
                 self%regs_grad_odd( :,:,iref) = (cc_odd( iref) - sum_cc_odd( iref)) * cavgs_odd( :,:,iref)/sum_cc_odd( iref)**2 - sum_cavgs_odd( :,:,iref)
             endif
-            if( sum_cc_odd(iref) > DTINY )then
+            if( sum_cc_odd(iref)**2 > DTINY )then
                 self%regs_grad_even(:,:,iref) = (cc_even(iref) - sum_cc_even(iref)) * cavgs_even(:,:,iref)/sum_cc_even(iref)**2 - sum_cavgs_even(:,:,iref)
             endif
         enddo
@@ -420,12 +421,19 @@ contains
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here), ctf_rot, loc)
-                if( self%pftcc%ptcl_iseven(iptcl) )then
+                if( params_glob%l_lpset )then
+                    if( self%pftcc%ptcl_iseven(iptcl) )then
+                        self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
+                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                    else
+                        self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
+                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                    endif
+                else
                     self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
                     self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
-                else
-                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
-                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                    self%regs_odd(:,:,iref)        = self%regs_odd(:,:,iref)        + ptcl_ctf_rot
+                    self%regs_denom_odd(:,:,iref)  = self%regs_denom_odd(:,:,iref)  + ctf_rot**2
                 endif
             endif
         enddo
@@ -477,7 +485,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
         do iptcl = params_glob%fromp, params_glob%top
             sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
-            if( sum_corr < TINY )then
+            if( sum_corr < DTINY )then
                 self%ref_ptcl_tab(:,iptcl)%sum = 1.
                 self%ref_ptcl_tab(:,iptcl)%w   = 0.
                 self%ref_ptcl_corr(iptcl,:)    = 0.
@@ -565,7 +573,7 @@ contains
                 mask_ir = .true.
                 next_ir = back_ir
             endif
-            max_ir(next_ir) = -1
+            max_ir(next_ir) = -1.
             do ip = params_glob%fromp, params_glob%top
                 if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
                     max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
@@ -583,18 +591,24 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: iref
         logical,            intent(in)    :: mask_ir(self%nrefs)
-        real    :: dists(self%nrefs)
-        integer :: closest, i
+        real      :: dist, min_dist
+        integer   :: closest, i
         type(ori) :: oi, oiref
         call build_glob%eulspace%get_ori(iref, oiref)
-        dists = huge(dists(1))
+        call oiref%e3set(0.)
+        min_dist = huge(dist)
+        closest  = iref
         do i = 1, self%nrefs
             if( i /= iref .and. mask_ir(i) )then
                 call build_glob%eulspace%get_ori(i, oi)
-                dists(i) = oi.euldist.oiref
+                call oi%e3set(0.)
+                dist = oi.euldist.oiref
+                if( dist < min_dist )then
+                    min_dist = dist
+                    closest  = i
+                endif
             endif
         end do
-        closest = minloc( dists, dim=1 )
     end function find_closest_iref
 
     subroutine uniform_cluster_sort_neigh( self, ncols, cur_ir )
@@ -682,12 +696,12 @@ contains
         integer :: iref, k, box, find
         real    :: eps, filt(self%kfromto(1):self%kfromto(2)), rnd_num
         ! form the cavgs
-        where( abs(self%regs_denom_odd) < TINY )
+        where( abs(self%regs_denom_odd) < DTINY )
             self%regs_odd = 0._dp
         elsewhere
             self%regs_odd = self%regs_odd / self%regs_denom_odd
         endwhere
-        where( abs(self%regs_denom_even) < TINY )
+        where( abs(self%regs_denom_even) < DTINY )
             self%regs_even = 0._dp
         elsewhere
             self%regs_even = self%regs_even / self%regs_denom_even
@@ -752,6 +766,8 @@ contains
         self%regs_even      = real(self%regs_even, dp)
         self%regs_grad_odd  = real(self%regs_grad_odd,  dp)
         self%regs_grad_even = real(self%regs_grad_even, dp)
+        where( isnan(real(self%regs_grad_odd)) )  self%regs_grad_odd  = 0.
+        where( isnan(real(self%regs_grad_even)) ) self%regs_grad_even = 0.
 
         ! annealing and different grad styles
         eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
@@ -777,7 +793,8 @@ contains
                 !$omp parallel do default(shared) private(iref,rnd_num) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     call random_number(rnd_num)
-                    if( rnd_num < (1. - eps) )then
+                    ! golden ratio initial stochastic
+                    if( rnd_num < ((1. - eps) * 2. / (1.+sqrt(5.))) )then
                         self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad_even(:,:,iref)
                         self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad_odd( :,:,iref)
                     endif
