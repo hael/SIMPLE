@@ -194,7 +194,7 @@ contains
         ! ref regularization
         if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             select case(trim(params_glob%reg_mode))
-                case('so2')
+                case('so2','so2_ptcl')
                     call reg_obj%reset_regs
                     call reg_obj%init_tab
                     ! Batch loop
@@ -223,6 +223,36 @@ contains
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                         call reg_obj%compute_grad_ptcl
                     enddo
+                    call reg_obj%regularize_refs
+                    if( trim(params_glob%refine) == 'prob' )then
+                        call reg_obj%init_tab
+                        ! Batch loop
+                        do ibatch=1,nbatches
+                            batch_start = batches(ibatch,1)
+                            batch_end   = batches(ibatch,2)
+                            batchsz     = batch_end - batch_start + 1
+                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                            call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
+                        enddo
+                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
+                        call reg_obj%reg_uniform_cluster(best_ir)
+                        call reg_obj%map_ptcl_ref(best_ir)
+                    elseif( trim(params_glob%refine) == 'prob_inpl' )then
+                        THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
+                    endif
+                case('so2_cavg')
+                    call reg_obj%reset_regs
+                    call reg_obj%init_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
+                        call reg_obj%prev_cavgs
+                    enddo
+                    call reg_obj%compute_grad_cavg
                     call reg_obj%regularize_refs
                     if( trim(params_glob%refine) == 'prob' )then
                         call reg_obj%init_tab
