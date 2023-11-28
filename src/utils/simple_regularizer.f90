@@ -8,6 +8,8 @@ use simple_builder,           only: build_glob
 use simple_ori,               only: geodesic_frobdev
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_opt_filter,        only: butterworth_filter
+use simple_image
 implicit none
 
 public :: regularizer
@@ -166,7 +168,7 @@ contains
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc)
+                self%ref_ptcl_corr(iptcl,iref)    = max(0., inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
             enddo
         enddo
         !$omp end parallel do
@@ -334,7 +336,8 @@ contains
                       &cavgs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                       &sum_cavgs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                       &sum_cavgs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
-        integer     :: iref, iref2
+        integer     :: iref, iref2, find, k
+        real        :: filt(self%kfromto(1):self%kfromto(2))
         real(dp)    :: cc_odd(self%nrefs), cc_even(self%nrefs), sum_cc_odd(self%nrefs), sum_cc_even(self%nrefs)
         where( abs(self%regs_denom_odd) < TINY )
             cavgs_odd = 0._dp
@@ -346,6 +349,15 @@ contains
         elsewhere
             cavgs_even = self%regs_even / self%regs_denom_even
         endwhere
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            cavgs_odd( :,k,:) = filt(k) * cavgs_odd( :,k,:)
+            cavgs_even(:,k,:) = filt(k) * cavgs_even(:,k,:)
+        enddo
+        !$omp end parallel do
         ! computing cc between avgs and refs
         cc_odd  = 0.d0
         cc_even = 0.d0
@@ -664,8 +676,6 @@ contains
 
 
     subroutine regularize_refs( self )
-        use simple_image
-        use simple_opt_filter, only: butterworth_filter
         class(regularizer), intent(inout) :: self
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
