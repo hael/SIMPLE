@@ -297,6 +297,12 @@ contains
                         enddo
                     enddo
                 enddo
+                do i = 1,self%ldim_shrink1(1)
+                    do j = 1,self%ldim_shrink1(2)
+                        if( self%l_mic_mask1(i,j) )cycle
+                        call mic%set([i,j,1], 0.)
+                    enddo
+                enddo
                 call mic%collage(mic_pick,collage)
                 call collage%write_jpg(trim(self%fbody)//'_collage.jpg')
                 call mic%kill
@@ -434,7 +440,7 @@ contains
         if( found ) self%l_mic_mask1 = self%l_mic_mask1 .and. final_mask
         call mic_dog%kill
         call mic%kill
-
+        call rt%kill
         contains
 
             subroutine histogram_rejection( found )
@@ -598,7 +604,7 @@ contains
                 real    :: pks(NBINS,K), bin_vars(K), tmpvec(K), x(NBINS), minmax_patch(2)
                 real    :: dr, kmeans_score, tmp, mean, std, tvd, ming, maxg
                 logical :: mask(dims(1),dims(2)), patch_mask(2*BOX,2*BOX), bin_mask(K), outside
-                integer :: nmask,b,twob,bon2,bon4,i,j,m,ilb,jlb,iub,jub,nx,ny,nxy,bin,repeat,ii,jj
+                integer :: nmask,b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy,bin,repeat,ii,jj
                 found = .false.
                 b     = BOX
                 twob  = 2*b
@@ -719,22 +725,42 @@ contains
                             if( kmeans_labels(m) == bin ) mask(ii:ii+b-1,jj:jj+b-1) = .false.
                         enddo
                     enddo
-                    final_mask = mask
                     ! erosion with half window size
+                    final_mask = mask
                     do i = 1,2*nx
                         ilb = max(1, (i-1)*bon2-bon4+1)
-                        iub = min(ilb+twob/2-1, dims(1))
-                        ilb = iub - twob/2 + 1 + bon4
+                        iub = min(ilb+b-1, dims(1))
+                        ilb = iub - b + 1 + bon4
                         iub = iub - bon4
                         do j = 1,2*ny
                             jlb = max(1, (j-1)*bon2-bon4+1)
-                            jub = min(jlb+twob/2-1, dims(2))
-                            jlb = jub - twob/2 + 1 + bon4
+                            jub = min(jlb+b-1, dims(2))
+                            jlb = jub - b + 1 + bon4
                             jub = jub - bon4
                             n = count(mask(ilb-bon4:iub+bon4,jlb-bon4:jub+bon4))
                             if( n == 0   )cycle
                             if( n == b*b )cycle
                             final_mask(ilb:iub,jlb:jub) = .true.
+                        enddo
+                    enddo
+                    ! dilation with half window size
+                    mask = final_mask
+                    do i = 1,2*nx
+                        ilb = max(1, (i-1)*bon2-bon4+1)
+                        iub = min(ilb+b-1, dims(1))
+                        ilb = iub - b + 1 + bon4
+                        iub = iub - bon4
+                        do j = 1,2*ny
+                            jlb = max(1, (j-1)*bon2-bon4+1)
+                            jub = min(jlb+b-1, dims(2))
+                            jlb = jub - b + 1 + bon4
+                            jub = jub - bon4
+                            if( all(mask(ilb:iub,jlb:jub)) )then
+                                n = count(.not.mask(ilb-bon4:iub+bon4,jlb-bon4:jub+bon4))
+                                if( n > 0 )then
+                                    final_mask(ilb:iub,jlb:jub) = .false.
+                                endif
+                            endif
                         enddo
                     enddo
                 endif
