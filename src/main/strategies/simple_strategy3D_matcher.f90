@@ -203,8 +203,8 @@ contains
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%prev_cavgs
                         call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
+                        call reg_obj%prev_cavgs
                     enddo
                     call reg_obj%compute_grad_const
                     ! Batch loop
