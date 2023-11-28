@@ -306,7 +306,6 @@ contains
         complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
         ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
         do iref = 1, self%nrefs
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,loc,pind_here,iref2,ptcl_ctf_rot)
             do iptcl = params_glob%fromp, params_glob%top
                 if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                     iref2 = self%prev_ptcl_ref(iptcl)
@@ -326,7 +325,6 @@ contains
                     endif
                 endif
             enddo
-            !$omp end parallel do
         enddo
     end subroutine compute_grad_ptcl
 
@@ -405,7 +403,7 @@ contains
                 self%prev_ptcl_ref(iptcl) = iref
                 pind_here = self%pftcc%pinds(iptcl)
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
-                loc = self%pftcc%get_roind(360.-o_prev%e3get())
+                loc = self%ref_ptcl_tab(iref, iptcl)%loc
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
@@ -746,7 +744,7 @@ contains
         self%regs_grad_even = real(self%regs_grad_even, dp)
 
         ! annealing and different grad styles
-        if( params_glob%l_reg_anneal ) eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
+        eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
         call seed_rnd
         if( params_glob%l_reg_anneal )then
             if( params_glob%l_reg_grad )then
@@ -769,7 +767,7 @@ contains
                 !$omp parallel do default(shared) private(iref,rnd_num) proc_bind(close) schedule(static)
                 do iref = 1, self%nrefs
                     call random_number(rnd_num)
-                    if( rnd_num < 0.5 )then
+                    if( rnd_num < (1. - eps) )then
                         self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_grad_even(:,:,iref)
                         self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_grad_odd( :,:,iref)
                     endif
