@@ -402,7 +402,7 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(image)                   :: img_cavg, calc_cavg, ptcl_match
+        type(image)                   :: img_cavg, calc_cavg, ptcl_match, img_cavg_pd
         type(regularizer)             :: reg_obj
         integer  :: nptcls, iptcl, nptcls_cls
         logical  :: l_ctf
@@ -500,14 +500,17 @@ contains
         cls_avg = 0.
         denom   = 0.
         call img_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
+        call img_cavg_pd%new([params%box,params%box,1], params%smpd)
         if( cline%defined('stk2') )then
             print *, nptcls_cls, box
             do j = 1, nptcls_cls
                 iptcl = pinds(j)
                 call img_cavg%read(trim(params%stk2), j)
                 call img_cavg%fft
+                call img_cavg_pd%zero_and_flag_ft
+                call img_cavg%pad(img_cavg_pd)
                 ! transfer to polar coordinates
-                call build%img_crop_polarizer%polarize(pftcc, img_cavg, iptcl, .true., .true.)
+                call build%img_crop_polarizer%polarize(pftcc, img_cavg_pd, iptcl, .true., .true.)
                 ! e/o flags
                 call pftcc%set_eo(iptcl, .true. )
                 ! accumulating the cls_avg
@@ -526,6 +529,7 @@ contains
             call calc_cavg%ifft
             call calc_cavg%write('polar_cavg_kPCA.mrc')
         endif
+        call img_cavg_pd%kill
         call img_cavg%kill
         call calc_cavg%kill
         ! end gracefully
