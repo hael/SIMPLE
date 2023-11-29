@@ -84,7 +84,6 @@ type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavg_filter2D
 type(simple_program), target :: check_align
 type(simple_program), target :: check_align_inpl
-type(simple_program), target :: ced_2D_filter
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
@@ -151,6 +150,7 @@ type(simple_program), target :: refine3D_nano
 type(simple_program), target :: remoc
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: selection
+type(simple_program), target :: reg_test
 type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
@@ -356,7 +356,6 @@ contains
         call new_cavg_filter2D
         call new_check_align
         call new_check_align_inpl
-        call new_ced_2D_filter
         call new_center
         call new_cleanup2D
         call new_center2D_nano
@@ -421,6 +420,7 @@ contains
         call new_reextract
         call new_refine3D
         call new_refine3D_nano
+        call new_reg_test
         call new_remoc
         call new_replace_project_field
         call new_selection
@@ -470,7 +470,6 @@ contains
         call push2prg_ptr_array(cavg_filter2D)
         call push2prg_ptr_array(check_align)
         call push2prg_ptr_array(check_align_inpl)
-        call push2prg_ptr_array(ced_2D_filter)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
@@ -533,6 +532,7 @@ contains
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
         call push2prg_ptr_array(refine3D_nano)
+        call push2prg_ptr_array(reg_test)
         call push2prg_ptr_array(replace_project_field)
         call push2prg_ptr_array(selection)
         call push2prg_ptr_array(scale)
@@ -600,8 +600,6 @@ contains
                 ptr2prg => check_align
             case('check_align_inpl')
                 ptr2prg => check_align_inpl
-            case('ced_2D_filter')
-                ptr2prg => ced_2D_filter
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -730,6 +728,8 @@ contains
                 ptr2prg => refine3D
             case('refine3D_nano')
                 ptr2prg => refine3D_nano
+            case('reg_test')
+                ptr2prg => reg_test
             case('remoc')
                 ptr2prg => remoc
             case('replace_project_field')
@@ -812,7 +812,6 @@ contains
         write(logfhandle,'(A)') cavg_filter2D%name
         write(logfhandle,'(A)') check_align%name
         write(logfhandle,'(A)') check_align_inpl%name
-        write(logfhandle,'(A)') ced_2D_filter%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
@@ -870,6 +869,7 @@ contains
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') reg_test%name
         write(logfhandle,'(A)') remoc%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
@@ -1440,32 +1440,30 @@ contains
         call check_align_inpl%set_input('comp_ctrls', 1, nthr)
     end subroutine new_check_align_inpl
 
-    subroutine new_ced_2D_filter
+    subroutine new_reg_test
         ! PROGRAM SPECIFICATION
-        call ced_2D_filter%new(&
-        &'ced_2D_filter',&             ! name
-        &'Coherence-Enhancing Diffution 2D Filter',&             ! descr_short
-        &'is a filter that smoothes images in a 2D stack using the diffusion equation.',& ! descr_long
-        &'simple_exec',&               ! executable
-        &1, 1, 0, 0, 1, 1, 1, .false.)                                      ! # entries in each group, requires sp_project
+        call reg_test%new(&
+        &'reg_test',&                                                       ! name
+        &'Alignment check of class averages vs reprojection',&              ! descr_short
+        &'is a program to check the alignment to form class averages vs the reprojection',& ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &1, 1, 0, 0, 1, 0, 1, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ced_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Stack',  'Stack',  'stack.mrc file', .true., '')
+        call reg_test%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
-        call ced_2D_filter%set_input('parm_ios', 1, smpd)
+        call reg_test%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        !sigma.required = .true.
-        call ced_2D_filter%set_input('filt_ctrls',1, 'sigma', 'num', 'Sigma, for Gaussian generation', 'Sigma, for Gaussian generation(in pixels)', &
-        & '{1.}', .false., 1.0)
+        call reg_test%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
         ! mask controls
-        call ced_2D_filter%set_input('mask_ctrls', 1, mskdiam)
+        ! <empty>
         ! computer controls
-        call ced_2D_filter%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_ced_2D_filter
+        call reg_test%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_reg_test
 
     subroutine new_center
         ! PROGRAM SPECIFICATION

@@ -104,6 +104,7 @@ type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(check_align_commander)                 :: xcheck_align
 type(check_align_inpl_commander)            :: xcheck_align_inpl
 type(centervol_commander)                   :: xcenter
+type(reg_test_commander)                    :: xreg_test
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
 type(convert_commander)                     :: xconvert
@@ -319,6 +320,8 @@ select case(trim(prg))
         call xfilter%execute(cline)
     case( 'normalize' )
         call xnormalize%execute(cline)
+    case( 'reg_test' )
+        call xreg_test%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )
@@ -385,7 +388,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('44301e63')
+call simple_print_git_version('d63d83c7')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
