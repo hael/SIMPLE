@@ -20,6 +20,7 @@ public :: refine3D_commander
 public :: check_3Dconv_commander
 public :: check_align_commander
 public :: check_align_inpl_commander
+public :: reg_test_commander
 private
 #include "simple_local_flags.inc"
 
@@ -52,6 +53,11 @@ type, extends(commander_base) :: check_align_inpl_commander
   contains
     procedure :: execute      => exec_check_align_inpl
 end type check_align_inpl_commander
+
+type, extends(commander_base) :: reg_test_commander
+  contains
+    procedure :: execute      => exec_reg_test
+end type reg_test_commander
 
 contains
 
@@ -1241,5 +1247,109 @@ contains
         call orientation%kill
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align_inpl
+
+    subroutine exec_reg_test( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,&
+                    &read_and_filter_refvols, preprefvol, preprecvols, norm_struct_facts, killrecvols, grid_ptcl
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
+        use simple_fplane,              only: fplane
+        use simple_regularizer,         only: regularizer
+        use simple_image
+        class(reg_test_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        integer,          parameter   :: MAXITS = 60, N_ITERS = 5
+        integer,          allocatable :: pinds(:), best_ir(:)
+        logical,          allocatable :: ptcl_mask(:)
+        complex,          allocatable :: cmat(:,:)
+        real,             allocatable :: sigma2_noise(:,:)
+        type(image),      allocatable :: tmp_imgs(:)
+        type(fplane),     allocatable :: fpls(:)
+        type(ctfparams),  allocatable :: ctfparms(:)
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(ori)                     :: o_tmp
+        type(image)                   :: img
+        type(regularizer)             :: reg_obj
+        type(ori)                     :: orientation
+        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr
+        logical  :: l_ctf, do_center
+        real     :: xyz(3), euls(3), shvec(2), sdev
+        call cline%set('mkdir',    'yes')
+        call cline%set('oritype',  'ptcl3D')
+        if( .not.cline%defined('center') ) call cline%set('center', 'no')
+        call build%init_params_and_build_strategy3D_tbox(cline,params)
+        call build%spproj%update_projinfo(cline)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params%fromp:params%top))
+        call build_glob%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
+            &1.0, nptcls, pinds, ptcl_mask)
+        print *, 'nptcls = ', nptcls, '; fromp = ', params%fromp, '; top = ', params%top
+        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
+        call pftcc%reallocate_ptcls(nptcls, pinds)
+        call reg_obj%new(pftcc)
+        ! e/o partioning
+        if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
+            call build%spproj%os_ptcl3D%partition_eo
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
+        ! more prep
+        call prepimgbatch(params%top-params%fromp+1)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        print *, 'Preparing the references ...'
+        ! PREPARATION OF REFERENCES IN PFTCC
+        ! read reference volumes and create polar projections
+        do s=1,params%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
+            call read_and_filter_refvols( cline, params%vols(s), params%vols(s))
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1, params%nspace
+                call build_glob%eulspace%get_ori(iref, o_tmp)
+                call build_glob%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
+                call build_glob%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build_glob%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+        end do
+        call pftcc%memoize_refs
+        ! PREPARATION OF PARTICLES
+        print *, 'Preparing the particles ...'
+        call read_imgbatch([params%fromp,params%top], ptcl_mask)
+        !$omp parallel do default(shared) private(iptcl,ithr) schedule(static) proc_bind(close)
+        do iptcl = params%fromp,params%top
+            if( .not.ptcl_mask(iptcl) ) cycle
+            ithr = omp_get_thread_num()+1
+            ! prep
+            call prepimg4align(iptcl, build%imgbatch(iptcl), tmp_imgs(ithr))
+            call build%imgbatch(iptcl)%ifft ! for reconstruction
+            ! transfer to polar coordinates
+            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+            call pftcc%set_eo(iptcl, .true.)
+        enddo
+        !$omp end parallel do
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
+        ! make CTFs
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+        call simple_end('**** SIMPLE_REG_TEST NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_reg_test
 
 end module simple_commander_refine3D
