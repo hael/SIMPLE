@@ -146,6 +146,8 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure          :: gencorr_ref
+    procedure          :: gencorrs_ref
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -1616,6 +1618,53 @@ contains
             gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
         endif
     end function gencorr_cc_for_rot_8
+
+    real(dp) function gencorrs_ref( self, iref, jref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, jref
+        real(dp) :: corrs(self%nrots)
+        integer  :: irot
+        do irot = 1, self%nrots
+            corrs(irot) = self%gencorr_ref( iref, jref, irot )
+        enddo
+        gencorrs_ref = maxval(corrs, dim=1)
+    end function gencorrs_ref
+
+    real(dp) function gencorr_ref( self, iref, jref, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, jref
+        integer, optional,       intent(in)    :: irot
+        complex(dp), pointer :: i_pft_ref_8(:,:), j_pft_ref_8(:,:), pft_ref_tmp(:,:,:)
+        integer  :: ithr, k
+        real(dp) :: i_sqsum_ref, j_sqsum_ref
+        ithr = omp_get_thread_num() + 1
+        i_pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
+        j_pft_ref_8 => self%heap_vars(ithr)%pft_ref_tmp_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_dref_8
+        i_pft_ref_8 = self%pfts_refs_even(:,:,iref)
+        j_pft_ref_8 = self%pfts_refs_even(:,:,jref)
+        gencorr_ref = 0.d0
+        i_sqsum_ref = 0.d0
+        j_sqsum_ref = 0.d0
+        if( present(irot) )then
+            call self%rotate_ref(j_pft_ref_8, irot, pft_ref_tmp(:,:,1))
+            j_pft_ref_8 = pft_ref_tmp(:,:,1)
+        endif
+        if( params_glob%l_kweight )then
+            do k = self%kfromto(1),self%kfromto(2)
+                i_sqsum_ref = i_sqsum_ref + real(k,kind=dp) * sum(real(i_pft_ref_8(:,k) * conjg(i_pft_ref_8(:,k)),dp))
+                j_sqsum_ref = j_sqsum_ref + real(k,kind=dp) * sum(real(j_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
+                gencorr_ref = gencorr_ref + real(k,kind=dp) * sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
+            end do
+        else
+            do k = self%kfromto(1),self%kfromto(2)
+                i_sqsum_ref = i_sqsum_ref + sum(real(i_pft_ref_8(:,k) * conjg(i_pft_ref_8(:,k)),dp))
+                j_sqsum_ref = j_sqsum_ref + sum(real(j_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
+                gencorr_ref = gencorr_ref + sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
+            end do
+        endif
+        gencorr_ref = gencorr_ref / dsqrt(i_sqsum_ref * j_sqsum_ref)
+    end function gencorr_ref
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
         class(polarft_corrcalc), intent(inout) :: self

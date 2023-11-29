@@ -1260,22 +1260,21 @@ contains
         use simple_image
         class(reg_test_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        integer,          parameter   :: MAXITS = 60, N_ITERS = 5
-        integer,          allocatable :: pinds(:), best_ir(:)
+        integer,          allocatable :: pinds(:), best_ir(:), indxarr(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
-        real,             allocatable :: sigma2_noise(:,:)
+        real,             allocatable :: sigma2_noise(:,:), cost_refs(:), dist_refs(:)
         type(image),      allocatable :: tmp_imgs(:)
         type(fplane),     allocatable :: fpls(:)
         type(ctfparams),  allocatable :: ctfparms(:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
-        type(ori)                     :: o_tmp
+        type(ori)                     :: o_tmp, ojref, oiref
         type(image)                   :: img
         type(regularizer)             :: reg_obj
         type(ori)                     :: orientation
-        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr
+        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr, cur_ref
         logical  :: l_ctf, do_center
         real     :: xyz(3), euls(3), shvec(2), sdev
         call cline%set('mkdir',    'yes')
@@ -1349,6 +1348,22 @@ contains
         l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+        ! computing the cc value between cur_ref and other refs
+        cur_ref = 1
+        allocate(cost_refs(params%nspace),dist_refs(params%nspace),indxarr(params%nspace))
+        do iref = 1, params%nspace
+            cost_refs(iref) = pftcc%gencorrs_ref(cur_ref, iref)
+            call build_glob%eulspace%get_ori(iref, oiref)
+            call oiref%e3set(0.)
+            call build_glob%eulspace%get_ori(cur_ref, ojref)
+            call ojref%e3set(0.)
+            dist_refs(iref) = ojref.euldist.oiref
+        enddo
+        indxarr = (/(iref,iref=1,params%nspace)/)
+        call hpsort(dist_refs, indxarr)
+        do iref = 1, params%nspace
+            print *, indxarr(iref), ' -> ', dist_refs(iref), ' -> ', cost_refs(indxarr(iref))
+        enddo
         call simple_end('**** SIMPLE_REG_TEST NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reg_test
 
