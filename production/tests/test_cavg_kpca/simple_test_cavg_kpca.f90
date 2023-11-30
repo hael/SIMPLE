@@ -109,19 +109,19 @@ if( cline%defined('stk') )then
                     ! l, bottom left corner
                     phys   = build%imgbatch(i)%comp_addr_phys(l,m)
                     kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                    tval   = kw * ctfimg%get_cmat_at(phys(1), phys(2),1)
+                    tval   = kw * real(ctfimg%get_cmat_at(phys(1), phys(2),1))
                     ! l, bottom right corner
                     phys   = build%imgbatch(i)%comp_addr_phys(l,mm)
                     kw     = (1.-dist(1))*dist(2)
-                    tval   = tval   + kw * ctfimg%get_cmat_at(phys(1), phys(2),1)
+                    tval   = tval   + kw * real(ctfimg%get_cmat_at(phys(1), phys(2),1))
                     ! ll, upper left corner
                     phys    = build%imgbatch(i)%comp_addr_phys(ll,m)
                     kw      = dist(1)*(1.-dist(2))
-                    tval    = tval  + kw * ctfimg%get_cmat_at(phys(1), phys(2),1)
+                    tval    = tval  + kw * real(ctfimg%get_cmat_at(phys(1), phys(2),1))
                     ! ll, upper right corner
                     phys    = build%imgbatch(i)%comp_addr_phys(ll,mm)
                     kw      = dist(1)*dist(2)
-                    tval    = tval    + kw * ctfimg%get_cmat_at(phys(1), phys(2),1)
+                    tval    = tval    + kw * real(ctfimg%get_cmat_at(phys(1), phys(2),1))
                     ! update with interpolated values
                     phys = build%imgbatch(i)%comp_addr_phys(h,k)
                     call rotctfimg%set_cmat_at(phys(1),phys(2),1, cmplx(tval*tval,0.))
