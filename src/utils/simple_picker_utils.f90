@@ -13,7 +13,8 @@ private
 real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, GAUSIG = 5., BOX_EXP_FAC = 0.111
 integer, parameter :: OFFSET       = 3,   OFFSET_UB    = 2 * OFFSET
 integer, parameter :: MAXNREFS     = 100
-real,    parameter :: DIST_THRES   = real(OFFSET), NDEV_DEFAULT = 2.5
+real,    parameter :: DIST_THRES1  = real(OFFSET), DIST_THRES2  = real(4*OFFSET)
+real,    parameter :: NDEV_DEFAULT = 2.5
 logical, parameter :: L_WRITE      = .false.
 
 type picker_utils
@@ -28,7 +29,7 @@ type picker_utils
     type(image)                   :: mic_raw, mic_shrink1, mic_shrink2, imgau_shrink1, imgau_shrink2
     type(image),      allocatable :: boximgs1(:), boximgs2(:), boxrefs(:,:)
     integer,          allocatable :: positions1(:,:), positions2(:,:), inds_offset(:,:)
-    real,             allocatable :: box_scores1(:)
+    real,             allocatable :: box_scores1(:), box_scores2(:)
     logical,          allocatable :: l_err_refs(:,:), l_mic_mask1(:,:)
     character(len=LONGSTRLEN)     :: boxname
     character(len=:), allocatable :: fbody
@@ -38,16 +39,15 @@ type picker_utils
     procedure          :: new
     procedure          :: set_refs
     procedure          :: exec_picker
-    procedure, private :: set_positions_1
-    procedure, private :: set_positions_2
+    procedure, private :: set_positions_1, set_positions_2
     generic            :: set_positions => set_positions_1, set_positions_2
     procedure, private :: set_pos_priv
-    procedure          :: gauconv_mics
+    procedure, private :: gauconv_mics
     procedure, private :: extract_boximgs1
     procedure, private :: extract_boximgs2
-    procedure          :: analyze_boximgs1
-    procedure          :: center_filter
-    procedure          :: distance_filter
+    procedure, private :: analyze_boximgs1
+    procedure, private :: center_filter
+    procedure, private :: distance_filter
     procedure          :: refine_positions
     procedure          :: remove_outliers
     procedure          :: peak_vs_nonpeak_stats
@@ -272,8 +272,12 @@ contains
         call self%analyze_boximgs1
         if( self%nboxes1 > 0 )then
             call self%center_filter
-            call self%distance_filter
+            ! call self%distance_filter
+            call self%distance_filter(self%nboxes1, self%box_scores1, self%positions1, DIST_THRES1)
             call self%refine_positions
+            if( self%l_roi )then
+                call self%distance_filter(self%nboxes2, self%box_scores2, self%positions2, DIST_THRES2)
+            endif
             call self%remove_outliers
             call self%peak_vs_nonpeak_stats
             ! # ptcls
@@ -333,7 +337,7 @@ contains
         real,    allocatable :: scores(:,:)
         integer, allocatable :: counts(:,:)
         real        :: score, scale, radius
-        integer     :: ldim(3), i,j,ithr,ii,jj, cnt
+        integer     :: ldim(3), i,j,ithr,ii,jj
         logical     :: outside
         if( self%smpd_raw > SMPD_ICE ) return
         scale   = self%smpd_raw / SMPD_ICE
@@ -419,25 +423,33 @@ contains
     subroutine flag_amorphous_carbon( self )
         use json_string_utilities, only: replace_string
         class(picker_utils), intent(inout) :: self
+        real,    parameter :: DOG_SIG1=0.125, DOG_SIG2=0.1, GAU_SIG=0.125
+        integer, parameter :: BOXH= 32 ! even number
         type(ran_tabu)                :: rt
         type(image)                   :: mic, mic_dog
         logical,          allocatable :: final_mask(:,:)
         character(len=:), allocatable :: string
-        integer :: dims(3), n
+        integer :: dims(3), pad
         logical :: found
-        dims = self%mic_shrink1%get_ldim()
-        n    = product(dims)
+        dims   = self%mic_shrink1%get_ldim()
         string = trim(self%fbody)
         allocate(final_mask(dims(1),dims(2)),source=.true.)
         call mic%copy(self%mic_shrink1)
         call mic_dog%copy(self%mic_shrink1)
         call mic_dog%fft
-        call mic_dog%dog2D(0.125, 0.1)
+        call mic_dog%dog2D(DOG_SIG1, DOG_SIG2)
         call mic_dog%ifft
         call histogram_rejection( found )
         if( .not.found ) call clustering_rejection( found )
-        print *,string//' % amorphous carbon: ',100.-100.*count(final_mask(:,:))/real(n)
-        if( found ) self%l_mic_mask1 = self%l_mic_mask1 .and. final_mask
+        if( found )then
+            self%l_mic_mask1 = self%l_mic_mask1 .and. final_mask
+            ! accounting for center of picking boxes
+            pad = nint(real(self%ldim_box1(1))/2.)
+            final_mask = self%l_mic_mask1
+            self%l_mic_mask1 = .false.
+            self%l_mic_mask1(1:dims(1)-pad,1:dims(2)-pad) = final_mask(pad+1:,pad+1:)
+        endif
+        print *,string//' % amorphous carbon: ',100.-100.*count(final_mask(:,:))/real(product(dims))
         call mic_dog%kill
         call mic%kill
         call rt%kill
@@ -445,24 +457,23 @@ contains
 
             subroutine histogram_rejection( found )
                 logical, intent(out) :: found
-                integer,   parameter :: NBINS    = 128
-                integer,   parameter :: BOX      = 32 ! even number
-                real,      parameter :: FRACTION = 0.5
+                integer,   parameter :: NBINS         = 128
+                real,      parameter :: FRACTION      = 0.5
+                real,      parameter :: PEAK_FRACTION = 0.6
                 type(image)          :: tmpimg
-                real,    allocatable :: rvec(:)
                 real,    pointer     :: prmat(:,:,:)
-                real    :: x(NBINS), p(NBINS), rmin,rmax,dr, threshold, mean, std
-                real    :: counts(dims(1),dims(2),1)
-                real    :: norms(dims(1),dims(2),1)
+                real    :: counts(dims(1),dims(2),1), norms(dims(1),dims(2),1)
+                real    :: x(NBINS), p(NBINS), rmin,rmax,dr, threshold, mean, std, p2,pnm1
                 logical :: mask(dims(1),dims(2)), tmp_mask(dims(1),dims(2))
-                integer :: ldim(3),b,bon2,bon4,i,j, thatbin, npeaks, peak1, peak2, p2, pnm1, nmask, nbelowthreshold
+                integer :: ldim(3),b,bon2,bon4,i,j,thatbin,npeaks,peak1,peak2
+                integer :: nmask,nbelowthreshold, n
                 found = .false.
                 call tmpimg%copy(mic_dog)
-                ldim = [BOX,BOX,1]
-                b    = 2*BOX
-                bon2 = BOX
-                bon4 = BOX/2
-                ! call tmpimg%neg
+                ldim = [BOXH,BOXH,1]
+                b    = 2*BOXH
+                bon2 = BOXH
+                bon4 = BOXH/2
+                n    = product(dims)
                 call tmpimg%get_rmat_ptr(prmat)
                 mean  = sum(prmat(1:dims(1),1:dims(2),1)) / real(n)
                 prmat = prmat-mean
@@ -542,7 +553,7 @@ contains
                             endif
                         enddo
                         ! print *,'second peak: ', trim(string), peak2, x(peak2), p(peak2)
-                        if( p(thatbin) < 0.6*min(p(peak1),p(peak2)) )then
+                        if( p(thatbin) < PEAK_FRACTION*min(p(peak1),p(peak2)) )then
                             nbelowthreshold = count(prmat(1:dims(1),1:dims(2),1) < threshold)
                             if( (threshold < 0.) .or. &
                                 &((threshold < 0.5) .and. (nbelowthreshold < nint(0.85*real(n))) .and.&
@@ -550,19 +561,19 @@ contains
                                 found  = .true.
                                 counts = 0.
                                 norms  = 0.
-                                do i = 1,dims(1)-b+1,BOX
-                                    do j = 1,dims(2)-b+1,BOX
+                                do i = 1,dims(1)-b+1,BOXH
+                                    do j = 1,dims(2)-b+1,BOXH
                                         counts(i:i+b-1,j:j+b-1,1) = counts(i:i+b-1,j:j+b-1,1) + count(prmat(i:i+b-1,j:j+b-1,1) < threshold)
                                         norms(i:i+b-1,j:j+b-1,1)  = norms(i:i+b-1,j:j+b-1,1)  + b*b
                                     enddo
                                 enddo
                                 i = dims(1)-b+1
-                                do j = 1,dims(2)-b+1,BOX
+                                do j = 1,dims(2)-b+1,BOXH
                                     counts(i:i+b-1,j:j+b-1,1) = counts(i:i+b-1,j:j+b-1,1) + count(prmat(i:i+b-1,j:j+b-1,1) < threshold)
                                     norms(i:i+b-1,j:j+b-1,1)  = norms(i:i+b-1,j:j+b-1,1)  + b*b
                                 enddo
                                 j = dims(2)-b+1
-                                do i = 1,dims(1)-b+1,BOX
+                                do i = 1,dims(1)-b+1,BOXH
                                     counts(i:i+b-1,j:j+b-1,1) = counts(i:i+b-1,j:j+b-1,1) + count(prmat(i:i+b-1,j:j+b-1,1) < threshold)
                                     norms(i:i+b-1,j:j+b-1,1)  = norms(i:i+b-1,j:j+b-1,1)  + b*b
                                 enddo
@@ -599,12 +610,12 @@ contains
                 real,    parameter :: TVD_THRESHOLD = 0.1
                 real,            pointer :: prmat_patch(:,:,:)
                 type(image), allocatable :: patches(:,:)
-                real,    allocatable :: ps(:,:,:), ps_bak(:,:,:), inds(:)
-                integer, allocatable :: kmeans_labels(:), tmp_labels(:)
+                real,    allocatable :: ps(:,:,:), ps_bak(:,:,:)
+                integer, allocatable :: kmeans_labels(:), tmp_labels(:), inds(:)
                 real    :: pks(NBINS,K), bin_vars(K), tmpvec(K), x(NBINS), minmax_patch(2)
-                real    :: dr, kmeans_score, tmp, mean, std, tvd, ming, maxg
+                real    :: dr, kmeans_score, tmp, mean, tvd, ming, maxg
                 logical :: mask(dims(1),dims(2)), patch_mask(2*BOX,2*BOX), bin_mask(K), outside
-                integer :: nmask,b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy,bin,repeat,ii,jj
+                integer :: b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy,bin,repeat,ii,jj
                 found = .false.
                 b     = BOX
                 twob  = 2*b
@@ -633,7 +644,7 @@ contains
                         call mic%window_slim([ilb-1,jlb-1],twob, patches(i,j), outside)
                         call patches(i,j)%subtr_backgr_ramp(patch_mask)
                         call patches(i,j)%fft
-                        call patches(i,j)%gau2D(0.125)
+                        call patches(i,j)%gau2D(GAU_SIG)
                         call patches(i,j)%ifft
                         call patches(i,j)%get_rmat_ptr(prmat_patch)
                         minmax_patch = patches(i,j)%minmax()
@@ -774,7 +785,7 @@ contains
                 integer, parameter :: nits = 100
                 logical :: isempty(K)
                 real    :: centers(NBINS,K), p(NBINS), score, score_min, prev_overall_score
-                integer :: i,j,c,cl, o,it
+                integer :: i,j,c,cl,it
                 c = 0
                 do i = 1,n
                     c = c+1
@@ -1139,50 +1150,6 @@ contains
         deallocate(positions_tmp, box_scores1_tmp)
     end subroutine center_filter
 
-    subroutine distance_filter( self )
-        class(picker_utils), intent(inout) :: self
-        integer, allocatable :: positions_tmp(:,:)
-        real,    allocatable :: box_scores1_tmp(:)
-        integer :: ibox, jbox, loc(1), npeaks, cnt
-        real    :: dist
-        logical :: mask(self%nboxes1), selected_pos1(self%nboxes1)
-        selected_pos1 = .true.
-        do ibox = 1,self%nboxes1
-            mask = .false.
-            !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
-            do jbox = 1,self%nboxes1
-                dist = euclid(real(self%positions1(ibox,:)),real(self%positions1(jbox,:)))
-                if( dist <= DIST_THRES ) mask(jbox) = .true.
-            end do
-            !$omp end parallel do
-            ! find best match in the neigh
-            loc = maxloc(self%box_scores1, mask=mask)
-            ! eliminate all but the best
-            mask(loc(1)) = .false.
-            where( mask ) selected_pos1 = .false.
-        end do
-        npeaks = count(selected_pos1)
-        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', self%nboxes1
-        write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
-        ! update positions1 and box_scores1
-        allocate(positions_tmp(npeaks,2), box_scores1_tmp(npeaks))
-        positions_tmp   = 0
-        box_scores1_tmp = 0.
-        cnt             = 0
-        do ibox = 1,self%nboxes1
-            if( selected_pos1(ibox) )then
-                cnt = cnt + 1
-                positions_tmp(cnt,:) = self%positions1(ibox,:)
-                box_scores1_tmp(cnt) = self%box_scores1(ibox)
-            endif
-        end do
-        deallocate(self%positions1, self%box_scores1)
-        self%nboxes1 = npeaks
-        allocate(self%positions1(self%nboxes1,2), source=positions_tmp)
-        allocate(self%box_scores1(self%nboxes1),  source=box_scores1_tmp)
-        deallocate(positions_tmp, box_scores1_tmp)
-    end subroutine distance_filter
-
     subroutine refine_positions( self )
         class(picker_utils), intent(inout) :: self
         integer     :: ibox, xrange(2), yrange(2), xind, yind, ithr, iref
@@ -1192,6 +1159,7 @@ contains
         if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
         self%nboxes2 = self%nboxes1
         allocate(self%positions2(self%nboxes2,2), source=nint((SMPD_SHRINK1/SMPD_SHRINK2) * real(self%positions1)))
+        allocate(self%box_scores2(self%nboxes2),  source=-1.)
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
         end do
@@ -1229,6 +1197,7 @@ contains
                         endif
                     end do
                 end do
+                self%box_scores2(ibox) = box_score
             end do
             !$omp end parallel do
         else
@@ -1252,6 +1221,7 @@ contains
                         endif
                     end do
                 end do
+                self%box_scores2(ibox) = box_score
             end do
             !$omp end parallel do
         endif
@@ -1259,6 +1229,53 @@ contains
             call boximgs_heap(ithr)%kill
         end do
     end subroutine refine_positions
+
+    subroutine distance_filter( self, nbox, box_scores, positions, threshold )
+        class(picker_utils), intent(inout) :: self
+        integer,             intent(inout) :: nbox
+        real,                intent(in)    :: threshold
+        real, allocatable,               intent(inout) :: box_scores(:)
+        integer, allocatable,            intent(inout) :: positions(:,:)
+        integer, allocatable :: positions_tmp(:,:)
+        real,    allocatable :: box_scores_tmp(:)
+        integer :: ibox, jbox, loc, npeaks
+        real    :: dist
+        logical :: mask(nbox), selected_pos(nbox)
+        selected_pos = .true.
+        do ibox = 1,nbox
+            mask = .false.
+            !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
+            do jbox = 1,nbox
+                dist = euclid(real(positions(ibox,:)),real(positions(jbox,:)))
+                if( dist <= threshold ) mask(jbox) = .true.
+            end do
+            !$omp end parallel do
+            ! find best match in the neigh
+            loc = maxloc(box_scores, mask=mask, dim=1)
+            ! eliminate all but the best
+            mask(loc) = .false.
+            where( mask ) selected_pos = .false.
+        end do
+        npeaks = count(selected_pos)
+        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
+        write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
+        ! update positions2 and box_scores2
+        allocate(positions_tmp(npeaks,2), box_scores_tmp(npeaks))
+        positions_tmp  = 0
+        box_scores_tmp = 0.
+        npeaks         = 0
+        do ibox = 1,nbox
+            if( selected_pos(ibox) )then
+                npeaks = npeaks + 1
+                positions_tmp(npeaks,:) = positions(ibox,:)
+                box_scores_tmp(npeaks)  = box_scores(ibox)
+            endif
+        end do
+        nbox = npeaks
+        deallocate(positions, box_scores)
+        call move_alloc(positions_tmp, positions)
+        call move_alloc(box_scores_tmp, box_scores)
+    end subroutine distance_filter
 
     subroutine remove_outliers( self )
         class(picker_utils), intent(inout) :: self
@@ -1454,6 +1471,7 @@ contains
             if( allocated(self%positions2)  ) deallocate(self%positions2)
             if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
             if( allocated(self%box_scores1) ) deallocate(self%box_scores1)
+            if( allocated(self%box_scores2) ) deallocate(self%box_scores2)
             if( allocated(self%fbody)       ) deallocate(self%fbody)
             if( allocated(self%l_mic_mask1) ) deallocate(self%l_mic_mask1)
         endif
