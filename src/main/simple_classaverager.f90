@@ -355,7 +355,7 @@ contains
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq, reg_scale, crop_scale
         integer :: batch_iprecs(READBUFFSZ), fdims_crop(3), logi_lims_crop(3,2)
         integer :: phys(2), win_corner(2), cyc_lims_cropR(2,2),cyc_lims_crop(3,2), sigma2_kfromto(2)
-        integer :: iprec, i, sh, iwinsz, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
+        integer :: iprec, i, sh, nyq_crop, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
@@ -368,7 +368,6 @@ contains
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         wdim   = kbwin%get_wdim()
-        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! Number stacks
         first_pind = params_glob%fromp
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
