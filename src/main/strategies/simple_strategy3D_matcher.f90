@@ -79,7 +79,7 @@ contains
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, objfun_ori
         logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -270,6 +270,32 @@ contains
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
+                case('so2_norm_cavg')
+                    objfun_ori            = params_glob%cc_objfun
+                    params_glob%cc_objfun = OBJFUN_PROB
+                    call reg_obj%reset_regs
+                    call reg_obj%init_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
+                    enddo
+                    if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
+                    call reg_obj%reg_uniform_cluster(best_ir)
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%form_cavgs(best_ir)
+                    enddo
+                    call reg_obj%compute_grad_norm_cavg
+                    call reg_obj%regularize_refs
+                    params_glob%cc_objfun = objfun_ori
                 case('so2_reproj')
                     call reg_obj%reset_regs
                     call reg_obj%init_tab

@@ -63,6 +63,8 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
     complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
+    complex(sp),         allocatable :: norm_refs_even(:,:,:)       !< -"-, normalized even
+    complex(sp),         allocatable :: norm_refs_odd(:,:,:)        !< -"-, normalized odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
@@ -148,6 +150,7 @@ type :: polarft_corrcalc
     generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_ref
     procedure          :: gencorrs_ref
+    procedure          :: normalize_refs
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -287,6 +290,8 @@ contains
         ! allocate others
         allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%norm_refs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                    &self%norm_refs_odd(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
@@ -307,6 +312,8 @@ contains
         end do
         self%pfts_refs_even  = zero
         self%pfts_refs_odd   = zero
+        self%norm_refs_even  = zero
+        self%norm_refs_odd   = zero
         self%pfts_ptcls      = zero
         self%sqsums_ptcls    = 0.d0
         self%ksqsums_ptcls   = 0.d0
@@ -1630,40 +1637,62 @@ contains
         gencorrs_ref = maxval(corrs, dim=1)
     end function gencorrs_ref
 
+    subroutine normalize_refs( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer  :: iref, k
+        real(dp) :: sqsum_ref
+        do iref = 1, self%nrefs
+            sqsum_ref = 0._dp
+            if( params_glob%l_kweight )then
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)),dp))
+                enddo
+            else
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref +                   sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)),dp))
+                enddo
+            endif
+            self%norm_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref)/dsqrt(sqsum_ref)
+            sqsum_ref = 0._dp
+            if( params_glob%l_kweight )then
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)),dp))
+                enddo
+            else
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_ref = sqsum_ref +                   sum(real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)),dp))
+                enddo
+            endif
+            self%norm_refs_odd(:,:,iref) = self%pfts_refs_odd(:,:,iref)/dsqrt(sqsum_ref)
+        enddo
+    end subroutine normalize_refs
+
     real(dp) function gencorr_ref( self, iref, jref, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, jref
         integer, optional,       intent(in)    :: irot
         complex(dp), pointer :: i_pft_ref_8(:,:), j_pft_ref_8(:,:), pft_ref_tmp(:,:,:)
         integer  :: ithr, k
-        real(dp) :: i_sqsum_ref, j_sqsum_ref
         ithr = omp_get_thread_num() + 1
         i_pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
         j_pft_ref_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_dref_8
-        i_pft_ref_8 = self%pfts_refs_even(:,:,iref)
-        j_pft_ref_8 = self%pfts_refs_even(:,:,jref)
+        i_pft_ref_8 = self%norm_refs_even(:,:,iref)
+        j_pft_ref_8 = self%norm_refs_even(:,:,jref)
         gencorr_ref = 0.d0
-        i_sqsum_ref = 0.d0
-        j_sqsum_ref = 0.d0
         if( present(irot) )then
             call self%rotate_ref(j_pft_ref_8, irot, pft_ref_tmp(:,:,1))
             j_pft_ref_8 = pft_ref_tmp(:,:,1)
         endif
         if( params_glob%l_kweight )then
             do k = self%kfromto(1),self%kfromto(2)
-                i_sqsum_ref = i_sqsum_ref + real(k,kind=dp) * sum(real(i_pft_ref_8(:,k) * conjg(i_pft_ref_8(:,k)),dp))
-                j_sqsum_ref = j_sqsum_ref + real(k,kind=dp) * sum(real(j_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
-                gencorr_ref = gencorr_ref + real(k,kind=dp) * sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
+                gencorr_ref = gencorr_ref + sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp)) * real(k,kind=dp)
             end do
         else
             do k = self%kfromto(1),self%kfromto(2)
-                i_sqsum_ref = i_sqsum_ref + sum(real(i_pft_ref_8(:,k) * conjg(i_pft_ref_8(:,k)),dp))
-                j_sqsum_ref = j_sqsum_ref + sum(real(j_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
                 gencorr_ref = gencorr_ref + sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
             end do
         endif
-        gencorr_ref = gencorr_ref / dsqrt(i_sqsum_ref * j_sqsum_ref)
     end function gencorr_ref
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
@@ -2338,7 +2367,7 @@ contains
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
