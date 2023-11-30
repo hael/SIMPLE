@@ -4132,11 +4132,32 @@ contains
 
     !>  \brief minmax to get the minimum and maximum values in an image
     !! \return  mm 2D element (minimum , maximum)
-    function minmax( self )result( mm )
-        class(image), intent(in) :: self
-        real :: mm(2)
-        mm(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+    function minmax( self, radius )result( mm )
+        class(image),   intent(in) :: self
+        real, optional, intent(in) :: radius
+        real    :: mm(2), radsq
+        integer :: c(3),i,j,k,dksq,djsq,dsq
+        if( present(radius) )then
+            radsq = radius**2
+            c     = self%ldim/2+1
+            if( self%ldim(3)==1 ) c(3)=1
+            mm    = [huge(0.),-huge(0.)]
+            do k = 1,self%ldim(3)
+                dksq = (k-c(3))**2
+                do j = 1,self%ldim(2)
+                    djsq = dksq + (j-c(2))**2
+                    do i = 1,self%ldim(1)
+                        dsq = djsq + (i-c(1))**2
+                        if( real(dsq) > radsq ) cycle
+                        mm(1) = min(mm(1),self%rmat(i,j,k))
+                        mm(2) = max(mm(2),self%rmat(i,j,k))
+                    enddo
+                enddo
+            enddo
+        else
+            mm(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+            mm(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        endif
     end function minmax
 
     subroutine loc_sdev( self, winsz, sdevimg, asdev )
