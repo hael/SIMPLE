@@ -69,6 +69,7 @@ type :: regularizer
     procedure          :: compute_grad_smpl
     procedure          :: compute_grad_ptcl
     procedure          :: compute_grad_cavg
+    procedure          :: compute_grad_norm_cavg
     procedure          :: compute_grad_reproj
     procedure          :: regularize_refs
     procedure          :: reset_regs
@@ -265,11 +266,20 @@ contains
                 call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
                 grad_w = 1./self%ref_ptcl_tab(iref, iptcl)%sum - self%ref_ptcl_tab(iref, iptcl)%w/self%ref_ptcl_tab(iref, iptcl)%sum**2
-                if( self%pftcc%ptcl_iseven(iptcl) )then
+                if( params_glob%l_lpset )then
+                    if( self%pftcc%ptcl_iseven(iptcl) )then
+                        self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
+                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                        self%regs_grad_even(:,:,iref)  = self%regs_grad_even(:,:,iref)  + ptcl_ctf_rot * grad_w
+                    else
+                        self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
+                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                        self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot * grad_w
+                    endif
+                else
                     self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
                     self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
                     self%regs_grad_even(:,:,iref)  = self%regs_grad_even(:,:,iref)  + ptcl_ctf_rot * grad_w
-                else
                     self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
                     self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
                     self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot * grad_w
@@ -401,6 +411,65 @@ contains
             endif
         enddo
     end subroutine compute_grad_cavg
+
+    subroutine compute_grad_norm_cavg( self )
+        class(regularizer), intent(inout) :: self
+        complex(dp) :: cavgs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                      &cavgs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs)
+        integer  :: iref, iref2, find, k
+        real(dp) :: sqsum_ref, sqsum_cavg
+        real     :: filt(self%kfromto(1):self%kfromto(2))
+        call self%pftcc%normalize_refs
+        where( abs(self%regs_denom_odd) < DTINY )
+            cavgs_odd = 0._dp
+        elsewhere
+            cavgs_odd = self%regs_odd / self%regs_denom_odd
+        endwhere
+        where( abs(self%regs_denom_even) < DTINY )
+            cavgs_even = 0._dp
+        elsewhere
+            cavgs_even = self%regs_even / self%regs_denom_even
+        endwhere
+        ! applying butterworth filter at cut-off = lp
+        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
+        call butterworth_filter(find, self%kfromto, filt)
+        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
+        do k = self%kfromto(1),self%kfromto(2)
+            cavgs_odd( :,k,:) = filt(k) * cavgs_odd( :,k,:)
+            cavgs_even(:,k,:) = filt(k) * cavgs_even(:,k,:)
+        enddo
+        !$omp end parallel do
+        do iref = 1, self%nrefs
+            sqsum_ref  = 0._dp
+            sqsum_cavg = 0._dp
+            if( params_glob%l_kweight )then
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_cavg = sqsum_cavg + real(k,kind=dp) * sum(real(cavgs_odd(:,k,iref)                * conjg(cavgs_odd(:,k,iref)),dp))
+                    sqsum_ref  = sqsum_ref  + real(k,kind=dp) * sum(real(self%pftcc%pfts_refs_odd(:,k,iref) * conjg(self%pftcc%pfts_refs_odd(:,k,iref)),dp))
+                enddo
+            else
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_cavg = sqsum_cavg + sum(real(cavgs_odd(:,k,iref)                * conjg(cavgs_odd(:,k,iref)),dp))
+                    sqsum_ref  = sqsum_ref  + sum(real(self%pftcc%pfts_refs_odd(:,k,iref) * conjg(self%pftcc%pfts_refs_odd(:,k,iref)),dp))
+                enddo
+            endif
+            self%regs_grad_odd( :,:,iref) = 2 * cavgs_odd(:,:,iref) / dsqrt(sqsum_cavg) / dsqrt(sqsum_ref)
+            sqsum_ref  = 0._dp
+            sqsum_cavg = 0._dp
+            if( params_glob%l_kweight )then
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_cavg = sqsum_cavg + real(k,kind=dp) * sum(real(cavgs_even(:,k,iref)                * conjg(cavgs_even(:,k,iref)),dp))
+                    sqsum_ref  = sqsum_ref  + real(k,kind=dp) * sum(real(self%pftcc%pfts_refs_even(:,k,iref) * conjg(self%pftcc%pfts_refs_even(:,k,iref)),dp))
+                enddo
+            else
+                do k = self%kfromto(1),self%kfromto(2)
+                    sqsum_cavg = sqsum_cavg + sum(real(cavgs_even(:,k,iref)                * conjg(cavgs_even(:,k,iref)),dp))
+                    sqsum_ref  = sqsum_ref  + sum(real(self%pftcc%pfts_refs_even(:,k,iref) * conjg(self%pftcc%pfts_refs_even(:,k,iref)),dp))
+                enddo
+            endif
+            self%regs_grad_even( :,:,iref) = 2 * cavgs_even(:,:,iref) / dsqrt(sqsum_cavg) / dsqrt(sqsum_ref)
+        enddo
+    end subroutine compute_grad_norm_cavg
 
     subroutine compute_grad_reproj( self )
         class(regularizer), intent(inout) :: self
@@ -829,6 +898,8 @@ contains
         self%regs_even      = real(self%regs_even, dp)
         self%regs_grad_odd  = real(self%regs_grad_odd,  dp)
         self%regs_grad_even = real(self%regs_grad_even, dp)
+        where( isnan(real(self%regs_grad_odd)) )  self%regs_grad_odd  = 0.
+        where( isnan(real(self%regs_grad_even)) ) self%regs_grad_even = 0.
 
         ! annealing and different grad styles
         eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
