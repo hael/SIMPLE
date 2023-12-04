@@ -908,7 +908,7 @@ contains
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         integer,          parameter   :: MAXITS = 60, N_ITERS = 5
-        integer,          allocatable :: pinds(:), best_ir(:)
+        integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
         real,             allocatable :: sigma2_noise(:,:)
@@ -1006,9 +1006,8 @@ contains
             call reg_obj%init_tab
             call reg_obj%fill_tab_noshift(pinds)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
-            if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
-            call reg_obj%reg_uniform_cluster(best_ir)
-            call reg_obj%form_cavgs(best_ir)
+            call reg_obj%reg_uniform_cluster
+            call reg_obj%form_cavgs
             call reg_obj%regularize_refs
             print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
             ! init volumes
@@ -1027,7 +1026,7 @@ contains
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
-                iref = best_ir(iptcl)
+                iref = reg_obj%ptcl_ref_map(iptcl)
                 if( reg_obj%ref_ptcl_tab(iref, iptcl)%prob < TINY ) cycle
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle

@@ -234,9 +234,7 @@ contains
                             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                             call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
                         enddo
-                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
-                        call reg_obj%reg_uniform_cluster(best_ir)
-                        call reg_obj%map_ptcl_ref(best_ir)
+                        call reg_obj%reg_uniform_cluster
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
@@ -264,9 +262,7 @@ contains
                             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                             call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
                         enddo
-                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
-                        call reg_obj%reg_uniform_cluster(best_ir)
-                        call reg_obj%map_ptcl_ref(best_ir)
+                        call reg_obj%reg_uniform_cluster
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
@@ -283,15 +279,14 @@ contains
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                         call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
                     enddo
-                    if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
-                    call reg_obj%reg_uniform_cluster(best_ir)
+                    call reg_obj%reg_uniform_cluster
                     ! Batch loop
                     do ibatch=1,nbatches
                         batch_start = batches(ibatch,1)
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%form_cavgs(best_ir)
+                        call reg_obj%form_cavgs
                     enddo
                     call reg_obj%compute_grad_norm_cavg
                     call reg_obj%regularize_refs
@@ -320,9 +315,7 @@ contains
                             call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                             call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
                         enddo
-                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top))
-                        call reg_obj%reg_uniform_cluster(best_ir)
-                        call reg_obj%map_ptcl_ref(best_ir)
+                        call reg_obj%reg_uniform_cluster
                     elseif( trim(params_glob%refine) == 'prob_inpl' )then
                         THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
                     endif
