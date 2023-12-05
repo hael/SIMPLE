@@ -236,7 +236,8 @@ do cur_class = 1, n_cls
             call rotimg%clip(build%imgbatch(i))
             call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ptcls_stk.mrc',i)
             ! write ctf
-            call rotctfimg%write(int2str(cur_class) // '_aligned_ctfs_stk.mrc',i)
+            call rotctfimg%clip(build%imgbatch(i))
+            call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ctfs_stk.mrc',i)
         enddo
     endif
     ! deconvolutions
