@@ -8,7 +8,7 @@ private
 #include "simple_local_flags.inc"
 
 type :: histogram
-    private
+    ! private
     real,    allocatable :: x(:)
     integer, allocatable :: counts(:)
     integer              :: nbins = 0
@@ -18,9 +18,10 @@ type :: histogram
 
   contains
     ! Initialization
-    procedure, private :: new_1, new_2
-    generic            :: new => new_1, new_2
+    procedure, private :: new_1, new_2, new_3
+    generic            :: new => new_1, new_2, new_3
     procedure          :: reset
+    procedure          :: zero
     procedure          :: quantize
     ! Getters
     procedure          :: get
@@ -63,9 +64,9 @@ contains
                 call self%kill
             endif
         endif
+        self%nbins = nbins
         if( alloc )then
             if( nbins < 2 ) THROW_HARD('Invalid NBINS value: '//int2str(nbins))
-            self%nbins = nbins
             allocate(self%x(self%nbins+1),self%counts(self%nbins))
             self%x      = 0.
             self%xrange = 0.
@@ -86,23 +87,47 @@ contains
         call self%quantize(img, grad, minmax, radius)
     end subroutine new_2
 
+    subroutine new_3( self, other, copy )
+        class(histogram),  intent(inout) :: self
+        type(histogram),   intent(in)    :: other
+        logical, optional, intent(in)    :: copy
+        call self%new_1(other%nbins)
+        self%x      = other%x
+        self%xrange = other%xrange
+        self%dx     = other%dx
+        if( present(copy) )then
+            if( copy )then
+                self%counts = other%counts
+                self%ntot   = other%ntot
+            endif
+        endif
+    end subroutine new_3
+
     pure subroutine reset( self)
         class(histogram), intent(inout) :: self
         if( self%exists )then
             self%x      = 0.
             self%xrange = 0.
-            self%counts = 0
-            self%ntot   = 0
             self%nbins  = 0
             self%dx     = 0.
+            call self%zero
         endif
     end subroutine reset
+
+    pure subroutine zero( self)
+        class(histogram), intent(inout) :: self
+        if( self%exists )then
+            self%counts = 0
+            self%ntot   = 0
+        endif
+    end subroutine zero
 
     subroutine quantize( self, img, grad, minmax, radius )
         class(histogram),  intent(inout) :: self
         class(image),      intent(in)    :: img
         logical, optional, intent(in)    :: grad
         real,    optional, intent(in)    :: minmax(2), radius
+        real, allocatable :: grads(:,:)
         real, pointer :: prmat(:,:,:)
         real    :: minmax_here(2), diff, radsq, dsq
         integer :: dims(3), center(3), i,j,bin,djsq
@@ -110,36 +135,45 @@ contains
         if( img%is_ft() ) THROW_HARD('Real space only!')
         dims = img%get_ldim()
         if( dims(3) /= 1 ) THROW_HARD('2D images only!')
-        if( present(minmax) ) minmax_here = minmax
         radsq = real(maxval(dims)**2)
         if( present(radius) ) radsq = radius**2
         call img%get_rmat_ptr(prmat)
         if( present(grad) )then
             if( grad )then
+                allocate(grads(dims(1),dims(2)))
                 ! gradients magitude, img destroyed on output
-                prmat(2:dims(1)-1,2:dims(2)-1,1) = &
-                &(prmat(3:dims(1),2:dims(2)-1,1) - prmat(1:dims(1)-2,2:dims(2)-1,1))**2 +&
-                &(prmat(2:dims(1)-1,3:dims(2),1) - prmat(2:dims(1)-1,1:dims(2)-2,1))**2
-                prmat(2:dims(1)-1,2:dims(2)-1,1) = sqrt(prmat(2:dims(1)-1,2:dims(2)-1,1)) / 2.
-                prmat(1,:,1)       = 0.
-                prmat(dims(1),:,1) = 0.
-                prmat(:,1,1)       = 0.
-                prmat(:,dims(2),1) = 0.
-                if( .not.present(minmax) )then
-                    minmax_here    = img%minmax(radius=radius)
-                    minmax_here(1) = 0.
-                endif
-            else
-                minmax_here = img%minmax(radius=radius)
+                do i = 1,dims(1)
+                    if( i == 1 )then
+                        grads(i,:) = (prmat(2,:dims(2),1) - prmat(1,:dims(2),1))**2
+                    else if( i==dims(1) )then
+                        grads(i,:) = (prmat(i,:dims(2),1) - prmat(i-1,:dims(2),1))**2
+                    else
+                        grads(i,:) = (prmat(i+1,:dims(2),1) - prmat(i-1,:dims(2),1))**2
+                    endif
+                enddo
+                do j = 1,dims(2)
+                    if( j == 1 )then
+                        grads(:,j) = grads(:,j) + (prmat(:dims(1),2,1) - prmat(:dims(1),1,1))**2
+                    else if( j==dims(2) )then
+                        grads(:,j) = grads(:,j) + (prmat(:dims(1),j,1) - prmat(:dims(1),j-1,1))**2
+                    else
+                        grads(:,j) = grads(:,j) + (prmat(:dims(1),j+1,1) - prmat(:dims(1),j-1,1))**2
+                    endif
+                enddo
+                prmat(1:dims(1),1:dims(2),1) = sqrt(grads/4.)
+                deallocate(grads)
             endif
+        endif
+        if( present(minmax) )then
+            minmax_here = minmax
         else
             minmax_here = img%minmax(radius=radius)
         endif
         diff = minmax_here(2)-minmax_here(1)
         if( diff < TINY ) THROW_HARD('Invalid bounds!')
         self%xrange = diff
-        self%dx = self%xrange / real(self%nbins)
-        self%x(1) = minmax_here(1)
+        self%dx     = self%xrange / real(self%nbins)
+        self%x(1)   = minmax_here(1)
         do i = 2,self%nbins
             self%x(i) = self%x(1) + real(i-1)*self%dx
         enddo
@@ -152,7 +186,8 @@ contains
                 dsq  = real(djsq + (i-center(1))**2)
                 if( dsq > radsq ) cycle
                 bin = self%get_bin(prmat(i,j,1))
-                if( bin /= 0 ) self%counts(bin) = self%counts(bin)+1
+                bin = min(self%nbins,max(1,bin))
+                self%counts(bin) = self%counts(bin)+1
             enddo
         enddo
         self%ntot = sum(self%counts)
@@ -186,19 +221,26 @@ contains
         real :: v
         get_bin = 0
         v = val - self%x(1)
-        if( v > -TINY .and. v < self%xrange+TINY )then
+        if( v < 0. )then
+            get_bin = 0
+        else if( v > self%xrange )then
+            get_bin = self%nbins+1
+        else
             v = real(self%nbins) * v / self%xrange
-            get_bin = min(self%nbins,max(1, floor(v)+1))
+            get_bin = min(self%nbins,max(1, ceiling(v)))
         endif
     end function get_bin
 
     !> Arithmetics
 
     subroutine add( self, other )
-        class(histogram), intent(inout) :: self, other
-        if( self%nbins /= other%nbins ) THROW_HARD('Invalid dimensions')
+        class(histogram), intent(inout) :: self
+        type(histogram),  intent(in)    :: other
+        if( self%nbins /= other%nbins )then
+            THROW_HARD('Invalid dimensions: '//int2str(self%nbins)//' vs. '//int2str(other%nbins))
+        endif
         self%counts = self%counts + other%counts
-        self%ntot   = self%ntot + other%ntot
+        self%ntot   = sum(self%counts)
     end subroutine add
 
     !> Calculators
