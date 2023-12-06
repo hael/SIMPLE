@@ -209,7 +209,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: DoG2D, Gau2D
+    procedure          :: DoG2D, Gau2D, lpgau2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
@@ -263,7 +263,7 @@ contains
     procedure          :: gauran
     procedure          :: add_gauran
     procedure          :: dead_hot_positions
-    procedure          :: taper_edges
+    procedure          :: taper_edges, taper_edges_hann
     procedure          :: subtr_backgr_ramp
     procedure          :: zero
     procedure          :: zero_and_unflag_ft
@@ -3993,6 +3993,28 @@ contains
         !$omp end parallel do
     end subroutine Gau2D
 
+    subroutine lpgau2D( self, sig )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: sig ! half-width in Angs
+        real    :: gau, fsq, sigsq
+        integer :: phys(2), lims(3,2), h, k
+        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
+        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
+        lims  = self%fit%loop_lims(2)
+        sigsq = (sig/self%smpd)**2 ! in pixels
+        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,k,fsq,phys,gau)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                fsq  = h*h+k*k
+                gau  = exp(-min(65., fsq / sigsq))
+                phys = self%comp_addr_phys(h,k)
+                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * gau
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine lpgau2D
+
     ! CALCULATORS
 
     !> \brief stats  is for providing foreground/background statistics
@@ -5740,6 +5762,39 @@ contains
         if(allocated(smooth_avg_curr_edge_start)) deallocate(smooth_avg_curr_edge_start)
         if(allocated(smooth_avg_curr_edge_stop))  deallocate(smooth_avg_curr_edge_stop)
     end subroutine taper_edges
+
+    subroutine taper_edges_hann( self, borders )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: borders(2)
+        real    :: w
+        integer :: i,j,n
+        if( self%is_ft() )THROW_HARD('Real space only!')
+        if( self%is_3d() )THROW_HARD('2D images only!')
+        n = 0
+        do j = 1,borders(2)
+            n = n+1
+            w = 1. - cos(PIO2* real(j-1)/real(borders(2)) )
+            w = min(1.,max(0.,w))
+            self%rmat(1:self%ldim(1),j,1) = w * self%rmat(1:self%ldim(1),j,1)
+        enddo
+        n = 0
+        do j = self%ldim(2)-borders(2)+1,self%ldim(2)
+            n = n+1
+            w = cos(PIO2* real(j-self%ldim(2)+borders(2))/real(borders(2)))
+            w = min(1.,max(0.,w))
+            self%rmat(1:self%ldim(1),j,1) = w * self%rmat(1:self%ldim(1),j,1)
+        enddo
+        do i = 1,borders(1)
+            w = 1. - cos(PIO2* real(i-1)/real(borders(1)) )
+            w = min(1.,max(0.,w))
+            self%rmat(i,1:self%ldim(2),1) = w * self%rmat(i,1:self%ldim(2),1)
+        enddo
+        do i = self%ldim(1)-borders(1)+1,self%ldim(1)
+            w = cos(PIO2* real(i-self%ldim(1)+borders(1))/real(borders(1)))
+            w = min(1.,max(0.,w))
+            self%rmat(i,1:self%ldim(2),1) = w * self%rmat(i,1:self%ldim(2),1)
+        enddo
+    end subroutine taper_edges_hann
 
     !>  subtracts background linear ramp including mean
     subroutine subtr_backgr_ramp( self, lmsk )

@@ -22,7 +22,7 @@ end interface
 contains
 
     !>   for finding closest element in an ordered list
-    subroutine find_1( arr, n, x, j, dist1 )
+    pure subroutine find_1( arr, n, x, j, dist1 )
         integer, intent(in)  :: n           !< size of list
         real,    intent(in)  :: arr(n), x   !< list and search value
         real,    intent(out) :: dist1
@@ -40,7 +40,7 @@ contains
     end subroutine find_1
 
     !>   for finding closest element in an ordered list
-    subroutine find_2( arr, n, x, j, dist1 )
+    pure subroutine find_2( arr, n, x, j, dist1 )
         integer, intent(in)  :: n         !< size of list
         integer, intent(in)  :: arr(n), x !< list and search value
         integer, intent(out) :: dist1
