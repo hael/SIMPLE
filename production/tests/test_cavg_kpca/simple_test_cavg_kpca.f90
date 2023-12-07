@@ -91,7 +91,7 @@ do cur_class = 1, n_cls
             endif
             call rotimg%zero_and_unflag_ft
             call rotctfimg%zero_and_flag_ft
-            call build%imgbatch(i)%read(p%stk,i)
+            call build%imgbatch(i)%read(int2str(cur_class)//'_'//p%stk,i)
             call build%imgbatch(i)%pad(rotimg)
             call rotimg%fft
             ! CTF rotation
@@ -236,6 +236,7 @@ do cur_class = 1, n_cls
             call rotimg%clip(build%imgbatch(i))
             call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ptcls_stk.mrc',i)
             ! write ctf
+            call rotctfimg%ifft
             call rotctfimg%clip(build%imgbatch(i))
             call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ctfs_stk.mrc',i)
         enddo
