@@ -73,7 +73,6 @@ contains
         integer,           intent(in) :: n
         real,              intent(in) :: fsc(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
-        real, parameter           :: SCALE = 40.
         type(str4arr)             :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
@@ -112,7 +111,6 @@ contains
         integer,           intent(in) :: n
         real,              intent(in) :: fsc(n), fsc_n(n), fsc_t(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
-        real, parameter           :: SCALE = 40.
         type(str4arr)             :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
