@@ -10,28 +10,26 @@ private
 type :: histogram
     ! private
     real,    allocatable :: x(:)
-    integer, allocatable :: counts(:)
+    real,    allocatable :: counts(:)
     integer              :: nbins = 0
-    integer              :: ntot  = 0
+    real                 :: ntot  = 0.
     real                 :: dx=0., xrange=0.
     logical              :: exists = .false.
-
   contains
     ! Initialization
-    procedure, private :: new_1, new_2, new_3
-    generic            :: new => new_1, new_2, new_3
+    procedure, private :: new_1, new_2, new_3, new_4
+    generic            :: new => new_1, new_2, new_3, new_4
     procedure          :: reset
     procedure          :: zero
     procedure          :: quantize
     ! Getters
-    procedure          :: get
-    procedure          :: get_bin
+    procedure          :: get, get_x, get_bin
     ! Arithmetics
     procedure          :: add
     ! Descriptors
     procedure          :: npeaks
+    procedure          :: find_hill, find_next_valley
     procedure, private :: moments
-    procedure, private :: sided_moments
     procedure          :: mean
     procedure          :: variance
     procedure          :: skewness
@@ -40,9 +38,11 @@ type :: histogram
     procedure          :: entropy
     ! Operations
     procedure          :: smooth
+    procedure          :: plot
     ! Comparison
     procedure          :: TVD
     procedure          :: KLD
+    procedure          :: JSD
     procedure          :: HD
     ! Destructor
     procedure          :: kill
@@ -53,7 +53,7 @@ contains
 
     subroutine new_1( self, nbins )
         class(histogram), intent(inout) :: self
-        integer,             intent(in) :: nbins
+        integer,          intent(in)    :: nbins
         logical :: alloc
         alloc= .true.
         if( self%exists )then
@@ -70,21 +70,20 @@ contains
             allocate(self%x(self%nbins+1),self%counts(self%nbins))
             self%x      = 0.
             self%xrange = 0.
-            self%counts = 0
+            self%counts = 0.
             self%dx     = 0.
-            self%ntot   = 0
+            self%ntot   = 0.
         endif
         self%exists = .true.
     end subroutine new_1
 
-    subroutine new_2( self, img, nbins, grad, minmax, radius )
+    subroutine new_2( self, img, nbins, minmax, radius )
         class(histogram),  intent(inout) :: self
         class(image),      intent(in)    :: img
         integer,           intent(in)    :: nbins
-        logical, optional, intent(in)    :: grad
         real,    optional, intent(in)    :: minmax(2), radius
         call self%new_1(nbins)
-        call self%quantize(img, grad, minmax, radius)
+        call self%quantize(img, minmax, radius)
     end subroutine new_2
 
     subroutine new_3( self, other, copy )
@@ -103,6 +102,36 @@ contains
         endif
     end subroutine new_3
 
+    subroutine new_4( self, nbins, rvec )
+        class(histogram),  intent(inout) :: self
+        integer,           intent(in)    :: nbins
+        real, allocatable, intent(in)    :: rvec(:)
+        real    :: minmax(2), diff
+        integer :: i,n,bin
+        if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
+        call self%new_1(nbins)
+        n         = size(rvec)
+        minmax(1) = minval(rvec)
+        minmax(2) = maxval(rvec)
+        diff      = minmax(2) - minmax(1)
+        if( diff < TINY ) THROW_HARD('Invalid bounds!')
+        self%xrange = diff
+        self%dx     = self%xrange / real(self%nbins)
+        self%x(1)   = minmax(1)
+        do i = 2,self%nbins
+            self%x(i) = self%x(1) + real(i-1)*self%dx
+        enddo
+        self%x(self%nbins+1) = minmax(2)
+        ! quantization
+        self%counts = 0.
+        do i = 1,n
+            bin = self%get_bin(rvec(i))
+            bin = min(self%nbins,max(1,bin))
+            self%counts(bin) = self%counts(bin) + 1.
+        enddo
+        self%ntot = sum(self%counts)
+    end subroutine new_4
+
     pure subroutine reset( self)
         class(histogram), intent(inout) :: self
         if( self%exists )then
@@ -117,52 +146,26 @@ contains
     pure subroutine zero( self)
         class(histogram), intent(inout) :: self
         if( self%exists )then
-            self%counts = 0
-            self%ntot   = 0
+            self%counts = 0.
+            self%ntot   = 0.
         endif
     end subroutine zero
 
-    subroutine quantize( self, img, grad, minmax, radius )
+    subroutine quantize( self, img, minmax, radius )
         class(histogram),  intent(inout) :: self
         class(image),      intent(in)    :: img
-        logical, optional, intent(in)    :: grad
         real,    optional, intent(in)    :: minmax(2), radius
-        real, allocatable :: grads(:,:)
         real, pointer :: prmat(:,:,:)
-        real    :: minmax_here(2), diff, radsq, dsq
-        integer :: dims(3), center(3), i,j,bin,djsq
+        real          :: minmax_here(2), diff, radsq, dsq
+        integer       :: dims(3), center(3), i,j,bin,djsq
         if( .not.self%exists ) THROW_HARD('Object has not been instanciated!')
         if( img%is_ft() ) THROW_HARD('Real space only!')
         dims = img%get_ldim()
         if( dims(3) /= 1 ) THROW_HARD('2D images only!')
-        radsq = real(maxval(dims)**2)
-        if( present(radius) ) radsq = radius**2
-        call img%get_rmat_ptr(prmat)
-        if( present(grad) )then
-            if( grad )then
-                allocate(grads(dims(1),dims(2)))
-                ! gradients magitude, img destroyed on output
-                do i = 1,dims(1)
-                    if( i == 1 )then
-                        grads(i,:) = (prmat(2,:dims(2),1) - prmat(1,:dims(2),1))**2
-                    else if( i==dims(1) )then
-                        grads(i,:) = (prmat(i,:dims(2),1) - prmat(i-1,:dims(2),1))**2
-                    else
-                        grads(i,:) = (prmat(i+1,:dims(2),1) - prmat(i-1,:dims(2),1))**2
-                    endif
-                enddo
-                do j = 1,dims(2)
-                    if( j == 1 )then
-                        grads(:,j) = grads(:,j) + (prmat(:dims(1),2,1) - prmat(:dims(1),1,1))**2
-                    else if( j==dims(2) )then
-                        grads(:,j) = grads(:,j) + (prmat(:dims(1),j,1) - prmat(:dims(1),j-1,1))**2
-                    else
-                        grads(:,j) = grads(:,j) + (prmat(:dims(1),j+1,1) - prmat(:dims(1),j-1,1))**2
-                    endif
-                enddo
-                prmat(1:dims(1),1:dims(2),1) = sqrt(grads/4.)
-                deallocate(grads)
-            endif
+        if( present(radius) )then
+            radsq = radius**2
+        else
+            radsq = real(maxval(dims)**2)
         endif
         if( present(minmax) )then
             minmax_here = minmax
@@ -179,7 +182,8 @@ contains
         enddo
         self%x(self%nbins+1) = minmax_here(2)
         center = dims/2 + 1
-        self%counts = 0
+        self%counts = 0.
+        call img%get_rmat_ptr(prmat)
         do j = 1,dims(2)
             djsq = (j-center(2))**2
             do i = 1,dims(1)
@@ -187,7 +191,7 @@ contains
                 if( dsq > radsq ) cycle
                 bin = self%get_bin(prmat(i,j,1))
                 bin = min(self%nbins,max(1,bin))
-                self%counts(bin) = self%counts(bin)+1
+                self%counts(bin) = self%counts(bin)+1.
             enddo
         enddo
         self%ntot = sum(self%counts)
@@ -204,16 +208,18 @@ contains
             get = 0.
             return
         endif
+        get = self%counts(i)
         if( present(prob) )then
-            if( prob )then
-                get = real(self%counts(i)) / real(self%ntot)
-            else
-                get = real(self%counts(i))
-            endif
-        else
-            get = real(self%counts(i))
+            if( prob ) get = get / self%ntot
         endif
     end function get
+
+    real function get_x( self , bin )
+        class(histogram),  intent(in) :: self
+        integer,           intent(in) :: bin
+        if( (bin < 1) .or. (bin > self%nbins) ) THROW_HARD('Invalid index!')
+        get_x = self%x(bin) + self%dx/2.
+    end function get_x
 
     elemental integer function get_bin( self, val )
         class(histogram), intent(in) :: self
@@ -240,7 +246,7 @@ contains
             THROW_HARD('Invalid dimensions: '//int2str(self%nbins)//' vs. '//int2str(other%nbins))
         endif
         self%counts = self%counts + other%counts
-        self%ntot   = sum(self%counts)
+        self%ntot   = self%ntot   + other%ntot
     end subroutine add
 
     !> Calculators
@@ -251,6 +257,7 @@ contains
         integer :: i
         npeaks = 0
         do i = 2,self%nbins-1
+            ! if( self%counts(i) == self%counts(i-1) ) cycle
             if( (self%counts(i) > self%counts(i-1)) .and. (self%counts(i) > self%counts(i+1)) )then
                 npeaks = npeaks+1
             endif
@@ -258,10 +265,44 @@ contains
         if( present(include_lims) )then
             if(include_lims)then
                 if((self%counts(1) > self%counts(2)))                     npeaks = npeaks+1
-                if((self%counts(self%nbins) > self%counts(self%nbins+1))) npeaks = npeaks+1
+                if((self%counts(self%nbins) > self%counts(self%nbins-1))) npeaks = npeaks+1
             endif
         endif
     end function npeaks
+
+    integer function find_hill( self, npeak )
+        class(histogram), intent(in) :: self
+        integer,          intent(in) :: npeak ! Nth peak
+        real    :: prev_count
+        integer :: i, n
+        find_hill  = 0
+        n          = 0
+        prev_count = self%counts(1)
+        do i = 2,self%nbins-1
+            prev_count = min(prev_count,self%counts(i-1))
+            if( (self%counts(i) > prev_count) .and. (self%counts(i) > self%counts(i+1)) )then
+                n = n+1
+                if( n == npeak )then
+                    find_hill = i
+                    exit
+                endif
+                prev_count = self%counts(i)
+            endif
+        enddo   
+    end function find_hill
+
+    pure integer function find_next_valley( self, bin )
+        class(histogram), intent(in) :: self
+        integer,          intent(in) :: bin
+        integer :: i
+        find_next_valley = 0
+        do i = bin+1,self%nbins-1
+            if( self%counts(i) < self%counts(i+1) )then
+                find_next_valley = i
+                exit
+            endif
+        enddo   
+    end function find_next_valley
 
     real function moments( self, order, mean )
         class(histogram), intent(in) :: self
@@ -272,36 +313,8 @@ contains
             THROW_HARD('Unsupported moment order!')
         endif
         v = self%dx/2. - mean
-        moments = sum( real(self%counts) * (self%x(:self%nbins)+v)**order) / real(self%ntot)
+        moments = sum( self%counts * (self%x(:self%nbins)+v)**order) / self%ntot
     end function moments
-
-    subroutine sided_moments( self, order, val, ms )
-        class(histogram), intent(in)  :: self
-        integer,          intent(in)  :: order
-        real,             intent(in)  :: val
-        real,             intent(out) :: ms(2)
-        real    :: v, w
-        integer :: i, n1,n2
-        if( order<2 .or. order>4 )then
-            THROW_HARD('Unsupported moment order!')
-        endif
-        v  = self%dx/2. - val
-        ms = 0.
-        n1 = 0
-        n2 = 0
-        do i = 1,self%nbins
-            w = real(self%counts(i)) * (self%x(i)+v)**order
-            if( (self%x(i)+self%dx/2.) < v )then
-                ms(1) = ms(1) + w
-                n1 = n1 + 1
-            else
-                ms(2) = ms(2) + w
-                n2 = n2 + 1
-            endif
-        enddo
-        if( n1 > 0 ) ms(1) = ms(1) / real(n1) 
-        if( n2 > 0 ) ms(2) = ms(2) / real(n2) 
-    end subroutine sided_moments
 
     real function mean( self )
         class(histogram), intent(in) :: self
@@ -359,8 +372,8 @@ contains
         integer :: i
         entropy = 0.
         do i =1,self%nbins
-            if( self%counts(i) == 0 ) cycle
-            p = min(1., max(TINY, real(self%counts(i))/real(self%ntot)))
+            if( self%counts(i) < TINY ) cycle
+            p = min(1., max(TINY, self%counts(i)/self%ntot))
             entropy = entropy - p * log(p) ! in nats
         enddo
         if( present(bounded) )then
@@ -370,17 +383,87 @@ contains
 
     ! Operations
 
-    ! convolute with window [decay, 1., decay], borders assumed 0.
-    subroutine smooth( self, w )
+    ! convolute with window [w, 1., w], borders assumed 0.
+    subroutine smooth( self, w, nits, npeaks_target, npeaks_out )
         class(histogram), intent(inout) :: self
         real,             intent(in)    :: w
-        real    :: vec(self%nbins)
-        vec                 = real(self%counts)
-        vec(2:self%nbins)   = vec(2:self%nbins)   + w * real(self%counts(1:self%nbins-1))
-        vec(1:self%nbins-1) = vec(1:self%nbins-1) + w * real(self%counts(2:self%nbins))
-        self%counts = nint(vec / (1.+2.*w))
+        integer,          intent(in)    :: nits, npeaks_target
+        integer,          intent(inout) :: npeaks_out
+        real    :: vec(0:self%nbins+1), vec2(0:self%nbins+1)
+        integer :: i,it
+        npeaks_out = 0
+        vec(0)            = 0.
+        vec(1:self%nbins) = self%counts(1:self%nbins)
+        vec(self%nbins+1) = 0.
+        do it = 1,nits
+            ! smooth
+            ! call SavitzkyGolay_filter( self%nbins+2, vec(0:self%nbins+1))
+            ! where( vec(0:self%nbins+1) < 0. )
+            !     vec(0:self%nbins+1)  = 0.
+            !     vec2(0:self%nbins+1) = 0.
+            ! else where
+            !     vec2(0:self%nbins+1) = vec(0:self%nbins+1)
+            ! end where
+            vec2(0)            = 0.
+            vec2(1:self%nbins) = vec(1:self%nbins) + w * (vec(0:self%nbins-1) + vec(2:self%nbins+1))
+            vec2(self%nbins+1) = 0.
+            vec2(1:self%nbins) = vec2(1:self%nbins) / (1.+2.*w)
+            ! rescale
+            vec2(1:self%nbins) = vec2(1:self%nbins) * (self%ntot/ sum(vec2(1:self%nbins)))
+            npeaks_out = 0
+            do i = 1,self%nbins
+                if( (vec2(i) > vec2(i-1)) .and. (vec2(i) > vec2(i+1)) )then
+                    ! counting peaks and ignoring spurious ones
+                    if( vec2(i) > 0.5 ) npeaks_out = npeaks_out+1
+                endif
+            enddo
+            vec(0:self%nbins+1) = vec2(0:self%nbins+1)
+            if( npeaks_out <= npeaks_target )exit
+        enddo
+        where( vec(1:self%nbins) < 0.5 ) vec(1:self%nbins) = 0.
+        self%counts = vec(1:self%nbins)
         self%ntot   = sum(self%counts)
     end subroutine smooth
+
+    subroutine plot( self, fname )
+        use CPlot2D_wrapper_module
+        class(histogram), intent(in) :: self
+        character(len=*), intent(in) :: fname
+        type(str4arr)                :: title
+        type(CPlot2D_type)           :: plot2D
+        type(CDataSet_type)          :: dataSet
+        character(len=LONGSTRLEN)    :: ps2pdf_cmd, fname_pdf, fname_eps
+        integer                      :: i,iostat
+        if( .not.self%exists ) THROW_HARD('Object not instantiated')
+        fname_eps  = trim(fname)//'.eps'
+        fname_pdf  = trim(fname)//'.pdf'
+        call CPlot2D__new(plot2D, trim(fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
+        call CDataSet_addpoint(dataSet, self%x(1)-self%dx/2., 0.)
+        do i = 1,self%nbins
+            call CDataSet_addpoint(dataSet, self%x(i)+self%dx/2., self%counts(i))
+        end do
+        call CDataSet_addpoint(dataSet, self%x(self%nbins)+self%dx/2., 0.)
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        title%str = 'X'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str = 'Counts'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ! conversion to PDF
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
+            &//trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine plot
     
     ! Comparison
 
@@ -388,7 +471,7 @@ contains
     real function TVD( self, other )
         class(histogram), intent(in) :: self, other
         if( self%nbins /= other%nbins ) THROW_HARD('Invalid dimensions')
-        TVD = 0.5 * sum(abs(real(self%counts)/real(self%ntot) - real(other%counts)/real(other%ntot)))
+        TVD = 0.5 * sum(abs(self%counts/self%ntot - other%counts/other%ntot))
     end function TVD
 
     ! K-L Divergence
@@ -399,19 +482,25 @@ contains
         if( self%nbins /= other%nbins ) THROW_HARD('Invalid dimensions')
         KLD = 0.
         do i =1,self%nbins
-            pself = real(self%counts(i)) / real(self%ntot)
+            pself = self%counts(i) / self%ntot
             if( pself < TINY ) cycle
-            pother = real(other%counts(i))  / real(other%ntot)
+            pother = other%counts(i)  / other%ntot
             if( pother < TINY ) cycle
             KLD = KLD + pself *log(pself/pother)
         enddo
     end function KLD
 
+    ! Jensen-Shannon Divergence, symmetrized KLD
+    real function JSD( self, other )
+        class(histogram), intent(in) :: self, other
+        JSD = 0.5 *(self%KLD(other) + other%KLD(self))
+    end function JSD
+
     ! Hellinger Distance
     real function HD( self, other )
         class(histogram), intent(in) :: self, other
         if( self%nbins /= other%nbins ) THROW_HARD('Invalid dimensions')
-        HD = sum( (sqrt(real(self%counts)/real(self%ntot)) - sqrt(real(other%counts)/real(other%ntot)))**2 )
+        HD = sum( (sqrt(self%counts/self%ntot) - sqrt(other%counts/other%ntot))**2 )
         HD = sqrt(HD/2.)
     end function HD
 
@@ -420,10 +509,10 @@ contains
         class(histogram), intent(inout) :: self
         if( self%exists )then
             deallocate(self%x,self%counts)
-            self%ntot   = 0
+            self%ntot   = 0.
             self%dx     = 0.
             self%xrange = 0.
-            self%nbins  = 0
+            self%nbins  = 0.
             self%exists = .false.
         endif
     end subroutine kill

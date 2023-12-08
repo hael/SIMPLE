@@ -209,7 +209,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: DoG2D, Gau2D, lpgau2D
+    procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
@@ -224,6 +224,7 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
+    procedure          :: gradients_magnitude
     procedure          :: calc_ice_score
     procedure          :: gradient
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
@@ -3940,59 +3941,6 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
 
-    ! Difference of Gaussian filter
-    subroutine DoG2D( self, sig1, sig2 )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: sig1, sig2 ! unit is spatial frequency
-        real, parameter :: A = sqrt(TWOPI)
-        real    :: ghsq, gk, gsq, B1, B2, gau1, gau2
-        integer :: phys(2), lims(3,2), h, k
-        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
-        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
-        B1 = 2. * sig1**2
-        B2 = 2. * sig2**2
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(h,ghsq,k,gk,gsq,phys,gau1,gau2)
-        do h = lims(1,1),lims(1,2)
-            ghsq = (real(h) / real(self%ldim(1)))**2
-            do k = lims(2,1),lims(2,2)
-                gk   = real(k) / real(self%ldim(2))
-                gsq  = ghsq + gk*gk
-                gau1 = exp(-gsq/B1) / sig1
-                gau2 = exp(-gsq/B2) / sig2
-                phys = self%comp_addr_phys(h,k)
-                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * (gau1-gau2)/A
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine DoG2D
-
-    subroutine Gau2D( self, sig)
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: sig
-        real, parameter :: A = sqrt(TWOPI)
-        real    :: ghsq, gk, gsq, B, gau
-        integer :: phys(2), lims(3,2), h, k
-        if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
-        if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
-        B = 2. * sig**2
-        lims = self%fit%loop_lims(2)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(h,ghsq,k,gk,gsq,phys,gau)
-        do h = lims(1,1),lims(1,2)
-            ghsq = (real(h) / real(self%ldim(1)))**2
-            do k = lims(2,1),lims(2,2)
-                gk   = real(k) / real(self%ldim(2))
-                gsq  = ghsq + gk*gk
-                gau  = exp(-gsq/B) / sig
-                phys = self%comp_addr_phys(h,k)
-                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * gau/A
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine Gau2D
-
     subroutine lpgau2D( self, sig )
         class(image), intent(inout) :: self
         real,         intent(in)    :: sig ! half-width in Angs
@@ -4458,6 +4406,46 @@ contains
         if(present(Dr)) Dr = Ddr
         call img_p%kill
     end subroutine calc_gradient
+
+    subroutine gradients_magnitude( self, self_out )
+        class(image), intent(in)    :: self
+        class(image), intent(inout) :: self_out
+        real    :: gx,gy
+        integer :: i,j,ni,nj
+        if( self%is_ft() ) THROW_HARD('Image input must be in the spatial domain!')
+        if( .not.self%is_2d() ) THROW_HARD('Image input must be in 2D!')
+        if( .not.self_out%exists() ) call self_out%copy(self)
+        ni = self%ldim(1)
+        nj = self%ldim(2)
+        !$omp parallel private(i,j) proc_bind(close) default(shared)
+        !$omp do
+        do i = 1,ni
+            if( i == 1 )then
+                self_out%rmat(i,:nj,1) = (self%rmat(2,:nj,1) - self%rmat(1,:nj,1))**2
+            else if( i == ni )then
+                self_out%rmat(i,:nj,1) = (self%rmat(i,:nj,1) - self%rmat(i-1,:nj,1))**2
+            else
+                self_out%rmat(i,:nj,1) = (self%rmat(i+1,:nj,1) - self%rmat(i-1,:nj,1))**2
+            endif
+        enddo
+        !$omp end do
+        !$omp do
+        do j = 1,nj
+            if( j == 1 )then
+                self_out%rmat(:ni,j,1) = self_out%rmat(:ni,j,1) + (self%rmat(:ni,2,1) - self%rmat(:ni,1,1))**2
+            else if( j == nj )then
+                self_out%rmat(:ni,j,1) = self_out%rmat(:ni,j,1) + (self%rmat(:ni,j,1) - self%rmat(:ni,j-1,1))**2
+            else
+                self_out%rmat(:ni,j,1) = self_out%rmat(:ni,j,1) + (self%rmat(:ni,j+1,1) - self%rmat(:ni,j-1,1))**2
+            endif
+        enddo
+        !$omp end do
+        !$omp workshare
+        self_out%rmat(1:ni,1:nj,1) = self_out%rmat(1:ni,1:nj,1)/4.
+        self_out%rmat(1:ni,1:nj,1) = merge(sqrt(self_out%rmat(1:ni,1:nj,1)), 0., self_out%rmat(1:ni,1:nj,1)>0.)
+        !$omp end workshare
+        !$omp end parallel
+    end subroutine gradients_magnitude
 
     subroutine calc_ice_score( self, score )
         class(image), intent(in)  :: self
