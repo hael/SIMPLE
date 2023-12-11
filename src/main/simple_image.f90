@@ -4410,7 +4410,6 @@ contains
     subroutine gradients_magnitude( self, self_out )
         class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
-        real    :: gx,gy
         integer :: i,j,ni,nj
         if( self%is_ft() ) THROW_HARD('Image input must be in the spatial domain!')
         if( .not.self%is_2d() ) THROW_HARD('Image input must be in 2D!')
