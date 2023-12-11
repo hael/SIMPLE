@@ -98,21 +98,21 @@ type :: atom_stats
     integer :: size              = 0  ! number of voxels in connected component                     NVOX
     integer :: cn_std            = 0  ! standard coordination number                                CN_STD
     integer :: adjacent_cn13     = 0  ! number of neighboring atoms w/ cn > 12                      ADJ_CN13
-    real    :: bondl             = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
+    real    :: bondl             = 0. ! nearest neighbor bond length in A                           NN_BONDL
     real    :: cn_gen            = 0. ! generalized coordination number                             CN_GEN
     real    :: diam              = 0. ! atom diameter                                               DIAM
     real    :: avg_int           = 0. ! average grey level intensity across the connected component AVG_INT
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
-    real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
+    real    :: cendist           = 0. ! distance from the center of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: u_iso             = 0. ! isotropic displacement parameters (b-factor)                U_ISO
     real    :: u_evals(3)        = 0. ! eigenvalues of aniso displacement matrix (maj,med,min)      U_(MAJ,MED,MIN)
-    real    :: azimuth           = 0. ! Azimuthal angle of major eigenvector [0,Pi)                 AZIMUTH
-    real    :: polar             = 0. ! Polar angle of major eigenvector [0, Pi)                    POLAR
+    real    :: azimuth           = 0. ! azimuthal angle of major eigenvector [0,Pi)                 AZIMUTH
+    real    :: polar             = 0. ! polar angle of major eigenvector [0, Pi)                    POLAR
     real    :: doi               = 0. ! degree of isotropy                                          DOI
-    real    :: doi_min           = 0. ! degree of isotropy w/r to average eigenvalues of aniso      DOI_MIN
-    real    :: isocorr           = 0. ! Correlation of isotropic B-Factor fit to input map          ISO_CORR
-    real    :: anisocorr         = 0. ! Correlation of anisotropic B-Factor fit to input map        ANISO_CORR
+    real    :: doi_min           = 0. ! degree of isotropy ratio of the two smallest eigenvalues    DOI_MIN
+    real    :: isocorr           = 0. ! correlation of isotropic B-Factor fit to input map          ISO_CORR
+    real    :: anisocorr         = 0. ! correlation of anisotropic B-Factor fit to input map        ANISO_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
     
     ! strain
@@ -124,9 +124,9 @@ type :: atom_stats
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
 
-    ! Auxillary (non-output)
+    ! Auxiliary (non-output)
     real    :: aniso(3,3)        = 0. ! ADP Matrix for ANISOU PDB file                              N/A
-    logical :: tossADP           = .false. ! True if atom inadequate for ADP calculations           N/A
+    logical :: tossADP           = .false. ! true if atom inadequate for ADP calculations           N/A
 
 end type atom_stats
 
@@ -166,7 +166,7 @@ type :: nanoparticle
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
-    real                  :: natoms_cns(CNMIN:CNMAX) = 0.       ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_cns(CNMIN:CNMAX)       = 0. ! # of atoms per cn_std                            NATOMS
     real                  :: natoms_aniso_cns(CNMIN:CNMAX) = 0. ! # of atoms with aniso calculated per cn_std      NATOMS
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
@@ -274,7 +274,7 @@ contains
 
     ! getters/setters
 
-    subroutine get_ldim(self,ldim)
+    subroutine get_ldim( self, ldim )
         class(nanoparticle), intent(in)  :: self
         integer,             intent(out) :: ldim(3)
         ldim = self%img%get_ldim()
@@ -399,7 +399,7 @@ contains
         real, allocatable :: centers(:,:)
         logical :: mask_present
         integer :: sz, i, cnt
-        sz = size(self%atominfo)
+        sz           = size(self%atominfo)
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
         if( mask_present )then
@@ -426,7 +426,7 @@ contains
         real, allocatable :: centers_A(:,:)
         logical :: mask_present
         integer :: sz, i, cnt
-        sz = size(self%atominfo)
+        sz           = size(self%atominfo)
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
         if( mask_present )then
@@ -1550,59 +1550,57 @@ contains
     ! the correlation between fit and rmat is stored in atominfo. The variances
     ! along the 3 principal axes and the angular orientation of the major axis are also
     ! calculated.
-    subroutine calc_anisotropic_disp(self, cc, a, rmat, fit)
+    subroutine calc_anisotropic_disp( self, cc, a, rmat, fit )
         class(nanoparticle), intent(inout)  :: self
-        class(image), intent(inout)         :: fit
-        integer, intent(in)                 :: cc
-        real, intent(in)                    :: a(3) ! Lattice params
-        real, pointer, intent(in)           :: rmat(:,:,:)
+        class(image),        intent(inout)  :: fit
+        integer,             intent(in)     :: cc
+        real,                intent(in)     :: a(3) ! Lattice params
+        real, pointer,       intent(in)     :: rmat(:,:,:)
         real(kind=8), allocatable           :: X(:,:), XTW(:,:), Y(:,:)
         real(kind=8)    :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
         real(kind=8)    :: eigenvals(3), eigenvecs(3,3)
         real(kind=8)    :: majvector(3), rvec(3,1), beta(1,1), r(3)
         real    :: center(3), output_rad, fit_rad, maxrad, int, amp, max_int_out, corr
         integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
-        logical :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        logical :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
 
-        output_rad = (sum(a)/3)/(2.*sqrt(2.))  ! 1/2 FCC nearest neighbor dist
-        fit_rad = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+        output_rad = ( sum(a) / 3 ) / ( 2. * sqrt(2.) )  ! 1/2 FCC nearest neighbor dist
+        fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
 
         ! Create search window containing sphere of fit rad to speed up loops.
-        center = self%atominfo(cc)%center(:)
-        maxrad  = 0.5*(sum(a)/3) / self%smpd
-        ilo = max(nint(center(1) - maxrad), 1)
-        ihi = min(nint(center(1) + maxrad), self%ldim(1))
-        jlo = max(nint(center(2) - maxrad), 1)
-        jhi = min(nint(center(2) + maxrad), self%ldim(2))
-        klo = max(nint(center(3) - maxrad), 1)
-        khi = min(nint(center(3) + maxrad), self%ldim(3))
-
+        center  = self%atominfo(cc)%center(:)
+        maxrad  = 0.5 * (sum(a)/3) / self%smpd
+        ilo     = max(nint(center(1) - maxrad), 1)
+        ihi     = min(nint(center(1) + maxrad), self%ldim(1))
+        jlo     = max(nint(center(2) - maxrad), 1)
+        jhi     = min(nint(center(2) + maxrad), self%ldim(2))
+        klo     = max(nint(center(3) - maxrad), 1)
+        khi     = min(nint(center(3) + maxrad), self%ldim(3))
         ! Get nvoxels within sphere of fitting
         nvoxels = 0
-        do k=klo, khi
-            do j=jlo, jhi
-                do i=ilo, ihi
-                    if (euclid(1.*(/i, j, k/), 1.*center)*self%smpd < fit_rad) then
+        do k = klo, khi
+            do j = jlo, jhi
+                do i = ilo, ihi
+                    if ( euclid(1.*(/i, j, k/), 1.*center)*self%smpd < fit_rad ) then
                         nvoxels = nvoxels + 1
                     end if
                 end do
             end do
         end do
         allocate(X(nvoxels, 7), XTW(7, nvoxels), Y(nvoxels,1), source = 0._dp)
-
         ! Linear least squares to calculate the best fit params B
         ! Conduct fit in units of Angstroms (easier on matrix operations)
         ! Note the sum of the square error of the logs is minimized instead
         ! of the sum of the square error to make the problem linear.
         ! Solution: B = ((X^T)WX)^-1((X^T)WY)
-        XTWX = 0._dp
-        XTWX_inv = 0._dp
-        XTWY = 0._dp
-        n = 1
+        XTWX          = 0._dp
+        XTWX_inv      = 0._dp
+        XTWY          = 0._dp
+        n             = 1
         X(:nvoxels,1) = 1.
-        do k=klo, khi
-            do j=jlo, jhi
-                do i=ilo, ihi
+        do k = klo, khi
+            do j = jlo, jhi
+                do i = ilo, ihi
                     r = (1.*(/i, j, k/) - center) * self%smpd
                     if (norm_2(r) < fit_rad) then
                         int = rmat(i,j,k)
@@ -1623,7 +1621,7 @@ contains
         XTWY = matmul(XTW, Y)
         deallocate(X,XTW,Y)
         call matinv(XTWX, XTWX_inv, 7, errflg)
-        B = matmul(XTWX_inv, XTWY)
+        B   = matmul(XTWX_inv, XTWY)
         amp = exp(B(1,1)) ! Best fit peak
         ! Generate covariance matrix
         cov_inv(1,1) = -2. * B(2,1)
@@ -1640,15 +1638,15 @@ contains
 
         ! Sample fit for goodness of fit and visualization
         max_int_out = 0.
-        fit_mask = .false.
-        do k=klo, khi 
-            do j=jlo, jhi   
-                do i=ilo, ihi
+        fit_mask    = .false.
+        do k = klo, khi 
+            do j = jlo, jhi   
+                do i = ilo, ihi
                     rvec(:3,1) = (1.*(/i, j, k/) - center) * self%smpd
                     if (norm_2(rvec(:3,1)) < output_rad) then
                         fit_mask(i,j,k) = .true.
-                        beta = matmul(matmul(transpose(rvec),cov_inv),rvec)
-                        int =  amp * exp(-0.5 * beta(1,1))
+                        beta            = matmul(matmul(transpose(rvec),cov_inv),rvec)
+                        int             = amp * exp(-0.5 * beta(1,1))
                         call fit%set_rmat_at(i, j, k, int)
                         if (int > max_int_out) then
                             max_int_out = int
@@ -1659,38 +1657,36 @@ contains
         end do
         corr = fit%real_corr(self%img_raw, mask=fit_mask)
         self%atominfo(cc)%anisocorr = corr 
-
         ! Calculate eigenvalues and orientation of major eigenvector
         call jacobi(cov, 3, 3, eigenvals, eigenvecs, nrot)
         call eigsrt(eigenvals, eigenvecs, 3, 3)
         ! Any negative eigenvalue or large eigenvalue implies intensity 
         ! distribution can't be approximated as a multivariate Gaussian
-        if (any(eigenvals <= 0._dp) .or. any(eigenvals > (2*fit_rad)**2)) then
-            self%atominfo(cc)%tossADP = .true.
-            self%atominfo(cc)%u_evals = 0.
-            self%atominfo(cc)%anisocorr = 0.
-            self%atominfo(cc)%azimuth = 0.
-            self%atominfo(cc)%polar = 0.
-            self%atominfo(cc)%doi = 0.
-            self%atominfo(cc)%doi_min = 0.
-            self%atominfo(cc)%aniso = 0.
+        if ( any(eigenvals <= 0._dp) .or. any(eigenvals > (1.25*fit_rad)**2) ) then
+            self%atominfo(cc)%tossADP     = .true.
+            self%atominfo(cc)%u_evals     = 0.
+            self%atominfo(cc)%anisocorr   = 0.
+            self%atominfo(cc)%azimuth     = 0.
+            self%atominfo(cc)%polar       = 0.
+            self%atominfo(cc)%doi         = 1. 
+            self%atominfo(cc)%doi_min     = 0.
+            self%atominfo(cc)%aniso       = 0.
             return
         end if
         self%atominfo(cc)%u_evals(:3) = eigenvals(:3)
-        self%atominfo(cc)%doi = eigenvals(3)/eigenvals(1)
-        self%atominfo(cc)%doi_min = eigenvals(2)/eigenvals(1)
+        self%atominfo(cc)%doi         = eigenvals(3) / eigenvals(1)
+        self%atominfo(cc)%doi_min     = eigenvals(2) / eigenvals(1)
         ! Find azimuthal and polar angles of the major eigenvector
         majvector = eigenvecs(:,1)
         ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
         if (majvector(2) < 0.) then
             majvector = -1. * majvector
         end if
-        write(*, '(i4, 3f8.2)') cc, majvector(:3)
-        self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))
+        self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
         if (majvector(1) > 0.) then
-            self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1))
+            self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
         else if (majvector(1) < 0.) then
-            self%atominfo(cc)%azimuth = atan(majvector(2)/majvector(1)) + PI
+            self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1)) + PI
         else
             self%atominfo(cc)%azimuth = PI / 2
         end if
@@ -1705,7 +1701,7 @@ contains
 
     ! visualization and output
 
-    subroutine simulate_atoms( self, simatms, betas, mask, atoms_obj)
+    subroutine simulate_atoms( self, simatms, betas, mask, atoms_obj )
         class(nanoparticle),           intent(inout) :: self
         class(image),                  intent(inout) :: simatms
         real,        optional,         intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
@@ -1775,12 +1771,12 @@ contains
         integer     :: cc
         if( present(coords) )then
             call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
-            do cc=1,size(coords, dim = 2)
+            do cc = 1, size(coords, dim = 2)
                 call set_atm_info
             enddo
         else
             call centers_pdb%new(self%n_cc, dummy=.true.)
-            do cc=1,self%n_cc
+            do cc = 1, self%n_cc
                 call set_atm_info
             enddo
         endif
@@ -1810,7 +1806,7 @@ contains
         type(atoms) :: centers_pdb
         integer     :: cc
         call centers_pdb%new(self%n_cc, dummy=.true.)
-        do cc=1,self%n_cc
+        do cc = 1, self%n_cc
             call centers_pdb%set_name(cc,self%atom_name)
             call centers_pdb%set_element(cc,self%element)
             call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
@@ -1842,7 +1838,7 @@ contains
         real        :: aniso(3, 3, self%n_cc)
         integer     :: cc
         call centers_pdb%new(self%n_cc, dummy=.true.)
-        do cc=1,self%n_cc
+        do cc = 1, self%n_cc
             call centers_pdb%set_name(cc,self%atom_name)
             call centers_pdb%set_element(cc,self%element)
             call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
@@ -2141,7 +2137,7 @@ contains
         write(funit,602)              self%radial_strain_stats_cns(cn)%maxv            ! MAX_RADIAL_STRAIN
     end subroutine write_cn_stats
 
-    subroutine kill_nanoparticle(self)
+    subroutine kill_nanoparticle( self )
         class(nanoparticle), intent(inout) :: self
         call self%img%kill()
         call self%img_raw%kill
