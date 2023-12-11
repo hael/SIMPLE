@@ -313,7 +313,7 @@ contains
             THROW_HARD('Unsupported moment order!')
         endif
         v = self%dx/2. - mean
-        moments = sum( self%counts * (self%x(:self%nbins)+v)**order) / self%ntot
+        moments = sum(self%counts * (self%x(:self%nbins)+v)**order) / self%ntot
     end function moments
 
     real function mean( self )
@@ -397,13 +397,6 @@ contains
         vec(self%nbins+1) = 0.
         do it = 1,nits
             ! smooth
-            ! call SavitzkyGolay_filter( self%nbins+2, vec(0:self%nbins+1))
-            ! where( vec(0:self%nbins+1) < 0. )
-            !     vec(0:self%nbins+1)  = 0.
-            !     vec2(0:self%nbins+1) = 0.
-            ! else where
-            !     vec2(0:self%nbins+1) = vec(0:self%nbins+1)
-            ! end where
             vec2(0)            = 0.
             vec2(1:self%nbins) = vec(1:self%nbins) + w * (vec(0:self%nbins-1) + vec(2:self%nbins+1))
             vec2(self%nbins+1) = 0.
@@ -505,7 +498,7 @@ contains
     end function HD
 
     ! Destructor
-    pure subroutine kill( self )
+    elemental subroutine kill( self )
         class(histogram), intent(inout) :: self
         if( self%exists )then
             deallocate(self%x,self%counts)
