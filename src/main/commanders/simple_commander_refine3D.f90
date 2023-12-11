@@ -907,7 +907,7 @@ contains
         use simple_image
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        integer,          parameter   :: MAXITS = 60, N_ITERS = 5
+        integer,          parameter   :: MAXITS = 60, N_ITERS = 1
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         complex,          allocatable :: cmat(:,:)
@@ -935,7 +935,6 @@ contains
         allocate(ptcl_mask(params%fromp:params%top))
         call build_glob%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
             &1.0, nptcls, pinds, ptcl_mask)
-        print *, 'nptcls = ', nptcls, '; fromp = ', params%fromp, '; top = ', params%top
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
         call reg_obj%new(pftcc)
@@ -990,8 +989,7 @@ contains
                 ! transfer to polar coordinates
                 call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
                 ! e/o flags
-                ! call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-                call pftcc%set_eo(iptcl, .true.)
+                call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
             enddo
             !$omp end parallel do
             ! getting the ctfs
@@ -1049,6 +1047,38 @@ contains
             call norm_struct_facts( cline, iter )
             ! destruct
             call killrecvols()
+            ! using gencorrs (cc-based to estimate the sigma)
+            ! if( params%l_needs_sigma )then
+            !     allocate( sigma2_noise(pftcc%kfromto(1):pftcc%kfromto(2), params%fromp:params%top), source=1. )
+            !     ! do j = pftcc%kfromto(1),pftcc%kfromto(2)
+            !     !     sigma2_noise(j,:) = real(j)
+            !     ! enddo
+            !     call pftcc%assign_sigma2_noise(sigma2_noise)
+            !     call pftcc%memoize_ptcls
+            !     params%cc_objfun = OBJFUN_CC
+            !     !$omp parallel do default(shared) private(j,iref,ithr,iptcl,inpl_corrs,cxy,max_corr,max_iref,max_sh,max_loc,loc,corr,sh) proc_bind(close) schedule(static)
+            !     do j = 1, nptcls
+            !         max_corr = 0.
+            !         do iref = 1, params%nspace
+            !             ithr  = omp_get_thread_num() + 1
+            !             iptcl = pinds(j)
+            !             ! find best irot/shift for this pair of iref, iptcl
+            !             call pftcc%gencorrs( iref, iptcl, inpl_corrs )
+            !             loc  = maxloc(inpl_corrs, dim=1)
+            !             corr = inpl_corrs(loc)
+            !             sh   = 0.
+            !             if( corr > max_corr )then
+            !                 max_corr = corr
+            !                 max_loc  = loc
+            !                 max_sh   = sh
+            !                 max_iref = iref
+            !             endif
+            !         enddo
+            !         call pftcc%update_sigma( max_iref, iptcl, max_sh, max_loc )
+            !     enddo
+            !     !$omp end parallel do
+            !     params%cc_objfun = OBJFUN_EUCLID
+            ! endif
             call orientation%kill
         enddo
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)

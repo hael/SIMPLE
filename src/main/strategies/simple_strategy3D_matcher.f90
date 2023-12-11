@@ -291,6 +291,30 @@ contains
                     call reg_obj%compute_grad_norm_cavg
                     call reg_obj%regularize_refs
                     params_glob%cc_objfun = objfun_ori
+                case('so2_inpl')
+                    ! to be used with 'refine=prob' and inpl samplings
+                    call reg_obj%reset_regs
+                    call reg_obj%init_tab
+                    ! Batch loop
+                    do ibatch=1,nbatches
+                        batch_start = batches(ibatch,1)
+                        batch_end   = batches(ibatch,2)
+                        batchsz     = batch_end - batch_start + 1
+                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                        call reg_obj%fill_tab_prob(pinds(batch_start:batch_end))
+                    enddo
+                    call reg_obj%reg_uniform_cluster
+                    if( params_glob%l_reg_debug )then
+                        ! Batch loop
+                        do ibatch=1,nbatches
+                            batch_start = batches(ibatch,1)
+                            batch_end   = batches(ibatch,2)
+                            batchsz     = batch_end - batch_start + 1
+                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                            call reg_obj%form_cavgs
+                        enddo
+                        call reg_obj%regularize_refs
+                    endif
                 case('so2_reproj')
                     call reg_obj%reset_regs
                     call reg_obj%init_tab

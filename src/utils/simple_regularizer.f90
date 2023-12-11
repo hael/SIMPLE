@@ -198,8 +198,8 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer   :: i, iref, iptcl, indxarr(self%nrots), j
-        real      :: inpl_corrs(self%nrots)
-        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr) proc_bind(close) schedule(static)
+        real      :: inpl_corrs(self%nrots), rnd_num
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -210,10 +210,12 @@ contains
                 call hpsort(inpl_corrs, indxarr)
                 call reverse(indxarr)
                 call reverse(inpl_corrs)
+                call random_number(rnd_num)
+                rnd_num = rnd_num * (N_SAMPLES - 1.) + 1.
                 self%ref_ptcl_tab(iref,iptcl)%loc_smpl = indxarr(1:N_SAMPLES)
                 self%ref_ptcl_tab(iref,iptcl)%sh       = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc      = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_corr(iptcl,iref)         = sum(inpl_corrs(1:N_SAMPLES))
+                self%ref_ptcl_tab(iref,iptcl)%loc      = indxarr(int(rnd_num))
+                self%ref_ptcl_corr(iptcl,iref)         = inpl_corrs(int(rnd_num))
             enddo
         enddo
         !$omp end parallel do
@@ -656,48 +658,47 @@ contains
 
     subroutine uniform_cluster_sort( self )
         class(regularizer), intent(inout) :: self
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir, back_ir
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir
         real      :: max_ir(self%nrefs)
         logical   :: mask_ir(self%nrefs), mask_ip(params_glob%fromp:params_glob%top)
-        mask_ir = .true.
+        mask_ir = .false.
         mask_ip = .true.
-        max_ir  = -1.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
-        do ir = 1, self%nrefs
-            if( mask_ir(ir) )then
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
-                        max_ip(ir) = ip
-                    endif
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
-        max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
-        max_ind_ip = max_ip(max_ind_ir)
-        self%ptcl_ref_map(max_ind_ip) = max_ind_ir
-        mask_ip(max_ind_ip) = .false.
-        mask_ir(max_ind_ir) = .false.
-        back_ir = max_ind_ir
-        next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
         do
             if( .not.(any(mask_ip)) ) return
             if( .not.(any(mask_ir)) )then
                 mask_ir = .true.
-                next_ir = back_ir
+                max_ir  = -1.
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+                do ir = 1, self%nrefs
+                    if( mask_ir(ir) )then
+                        do ip = params_glob%fromp, params_glob%top
+                            if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
+                                max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
+                                max_ip(ir) = ip
+                            endif
+                        enddo
+                    endif
+                enddo
+                !$omp end parallel do
+                max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
+                max_ind_ip = max_ip(max_ind_ir)
+                self%ptcl_ref_map(max_ind_ip) = max_ind_ir
+                mask_ip(max_ind_ip) = .false.
+                mask_ir(max_ind_ir) = .false.
+                next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
+            else
+                max_ir(next_ir) = -1.
+                do ip = params_glob%fromp, params_glob%top
+                    if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
+                        max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
+                        max_ind_ip = ip
+                    endif
+                enddo
+                self%ptcl_ref_map(max_ind_ip) = next_ir
+                mask_ip(max_ind_ip) = .false.
+                mask_ir(next_ir)    = .false.
+                next_ir             = self%find_closest_iref(next_ir, mask_ir)
             endif
-            max_ir(next_ir) = -1.
-            do ip = params_glob%fromp, params_glob%top
-                if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
-                    max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
-                    max_ind_ip = ip
-                endif
-            enddo
-            self%ptcl_ref_map(max_ind_ip) = next_ir
-            mask_ip(max_ind_ip) = .false.
-            mask_ir(next_ir)    = .false.
-            next_ir             = self%find_closest_iref(next_ir, mask_ir)
         enddo
     end subroutine uniform_cluster_sort
 
