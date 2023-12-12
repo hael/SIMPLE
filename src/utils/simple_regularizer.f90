@@ -199,6 +199,7 @@ contains
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer   :: i, iref, iptcl, indxarr(self%nrots), j, irnd
         real      :: inpl_corrs(self%nrots), rnd_num
+        call seed_rnd
         !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
@@ -602,20 +603,22 @@ contains
         integer :: iref, iptcl
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
-        do iptcl = params_glob%fromp, params_glob%top
-            sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
-            if( sum_corr < DTINY )then
-                self%ref_ptcl_tab(:,iptcl)%sum = 1.
-                self%ref_ptcl_tab(:,iptcl)%w   = 0.
-                self%ref_ptcl_corr(iptcl,:)    = 0.
-            else
-                self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
-                self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
-                self%ref_ptcl_corr(iptcl,:)    = self%ref_ptcl_corr(iptcl,:) / sum_corr
-            endif
-        enddo
-        !$omp end parallel do
+        if( params_glob%l_reg_norm )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+            do iptcl = params_glob%fromp, params_glob%top
+                sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
+                if( sum_corr < DTINY )then
+                    self%ref_ptcl_tab(:,iptcl)%sum = 1.
+                    self%ref_ptcl_tab(:,iptcl)%w   = 0.
+                    self%ref_ptcl_corr(iptcl,:)    = 0.
+                else
+                    self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
+                    self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
+                    self%ref_ptcl_corr(iptcl,:)    = self%ref_ptcl_corr(iptcl,:) / sum_corr
+                endif
+            enddo
+            !$omp end parallel do
+        endif
         self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iref = 1, self%nrefs
