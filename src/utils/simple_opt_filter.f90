@@ -551,7 +551,7 @@ contains
         integer                       :: filtsz, cutoff_find, lb(3), ub(3), smooth_ext
         real                          :: rad, find_stepsz, val, smpd
         type(image_ptr)               :: pdiff_odd, pdiff_even, pdiff_opt_odd, pdiff_opt_even, pweights
-        integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
+        integer,          parameter   :: CHUNKSZ = 20
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         real,             allocatable :: fsc(:), cur_fil(:)
         character(len=:), allocatable :: fsc_fname
@@ -686,7 +686,6 @@ contains
         integer,              optional, intent(inout) :: cutoff_finds_eo(2)
         real(   kind=c_float),          pointer       ::  in(:,:,:,:)
         complex(kind=c_float_complex),  pointer       :: out(:,:,:,:)
-        integer,                        parameter     :: CHUNKSZ = 20, N_IMGS = 2
         real,                           allocatable   :: fsc(:), cur_fil(:)
         character(len=:),               allocatable   :: fsc_fname
         type(image)     ::  odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat,&
