@@ -16,14 +16,14 @@ public :: regularizer
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: N_SAMPLES = 5
+integer, parameter :: MAX_INPL_SAMPLES = 5
 
 type reg_params
-    integer :: iptcl                !< iptcl index
-    integer :: iref                 !< iref index
-    integer :: loc                  !< inpl index
-    integer :: loc_smpl(N_SAMPLES)  !< inpl samplings
-    real    :: prob, sh(2), w       !< probability, shift, and weight
+    integer :: iptcl                       !< iptcl index
+    integer :: iref                        !< iref index
+    integer :: loc                         !< inpl index
+    integer :: loc_smpl(MAX_INPL_SAMPLES)  !< inpl samplings
+    real    :: prob, sh(2), w              !< probability, shift, and weight
     real    :: sum
 end type reg_params
 
@@ -197,9 +197,9 @@ contains
     subroutine fill_tab_prob( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl, indxarr(self%nrots), j
+        integer   :: i, iref, iptcl, indxarr(self%nrots), j, irnd
         real      :: inpl_corrs(self%nrots), rnd_num
-        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -211,11 +211,11 @@ contains
                 call reverse(indxarr)
                 call reverse(inpl_corrs)
                 call random_number(rnd_num)
-                rnd_num = rnd_num * (N_SAMPLES - 1.) + 1.
-                self%ref_ptcl_tab(iref,iptcl)%loc_smpl = indxarr(1:N_SAMPLES)
-                self%ref_ptcl_tab(iref,iptcl)%sh       = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc      = indxarr(int(rnd_num))
-                self%ref_ptcl_corr(iptcl,iref)         = inpl_corrs(int(rnd_num))
+                irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                self%ref_ptcl_tab(iref,iptcl)%loc_smpl(1:params_glob%reg_nrots) = indxarr(1:params_glob%reg_nrots)
+                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
+                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(irnd)
             enddo
         enddo
         !$omp end parallel do
@@ -298,7 +298,7 @@ contains
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                 iref      = self%prev_ptcl_ref(iptcl)
                 pind_here = self%pftcc%pinds(iptcl)
-                do irot = 1, N_SAMPLES
+                do irot = 1, params_glob%reg_nrots
                     loc = self%ref_ptcl_tab(iref, iptcl)%loc_smpl(irot)
                     loc = (self%nrots+1)-(loc-1)
                     if( loc > self%nrots ) loc = loc - self%nrots
