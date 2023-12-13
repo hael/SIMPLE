@@ -79,7 +79,12 @@ call img_copy%polarize(pftcc, b%img, 9, isptcl=.false., iseven=.true., mask=b%l_
 call img_copy%polarize(pftcc, b%img, 9, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 call pftcc%shift_ptcl(9, [0.,0.,0.]) ! no shift
 call img_copy%ifft()
-call img_copy%write('shifted.mrc', 9)
+call img_copy%write('shifted.mrc', 1)
+pftcc%with_ctf = .false.
+call pftcc%memoize_refs
+do i = 1, N_PTCLS
+    call pftcc%memoize_sqsum_ptcl(i)
+enddo
 call pftcc%memoize_ptcls
 lims(1,1) = -6.
 lims(1,2) =  6.
