@@ -58,6 +58,7 @@ type :: regularizer
     procedure          :: partition_refs
     procedure          :: make_neigh_tab
     procedure          :: uniform_cluster_sort
+    procedure          :: nonuniform_cluster_sort
     procedure          :: find_closest_iref
     procedure          :: uniform_cluster_sort_neigh
     procedure          :: uniform_cluster_sort_dyn
@@ -632,7 +633,7 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn
         else
-            call self%uniform_cluster_sort
+            call self%nonuniform_cluster_sort
         endif
     end subroutine reg_uniform_cluster
 
@@ -704,6 +705,32 @@ contains
             endif
         enddo
     end subroutine uniform_cluster_sort
+
+    subroutine nonuniform_cluster_sort( self )
+        class(regularizer), intent(inout) :: self
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs)
+        real      :: max_ir(self%nrefs)
+        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        mask_ip = .true.
+        do
+            if( .not.(any(mask_ip)) ) return
+            max_ir  = -1.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+            do ir = 1, self%nrefs
+                do ip = params_glob%fromp, params_glob%top
+                    if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
+                        max_ip(ir) = ip
+                    endif
+                enddo
+            enddo
+            !$omp end parallel do
+            max_ind_ir = maxloc(max_ir, dim=1)
+            max_ind_ip = max_ip(max_ind_ir)
+            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
+            mask_ip(max_ind_ip) = .false.
+        enddo
+    end subroutine nonuniform_cluster_sort
 
     function find_closest_iref( self, iref, mask_ir ) result( closest )
         class(regularizer), intent(inout) :: self
