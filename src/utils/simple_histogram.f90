@@ -26,17 +26,17 @@ type :: histogram
     procedure          :: get, get_x, get_bin
     ! Arithmetics
     procedure          :: add
+    procedure          :: div
     ! Descriptors
     procedure          :: npeaks
     procedure          :: find_hill, find_next_valley
     procedure, private :: moments
     procedure          :: mean
     procedure          :: variance
-    procedure          :: skewness
-    procedure          :: kurtosis
     procedure          :: hmode
     procedure          :: entropy
     ! Operations
+    procedure          :: topdf
     procedure          :: smooth
     procedure          :: plot
     ! Comparison
@@ -249,6 +249,15 @@ contains
         self%ntot   = self%ntot   + other%ntot
     end subroutine add
 
+    subroutine div( self, v )
+        class(histogram), intent(inout) :: self
+        real,             intent(in)    :: v
+        if( abs(v) > TINY )then
+            self%counts = self%counts / v
+            self%ntot    = sum(self%counts)
+        endif
+    end subroutine div
+
     !> Calculators
 
     pure integer function npeaks( self, include_lims )
@@ -309,7 +318,7 @@ contains
         integer,          intent(in) :: order
         real,             intent(in) :: mean
         real :: v
-        if( order<1 .or. order>4 )then
+        if( order<1 .or. order>2 )then
             THROW_HARD('Unsupported moment order!')
         endif
         v = self%dx/2. - mean
@@ -332,31 +341,6 @@ contains
         endif
         variance = self%moments(2,m)
     end function variance
-
-    ! Fisher's skewness, third moment
-    real function skewness( self, mean )
-        class(histogram), intent(in) :: self
-        real,   optional, intent(in) :: mean
-        real :: m
-        if( present(mean) )then
-            m = mean
-        else
-            m = self%mean()
-        endif
-        skewness = self%moments(3,m)
-    end function skewness
-
-    real function kurtosis( self, mean )
-        class(histogram), intent(in) :: self
-        real,   optional, intent(in) :: mean
-        real :: m
-        if( present(mean) )then
-            m = mean
-        else
-            m = self%mean()
-        endif
-        kurtosis = self%moments(4,m)
-    end function kurtosis
 
     pure real function hmode( self )
         class(histogram), intent(in) :: self
@@ -382,6 +366,13 @@ contains
     end function entropy
 
     ! Operations
+
+    subroutine topdf( self )
+        class(histogram), intent(inout) :: self
+        if( .not.self%exists ) THROW_HARD('Instance dos not exist!')
+        if( self%ntot < TINY ) THROW_HARD('Empty histogram')
+        self%counts = self%counts / self%ntot
+    end subroutine topdf
 
     ! convolute with window [w, 1., w], borders assumed 0.
     subroutine smooth( self, w, nits, npeaks_target, npeaks_out )

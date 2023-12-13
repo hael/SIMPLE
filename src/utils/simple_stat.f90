@@ -12,7 +12,7 @@ public :: avg_sdev, moment, moment_serial, pearsn, normalize, normalize_sigm, no
 public :: corrs2weights, corr2distweight, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: median, median_nocopy, robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8
+public :: conv2rank_weights, calc_stats, pearsn_serial, norm_corr, norm_corr_8, skewness, kurtosis
 private
 #include "simple_local_flags.inc"
 
@@ -28,6 +28,16 @@ interface moment
     module procedure moment_2
     module procedure moment_3
     module procedure moment_4
+end interface
+
+interface skewness
+    module procedure skewness_1
+    module procedure skewness_2
+end interface
+
+interface kurtosis
+    module procedure kurtosis_1
+    module procedure kurtosis_2
 end interface
 
 interface pearsn
@@ -388,6 +398,111 @@ contains
             sdev = 0.
         endif
     end subroutine moment_serial
+
+    real function skewness_1( data )
+        real, intent(in) :: data(:)
+        real(dp) :: mu, k2, k3, c
+        integer  :: n
+        skewness_1 = 0.
+        n  = size(data)
+        if( n < 3 )then
+            THROW_WARN('ERROR: n must be at least 2')
+        else
+            mu = sum(real(data,dp)) / real(n,dp)
+            k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
+            if( k2 > DTINY )then
+                k3 = sum((real(data,dp)-mu)**3) / real(n,dp)
+                c  = sqrt(real(n*(n-1),dp)) / real(n-2,dp) ! unbiased
+                skewness_1 = real(c * k3 / k2**1.5d0)
+            endif
+        endif
+    end function skewness_1
+
+    real function skewness_2( data, mask )
+        real,              intent(in) :: data(:,:)
+        logical, optional, intent(in) :: mask(:,:)
+        real(dp) :: mu, k2, k3, c
+        integer  :: n
+        skewness_2 = 0.
+        n  = size(data)
+        if( n < 3 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
+        endif
+        if( present(mask) )then
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions')
+            n  = count(mask)
+            mu = sum(real(data,dp), mask=mask) / real(n,dp)
+            k3 = sum((real(data,dp)-mu)**3, mask=mask) / real(n,dp)
+            k2 = sum((real(data,dp)-mu)**2, mask=mask) / real(n,dp)
+        else
+            mu = sum(real(data,dp)) / real(n,dp)
+            k3 = sum((real(data,dp)-mu)**3) / real(n,dp)
+            k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
+        endif
+        if( k2 > DTINY )then
+            c = sqrt(real(n*(n-1),dp)) / real(n-2,dp) ! unbiased
+            skewness_2 = real(c * k3 / k2**1.5d0)
+        endif
+    end function skewness_2
+
+    real function kurtosis_1( data )
+        real, intent(in) :: data(:)
+        real(dp) :: mu, k2, k4, k4b, c1, c2
+        integer  :: n
+        kurtosis_1 = 0.
+        n  = size(data)
+        if( n < 4 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
+        endif
+        mu = sum(real(data,dp)) / real(n,dp)
+        k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
+        if( k2 > DTINY )then
+            ! calculation split: numerical overflow
+            c1 =     real(n+1,dp) / real(n-1,dp)
+            c1 = c1*(real(n,dp)   / real(n-2,dp))
+            c1 = c1               / real(n-3,dp)
+            k4 = c1*k4b
+            c2 =     real(n-1,dp) / real(n-2,dp)
+            c2 = c2*(real(n-1,dp) / real(n-3,dp))
+            kurtosis_1 = real(k4 / k2**2 - 3.d0 * c2)
+        endif
+    end function kurtosis_1
+
+    real function kurtosis_2( data, mask )
+        real,              intent(in) :: data(:,:)
+        logical, optional, intent(in) :: mask(:,:)
+        real(dp) :: mu, k2, k4, k4b, c1, c2
+        integer  :: n
+        kurtosis_2 = 0.
+        n  = size(data)
+        if( n < 4 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
+        endif
+        if( present(mask) )then
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions')
+            n   = count(mask)
+            mu  = sum(real(data,dp), mask=mask) / real(n,dp)
+            k4b = sum((real(data,dp)-mu)**4, mask=mask)
+            k2  = sum((real(data,dp)-mu)**2, mask=mask) / real(n,dp)
+        else
+            mu  = sum(real(data,dp)) / real(n,dp)
+            k4b = sum((real(data,dp)-mu)**4)
+            k2  = sum((real(data,dp)-mu)**2) / real(n,dp)
+        endif
+        if( k2 > DTINY )then
+            ! calculation split: numerical overflow
+            c1 =     real(n+1,dp) / real(n-1,dp)
+            c1 = c1*(real(n,dp)   / real(n-2,dp))
+            c1 = c1               / real(n-3,dp)
+            k4 = c1*k4b
+            c2 =     real(n-1,dp) / real(n-2,dp)
+            c2 = c2*(real(n-1,dp) / real(n-3,dp))
+            kurtosis_2 = real(k4 / k2**2 - 3.d0 * c2)
+        endif
+    end function kurtosis_2
 
     function pearsn_1( x, y ) result( r )
         real, intent(in) :: x(:),y(:)

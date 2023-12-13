@@ -555,7 +555,7 @@ contains
         real(dp),         allocatable :: denom_even(:,:), denom_odd(:,:), R2s(:), RmI2s(:), weights(:)
         real(sp), target, allocatable :: sig2(:,:)
         real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), dfs(:), bindiff(:)
-        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:), means(:), sdevs(:), binccs(:)
+        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:), binccs(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
         integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:), cls_pops(:)
         logical,          allocatable :: selected(:)
@@ -676,7 +676,6 @@ contains
                 purity(0) = purity(0) * 100. / real(pop)
                 print *, icls,pop,purity(0)
             endif
-            allocate(means(ini_pop),sdevs(ini_pop))
             do ibatch=1,nbatches
                 ! read
                 batch_start = batches(ibatch,1)
@@ -712,13 +711,9 @@ contains
                     call tmp_imgs(ithr)%bp(0.,4.)
                     call tmp_imgs(ithr)%ifft
                     call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
-                    call tmp_imgs(ithr)%moments_within(build%lmsk, means(i), sdevs(i))
-                    call build%spproj_field%set(iptcl,'mean',means(i))
-                    call build%spproj_field%set(iptcl,'sdev',sdevs(i))
                 enddo
                 !$omp end parallel do
             enddo
-            deallocate(means,sdevs)
             print *,icls,' Ice rejection: ', count(pinds==0)
             if( l_groundtruth )then
                 purity(0) = real(sum(labels(pinds(:)),mask=(pinds>0)))

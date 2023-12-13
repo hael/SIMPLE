@@ -217,6 +217,7 @@ contains
     procedure          :: rmsd
     procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
+    procedure          :: skew, kurt
     procedure          :: noisesdev
     procedure          :: mean
     procedure          :: contains_nans
@@ -236,7 +237,6 @@ contains
     procedure          :: phase_corr
     procedure          :: fcorr_shift
     procedure          :: norm_within
-    procedure          :: moments_within
     procedure          :: prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2, prenorm4real_corr_3
     procedure, private :: real_corr_prenorm_1, real_corr_prenorm_2, real_corr_prenorm_3
@@ -4918,16 +4918,21 @@ contains
         if( sxx > TINY ) self%rmat = self%rmat / sqrt(sxx)
     end subroutine norm_within
 
-    subroutine moments_within( self, mask, mean, sdev )
-        class(image), intent(in)  :: self
-        real,         intent(out) :: mean, sdev
-        logical,      intent(in) :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
-        real :: npix
-        npix = real(count(mask))
-        mean = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        sdev = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2, mask=mask) / npix
-        if( sdev > TINY ) sdev = sqrt(sdev)
-    end subroutine moments_within
+    real function skew( self, mask )
+        class(image),      intent(in)  :: self
+        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        skew = skewness(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
+    end function skew
+
+    real function kurt( self, mask )
+        class(image),      intent(in)  :: self
+        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        if( self%is_3d() ) THROW_HARD('2D only!')
+        if( self%is_ft() ) THROW_HARD('Real space only!')
+        kurt = kurtosis(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
+    end function kurt
 
     !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
     !>  The image is centered and standardized
