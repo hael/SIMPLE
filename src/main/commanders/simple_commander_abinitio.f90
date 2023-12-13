@@ -108,7 +108,7 @@ contains
         ! make master parameters
         call params%new(cline)
         select case(params%cc_objfun)
-            case(OBJFUN_EUCLID)
+            case(OBJFUN_EUCLID,OBJFUN_PROB)
                 l_euclid = .true.
             case DEFAULT
                 l_euclid = .false.
