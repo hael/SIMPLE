@@ -1000,105 +1000,68 @@ contains
 
     ! calculate classes intensity histogram distance to average histogram
     subroutine score_classes( os )
+        use simple_histogram, only:histogram
         class(oris), intent(inout) :: os
-        integer, parameter :: NHISTBINS = 256
-        real,    parameter :: NSIG = 4.
+        integer,   parameter :: NHISTBINS = 128
         type(image)          :: tmpimg
-        real,        pointer :: prmat(:,:,:)
+        type(histogram)      :: hists(ncls), hist_avg
         logical, allocatable :: lmsk(:,:,:), cls_mask(:)
-        real    :: p(NHISTBINS), ps(NHISTBINS,ncls), vals(ncls)
-        real    :: brightvals(ncls), darkvals(ncls), minmax(2)
-        real    :: overall_min, overall_max, dr, mean, std, mskrad, score
-        integer :: icls,i,n,zerobin
+        real    :: minmax(2),mean,skew,kurt,tvd,overall_min,overall_max,mskrad,std
+        integer :: icls,n
         cls_mask = nint(os%get_all('pop')) > 0
-        n = count(cls_mask)
+        n        = count(cls_mask)
         if( n == 0 ) return
-        ! build histograms
-        mskrad = real(ldim_crop(1))/2.-COSMSKHALFWIDTH
-        call tmpimg%disc(ldim_crop,smpd_crop,mskrad,lmsk)
-        call tmpimg%kill
-        overall_min =  999.
-        overall_max = -999.
-        do icls = 1,ncls
-            if( .not.cls_mask(icls) ) cycle
-            call cavgs_merged(icls)%get_rmat_ptr(prmat)
-            minmax(1) = minval(prmat(1:ldim_crop(1),1:ldim_crop(2),1), mask=lmsk(1:ldim_crop(1),1:ldim_crop(2),1))
-            minmax(2) = maxval(prmat(1:ldim_crop(1),1:ldim_crop(2),1), mask=lmsk(1:ldim_crop(1),1:ldim_crop(2),1))
-            overall_min = min(minmax(1),overall_min)
-            overall_max = max(minmax(2),overall_max)
-        enddo
-        dr = (overall_max-overall_min) / real(NHISTBINS)
-        ps = 0.
-        do icls = 1,ncls
-            if( .not.cls_mask(icls) ) cycle
-            call cavgs_merged(icls)%get_rmat_ptr(prmat)
-            !$omp parallel do private(i,minmax) proc_bind(close)
-            do i = 1,NHISTBINS
-                minmax(1) = overall_min + real(i-1)*dr
-                minmax(2) = minmax(1) + dr
-                p(i) = real(count(lmsk(:,:,1) .and. (prmat(1:ldim_crop(1),1:ldim_crop(2),1) > minmax(1))&
-                    &.and. (prmat(1:ldim_crop(1),1:ldim_crop(2),1) < minmax(2)) ))
-            enddo
-            !$omp end parallel do
-            ps(:,icls) = p
-        enddo
-        ! overall histogram
-        p = 0.
-        do icls = 1,ncls
-            if( .not.cls_mask(icls) ) cycle
-            p = p + ps(:,icls)
-            ! individual probabilities
-            ps(:,icls) = ps(:,icls) / sum(ps(:,icls))
-        enddo
-        p = p / sum(p) ! overall probabilities
-        ! outliers
-        zerobin    = ceiling(-overall_min/dr)
-        vals       = 0.
-        brightvals = 0.
-        darkvals   = 0.
-        !$omp parallel do private(icls) proc_bind(close)
-        do icls = 1,ncls
-            if( .not.cls_mask(icls) ) cycle
-            vals(icls)       = sum(abs(ps(:,icls)-p(:)))
-            brightvals(icls) = sum(abs(ps(zerobin:,icls)-p(zerobin:)))
-            darkvals(icls)   = sum(abs(ps(:zerobin,icls)-p(:zerobin)))
-        enddo
-        !$omp end parallel do
-        mean = sum(vals,mask=cls_mask) / real(n)
-        std  = sum((vals-mean)**2,mask=cls_mask)/real(n)
-        if( std > 0. )then
-            std  = sqrt(std)
-            where( cls_mask ) vals = abs((vals-mean) / std)
-        else
-            vals = 0.
-        endif
-        ! bright outliers
-        mean = sum(brightvals,mask=cls_mask) / real(n)
-        std  = sum((brightvals-mean)**2,mask=cls_mask)/real(n)
-        if( std > 0. )then
-            std  = sqrt(std)
-            where( cls_mask ) brightvals = abs((brightvals-mean) / std)
-        else
-            brightvals = 0.
-        endif
-        ! dark outliers
-        mean = sum(darkvals,mask=cls_mask) / real(n)
-        std  = sum((darkvals-mean)**2,mask=cls_mask)/real(n)
-        if( std > 0. )then
-            std  = sqrt(std)
-            where( cls_mask ) darkvals = abs((darkvals-mean) / std)
-        else
-            darkvals = 0.
-        endif
-        ! update doc
+        mskrad = real(params_glob%msk)
+        call tmpimg%disc(ldim_crop, smpd_crop, mskrad, lmsk)
+        overall_min =  huge(0.)
+        overall_max = -999999.
+        !$omp parallel private(icls,minmax,mean,std,skew,kurt,tvd) proc_bind(close) default(shared)
+        !$omp do reduction(min:overall_min) reduction(max:overall_max)
         do icls = 1,ncls
             if( cls_mask(icls) )then
-                score = max(vals(icls),max(brightvals(icls),darkvals(icls)))
-                call os%set(icls, 'score', score)
-            else
-                call os%set(icls, 'score', 0.)
+                call cavgs_merged(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg )
+                overall_min = min(minmax(1),overall_min)
+                overall_max = max(minmax(2),overall_max)
+                call os%set(icls, 'mean', mean)
+                call os%set(icls, 'var',  std*std)
+                skew = cavgs_merged(icls)%skew(lmsk(:ldim_crop(1),:ldim_crop(2),1))
+                kurt = cavgs_merged(icls)%kurt(lmsk(:ldim_crop(1),:ldim_crop(2),1))
+                call os%set(icls, 'skew', skew)
+                call os%set(icls, 'kurt', kurt)
             endif
         enddo
+        !$omp end do
+        !$omp do
+        do icls = 1,ncls
+            if( cls_mask(icls) )then
+                call hists(icls)%new(cavgs_merged(icls), NHISTBINS,&
+                &minmax=[overall_min, overall_max], radius=mskrad)
+            endif
+        enddo
+        !$omp end do
+        !$omp single
+        call hist_avg%new(hists(findloc(cls_mask, .true., dim=1)))
+        !$omp end single
+        !$omp do
+        do icls = 1,ncls
+            if( cls_mask(icls) ) call hist_avg%add(hists(icls))
+        enddo
+        !$omp end do
+        !$omp single
+        call hist_avg%div(real(n))
+        !$omp end single
+        !$omp do
+        do icls = 1,ncls
+            if( cls_mask(icls) )then
+                tvd = hist_avg%tvd(hists(icls))
+                call os%set(icls, 'tvd', tvd)
+                call hists(icls)%kill
+            endif
+        enddo
+        !$omp end do
+        !$omp end parallel
+        call hist_avg%kill
+        call tmpimg%kill
     end subroutine score_classes
 
     ! I/O
