@@ -553,7 +553,7 @@ contains
                         call converged_chunks(ichunk)%spproj%os_ptcl2D%get_pinds(ind,'class',pinds,consider_w=.false.)
                         pop = size(pinds)
                         do i=1,pop
-                            ii      = pinds(i)               ! in chunk
+                            ii      = pinds(i)            ! in chunk
                             poolind = fromp_prev + ii - 1 ! in pool
                             call pool_proj%os_ptcl2D%set_class(poolind,icls)
                         enddo
@@ -750,7 +750,7 @@ contains
 
     subroutine reject_from_pool
         type(image)          :: img
-        logical, allocatable :: cls_mask(:), tvd_mask(:), corres_mask(:)
+        logical, allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
@@ -761,23 +761,16 @@ contains
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         ncls_rejected   = 0
         nptcls_rejected = 0
-        allocate(cls_mask(ncls_glob),tvd_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
+        allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! total variation distance
         if( L_CLS_REJECT_DEV )then
-            do icls = 1,ncls_glob
-                if( tvd_mask(icls) )then
-                    if( pool_proj%os_cls2D%isthere(icls,'score') )then
-                        tvd_mask(icls) = pool_proj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
-                    endif
-                endif
-            enddo
+            call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
         endif
         ! correlation & resolution
-        corres_mask = tvd_mask
         ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
         ! overall class rejection
-        cls_mask = tvd_mask .and. corres_mask
+        cls_mask = moments_mask .and. corres_mask
         ! rejecting associated particles
         ncls2reject = count(.not.cls_mask)
         if( ncls2reject > 0 .and. ncls2reject < min(ncls_glob,nint(real(ncls_glob)*FRAC_SKIP_REJECTION)) )then
@@ -1106,11 +1099,13 @@ contains
                 call spproj%os_stk%set(i, 'top', real(jptcl))
             else
                 ! keeps track of skipped particles
+                !$omp parallel do private(iptcl,icls,eo) default(shared) proc_bind(close) reduction(+:prev_eo_pops)
                 do iptcl = fromp,top
                     icls = pool_proj%os_ptcl2D%get_class(iptcl)
                     eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
                     prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
                 enddo
+                !$omp end parallel do
             endif
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)

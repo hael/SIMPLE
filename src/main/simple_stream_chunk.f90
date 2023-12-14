@@ -350,7 +350,7 @@ contains
         real,              intent(in) :: res_thresh, ndev
         integer,           intent(in) :: box
         type(image)                   :: img
-        logical,          allocatable :: cls_mask(:), tvd_mask(:), corres_mask(:)
+        logical,          allocatable :: cls_mask(:), moments_mask(:), corres_mask(:)
         character(len=:), allocatable :: cavgs
         character(len=XLONGSTRLEN)    :: projfile
         real                  :: smpd_here
@@ -364,22 +364,15 @@ contains
         call self%spproj%read_segment('out',  projfile)
         call self%spproj%get_cavgs_stk(cavgs, ncls, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
-        allocate(cls_mask(ncls),tvd_mask(ncls),corres_mask(ncls),source=.true.)
+        allocate(cls_mask(ncls),moments_mask(ncls),corres_mask(ncls),source=.true.)
         ! total variation distance
         if( L_CLS_REJECT_DEV )then
-            do icls = 1,ncls
-                if( tvd_mask(icls) )then
-                    if( self%spproj%os_cls2D%isthere(icls,'score') )then
-                        tvd_mask(icls) = self%spproj%os_cls2D%get(icls,'score') < CLS_REJECT_THRESHOLD
-                    endif
-                endif
-            enddo
+            call self%spproj%os_cls2D%class_moments_rejection(moments_mask)
         endif
         ! correlation and resolution
-        corres_mask = tvd_mask
         call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
         ! overall class rejection
-        cls_mask      = tvd_mask .and. corres_mask
+        cls_mask      = moments_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)
         if( ncls_rejected == 0 .or. ncls_rejected >= min(ncls,nint(real(ncls)*FRAC_SKIP_REJECTION)) )then
             ! no or too many classes to reject

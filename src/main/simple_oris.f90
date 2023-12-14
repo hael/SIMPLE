@@ -191,6 +191,7 @@ type :: oris
     procedure          :: calc_soft_weights2D
     procedure          :: sig3weights
     procedure          :: find_best_classes
+    procedure          :: class_moments_rejection
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1
@@ -2599,6 +2600,104 @@ contains
         deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
 
+    subroutine class_moments_rejection( self, mask )
+        class(oris), intent(in)    :: self
+        logical,     intent(inout) :: mask(1:self%n)
+        real,    allocatable :: vals(:)
+        logical, allocatable :: msk(:)
+        integer :: icls
+        logical :: has_mean, has_var, has_skew, has_kurt, has_tvd, l_err
+        msk = mask
+        if( self%isthere('pop') )then
+            do icls=1,self%n
+                if( self%get(icls,'pop') < 0.5 ) msk(icls) = .false.
+            enddo
+        endif
+        has_mean = self%isthere('mean')
+        has_var  = self%isthere('var')
+        has_skew = self%isthere('skew')
+        has_kurt = self%isthere('kurt')
+        has_tvd  = self%isthere('tvd')
+        if( has_mean )then
+            vals = self%get_all('mean')
+            call normalize_vals(vals, l_err)
+            if( .not.l_err )then
+                do icls = 1,self%n
+                    if( abs(vals(icls)) > 5. ) msk(icls) = .false.
+                enddo
+            endif
+        endif
+        if( has_mean )then
+            vals = self%get_all('var')
+            call normalize_vals(vals, l_err)
+            if( .not.l_err )then
+                do icls = 1,self%n
+                    if( vals(icls) > 5. ) msk(icls) = .false.
+                enddo
+            endif
+        endif
+        if( has_skew )then
+            vals = self%get_all('skew')
+            do icls = 1,self%n
+                if( vals(icls) < 0. ) msk(icls) = .false.
+            enddo
+        endif
+        if( has_kurt )then
+            vals = self%get_all('kurt')
+            call normalize_vals(vals, l_err)
+            if( .not.l_err )then
+                do icls = 1,self%n
+                    if( abs(vals(icls)) > 4. ) msk(icls) = .false.
+                enddo
+            endif
+        endif
+        if( has_tvd )then
+            vals = self%get_all('tvd')
+            do icls = 1,self%n
+                if( vals(icls) > 0.5 ) msk(icls) = .false.
+            enddo
+        endif
+        mask = msk
+        contains
+
+            subroutine normalize_vals( x, err )
+                real,    intent(inout) :: x(self%n)
+                logical, intent(out)   :: err
+                logical :: tmpmsk(self%n)
+                real    :: mean, var
+                integer :: nmsk
+                err    = .false.
+                tmpmsk = msk
+                nmsk   = count(tmpmsk)
+                if( nmsk < 3 )then
+                    err = .true.
+                    return
+                endif
+                mean   = sum(x,mask=tmpmsk) / real(nmsk)
+                x      = x - mean
+                var    = sum(x**2,mask=tmpmsk) / real(nmsk)
+                if( var < TINY )then
+                    err = .true.
+                else
+                    x      = x / sqrt(var)
+                    tmpmsk = tmpmsk .and. (abs(x) < 3.)
+                    nmsk   = count(tmpmsk)
+                    if( nmsk > 2 )then
+                        mean = sum(x,mask=tmpmsk) / real(nmsk)
+                        x    = x - mean
+                        var  = sum(x**2,mask=tmpmsk) / real(nmsk)
+                        if( var < TINY )then
+                            err = .true.
+                        else
+                            x = x / sqrt(var)
+                        endif
+                    endif
+                endif
+            end subroutine normalize_vals
+
+    end subroutine class_moments_rejection
+
+
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )
         class(oris), intent(inout) :: self
@@ -2906,7 +3005,7 @@ contains
         class(oris), intent(in) :: self
         real    :: dists(self%n), dists_max(self%n), x, nearest3(3), res
         integer :: i, j
-        !$omp parallel do default(shared) proc_bind(close) private(j,i,dists,nearest3) reduction(max:res)
+        !$omp parallel do default(shared) proc_bind(close) private(j,i,dists,nearest3)
         do j=1,self%n
             do i=1,self%n
                 if( i == j )then
