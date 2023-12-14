@@ -3450,8 +3450,14 @@ contains
         &'low-pass limit in Angstroms', .false., 15.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 8, ctfresthreshold)
+        preprocess_stream_dev%filt_ctrls(8)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
+        preprocess_stream_dev%filt_ctrls(8)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
+        preprocess_stream_dev%filt_ctrls(8)%rval_default      = CTFRES_THRESHOLD_STREAM
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('filt_ctrls', 9, icefracthreshold)
+        preprocess_stream_dev%filt_ctrls(9)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
+        preprocess_stream_dev%filt_ctrls(9)%descr_placeholder = 'Ice fraction threshold{1.0}'
+        preprocess_stream_dev%filt_ctrls(9)%rval_default      = ICEFRAC_THRESHOLD_STREAM
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 9, submenu="CTF estimation")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
