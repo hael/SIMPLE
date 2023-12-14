@@ -70,12 +70,8 @@ type :: parameters
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
-    character(len=3)          :: reg_ref='no'         !< apply objective regularizer to the reference(yes|no){no}
-    character(len=3)          :: reg_anneal='no'      !< annealing between reproj and regs (yes|no){no}
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reg_debug='no'       !< output images for debugging in reg (yes|no){no}
-    character(len=3)          :: reg_neigh='no'       !< neighborhood option in reg (yes|no){no}
-    character(len=3)          :: reg_norm='yes'       !< ref normalization for each ptcl (yes|no){yes}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -194,8 +190,6 @@ type :: parameters
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh){shc}
-    character(len=STDLEN)     :: reg_mode='so2'       !< reg mode(so2|so3){so2}
-    character(len=STDLEN)     :: reg_grad='no'        !< reg gradient to be used
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -241,9 +235,7 @@ type :: parameters
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: reg_iters=30        !< # iters regularization scheme
-    integer :: reg_num=30          !< # uniform num of ptcls for each class in reg
     integer :: reg_nrots=1         !< # inplane rotation samples
-    integer :: reg_nneighs=25      !< # partitions of neighborhood in reg
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxnchunks=0
@@ -433,13 +425,8 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_reg_ref      = .false.
-    logical :: l_reg_grad     = .false.
-    logical :: l_reg_anneal   = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_debug    = .false.
-    logical :: l_reg_neigh    = .false.
-    logical :: l_reg_norm     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -573,15 +560,9 @@ contains
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
-        call check_carg('reg_mode',       self%reg_mode)
-        call check_carg('reg_grad',       self%reg_grad)
         call check_carg('randomise',      self%randomise)
-        call check_carg('reg_ref',        self%reg_ref)
-        call check_carg('reg_anneal',     self%reg_anneal)
         call check_carg('reg_init',       self%reg_init)
         call check_carg('reg_debug',      self%reg_debug)
-        call check_carg('reg_neigh',      self%reg_neigh)
-        call check_carg('reg_norm',       self%reg_norm)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -677,9 +658,7 @@ contains
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('reg_iters',      self%reg_iters)
-        call check_iarg('reg_num'  ,      self%reg_num)
         call check_iarg('reg_nrots',      self%reg_nrots)
-        call check_iarg('reg_nneighs',    self%reg_nneighs)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxnchunks',     self%maxnchunks)
@@ -1469,13 +1448,8 @@ contains
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg options
-        self%l_reg_ref    = trim(self%reg_ref   ).eq.'yes'
-        self%l_reg_anneal = trim(self%reg_anneal).eq.'yes'
-        self%l_reg_grad   = trim(self%reg_grad  ).eq.'yes'
         self%l_reg_init   = trim(self%reg_init  ).eq.'yes'
         self%l_reg_debug  = trim(self%reg_debug ).eq.'yes'
-        self%l_reg_neigh  = trim(self%reg_neigh ).eq.'yes'
-        self%l_reg_norm   = trim(self%reg_norm  ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then

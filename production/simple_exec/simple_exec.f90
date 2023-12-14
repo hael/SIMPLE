@@ -102,9 +102,7 @@ type(nununiform_filter2D_commander)         :: xnununiform_filter2D
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(cavg_filter2D_commander)               :: xcavg_filter2D
 type(check_align_commander)                 :: xcheck_align
-type(check_align_inpl_commander)            :: xcheck_align_inpl
 type(centervol_commander)                   :: xcenter
-type(reg_test_commander)                    :: xreg_test
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
 type(convert_commander)                     :: xconvert
@@ -304,8 +302,6 @@ select case(trim(prg))
         call xcavg_filter2D%execute(cline)
     case( 'check_align' )
         call xcheck_align%execute(cline)
-    case( 'check_align_inpl' )
-        call xcheck_align_inpl%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
@@ -320,8 +316,6 @@ select case(trim(prg))
         call xfilter%execute(cline)
     case( 'normalize' )
         call xnormalize%execute(cline)
-    case( 'reg_test' )
-        call xreg_test%execute(cline)
     case( 'scale' )
         call xscale%execute(cline)
     case( 'stack' )

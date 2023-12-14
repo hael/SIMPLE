@@ -149,9 +149,6 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorr_ref
-    procedure          :: gencorrs_ref
-    procedure          :: normalize_refs
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -1654,75 +1651,6 @@ contains
             gencorr_cc_for_rot_8 = gencorr_cc_for_rot_8 / dsqrt(sqsum_ref * self%sqsums_ptcls(i))
         endif
     end function gencorr_cc_for_rot_8
-
-    real(dp) function gencorrs_ref( self, iref, jref )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, jref
-        real(dp) :: corrs(self%nrots)
-        integer  :: irot
-        do irot = 1, self%nrots
-            corrs(irot) = self%gencorr_ref( iref, jref, irot )
-        enddo
-        gencorrs_ref = maxval(corrs, dim=1)
-    end function gencorrs_ref
-
-    subroutine normalize_refs( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer  :: iref, k
-        real(dp) :: sqsum_ref
-        do iref = 1, self%nrefs
-            sqsum_ref = 0._dp
-            if( params_glob%l_kweight )then
-                do k = self%kfromto(1),self%kfromto(2)
-                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)),dp))
-                enddo
-            else
-                do k = self%kfromto(1),self%kfromto(2)
-                    sqsum_ref = sqsum_ref +                   sum(real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)),dp))
-                enddo
-            endif
-            self%norm_refs_even(:,:,iref) = self%pfts_refs_even(:,:,iref)/dsqrt(sqsum_ref)
-            sqsum_ref = 0._dp
-            if( params_glob%l_kweight )then
-                do k = self%kfromto(1),self%kfromto(2)
-                    sqsum_ref = sqsum_ref + real(k,kind=dp) * sum(real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)),dp))
-                enddo
-            else
-                do k = self%kfromto(1),self%kfromto(2)
-                    sqsum_ref = sqsum_ref +                   sum(real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)),dp))
-                enddo
-            endif
-            self%norm_refs_odd(:,:,iref) = self%pfts_refs_odd(:,:,iref)/dsqrt(sqsum_ref)
-        enddo
-    end subroutine normalize_refs
-
-    real(dp) function gencorr_ref( self, iref, jref, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, jref
-        integer, optional,       intent(in)    :: irot
-        complex(dp), pointer :: i_pft_ref_8(:,:), j_pft_ref_8(:,:), pft_ref_tmp(:,:,:)
-        integer  :: ithr, k
-        ithr = omp_get_thread_num() + 1
-        i_pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
-        j_pft_ref_8 => self%heap_vars(ithr)%pft_ref_tmp_8
-        pft_ref_tmp => self%heap_vars(ithr)%pft_dref_8
-        i_pft_ref_8 = self%norm_refs_even(:,:,iref)
-        j_pft_ref_8 = self%norm_refs_even(:,:,jref)
-        gencorr_ref = 0.d0
-        if( present(irot) )then
-            call self%rotate_ref(j_pft_ref_8, irot, pft_ref_tmp(:,:,1))
-            j_pft_ref_8 = pft_ref_tmp(:,:,1)
-        endif
-        if( params_glob%l_kweight )then
-            do k = self%kfromto(1),self%kfromto(2)
-                gencorr_ref = gencorr_ref + sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp)) * real(k,kind=dp)
-            end do
-        else
-            do k = self%kfromto(1),self%kfromto(2)
-                gencorr_ref = gencorr_ref + sum(real(i_pft_ref_8(:,k) * conjg(j_pft_ref_8(:,k)),dp))
-            end do
-        endif
-    end function gencorr_ref
 
     real(dp) function gencorr_euclid_for_rot_8( self, pft_ref, iptcl )
         class(polarft_corrcalc), intent(inout) :: self

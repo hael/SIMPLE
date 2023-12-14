@@ -11,7 +11,6 @@ use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
 use simple_regularizer,             only: regularizer
-use simple_regularizer_inpl,        only: regularizer_inpl, reg_params
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
@@ -21,7 +20,6 @@ use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedyc,      only: strategy3D_greedyc
-use simple_strategy3D_prob_inpl,    only: strategy3D_prob_inpl
 use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_shc_sub,      only: strategy3D_shc_sub
@@ -41,7 +39,6 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(regularizer_inpl), target :: reg_inpl
 type(regularizer),      target :: reg_obj
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
@@ -192,199 +189,29 @@ contains
         endif
 
         ! ref regularization
-        if( params_glob%l_reg_ref .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            select case(trim(params_glob%reg_mode))
-                case('so2','so2_ptcl')
-                    call reg_obj%reset_regs
-                    call reg_obj%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        call reg_obj%prev_cavgs
-                    enddo
-                    call reg_obj%compute_grad_const
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%compute_grad_prev
-                    enddo
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%compute_grad_ptcl
-                    enddo
-                    call reg_obj%regularize_refs
-                    if( trim(params_glob%refine) == 'prob' )then
-                        call reg_obj%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                            call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        enddo
-                        call reg_obj%reg_uniform_cluster
-                    elseif( trim(params_glob%refine) == 'prob_inpl' )then
-                        THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
-                    endif
-                case('so2_cavg')
-                    call reg_obj%reset_regs
-                    call reg_obj%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        call reg_obj%prev_cavgs
-                    enddo
-                    call reg_obj%compute_grad_cavg
-                    call reg_obj%regularize_refs
-                    if( trim(params_glob%refine) == 'prob' )then
-                        call reg_obj%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                            call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        enddo
-                        call reg_obj%reg_uniform_cluster
-                    elseif( trim(params_glob%refine) == 'prob_inpl' )then
-                        THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
-                    endif
-                case('so2_norm_cavg')
-                    objfun_ori            = params_glob%cc_objfun
-                    params_glob%cc_objfun = OBJFUN_PROB
-                    call reg_obj%reset_regs
-                    call reg_obj%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                    enddo
-                    call reg_obj%reg_uniform_cluster
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%form_cavgs
-                    enddo
-                    call reg_obj%compute_grad_norm_cavg
-                    call reg_obj%regularize_refs
-                    params_glob%cc_objfun = objfun_ori
-                case('so2_inpl')
-                    ! to be used with 'refine=prob' and inpl samplings
-                    call reg_obj%reset_regs
-                    call reg_obj%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_inpl_sto(pinds(batch_start:batch_end))
-                    enddo
-                    call reg_obj%reg_uniform_cluster
-                    if( params_glob%l_reg_debug )then
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                            call reg_obj%form_cavgs
-                        enddo
-                        call reg_obj%regularize_refs
-                    endif
-                case('so2_reproj')
-                    call reg_obj%reset_regs
-                    call reg_obj%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        call reg_obj%prev_cavgs
-                    enddo
-                    call reg_obj%compute_grad_reproj
-                    call reg_obj%regularize_refs
-                    if( trim(params_glob%refine) == 'prob' )then
-                        call reg_obj%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                            call reg_obj%fill_tab_noshift(pinds(batch_start:batch_end))
-                        enddo
-                        call reg_obj%reg_uniform_cluster
-                    elseif( trim(params_glob%refine) == 'prob_inpl' )then
-                        THROW_HARD('refine mode of so2 should be prob, not prob_inpl!')
-                    endif
-                case('so3')
-                    ! using reg/inpl to do alignment for updating 3D volume
-                    call reg_inpl%reset_regs
-                    call reg_inpl%init_tab
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true.)
-                    enddo
-                    if( allocated(best_ir) ) deallocate(best_ir,best_irot)
-                    allocate(best_ir(params_glob%fromp:params_glob%top),best_irot(params_glob%fromp:params_glob%top))
-                    call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
-                    ! Batch loop
-                    do ibatch=1,nbatches
-                        batch_start = batches(ibatch,1)
-                        batch_end   = batches(ibatch,2)
-                        batchsz     = batch_end - batch_start + 1
-                        call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_inpl%form_cavgs(best_ir, best_irot)
-                    enddo
-                    call reg_inpl%compute_regs
-                    if( trim(params_glob%refine) == 'prob_inpl' )then
-                        ! using reg/inpl to do alignment for updating 3D volume
-                        call reg_inpl%init_tab
-                        ! Batch loop
-                        do ibatch=1,nbatches
-                            batch_start = batches(ibatch,1)
-                            batch_end   = batches(ibatch,2)
-                            batchsz     = batch_end - batch_start + 1
-                            call fill_batch_particles(batchsz, pinds(batch_start:batch_end), use_inpl=.true., use_reg=.true.)
-                        enddo
-                        if( .not. allocated(best_ir) ) allocate(best_ir(params_glob%fromp:params_glob%top),best_irot(params_glob%fromp:params_glob%top))
-                        call reg_inpl%reg_uniform_cluster(best_ir, best_irot)
-                        call reg_inpl%map_ptcl_ref(best_ir, best_irot)
-                    elseif( trim(params_glob%refine) == 'prob' )then
-                        THROW_HARD('refine mode of so3 should be prob_inpl, not prob!')
-                    endif
-                case DEFAULT
-                    THROW_HARD('reg_mode mode: '//trim(params_glob%reg_mode)//' unsupported')
-            end select
+        if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
+            call reg_obj%reset_regs
+            call reg_obj%init_tab
+            ! Batch loop
+            do ibatch=1,nbatches
+                batch_start = batches(ibatch,1)
+                batch_end   = batches(ibatch,2)
+                batchsz     = batch_end - batch_start + 1
+                call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                call reg_obj%fill_tab_inpl_sto(pinds(batch_start:batch_end))
+            enddo
+            call reg_obj%reg_uniform_cluster
+            if( params_glob%l_reg_debug )then
+                ! Batch loop
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    call reg_obj%form_cavgs
+                enddo
+                call reg_obj%regularize_refs
+            endif
         endif
 
         ! Batch loop
@@ -435,11 +262,7 @@ contains
                             allocate(strategy3D_shcc             :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('neigh')
-                        if( params_glob%l_reg_ref )then
-                            allocate(strategy3D_neigh            :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            allocate(strategy3D_greedy_sub       :: strategy3Dsrch(iptcl_batch)%ptr)
-                        endif
+                        allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc_neigh')
                         allocate(strategy3D_shc_sub              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_test')
@@ -459,8 +282,6 @@ contains
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob_inpl')
-                        allocate(strategy3D_prob_inpl            :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
@@ -471,8 +292,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( trim(params_glob%refine) == 'prob_inpl' )   strategy3Dspecs(iptcl_batch)%reg_inpl => reg_inpl
-                if( trim(params_glob%refine) == 'prob' )        strategy3Dspecs(iptcl_batch)%reg_obj  => reg_obj
+                if( trim(params_glob%refine) == 'prob' ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -532,10 +352,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( params_glob%l_reg_ref )then
-                call reg_inpl%kill
-                call reg_obj%kill
-            endif
+            if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -629,10 +446,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( params_glob%l_reg_ref )then
-            call reg_obj%new(pftcc)
-            call reg_inpl%new(pftcc)
-        endif
+        if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
@@ -712,53 +526,5 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
     end subroutine build_batch_particles
-
-    subroutine fill_batch_particles( nptcls_here, pinds_here, use_inpl, use_reg )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
-        integer, intent(in) :: nptcls_here
-        integer, intent(in) :: pinds_here(nptcls_here)
-        logical, optional, intent(in) :: use_inpl
-        logical, optional, intent(in) :: use_reg
-        integer :: iptcl_batch, iptcl, ithr
-        logical :: l_use_inpl, l_use_reg
-        ! optional arguments
-        l_use_inpl = .false.
-        l_use_reg  = .false.
-        if( present(use_inpl) ) l_use_inpl = use_inpl
-        if( present(use_reg)  ) l_use_reg  = use_reg
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
-        ! reassign particles indices & associated variables
-        call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
-        do iptcl_batch = 1,nptcls_here
-            ithr  = omp_get_thread_num() + 1
-            iptcl = pinds_here(iptcl_batch)
-            ! prep
-            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
-            ! transfer to polar coordinates
-            call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! e/o flags
-            call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-        end do
-        !$omp end parallel do
-        ! make CTFs
-        call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        ! Memoize particles FFT parameters
-        call pftcc%memoize_ptcls
-        ! filling the prob table
-        if( l_use_inpl )then
-            if( l_use_reg )then
-                call reg_inpl%fill_tab(pinds_here, use_reg=.true.)
-            else
-                call reg_inpl%fill_tab(pinds_here)
-            endif
-        else
-            if( l_use_reg )then
-                ! not an option yet
-            else
-                call reg_obj%fill_tab_noshift(pinds_here)
-            endif
-        endif
-    end subroutine fill_batch_particles
 
 end module simple_strategy3D_matcher
