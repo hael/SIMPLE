@@ -22,7 +22,6 @@ type reg_params
     integer :: iptcl                       !< iptcl index
     integer :: iref                        !< iref index
     integer :: loc                         !< inpl index
-    integer :: loc_smpl(MAX_INPL_SAMPLES)  !< inpl samplings
     real    :: prob, sh(2), w              !< probability, shift, and weight
     real    :: sum
 end type reg_params
@@ -54,11 +53,13 @@ type :: regularizer
     procedure          :: fill_tab_noshift
     procedure          :: compute_grad_const
     procedure          :: compute_grad_prev
-    procedure          :: fill_tab_prob
+    procedure          :: fill_tab_inpl_sto
     procedure          :: partition_refs
     procedure          :: make_neigh_tab
     procedure          :: uniform_cluster_sort
-    procedure          :: nonuniform_cluster_sort
+    procedure          :: nonuni_greedy_align
+    procedure          :: nonuni_sto_ptcl_align
+    procedure          :: nonuni_sto_ref_align
     procedure          :: find_closest_iref
     procedure          :: uniform_cluster_sort_neigh
     procedure          :: uniform_cluster_sort_dyn
@@ -66,7 +67,6 @@ type :: regularizer
     procedure          :: reg_lap
     procedure          :: prev_cavgs
     procedure          :: form_cavgs
-    procedure          :: compute_grad_smpl
     procedure          :: compute_grad_ptcl
     procedure          :: compute_grad_cavg
     procedure          :: compute_grad_norm_cavg
@@ -195,7 +195,7 @@ contains
         !$omp end parallel do
     end subroutine compute_grad_const
 
-    subroutine fill_tab_prob( self, glob_pinds )
+    subroutine fill_tab_inpl_sto( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer   :: i, iref, iptcl, indxarr(self%nrots), j, irnd
@@ -214,14 +214,13 @@ contains
                 call reverse(inpl_corrs)
                 call random_number(rnd_num)
                 irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
-                self%ref_ptcl_tab(iref,iptcl)%loc_smpl(1:params_glob%reg_nrots) = indxarr(1:params_glob%reg_nrots)
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
                 self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(irnd)
             enddo
         enddo
         !$omp end parallel do
-    end subroutine fill_tab_prob
+    end subroutine fill_tab_inpl_sto
 
     subroutine partition_refs( self )
         class(regularizer), intent(inout) :: self
@@ -289,31 +288,6 @@ contains
             endif
         enddo
     end subroutine form_cavgs
-
-    subroutine compute_grad_smpl( self )
-        class(regularizer), intent(inout) :: self
-        integer     :: iptcl, iref, loc, pind_here, irot
-        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
-        do iptcl = params_glob%fromp, params_glob%top
-            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                iref      = self%prev_ptcl_ref(iptcl)
-                pind_here = self%pftcc%pinds(iptcl)
-                do irot = 1, params_glob%reg_nrots
-                    loc = self%ref_ptcl_tab(iref, iptcl)%loc_smpl(irot)
-                    loc = (self%nrots+1)-(loc-1)
-                    if( loc > self%nrots ) loc = loc - self%nrots
-                    call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
-                    if( self%pftcc%ptcl_iseven(iptcl) )then
-                        self%regs_grad_even(:,:,iref) = self%regs_grad_even(:,:,iref) + ptcl_ctf_rot
-                    else
-                        self%regs_grad_odd(:,:,iref)  = self%regs_grad_odd(:,:,iref)  + ptcl_ctf_rot
-                    endif
-                enddo
-            endif
-        enddo
-    end subroutine compute_grad_smpl
 
     subroutine compute_grad_ptcl( self )
         class(regularizer), intent(inout) :: self
@@ -633,7 +607,7 @@ contains
         if( params_glob%l_reg_neigh )then
             call self%uniform_cluster_sort_dyn
         else
-            call self%nonuniform_cluster_sort
+            call self%nonuni_sto_ref_align
         endif
     end subroutine reg_uniform_cluster
 
@@ -706,20 +680,19 @@ contains
         enddo
     end subroutine uniform_cluster_sort
 
-    subroutine nonuniform_cluster_sort( self )
+    subroutine nonuni_greedy_align( self )
         class(regularizer), intent(inout) :: self
         integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs)
         real      :: max_ir(self%nrefs)
         logical   :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
-        do
-            if( .not.(any(mask_ip)) ) return
+        do while( any(mask_ip) )
             max_ir  = -1.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
+                    if( mask_ip(ip) .and. self%ref_ptcl_corr(ip, ir) > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_corr(ip, ir)
                         max_ip(ir) = ip
                     endif
                 enddo
@@ -730,7 +703,68 @@ contains
             self%ptcl_ref_map(max_ind_ip) = max_ind_ir
             mask_ip(max_ind_ip) = .false.
         enddo
-    end subroutine nonuniform_cluster_sort
+    end subroutine nonuni_greedy_align
+
+    subroutine nonuni_sto_ptcl_align( self )
+        class(regularizer), intent(inout) :: self
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(params_glob%fromp:params_glob%top)
+        real      :: max_ir(self%nrefs), temp_corr(params_glob%fromp:params_glob%top), rnd_num
+        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        mask_ip = .true.
+        call seed_rnd
+        do while( any(mask_ip) )
+            max_ir  = -1.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip,indxarr,temp_corr,rnd_num)
+            do ir = 1, self%nrefs
+                indxarr   = (/(ip,ip=params_glob%fromp, params_glob%top)/)
+                temp_corr = self%ref_ptcl_corr(:, ir)
+                do ip = params_glob%fromp, params_glob%top
+                    if( .not.(mask_ip(ip)) ) temp_corr(ip) = 0.
+                enddo
+                call hpsort(temp_corr, indxarr)
+                call reverse(indxarr)
+                call random_number(rnd_num)
+                ip = indxarr(1 + floor(min(params_glob%reg_nrots, count(mask_ip)) * rnd_num))
+                max_ir(ir) = self%ref_ptcl_corr(ip, ir)
+                max_ip(ir) = ip
+            enddo
+            !$omp end parallel do
+            max_ind_ir = maxloc(max_ir, dim=1)
+            max_ind_ip = max_ip(max_ind_ir)
+            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
+            mask_ip(max_ind_ip) = .false.
+        enddo
+    end subroutine nonuni_sto_ptcl_align
+
+    subroutine nonuni_sto_ref_align( self )
+        class(regularizer), intent(inout) :: self
+        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(self%nrefs)
+        real      :: max_ir(self%nrefs), rnd_num
+        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        mask_ip = .true.
+        call seed_rnd
+        do while( any(mask_ip) )
+            max_ir  = -1.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+            do ir = 1, self%nrefs
+                do ip = params_glob%fromp, params_glob%top
+                    if( mask_ip(ip) .and. self%ref_ptcl_corr(ip, ir) > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_corr(ip, ir)
+                        max_ip(ir) = ip
+                    endif
+                enddo
+            enddo
+            !$omp end parallel do
+            indxarr = (/(ir,ir=1,self%nrefs)/)
+            call hpsort(max_ir, indxarr)
+            call reverse(indxarr)
+            call random_number(rnd_num)
+            max_ind_ir = indxarr(1 + floor(params_glob%reg_nrots * rnd_num))
+            max_ind_ip = max_ip(max_ind_ir)
+            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
+            mask_ip(max_ind_ip) = .false.
+        enddo
+    end subroutine nonuni_sto_ref_align
 
     function find_closest_iref( self, iref, mask_ir ) result( closest )
         class(regularizer), intent(inout) :: self
