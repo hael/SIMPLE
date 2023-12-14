@@ -668,7 +668,6 @@ contains
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
-        use simple_regularizer_inpl,   only: reg_params
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
