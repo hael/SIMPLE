@@ -182,8 +182,8 @@ contains
         if( .not. cline%defined('dfmin')           )  call cline%set('dfmin',            DFMIN_DEFAULT)
         if( .not. cline%defined('dfmax')           )  call cline%set('dfmax',            DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        )  call cline%set('ctfpatch',         'yes')
-        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD)
-        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD)
+        if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
+        if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
         if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
         ! extraction
@@ -917,15 +917,16 @@ contains
             ! optional rejection
             l_skip_pick = .false.
             if( trim(params%stream).eq.'yes' )then
+                ! based on CTFRES
                 if( l_pick .and. o_mov%isthere('ctfres') )then
                     l_skip_pick = o_mov%get('ctfres') > (params_glob%ctfresthreshold-0.001)
                     if( l_skip_pick ) call o_mov%set('nptcls',0.)
                 end if
-                ! ! temporarily disabled rejection on icefrac whilst gathering data to determine optimal default cutoff.
-                ! if( l_pick .and. .not. l_skip_pick .and. o_mov%isthere('icefrac') )then
-                !     l_skip_pick = o_mov%get('icefrac') > (params_glob%icefracthreshold-0.001)
-                !     if( l_skip_pick ) call o_mov%set('nptcls',0.)
-                ! endif
+                ! based on ice fraction
+                if( l_pick .and. .not.l_skip_pick .and. o_mov%isthere('icefrac') )then
+                    l_skip_pick = o_mov%get('icefrac') > (params_glob%icefracthreshold-0.001)
+                    if( l_skip_pick ) call o_mov%set('nptcls',0.)
+                endif
             endif
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)

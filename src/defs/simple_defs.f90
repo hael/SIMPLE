@@ -173,13 +173,15 @@ real, parameter    :: CLS_REJECT_STD       = 4.0       !< # deviations for 2D cl
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2
-real, parameter    :: DFMAX_DEFAULT        = 5.0       !< Default maximum bound for defocus search (microns)
-real, parameter    :: DFMIN_DEFAULT        = 0.2       !< Default minimum bound for defocus search (microns)
-real, parameter    :: LP_CTF_ESTIMATE      = 5.0       !< Default low-pass limit for defocus search (Angstroms)
-real, parameter    :: HP_CTF_ESTIMATE      = 30.0      !< Default high-pass limit for defocus search (Angstroms)
-real, parameter    :: CTFRES_THRESHOLD     = 50.0      !< Ctfres rejection threshold (Angstroms)
-real, parameter    :: ICEFRAC_THRESHOLD    = 1.0       !< Icefrac rejection threshold
-real, parameter    :: FRAC_SKIP_REJECTION  = 0.8       !< When the number of classes to reject is too high rejection is skipped
+real, parameter    :: DFMAX_DEFAULT            = 5.0   !< Default maximum bound for defocus search (microns)
+real, parameter    :: DFMIN_DEFAULT            = 0.2   !< Default minimum bound for defocus search (microns)
+real, parameter    :: LP_CTF_ESTIMATE          = 5.0   !< Default low-pass limit for defocus search (Angstroms)
+real, parameter    :: HP_CTF_ESTIMATE          = 30.0  !< Default high-pass limit for defocus search (Angstroms)
+real, parameter    :: CTFRES_THRESHOLD         = 50.0  !< Ctfres rejection threshold (Angstroms)
+real, parameter    :: CTFRES_THRESHOLD_STREAM  = 10.0  !< Stream ctfres rejection threshold (Angstroms)
+real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection threshold
+real, parameter    :: ICEFRAC_THRESHOLD_STREAM = 1.0   !< Stream icefrac rejection threshold
+real, parameter    :: FRAC_SKIP_REJECTION      = 0.8   !< When the number of classes to reject is too high rejection is skipped
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
