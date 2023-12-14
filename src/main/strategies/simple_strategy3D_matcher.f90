@@ -301,7 +301,7 @@ contains
                         batch_end   = batches(ibatch,2)
                         batchsz     = batch_end - batch_start + 1
                         call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                        call reg_obj%fill_tab_prob(pinds(batch_start:batch_end))
+                        call reg_obj%fill_tab_inpl_sto(pinds(batch_start:batch_end))
                     enddo
                     call reg_obj%reg_uniform_cluster
                     if( params_glob%l_reg_debug )then
