@@ -42,7 +42,7 @@ call img_part2%read(fn_img_part2)
 rad_core_vox  = rad_core/smpd
 ldim_refs     = [ldim1(1), ldim1(2), ldim1(3)]
 nshells       = int(np_rad_vox / shell_size_vox)
-center        = ldim_refs(1:3) / 2 + 0.5
+center        = ldim_refs(1:3) / 2 + 1.
 allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.false.)
 
 ! remove negative values
