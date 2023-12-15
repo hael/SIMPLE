@@ -2610,7 +2610,7 @@ contains
         end where
     end subroutine binarize_3
 
-    !>  \brief cendist produces an image with square distance from the centre of the image
+    !>  \brief cendist produces an image holding the distances from the centre of the image
     subroutine cendist( self )
         class(image), intent(inout) :: self
         real    :: centre(3)
