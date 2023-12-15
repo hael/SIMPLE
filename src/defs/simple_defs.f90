@@ -21,7 +21,7 @@ integer,  parameter :: LINE_MAX_LEN = 8192
 real(sp), parameter :: PI           = acos(-1.)
 real(dp), parameter :: DPI          = acos(-1.d0)
 real(sp), parameter :: PIO2         = acos(-1.)/2.
-real(sp), parameter :: DPIO2        = acos(-1.d0)/2.d0
+real(dp), parameter :: DPIO2        = acos(-1.d0)/2.d0
 real(sp), parameter :: TWOPI        = 2.*acos(-1.)
 real(dp), parameter :: DTWOPI       = 2.d0*acos(-1.d0)
 real(sp), parameter :: FOURPI       = 4.*acos(-1.)
@@ -168,8 +168,7 @@ real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
 real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
-real, parameter    :: CLS_REJECT_THRESHOLD = 4.0
-real, parameter    :: CLS_REJECT_STD       = 4.0       !< # deviations for 2D class selection/rejection
+real, parameter    :: CLS_REJECT_STD       = 2.5       !< # deviations for 2D class selection/rejection
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2
@@ -238,11 +237,6 @@ integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100     ! seconds
 integer, parameter :: WALLTIME_DEFAULT            = 86340   ! seconds, 23h59mins
 
 ! precision constants
-#ifndef IMAGE_SINGLE_PRECISION
-integer, parameter :: img_kind = DP
-#else
-integer, parameter :: img_kind = SP
-#endif
 integer, parameter :: fp_kind  = DP
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs

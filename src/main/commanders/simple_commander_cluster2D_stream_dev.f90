@@ -763,12 +763,10 @@ contains
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! total variation distance
-        if( L_CLS_REJECT_DEV )then
-            call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
-        endif
+        if( L_CLS_REJECT_DEV ) call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
         ! correlation & resolution
-        ndev_here = 1.5*params_glob%ndev2D ! less stringent rejection than chunk
-        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
+        ndev_here = 1.25*params_glob%ndev2D ! less stringent rejection than chunk
+        call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
         ! rejecting associated particles
@@ -1064,6 +1062,8 @@ contains
             call random_generator%shuffle(stk_order)
             nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
             nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+            !$omp parallel do schedule(static) proc_bind(close) private(i,istk)&
+            !$omp default(shared) reduction(+:nptcls_sel,nptcls2update)
             do i = 1,nstks_tot
                 istk = stk_order(i)
                 if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
@@ -1071,6 +1071,7 @@ contains
                 nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
                 pool_stacks_mask(istk) = .true.
             enddo
+            !$omp end parallel do
             call random_generator%kill
         else
             nptcls2update    = nptcls_tot
@@ -1099,13 +1100,11 @@ contains
                 call spproj%os_stk%set(i, 'top', real(jptcl))
             else
                 ! keeps track of skipped particles
-                !$omp parallel do private(iptcl,icls,eo) default(shared) proc_bind(close) reduction(+:prev_eo_pops)
                 do iptcl = fromp,top
                     icls = pool_proj%os_ptcl2D%get_class(iptcl)
                     eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
                     prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
                 enddo
-                !$omp end parallel do
             endif
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)

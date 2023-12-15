@@ -370,7 +370,7 @@ contains
             call self%spproj%os_cls2D%class_moments_rejection(moments_mask)
         endif
         ! correlation and resolution
-        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
+        call self%spproj%os_cls2D%class_corres_rejection(ndev, corres_mask)
         ! overall class rejection
         cls_mask      = moments_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)

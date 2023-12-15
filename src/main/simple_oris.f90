@@ -191,7 +191,7 @@ type :: oris
     procedure          :: calc_soft_weights2D
     procedure          :: sig3weights
     procedure          :: find_best_classes
-    procedure          :: class_moments_rejection
+    procedure          :: class_moments_rejection, class_corres_rejection
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1
@@ -2600,6 +2600,74 @@ contains
         deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
 
+    subroutine class_corres_rejection( self, threshold, mask )
+        class(oris), intent(in)    :: self
+        real,        intent(in)    :: threshold
+        logical,     intent(inout) :: mask(1:self%n)
+        real,    allocatable :: vals(:)
+        logical, allocatable :: msk(:)
+        integer :: icls
+        logical :: has_corr, has_res, l_err
+        msk = mask
+        if( self%isthere('pop') )then
+            do icls=1,self%n
+                msk(icls) = self%get(icls,'pop') > 0.5
+            enddo
+        endif
+        has_corr = self%isthere('corr')
+        has_res  = self%isthere('res')
+        if( has_corr )then
+            vals = self%get_all('corr')
+            call normalize_vals(vals, l_err)
+            if( .not.l_err )then
+                do icls = 1,self%n
+                    if( msk(icls) ) msk(icls) = vals(icls) > -threshold
+                enddo
+            endif
+        endif
+        if( has_res )then
+            ! todo
+        endif
+        mask = msk
+        contains
+
+            subroutine normalize_vals( x, err )
+                real,    intent(inout) :: x(self%n)
+                logical, intent(out)   :: err
+                logical :: tmpmsk(self%n)
+                real    :: mean, var
+                integer :: nmsk
+                err    = .false.
+                tmpmsk = msk
+                nmsk   = count(tmpmsk)
+                if( nmsk < 3 )then
+                    err = .true.
+                    return
+                endif
+                mean   = sum(x,mask=tmpmsk) / real(nmsk)
+                x      = x - mean
+                var    = sum(x**2,mask=tmpmsk) / real(nmsk)
+                if( var < TINY )then
+                    err = .true.
+                else
+                    x      = x / sqrt(var)
+                    tmpmsk = tmpmsk .and. (abs(x) < 2.)
+                    nmsk   = count(tmpmsk)
+                    if( nmsk > 2 )then
+                        mean = sum(x,mask=tmpmsk) / real(nmsk)
+                        x    = x - mean
+                        var  = sum(x**2,mask=tmpmsk) / real(nmsk)
+                        if( var < TINY )then
+                            err = .true.
+                        else
+                            x = x / sqrt(var)
+                        endif
+                    endif
+                endif
+            end subroutine normalize_vals
+
+    end subroutine class_corres_rejection
+
     subroutine class_moments_rejection( self, mask )
         class(oris), intent(in)    :: self
         logical,     intent(inout) :: mask(1:self%n)
@@ -2610,7 +2678,7 @@ contains
         msk = mask
         if( self%isthere('pop') )then
             do icls=1,self%n
-                if( self%get(icls,'pop') < 0.5 ) msk(icls) = .false.
+                msk(icls) = self%get(icls,'pop') > 0.5
             enddo
         endif
         has_mean = self%isthere('mean')
@@ -2632,14 +2700,14 @@ contains
             call normalize_vals(vals, l_err)
             if( .not.l_err )then
                 do icls = 1,self%n
-                    if( vals(icls) > 5. ) msk(icls) = .false.
+                    if( msk(icls) ) msk(icls) = vals(icls) < 5.0
                 enddo
             endif
         endif
         if( has_skew )then
             vals = self%get_all('skew')
             do icls = 1,self%n
-                if( vals(icls) < 0. ) msk(icls) = .false.
+                if( msk(icls) ) msk(icls) = vals(icls) > 0.0
             enddo
         endif
         if( has_kurt )then
@@ -2647,14 +2715,14 @@ contains
             call normalize_vals(vals, l_err)
             if( .not.l_err )then
                 do icls = 1,self%n
-                    if( abs(vals(icls)) > 4. ) msk(icls) = .false.
+                    if( msk(icls) ) msk(icls) = abs(vals(icls)) < 4.0
                 enddo
             endif
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')
             do icls = 1,self%n
-                if( vals(icls) > 0.5 ) msk(icls) = .false.
+                if( msk(icls) ) msk(icls) = vals(icls) < 0.5
             enddo
         endif
         mask = msk
@@ -2696,7 +2764,6 @@ contains
             end subroutine normalize_vals
 
     end subroutine class_moments_rejection
-
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )
