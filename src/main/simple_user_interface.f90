@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
-public :: write_ui_json, print_ui_latex, list_single_prgs_in_ui
+public :: print_ui_json, write_ui_json, print_ui_latex, list_single_prgs_in_ui
 private
 #include "simple_local_flags.inc"
 
@@ -5482,6 +5482,108 @@ contains
         class(simple_program), intent(in) :: self
         write(logfhandle,'(a)') self%descr_long
     end subroutine print_prg_descr_long
+
+    subroutine print_ui_json
+        use json_module
+        type(json_core)           :: json
+        type(json_value), pointer :: program_entry, program, all_programs
+        integer :: iprg
+        ! JSON init
+        call json%initialize()
+        ! create object of program entries
+        call json%create_object(all_programs, 'SIMPLE_UI')
+        do iprg=1,n_prg_ptrs
+            call create_program_entry
+            call json%add(all_programs, program_entry)
+        end do
+        ! write & clean
+        call json%print(all_programs, logfhandle)
+        if( json%failed() )then
+            write(logfhandle,*) 'json input/output error for simple_user_interface'
+            stop
+        endif
+        call json%destroy(all_programs)
+
+        contains
+
+            subroutine create_program_entry
+                call json%create_object(program_entry, trim(prg_ptr_array(iprg)%ptr2prg%name))
+                call json%create_object(program, 'program')
+                call json%add(program_entry, program)
+                ! program section
+                call json%add(program, 'name',        prg_ptr_array(iprg)%ptr2prg%name)
+                call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
+                call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
+                call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
+                call json%add(program, 'advanced', prg_ptr_array(iprg)%ptr2prg%advanced)
+                if( allocated(prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)) then
+                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)
+                endif
+                ! all sections
+                call create_section( 'image input/output',     prg_ptr_array(iprg)%ptr2prg%img_ios )
+                call create_section( 'parameter input/output', prg_ptr_array(iprg)%ptr2prg%parm_ios )
+                call create_section( 'alternative inputs',     prg_ptr_array(iprg)%ptr2prg%alt_ios )
+                call create_section( 'search controls',        prg_ptr_array(iprg)%ptr2prg%srch_ctrls )
+                call create_section( 'filter controls',        prg_ptr_array(iprg)%ptr2prg%filt_ctrls )
+                call create_section( 'mask controls',          prg_ptr_array(iprg)%ptr2prg%mask_ctrls )
+                call create_section( 'computer controls',      prg_ptr_array(iprg)%ptr2prg%comp_ctrls )
+            end subroutine create_program_entry
+
+            subroutine create_section( name, arr )
+                character(len=*),          intent(in) :: name
+                type(simple_input_param), allocatable, intent(in) :: arr(:)
+                type(json_value), pointer :: entry, section
+                character(len=STDLEN)     :: options_str, before
+                character(len=KEYLEN)     :: args(10)
+                integer                   :: i, j, sz, nargs
+                logical :: found, param_is_multi, param_is_binary, exception
+                call json%create_array(section, trim(name))
+                if( allocated(arr) )then
+                    sz = size(arr)
+                    do i=1,sz
+                        call json%create_object(entry, trim(arr(i)%key))
+                        call json%add(entry, 'key', trim(arr(i)%key))
+                        call json%add(entry, 'keytype', trim(arr(i)%keytype))
+                        call json%add(entry, 'descr_short', trim(arr(i)%descr_short))
+                        call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
+                        call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
+                        call json%add(entry, 'required', arr(i)%required)
+                        if( allocated(arr(i)%gui_submenu) ) then
+                          call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                        endif
+                        if( allocated(arr(i)%exclusive_group) ) then
+                          call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                        endif
+                        if( allocated(arr(i)%active_flags) ) then
+                          call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                        endif
+                        call json%add(entry, 'advanced', arr(i)%advanced)
+                        call json%add(entry, 'online', arr(i)%online)
+                        param_is_multi  = trim(arr(i)%keytype).eq.'multi'
+                        param_is_binary = trim(arr(i)%keytype).eq.'binary'
+                        if( param_is_multi .or. param_is_binary )then
+                            options_str = trim(arr(i)%descr_placeholder)
+                            call split( options_str, '(', before )
+                            call split( options_str, ')', before )
+                            call parsestr(before, '|', args, nargs)
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
+                            if( exception )then
+                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
+                                stop
+                            endif
+                            call json%add(entry, 'options', args(1:nargs))
+                            do j = 1, nargs
+                                call json%update(entry, 'options['//int2str(j)//']', trim(args(j)), found)
+                            enddo
+                        endif
+                        call json%add(section, entry)
+                    enddo
+                endif
+                call json%add(program_entry, section)
+            end subroutine create_section
+
+    end subroutine print_ui_json
 
     subroutine write_ui_json
         use json_module
