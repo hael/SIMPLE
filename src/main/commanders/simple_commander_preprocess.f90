@@ -2078,7 +2078,7 @@ contains
         call micrograph%kill
         call o_mic%kill
         call o_tmp%kill
-        call progressfile_update(1.0)
+        if( prog_write ) call progressfile_update(1.0)
         call qsys_job_finished('simple_commander_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
     end subroutine exec_extract
