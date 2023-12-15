@@ -92,6 +92,8 @@ contains
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfPowerSpectrum", splflag="ctfjpg", string=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographCoordinates", splflag="boxfile", string=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splNumberParticles", splflag="nptcls", int=.true.)]
+        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splNMics", splflag="nmics", int=.true.)]
+        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splMicId", splflag="micid", int=.true.)]
 
         ! assign stk flags
         if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
@@ -148,6 +150,9 @@ contains
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnEstimatedResolution", splflag="res")]
       !  self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop", int=.true.)]
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop")]
+        self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="splNClasses", splflag="ncls", int=.true.)]
+        self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="splClassScore", splflag="score")]
+
         
         ! assign class3D flags
         if (.not. allocated(self%starfile%class3D%flags)) allocate(self%starfile%class3D%flags(0))
@@ -631,6 +636,7 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
+        integer                           :: i
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -641,6 +647,10 @@ contains
         endif
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
+        do i=1, spproj%os_mic%get_noris()
+            call spproj%os_mic%set(i, "nmics", real(spproj%os_mic%get_noris()))
+            call spproj%os_mic%set(i, "micid", real(i))
+        end do
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_mic,    self%starfile%micrographs%flags)
         call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics", exclude="rlnImageSize")
@@ -678,6 +688,7 @@ contains
                 call spproj%get_cavgs_stk(stkname, ncls, smpd)
                 call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
             end if
+            call spproj%os_cls2D%set(i, "ncls", real(spproj%os_cls2D%get_noris()))
         end do
         call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
         call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", mapstks=.false.)

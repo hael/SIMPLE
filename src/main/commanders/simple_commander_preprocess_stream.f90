@@ -353,7 +353,7 @@ contains
                 call reject_from_pool
                 call read_pool_xml_beamtilts()
                 call assign_pool_optics(cline, propagate = .false.)
-                ! call reject_from_pool_user
+                call reject_from_pool_user
                 if( .not.l_nchunks_maxed )then
                     call write_project_stream2D(.true.)
                     call import_chunks_into_pool(.false., nchunks_imported)
@@ -530,7 +530,7 @@ contains
                     else
                         call spproj%os_mic%reallocate(n_completed)
                         old_fnames = completed_fnames(:)
-                        deallocate(completed_fnames)
+                        deallocate(completedfnames)
                         allocate(completedfnames(n_completed))
                         if( n_old > 0 )then
                             completedfnames(1:n_old) = old_fnames(:)
