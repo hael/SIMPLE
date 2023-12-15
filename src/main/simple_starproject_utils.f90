@@ -122,7 +122,7 @@ contains
                     call enable_splflag(trim(adjustl(keys(ikey))), flags)
                 end do
                 testcount = testcount + 1
-                if(testcount == 10) then ! Do 10 tests to counter xpos or ypos being 0
+                if(testcount == 1000) then ! Do 1000 tests to counter xpos or ypos being 0
                     exit
                 end if
             end if
