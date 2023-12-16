@@ -960,7 +960,7 @@ contains
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
         character(len=*), parameter   :: FINAL_MAPS = './final_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
-        integer,          parameter   :: NSPACE_CLS3D = 1000
+        integer,          parameter   :: NSPACE_CLS3D = 500
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         integer,          allocatable :: pinds(:)
         real,             allocatable :: rstates(:), corrs(:), euldists(:)
