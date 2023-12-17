@@ -11,8 +11,8 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG = 5., BOX_EXP_FAC = 0.111
-integer, parameter :: OFFSET      = 3, OFFSET_UB = 2 * OFFSET
+real,    parameter :: GAUSIG      = 5., BOX_EXP_FAC = 0.111
+integer, parameter :: OFFSET      = 3 , OFFSET_UB   = 2 * OFFSET
 real,    parameter :: DIST_THRES1 = real(OFFSET), DIST_THRES2 = real(4*OFFSET)
 logical, parameter :: L_WRITE     = .false.
 
@@ -40,6 +40,7 @@ contains
     procedure :: gaumatch_boximgs
     procedure :: detect_peaks
     procedure :: center_filter
+    procedure :: distance_filter
     procedure :: kill
 end type
 
@@ -282,8 +283,8 @@ contains
         end do
         !$omp end parallel do
         npeaks = count(scores_cen <= real(OFFSET))
-        write(logfhandle,'(a,1x,I5)') '# positions before center filtering: ', count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after  center filtering: ', npeaks
+        write(logfhandle,'(a,1x,I5)') '# positions before   center filtering: ', count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after    center filtering: ', npeaks
         ! modify box_scores and update npeaks
         where( scores_cen <= real(OFFSET) )
             ! there's a peak
@@ -291,8 +292,63 @@ contains
             self%box_scores = -1.
         endwhere
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# npeaks    after  center filtering: ', self%npeaks
+        write(logfhandle,'(a,1x,I5)') '# npeaks    after    center filtering: ', self%npeaks
     end subroutine center_filter
+
+    subroutine distance_filter( self, dist_thres )
+        class(pickgau), intent(inout) :: self
+        real,           intent(in)    :: dist_thres
+        integer, allocatable :: pos_inds(:)
+        real,    allocatable :: pos_scores(:)
+        logical, allocatable :: mask(:), selected_pos(:)
+        integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak
+        real    :: dist
+        logical :: is_peak
+        pos_inds   = pack(self%inds_offset(:,:), mask=self%box_scores(:,:) >= self%t)
+        pos_scores = pack(self%box_scores(:,:),  mask=self%box_scores(:,:) >= self%t)
+        nbox       = size(pos_inds)
+        allocate(mask(nbox),         source=.false.)
+        allocate(selected_pos(nbox), source=.true. )
+        selected_pos = .true.
+        do ibox = 1,nbox
+            mask = .false.
+            !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
+            do jbox = 1,nbox
+                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
+                if( dist <= dist_thres ) mask(jbox) = .true.
+            end do
+            !$omp end parallel do
+            ! find best match in the neigh
+            loc = maxloc(pos_scores, mask=mask, dim=1)
+            ! eliminate all but the best
+            mask(loc) = .false.
+            where( mask ) selected_pos = .false.
+        end do
+        npeaks = count(selected_pos)
+        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
+        write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
+        ! update packed arrays
+        pos_inds   = pack(pos_inds,   mask=selected_pos)
+        pos_scores = pack(pos_scores, mask=selected_pos)
+        ! update box_scores
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ipeak) proc_bind(close)
+        do ioff = 1,self%nx_offset
+            do joff = 1,self%ny_offset
+                ithr = omp_get_thread_num() + 1
+                is_peak = .false.
+                do ipeak = 1,npeaks
+                    if( pos_inds(ipeak) == self%inds_offset(ioff,joff) )then
+                        is_peak = .true.
+                        exit
+                    endif
+                end do
+                if( .not. is_peak ) self%box_scores(ioff,joff) = -1.
+            end do
+        end do
+        !$omp end parallel do
+        npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', npeaks
+    end subroutine distance_filter
 
     subroutine kill( self )
         class(pickgau), intent(inout) :: self
