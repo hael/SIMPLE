@@ -17,10 +17,10 @@ private
 #include "simple_local_flags.inc"
 
 type reg_params
-    integer :: iptcl                       !< iptcl index
-    integer :: iref                        !< iref index
-    integer :: loc                         !< inpl index
-    real    :: prob, sh(2)                 !< probability, shift
+    integer :: iptcl        !< iptcl index
+    integer :: iref         !< iref index
+    integer :: loc          !< inpl index
+    real    :: prob, sh(2)  !< probability, shift
 end type reg_params
 
 type :: regularizer
@@ -54,8 +54,8 @@ type :: regularizer
     procedure          :: find_closest_iref
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
-    procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
-    generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_test
+    procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
+    generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -79,7 +79,7 @@ contains
         self%regs_even       = 0.d0
         self%regs_denom_odd  = 0.d0
         self%regs_denom_even = 0.d0
-        self%pftcc      => pftcc
+        self%pftcc => pftcc
     end subroutine new
 
     subroutine init_tab( self )
@@ -105,8 +105,8 @@ contains
     subroutine fill_tab_noshift( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl
-        real      :: inpl_corrs(self%nrots)
+        integer :: i, iref, iptcl
+        real    :: inpl_corrs(self%nrots)
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
@@ -124,8 +124,8 @@ contains
     subroutine fill_tab_inpl_sto( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: i, iref, iptcl, indxarr(self%nrots), j, irnd
-        real      :: inpl_corrs(self%nrots), rnd_num
+        integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd
+        real    :: inpl_corrs(self%nrots), rnd_num
         call seed_rnd
         !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -226,7 +226,7 @@ contains
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr)
             do iptcl = params_glob%fromp, params_glob%top
                 sum_corr = sum(self%ref_ptcl_cor(:,iptcl))
                 if( sum_corr < DTINY )then
@@ -245,20 +245,19 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! sorted clustering
+        ! do the actual alignment
         self%ptcl_ref_map = 1
         call self%nonuni_sto_ref_align
     end subroutine tab_align
 
     subroutine uni_align( self )
         class(regularizer), intent(inout) :: self
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir
-        real      :: max_ir(self%nrefs)
-        logical   :: mask_ir(self%nrefs), mask_ip(params_glob%fromp:params_glob%top)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir
+        real    :: max_ir(self%nrefs)
+        logical :: mask_ir(self%nrefs), mask_ip(params_glob%fromp:params_glob%top)
         mask_ir = .false.
         mask_ip = .true.
-        do
-            if( .not.(any(mask_ip)) ) return
+        do while( any(mask_ip) )
             if( .not.(any(mask_ir)) )then
                 mask_ir = .true.
                 max_ir  = -1.
@@ -298,12 +297,12 @@ contains
 
     subroutine nonuni_greedy_align( self )
         class(regularizer), intent(inout) :: self
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs)
-        real      :: max_ir(self%nrefs)
-        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs)
+        real    :: max_ir(self%nrefs)
+        logical :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
         do while( any(mask_ip) )
-            max_ir  = -1.
+            max_ir = -1.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
@@ -323,13 +322,13 @@ contains
 
     subroutine nonuni_sto_ptcl_align( self )
         class(regularizer), intent(inout) :: self
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(params_glob%fromp:params_glob%top)
-        real      :: max_ir(self%nrefs), temp_corr(params_glob%fromp:params_glob%top), rnd_num
-        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(params_glob%fromp:params_glob%top)
+        real    :: max_ir(self%nrefs), temp_corr(params_glob%fromp:params_glob%top), rnd_num
+        logical :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
         call seed_rnd
         do while( any(mask_ip) )
-            max_ir  = -1.
+            max_ir = -1.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip,indxarr,temp_corr,rnd_num)
             do ir = 1, self%nrefs
                 indxarr   = (/(ip,ip=params_glob%fromp, params_glob%top)/)
@@ -354,13 +353,13 @@ contains
 
     subroutine nonuni_sto_ref_align( self )
         class(regularizer), intent(inout) :: self
-        integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(self%nrefs)
-        real      :: max_ir(self%nrefs), rnd_num
-        logical   :: mask_ip(params_glob%fromp:params_glob%top)
+        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(self%nrefs)
+        real    :: max_ir(self%nrefs), rnd_num
+        logical :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
         call seed_rnd
         do while( any(mask_ip) )
-            max_ir  = -1.
+            max_ir = -1.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
@@ -410,8 +409,7 @@ contains
         class(regularizer), intent(inout) :: self
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
-        integer :: iref, k, box, find
-        real    :: eps, filt(self%kfromto(1):self%kfromto(2)), rnd_num
+        integer     :: iref, box
         ! form the cavgs
         where( abs(self%regs_denom_odd) < DTINY )
             self%regs_odd = 0._dp
@@ -424,74 +422,36 @@ contains
             self%regs_even = self%regs_even / self%regs_denom_even
         endwhere
         ! output images for debugging
-        if( params_glob%l_reg_debug )then
-            do iref = 1, self%nrefs
-                ! odd
-                call self%pftcc%polar2cartesian(cmplx(self%regs_odd(:,:,iref), kind=sp), cmat, box)
-                call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('odd_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-                call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_odd(:,:,iref), kind=sp), cmat, box)
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('odd_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-                !even
-                call self%pftcc%polar2cartesian(cmplx(self%regs_even(:,:,iref), kind=sp), cmat, box)
-                call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('even_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-                call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
-                call calc_cavg%zero_and_flag_ft
-                call calc_cavg%set_cmat(cmat)
-                call calc_cavg%shift_phorig()
-                call calc_cavg%ifft
-                call calc_cavg%write('even_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-            enddo
-        endif
-        ! k-weight
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            self%regs_odd( :,k,:) = real(k) * self%regs_odd( :,k,:)
-            self%regs_even(:,k,:) = real(k) * self%regs_even(:,k,:)
-        enddo
-        !$omp end parallel do
-
-        ! applying butterworth filter at cut-off = lp
-        find = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
-        call butterworth_filter(find, self%kfromto, filt)
-        !$omp parallel do default(shared) private(k) proc_bind(close) schedule(static)
-        do k = self%kfromto(1),self%kfromto(2)
-            self%regs_odd( :,k,:) = filt(k) * self%regs_odd( :,k,:)
-            self%regs_even(:,k,:) = filt(k) * self%regs_even(:,k,:)
-        enddo
-        !$omp end parallel do
-
-        ! taking the real part only (since the global cost function takes only real part)
-        self%regs_odd       = real(self%regs_odd,  dp)
-        self%regs_even      = real(self%regs_even, dp)
-        
-        ! annealing and different grad styles
-        eps = min(1., real(params_glob%which_iter) / real(params_glob%reg_iters))
-        call seed_rnd
-        !$omp parallel do default(shared) private(iref,rnd_num) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            call random_number(rnd_num)
-            ! golden ratio initial stochastic
-            if( rnd_num < ((1. - eps) * 2. / (1.+sqrt(5.))) )then
-                self%pftcc%pfts_refs_even(:,:,iref) = self%pftcc%pfts_refs_even(:,:,iref) + self%regs_even(:,:,iref)
-                self%pftcc%pfts_refs_odd( :,:,iref) = self%pftcc%pfts_refs_odd( :,:,iref) + self%regs_odd( :,:,iref)
-            endif
+            ! odd
+            call self%pftcc%polar2cartesian(cmplx(self%regs_odd(:,:,iref), kind=sp), cmat, box)
+            call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('odd_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+            call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_odd(:,:,iref), kind=sp), cmat, box)
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('odd_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+            !even
+            call self%pftcc%polar2cartesian(cmplx(self%regs_even(:,:,iref), kind=sp), cmat, box)
+            call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('even_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
+            call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
+            call calc_cavg%zero_and_flag_ft
+            call calc_cavg%set_cmat(cmat)
+            call calc_cavg%shift_phorig()
+            call calc_cavg%ifft
+            call calc_cavg%write('even_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
         enddo
-        !$omp end parallel do
-        call self%pftcc%memoize_refs
         call calc_cavg%kill
     end subroutine output_reproj_cavgs
     
@@ -547,7 +507,7 @@ contains
         end if
     end subroutine rotate_polar_complex
 
-    subroutine rotate_polar_test( self, ptcl_ctf, ptcl_ctf_rot, irot )
+    subroutine rotate_polar_real_dp( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(regularizer), intent(inout) :: self
         real(dp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -565,7 +525,7 @@ contains
             ptcl_ctf_rot(  1:rot-1    , :) = real(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:), dp)
             ptcl_ctf_rot(rot:self%pftsz,:) = real(ptcl_ctf(               1:self%pftsz-rot+1,:), dp)
         end if
-    end subroutine rotate_polar_test
+    end subroutine rotate_polar_real_dp
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )

@@ -70,13 +70,13 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
-        integer,               allocatable :: batches(:,:), best_ir(:), best_irot(:)
+        integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, objfun_ori
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr
         if( L_BENCH_GLOB )then
             t_init = tic()

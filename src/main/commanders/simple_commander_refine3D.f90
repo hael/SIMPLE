@@ -897,8 +897,6 @@ contains
         integer,          parameter   :: MAXITS = 60, N_ITERS = 1
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
-        complex,          allocatable :: cmat(:,:)
-        real,             allocatable :: sigma2_noise(:,:)
         type(image),      allocatable :: tmp_imgs(:)
         type(fplane),     allocatable :: fpls(:)
         type(ctfparams),  allocatable :: ctfparms(:)
@@ -906,10 +904,9 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(image)                   :: img
         type(regularizer)             :: reg_obj
         type(ori)                     :: orientation
-        integer  :: nptcls, iptcl, j, s, iref, box, loc, pind_here, ithr, iter
+        integer  :: nptcls, iptcl, s, iref, loc, ithr, iter
         logical  :: l_ctf, do_center
         real     :: xyz(3), euls(3), shvec(2), sdev
         call cline%set('mkdir',    'yes')
