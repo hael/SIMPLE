@@ -230,6 +230,7 @@ type(simple_input_param) :: kweight_pool
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lpstart_nonuni
+type(simple_input_param) :: lp_pick
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: lpthres
 type(simple_input_param) :: max_dose
@@ -279,6 +280,7 @@ type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: picker
+type(simple_input_param) :: pick_roi
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
@@ -982,6 +984,7 @@ contains
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
         call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
+        call set_param(lp_pick,       'lp_pick',       'num',    'Low-pass limit for picking', 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(mskdiam,       'mskdiam',       'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
@@ -1105,6 +1108,7 @@ contains
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
         call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(rnd_cls_init,   'rnd_cls_init', 'binary', 'Initiate 2D classification from random classes', 'Initiate 2D classification from random classes vs. raw images(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kweight,        'kweight',      'multi',  'Correlation weighing scheme', 'Correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
@@ -3024,7 +3028,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 4, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 4, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3050,8 +3054,10 @@ contains
         call pick%set_input('srch_ctrls', 3, pgrp)
         call pick%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
         pick%srch_ctrls(3)%required = .false.
+        call pick%set_input('srch_ctrls', 4, pick_roi)
+        call pick%set_gui_params('srch_ctrls', 4, submenu="picking")
         ! filter controls
-        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., PICK_LP_DEFAULT)
         call pick%set_gui_params('filt_ctrls', 1, submenu="picking")
         ! mask controls
         ! <empty>
@@ -3110,7 +3116,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 13, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 13, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -3150,6 +3156,7 @@ contains
         call preprocess%set_input('srch_ctrls',12, mcconvention)
         call preprocess%set_input('srch_ctrls',13, algorithm)
         call preprocess%set_input('srch_ctrls',14, mcpatch_thres)
+        call preprocess%set_input('srch_ctrls',15, pick_roi)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3159,8 +3166,7 @@ contains
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
         call preprocess%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
-        call preprocess%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
-        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call preprocess%set_input('filt_ctrls', 5, lp_pick)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3232,8 +3238,7 @@ contains
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
         call preprocess_stream%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
-        call preprocess_stream%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
-        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call preprocess_stream%set_input('filt_ctrls', 5, lp_pick)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3377,13 +3382,12 @@ contains
         call preprocess_stream_dev%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 4, submenu="CTF estimation")
-        call preprocess_stream_dev%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
-        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 5, lp_pick)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 5, submenu="picking")
         call preprocess_stream_dev%set_input('filt_ctrls', 6, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 6, submenu="picking")
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 6, submenu="cluster2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
@@ -5713,8 +5717,7 @@ contains
         ! write & clean
         call json%print(program_entry, trim(adjustl(self%name))//'.json')
         if( json%failed() )then
-            write(logfhandle,*) 'json input/output error for program: ', trim(self%name)
-            stop
+            THROW_HARD('json input/output error for program: '//trim(self%name))
         endif
         call json%destroy(program_entry)
 

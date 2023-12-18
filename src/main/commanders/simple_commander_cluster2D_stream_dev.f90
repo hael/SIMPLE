@@ -763,10 +763,13 @@ contains
         nptcls_rejected = 0
         allocate(cls_mask(ncls_glob),moments_mask(ncls_glob),corres_mask(ncls_glob),source=.true.)
         ! total variation distance
-        if( L_CLS_REJECT_DEV ) call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
+        if( L_CLS_REJECT_DEV )then
+            call pool_proj%os_cls2D%class_moments_rejection(moments_mask)
+            call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
+        endif
         ! correlation & resolution
         ndev_here = 1.25*params_glob%ndev2D ! less stringent rejection than chunk
-        call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
+        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
         ! rejecting associated particles

@@ -86,9 +86,10 @@ contains
         if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
         if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT)
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
+        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',        'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
@@ -106,8 +107,8 @@ contains
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init',  'no')
         if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
-        if( .not. cline%defined('kweight_chunk')) call cline%set('kweight_chunk','default')
-        if( .not. cline%defined('kweight_pool') ) call cline%set('kweight_pool', 'default')
+        if( .not. cline%defined('kweight_chunk'))call cline%set('kweight_chunk','default')
+        if( .not. cline%defined('kweight_pool') )call cline%set('kweight_pool', 'default')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ncls_in = 0
