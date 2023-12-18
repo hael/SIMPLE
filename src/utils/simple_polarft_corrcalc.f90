@@ -1521,7 +1521,7 @@ contains
         even  = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1561,7 +1561,7 @@ contains
         even  = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1676,7 +1676,7 @@ contains
         pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
         gencorr_prob_for_rot_8 = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            diffsq = (1._dp / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
+            diffsq = (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
             gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 + real(k,dp) * dexp(-diffsq / self%kwsqsums_ptcls(k,i))
         end do
         gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 / real(self%nk,dp)
@@ -1846,7 +1846,7 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i))
             f         = f + expdiffsq
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
@@ -1855,7 +1855,7 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 1._dp / real(self%sigma2_noise(k,iptcl))
+            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
             expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i))
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
             grad(2)   = grad(2) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)
