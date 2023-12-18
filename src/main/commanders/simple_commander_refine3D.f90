@@ -991,9 +991,9 @@ contains
             call reg_obj%init_tab
             call reg_obj%fill_tab_noshift(pinds)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
-            call reg_obj%reg_uniform_cluster
-            call reg_obj%form_cavgs
-            call reg_obj%regularize_refs
+            call reg_obj%tab_align
+            call reg_obj%compute_cavgs
+            call reg_obj%output_reproj_cavgs
             print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
             ! init volumes
             call preprecvols

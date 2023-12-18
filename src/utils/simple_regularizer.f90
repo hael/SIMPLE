@@ -20,8 +20,7 @@ type reg_params
     integer :: iptcl                       !< iptcl index
     integer :: iref                        !< iref index
     integer :: loc                         !< inpl index
-    real    :: prob, sh(2), w              !< probability, shift, and weight
-    real    :: sum
+    real    :: prob, sh(2)                 !< probability, shift
 end type reg_params
 
 type :: regularizer
@@ -33,9 +32,8 @@ type :: regularizer
     complex(dp), allocatable :: regs_even(:,:,:)            !< -"-, reg terms
     real(dp),    allocatable :: regs_denom_odd(:,:,:)       !< -"-, reg denom
     real(dp),    allocatable :: regs_denom_even(:,:,:)      !< -"-, reg denom
-    real,        allocatable :: ref_ptcl_corr(:,:)      !< 2D corr table
-    integer,     allocatable :: ptcl_ref_map(:)         !< hard-alignment tab
-    integer,     allocatable :: prev_ptcl_ref(:)        !< prev ptcl-ref map
+    real,        allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
+    integer,     allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -45,15 +43,15 @@ type :: regularizer
     procedure          :: init_tab
     procedure          :: fill_tab_noshift
     procedure          :: fill_tab_inpl_sto
-    procedure          :: uniform_cluster_sort
+    procedure          :: prev_cavgs
+    procedure          :: compute_cavgs
+    procedure          :: output_reproj_cavgs
+    procedure          :: tab_align
+    procedure          :: uni_align
     procedure          :: nonuni_greedy_align
     procedure          :: nonuni_sto_ptcl_align
     procedure          :: nonuni_sto_ref_align
     procedure          :: find_closest_iref
-    procedure          :: reg_uniform_cluster
-    procedure          :: prev_cavgs
-    procedure          :: form_cavgs
-    procedure          :: regularize_refs
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_test
@@ -76,8 +74,7 @@ contains
         allocate(self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_denom_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
                 &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%prev_ptcl_ref(params_glob%fromp:params_glob%top))
+                &self%regs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
         self%regs_odd        = 0.d0
         self%regs_even       = 0.d0
         self%regs_denom_odd  = 0.d0
@@ -88,12 +85,12 @@ contains
     subroutine init_tab( self )
         class(regularizer), intent(inout) :: self
         integer :: iptcl, iref
-        if( .not.(allocated(self%ref_ptcl_corr)) )then
-            allocate(self%ref_ptcl_corr(params_glob%fromp:params_glob%top,self%nrefs), source=0.)
-            allocate(self%ref_ptcl_tab( self%nrefs,params_glob%fromp:params_glob%top))
-            allocate(self%ptcl_ref_map( params_glob%fromp:params_glob%top))
+        if( .not.(allocated(self%ref_ptcl_cor)) )then
+            allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top), source=0.)
+            allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
+            allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         endif
-        self%ref_ptcl_corr = 0.
+        self%ref_ptcl_cor = 0.
         do iref = 1,self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
                 self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
@@ -101,8 +98,6 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%loc   = 0
                 self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
-                self%ref_ptcl_tab(iref,iptcl)%w     = 0.
-                self%ref_ptcl_tab(iref,iptcl)%sum   = 0.
             enddo
         enddo
     end subroutine init_tab
@@ -120,7 +115,7 @@ contains
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_corr(iptcl,iref)    = max(0., inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
+                self%ref_ptcl_cor(iref,iptcl)     = max(0., inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
             enddo
         enddo
         !$omp end parallel do
@@ -147,13 +142,13 @@ contains
                 irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
-                self%ref_ptcl_corr(iptcl,iref)    = inpl_corrs(irnd)
+                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
             enddo
         enddo
         !$omp end parallel do
     end subroutine fill_tab_inpl_sto
 
-    subroutine form_cavgs( self )
+    subroutine compute_cavgs( self )
         class(regularizer), intent(inout) :: self
         integer     :: iptcl, iref, loc, pind_here
         complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
@@ -181,12 +176,12 @@ contains
                 else
                     self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
                     self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
-                    self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
-                    self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                    self%regs_odd(:,:,iref)        = self%regs_odd(:,:,iref)        + ptcl_ctf_rot
+                    self%regs_denom_odd(:,:,iref)  = self%regs_denom_odd(:,:,iref)  + ctf_rot**2
                 endif
             endif
         enddo
-    end subroutine form_cavgs
+    end subroutine compute_cavgs
 
     subroutine prev_cavgs( self )
         class(regularizer), intent(inout) :: self
@@ -199,8 +194,7 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                 call build_glob%spproj_field%get_ori(iptcl, o_prev)     ! previous ori
-                iref  = build_glob%eulspace%find_closest_proj(o_prev)   ! previous projection direction
-                self%prev_ptcl_ref(iptcl) = iref
+                iref      = build_glob%eulspace%find_closest_proj(o_prev)   ! previous projection direction
                 pind_here = self%pftcc%pinds(iptcl)
                 ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = self%ref_ptcl_tab(iref, iptcl)%loc
@@ -226,7 +220,7 @@ contains
         enddo
     end subroutine prev_cavgs
 
-    subroutine reg_uniform_cluster( self )
+    subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
         real    :: sum_corr
@@ -234,33 +228,29 @@ contains
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl, sum_corr)
             do iptcl = params_glob%fromp, params_glob%top
-                sum_corr = sum(self%ref_ptcl_corr(iptcl,:))
+                sum_corr = sum(self%ref_ptcl_cor(:,iptcl))
                 if( sum_corr < DTINY )then
-                    self%ref_ptcl_tab(:,iptcl)%sum = 1.
-                    self%ref_ptcl_tab(:,iptcl)%w   = 0.
-                    self%ref_ptcl_corr(iptcl,:)    = 0.
+                    self%ref_ptcl_cor(:,iptcl) = 0.
                 else
-                    self%ref_ptcl_tab(:,iptcl)%sum = sum_corr
-                    self%ref_ptcl_tab(:,iptcl)%w   = self%ref_ptcl_corr(iptcl,:)
-                    self%ref_ptcl_corr(iptcl,:)    = self%ref_ptcl_corr(iptcl,:) / sum_corr
+                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr
                 endif
             enddo
             !$omp end parallel do
         endif
-        self%ref_ptcl_corr = self%ref_ptcl_corr / maxval(self%ref_ptcl_corr)
+        self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iref = 1, self%nrefs
             do iptcl = params_glob%fromp,params_glob%top
-                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_corr(iptcl,iref)
+                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
             enddo
         enddo
         !$omp end parallel do
         ! sorted clustering
         self%ptcl_ref_map = 1
         call self%nonuni_sto_ref_align
-    end subroutine reg_uniform_cluster
+    end subroutine tab_align
 
-    subroutine uniform_cluster_sort( self )
+    subroutine uni_align( self )
         class(regularizer), intent(inout) :: self
         integer   :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir
         real      :: max_ir(self%nrefs)
@@ -304,7 +294,7 @@ contains
                 next_ir             = self%find_closest_iref(next_ir, mask_ir)
             endif
         enddo
-    end subroutine uniform_cluster_sort
+    end subroutine uni_align
 
     subroutine nonuni_greedy_align( self )
         class(regularizer), intent(inout) :: self
@@ -317,8 +307,8 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_corr(ip, ir) > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_corr(ip, ir)
+                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_cor(ir,ip)
                         max_ip(ir) = ip
                     endif
                 enddo
@@ -343,7 +333,7 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip,indxarr,temp_corr,rnd_num)
             do ir = 1, self%nrefs
                 indxarr   = (/(ip,ip=params_glob%fromp, params_glob%top)/)
-                temp_corr = self%ref_ptcl_corr(:, ir)
+                temp_corr = self%ref_ptcl_cor(ir,:)
                 do ip = params_glob%fromp, params_glob%top
                     if( .not.(mask_ip(ip)) ) temp_corr(ip) = 0.
                 enddo
@@ -351,7 +341,7 @@ contains
                 call reverse(indxarr)
                 call random_number(rnd_num)
                 ip = indxarr(1 + floor(min(params_glob%reg_nrots, count(mask_ip)) * rnd_num))
-                max_ir(ir) = self%ref_ptcl_corr(ip, ir)
+                max_ir(ir) = self%ref_ptcl_cor(ir,ip)
                 max_ip(ir) = ip
             enddo
             !$omp end parallel do
@@ -374,8 +364,8 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_corr(ip, ir) > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_corr(ip, ir)
+                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) > max_ir(ir) )then
+                        max_ir(ir) = self%ref_ptcl_cor(ir,ip)
                         max_ip(ir) = ip
                     endif
                 enddo
@@ -416,7 +406,7 @@ contains
         end do
     end function find_closest_iref
 
-    subroutine regularize_refs( self )
+    subroutine output_reproj_cavgs( self )
         class(regularizer), intent(inout) :: self
         complex,            allocatable   :: cmat(:,:)
         type(image) :: calc_cavg
@@ -503,7 +493,7 @@ contains
         !$omp end parallel do
         call self%pftcc%memoize_refs
         call calc_cavg%kill
-    end subroutine regularize_refs
+    end subroutine output_reproj_cavgs
     
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
@@ -611,7 +601,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs_odd, self%regs_denom_odd,self%regs_even,self%regs_denom_even,self%prev_ptcl_ref)
-        if(allocated(self%ref_ptcl_corr)) deallocate(self%ref_ptcl_corr,self%ref_ptcl_tab,self%ptcl_ref_map)
+        deallocate(self%regs_odd, self%regs_denom_odd,self%regs_even,self%regs_denom_even)
+        if(allocated(self%ref_ptcl_cor)) deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill
 end module simple_regularizer
