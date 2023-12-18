@@ -181,6 +181,7 @@ real, parameter    :: CTFRES_THRESHOLD_STREAM  = 10.0  !< Stream ctfres rejectio
 real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection threshold
 real, parameter    :: ICEFRAC_THRESHOLD_STREAM = 1.0   !< Stream icefrac rejection threshold
 real, parameter    :: FRAC_SKIP_REJECTION      = 0.8   !< When the number of classes to reject is too high rejection is skipped
+real, parameter    :: PICK_LP_DEFAULT          = 20.   !< Picking resolution limit
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

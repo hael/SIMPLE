@@ -185,7 +185,9 @@ contains
         if( .not. cline%defined('ctfresthreshold') )  call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         if( .not. cline%defined('icefracthreshold') ) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
-        if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('picker')          )  call cline%set('picker',         'old')
+        if( .not. cline%defined('lp_pick')         )  call cline%set('lp_pick',         PICK_LP_DEFAULT)
+        if( .not. cline%defined('pick_roi')        )  call cline%set('pick_roi',        'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       )  call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  )  call cline%set('extractfrommov',  'no')
@@ -720,9 +722,10 @@ contains
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
         if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT )
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
+        if( .not. cline%defined('pick_roi')        )  call cline%set('pick_roi',       'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
@@ -1441,6 +1444,9 @@ contains
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',           2.)
         if( .not. cline%defined('thres')     ) call cline%set('thres',         24.)
+        if( .not. cline%defined('pick_roi')  ) call cline%set('pick_roi',     'no')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',PICK_LP_DEFAULT)
+        if( .not. cline%defined('picker')    ) call cline%set('picker',      'old')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
@@ -1773,7 +1779,7 @@ contains
         type(ptcl_extractor)                    :: extractor
         type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
-        type(image)                             :: micrograph
+        type(image)                             :: micrograph, micrograph_pad
         type(ori)                               :: o_mic, o_tmp
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
@@ -1786,7 +1792,7 @@ contains
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         character(len=STDLEN)     :: ext
         real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
-        integer                   :: ldim(3), lfoo(3), fromto(2)
+        integer                   :: ldim(3), lfoo(3), fromto(2), ldim_pd(3)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, box_first, i, iptcl_g
         integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
         logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
@@ -1901,6 +1907,15 @@ contains
             call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
+            if( trim(params%pick_roi).eq.'yes' )then
+                ! under testing
+                ldim_pd(1:2) = find_larger_magic_box(ldim(1:2)+1)
+                if( minval(ldim_pd(1:2)-ldim(1:2)) < 16 )then
+                    ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
+                endif
+                ldim_pd(3) = 1
+                call micrograph_pad%new(ldim_pd, params%smpd)
+            endif
             if( trim(params%extractfrommov).ne.'yes' ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
             box_first = 0
             ! main loop
@@ -1986,6 +2001,14 @@ contains
                 else
                     ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
+                    if( trim(params%pick_roi).eq.'yes' )then
+                        ! under testing
+                        call micrograph%pad_mirr(micrograph_pad)
+                        call micrograph_pad%fft
+                        call micrograph_pad%bp(real(minval(ldim_pd(1:2)))*params%smpd/8.,0.)
+                        call micrograph_pad%ifft
+                        call micrograph_pad%clip(micrograph)
+                    endif
                     ! phase-flip micrograph
                     if( cline%defined('ctf') )then
                         if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
@@ -2076,6 +2099,7 @@ contains
         ! end gracefully
         call extractor%kill
         call micrograph%kill
+        call micrograph_pad%kill
         call o_mic%kill
         call o_tmp%kill
         if( prog_write ) call progressfile_update(1.0)

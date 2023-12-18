@@ -368,9 +368,10 @@ contains
         ! total variation distance
         if( L_CLS_REJECT_DEV )then
             call self%spproj%os_cls2D%class_moments_rejection(moments_mask)
+            call self%spproj%os_cls2D%class_corres_rejection(ndev, corres_mask)
         endif
         ! correlation and resolution
-        call self%spproj%os_cls2D%class_corres_rejection(ndev, corres_mask)
+        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, corres_mask, ndev)
         ! overall class rejection
         cls_mask      = moments_mask .and. corres_mask
         ncls_rejected = count(.not.cls_mask)

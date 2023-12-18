@@ -356,7 +356,7 @@ type :: parameters
     real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
     real    :: lp_ctf_estimate=LP_CTF_ESTIMATE !< low-pass limit 4 ctf_estimate(in A)
     real    :: lpstart_nonuni= 30. !< optimization(search)-based low-pass limit lower bound
-    real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
+    real    :: lp_pick=PICK_LP_DEFAULT !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
