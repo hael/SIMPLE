@@ -434,8 +434,7 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
-        real    :: crop_factor, smpd_here
-        integer :: ldim_here(3), ifoo
+        real    :: crop_factor
         logical :: has_been_searched
         do_center   = .true.
         ! centering
