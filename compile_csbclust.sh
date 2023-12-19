@@ -1,6 +1,6 @@
 #!/bin/bash
 module purge
-module load cmake/3.13.1
+module load cmake/3.25.2
 echo "Compiling SIMPLE with gcc11.2.0"
 module load gcc/11.2.0
 rm -r build_gcc11.2.0
