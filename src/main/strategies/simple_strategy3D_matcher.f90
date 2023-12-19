@@ -502,7 +502,7 @@ contains
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds_here(nptcls_here)
         integer :: iptcl_batch, iptcl, ithr
-        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
+        call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
         if( params_glob%l_cartesian ) call cftcc%reallocate_ptcls(nptcls_here, pinds_here)

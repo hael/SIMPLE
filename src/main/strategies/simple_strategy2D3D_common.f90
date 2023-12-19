@@ -618,7 +618,7 @@ contains
         ! gridding batch loop
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-            call read_imgbatch( nptcls2update, pinds, batchlims)
+            call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
             !$omp parallel do default(shared) private(i,iptcl,ibatch,sdev_noise) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)

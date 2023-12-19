@@ -1,11 +1,12 @@
 module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
-use simple_builder,    only: build_glob
-use simple_parameters, only: params_glob
-use simple_ctf,        only: ctf
-use simple_image,      only: image, image_ptr
-use simple_stack_io,   only: stack_io
+use simple_builder,           only: build_glob
+use simple_parameters,        only: params_glob
+use simple_ctf,               only: ctf
+use simple_image,             only: image, image_ptr
+use simple_stack_io,          only: stack_io
+use simple_discrete_stack_io, only: dstack_io
 use simple_euclid_sigma2
 use simple_fsc
 implicit none
@@ -345,7 +346,7 @@ contains
         integer, parameter            :: READBUFFSZ = 1024
         complex, parameter            :: zero = cmplx(0.,0.)
         type(kbinterpol)              :: kbwin
-        type(stack_io)                :: stkio_r
+        type(dstack_io)               :: dstkio_r
         type(image_ptr)               :: pcmat(nthr_glob), prhomat(nthr_glob)
         type(image),      allocatable :: cgrid_imgs(:), read_imgs(:), cgrid_imgs_crop(:)
         character(len=:), allocatable :: stk_fname
@@ -407,6 +408,7 @@ contains
         allocate(tvals(fdims_crop(1),fdims_crop(2),READBUFFSZ),cmats(fdims_crop(1),fdims_crop(2),READBUFFSZ),&
         &rhos(fdims_crop(1),fdims_crop(2),READBUFFSZ))
         interp_shlim = nyq_crop + 1
+        call dstkio_r%new(smpd, ldim(1))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -415,8 +417,6 @@ contains
             top    = nint(build_glob%spproj%os_stk%get(istk,'top'))
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
-            ! open buffer
-            call stkio_r%open(stk_fname, smpd, 'read', bufsz=min(nptcls_in_stk,READBUFFSZ))
             ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
@@ -435,7 +435,7 @@ contains
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
                     nptcls_eff = nptcls_eff + 1
-                    call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
+                    call dstkio_r%read(stk_fname, precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
                 enddo
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
@@ -660,10 +660,9 @@ contains
                     !$omp end parallel
                 endif
             enddo ! end read batches loop
-            ! close stack
-            call stkio_r%close
         enddo
         ! Cleanup
+        call dstkio_r%kill
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
             call cgrid_imgs(i)%kill
