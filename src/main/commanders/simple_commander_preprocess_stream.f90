@@ -284,10 +284,10 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I5)')                         '>>> # MOVIES PROCESSED & IMPORTED:     ',n_imported
-                if( l_pick ) write(logfhandle,'(A,I8)')            '>>> # PARTICLES EXTRACTED:          ',nptcls_glob
-                write(logfhandle,'(A,I3,A1,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
-                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)') '>>> # FAILED JOBS                :     ',n_failed_jobs
+                write(logfhandle,'(A,I5)')                         '>>> # MOVIES PROCESSED & IMPORTED       : ',n_imported
+                if( l_pick ) write(logfhandle,'(A,I8)')            '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                write(logfhandle,'(A,I3,A1,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/',params%nparts
+                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
@@ -397,7 +397,6 @@ contains
             subroutine write_migrographs_starfile
                 integer(timer_int_kind)      :: ms0
                 real(timer_int_kind)         :: ms_assign, ms_export
-                
                 if (spproj%os_mic%get_noris() > 0) then
                     if( .not. l_cluster2D ) then
                         if( DEBUG_HERE ) ms0 = tic()
@@ -415,7 +414,6 @@ contains
                     endif
                     if(allocated(starproj%tiltinfo)) deallocate(starproj%tiltinfo)
                 end if
-                
             end subroutine write_migrographs_starfile
 
             subroutine write_project()

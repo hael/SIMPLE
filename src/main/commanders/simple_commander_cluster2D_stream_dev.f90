@@ -999,12 +999,13 @@ contains
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
         type(sp_project)                       :: spproj
-        integer,                   allocatable :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
+        integer,                   allocatable :: min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
+        integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, rejection_fhandle, ok
-        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
+        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
         if( .not.pool_available )return
         if( L_BENCH ) t_tot  = tic()
@@ -1055,18 +1056,12 @@ contains
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
-        allocate(prev_eo_pops(ncls_glob,2),source=0)
         if( nptcls_old > params_glob%ncls_start*params_glob%nptcls_per_cls )then
-            allocate(stk_order(nstks_tot))
-            do istk = 1,nstks_tot
-                stk_order(istk) = istk
-            enddo
+            allocate(stk_order(nstks_tot), source=(/(istk,istk=1,nstks_tot)/))
             random_generator = ran_tabu(nstks_tot)
             call random_generator%shuffle(stk_order)
             nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
             nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
-            !$omp parallel do schedule(static) proc_bind(close) private(i,istk)&
-            !$omp default(shared) reduction(+:nptcls_sel,nptcls2update)
             do i = 1,nstks_tot
                 istk = stk_order(i)
                 if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
@@ -1074,7 +1069,6 @@ contains
                 nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
                 pool_stacks_mask(istk) = .true.
             enddo
-            !$omp end parallel do
             call random_generator%kill
         else
             nptcls2update    = nptcls_tot
@@ -1085,6 +1079,7 @@ contains
         ! transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
         call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
+        allocate(prev_eo_pops(ncls_glob,2),prev_eo_pops_thread(ncls_glob,2),source=0)
         i     = 0
         jptcl = 0
         do istk = 1,nstks_tot
@@ -1095,19 +1090,27 @@ contains
                 i = i + 1 ! stack index in spproj
                 call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
                 call spproj%os_stk%set(i, 'fromp', real(jptcl+1))
+                !$omp parallel do private(iptcl,jjptcl) proc_bind(close) default(shared)
                 do iptcl = fromp,top
-                    jptcl = jptcl+1
-                    call spproj%os_ptcl2D%transfer_ori(jptcl, pool_proj%os_ptcl2D, iptcl)
-                    call spproj%os_ptcl2D%set_stkind(jptcl, i)
+                    jjptcl = jptcl+iptcl-fromp+1
+                    call spproj%os_ptcl2D%transfer_ori(jjptcl, pool_proj%os_ptcl2D, iptcl)
+                    call spproj%os_ptcl2D%set_stkind(jjptcl, i)
                 enddo
+                !$omp end parallel do
+                jptcl = jptcl + (top-fromp+1)
                 call spproj%os_stk%set(i, 'top', real(jptcl))
             else
                 ! keeps track of skipped particles
+                prev_eo_pops_thread = 0
+                !$omp parallel do private(iptcl,icls,eo) proc_bind(close) default(shared)&
+                !$omp reduction(+:prev_eo_pops_thread)
                 do iptcl = fromp,top
                     icls = pool_proj%os_ptcl2D%get_class(iptcl)
                     eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
-                    prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
+                    prev_eo_pops_thread(icls,eo) = prev_eo_pops_thread(icls,eo) + 1
                 enddo
+                !$omp end parallel do
+                prev_eo_pops = prev_eo_pops + prev_eo_pops_thread
             endif
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
