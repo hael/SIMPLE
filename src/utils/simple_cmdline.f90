@@ -517,8 +517,7 @@ contains
         character(len=*), optional, intent(in)    :: tag
         integer :: i, parameters_fhandle, ok
         if( file_exists(trim(adjustl(filename)))) call del_file(trim(adjustl(filename)))
-        call fopen(parameters_fhandle, file='.parameters', status='new', iostat=ok)
-        
+        call fopen(parameters_fhandle, file=trim(adjustl(filename)), status='new', iostat=ok)
         if( present(tag) )then
             do i=1,self%argcnt
                 if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
