@@ -735,9 +735,9 @@ contains
         do ik = self%kfromto(1),self%kfromto(2)
             sumsqk                = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
             self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
+            if( l_sigma ) self%kwsqsums_ptcls(ik,i) =                         sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
             sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
-            if( l_sigma ) self%kwsqsums_ptcls(ik,i) =                         sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
             if( l_sigma ) self%wsqsums_ptcls(i)     = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
         enddo
     end subroutine memoize_sqsum_ptcl
@@ -1521,7 +1521,7 @@ contains
         even  = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
+            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1543,7 +1543,7 @@ contains
             ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF), fftw normalized
             self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*self%rvec1(ithr)%r(1:self%nrots))
             ! exp( -k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )  / SUM(exp( -k/sig2 x |X|2) )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * dexp( -(w * sumsqptcl + self%drvec(ithr)%r) / self%kwsqsums_ptcls(k,i))
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * dexp( -(abs(dsqrt(w * sumsqptcl + self%drvec(ithr)%r) - 1._dp ) + 1._dp) )
         end do
         prob = real( self%heap_vars(ithr)%kcorrs / real(self%nk,dp) )
     end subroutine gencorrs_prob
@@ -1561,7 +1561,7 @@ contains
         even  = self%iseven(i)
         self%heap_vars(ithr)%kcorrs = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
+            w         = 1._dp / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
             ! FT(CTF2) x FT(REF2)*)
             if( even )then
@@ -1583,7 +1583,7 @@ contains
             ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
             self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*self%rvec1(ithr)%r(1:self%nrots))
             ! exp( -k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )  / SUM(exp( -k/sig2 x |X|2) )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * dexp( -(w * sumsqptcl + self%drvec(ithr)%r) / self%kwsqsums_ptcls(k,i) )
+            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + real(k,dp) * dexp( -(abs(dsqrt(w * sumsqptcl + self%drvec(ithr)%r) - 1._dp) + 1._dp) )
         end do
         prob = real( self%heap_vars(ithr)%kcorrs / real(self%nk,dp) )
     end subroutine gencorrs_shifted_prob
@@ -1676,8 +1676,8 @@ contains
         pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
         gencorr_prob_for_rot_8 = 0.d0
         do k = self%kfromto(1),self%kfromto(2)
-            diffsq = (real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
-            gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 + real(k,dp) * dexp(-diffsq / self%kwsqsums_ptcls(k,i))
+            diffsq = (1._dp / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp))
+            gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 + real(k,dp) * dexp(-(abs(dsqrt(diffsq) - 1._dp) + 1._dp))
         end do
         gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 / real(self%nk,dp)
     end function gencorr_prob_for_rot_8
@@ -1846,19 +1846,19 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
-            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i))
+            w         = 0.5_dp / real(self%sigma2_noise(k,iptcl))
+            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i)) / dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
             f         = f + expdiffsq
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-            grad(1)   = grad(1) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)
+            grad(1)   = grad(1) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)/dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
         end do
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl))
-            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i))
+            w         = 0.5 / real(self%sigma2_noise(k,iptcl))
+            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i)) / dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
             gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-            grad(2)   = grad(2) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)
+            grad(2)   = grad(2) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)/dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
         end do
         f    = f    / real(self%nk,dp)
         grad = grad / real(self%nk,dp)
