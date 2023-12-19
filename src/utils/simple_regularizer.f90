@@ -229,7 +229,7 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr)
             do iptcl = params_glob%fromp, params_glob%top
                 sum_corr = sum(self%ref_ptcl_cor(:,iptcl))
-                if( sum_corr < DTINY )then
+                if( sum_corr < TINY )then
                     self%ref_ptcl_cor(:,iptcl) = 0.
                 else
                     self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr
