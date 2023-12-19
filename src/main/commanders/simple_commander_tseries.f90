@@ -1638,7 +1638,7 @@ contains
                 enddo
             enddo
             ! Images prep
-            call read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
+            call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz])
             !$omp parallel do default(shared) private(i,iptcl,x,y,sdev_noise) proc_bind(close) schedule(static)
             do i = 1, batchsz
                 iptcl = pinds(batch_start+i-1)

@@ -54,12 +54,11 @@ contains
         character(len=*), intent(in)    :: stkname
         integer,          intent(in)    :: ind_in_stk
         class(image),     intent(inout) :: img
-        integer :: ithr
-        ! mlti-threaded
+        integer, parameter :: ithr = 1
+        ! multi-threaded
         ! ithr = omp_get_thread_num() + 1
         ! if( trim(self%stknames(ithr)).ne.trim(stkname) ) call self%open(stkname, ithr)
         ! single-threaded
-        ithr = 1
         if( trim(self%stknames(ithr)).ne.trim(stkname) ) call self%open(stkname)
         if( .not. self%l_open(ithr) ) THROW_HARD('stack not opened')
         if( ind_in_stk < 1 .or. ind_in_stk > self%nptcls(ithr) )then

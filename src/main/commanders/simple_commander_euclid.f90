@@ -119,7 +119,7 @@ contains
     end subroutine exec_calc_pspec_distr
 
     subroutine exec_calc_pspec( self, cline )
-        use simple_strategy2D3D_common, only: prepimgbatch, read_imgbatch, killimgbatch
+        use simple_strategy2D3D_common, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
         class(calc_pspec_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
@@ -160,7 +160,7 @@ contains
         do i = 1,nptcls_part_sel,batchsz_max
             batchlims = [i, min(i+batchsz_max-1,nptcls_part_sel)]
             nbatch    = batchlims(2) - batchlims(1) + 1
-            call read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
+            call discrete_read_imgbatch(nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
             !$omp parallel do default(shared) private(iptcl,imatch,pspec)&
             !$omp schedule(static) proc_bind(close)
             do imatch = 1,nbatch

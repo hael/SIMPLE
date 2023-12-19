@@ -370,11 +370,11 @@ contains
 
     !>  \brief  prepares batch particle images for alignment
     subroutine build_pftcc_batch_particles( nptcls_here, pinds )
-        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         integer :: iptcl_batch, iptcl, ithr
-        call read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
+        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
