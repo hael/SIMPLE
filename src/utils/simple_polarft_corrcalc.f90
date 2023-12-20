@@ -1545,7 +1545,7 @@ contains
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
-        prob = real( dexp( -abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp) + 1._dp ) )
+        prob = real( abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp) )
     end subroutine gencorrs_prob
 
     subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, prob)
@@ -1585,7 +1585,7 @@ contains
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
-        prob = real( dexp( -abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp) + 1._dp ) )
+        prob = abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp)
     end subroutine gencorrs_shifted_prob
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot, pfts_refs)
@@ -1678,7 +1678,7 @@ contains
             gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 +&
                 &(real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp)) / (2.d0*real(self%pftsz,dp))
         end do
-        gencorr_prob_for_rot_8 = dexp( -abs(dsqrt(gencorr_prob_for_rot_8) - 1._dp) + 1._dp )
+        gencorr_prob_for_rot_8 = abs(dsqrt(gencorr_prob_for_rot_8) - 1._dp)
     end function gencorr_prob_for_rot_8
 
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )

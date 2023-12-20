@@ -47,11 +47,7 @@ type :: regularizer
     procedure          :: compute_cavgs
     procedure          :: output_reproj_cavgs
     procedure          :: tab_align
-    procedure          :: uni_align
-    procedure          :: nonuni_greedy_align
-    procedure          :: nonuni_sto_ptcl_align
     procedure          :: nonuni_sto_ref_align
-    procedure          :: find_closest_iref
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
@@ -114,8 +110,8 @@ contains
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc = maxloc(inpl_corrs, dim=1)
-                self%ref_ptcl_cor(iref,iptcl)     = max(0., inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc))
+                self%ref_ptcl_tab(iref,iptcl)%loc = minloc(inpl_corrs, dim=1)
+                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(self%ref_ptcl_tab(iref,iptcl)%loc)
             enddo
         enddo
         !$omp end parallel do
@@ -133,11 +129,8 @@ contains
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                where( inpl_corrs < TINY ) inpl_corrs = 0.
                 indxarr = (/(j,j=1,self%nrots)/)
                 call hpsort(inpl_corrs, indxarr)
-                call reverse(indxarr)
-                call reverse(inpl_corrs)
                 call random_number(rnd_num)
                 irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
@@ -250,160 +243,34 @@ contains
         call self%nonuni_sto_ref_align
     end subroutine tab_align
 
-    subroutine uni_align( self )
-        class(regularizer), intent(inout) :: self
-        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), next_ir
-        real    :: max_ir(self%nrefs)
-        logical :: mask_ir(self%nrefs), mask_ip(params_glob%fromp:params_glob%top)
-        mask_ir = .false.
-        mask_ip = .true.
-        do while( any(mask_ip) )
-            if( .not.(any(mask_ir)) )then
-                mask_ir = .true.
-                max_ir  = -1.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
-                do ir = 1, self%nrefs
-                    if( mask_ir(ir) )then
-                        do ip = params_glob%fromp, params_glob%top
-                            if( mask_ip(ip) .and. self%ref_ptcl_tab(ir, ip)%prob > max_ir(ir) )then
-                                max_ir(ir) = self%ref_ptcl_tab(ir, ip)%prob
-                                max_ip(ir) = ip
-                            endif
-                        enddo
-                    endif
-                enddo
-                !$omp end parallel do
-                max_ind_ir = maxloc(max_ir, dim=1, mask=mask_ir)
-                max_ind_ip = max_ip(max_ind_ir)
-                self%ptcl_ref_map(max_ind_ip) = max_ind_ir
-                mask_ip(max_ind_ip) = .false.
-                mask_ir(max_ind_ir) = .false.
-                next_ir = self%find_closest_iref(max_ind_ir, mask_ir)
-            else
-                max_ir(next_ir) = -1.
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_tab(next_ir, ip)%prob > max_ir(next_ir) )then
-                        max_ir(next_ir) = self%ref_ptcl_tab(next_ir, ip)%prob
-                        max_ind_ip = ip
-                    endif
-                enddo
-                self%ptcl_ref_map(max_ind_ip) = next_ir
-                mask_ip(max_ind_ip) = .false.
-                mask_ir(next_ir)    = .false.
-                next_ir             = self%find_closest_iref(next_ir, mask_ir)
-            endif
-        enddo
-    end subroutine uni_align
-
-    subroutine nonuni_greedy_align( self )
-        class(regularizer), intent(inout) :: self
-        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs)
-        real    :: max_ir(self%nrefs)
-        logical :: mask_ip(params_glob%fromp:params_glob%top)
-        mask_ip = .true.
-        do while( any(mask_ip) )
-            max_ir = -1.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
-            do ir = 1, self%nrefs
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_cor(ir,ip)
-                        max_ip(ir) = ip
-                    endif
-                enddo
-            enddo
-            !$omp end parallel do
-            max_ind_ir = maxloc(max_ir, dim=1)
-            max_ind_ip = max_ip(max_ind_ir)
-            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
-            mask_ip(max_ind_ip) = .false.
-        enddo
-    end subroutine nonuni_greedy_align
-
-    subroutine nonuni_sto_ptcl_align( self )
-        class(regularizer), intent(inout) :: self
-        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(params_glob%fromp:params_glob%top)
-        real    :: max_ir(self%nrefs), temp_corr(params_glob%fromp:params_glob%top), rnd_num
-        logical :: mask_ip(params_glob%fromp:params_glob%top)
-        mask_ip = .true.
-        call seed_rnd
-        do while( any(mask_ip) )
-            max_ir = -1.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip,indxarr,temp_corr,rnd_num)
-            do ir = 1, self%nrefs
-                indxarr   = (/(ip,ip=params_glob%fromp, params_glob%top)/)
-                temp_corr = self%ref_ptcl_cor(ir,:)
-                do ip = params_glob%fromp, params_glob%top
-                    if( .not.(mask_ip(ip)) ) temp_corr(ip) = 0.
-                enddo
-                call hpsort(temp_corr, indxarr)
-                call reverse(indxarr)
-                call random_number(rnd_num)
-                ip = indxarr(1 + floor(min(params_glob%reg_nrots, count(mask_ip)) * rnd_num))
-                max_ir(ir) = self%ref_ptcl_cor(ir,ip)
-                max_ip(ir) = ip
-            enddo
-            !$omp end parallel do
-            max_ind_ir = maxloc(max_ir, dim=1)
-            max_ind_ip = max_ip(max_ind_ir)
-            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
-            mask_ip(max_ind_ip) = .false.
-        enddo
-    end subroutine nonuni_sto_ptcl_align
-
     subroutine nonuni_sto_ref_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: ir, ip, max_ind_ir, max_ind_ip, max_ip(self%nrefs), indxarr(self%nrefs)
-        real    :: max_ir(self%nrefs), rnd_num
+        integer :: ir, ip, min_ind_ir, min_ind_ip, min_ip(self%nrefs), indxarr(self%nrefs)
+        real    :: min_ir(self%nrefs), rnd_num
         logical :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
         call seed_rnd
         do while( any(mask_ip) )
-            max_ir = -1.
+            min_ir = huge(rnd_num)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
             do ir = 1, self%nrefs
                 do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) > max_ir(ir) )then
-                        max_ir(ir) = self%ref_ptcl_cor(ir,ip)
-                        max_ip(ir) = ip
+                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) < min_ir(ir) )then
+                        min_ir(ir) = self%ref_ptcl_cor(ir,ip)
+                        min_ip(ir) = ip
                     endif
                 enddo
             enddo
             !$omp end parallel do
             indxarr = (/(ir,ir=1,self%nrefs)/)
-            call hpsort(max_ir, indxarr)
-            call reverse(indxarr)
+            call hpsort(min_ir, indxarr)
             call random_number(rnd_num)
-            max_ind_ir = indxarr(1 + floor(params_glob%reg_nrots * rnd_num))
-            max_ind_ip = max_ip(max_ind_ir)
-            self%ptcl_ref_map(max_ind_ip) = max_ind_ir
-            mask_ip(max_ind_ip) = .false.
+            min_ind_ir = indxarr(1 + floor(params_glob%reg_nrots * rnd_num))
+            min_ind_ip = min_ip(min_ind_ir)
+            self%ptcl_ref_map(min_ind_ip) = min_ind_ir
+            mask_ip(min_ind_ip) = .false.
         enddo
     end subroutine nonuni_sto_ref_align
-
-    function find_closest_iref( self, iref, mask_ir ) result( closest )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: iref
-        logical,            intent(in)    :: mask_ir(self%nrefs)
-        real      :: dist, min_dist
-        integer   :: closest, i
-        type(ori) :: oi, oiref
-        call build_glob%eulspace%get_ori(iref, oiref)
-        call oiref%e3set(0.)
-        min_dist = huge(dist)
-        closest  = iref
-        do i = 1, self%nrefs
-            if( i /= iref .and. mask_ir(i) )then
-                call build_glob%eulspace%get_ori(i, oi)
-                call oi%e3set(0.)
-                dist = oi.euldist.oiref
-                if( dist < min_dist )then
-                    min_dist = dist
-                    closest  = i
-                endif
-            endif
-        end do
-    end function find_closest_iref
 
     subroutine output_reproj_cavgs( self )
         class(regularizer), intent(inout) :: self
