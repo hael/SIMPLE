@@ -53,7 +53,7 @@ contains
                     call random_number(rnd_num)
                     irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
                     loc  = inpl_inds(irnd)
-                    ref_corrs(iref) = inpl_corrs(loc)
+                    ref_corrs(iref) = inpl_corrs(irnd)
                 endif
             enddo
             ref_inds = (/(iref,iref=1,self%s%nrefs)/)
@@ -62,7 +62,7 @@ contains
             irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
             iref = ref_inds(irnd)
             self%s%nrefs_eval = self%s%nrefs
-            call assign_ori(self%s, iref, loc, ref_corrs(ref_inds(irnd)))
+            call assign_ori(self%s, iref, loc, ref_corrs(irnd))
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
