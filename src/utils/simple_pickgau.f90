@@ -11,8 +11,8 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG   = 5., BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
-integer, parameter :: OFFSET   = 3 , OFFSET_UB   = 2 * OFFSET, MAXNREFS = 100
+real,    parameter :: GAUSIG = 5., BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
+integer, parameter :: OFFSET_DEFAULT = 3 , MAXNREFS = 100
 logical, parameter :: L_WRITE  = .false.
 
 ! class variables
@@ -25,12 +25,12 @@ type pickgau
     private
     real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
-    integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0
+    integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     type(image)              :: mic_shrink, gauref
     type(image), allocatable :: boximgs(:), boxrefs(:)
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
-    real,        allocatable :: box_scores(:,:)
+    real,        allocatable :: box_scores(:,:), box_scores_mem(:,:)
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
 contains
@@ -49,6 +49,7 @@ contains
     procedure, private :: center_filter
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
+    procedure          :: peak_vs_nonpeak_stats
     procedure          :: get_positions
     procedure          :: refine_upscaled
     procedure          :: kill
@@ -67,32 +68,35 @@ contains
         call mic_raw%read(micname)
     end subroutine read_mic_raw
 
-    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, ndev )
-        class(pickgau),   intent(inout) :: self
-        character(len=*), intent(in)    :: pcontrast
-        real,             intent(in)    :: smpd_shrink, moldiam
-        real, optional,   intent(in)    :: moldiam_max
-        real, optional,   intent(in)    :: ndev    !< # std devs for outlier detection
-        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, ndev )
+    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev )
+        class(pickgau),    intent(inout) :: self
+        character(len=*),  intent(in)    :: pcontrast
+        real,              intent(in)    :: smpd_shrink, moldiam
+        real,    optional, intent(in)    :: moldiam_max
+        integer, optional, intent(in)    :: offset
+        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev )
     end subroutine new_gaupicker
 
-    subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, ndev )
-        class(pickgau),   intent(inout) :: self
-        character(len=*), intent(in)    :: pcontrast
-        real,             intent(in)    :: smpd_shrink, mskdiam
-        class(image),     intent(inout) :: imgs(:)
-        real, optional,   intent(in)    :: ndev    !< # std devs for outlier detection
-        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, mskdiam, ndev )
+    subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, offset, ndev )
+        class(pickgau),    intent(inout) :: self
+        character(len=*),  intent(in)    :: pcontrast
+        real,              intent(in)    :: smpd_shrink, mskdiam
+        class(image),      intent(inout) :: imgs(:)
+        integer, optional, intent(in)    :: offset
+        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, mskdiam=mskdiam, offset=offset, ndev=ndev )
         call self%set_refs( imgs, mskdiam )
         call self%setup_iterators
     end subroutine new_refpicker
 
-    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, mskdiam, ndev )
-        class(pickgau),   intent(inout) :: self
-        character(len=*), intent(in)    :: pcontrast
-        real,             intent(in)    :: smpd_shrink, moldiam, moldiam_max
-        real, optional,   intent(in)    :: mskdiam !< reference-based picking if present
-        real, optional,   intent(in)    :: ndev    !< # std devs for outlier detection
+    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, mskdiam, offset, ndev )
+        class(pickgau),    intent(inout) :: self
+        character(len=*),  intent(in)    :: pcontrast
+        real,              intent(in)    :: smpd_shrink, moldiam, moldiam_max
+        real,    optional, intent(in)    :: mskdiam !< reference-based picking if present
+        integer, optional, intent(in)    :: offset
+        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         character(len=:), allocatable   :: numstr
         integer     :: ldim_pd(3), box_max
         type(image) :: mic_pad, gauimg
@@ -149,6 +153,10 @@ contains
         ! set ndev
         self%ndev = NDEV_DEFAULT
         if( present(ndev) ) self%ndev = ndev
+        ! set offset
+        self%offset = OFFSET_DEFAULT
+        if( present(offset) ) self%offset = offset
+        self%offset_ub = self%offset * 2
         ! shrink micrograph
         call self%mic_shrink%new(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
@@ -286,10 +294,10 @@ contains
         allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         self%nboxes    = 0
         self%nx_offset = 0
-        do xind = 0,self%nx,OFFSET
+        do xind = 0,self%nx,self%offset
             self%nx_offset = self%nx_offset + 1
             self%ny_offset = 0
-            do yind = 0,self%ny,OFFSET
+            do yind = 0,self%ny,self%offset
                 self%nboxes    = self%nboxes    + 1
                 self%ny_offset = self%ny_offset + 1
                 if( self%l_mic_mask(xind+1,yind+1) ) self%nboxes = self%nboxes + 1
@@ -297,8 +305,8 @@ contains
         end do
         ! count # boxes, upper bound
         self%nboxes_ub = 0
-        do xind = 0,self%nx,OFFSET_UB
-            do yind = 0,self%ny,OFFSET_UB
+        do xind = 0,self%nx,self%offset_ub
+            do yind = 0,self%ny,self%offset_ub
                 if( self%l_mic_mask(xind+1,yind+1) ) self%nboxes_ub = self%nboxes_ub + 1
             end do
         end do
@@ -309,10 +317,10 @@ contains
         ! calculate total # boxes
         self%nboxes    = 0
         self%nx_offset = 0
-        do xind = 0,self%nx,OFFSET
+        do xind = 0,self%nx,self%offset
             self%nx_offset = self%nx_offset + 1
             self%ny_offset = 0
-            do yind = 0,self%ny,OFFSET
+            do yind = 0,self%ny,self%offset
                 self%ny_offset = self%ny_offset + 1
                 if( self%l_mic_mask(xind+1,yind+1) )then
                     self%nboxes = self%nboxes + 1
@@ -385,6 +393,10 @@ contains
             end do
         end do
         !$omp end parallel do
+        ! save a box_score copy in memory
+        if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
+        allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores) 
+        ! destruct heap
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
@@ -436,6 +448,13 @@ contains
         else
             THROW_HARD('Instance not setup for reference-based picking')
         endif
+        ! save a box_score copy in memory
+        if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
+        allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores)
+        ! destruct heap
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
     end subroutine refmatch_boximgs
 
     subroutine detect_peaks( self )
@@ -470,16 +489,16 @@ contains
                 if( self%box_scores(ioff,joff) >= self%t )then
                     scores_cen(ioff,joff) = self%boximgs(self%inds_offset(ioff,joff))%box_cen_arg(boximgs_heap(ithr))
                 else
-                    scores_cen(ioff,joff) = real(OFFSET) + 1.
+                    scores_cen(ioff,joff) = real(self%offset) + 1.
                 endif
             end do
         end do
         !$omp end parallel do
-        npeaks = count(scores_cen <= real(OFFSET))
+        npeaks = count(scores_cen <= real(self%offset))
         write(logfhandle,'(a,1x,I5)') '# positions before   center filtering: ', count(self%box_scores >= self%t)
         write(logfhandle,'(a,1x,I5)') '# positions after    center filtering: ', npeaks
         ! modify box_scores and update npeaks
-        where( scores_cen <= real(OFFSET) )
+        where( scores_cen <= real(self%offset) )
             ! there's a peak
         elsewhere
             self%box_scores = -1.
@@ -559,7 +578,7 @@ contains
                 pos  = self%positions(self%inds_offset(ioff,joff),:)
                 if( self%box_scores(ioff,joff) >= self%t )then
                     call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-                    loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(OFFSET)
+                    loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
                 else
                     loc_sdevs(ioff,joff) = -1.
                 endif
@@ -590,6 +609,56 @@ contains
             call boximgs_heap(ithr)%kill
         end do
     end subroutine remove_outliers
+
+    subroutine peak_vs_nonpeak_stats( self )
+        class(pickgau), intent(inout) :: self
+        real,    allocatable :: scores_peak(:), scores_nonpeak(:)
+        integer, allocatable :: pos(:,:)
+        real    :: a_peak, s_peak, a_nonpeak, s_nonpeak, smd, ksstat, prob, pixrad_shrink, rpos(2)
+        integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset
+        logical :: mask_backgr(0:self%nx,0:self%ny), mask_backgr_offset(self%nx_offset,self%ny_offset)
+        ! prepare background mask
+        call self%get_positions(pos)
+        mask_backgr   = .true. 
+        pixrad_shrink = (self%maxdiam / 2.) / self%smpd_shrink
+        do ibox = 1,self%nboxes
+            rpos      = real(pos(ibox,:))
+            xrange(1) = max(0,       nint(rpos(1) - pixrad_shrink))
+            xrange(2) = min(self%nx, nint(rpos(1) + pixrad_shrink))
+            yrange(1) = max(0,       nint(rpos(2) - pixrad_shrink))
+            yrange(2) = min(self%ny, nint(rpos(2) + pixrad_shrink))
+            do xind = xrange(1),xrange(2)
+                do yind = yrange(1),yrange(2)
+                    mask_backgr(xind,yind) = .false.
+                end do
+            end do
+        end do
+        ! translate background mask to offset coordinates
+        mask_backgr_offset = .false.
+        nx_offset = 0
+        do xind = 0,self%nx,self%offset
+            nx_offset = nx_offset + 1
+            ny_offset = 0
+            do yind = 0,self%ny,self%offset
+                ny_offset = ny_offset + 1
+                if( mask_backgr(xind,yind) .and. self%box_scores(nx_offset,ny_offset) > -1. + TINY )then
+                    mask_backgr_offset(nx_offset,ny_offset) = .true.
+                endif
+            end do
+        end do
+        ! extract scores
+        scores_peak    = pack(self%box_scores_mem, mask=self%box_scores >= self%t)
+        scores_nonpeak = pack(self%box_scores_mem, mask=mask_backgr_offset)
+        ! calc stats
+        call avg_sdev(scores_peak,    a_peak,    s_peak)
+        call avg_sdev(scores_nonpeak, a_nonpeak, s_nonpeak)
+        smd = std_mean_diff(a_peak, a_nonpeak, s_peak, s_nonpeak)
+        call kstwo(scores_peak, size(scores_peak), scores_nonpeak, size(scores_nonpeak), ksstat, prob)
+        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
+        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
+        write(logfhandle,'(a,1x,f4.2)') 'P             = ', prob
+        if( smd < 0.2 .and. prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar'
+    end subroutine peak_vs_nonpeak_stats
 
     subroutine get_positions( self, pos, smpd_new )
         class(pickgau),       intent(in)    :: self
@@ -628,7 +697,7 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
-        factor = real(OFFSET) * (smpd_old / self%smpd_shrink)
+        factor = real(self%offset) * (smpd_old / self%smpd_shrink)
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
@@ -715,11 +784,12 @@ contains
             call self%mic_shrink%kill
             call self%gauref%kill
             call self%destruct_boximgs
-            if( allocated(self%l_mic_mask)  ) deallocate(self%l_mic_mask)
-            if( allocated(self%l_err_refs)  ) deallocate(self%l_err_refs)
-            if( allocated(self%positions)   ) deallocate(self%positions)
-            if( allocated(self%inds_offset) ) deallocate(self%inds_offset)
-            if( allocated(self%box_scores)  ) deallocate(self%box_scores)
+            if( allocated(self%l_mic_mask)     ) deallocate(self%l_mic_mask)
+            if( allocated(self%l_err_refs)     ) deallocate(self%l_err_refs)
+            if( allocated(self%positions)      ) deallocate(self%positions)
+            if( allocated(self%inds_offset)    ) deallocate(self%inds_offset)
+            if( allocated(self%box_scores)     ) deallocate(self%box_scores)
+            if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
             if( allocated(self%boxrefs) )then
                 do iimg = 1,size(self%boxrefs)
                     call self%boxrefs(iimg)%kill
