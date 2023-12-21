@@ -51,9 +51,9 @@ contains
                     inpl_inds = (/(j,j=1,self%s%nrots)/)
                     call hpsort(inpl_corrs, inpl_inds)
                     call random_number(rnd_num)
-                    irnd      = 1 + floor(params_glob%reg_nrots * rnd_num)
-                    loc       = inpl_inds(irnd)
-                    ref_corrs = inpl_corrs(loc)
+                    irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                    loc  = inpl_inds(irnd)
+                    ref_corrs(iref) = inpl_corrs(loc)
                 endif
             enddo
             ref_inds = (/(iref,iref=1,self%s%nrefs)/)
