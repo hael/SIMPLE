@@ -731,10 +731,10 @@ contains
         real(sp), dimension(size(x)) :: tmp
         mdum=assert_eq(size(u,1),size(b),'svbksb_sp: mdum')
         ndum=assert_eq((/size(u,2),size(v,1),size(v,2),size(w),size(x)/),'svbksb_sp: ndum')
-        where (w /= 0.0)
-            tmp=matmul(b,u)/w     ! Calculate diag(1/w_j)U^T B,
+        where (is_equal(w,0.))
+            tmp=0.                ! but replace 1/w_j by zero if w_j=0.
         elsewhere
-            tmp=0.0               ! but replace 1/w_j by zero if w_j=0.
+            tmp=matmul(b,u)/w     ! Calculate diag(1/w_j)U^T B,
         end where
         x=matmul(v,tmp)           ! Matrix multiply by V to get answer.
     end subroutine svbksb_sp
@@ -749,10 +749,10 @@ contains
         real(dp), dimension(size(x)) :: tmp
         mdum=assert_eq(size(u,1),size(b),'svbksb_dp: mdum')
         ndum=assert_eq((/size(u,2),size(v,1),size(v,2),size(w),size(x)/),'svbksb_dp: ndum')
-        where (w /= 0.0)
-            tmp=matmul(b,u)/w
+        where (is_equal(w,0.d0))
+            tmp=0.d0              ! but replace 1/w_j by zero if w_j=0.
         elsewhere
-            tmp=0.0
+            tmp=matmul(b,u)/w     ! Calculate diag(1/w_j)U^T B,
         end where
         x=matmul(v,tmp)
     end subroutine svbksb_dp
@@ -782,7 +782,7 @@ contains
             scale=0.0
             if (i <= m) then
                 scale=sum(abs(a(i:m,i)))
-                if (scale /= 0.0) then
+                if( .not.is_equal(scale,0.0) )then
                     a(i:m,i)=a(i:m,i)/scale
                     s=dot_product(a(i:m,i),a(i:m,i))
                     f=a(i,i)
@@ -799,7 +799,7 @@ contains
             scale=0.0
             if ((i <= m) .and. (i /= n)) then
                 scale=sum(abs(a(i,l:n)))
-                if (scale /= 0.0) then
+                if (.not.is_equal(scale,0.0)) then
                     a(i,l:n)=a(i,l:n)/scale
                     s=dot_product(a(i,l:n),a(i,l:n))
                     f=a(i,l)
@@ -816,7 +816,7 @@ contains
         anorm=maxval(abs(w)+abs(rv1))
         do i=n,1,-1            ! Accumulation of right-hand transformations.
             if (i < n) then
-                if (g /= 0.0) then
+                if (.not.is_equal(g,0.0)) then
                     v(l:n,i)=(a(i,l:n)/a(i,l))/g     ! Double division to avoid possible underflow
                     tempn(l:n)=matmul(a(i,l:n),v(l:n,l:n))
                     v(l:n,l:n)=v(l:n,l:n)+outerprod(v(l:n,i),tempn(l:n))
@@ -832,7 +832,7 @@ contains
             l=i+1
             g=w(i)
             a(i,l:n)=0.0
-            if (g /= 0.0) then
+            if (.not.is_equal(g,0.0)) then
                 g=1.0_sp/g
                 tempn(l:n)=(matmul(a(l:m,i),a(l:m,l:n))/a(i,i))*g
                 a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
@@ -906,7 +906,7 @@ contains
                     v(1:n,i)=-tempn(1:n)*s+v(1:n,i)*c
                     z=pythag(f,h)
                     w(j)=z            ! Rotation can be arbitrary if z=0.
-                    if (z /= 0.0) then
+                    if (.not.is_equal(z,0.0)) then
                         z=1.0_sp/z
                         c=f*z
                         s=h*z
@@ -944,7 +944,7 @@ contains
             scale=0.0
             if (i <= m) then
                 scale=sum(abs(a(i:m,i)))
-                if (scale /= 0.0) then
+                if (.not.is_equal(scale,0.0d0)) then
                     a(i:m,i)=a(i:m,i)/scale
                     s=dot_product(a(i:m,i),a(i:m,i))
                     f=a(i,i)
@@ -961,7 +961,7 @@ contains
             scale=0.0
             if ((i <= m) .and. (i /= n)) then
                 scale=sum(abs(a(i,l:n)))
-                if (scale /= 0.0) then
+                if (.not.is_equal(scale,0.0d0)) then
                     a(i,l:n)=a(i,l:n)/scale
                     s=dot_product(a(i,l:n),a(i,l:n))
                     f=a(i,l)
@@ -978,7 +978,7 @@ contains
         anorm=maxval(abs(w)+abs(rv1))
         do i=n,1,-1
             if (i < n) then
-                if (g /= 0.0) then
+                if (.not.is_equal(g,0.0d0)) then
                     v(l:n,i)=(a(i,l:n)/a(i,l))/g
                     tempn(l:n)=matmul(a(i,l:n),v(l:n,l:n))
                     v(l:n,l:n)=v(l:n,l:n)+outerprod(v(l:n,i),tempn(l:n))
@@ -994,7 +994,7 @@ contains
             l=i+1
             g=w(i)
             a(i,l:n)=0.0
-            if (g /= 0.0) then
+            if (.not.is_equal(g,0.0d0)) then
                 g=1.0_dp/g
                 tempn(l:n)=(matmul(a(l:m,i),a(l:m,l:n))/a(i,i))*g
                 a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
@@ -1067,7 +1067,7 @@ contains
                     v(1:n,i)=-tempn(1:n)*s+v(1:n,i)*c
                     z=pythag(f,h)
                     w(j)=z
-                    if (z /= 0.0) then
+                    if (.not.is_equal(z,0.0d0)) then
                         z=1.0_dp/z
                         c=f*z
                         s=h*z
@@ -1270,10 +1270,10 @@ contains
         integer                      :: ma
         real(sp), dimension(size(w)) :: wti
         ma=assert_eq((/size(v,1),size(v,2),size(w),size(cvm,1),size(cvm,2)/),'svdvar')
-        where (w /= 0.0)
-            wti=1.0_sp/(w*w)
-        elsewhere
+        where (.not.is_equal(w,0.0))
             wti=0.0
+        elsewhere
+            wti=1.0_sp/(w*w)
         end where
         cvm=v*spread(wti,dim=1,ncopies=ma)
         cvm=matmul(cvm,transpose(v))          ! Covariance matrix is given by (15.4.20).
