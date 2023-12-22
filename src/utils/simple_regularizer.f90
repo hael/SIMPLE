@@ -118,64 +118,27 @@ contains
     end subroutine fill_tab_noshift
 
     subroutine fill_tab_inpl_sto( self, glob_pinds )
-        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd, ithr, irot
-        real    :: inpl_corrs(self%nrots), rnd_num, lims(2,2), cxy(3)
+        integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd
+        real    :: inpl_corrs(self%nrots), rnd_num
         call seed_rnd
-        if( params_glob%l_doshift )then
-            lims(1,1) = -params_glob%trs
-            lims(1,2) =  params_glob%trs
-            lims(2,1) = -params_glob%trs
-            lims(2,2) =  params_glob%trs
-            do ithr = 1, params_glob%nthr
-                call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                ! find best irot/shift for this pair of iref, iptcl
+                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                indxarr = (/(j,j=1,self%nrots)/)
+                call hpsort(inpl_corrs, indxarr)
+                call random_number(rnd_num)
+                irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
+                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
             enddo
-            !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd,irot,ithr,cxy) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do i = 1, self%pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    ! find best irot/shift for this pair of iref, iptcl
-                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                    indxarr = (/(j,j=1,self%nrots)/)
-                    call hpsort(inpl_corrs, indxarr)
-                    call random_number(rnd_num)
-                    irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
-                    ithr =  omp_get_thread_num() + 1
-                    call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    irot = indxarr(irnd)
-                    cxy  = grad_shsrch_obj(ithr)%minimize(irot)
-                    if( irot > 0 )then
-                        self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
-                        self%ref_ptcl_cor(iref,iptcl)     = cxy(1)
-                    else
-                        self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                        self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
-                    endif
-                    self%ref_ptcl_tab(iref,iptcl)%loc = indxarr(irnd)
-                enddo
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                do i = 1, self%pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    ! find best irot/shift for this pair of iref, iptcl
-                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                    indxarr = (/(j,j=1,self%nrots)/)
-                    call hpsort(inpl_corrs, indxarr)
-                    call random_number(rnd_num)
-                    irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
-                    self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
+        enddo
+        !$omp end parallel do
     end subroutine fill_tab_inpl_sto
 
     subroutine compute_cavgs( self )
@@ -251,9 +214,11 @@ contains
     end subroutine prev_cavgs
 
     subroutine tab_align( self )
+        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl
-        real    :: sum_corr
+        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
+        integer :: iref, iptcl, ithr, irot
+        real    :: sum_corr, lims(2,2), cxy(3)
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr)
@@ -278,6 +243,28 @@ contains
         ! do the actual alignment
         self%ptcl_ref_map = 1
         call self%nonuni_sto_ref_align
+        if( params_glob%l_doshift )then
+            lims(1,1) = -params_glob%trs
+            lims(1,2) =  params_glob%trs
+            lims(2,1) = -params_glob%trs
+            lims(2,2) =  params_glob%trs
+            do ithr = 1, params_glob%nthr
+                call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
+            enddo
+            !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
+            do iref = 1, self%nrefs
+                iptcl = self%ptcl_ref_map(iref)
+                ithr  =  omp_get_thread_num() + 1
+                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                irot = self%ref_ptcl_tab(iref,iptcl)%loc
+                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
+                if( irot > 0 )then
+                    self%ref_ptcl_tab(iref,iptcl)%sh   = cxy(2:3)
+                    self%ref_ptcl_tab(iref,iptcl)%prob = cxy(1)
+                endif
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine tab_align
 
     subroutine nonuni_sto_ref_align( self )
