@@ -1832,12 +1832,12 @@ contains
         integer,                 intent(in)    :: iptcl, irot
         real(dp),                intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_diff(:,:)
-        real(dp) :: expdiffsq, gradsq, w
+        real(dp) :: w
         integer  :: k, i, ithr
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        f    = 0.d0
-        grad = 0.d0
+        ithr  = omp_get_thread_num() + 1
+        i     = self%pinds(iptcl)
+        f     = 0.d0
+        grad  = 0.d0
         pft_diff => self%heap_vars(ithr)%shmat_8
         call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
@@ -1845,22 +1845,23 @@ contains
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 0.5_dp / real(self%sigma2_noise(k,iptcl))
-            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i)) / dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
-            f         = f + expdiffsq
-            gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-            grad(1)   = grad(1) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)/dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
+            w       = real(k,dp) / real(self%sigma2_noise(k,iptcl)) / (2.d0*real(self%pftsz,dp))
+            f       = f + w * sum(real(csq_fast(pft_diff(:,k)),dp))
+            grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
         call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
         if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
         do k = self%kfromto(1),self%kfromto(2)
-            w         = 0.5 / real(self%sigma2_noise(k,iptcl))
-            expdiffsq = real(k,dp) * dexp(-w * sum(real(csq_fast(pft_diff(:,k)),dp)) / self%kwsqsums_ptcls(k,i)) / dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
-            gradsq    = real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-            grad(2)   = grad(2) - expdiffsq * 2.d0 * w*gradsq/self%kwsqsums_ptcls(k,i)/dsqrt(2_dp * PI * self%kwsqsums_ptcls(k,i))
+            w      = real(k,dp) / real(self%sigma2_noise(k,iptcl)) / (2.d0*real(self%pftsz,dp))
+            grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
-        f    = f    / real(self%nk,dp)
-        grad = grad / real(self%nk,dp)
+        grad = grad / dsqrt(f)
+        f    = abs(dsqrt(f) - 1._dp)
+        if( f < DTINY )then
+            grad = 0._dp
+        else
+            grad = grad / f
+        endif
     end subroutine gencorr_prob_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
