@@ -47,6 +47,7 @@ type :: regularizer
     procedure          :: compute_cavgs
     procedure          :: output_reproj_cavgs
     procedure          :: tab_align
+    procedure          :: shift_align
     procedure          :: nonuni_sto_ref_align
     procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
@@ -214,11 +215,9 @@ contains
     end subroutine prev_cavgs
 
     subroutine tab_align( self )
-        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
-        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: iref, iptcl, ithr, irot
-        real    :: sum_corr, lims(2,2), cxy(3)
+        integer :: iref, iptcl, ithr
+        real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr)
@@ -243,17 +242,25 @@ contains
         ! do the actual alignment
         self%ptcl_ref_map = 1
         call self%nonuni_sto_ref_align
-        if( params_glob%l_doshift )then
-            lims(1,1) = -params_glob%trs
-            lims(1,2) =  params_glob%trs
-            lims(2,1) = -params_glob%trs
-            lims(2,2) =  params_glob%trs
-            do ithr = 1, params_glob%nthr
-                call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
-            enddo
-            !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                iptcl = self%ptcl_ref_map(iref)
+    end subroutine tab_align
+
+    subroutine shift_align( self )
+        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
+        class(regularizer), intent(inout) :: self
+        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
+        integer :: iref, iptcl, ithr, irot
+        real    :: lims(2,2), cxy(3)
+        lims(1,1) = -params_glob%trs
+        lims(1,2) =  params_glob%trs
+        lims(2,1) = -params_glob%trs
+        lims(2,2) =  params_glob%trs
+        do ithr = 1, params_glob%nthr
+            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
+        enddo
+        !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            iptcl = self%ptcl_ref_map(iref)
+            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                 ithr  =  omp_get_thread_num() + 1
                 call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                 irot = self%ref_ptcl_tab(iref,iptcl)%loc
@@ -262,10 +269,10 @@ contains
                     self%ref_ptcl_tab(iref,iptcl)%sh   = cxy(2:3)
                     self%ref_ptcl_tab(iref,iptcl)%prob = cxy(1)
                 endif
-            enddo
-            !$omp end parallel do
-        endif
-    end subroutine tab_align
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine shift_align
 
     subroutine nonuni_sto_ref_align( self )
         class(regularizer), intent(inout) :: self

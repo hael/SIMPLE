@@ -202,6 +202,15 @@ contains
                 call reg_obj%fill_tab_inpl_sto(pinds(batch_start:batch_end))
             enddo
             call reg_obj%tab_align
+            if( params_glob%l_doshift )then
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    call reg_obj%shift_align
+                enddo
+            endif
             if( params_glob%l_reg_debug )then
                 ! Batch loop
                 do ibatch=1,nbatches
