@@ -166,7 +166,7 @@ contains
                         call hpsort(inpl_corrs, indxarr)
                         call random_number(rnd_num)
                         irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
-                        self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                        self%ref_ptcl_tab(iref,iptcl)%sh  = [x,y]
                         self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
                         self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
                     enddo
