@@ -41,8 +41,9 @@ type :: regularizer
     procedure          :: new
     ! PROCEDURES
     procedure          :: init_tab
+    procedure          :: fill_tab_smpl
     procedure          :: fill_tab_noshift
-    procedure          :: fill_tab_inpl_sto
+    procedure          :: fill_tab_inpl_smpl
     procedure          :: prev_cavgs
     procedure          :: compute_cavgs
     procedure          :: output_reproj_cavgs
@@ -118,7 +119,7 @@ contains
         !$omp end parallel do
     end subroutine fill_tab_noshift
 
-    subroutine fill_tab_inpl_sto( self, glob_pinds )
+    subroutine fill_tab_inpl_smpl( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd
@@ -140,7 +141,40 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine fill_tab_inpl_sto
+    end subroutine fill_tab_inpl_smpl
+
+    subroutine fill_tab_smpl( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer,            parameter     :: SH_STEPS = 5
+        integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd, ix, iy
+        real    :: inpl_corrs(self%nrots), rnd_num, sh_max, step, x, y
+        sh_max = params_glob%trs
+        step   = sh_max*2./real(SH_STEPS)
+        call seed_rnd
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd,ix,iy,x,y) proc_bind(close) schedule(static)
+        do iref = 1, self%nrefs
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                do ix = 1, SH_STEPS
+                    x = -sh_max + step/2. + real(ix-1)*step
+                    do iy = 1, SH_STEPS
+                        y = -sh_max + step/2. + real(iy-1)*step
+                        ! find best irot/shift for this pair of iref, iptcl
+                        call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs )
+                        indxarr = (/(j,j=1,self%nrots)/)
+                        call hpsort(inpl_corrs, indxarr)
+                        call random_number(rnd_num)
+                        irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                        self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                        self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
+                        self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                    enddo
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine fill_tab_smpl
 
     subroutine compute_cavgs( self )
         class(regularizer), intent(inout) :: self
