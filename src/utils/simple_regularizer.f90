@@ -147,30 +147,35 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer,            parameter     :: SH_STEPS = 5
-        integer :: i, iref, iptcl, indxarr(self%nrots), j, irnd, ix, iy
-        real    :: inpl_corrs(self%nrots), rnd_num, sh_max, step, x, y
+        integer :: i, iref, iptcl, indxarr(self%nrots*SH_STEPS*SH_STEPS), j, irnd, ix, iy, cnt, rots(self%nrots*SH_STEPS*SH_STEPS)
+        real    :: inpl_corrs(self%nrots*SH_STEPS*SH_STEPS), rnd_num, sh_max, step, x, y, sh(self%nrots*SH_STEPS*SH_STEPS,2)
         sh_max = params_glob%trs
         step   = sh_max*2./real(SH_STEPS)
         call seed_rnd
-        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd,ix,iy,x,y) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,indxarr,rnd_num,irnd,ix,iy,x,y,sh,rots,cnt) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
+                cnt   = 0
                 do ix = 1, SH_STEPS
                     x = -sh_max + step/2. + real(ix-1)*step
                     do iy = 1, SH_STEPS
                         y = -sh_max + step/2. + real(iy-1)*step
                         ! find best irot/shift for this pair of iref, iptcl
-                        call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs )
-                        indxarr = (/(j,j=1,self%nrots)/)
-                        call hpsort(inpl_corrs, indxarr)
-                        call random_number(rnd_num)
-                        irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
-                        self%ref_ptcl_tab(iref,iptcl)%sh  = [x,y]
-                        self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
-                        self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                        call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs(cnt*self%nrots+1:(cnt+1)*self%nrots) )
+                        rots(cnt*self%nrots+1:(cnt+1)*self%nrots)   = (/(j,j=1,self%nrots)/)
+                        sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,1) = x
+                        sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,2) = y
+                        cnt = cnt + 1
                     enddo
                 enddo
+                indxarr = (/(j,j=1,self%nrots*SH_STEPS*SH_STEPS)/)
+                call hpsort(inpl_corrs, indxarr)
+                call random_number(rnd_num)
+                irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(indxarr(irnd),:)
+                self%ref_ptcl_tab(iref,iptcl)%loc = rots(indxarr(irnd))
+                self%ref_ptcl_cor(iref,iptcl)     =   inpl_corrs(irnd)
             enddo
         enddo
         !$omp end parallel do
