@@ -27,6 +27,8 @@ type :: regularizer
     integer                  :: nrots
     integer                  :: nrefs
     integer                  :: pftsz
+    integer                  :: inpl_ns                     ! in-plane # samplings
+    integer                  :: refs_ns                     ! refs # samplings
     integer                  :: kfromto(2)
     complex(dp), allocatable :: regs_odd(:,:,:)             !< -"-, reg terms
     complex(dp), allocatable :: regs_even(:,:,:)            !< -"-, reg terms
@@ -77,6 +79,8 @@ contains
         self%regs_even       = 0.d0
         self%regs_denom_odd  = 0.d0
         self%regs_denom_even = 0.d0
+        self%inpl_ns         = int(self%nrots * params_glob%reg_athres / 360.)
+        self%refs_ns         = int(self%nrefs * (1. - cos(params_glob%reg_athres * PI / 180.)) / 2.)
         self%pftcc => pftcc
     end subroutine new
 
@@ -134,7 +138,7 @@ contains
                 indxarr = (/(j,j=1,self%nrots)/)
                 call hpsort(inpl_corrs, indxarr)
                 call random_number(rnd_num)
-                irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                irnd = 1 + floor(self%inpl_ns * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
                 self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
@@ -172,7 +176,7 @@ contains
                 indxarr = (/(j,j=1,self%nrots*SH_STEPS*SH_STEPS)/)
                 call hpsort(inpl_corrs, indxarr)
                 call random_number(rnd_num)
-                irnd = 1 + floor(params_glob%reg_nrots * rnd_num)
+                irnd = 1 + floor(self%inpl_ns * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(indxarr(irnd),:)
                 self%ref_ptcl_tab(iref,iptcl)%loc = rots(indxarr(irnd))
                 self%ref_ptcl_cor(iref,iptcl)     =   inpl_corrs(irnd)
@@ -335,7 +339,7 @@ contains
             indxarr = (/(ir,ir=1,self%nrefs)/)
             call hpsort(min_ir, indxarr)
             call random_number(rnd_num)
-            min_ind_ir = indxarr(1 + floor(params_glob%reg_nrots * rnd_num))
+            min_ind_ir = indxarr(1 + floor(self%refs_ns * rnd_num))
             min_ind_ip = min_ip(min_ind_ir)
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
             mask_ip(min_ind_ip) = .false.
