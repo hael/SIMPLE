@@ -30,10 +30,10 @@ type :: regularizer
     integer                  :: inpl_ns                     ! in-plane # samplings
     integer                  :: refs_ns                     ! refs # samplings
     integer                  :: kfromto(2)
-    complex(dp), allocatable :: regs_odd(:,:,:)             !< -"-, reg terms
-    complex(dp), allocatable :: regs_even(:,:,:)            !< -"-, reg terms
-    real(dp),    allocatable :: regs_denom_odd(:,:,:)       !< -"-, reg denom
-    real(dp),    allocatable :: regs_denom_even(:,:,:)      !< -"-, reg denom
+    complex(dp), allocatable :: cavg_odd(:,:,:)             !< -"-, reg terms
+    complex(dp), allocatable :: cavg_even(:,:,:)            !< -"-, reg terms
+    real(dp),    allocatable :: cavg_denom_odd(:,:,:)       !< -"-, reg denom
+    real(dp),    allocatable :: cavg_denom_even(:,:,:)      !< -"-, reg denom
     real,        allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
     integer,     allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
     class(polarft_corrcalc), pointer     :: pftcc => null()
@@ -71,14 +71,14 @@ contains
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
         ! allocation
-        allocate(self%regs_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_denom_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%regs_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
-        self%regs_odd        = 0.d0
-        self%regs_even       = 0.d0
-        self%regs_denom_odd  = 0.d0
-        self%regs_denom_even = 0.d0
+        allocate(self%cavg_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%cavg_denom_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%cavg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
+                &self%cavg_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
+        self%cavg_odd        = 0.d0
+        self%cavg_even       = 0.d0
+        self%cavg_denom_odd  = 0.d0
+        self%cavg_denom_even = 0.d0
         self%inpl_ns         = int(self%nrots * params_glob%reg_athres / 360.)
         self%refs_ns         = int(self%nrefs * (1. - cos(params_glob%reg_athres * PI / 180.)) / 2.)
         self%pftcc => pftcc
@@ -138,7 +138,7 @@ contains
                 indxarr = (/(j,j=1,self%nrots)/)
                 call hpsort(inpl_corrs, indxarr)
                 call random_number(rnd_num)
-                irnd = 1 + floor(self%inpl_ns * rnd_num)
+                irnd = 1 + floor(real(self%inpl_ns) * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%loc =    indxarr(irnd)
                 self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
@@ -176,7 +176,7 @@ contains
                 indxarr = (/(j,j=1,self%nrots*SH_STEPS*SH_STEPS)/)
                 call hpsort(inpl_corrs, indxarr)
                 call random_number(rnd_num)
-                irnd = 1 + floor(self%inpl_ns * rnd_num)
+                irnd = 1 + floor(real(self%inpl_ns) * rnd_num)
                 self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(indxarr(irnd),:)
                 self%ref_ptcl_tab(iref,iptcl)%loc = rots(indxarr(irnd))
                 self%ref_ptcl_cor(iref,iptcl)     =   inpl_corrs(irnd)
@@ -203,17 +203,17 @@ contains
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
                 if( params_glob%l_lpset )then
                     if( self%pftcc%ptcl_iseven(iptcl) )then
-                        self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
-                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                        self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
+                        self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
                     else
-                        self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
-                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                        self%cavg_odd(:,:,iref)       = self%cavg_odd(:,:,iref)       + ptcl_ctf_rot
+                        self%cavg_denom_odd(:,:,iref) = self%cavg_denom_odd(:,:,iref) + ctf_rot**2
                     endif
                 else
-                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
-                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
-                    self%regs_odd(:,:,iref)        = self%regs_odd(:,:,iref)        + ptcl_ctf_rot
-                    self%regs_denom_odd(:,:,iref)  = self%regs_denom_odd(:,:,iref)  + ctf_rot**2
+                    self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
+                    self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
+                    self%cavg_odd(:,:,iref)        = self%cavg_odd(:,:,iref)        + ptcl_ctf_rot
+                    self%cavg_denom_odd(:,:,iref)  = self%cavg_denom_odd(:,:,iref)  + ctf_rot**2
                 endif
             endif
         enddo
@@ -239,17 +239,17 @@ contains
                 call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here), ctf_rot, loc)
                 if( params_glob%l_lpset )then
                     if( self%pftcc%ptcl_iseven(iptcl) )then
-                        self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
-                        self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
+                        self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
+                        self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
                     else
-                        self%regs_odd(:,:,iref)       = self%regs_odd(:,:,iref)       + ptcl_ctf_rot
-                        self%regs_denom_odd(:,:,iref) = self%regs_denom_odd(:,:,iref) + ctf_rot**2
+                        self%cavg_odd(:,:,iref)       = self%cavg_odd(:,:,iref)       + ptcl_ctf_rot
+                        self%cavg_denom_odd(:,:,iref) = self%cavg_denom_odd(:,:,iref) + ctf_rot**2
                     endif
                 else
-                    self%regs_even(:,:,iref)       = self%regs_even(:,:,iref)       + ptcl_ctf_rot
-                    self%regs_denom_even(:,:,iref) = self%regs_denom_even(:,:,iref) + ctf_rot**2
-                    self%regs_odd(:,:,iref)        = self%regs_odd(:,:,iref)        + ptcl_ctf_rot
-                    self%regs_denom_odd(:,:,iref)  = self%regs_denom_odd(:,:,iref)  + ctf_rot**2
+                    self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
+                    self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
+                    self%cavg_odd(:,:,iref)        = self%cavg_odd(:,:,iref)        + ptcl_ctf_rot
+                    self%cavg_denom_odd(:,:,iref)  = self%cavg_denom_odd(:,:,iref)  + ctf_rot**2
                 endif
             endif
         enddo
@@ -296,7 +296,7 @@ contains
         lims(2,1) = -params_glob%trs
         lims(2,2) =  params_glob%trs
         do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
+            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
         enddo
         !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -317,27 +317,23 @@ contains
 
     subroutine nonuni_sto_ref_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: ir, ip, min_ind_ir, min_ind_ip, min_ip(self%nrefs), indxarr(self%nrefs)
+        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs), indxarr(self%nrefs)
         real    :: min_ir(self%nrefs), rnd_num
         logical :: mask_ip(params_glob%fromp:params_glob%top)
         mask_ip = .true.
         call seed_rnd
         do while( any(mask_ip) )
             min_ir = huge(rnd_num)
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir,ip)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
             do ir = 1, self%nrefs
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) .and. self%ref_ptcl_cor(ir,ip) < min_ir(ir) )then
-                        min_ir(ir) = self%ref_ptcl_cor(ir,ip)
-                        min_ip(ir) = ip
-                    endif
-                enddo
+                min_ip(ir) = minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip)
+                min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
             enddo
             !$omp end parallel do
             indxarr = (/(ir,ir=1,self%nrefs)/)
             call hpsort(min_ir, indxarr)
             call random_number(rnd_num)
-            min_ind_ir = indxarr(1 + floor(self%refs_ns * rnd_num))
+            min_ind_ir = indxarr(1 + floor(real(self%refs_ns) * rnd_num))
             min_ind_ip = min_ip(min_ind_ir)
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
             mask_ip(min_ind_ip) = .false.
@@ -350,20 +346,20 @@ contains
         type(image) :: calc_cavg
         integer     :: iref, box
         ! form the cavgs
-        where( abs(self%regs_denom_odd) < DTINY )
-            self%regs_odd = 0._dp
+        where( abs(self%cavg_denom_odd) < DTINY )
+            self%cavg_odd = 0._dp
         elsewhere
-            self%regs_odd = self%regs_odd / self%regs_denom_odd
+            self%cavg_odd = self%cavg_odd / self%cavg_denom_odd
         endwhere
-        where( abs(self%regs_denom_even) < DTINY )
-            self%regs_even = 0._dp
+        where( abs(self%cavg_denom_even) < DTINY )
+            self%cavg_even = 0._dp
         elsewhere
-            self%regs_even = self%regs_even / self%regs_denom_even
+            self%cavg_even = self%cavg_even / self%cavg_denom_even
         endwhere
         ! output images for debugging
         do iref = 1, self%nrefs
             ! odd
-            call self%pftcc%polar2cartesian(cmplx(self%regs_odd(:,:,iref), kind=sp), cmat, box)
+            call self%pftcc%polar2cartesian(cmplx(self%cavg_odd(:,:,iref), kind=sp), cmat, box)
             call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)
@@ -377,7 +373,7 @@ contains
             call calc_cavg%ifft
             call calc_cavg%write('odd_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
             !even
-            call self%pftcc%polar2cartesian(cmplx(self%regs_even(:,:,iref), kind=sp), cmat, box)
+            call self%pftcc%polar2cartesian(cmplx(self%cavg_even(:,:,iref), kind=sp), cmat, box)
             call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)
@@ -396,10 +392,10 @@ contains
     
     subroutine reset_regs( self )
         class(regularizer), intent(inout) :: self
-        self%regs_odd        = 0._dp
-        self%regs_even       = 0._dp
-        self%regs_denom_odd  = 0._dp
-        self%regs_denom_even = 0._dp
+        self%cavg_odd        = 0._dp
+        self%cavg_even       = 0._dp
+        self%cavg_denom_odd  = 0._dp
+        self%cavg_denom_even = 0._dp
     end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
@@ -500,7 +496,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%regs_odd, self%regs_denom_odd,self%regs_even,self%regs_denom_even)
+        deallocate(self%cavg_odd, self%cavg_denom_odd,self%cavg_even,self%cavg_denom_even)
         if(allocated(self%ref_ptcl_cor)) deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill
 end module simple_regularizer
