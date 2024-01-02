@@ -199,15 +199,14 @@ contains
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
                 call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                if( params_glob%l_doshift )then
+                if( params_glob%l_reg_sh_samp .and. params_glob%l_doshift )then
                     call reg_obj%fill_tab_smpl(pinds(batch_start:batch_end))
                 else
                     call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
                 endif
             enddo
             call reg_obj%tab_align
-            ! if shifts are included in the sampling then no need to do shifts after the alignment
-            if( .not.(params_glob%l_doshift) )then
+            if( params_glob%l_doshift )then
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
                     batch_end   = batches(ibatch,2)

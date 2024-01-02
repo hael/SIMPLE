@@ -196,7 +196,6 @@ contains
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
                 iref = self%ptcl_ref_map(iptcl)
                 pind_here = self%pftcc%pinds(iptcl)
-                ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = self%ref_ptcl_tab(iref, iptcl)%loc
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
@@ -233,7 +232,6 @@ contains
                 call build_glob%spproj_field%get_ori(iptcl, o_prev)     ! previous ori
                 iref      = build_glob%eulspace%find_closest_proj(o_prev)   ! previous projection direction
                 pind_here = self%pftcc%pinds(iptcl)
-                ! computing the reg terms as the gradients w.r.t 2D references of the probability
                 loc = self%ref_ptcl_tab(iref, iptcl)%loc
                 loc = (self%nrots+1)-(loc-1)
                 if( loc > self%nrots ) loc = loc - self%nrots
@@ -298,7 +296,7 @@ contains
         lims(2,1) = -params_glob%trs
         lims(2,2) =  params_glob%trs
         do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
+            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
         enddo
         !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
@@ -309,8 +307,8 @@ contains
                 irot = self%ref_ptcl_tab(iref,iptcl)%loc
                 cxy  = grad_shsrch_obj(ithr)%minimize(irot)
                 if( irot > 0 )then
-                    self%ref_ptcl_tab(iref,iptcl)%sh   = cxy(2:3)
-                    self%ref_ptcl_tab(iref,iptcl)%prob = cxy(1)
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
+                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
                 endif
             endif
         enddo
