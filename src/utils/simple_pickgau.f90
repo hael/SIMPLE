@@ -24,38 +24,51 @@ type(image) :: mic_raw
 type pickgau
     private
     real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
+    real                     :: dist_thres  = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     type(image)              :: mic_shrink, gauref
-    type(image), allocatable :: boximgs(:), boxrefs(:)
+    type(image), allocatable :: boxrefs(:)
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:)
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
 contains
+    procedure          :: gaupick
     procedure          :: new_gaupicker
     procedure          :: new_refpicker
     procedure, private :: new
     procedure, private :: set_refs
     procedure, private :: setup_iterators
-    ! procedure          :: gaupick
-    ! procedure          :: refpick
-    procedure, private :: extract_boximgs
-    procedure, private :: destruct_boximgs
     procedure, private :: gaumatch_boximgs
     procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
     procedure, private :: center_filter
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
-    procedure          :: peak_vs_nonpeak_stats
+    procedure, private :: peak_vs_nonpeak_stats
     procedure          :: get_positions
+    procedure          :: write_boxfile
     procedure          :: refine_upscaled
     procedure          :: kill
 end type
 
 contains
+
+    subroutine gaupick( self )
+        class(pickgau), intent(inout) :: self
+        call self%gaumatch_boximgs
+        call self%detect_peaks
+        call self%write_boxfile('pickgau_after_detect_peaks.box')
+        call self%center_filter
+        call self%write_boxfile('pickgau_after_center_filter.box')
+        call self%distance_filter
+        call self%write_boxfile('pickgau_after_distance_filter.box')
+        call self%remove_outliers
+        call self%write_boxfile('pickgau_after_remove_outliers.box')
+        call self%peak_vs_nonpeak_stats
+    end subroutine gaupick
 
     subroutine read_mic_raw( micname, smpd )
         character(len=*), intent(in) :: micname !< micrograph file name
@@ -157,6 +170,12 @@ contains
         self%offset = OFFSET_DEFAULT
         if( present(offset) ) self%offset = offset
         self%offset_ub = self%offset * 2
+        ! set distance threshold
+        if( self%offset == 1 )then
+            self%dist_thres = 4.
+        else
+            self%dist_thres = self%offset
+        endif
         ! shrink micrograph
         call self%mic_shrink%new(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
@@ -243,6 +262,7 @@ contains
             numstr = int2str(nint(mskdiam))
             call self%gauref%write('gauref_mskdiam'//numstr//'.mrc')
         endif
+        call self%gauref%fft ! prep for convolution
         if( allocated(self%boxrefs) )then
             do iimg = 1,size(self%boxrefs)
                 call self%boxrefs(iimg)%kill
@@ -281,7 +301,7 @@ contains
                 call self%boxrefs(cnt)%write('boxrefs_shrink.mrc', cnt)
             enddo
         endif
-        call self%gauref%ifft
+        call self%gauref%ifft ! leave in real-space
         call img_rot%kill
         self%refpick = .true.
     end subroutine set_refs
@@ -333,37 +353,6 @@ contains
         if( allocated(self%box_scores) ) deallocate(self%box_scores)
         allocate(self%box_scores(self%nx_offset,self%ny_offset), source = -1.)
     end subroutine setup_iterators
-
-    subroutine extract_boximgs( self )
-        class(pickgau), intent(inout) :: self
-        integer :: pos(2), ibox
-        logical :: outside
-        if( allocated(self%boximgs) )then
-            do ibox = 1,self%nboxes
-                call self%boximgs(ibox)%kill
-            end do
-            deallocate(self%boximgs)
-        endif
-        allocate(self%boximgs(self%nboxes))
-        !$omp parallel do schedule(static) default(shared) private(ibox,outside,pos) proc_bind(close)
-        do ibox = 1,self%nboxes
-            call self%boximgs(ibox)%new(self%ldim_box, self%smpd_shrink)
-            pos = self%positions(ibox,:)
-            call self%mic_shrink%window_slim(pos, self%ldim_box(1), self%boximgs(ibox), outside)
-        end do
-        !$omp end parallel do
-    end subroutine extract_boximgs
-
-    subroutine destruct_boximgs( self )
-        class(pickgau), intent(inout) :: self
-        integer :: ibox
-        if( allocated(self%boximgs) )then
-            do ibox = 1,self%nboxes
-                call self%boximgs(ibox)%kill
-            end do
-            deallocate(self%boximgs)
-        endif
-    end subroutine destruct_boximgs
 
     subroutine gaumatch_boximgs( self )
         class(pickgau), intent(inout) :: self
@@ -471,23 +460,27 @@ contains
             self%box_scores = -1.
         end where
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# peaks detected:                      ', self%npeaks
+        write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
+        write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
     end subroutine detect_peaks
 
      subroutine center_filter( self )
         class(pickgau), intent(inout) :: self
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ioff, joff, ithr, npeaks
+        integer     :: ioff, joff, ithr, npeaks, pos(2)
         real        :: scores_cen(self%nx_offset,self%ny_offset)
+        logical     :: outside
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr) proc_bind(close)
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,pos,outside) proc_bind(close)
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
                 if( self%box_scores(ioff,joff) >= self%t )then
-                    scores_cen(ioff,joff) = self%boximgs(self%inds_offset(ioff,joff))%box_cen_arg(boximgs_heap(ithr))
+                    ithr = omp_get_thread_num() + 1
+                    pos  = self%positions(self%inds_offset(ioff,joff),:)
+                    call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
+                    scores_cen(ioff,joff) = boximgs_heap(ithr)%box_cen_arg(boximgs_heap(ithr))
                 else
                     scores_cen(ioff,joff) = real(self%offset) + 1.
                 endif
@@ -504,18 +497,27 @@ contains
             self%box_scores = -1.
         endwhere
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# npeaks    after    center filtering: ', self%npeaks 
+        write(logfhandle,'(a,1x,I5)') '# npeaks    after    center filtering: ', self%npeaks
+        ! destruct heap
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
     end subroutine center_filter
 
     subroutine distance_filter( self, dist_thres )
         class(pickgau), intent(inout) :: self
-        real,           intent(in)    :: dist_thres
+        real, optional, intent(in)    :: dist_thres
         integer, allocatable :: pos_inds(:)
         real,    allocatable :: pos_scores(:)
         logical, allocatable :: mask(:), selected_pos(:)
         integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak
-        real    :: dist
+        real    :: dist, dthres
         logical :: is_peak
+        if( present(dist_thres) )then
+            dthres = dist_thres
+        else
+            dthres = self%dist_thres
+        endif
         pos_inds   = pack(self%inds_offset(:,:), mask=self%box_scores(:,:) >= self%t)
         pos_scores = pack(self%box_scores(:,:),  mask=self%box_scores(:,:) >= self%t)
         nbox       = size(pos_inds)
@@ -526,7 +528,7 @@ contains
             !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
             do jbox = 1,nbox
                 dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                if( dist <= dist_thres ) mask(jbox) = .true.
+                if( dist <= dthres ) mask(jbox) = .true.
             end do
             !$omp end parallel do
             ! find best match in the neigh
@@ -605,6 +607,7 @@ contains
         end do
         !$omp end parallel do
         npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', npeaks
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
@@ -680,6 +683,20 @@ contains
             pos(ibox,:) = nint(scale * real(self%positions(pos_inds(ibox),:)))
         end do
     end subroutine get_positions
+
+    subroutine write_boxfile( self, fname )
+        class(pickgau),   intent(in) :: self
+        character(len=*), intent(in) :: fname
+        integer, allocatable :: pos(:,:)
+        integer :: funit, ibox, iostat
+        call self%get_positions(pos)
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fileiochk('simple_pickgau; write_boxfile ', iostat)
+        do ibox = 1,size(pos,dim=1)
+            write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%ldim_box(1), self%ldim_box(1), -3
+        end do
+        call fclose(funit)
+    end subroutine write_boxfile
 
     subroutine refine_upscaled( self, pos, smpd_old )
         class(pickgau), intent(inout) :: self
@@ -783,7 +800,6 @@ contains
         if( self%exists )then
             call self%mic_shrink%kill
             call self%gauref%kill
-            call self%destruct_boximgs
             if( allocated(self%l_mic_mask)     ) deallocate(self%l_mic_mask)
             if( allocated(self%l_err_refs)     ) deallocate(self%l_err_refs)
             if( allocated(self%positions)      ) deallocate(self%positions)
