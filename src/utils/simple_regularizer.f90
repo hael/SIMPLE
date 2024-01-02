@@ -326,7 +326,7 @@ contains
             min_ir = huge(rnd_num)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
             do ir = 1, self%nrefs
-                min_ip(ir) = minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip)
+                min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
                 min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
             enddo
             !$omp end parallel do
