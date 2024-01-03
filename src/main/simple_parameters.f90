@@ -74,6 +74,7 @@ type :: parameters
     character(len=3)          :: reg_debug='no'       !< output images for debugging in reg (yes|no){no}
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
     character(len=3)          :: reg_sh_samp='no'     !< sampling shifts in reg (yes|no){no}
+    character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -431,6 +432,7 @@ type :: parameters
     logical :: l_reg_debug    = .false.
     logical :: l_reg_norm     = .false.
     logical :: l_reg_sh_samp  = .false.
+    logical :: l_reg_opt_ang  = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -569,6 +571,7 @@ contains
         call check_carg('reg_debug',      self%reg_debug)
         call check_carg('reg_norm',       self%reg_norm)
         call check_carg('reg_sh_samp',    self%reg_sh_samp)
+        call check_carg('reg_opt_ang',    self%reg_opt_ang)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -1458,6 +1461,7 @@ contains
         self%l_reg_debug   = trim(self%reg_debug   ).eq.'yes'
         self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
         self%l_reg_sh_samp = trim(self%reg_sh_samp ).eq.'yes'
+        self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
