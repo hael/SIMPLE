@@ -4,9 +4,10 @@ module simple_picker_utils
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 use simple_image,      only: image
+use simple_pickgau,    only: pickgau, read_mic_raw
 implicit none
 
-public :: picker_utils
+public :: picker_utils, refac_gaupick
 private
 #include "simple_local_flags.inc"
 
@@ -57,6 +58,17 @@ type picker_utils
 end type picker_utils
 
 contains
+
+    subroutine refac_gaupick( micname, pcontrast, smpd, moldiam )
+        character(len=*), intent(in) :: micname, pcontrast
+        real,             intent(in) :: smpd    !< sampling distance in A
+        real,             intent(in) :: moldiam !< maximum diameter in A
+        type(pickgau) :: gaup
+        call read_mic_raw(micname, smpd)
+        call gaup%new_gaupicker(pcontrast, SMPD_SHRINK1, moldiam, offset=3, ndev=NDEV_DEFAULT)
+        call gaup%gaupick
+        call gaup%kill
+    end subroutine refac_gaupick
 
     subroutine new( self, micname, pcontrast, smpd, moldiam, ndev )
         class(picker_utils),  intent(inout) :: self
