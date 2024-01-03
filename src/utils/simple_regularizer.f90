@@ -296,7 +296,7 @@ contains
         lims(2,1) = -params_glob%trs
         lims(2,2) =  params_glob%trs
         do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.false.)
+            call grad_shsrch_obj(ithr)%new(lims, opt_angle=params_glob%l_reg_opt_ang)
         enddo
         !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
