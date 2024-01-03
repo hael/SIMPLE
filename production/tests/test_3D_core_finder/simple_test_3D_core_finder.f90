@@ -3,16 +3,17 @@ include 'simple_lib.f08'
 use simple_image,        only: image
 implicit none
 #include "simple_local_flags.inc"
-real,    parameter  :: smpd=0.358, np_rad_A=50.0, shell_size_A=1.0
-real                :: suma, suma2, sumax, sumay
+real,    parameter  :: smpd=0.358 
+real,    parameter  :: shell_size_A=smpd
+real,    parameter  :: shell_size_vox=shell_size_A/smpd
 type(image)                 :: img_part1, img_part2, dists_img
 real,    allocatable        :: rvec1(:), rvec2(:)
 logical, allocatable        :: mask(:,:,:), shell_mask(:,:,:)
 real(kind=c_float), pointer :: rmat_img_part1(:,:,:)=>null()
 real(kind=c_float), pointer :: rmat_img_part2(:,:,:)=>null()
 real(kind=c_float), pointer :: rmat_dists_img(:,:,:)=>null()
-real                        :: np_rad_vox=np_rad_A/smpd, shell_size_vox=shell_size_A/smpd
-real                        :: rad_core, rad_core_vox, corr
+real                        :: np_rad_A, np_rad_vox
+real                        :: corr
 character(len=256)          :: fn_img_part1, fn_img_part2
 integer                     :: ldim1(3), ldim2(3), ldim_refs(3), n, nshells, ifoo
 real                        :: mean, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
@@ -32,7 +33,9 @@ call find_ldim_nptcls(fn_img_part2, ldim2, ifoo)
 if( ldim1(1) /= ldim2(1) .or. ldim1(2) /= ldim2(2) .or. ldim1(3) /= ldim2(3) )then
     THROW_HARD('****Non-conforming dimensions of 3D density maps vol1 and vol2')
 endif
-ldim_refs = [ldim1(1), ldim1(2), ldim1(3)]
+ldim_refs  = [ldim1(1), ldim1(2), ldim1(3)]
+np_rad_vox = ldim_refs(1) / 2. 
+np_rad_A   = np_rad_vox * smpd
 call img_part1%new(ldim_refs, smpd)
 call img_part2%new(ldim_refs, smpd)
 call dists_img%new(ldim_refs, smpd)
@@ -41,18 +44,17 @@ call img_part2%read(fn_img_part2)
 call dists_img%cendist
 call dists_img%get_rmat_ptr( rmat_dists_img )
 ! allocations and parameter calculations
-rad_core_vox  = rad_core/smpd
 nshells       = int(np_rad_vox / shell_size_vox)
 allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
   &shell_mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.true.)
-! mask negative values
-call img_part1%get_rmat_ptr( rmat_img_part1 )
-call img_part2%get_rmat_ptr( rmat_img_part2 )
-where( rmat_img_part1(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < 0. ) mask = .false.
-where( rmat_img_part2(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < 0. ) mask = .false.
+! apply low and high pass filter bands
+!call img_part1%bp(5.,.5)
+!call img_part2%bp(5.,.5)
 ! thresholding
-! call img_part1%zero_below(0.)
-! call img_part2%zero_below(0.)
+!where( rmat_img_part1(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < 0. ) mask = .false.
+!where( rmat_img_part2(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < 0. ) mask = .false.
+!call img_part1%zero_below(0.)
+!call img_part2%zero_below(0.)
 ! take averages of shells out to the NP radius
 do n = 0, nshells
     dist_lbound = real(n)*shell_size_vox
@@ -75,7 +77,7 @@ do n = 0, nshells
         corr = pearsn_serial(rvec1, rvec2)
         ! corr = img_part1%real_corr(img_part2, shell_mask) ! works too
     endif
-    print *, n, dist_lbound, dist_ubound, corr, mean
+    print *, n, dist_lbound*smpd, dist_ubound*smpd, corr, mean
 enddo
 call img_part1%kill()
 call img_part2%kill()
