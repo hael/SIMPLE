@@ -48,16 +48,18 @@ contains
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
-    procedure          :: get_positions
-    procedure          :: write_boxfile
-    procedure          :: refine_upscaled
+    procedure, private :: get_positions
+    procedure, private :: write_boxfile
+    procedure, private :: refine_upscaled
     procedure          :: kill
 end type
 
 contains
 
-    subroutine gaupick( self )
-        class(pickgau), intent(inout) :: self
+    subroutine gaupick( self, self_refine )
+        class(pickgau),           intent(inout) :: self
+        class(pickgau), optional, intent(inout) :: self_refine
+        integer, allocatable :: pos(:,:)
         call self%gaumatch_boximgs
         call self%detect_peaks
         call self%write_boxfile('pickgau_after_detect_peaks.box')
@@ -68,6 +70,12 @@ contains
         call self%remove_outliers
         call self%write_boxfile('pickgau_after_remove_outliers.box')
         call self%peak_vs_nonpeak_stats
+        if( present(self_refine) )then
+            call self%get_positions(pos, self_refine%smpd_shrink)
+            call self_refine%refine_upscaled(pos, self%smpd_shrink)
+            call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
+            deallocate(pos)
+        endif
     end subroutine gaupick
 
     subroutine read_mic_raw( micname, smpd )
@@ -644,7 +652,7 @@ contains
             ny_offset = 0
             do yind = 0,self%ny,self%offset
                 ny_offset = ny_offset + 1
-                if( mask_backgr(xind,yind) .and. self%box_scores(nx_offset,ny_offset) > -1. + TINY )then
+                if( mask_backgr(xind,yind) .and. self%box_scores_mem(nx_offset,ny_offset) > -1. + TINY )then
                     mask_backgr_offset(nx_offset,ny_offset) = .true.
                 endif
             end do
@@ -705,7 +713,7 @@ contains
         integer, allocatable :: pos_refined(:,:)
         real,    allocatable :: scores_refined(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1)
+        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks
         real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
         logical     :: outside, l_err
         nbox = size(pos, dim=1)
@@ -788,6 +796,8 @@ contains
             loc = minloc(dists)
             where(self%inds_offset(:,:) == loc(1)) self%box_scores(:,:) = scores_refined(ibox) 
         end do
+        npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', npeaks
         ! destruct
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
