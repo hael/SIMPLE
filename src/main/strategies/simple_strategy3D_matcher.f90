@@ -191,7 +191,6 @@ contains
 
         ! ref regularization
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call reg_obj%reset_regs
             call reg_obj%init_tab
             ! Batch loop
             do ibatch=1,nbatches
@@ -212,19 +211,8 @@ contains
                     batch_end   = batches(ibatch,2)
                     batchsz     = batch_end - batch_start + 1
                     call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                    call reg_obj%shift_align
+                    call reg_obj%shift_search
                 enddo
-            endif
-            if( params_glob%l_reg_debug )then
-                ! Batch loop
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                    call reg_obj%compute_cavgs
-                enddo
-                call reg_obj%output_reproj_cavgs
             endif
         endif
 

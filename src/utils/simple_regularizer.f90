@@ -24,18 +24,14 @@ type reg_params
 end type reg_params
 
 type :: regularizer
-    integer                  :: nrots
-    integer                  :: nrefs
-    integer                  :: pftsz
-    integer                  :: inpl_ns                     ! in-plane # samplings
-    integer                  :: refs_ns                     ! refs # samplings
-    integer                  :: kfromto(2)
-    complex(dp), allocatable :: cavg_odd(:,:,:)             !< -"-, reg terms
-    complex(dp), allocatable :: cavg_even(:,:,:)            !< -"-, reg terms
-    real(dp),    allocatable :: cavg_denom_odd(:,:,:)       !< -"-, reg denom
-    real(dp),    allocatable :: cavg_denom_even(:,:,:)      !< -"-, reg denom
-    real,        allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
-    integer,     allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
+    integer              :: nrots
+    integer              :: nrefs
+    integer              :: pftsz
+    integer              :: inpl_ns                     ! in-plane # samplings
+    integer              :: refs_ns                     ! refs # samplings
+    integer              :: kfromto(2)
+    real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
+    integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -46,13 +42,9 @@ type :: regularizer
     procedure          :: fill_tab_smpl
     procedure          :: fill_tab_noshift
     procedure          :: fill_tab_inpl_smpl
-    procedure          :: prev_cavgs
-    procedure          :: compute_cavgs
-    procedure          :: output_reproj_cavgs
     procedure          :: tab_align
-    procedure          :: shift_align
+    procedure          :: shift_search
     procedure          :: nonuni_sto_ref_align
-    procedure          :: reset_regs
     procedure, private :: calc_raw_frc, calc_pspec
     procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
     generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
@@ -70,17 +62,8 @@ contains
         self%nrefs   = pftcc%nrefs
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
-        ! allocation
-        allocate(self%cavg_denom_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%cavg_denom_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%cavg_even(self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%cavg_odd( self%pftsz,self%kfromto(1):self%kfromto(2),self%nrefs))
-        self%cavg_odd        = 0.d0
-        self%cavg_even       = 0.d0
-        self%cavg_denom_odd  = 0.d0
-        self%cavg_denom_even = 0.d0
-        self%inpl_ns         = int(self%nrots * params_glob%reg_athres / 360.)
-        self%refs_ns         = int(self%nrefs * (1. - cos(params_glob%reg_athres * PI / 180.)) / 2.)
+        self%inpl_ns = int(self%nrots * params_glob%reg_athres / 360.)
+        self%refs_ns = int(self%nrefs * (1. - cos(params_glob%reg_athres * PI / 180.)) / 2.)
         self%pftcc => pftcc
     end subroutine new
 
@@ -185,79 +168,9 @@ contains
         !$omp end parallel do
     end subroutine fill_tab_smpl
 
-    subroutine compute_cavgs( self )
-        class(regularizer), intent(inout) :: self
-        integer     :: iptcl, iref, loc, pind_here
-        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
-        do iptcl = params_glob%fromp, params_glob%top
-            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                iref = self%ptcl_ref_map(iptcl)
-                pind_here = self%pftcc%pinds(iptcl)
-                loc = self%ref_ptcl_tab(iref, iptcl)%loc
-                loc = (self%nrots+1)-(loc-1)
-                if( loc > self%nrots ) loc = loc - self%nrots
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here),            ctf_rot, loc)
-                if( params_glob%l_lpset )then
-                    if( self%pftcc%ptcl_iseven(iptcl) )then
-                        self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
-                        self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
-                    else
-                        self%cavg_odd(:,:,iref)       = self%cavg_odd(:,:,iref)       + ptcl_ctf_rot
-                        self%cavg_denom_odd(:,:,iref) = self%cavg_denom_odd(:,:,iref) + ctf_rot**2
-                    endif
-                else
-                    self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
-                    self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
-                    self%cavg_odd(:,:,iref)        = self%cavg_odd(:,:,iref)        + ptcl_ctf_rot
-                    self%cavg_denom_odd(:,:,iref)  = self%cavg_denom_odd(:,:,iref)  + ctf_rot**2
-                endif
-            endif
-        enddo
-    end subroutine compute_cavgs
-
-    subroutine prev_cavgs( self )
-        class(regularizer), intent(inout) :: self
-        type(ori)   :: o_prev
-        integer     :: iptcl, iref, loc, pind_here
-        complex     :: ptcl_ctf(self%pftsz,self%kfromto(1):self%kfromto(2),self%pftcc%nptcls)
-        complex(dp) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        ptcl_ctf = self%pftcc%pfts_ptcls * self%pftcc%ctfmats
-        do iptcl = params_glob%fromp, params_glob%top
-            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                call build_glob%spproj_field%get_ori(iptcl, o_prev)     ! previous ori
-                iref      = build_glob%eulspace%find_closest_proj(o_prev)   ! previous projection direction
-                pind_here = self%pftcc%pinds(iptcl)
-                loc = self%ref_ptcl_tab(iref, iptcl)%loc
-                loc = (self%nrots+1)-(loc-1)
-                if( loc > self%nrots ) loc = loc - self%nrots
-                call self%rotate_polar(cmplx(ptcl_ctf(:,:,pind_here), kind=dp), ptcl_ctf_rot, loc)
-                call self%rotate_polar(self%pftcc%ctfmats(:,:,pind_here), ctf_rot, loc)
-                if( params_glob%l_lpset )then
-                    if( self%pftcc%ptcl_iseven(iptcl) )then
-                        self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
-                        self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
-                    else
-                        self%cavg_odd(:,:,iref)       = self%cavg_odd(:,:,iref)       + ptcl_ctf_rot
-                        self%cavg_denom_odd(:,:,iref) = self%cavg_denom_odd(:,:,iref) + ctf_rot**2
-                    endif
-                else
-                    self%cavg_even(:,:,iref)       = self%cavg_even(:,:,iref)       + ptcl_ctf_rot
-                    self%cavg_denom_even(:,:,iref) = self%cavg_denom_even(:,:,iref) + ctf_rot**2
-                    self%cavg_odd(:,:,iref)        = self%cavg_odd(:,:,iref)        + ptcl_ctf_rot
-                    self%cavg_denom_odd(:,:,iref)  = self%cavg_denom_odd(:,:,iref)  + ctf_rot**2
-                endif
-            endif
-        enddo
-    end subroutine prev_cavgs
-
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl, ithr
+        integer :: iref, iptcl
         real    :: sum_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
@@ -285,7 +198,7 @@ contains
         call self%nonuni_sto_ref_align
     end subroutine tab_align
 
-    subroutine shift_align( self )
+    subroutine shift_search( self )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
         type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
@@ -302,7 +215,7 @@ contains
         do iref = 1, self%nrefs
             iptcl = self%ptcl_ref_map(iref)
             if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                ithr  =  omp_get_thread_num() + 1
+                ithr = omp_get_thread_num() + 1
                 call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
                 irot = self%ref_ptcl_tab(iref,iptcl)%loc
                 cxy  = grad_shsrch_obj(ithr)%minimize(irot)
@@ -313,7 +226,7 @@ contains
             endif
         enddo
         !$omp end parallel do
-    end subroutine shift_align
+    end subroutine shift_search
 
     subroutine nonuni_sto_ref_align( self )
         class(regularizer), intent(inout) :: self
@@ -339,64 +252,6 @@ contains
             mask_ip(min_ind_ip) = .false.
         enddo
     end subroutine nonuni_sto_ref_align
-
-    subroutine output_reproj_cavgs( self )
-        class(regularizer), intent(inout) :: self
-        complex,            allocatable   :: cmat(:,:)
-        type(image) :: calc_cavg
-        integer     :: iref, box
-        ! form the cavgs
-        where( abs(self%cavg_denom_odd) < DTINY )
-            self%cavg_odd = 0._dp
-        elsewhere
-            self%cavg_odd = self%cavg_odd / self%cavg_denom_odd
-        endwhere
-        where( abs(self%cavg_denom_even) < DTINY )
-            self%cavg_even = 0._dp
-        elsewhere
-            self%cavg_even = self%cavg_even / self%cavg_denom_even
-        endwhere
-        ! output images for debugging
-        do iref = 1, self%nrefs
-            ! odd
-            call self%pftcc%polar2cartesian(cmplx(self%cavg_odd(:,:,iref), kind=sp), cmat, box)
-            call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('odd_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-            call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_odd(:,:,iref), kind=sp), cmat, box)
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('odd_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-            !even
-            call self%pftcc%polar2cartesian(cmplx(self%cavg_even(:,:,iref), kind=sp), cmat, box)
-            call calc_cavg%new([box,box,1], params_glob%smpd * real(params_glob%box)/real(box))
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('even_polar_cavg_reg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-            call self%pftcc%polar2cartesian(cmplx(self%pftcc%pfts_refs_even(:,:,iref), kind=sp), cmat, box)
-            call calc_cavg%zero_and_flag_ft
-            call calc_cavg%set_cmat(cmat)
-            call calc_cavg%shift_phorig()
-            call calc_cavg%ifft
-            call calc_cavg%write('even_polar_cavg_'//int2str(params_glob%which_iter)//'.mrc', iref)
-        enddo
-        call calc_cavg%kill
-    end subroutine output_reproj_cavgs
-    
-    subroutine reset_regs( self )
-        class(regularizer), intent(inout) :: self
-        self%cavg_odd        = 0._dp
-        self%cavg_even       = 0._dp
-        self%cavg_denom_odd  = 0._dp
-        self%cavg_denom_even = 0._dp
-    end subroutine reset_regs
 
     subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
         class(regularizer), intent(inout) :: self
@@ -496,7 +351,6 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%cavg_odd, self%cavg_denom_odd,self%cavg_even,self%cavg_denom_even)
         if(allocated(self%ref_ptcl_cor)) deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map)
     end subroutine kill
 end module simple_regularizer

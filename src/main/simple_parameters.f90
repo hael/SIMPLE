@@ -71,7 +71,6 @@ type :: parameters
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
-    character(len=3)          :: reg_debug='no'       !< output images for debugging in reg (yes|no){no}
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
     character(len=3)          :: reg_sh_samp='no'     !< sampling shifts in reg (yes|no){no}
     character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
@@ -429,7 +428,6 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_reg_init     = .false.
-    logical :: l_reg_debug    = .false.
     logical :: l_reg_norm     = .false.
     logical :: l_reg_sh_samp  = .false.
     logical :: l_reg_opt_ang  = .false.
@@ -568,7 +566,6 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_init',       self%reg_init)
-        call check_carg('reg_debug',      self%reg_debug)
         call check_carg('reg_norm',       self%reg_norm)
         call check_carg('reg_sh_samp',    self%reg_sh_samp)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
@@ -1458,7 +1455,6 @@ contains
         end select
         ! reg options
         self%l_reg_init    = trim(self%reg_init    ).eq.'yes'
-        self%l_reg_debug   = trim(self%reg_debug   ).eq.'yes'
         self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
         self%l_reg_sh_samp = trim(self%reg_sh_samp ).eq.'yes'
         self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
