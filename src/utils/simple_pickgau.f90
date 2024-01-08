@@ -124,22 +124,22 @@ contains
         real        :: hpfreq, scale, maxdiam_max
         if( self%exists ) call self%kill
         self%smpd_shrink = smpd_shrink
-        if( trim(params_glob%pick_roi).eq.'yes' )then
+        !if( trim(params_glob%pick_roi).eq.'yes' )then
             ! high-pass micrograph
-            ldim_pd(1:2) = find_larger_magic_box(ldim_raw(1:2)+1)
-            if( minval(ldim_pd(1:2) - ldim_raw(1:2)) < 16 )then
-                ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
-            endif
-            ldim_pd(3) = 1
-            call mic_pad%new(ldim_pd, smpd_raw)
-            call mic_raw%pad_mirr(mic_pad)
-            call mic_pad%fft
-            hpfreq = real(minval(ldim_pd(1:2)))*self%smpd_shrink/16.
-            call mic_pad%bp(hpfreq,0.)
-            call mic_pad%ifft
-            call mic_pad%clip(mic_raw)
-            call mic_pad%kill
-        endif
+        !    ldim_pd(1:2) = find_larger_magic_box(ldim_raw(1:2)+1)
+        !    if( minval(ldim_pd(1:2) - ldim_raw(1:2)) < 16 )then
+        !        ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
+        !    endif
+        !    ldim_pd(3) = 1
+        !    call mic_pad%new(ldim_pd, smpd_raw)
+        !    call mic_raw%pad_mirr(mic_pad)
+        !    call mic_pad%fft
+        !    hpfreq = real(minval(ldim_pd(1:2)))*self%smpd_shrink/16.
+        !    call mic_pad%bp(hpfreq,0.)
+        !    call mic_pad%ifft
+        !    call mic_pad%clip(mic_raw)
+        !    call mic_pad%kill
+        !endif
         ! set shrunken logical dimensions
         scale            = smpd_raw / self%smpd_shrink
         self%ldim(1)     = round2even(real(ldim_raw(1)) * scale)
@@ -460,6 +460,9 @@ contains
         integer :: ioff, joff
         tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
         call detect_peak_thres(size(tmp), self%nboxes_ub, tmp, self%t)
+        print *, '*******'
+        print *, 'Threshold for peak detection is ', self%t
+        print *, '*******'
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
@@ -626,7 +629,7 @@ contains
         real,    allocatable :: scores_peak(:), scores_nonpeak(:)
         integer, allocatable :: pos(:,:)
         real    :: a_peak, s_peak, a_nonpeak, s_nonpeak, smd, ksstat, prob, pixrad_shrink, rpos(2)
-        integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset
+        integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
         logical :: mask_backgr(0:self%nx,0:self%ny), mask_backgr_offset(self%nx_offset,self%ny_offset)
         ! prepare background mask
         call self%get_positions(pos)
@@ -644,8 +647,10 @@ contains
                 end do
             end do
         end do
+
         ! translate background mask to offset coordinates
         mask_backgr_offset = .false.
+        mask_count = 0
         nx_offset = 0
         do xind = 0,self%nx,self%offset
             nx_offset = nx_offset + 1
@@ -654,6 +659,7 @@ contains
                 ny_offset = ny_offset + 1
                 if( mask_backgr(xind,yind) .and. self%box_scores_mem(nx_offset,ny_offset) > -1. + TINY )then
                     mask_backgr_offset(nx_offset,ny_offset) = .true.
+                    mask_count = mask_count + 1 !not currently detecting any background coordinates
                 endif
             end do
         end do
@@ -662,7 +668,11 @@ contains
         scores_nonpeak = pack(self%box_scores_mem, mask=mask_backgr_offset)
         ! calc stats
         call avg_sdev(scores_peak,    a_peak,    s_peak)
+        print *, 'A_PEAK = ', a_peak 
+        print *, 'S_PEAK = ', s_peak
         call avg_sdev(scores_nonpeak, a_nonpeak, s_nonpeak)
+        print *, 'A_NONPEAK = ', a_nonpeak
+        print *, 'S_NONPEAK = ', s_nonpeak
         smd = std_mean_diff(a_peak, a_nonpeak, s_peak, s_nonpeak)
         call kstwo(scores_peak, size(scores_peak), scores_nonpeak, size(scores_nonpeak), ksstat, prob)
         write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
@@ -716,6 +726,7 @@ contains
         integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks
         real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
         logical     :: outside, l_err
+        print *, 'ENTERED REFINE_UPSCALED'
         nbox = size(pos, dim=1)
         allocate(pos_refined(nbox,2),  source= 0 )
         allocate(scores_refined(nbox), source=-1.)
@@ -723,6 +734,7 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
         factor = real(self%offset) * (smpd_old / self%smpd_shrink)
+        print *, 'FACTOR = ', factor
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
@@ -760,6 +772,7 @@ contains
             end do
             !$omp end parallel do
         else
+            print *, 'NBOX = ', nbox
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
             do ibox = 1,nbox
@@ -802,6 +815,7 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
+        print *, 'END OF REFINE_UPSCALED'
     end subroutine refine_upscaled
 
     subroutine kill( self )
