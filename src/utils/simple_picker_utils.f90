@@ -1,4 +1,5 @@
-module simple_picker_utils
+module simple_picker_utils 
+
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
@@ -131,23 +132,23 @@ contains
         self%ndev = NDEV_DEFAULT
         if( present(ndev) ) self%ndev = ndev
         ! init mask
-        self%l_roi = trim(params_glob%pick_roi).eq.'yes'
+        !self%l_roi = trim(params_glob%pick_roi).eq.'yes'
         ! high-pass micrograph
-        if( self%l_roi )then
-            ldim_pd(1:2) = find_larger_magic_box(self%ldim_raw(1:2)+1)
-            if( minval(ldim_pd(1:2)-self%ldim_raw(1:2)) < 16 )then
-                ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
-            endif
-            ldim_pd(3) = 1
-            call mic_pad%new(ldim_pd, self%smpd_raw)
-            call self%mic_raw%pad_mirr(mic_pad)
-            call mic_pad%fft
-            hpfreq = real(minval(ldim_pd(1:2)))*SMPD_SHRINK1/16.
-            call mic_pad%bp(hpfreq,0.)
-            call mic_pad%ifft
-            call mic_pad%clip(self%mic_raw)
-            call mic_pad%kill
-        endif
+        !if( self%l_roi )then
+        !    ldim_pd(1:2) = find_larger_magic_box(self%ldim_raw(1:2)+1)
+        !    if( minval(ldim_pd(1:2)-self%ldim_raw(1:2)) < 16 )then
+        !        ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
+        !    endif
+        !    ldim_pd(3) = 1
+        !    call mic_pad%new(ldim_pd, self%smpd_raw)
+        !    call self%mic_raw%pad_mirr(mic_pad)
+        !    call mic_pad%fft
+        !    hpfreq = real(minval(ldim_pd(1:2)))*SMPD_SHRINK1/16.
+        !    call mic_pad%bp(hpfreq,0.)
+        !    call mic_pad%ifft
+        !    call mic_pad%clip(self%mic_raw)
+        !    call mic_pad%kill
+        !endif
         ! shrink micrograph
         call self%mic_shrink1%new(self%ldim_shrink1, SMPD_SHRINK1)
         call self%mic_shrink2%new(self%ldim_shrink2, SMPD_SHRINK2)
@@ -284,6 +285,7 @@ contains
         type(image) :: mic,mic_pick,collage
         real    :: shrink2
         integer :: box,i,j,k,ii,jj,pos(2)
+        character(len=100) :: filename_center, filename_distance
         if( present(dir_out) )then
             self%fbody   = trim(dir_out)//trim(self%fbody)
             self%boxname = trim(dir_out)//trim(self%boxname)
@@ -302,13 +304,20 @@ contains
         call self%analyze_boximgs1
         if( self%nboxes1 > 0 )then
             call self%center_filter
+            call write_boxfile(self%nboxes1, self%positions1, self%ldim_box1(1), 'picker_utils_after_center_filter.box')
             call self%distance_filter(self%nboxes1, self%box_scores1, self%positions1, DIST_THRES1)
-            call self%refine_positions
-            if( self%l_roi )then
-                call self%distance_filter(self%nboxes2, self%box_scores2, self%positions2, DIST_THRES2)
-            endif
+            call write_boxfile(self%nboxes1, self%positions1, self%ldim_box1(1), 'picker_utils_after_distance_filter.box')
+            
+            !if( self%l_roi )then
+            !    call self%distance_filter(self%nboxes2, self%box_scores2, self%positions2, DIST_THRES2)
+            !endif
+
             call self%remove_outliers
+            call write_boxfile(self%nboxes1, self%positions1, self%ldim_box1(1), 'picker_utils_after_remove_outliers.box')
+            call self%refine_positions
+            call write_boxfile(self%nboxes2, self%positions2, self%ldim_box2(1), 'picker_utils_after_refine_positions.box')
             call self%peak_vs_nonpeak_stats
+            
             ! # ptcls
             nptcls          = self%nboxes2
             ! bring back coordinates to original sampling
@@ -828,9 +837,11 @@ contains
         self%nboxes1   = 0
         self%nx_offset = 0
         do xind = 0,self%nx1,OFFSET
+        !do xind = 0, self%nx2, OFFSET
             self%nx_offset = self%nx_offset + 1
             self%ny_offset = 0
             do yind = 0,self%ny1,OFFSET
+            !do yind = 0, self%ny2, OFFSET
                 self%nboxes1   = self%nboxes1   + 1
                 self%ny_offset = self%ny_offset + 1
                 if( self%l_mic_mask1(xind+1,yind+1) ) self%nboxes1 = self%nboxes1 + 1
@@ -839,7 +850,9 @@ contains
         ! count # boxes, upper bound
         self%nboxes_ub = 0
         do xind = 0,self%nx1,OFFSET_UB
+        !do xind = 0,self%nx2,OFFSET_UB
             do yind = 0,self%ny1,OFFSET_UB
+            !do yind = 0,self%ny2,OFFSET_UB
                 if( self%l_mic_mask1(xind+1,yind+1) ) self%nboxes_ub = self%nboxes_ub + 1
             end do
         end do
@@ -853,9 +866,11 @@ contains
         self%nboxes1   = 0
         self%nx_offset = 0
         do xind = 0,self%nx1,OFFSET
+        !do xind = 0, self%nx2, OFFSET
             self%nx_offset = self%nx_offset + 1
             self%ny_offset = 0
             do yind = 0,self%ny1,OFFSET
+            !do yind = 0, self%ny2, OFFSET
                 self%ny_offset = self%ny_offset + 1
                 if( self%l_mic_mask1(xind+1,yind+1) )then
                     self%nboxes1 = self%nboxes1 + 1
@@ -1019,6 +1034,9 @@ contains
         call detect_peak_thres(size(tmp), int(self%nboxes_ub), tmp, t)
         deallocate(tmp)
         t = max(0.,t)
+        print *, '*******'
+        print *, 'Threshold for peak detection is ', t
+        print *, '*******'
         is_peak = .false.
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
@@ -1058,6 +1076,7 @@ contains
     end subroutine analyze_boximgs1
 
     subroutine center_filter( self )
+        use simple_strings, only: split
         class(picker_utils), intent(inout) :: self
         integer, allocatable :: positions_tmp(:,:)
         real,    allocatable :: box_scores1_tmp(:)
@@ -1103,6 +1122,7 @@ contains
         real        :: box_score, box_score_trial, factor, rpos(2), scores(self%nrefs)
         logical     :: outside, l_err
         type(image) :: boximgs_heap(nthr_glob)
+        print *, 'ENTERED REFINE_POSITIONS'
         if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
         self%nboxes2 = self%nboxes1
         allocate(self%positions2(self%nboxes2,2), source=nint((SMPD_SHRINK1/SMPD_SHRINK2) * real(self%positions1)))
@@ -1111,6 +1131,7 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
         end do
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
+        print *, 'FACTOR = ', factor
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
@@ -1148,6 +1169,7 @@ contains
             end do
             !$omp end parallel do
         else
+            print *, 'SELF%NBOXES2 = ', self%nboxes2
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
             do ibox= 1,self%nboxes2
@@ -1175,9 +1197,11 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
+        print *, 'END OF REFINE_POSITIONS'
     end subroutine refine_positions
 
     subroutine distance_filter( self, nbox, box_scores, positions, threshold )
+        use simple_strings, only: split
         class(picker_utils), intent(inout) :: self
         integer,             intent(inout) :: nbox
         real,                intent(in)    :: threshold
@@ -1188,6 +1212,7 @@ contains
         integer :: ibox, jbox, loc, npeaks
         real    :: dist
         logical :: mask(nbox), selected_pos(nbox)
+        character(len=100) :: filename_distance
         selected_pos = .true.
         do ibox = 1,nbox
             mask = .false.
@@ -1228,19 +1253,19 @@ contains
         class(picker_utils), intent(inout) :: self
         integer, allocatable :: positions_tmp(:,:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ibox, ithr, npeaks, cnt
+        integer     :: ibox, ithr, npeaks, cnt, box
         logical     :: outside
-        real        :: factor, loc_sdevs(self%nboxes2), avg, sdev, t
-        if( .not. allocated(self%positions2) ) THROW_HARD('positions2 need to be set')
+        real        :: factor, loc_sdevs(self%nboxes1), avg, sdev, t
+        if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
         do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
+            call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1) !changing from 2 to 1
         end do
-        factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
+        !factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
         !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside)
-        do ibox = 1,self%nboxes2
+        do ibox = 1,self%nboxes1
             ithr            = omp_get_thread_num() + 1
-            call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
-            loc_sdevs(ibox) = boximgs_heap(ithr)%avg_loc_sdev(nint(factor))
+            call self%mic_shrink1%window_slim([self%positions1(ibox,1),self%positions1(ibox,2)], self%ldim_box1(1), boximgs_heap(ithr), outside)
+            loc_sdevs(ibox) = boximgs_heap(ithr)%avg_loc_sdev(OFFSET)
         end do
         !$omp end parallel do
         call avg_sdev(loc_sdevs, avg, sdev)
@@ -1255,14 +1280,14 @@ contains
         ! update positions2
         allocate(positions_tmp(npeaks,2), source=0)
         cnt = 0
-        do ibox = 1,self%nboxes2
+        do ibox = 1,self%nboxes1
             if( loc_sdevs(ibox) < t )then
                 cnt = cnt + 1
-                positions_tmp(cnt,:) = self%positions2(ibox,:)
+                positions_tmp(cnt,:) = self%positions1(ibox,:)
             endif
         end do
-        self%nboxes2 = npeaks
-        call move_alloc(positions_tmp, self%positions2)
+        self%nboxes1 = npeaks
+        call move_alloc(positions_tmp, self%positions1)
         if( L_WRITE )then
             call self%extract_boximgs2
             call write_boximgs(int(self%nboxes2), self%boximgs2, trim(self%fbody)//'_after_filters.mrcs')
@@ -1289,7 +1314,7 @@ contains
         mask_backgr    = .true. 
         pixrad_shrink2 = (self%maxdiam / 2.) / SMPD_SHRINK2
         do ibox = 1,self%nboxes2
-            rpos      = real(self%positions2(ibox,:))
+            rpos      = real(self%positions1(ibox,:))
             xrange(1) = max(0,        nint(rpos(1) - pixrad_shrink2))
             xrange(2) = min(self%nx2, nint(rpos(1) + pixrad_shrink2))
             yrange(1) = max(0,        nint(rpos(2) - pixrad_shrink2))
@@ -1319,6 +1344,7 @@ contains
                 endif
             end do
         end do
+
         ! extract background info
         allocate(scores_nonpeak(nbackgr), source=0.)
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
@@ -1353,7 +1379,7 @@ contains
         endif
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside,iref,scores,l_err)
-            do ibox = 1,self%nboxes2
+            do ibox = 1,self%nboxes1
                 ithr = omp_get_thread_num() + 1
                 call self%mic_shrink2%window_slim([self%positions2(ibox,1),self%positions2(ibox,2)], self%ldim_box2(1), boximgs_heap(ithr), outside)
                 call boximgs_heap(ithr)%prenorm4real_corr(l_err)
@@ -1381,7 +1407,11 @@ contains
             !$omp end parallel do
         endif
         call avg_sdev(scores_peak,    a_peak,    s_peak)
+        print *, 'A_PEAK = ', a_peak 
+        print *, 'S_PEAK = ', s_peak
         call avg_sdev(scores_nonpeak, a_nonpeak, s_nonpeak)
+        print *, 'A_NONPEAK = ', a_nonpeak
+        print *, 'S_NONPEAK = ', s_nonpeak
         smd = std_mean_diff(a_peak, a_nonpeak, s_peak, s_nonpeak)
         call kstwo(scores_peak, self%nboxes2, scores_nonpeak, nbackgr, ksstat, prob)
         write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
