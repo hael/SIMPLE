@@ -56,8 +56,8 @@ contains
         self%nrefs   = pftcc%nrefs
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
-        self%inpl_ns = int(self%nrots * params_glob%reg_athres / 360.)
-        self%refs_ns = int(self%nrefs * (1. - cos(params_glob%reg_athres * PI / 180.)) / 2.)
+        self%inpl_ns = int(self%nrots * params_glob%reg_athres / 180.)
+        self%refs_ns = int(self%nrefs * params_glob%reg_athres / 180.)
         self%pftcc => pftcc
     end subroutine new
 
@@ -70,8 +70,8 @@ contains
             allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         endif
         self%ref_ptcl_cor = 0.
-        do iref = 1,self%nrefs
-            do iptcl = params_glob%fromp,params_glob%top
+        do iptcl = params_glob%fromp,params_glob%top
+            do iref = 1,self%nrefs
                 self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
                 self%ref_ptcl_tab(iref,iptcl)%iref  = iref
                 self%ref_ptcl_tab(iref,iptcl)%loc   = 0
@@ -181,8 +181,8 @@ contains
         endif
         self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
-        do iref = 1, self%nrefs
-            do iptcl = params_glob%fromp,params_glob%top
+        do iptcl = params_glob%fromp,params_glob%top
+            do iref = 1, self%nrefs
                 self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
             enddo
         enddo
