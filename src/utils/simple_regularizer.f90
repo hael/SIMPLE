@@ -4,11 +4,7 @@ module simple_regularizer
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters,        only: params_glob
-use simple_builder,           only: build_glob
-use simple_ori,               only: geodesic_frobdev
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-use simple_opt_filter,        only: butterworth_filter
 use simple_image
 implicit none
 
@@ -42,12 +38,10 @@ type :: regularizer
     procedure          :: fill_tab_smpl
     procedure          :: fill_tab_noshift
     procedure          :: fill_tab_inpl_smpl
-    procedure          :: tab_align
+    procedure          :: tab_normalize
     procedure          :: shift_search
-    procedure          :: nonuni_sto_ref_align
+    procedure          :: nonuni_tab_align
     procedure, private :: calc_raw_frc, calc_pspec
-    procedure, private :: rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
-    generic            :: rotate_polar => rotate_polar_real, rotate_polar_complex, rotate_polar_real_dp
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -168,7 +162,7 @@ contains
         !$omp end parallel do
     end subroutine fill_tab_smpl
 
-    subroutine tab_align( self )
+    subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
         real    :: sum_corr
@@ -193,10 +187,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! do the actual alignment
-        self%ptcl_ref_map = 1
-        call self%nonuni_sto_ref_align
-    end subroutine tab_align
+    end subroutine tab_normalize
 
     subroutine shift_search( self )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
@@ -228,12 +219,13 @@ contains
         !$omp end parallel do
     end subroutine shift_search
 
-    subroutine nonuni_sto_ref_align( self )
+    subroutine nonuni_tab_align( self )
         class(regularizer), intent(inout) :: self
         integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs), indxarr(self%nrefs)
         real    :: min_ir(self%nrefs), rnd_num
         logical :: mask_ip(params_glob%fromp:params_glob%top)
-        mask_ip = .true.
+        self%ptcl_ref_map = 1   
+        mask_ip           = .true.
         call seed_rnd
         do while( any(mask_ip) )
             min_ir = huge(rnd_num)
@@ -251,71 +243,7 @@ contains
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
             mask_ip(min_ind_ip) = .false.
         enddo
-    end subroutine nonuni_sto_ref_align
-
-    subroutine rotate_polar_real( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        real(sp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
-        integer :: rot
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        ! just need the realpart
-        if( irot == 1 .or. irot == self%pftsz + 1 )then
-            ptcl_ctf_rot = ptcl_ctf
-        else
-            ptcl_ctf_rot(  1:rot-1    , :) = ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
-            ptcl_ctf_rot(rot:self%pftsz,:) = ptcl_ctf(               1:self%pftsz-rot+1,:)
-        end if
-    end subroutine rotate_polar_real
-
-    subroutine rotate_polar_complex( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        complex(dp),        intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp),        intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
-        integer :: rot
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        if( irot == 1 )then
-            ptcl_ctf_rot = ptcl_ctf
-        else if( irot <= self%pftsz )then
-            ptcl_ctf_rot(rot:self%pftsz,:) =       ptcl_ctf(               1:self%pftsz-rot+1,:)
-            ptcl_ctf_rot(  1:rot-1     ,:) = conjg(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:))
-        else if( irot == self%pftsz + 1 )then
-            ptcl_ctf_rot = conjg(ptcl_ctf)
-        else
-            ptcl_ctf_rot(rot:self%pftsz,:) = conjg(ptcl_ctf(               1:self%pftsz-rot+1,:))
-            ptcl_ctf_rot(  1:rot-1     ,:) =       ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:)
-        end if
-    end subroutine rotate_polar_complex
-
-    subroutine rotate_polar_real_dp( self, ptcl_ctf, ptcl_ctf_rot, irot )
-        class(regularizer), intent(inout) :: self
-        real(dp),           intent(in)    :: ptcl_ctf(    self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp),           intent(inout) :: ptcl_ctf_rot(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,            intent(in)    :: irot
-        integer :: rot
-        if( irot >= self%pftsz + 1 )then
-            rot = irot - self%pftsz
-        else
-            rot = irot
-        end if
-        ! just need the realpart
-        if( irot == 1 .or. irot == self%pftsz + 1 )then
-            ptcl_ctf_rot = real(ptcl_ctf, dp)
-        else
-            ptcl_ctf_rot(  1:rot-1    , :) = real(ptcl_ctf(self%pftsz-rot+2:self%pftsz      ,:), dp)
-            ptcl_ctf_rot(rot:self%pftsz,:) = real(ptcl_ctf(               1:self%pftsz-rot+1,:), dp)
-        end if
-    end subroutine rotate_polar_real_dp
+    end subroutine nonuni_tab_align
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )

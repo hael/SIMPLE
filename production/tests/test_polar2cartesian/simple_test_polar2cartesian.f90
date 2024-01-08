@@ -1,7 +1,6 @@
 program simple_test_polar2cartesian
 include 'simple_lib.f08'
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_regularizer,      only: regularizer
 use simple_cmdline,          only: cmdline
 use simple_builder,          only: builder
 use simple_image,            only: image
@@ -13,7 +12,6 @@ type(cmdline)          :: cline
 type(builder)          :: b
 type(parameters)       :: p
 type(polarft_corrcalc) :: pftcc
-type(regularizer)      :: reg_obj
 type(polarizer)        :: img_copy, img
 type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 
@@ -22,8 +20,7 @@ real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 1
 real,    allocatable   :: corrs(:)
 real                   :: shift(2), corr, cxy(3), lims(2,2), rmsd, df
-complex, allocatable   :: cmat(:,:)
-complex(dp), allocatable :: pft(:,:), pft_bak(:,:)
+complex, allocatable   :: cmat(:,:), pft(:,:), pft_bak(:,:)
 integer                :: xsh, ysh, xbest, ybest, i, irot, nrots, box
 real, allocatable      :: sigma2_noise(:,:)
 if( command_argument_count() < 3 )then
@@ -50,7 +47,6 @@ p%kfromto(2) = 80
 allocate( sigma2_noise(p%kfromto(1):p%kfromto(2), 1:N_PTCLS), source=1.0 )
 call b%build_general_tbox(p, cline)
 call pftcc%new(N_PTCLS, [1,N_PTCLS], p%kfromto)
-call reg_obj%new(pftcc)
 nrots = pftcc%get_nrots()
 allocate(corrs(nrots))
 call img_copy%init_polarizer(pftcc, p%alpha)
@@ -94,14 +90,14 @@ cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), 360.-pftcc%get_rot(irot)
 
 ! stashing ptcl pft
-pft_bak = cmplx(pftcc%pfts_ptcls(:,:,1),kind=dp)
+pft_bak = pftcc%pfts_ptcls(:,:,1)
 allocate(pft(nrots/2,pftcc%nk))
 
 ! 0: -shift then irot
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft_bak,kind=sp)
+pftcc%pfts_ptcls(:,:,1) = pft_bak
 call pftcc%shift_ptcl(1,-cxy(2:3))
-call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,1),kind=dp), pft, irot)
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft,kind=sp)
+call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,1), irot, pft)
+pftcc%pfts_ptcls(:,:,1) = pft
 call pftcc%polar2cartesian(1,.false.,cmat,box)
 call img%new([box,box,1],1.0)
 call img%set_cmat(cmat)
@@ -110,10 +106,10 @@ call img%ifft
 call img%write('particle_aligned_0_polar.mrc')
 
 ! 1: +shift then irot
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft_bak,kind=sp)
+pftcc%pfts_ptcls(:,:,1) = pft_bak
 call pftcc%shift_ptcl(1,cxy(2:3))
-call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,1),kind=dp), pft, irot)
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft,kind=sp)
+call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,1), irot, pft)
+pftcc%pfts_ptcls(:,:,1) = pft
 call pftcc%polar2cartesian(1,.false.,cmat,box)
 call img%new([box,box,1],1.0)
 call img%set_cmat(cmat)
@@ -127,10 +123,10 @@ irot =  nrots+1 - (irot-1)
 if( irot > nrots ) irot = irot - nrots
 
 ! 2: -shift then 360-irot
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft_bak,kind=sp)
+pftcc%pfts_ptcls(:,:,1) = pft_bak
 call pftcc%shift_ptcl(1,-cxy(2:3))
-call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,1),kind=dp), pft, irot)
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft,kind=sp)
+call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,1), irot, pft)
+pftcc%pfts_ptcls(:,:,1) = pft
 call pftcc%polar2cartesian(1,.false.,cmat,box)
 call img%new([box,box,1],1.0)
 call img%set_cmat(cmat)
@@ -139,10 +135,10 @@ call img%ifft
 call img%write('particle_aligned_2_polar.mrc')
 
 ! 3: +shift then 360-irot
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft_bak,kind=sp)
+pftcc%pfts_ptcls(:,:,1) = pft_bak
 call pftcc%shift_ptcl(1,cxy(2:3))
-call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,1),kind=dp), pft, irot)
-pftcc%pfts_ptcls(:,:,1) = cmplx(pft,kind=sp)
+call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,1), irot, pft)
+pftcc%pfts_ptcls(:,:,1) = pft
 call pftcc%polar2cartesian(1,.false.,cmat,box)
 call img%new([box,box,1],1.0)
 call img%set_cmat(cmat)
