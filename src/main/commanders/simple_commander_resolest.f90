@@ -394,16 +394,14 @@ contains
         use simple_regularizer,         only: regularizer
         class(cavg_filter2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        complex,          allocatable :: cmat(:,:)
+        complex,          allocatable :: cmat(:,:), cls_avg(:,:), ptcl_rot(:,:), ctf_rot(:,:)
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: cavgsstk
-        complex(dp),      allocatable :: cls_avg(:,:), ptcl_rot(:,:)
-        real(dp),         allocatable :: ctf_rot(:,:), denom(:,:)
+        real,             allocatable :: denom(:,:)
         type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(image)                   :: img_cavg, calc_cavg, ptcl_match, img_cavg_pd
-        type(regularizer)             :: reg_obj
         integer  :: nptcls, iptcl, nptcls_cls
         logical  :: l_ctf
         integer  :: ncls, j, box, loc
@@ -419,7 +417,6 @@ contains
         nptcls_cls = size(pinds)
         call pftcc%new(nptcls_cls, [1,nptcls_cls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls_cls, pinds)
-        call reg_obj%new(pftcc)
         call build%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         call ptcl_match%new([params%box_crop, params%box_crop, 1], params%smpd_crop)
         call prepimgbatch(nptcls)
@@ -446,8 +443,8 @@ contains
             ! accumulating the cls_avg
             loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
             if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-            call reg_obj%rotate_polar(cmplx(pftcc%pfts_ptcls(:,:,j), kind=dp), ptcl_rot, loc)
-            call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j), ctf_rot, loc)
+            call pftcc%rotate_ptcl(      pftcc%pfts_ptcls(:,:,j), loc, ptcl_rot)
+            call pftcc%rotate_ptcl(cmplx(pftcc%ctfmats(:,:,j)),   loc, ctf_rot)
             cls_avg = cls_avg + ptcl_rot*ctf_rot
             denom   = denom   +          ctf_rot**2
             ! writing the raw stack
@@ -459,7 +456,7 @@ contains
             call calc_cavg%ifft
             call calc_cavg%write('ptcls_stk.mrc', j)
             ! writing the ctf stack
-            call pftcc%polar2cartesian(cmplx(pftcc%ctfmats(:,:,j), kind=sp), cmat, box)
+            call pftcc%polar2cartesian(cmplx(pftcc%ctfmats(:,:,j)), cmat, box)
             call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)
@@ -467,7 +464,7 @@ contains
             call calc_cavg%ifft
             call calc_cavg%write('ctfs_stk.mrc', j)
             ! writing the aligned ptcls stack
-            call pftcc%polar2cartesian(cmplx(ptcl_rot, kind=sp), cmat, box)
+            call pftcc%polar2cartesian(ptcl_rot, cmat, box)
             call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)
@@ -475,7 +472,7 @@ contains
             call calc_cavg%ifft
             call calc_cavg%write('aligned_ptcls_stk.mrc', j)
             ! writing the aligned ctf stack
-            call pftcc%polar2cartesian(cmplx(ctf_rot, kind=sp), cmat, box)
+            call pftcc%polar2cartesian(ctf_rot, cmat, box)
             call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)
@@ -484,7 +481,7 @@ contains
             call calc_cavg%write('aligned_ctfs_stk.mrc', j)
         enddo
         ! polar class average
-        call pftcc%polar2cartesian(cmplx(cls_avg / denom, kind=sp), cmat, box)
+        call pftcc%polar2cartesian(cls_avg / denom, cmat, box)
         call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
         call calc_cavg%zero_and_flag_ft
         call calc_cavg%set_cmat(cmat)
@@ -516,12 +513,12 @@ contains
                 ! accumulating the cls_avg
                 loc = pftcc%get_roind(build%spproj_field%e3get(iptcl))
                 if( loc > pftcc%nrots ) loc = loc - pftcc%nrots
-                call reg_obj%rotate_polar(pftcc%ctfmats(:,:,j), ctf_rot, loc)
-                cls_avg = cls_avg + ctf_rot * cmplx(pftcc%pfts_ptcls(:,:,j), kind=dp)
+                call pftcc%rotate_ptcl(cmplx(pftcc%ctfmats(:,:,j)), loc, ctf_rot)
+                cls_avg = cls_avg + ctf_rot * pftcc%pfts_ptcls(:,:,j)
                 denom   = denom   + ctf_rot**2
             enddo
             ! polar class average
-            call pftcc%polar2cartesian(cmplx(cls_avg / denom, kind=sp), cmat, box)
+            call pftcc%polar2cartesian(cls_avg / denom, cmat, box)
             call calc_cavg%new([box,box,1], params%smpd*real(params%box)/real(box))
             call calc_cavg%zero_and_flag_ft
             call calc_cavg%set_cmat(cmat)

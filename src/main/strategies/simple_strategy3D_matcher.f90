@@ -204,7 +204,8 @@ contains
                     call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
                 endif
             enddo
-            call reg_obj%tab_align
+            call reg_obj%tab_normalize
+            call reg_obj%nonuni_tab_align
             if( params_glob%l_doshift )then
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
