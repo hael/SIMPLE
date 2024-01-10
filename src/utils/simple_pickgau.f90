@@ -72,7 +72,7 @@ contains
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
-            call self_refine%refine_upscaled(pos, self%smpd_shrink)
+            call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
             call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
             deallocate(pos)
         endif
@@ -716,10 +716,11 @@ contains
         call fclose(funit)
     end subroutine write_boxfile
 
-    subroutine refine_upscaled( self, pos, smpd_old )
+    subroutine refine_upscaled( self, pos, smpd_old, offset_old )
         class(pickgau), intent(inout) :: self
         integer,        intent(in)    :: pos(:,:)
         real,           intent(in)    :: smpd_old
+        integer,        intent(in)    :: offset_old
         integer, allocatable :: pos_refined(:,:)
         real,    allocatable :: scores_refined(:)
         type(image) :: boximgs_heap(nthr_glob)
@@ -733,16 +734,16 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
-        factor = real(self%offset) * (smpd_old / self%smpd_shrink)
+        factor = real(offset_old) * (smpd_old / self%smpd_shrink)
         print *, 'FACTOR = ', factor
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
             do ibox = 1,nbox
                 rpos      = real(pos(ibox,:))
-                xrange(1) = max(0, nint(rpos(1) - factor))
+                xrange(1) = max(0,       nint(rpos(1) - factor))
                 xrange(2) = min(self%nx, nint(rpos(1) + factor))
-                yrange(1) = max(0, nint(rpos(2) - factor))
+                yrange(1) = max(0,       nint(rpos(2) - factor))
                 yrange(2) = min(self%ny, nint(rpos(2) + factor))
                 box_score = -1.
                 do xind = xrange(1),xrange(2)
@@ -777,9 +778,9 @@ contains
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
             do ibox = 1,nbox
                 rpos      = real(pos(ibox,:))
-                xrange(1) = max(0, nint(rpos(1) - factor))
+                xrange(1) = max(0,       nint(rpos(1) - factor))
                 xrange(2) = min(self%nx, nint(rpos(1) + factor))
-                yrange(1) = max(0, nint(rpos(2) - factor))
+                yrange(1) = max(0,       nint(rpos(2) - factor))
                 yrange(2) = min(self%ny, nint(rpos(2) + factor))
                 box_score = -1.
                 do xind = xrange(1),xrange(2)
