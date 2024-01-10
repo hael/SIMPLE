@@ -28,7 +28,7 @@ type :: regularizer
     integer              :: kfromto(2)
     real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
     integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
-    real,    allocatable :: sorted_corr(:,:)
+    real,    allocatable :: irot_corr(:,:), refs_corr(:,:)
     integer, allocatable :: irot_inds(:,:), refs_inds(:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
@@ -41,7 +41,7 @@ type :: regularizer
     procedure          :: tab_normalize
     procedure          :: shift_search
     procedure          :: nonuni_tab_align
-    procedure, private :: calc_raw_frc, calc_pspec, reg_multinomal
+    procedure, private :: calc_raw_frc, calc_pspec, ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -61,8 +61,8 @@ contains
         self%refs_ns = int(self%nrefs * params_glob%reg_athres / 180.)
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
-                &self%sorted_corr(self%nrefs,params_glob%nthr), source=0.)
-        allocate(self%irot_inds(self%nrots,params_glob%nthr),self%refs_inds(self%nrefs,params_glob%nthr), source=0)
+                &self%refs_corr(self%nrefs,params_glob%nthr), self%irot_corr(self%nrots,params_glob%nthr), source=0.)
+        allocate(self%irot_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         do iptcl = params_glob%fromp,params_glob%top
@@ -76,7 +76,7 @@ contains
         enddo
     end subroutine new
 
-    subroutine fill_tab_inpl_smpl( self, glob_pinds )
+    subroutine fill_tab_inpl_smpl2( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer :: i, iref, iptcl, j, irnd, ithr
@@ -99,29 +99,40 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine fill_tab_inpl_smpl
+    end subroutine fill_tab_inpl_smpl2
 
-    subroutine fill_tab_inpl_smpl2( self, glob_pinds )
+    subroutine fill_tab_inpl_smpl( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer :: i, iref, iptcl, irnd
-        real    :: inpl_corrs(self%nrots), rnd_num
+        integer :: i, j, iref, iptcl, irnd, ithr
+        real    :: inpl_corrs(self%nrots), rnd_num, inpl_corrs_norm(self%nrots)
         call seed_rnd
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd,rnd_num) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,inpl_corrs_norm,irnd,rnd_num,ithr) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
+                ithr  = omp_get_thread_num() + 1
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
-                inpl_corrs = inpl_corrs/sum(inpl_corrs)
-                irnd       = self%reg_multinomal(inpl_corrs)
-                self%ref_ptcl_tab(iref,iptcl)%loc = irnd
+                if( sum(inpl_corrs) < TINY )then
+                    self%irot_inds(:,ithr) = (/(j,j=1,self%nrots)/)
+                    call hpsort(inpl_corrs, self%irot_inds(:,ithr))
+                    call random_number(rnd_num)
+                    irnd = 1 + floor(real(self%inpl_ns) * rnd_num)
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                    self%ref_ptcl_tab(iref,iptcl)%loc = self%irot_inds(irnd, ithr)
+                    self%ref_ptcl_cor(iref,iptcl)     =     inpl_corrs(irnd)
+                else
+                    inpl_corrs_norm = (1. - inpl_corrs/sum(inpl_corrs))
+                    irnd            = self%inpl_multinomal(inpl_corrs_norm)
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                    self%ref_ptcl_tab(iref,iptcl)%loc = irnd
+                    self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                endif
             enddo
         enddo
         !$omp end parallel do
-    end subroutine fill_tab_inpl_smpl2
+    end subroutine fill_tab_inpl_smpl
 
     subroutine fill_tab_smpl( self, glob_pinds )
         class(regularizer), intent(inout) :: self
@@ -178,7 +189,11 @@ contains
             enddo
             !$omp end parallel do
         endif
-        self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
+        if( maxval(self%ref_ptcl_cor) < TINY )then
+            self%ref_ptcl_cor = 0.
+        else
+            self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
+        endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iptcl = params_glob%fromp,params_glob%top
             do iref = 1, self%nrefs
@@ -220,8 +235,8 @@ contains
 
     subroutine nonuni_tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs), indxarr(self%nrefs)
-        real    :: min_ir(self%nrefs), rnd_num
+        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs)
+        real    :: min_ir(self%nrefs)
         logical :: mask_ip(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
         mask_ip           = .true.
@@ -235,7 +250,7 @@ contains
             enddo
             !$omp end parallel do
             min_ir     = min_ir / sum(min_ir)
-            min_ind_ir = self%reg_multinomal(min_ir)
+            min_ind_ir = self%ref_multinomal(min_ir)
             min_ind_ip = min_ip(min_ind_ir)
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
             mask_ip(min_ind_ip) = .false.
@@ -271,22 +286,41 @@ contains
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
-    function reg_multinomal( self, pvec ) result( which )
+    function ref_multinomal( self, pvec ) result( which )
         class(regularizer), intent(inout) :: self
         real,               intent(in)    :: pvec(:) !< probabilities
         integer :: i, which, ithr
         real    :: rnd, bound
         ithr = omp_get_thread_num() + 1
-        self%sorted_corr(:,ithr) = pvec
-        self%refs_inds(:,ithr)   = (/(i,i=1,self%nrefs)/)
-        call hpsort(self%sorted_corr(:,ithr), self%refs_inds(:,ithr) )
+        self%refs_corr(:,ithr) = pvec
+        self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
+        call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
         rnd = ran3()
         do which=1,self%nrefs
-            bound = sum(self%sorted_corr(1:which, ithr))
+            bound = sum(self%refs_corr(1:which, ithr))
             if( rnd >= bound )exit
         enddo
         which = self%refs_inds(min(which,self%nrefs),ithr)
-    end function reg_multinomal
+    end function ref_multinomal
+
+    !>  \brief  generates a multinomal 1-of-K random number according to the
+    !!          distribution in pvec
+    function inpl_multinomal( self, pvec ) result( which )
+        class(regularizer), intent(inout) :: self
+        real,               intent(in)    :: pvec(:) !< probabilities
+        integer :: i, which, ithr
+        real    :: rnd, bound
+        ithr = omp_get_thread_num() + 1
+        self%irot_corr(:,ithr) = pvec
+        self%irot_inds(:,ithr) = (/(i,i=1,self%nrots)/)
+        call hpsort(self%irot_corr(:,ithr), self%irot_inds(:,ithr) )
+        rnd = ran3()
+        do which=self%nrots,1,-1
+            bound = sum(self%irot_corr(which:self%nrots, ithr))
+            if( rnd <= bound )exit
+        enddo
+        which = self%irot_inds(max(which,1),ithr)
+    end function inpl_multinomal
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
     subroutine calc_raw_frc( self, pft1, pft2, frc )
@@ -322,6 +356,6 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%sorted_corr,self%irot_inds,self%refs_inds)
+        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%irot_corr,self%refs_corr,self%irot_inds,self%refs_inds)
     end subroutine kill
 end module simple_regularizer
