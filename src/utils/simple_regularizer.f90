@@ -105,25 +105,19 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer :: i, iref, iptcl, irnd
-        real    :: inpl_corrs(self%nrots), inpl_corrs_bak(self%nrots), rnd_num
+        real    :: inpl_corrs(self%nrots), rnd_num
         call seed_rnd
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,inpl_corrs_bak,irnd,rnd_num) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd,rnd_num) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                if( maxval(inpl_corrs) < TINY )then
-                    call random_number(rnd_num)
-                    irnd = 1 + floor(real(self%nrots) * rnd_num)
-                else
-                    inpl_corrs_bak = 1. - inpl_corrs/maxval(inpl_corrs)
-                    inpl_corrs_bak =  inpl_corrs_bak/sum(inpl_corrs_bak)
-                    irnd           = self%reg_multinomal(inpl_corrs_bak)
-                endif
                 self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc = irnd
                 self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                inpl_corrs = inpl_corrs/sum(inpl_corrs)
+                irnd       = self%reg_multinomal(inpl_corrs)
+                self%ref_ptcl_tab(iref,iptcl)%loc = irnd
             enddo
         enddo
         !$omp end parallel do
@@ -184,7 +178,7 @@ contains
             enddo
             !$omp end parallel do
         endif
-        self%ref_ptcl_cor = (1. - self%ref_ptcl_cor / maxval(self%ref_ptcl_cor))
+        self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iptcl = params_glob%fromp,params_glob%top
             do iref = 1, self%nrefs
@@ -236,7 +230,7 @@ contains
             min_ir = 0.
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
             do ir = 1, self%nrefs
-                min_ip(ir) = params_glob%fromp + maxloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
+                min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
                 min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
             enddo
             !$omp end parallel do
@@ -287,11 +281,11 @@ contains
         self%refs_inds(:,ithr)   = (/(i,i=1,self%nrefs)/)
         call hpsort(self%sorted_corr(:,ithr), self%refs_inds(:,ithr) )
         rnd = ran3()
-        do which=self%nrefs,1,-1
-            bound = sum(self%sorted_corr(which:self%nrefs, ithr))
-            if( rnd <= bound )exit
+        do which=1,self%nrefs
+            bound = sum(self%sorted_corr(1:which, ithr))
+            if( rnd >= bound )exit
         enddo
-        which = self%refs_inds(max(which,1),ithr)
+        which = self%refs_inds(min(which,self%nrefs),ithr)
     end function reg_multinomal
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
