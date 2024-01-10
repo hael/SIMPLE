@@ -191,7 +191,6 @@ contains
 
         ! ref regularization
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call reg_obj%init_tab
             ! Batch loop
             do ibatch=1,nbatches
                 batch_start = batches(ibatch,1)
