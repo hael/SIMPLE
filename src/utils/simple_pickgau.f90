@@ -6,7 +6,7 @@ use simple_parameters, only: params_glob
 use simple_image,      only: image
 implicit none
 
-public :: read_mic_raw, pickgau
+public :: read_mic_raw, pickgau, gaupick_multi
 private
 #include "simple_local_flags.inc"
 
@@ -14,17 +14,20 @@ private
 real,    parameter :: GAUSIG = 5., BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
 integer, parameter :: OFFSET_DEFAULT = 3 , MAXNREFS = 100
 logical, parameter :: L_WRITE  = .false.
+logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
-integer     :: ldim_raw(3), ldim_raw_box(3)
-real        :: smpd_raw
-type(image) :: mic_raw
+integer                       :: ldim_raw(3), ldim_raw_box(3)
+real                          :: smpd_raw
+type(image)                   :: mic_raw
+character(len=:), allocatable :: fbody
 
 ! instance
 type pickgau
     private
     real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
-    real                     :: dist_thres  = 0.
+    real                     :: dist_thres  = 0., smd = 0., ksstat = 0., prob = 0., a_peak = 0., s_peak = 0.
+    real                     :: a_nonpeak = 0., s_nonpeak = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     type(image)              :: mic_shrink, gauref
@@ -32,6 +35,7 @@ type pickgau
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:)
+    logical                  :: l_roi   = .false.
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
 contains
@@ -41,6 +45,8 @@ contains
     procedure, private :: new
     procedure, private :: set_refs
     procedure, private :: setup_iterators
+    procedure, private :: flag_ice
+    procedure, private :: flag_amorphous_carbon
     procedure, private :: gaumatch_boximgs
     procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
@@ -56,11 +62,69 @@ end type
 
 contains
 
+    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev )
+        character(len=*),  intent(in) :: pcontrast
+        real,              intent(in) :: smpd_shrink, moldiams(:)
+        integer, optional, intent(in) :: offset
+        real,    optional, intent(in) :: ndev
+        type(pickgau), allocatable :: pickers(:)
+        integer,       allocatable :: picker_map(:,:)
+        type(pickgau) :: picker_merged
+        integer :: npickers, ipick, ioff, joff
+        real    :: moldiam_max
+        npickers    = size(moldiams)
+        moldiam_max = maxval(moldiams)
+        allocate(pickers(npickers))
+        ! multi-gaussian pick
+        do ipick = 1,npickers
+            call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
+            call pickers(ipick)%gaupick
+        end do
+        ! merged pick
+        call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
+        allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
+        picker_merged%box_scores = -1.
+        do ioff = 1,picker_merged%nx_offset
+            do joff = 1,picker_merged%ny_offset
+                do ipick = 1,npickers
+                    if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+                        if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
+                            picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
+                            picker_map(ioff,joff) = ipick
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
+        ! apply distance filter to merged
+        call picker_merged%distance_filter
+        ! update picker_map
+        do ioff = 1,picker_merged%nx_offset
+            do joff = 1,picker_merged%ny_offset
+                if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
+                    picker_map(ioff,joff) = 0
+                endif
+            end do
+        end do
+    end subroutine gaupick_multi
+
     subroutine gaupick( self, self_refine )
         class(pickgau),           intent(inout) :: self
         class(pickgau), optional, intent(inout) :: self_refine
         integer, allocatable :: pos(:,:)
-        call self%gaumatch_boximgs
+        if( self%refpick )then
+            call self%refmatch_boximgs
+        else
+            call self%gaumatch_boximgs
+        endif
+        if( self%l_roi )then
+            call self%flag_ice
+            call self%flag_amorphous_carbon
+            if( count(self%l_mic_mask) < nint(0.02*product(self%ldim)) )then
+                return
+            endif
+        endif
         call self%detect_peaks
         call self%write_boxfile('pickgau_after_detect_peaks.box')
         call self%center_filter
@@ -81,12 +145,18 @@ contains
     subroutine read_mic_raw( micname, smpd )
         character(len=*), intent(in) :: micname !< micrograph file name
         real,             intent(in) :: smpd    !< sampling distance in A
+        character(len=:), allocatable :: ext
         integer :: nframes
+        ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
         smpd_raw = smpd
+        ! read micrograph
         call mic_raw%new(ldim_raw, smpd_raw)
         call mic_raw%read(micname)
+        ! set fbody
+        ext   = fname2ext(trim(micname))
+        fbody = trim(get_fbody(basename(trim(micname)), ext))
     end subroutine read_mic_raw
 
     subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev )
@@ -124,22 +194,24 @@ contains
         real        :: hpfreq, scale, maxdiam_max
         if( self%exists ) call self%kill
         self%smpd_shrink = smpd_shrink
-        !if( trim(params_glob%pick_roi).eq.'yes' )then
+        ! self%l_roi       = trim(params_glob%pick_roi).eq.'yes'
+        self%l_roi       = .false. ! turned off for now
+        if( self%l_roi )then
             ! high-pass micrograph
-        !    ldim_pd(1:2) = find_larger_magic_box(ldim_raw(1:2)+1)
-        !    if( minval(ldim_pd(1:2) - ldim_raw(1:2)) < 16 )then
-        !        ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
-        !    endif
-        !    ldim_pd(3) = 1
-        !    call mic_pad%new(ldim_pd, smpd_raw)
-        !    call mic_raw%pad_mirr(mic_pad)
-        !    call mic_pad%fft
-        !    hpfreq = real(minval(ldim_pd(1:2)))*self%smpd_shrink/16.
-        !    call mic_pad%bp(hpfreq,0.)
-        !    call mic_pad%ifft
-        !    call mic_pad%clip(mic_raw)
-        !    call mic_pad%kill
-        !endif
+            ldim_pd(1:2) = find_larger_magic_box(ldim_raw(1:2)+1)
+            if( minval(ldim_pd(1:2) - ldim_raw(1:2)) < 16 )then
+               ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
+            endif
+            ldim_pd(3) = 1
+            call mic_pad%new(ldim_pd, smpd_raw)
+            call mic_raw%pad_mirr(mic_pad)
+            call mic_pad%fft
+            hpfreq = real(minval(ldim_pd(1:2)))*self%smpd_shrink/16.
+            call mic_pad%bp(hpfreq,0.)
+            call mic_pad%ifft
+            call mic_pad%clip(mic_raw)
+            call mic_pad%kill
+        endif
         ! set shrunken logical dimensions
         scale            = smpd_raw / self%smpd_shrink
         self%ldim(1)     = round2even(real(ldim_raw(1)) * scale)
@@ -362,6 +434,445 @@ contains
         allocate(self%box_scores(self%nx_offset,self%ny_offset), source = -1.)
     end subroutine setup_iterators
 
+    subroutine flag_ice( self )
+        class(pickgau), intent(inout) :: self
+        real,    parameter   :: THRESHOLD = 5.
+        real,    parameter   :: SMPD_ICE  = ICE_BAND1/2. - 0.15
+        integer, parameter   :: BOX = 128
+        type(image)          :: boximgs_heap(nthr_glob), img
+        real,    allocatable :: scores(:,:)
+        integer, allocatable :: counts(:,:)
+        real        :: score, scale, radius
+        integer     :: ldim(3),i,j,ithr,ii,jj
+        logical     :: outside
+        if( smpd_raw > SMPD_ICE ) return
+        scale   = self%smpd_shrink / SMPD_ICE
+        ldim(1) = round2even(real(self%ldim(1)) * scale)
+        ldim(2) = round2even(real(self%ldim(2)) * scale)
+        ldim(3) = 1
+        radius  = real(BOX)/2.- COSMSKHALFWIDTH
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%new([BOX,BOX,1], SMPD_ICE, wthreads=.false.)
+        end do
+        call img%new(ldim,SMPD_ICE)
+        call img%set_ft(.true.)
+        call mic_raw%fft
+        call mic_raw%clip(img)
+        call mic_raw%ifft
+        call img%ifft
+        allocate(scores(ldim(1),ldim(2)),source=0.)
+        allocate(counts(ldim(1),ldim(2)),source=0)
+        !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            do j = 1,ldim(2)-BOX+1,BOX/2
+                ithr = omp_get_thread_num() + 1
+                call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+                call boximgs_heap(ithr)%mask(radius,'soft')
+                call boximgs_heap(ithr)%fft
+                call boximgs_heap(ithr)%calc_ice_score(score)
+                scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+                counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+            end do
+        end do
+        !$omp end parallel do
+        i = ldim(1)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(j,ithr,outside,score) proc_bind(close)
+        do j = 1,ldim(2)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+        enddo
+        !$omp end parallel do
+        j = ldim(2)-BOX+1
+        !$omp parallel do schedule(static) default(shared) private(i,ithr,outside,score) proc_bind(close)
+        do i = 1,ldim(1)-BOX+1,BOX/2
+            ithr = omp_get_thread_num() + 1
+            call img%window_slim([i-1, j-1], BOX, boximgs_heap(ithr), outside)
+            call boximgs_heap(ithr)%mask(radius,'soft')
+            call boximgs_heap(ithr)%fft
+            call boximgs_heap(ithr)%calc_ice_score(score)
+            scores(i:i+BOX-1,j:j+BOX-1) = scores(i:i+BOX-1,j:j+BOX-1) + score
+            counts(i:i+BOX-1,j:j+BOX-1) = counts(i:i+BOX-1,j:j+BOX-1) + 1
+        enddo
+        !$omp end parallel do
+        where( counts > 0 ) scores = scores / real(counts)
+        scale = real(ldim(1)) / real(self%ldim(1))
+        do i = 1,self%ldim(1)
+            ii = min(ldim(1), max(1, nint(scale*real(i))))
+            do j = 1,self%ldim(2)
+                jj = min(ldim(2), max(1, nint(scale*real(j))))
+                self%l_mic_mask(i,j) = self%l_mic_mask(i,j) .and. (scores(ii,jj) < THRESHOLD)
+            enddo
+        enddo
+        if( .not.all(self%l_mic_mask(:,:)) )then
+            ! do i = 1,ldim(1)
+            !     do j = 1,ldim(2)
+            !         call img%set([i,j,1], scores(i,j))
+            !     end do
+            ! end do
+            ! call img%write(trim(self%fbody)//'_ice.mrc')
+            print *,' % ice water: ',&
+                &100.-100.*count(self%l_mic_mask(:,:))/real(product(self%ldim))
+        endif
+        call img%kill
+        do ithr = 1,nthr_glob
+            call boximgs_heap(ithr)%kill
+        end do
+    end subroutine flag_ice
+
+    subroutine flag_amorphous_carbon( self )
+        use simple_histogram, only: histogram
+        class(pickgau), intent(inout) :: self
+        integer, parameter :: K             = 5
+        integer, parameter :: BOX           = 32 ! multiple of 4
+        integer, parameter :: NBINS         = 64
+        real,    parameter :: TVD_THRESHOLD = 0.2
+        real,    parameter :: MIN_TVD_DIFF  = 0.05
+        real,    parameter :: MIC_LP        = 15.
+        type(histogram),  allocatable :: hists(:,:)
+        logical,          allocatable :: final_mask(:,:)
+        character(len=:), allocatable :: string
+        type(ran_tabu)  :: rt
+        type(histogram) :: khists(K)
+        type(image)     :: mic, patches(nthr_glob)
+        integer :: dims(3), pad, i
+        logical :: found, empty
+        found  = .false.
+        dims   = self%ldim
+        string = trim(fbody)
+        allocate(final_mask(dims(1),dims(2)),source=.true.)
+        call mic%copy(self%mic_shrink)
+        ! call gradients_variance_rejection( found )
+        call clustering_rejection( found )
+        if( found )then
+            self%l_mic_mask = self%l_mic_mask .and. final_mask
+            ! accounting for center of picking boxes
+            pad = nint(real(self%ldim_box(1))/2.)
+            final_mask = self%l_mic_mask
+            self%l_mic_mask = .false.
+            self%l_mic_mask(1:dims(1)-pad,1:dims(2)-pad) = final_mask(pad+1:,pad+1:)
+        endif
+        print *,string//' % amorphous carbon: ',100.-100.*count(final_mask(:,:))/real(product(dims))
+        call mic%kill
+        call rt%kill
+        do i = 1,nthr_glob
+            call patches(i)%kill
+        enddo
+        call khists(:)%kill
+        call hists(:,:)%kill
+        deallocate(hists)
+
+        contains
+
+            subroutine clustering_rejection( found )
+                logical, intent(out) :: found
+                integer, allocatable :: kmeans_labels(:), tmp_labels(:), inds(:)
+                type(image)          :: tmpimg, tmpimg2
+                type(histogram)      :: hist1, hist2
+                real(dp) :: tmp
+                real     :: bin_vars(K), tmpvec(K), tvd_inter(K-1)
+                real     :: kmeans_score, mean, tvd, min_tvd
+                logical  :: mask(dims(1),dims(2)), bin_mask(K), outside, cluster_mask(K-1)
+                integer  :: b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy
+                integer  :: bin,repeat,ii,jj,carbon,ithr
+                found = .false.
+                ! gradients magnitude image
+                call mic%fft
+                call mic%bp(0.,MIC_LP)
+                call mic%ifft
+                call mic%norm
+                call mic%gradients_magnitude(tmpimg)
+                b     = BOX
+                twob  = 2*b
+                bon2  = b/2
+                bon4  = b/4
+                nx    = ceiling(real(dims(1))/real(b))
+                ny    = ceiling(real(dims(2))/real(b))
+                nxy   = nx*ny
+                ! histograms
+                allocate(kmeans_labels(nxy), tmp_labels(nxy),hists(nx,ny))
+                !$omp parallel do collapse(2) proc_bind(close) private(i,j,ithr,ii,ilb,jlb,iub,jub)&
+                !$omp default(shared)
+                do i = 1,nx
+                    do j =1,ny
+                        ithr = omp_get_thread_num() + 1
+                        ii  = (i-1)*nx+j
+                        ilb = max(1, (i-1)*b-bon2+1)
+                        iub = min(ilb+twob-1, dims(1))
+                        ilb = iub-twob+1
+                        jlb = max(1, (j-1)*b-bon2+1)
+                        jub = min(jlb+twob-1, dims(2))
+                        jlb = jub-twob+1
+                        if(.not.patches(ithr)%exists() ) call patches(ithr)%new([twob,twob,1], self%smpd_shrink, wthreads=.false.)
+                        call tmpimg%window_slim([ilb-1,jlb-1],twob, patches(ithr), outside)
+                        call hists(i,j)%new(patches(ithr),  NBINS, minmax=[0.,4.])
+                    enddo
+                enddo
+                !$omp end parallel do
+                ! Cluster patches into K clusters
+                kmeans_score = huge(0.)
+                do i = 1,K
+                    call khists(i)%new(hists(1,1))
+                enddo
+                call seed_rnd
+                do repeat = 1,300
+                    rt = ran_tabu(nxy)
+                    call cluster(nxy, nx, ny, K, tmp, tmp_labels)
+                    if( real(tmp) < kmeans_score )then
+                        kmeans_score  = real(tmp)
+                        kmeans_labels = tmp_labels
+                    endif
+                enddo
+                do bin = 1,K
+                    bin_mask(bin) = count(kmeans_labels==bin) > 0
+                enddo
+                if( count(bin_mask) == 1 ) return ! clustering fail, do nothing
+                ! histograms for all clusters
+                do i = 1,K
+                    call khists(i)%zero
+                enddo
+                bin = 0
+                do i = 1,nx
+                    do j =1,ny
+                        bin = bin+1
+                        call khists(kmeans_labels(bin))%add(hists(i,j))
+                    enddo
+                enddo
+                ! deviation from mode
+                bin_vars = -1.
+                do bin = 1,K
+                    if( bin_mask(bin) )then
+                        mean          = khists(bin)%hmode()
+                        bin_vars(bin) = khists(bin)%variance(mean=mean)
+                    endif
+                enddo
+                ! sorting by cluster variance
+                inds   = (/(i,i=1,K)/)
+                tmpvec = bin_vars
+                call hpsort(tmpvec, inds)
+                ! debug
+                if( L_DEBUG )then
+                    do i = 1,K
+                        call tmpimg2%copy(tmpimg)
+                        j = 0
+                        do ii = 1,nx
+                            ilb = max(1, (ii-1)*b+1)
+                            iub = min(ilb+b-1, dims(1))
+                            ilb = iub-b+1
+                            do jj =1,ny
+                                j = j + 1
+                                if( kmeans_labels(j) == inds(i) ) cycle
+                                jlb = max(1, (jj-1)*b+1)
+                                jub = min(jlb+b-1, dims(2))
+                                jlb = jub-b+1
+                                do m = ilb,iub
+                                    do n = jlb,jub
+                                        call tmpimg2%set([m,n,1],0.)
+                                    enddo
+                                enddo
+                            enddo
+                        enddo
+                        call tmpimg2%write(trim(string)//'_clusters.mrc',i)
+                    enddo
+                    call mic%write(trim(string)//'_clusters.mrc',K+1)
+                    call tmpimg2%kill
+                endif
+                ! Segmentation by agglomerative inter-cluster distance
+                tvd_inter = -.1
+                do i = 1,K-1
+                    empty = .true.
+                    call hist1%new(khists(1))
+                    do j = 1,i
+                        jj = inds(j)
+                        if( bin_mask(jj) )then
+                            call hist1%add(khists(jj))
+                            empty = .false.
+                        endif
+                    enddo
+                    if( empty ) cycle
+                    empty = .true.
+                    call hist2%new(khists(1))
+                    do j = i+1,K
+                        jj = inds(j)
+                        if( bin_mask(jj) )then
+                            call hist2%add(khists(jj))
+                            empty= .false.
+                        endif
+                    enddo
+                    if( empty ) cycle
+                    tvd_inter(i) = hist1%tvd(hist2)
+                    if( L_DEBUG )then
+                        write(*,'(I6,5F9.4)') i, hist1%variance(), hist2%variance(), hist1%tvd(hist2),&
+                            &khists(inds(i))%variance(), khists(inds(i))%mean()
+                    endif
+                enddo
+                cluster_mask = tvd_inter > 0.
+                carbon       = maxloc(tvd_inter,dim=1)
+                tvd          = tvd_inter(carbon)
+                min_tvd      = minval(tvd_inter,mask=cluster_mask)
+                bin          = findloc(cluster_mask(1:K-1),.true.,dim=1) ! first non-empty cluster
+                ! Decision
+                found = .false.
+                if( bin == 0 )then
+                    tvd = 0.
+                else
+                    if( carbon == bin ) tvd = 0.
+                    if( abs(tvd-min_tvd) < MIN_TVD_DIFF ) tvd = 0.
+                endif
+                found = tvd > TVD_THRESHOLD
+                ! Dejection
+                if( found )then
+                    mask = final_mask
+                    do bin = carbon+1,K
+                        n = inds(bin)
+                        if( .not.bin_mask(n) ) cycle
+                        m     = 0
+                        do i = 1,nx
+                            ii = min((i-1)*b+1, dims(1)-b+1)
+                            do j =1,ny
+                                jj = min((j-1)*b+1, dims(2)-b+1)
+                                m = m+1
+                                if( kmeans_labels(m) == n ) mask(ii:ii+b-1,jj:jj+b-1) = .false.
+                            enddo
+                        enddo
+                    enddo
+                    ! erosion with half window size
+                    final_mask = mask
+                    do i = 1,2*nx
+                        ilb = max(1, (i-1)*bon2-bon4+1)
+                        iub = min(ilb+b-1, dims(1))
+                        ilb = iub - b + 1 + bon4
+                        iub = iub - bon4
+                        do j = 1,2*ny
+                            jlb = max(1, (j-1)*bon2-bon4+1)
+                            jub = min(jlb+b-1, dims(2))
+                            jlb = jub - b + 1 + bon4
+                            jub = jub - bon4
+                            n = count(mask(ilb-bon4:iub+bon4,jlb-bon4:jub+bon4))
+                            if( n == 0   )cycle
+                            if( n == b*b )cycle
+                            final_mask(ilb:iub,jlb:jub) = .true.
+                        enddo
+                    enddo
+                    ! dilation with half window size x 2
+                    mask = final_mask
+                    do i = 1,2*nx
+                        ilb = max(1, (i-1)*bon2-bon4+1)
+                        iub = min(ilb+b-1, dims(1))
+                        ilb = iub - b + 1 + bon4
+                        iub = iub - bon4
+                        do j = 1,2*ny
+                            jlb = max(1, (j-1)*bon2-bon4+1)
+                            jub = min(jlb+b-1, dims(2))
+                            jlb = jub - b + 1 + bon4
+                            jub = jub - bon4
+                            if( all(mask(ilb:iub,jlb:jub)) )then
+                                n = count(.not.mask(ilb-bon4:iub+bon4,jlb-bon4:jub+bon4))
+                                if( n > 0 )then
+                                    final_mask(ilb:iub,jlb:jub) = .false.
+                                endif
+                            endif
+                        enddo
+                    enddo
+                    mask = final_mask
+                    do i = 1,2*nx
+                        ilb = max(1, (i-1)*bon2-bon4+1)
+                        iub = min(ilb+b-1, dims(1))
+                        ilb = iub - b + 1 + bon4
+                        iub = iub - bon4
+                        do j = 1,2*ny
+                            jlb = max(1, (j-1)*bon2-bon4+1)
+                            jub = min(jlb+b-1, dims(2))
+                            jlb = jub - b + 1 + bon4
+                            jub = jub - bon4
+                            if( all(mask(ilb:iub,jlb:jub)) )then
+                                n = count(.not.mask(ilb-bon4:iub+bon4,jlb-bon4:jub+bon4))
+                                if( n > 0 )then
+                                    final_mask(ilb:iub,jlb:jub) = .false.
+                                endif
+                            endif
+                        enddo
+                    enddo
+                endif
+                ! cleanup
+                call hist1%kill
+                call hist2%kill
+            end subroutine clustering_rejection
+
+            subroutine cluster( n, nx, ny, K, overall_score, labels )
+                integer,         intent(in)  :: n, nx, ny, K
+                real(dp),        intent(out) :: overall_score
+                integer,         intent(out) :: labels(n)
+                integer, parameter :: nits = 100
+                integer  :: pops(K), new_labels(n)
+                real(dp) :: scores(K), kscores(K), prev_score, score
+                integer  :: i,j,c,cl,it,nk
+                ! initial labels
+                c = 0
+                do i = 1,n
+                    c = c+1
+                    if( c > K ) c = 1
+                    labels(i) = c
+                enddo
+                call rt%shuffle(labels)
+                ! main loop
+                prev_score = huge(0.0)
+                do it = 1,nits
+                    scores = 0.d0
+                    !$omp parallel private(i,j,c,cl,kscores) default(shared) proc_bind(close)
+                    !$omp do
+                    ! centers
+                    do cl = 1,K
+                        call khists(cl)%zero
+                        pops(cl) = count(labels==cl)
+                        if( pops(cl) == 0 ) cycle
+                        do i = 1,nx
+                            do j = 1,ny
+                                c = (i-1)*nx+j
+                                if( labels(c) /= cl )cycle
+                                call khists(cl)%add(hists(i,j))
+                            enddo
+                        enddo
+                    enddo
+                    !$omp end do
+                    !$omp do collapse(2) reduction(+:scores)
+                    do i = 1,nx
+                        do j = 1,ny
+                            c = (i-1)*nx+j
+                            do cl = 1,K
+                                if( pops(cl) > 0 )then
+                                    kscores(cl) = real(khists(cl)%tvd(hists(i,j)),dp)
+                                else
+                                    kscores(cl) = huge(0.)
+                                endif
+                            enddo
+                            ! current parttioning
+                            cl = labels(c)
+                            scores(cl) = scores(cl) + kscores(cl)
+                            ! new labels
+                            new_labels(c) = minloc(kscores,dim=1)
+                        enddo
+                    enddo
+                    !$omp end do
+                    !$omp end parallel
+                    nk     = count(pops>0)
+                    score  = sum(scores/real(pops,dp),mask=pops>0) / real(nk,dp)
+                    ! convergence
+                    if( score < prev_score )then
+                        if( abs(score - prev_score) < 1.d-6 ) exit
+                    endif
+                    prev_score = score
+                    labels     = new_labels
+                enddo
+                overall_score = score
+            end subroutine cluster
+
+    end subroutine flag_amorphous_carbon
+
     subroutine gaumatch_boximgs( self )
         class(pickgau), intent(inout) :: self
         logical     :: outside
@@ -507,6 +1018,7 @@ contains
         elsewhere
             self%box_scores = -1.
         endwhere
+        ! update npeaks
         self%npeaks = count(self%box_scores >= self%t)
         write(logfhandle,'(a,1x,I5)') '# npeaks    after    center filtering: ', self%npeaks
         ! destruct heap
@@ -628,7 +1140,7 @@ contains
         class(pickgau), intent(inout) :: self
         real,    allocatable :: scores_peak(:), scores_nonpeak(:)
         integer, allocatable :: pos(:,:)
-        real    :: a_peak, s_peak, a_nonpeak, s_nonpeak, smd, ksstat, prob, pixrad_shrink, rpos(2)
+        real    :: pixrad_shrink, rpos(2)
         integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
         logical :: mask_backgr(0:self%nx,0:self%ny), mask_backgr_offset(self%nx_offset,self%ny_offset)
         ! prepare background mask
@@ -667,18 +1179,18 @@ contains
         scores_peak    = pack(self%box_scores_mem, mask=self%box_scores >= self%t)
         scores_nonpeak = pack(self%box_scores_mem, mask=mask_backgr_offset)
         ! calc stats
-        call avg_sdev(scores_peak,    a_peak,    s_peak)
-        print *, 'A_PEAK = ', a_peak 
-        print *, 'S_PEAK = ', s_peak
-        call avg_sdev(scores_nonpeak, a_nonpeak, s_nonpeak)
-        print *, 'A_NONPEAK = ', a_nonpeak
-        print *, 'S_NONPEAK = ', s_nonpeak
-        smd = std_mean_diff(a_peak, a_nonpeak, s_peak, s_nonpeak)
-        call kstwo(scores_peak, size(scores_peak), scores_nonpeak, size(scores_nonpeak), ksstat, prob)
-        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', smd
-        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
-        write(logfhandle,'(a,1x,f4.2)') 'P             = ', prob
-        if( smd < 0.2 .and. prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar'
+        call avg_sdev(scores_peak, self%a_peak, self%s_peak)
+        print *, 'A_PEAK = ', self%a_peak 
+        print *, 'S_PEAK = ', self%s_peak
+        call avg_sdev(scores_nonpeak, self%a_nonpeak, self%s_nonpeak)
+        print *, 'A_NONPEAK = ', self%a_nonpeak
+        print *, 'S_NONPEAK = ', self%s_nonpeak
+        self%smd = std_mean_diff(self%a_peak, self%a_nonpeak, self%s_peak, self%s_nonpeak)
+        call kstwo(scores_peak, size(scores_peak), scores_nonpeak, size(scores_nonpeak), self%ksstat, self%prob)
+        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', self%smd
+        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', self%ksstat
+        write(logfhandle,'(a,1x,f4.2)') 'P             = ', self%prob
+        if( self%smd < 0.2 .and. self%prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar'
     end subroutine peak_vs_nonpeak_stats
 
     subroutine get_positions( self, pos, smpd_new )
