@@ -88,6 +88,7 @@ contains
             do joff = 1,picker_merged%ny_offset
                 do ipick = 1,npickers
                     if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+                        ! find picker with greatest box_score for each box, reset box score to the max value
                         if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
                             picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
                             picker_map(ioff,joff) = ipick
@@ -971,9 +972,6 @@ contains
         integer :: ioff, joff
         tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
         call detect_peak_thres(size(tmp), self%nboxes_ub, tmp, self%t)
-        print *, '*******'
-        print *, 'Threshold for peak detection is ', self%t
-        print *, '*******'
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
@@ -1229,6 +1227,7 @@ contains
     end subroutine write_boxfile
 
     subroutine refine_upscaled( self, pos, smpd_old, offset_old )
+        use simple_srch_sort_loc, only : hpsort_2
         class(pickgau), intent(inout) :: self
         integer,        intent(in)    :: pos(:,:)
         real,           intent(in)    :: smpd_old
@@ -1236,10 +1235,12 @@ contains
         integer, allocatable :: pos_refined(:,:)
         real,    allocatable :: scores_refined(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks
+        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks, ioff, joff
         real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
         logical     :: outside, l_err
-        print *, 'ENTERED REFINE_UPSCALED'
+
+        if( self%offset /= 1 ) THROW_HARD('Pixel offset in pickgau instance subjected to refinement must be 1')
+
         nbox = size(pos, dim=1)
         allocate(pos_refined(nbox,2),  source= 0 )
         allocate(scores_refined(nbox), source=-1.)
@@ -1247,7 +1248,6 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
         factor = real(offset_old) * (smpd_old / self%smpd_shrink)
-        print *, 'FACTOR = ', factor
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
@@ -1285,7 +1285,6 @@ contains
             end do
             !$omp end parallel do
         else
-            print *, 'NBOX = ', nbox
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
             do ibox = 1,nbox
@@ -1320,15 +1319,16 @@ contains
             end do
             !$omp end parallel do
             loc = minloc(dists)
-            where(self%inds_offset(:,:) == loc(1)) self%box_scores(:,:) = scores_refined(ibox) 
+            where(self%inds_offset(:,:) == loc(1)) self%box_scores(:,:) = scores_refined(ibox)
         end do
+
         npeaks = count(self%box_scores >= self%t)
         write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', npeaks
+    
         ! destruct
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
-        print *, 'END OF REFINE_UPSCALED'
     end subroutine refine_upscaled
 
     subroutine kill( self )
