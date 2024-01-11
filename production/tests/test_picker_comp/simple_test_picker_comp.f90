@@ -2,7 +2,7 @@ program simple_test_picker_comp
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_picker_utils, only: picker_utils
+use simple_picker_utils
 use simple_pickgau, only: pickgau, read_mic_raw
 use simple_linalg
 
@@ -15,7 +15,6 @@ integer, allocatable :: coords_pickgau(:,:), coords_picker_utils(:,:)
 logical :: match
 character(len=LONGSTRLEN) :: boxname_out, cwd
 character(len=:), allocatable :: dir_out
-type(picker_utils) :: putils
 type(pickgau) :: pgau, pgau_refine
 
 !$ nthr = omp_get_max_threads()
@@ -37,13 +36,6 @@ else
 end if
 close(16)
 
-! single moldiam pick, picker_utils
-print *, 'EXECUTING PICK FROM SIMPLE_PICKER_UTILS'
-call putils%new(micname=micname, pcontrast='black', smpd=SMPD, moldiam=MOLDIAM)
-print *, 'CREATED NEW PICKER OBJECT'
-call putils%exec_picker(boxname_out=boxname_out, nptcls=nptcls, dir_out=dir_out)
-print *, 'EXEC_PICKER IS COMPLETE'
-call putils%kill
 
 print *, ' '
 
