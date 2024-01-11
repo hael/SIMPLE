@@ -88,7 +88,6 @@ contains
             do joff = 1,picker_merged%ny_offset
                 do ipick = 1,npickers
                     if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
-                        ! find picker with greatest box_score for each box, reset box score to the max value
                         if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
                             picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
                             picker_map(ioff,joff) = ipick
@@ -1227,7 +1226,6 @@ contains
     end subroutine write_boxfile
 
     subroutine refine_upscaled( self, pos, smpd_old, offset_old )
-        use simple_srch_sort_loc, only : hpsort_2
         class(pickgau), intent(inout) :: self
         integer,        intent(in)    :: pos(:,:)
         real,           intent(in)    :: smpd_old
@@ -1235,7 +1233,7 @@ contains
         integer, allocatable :: pos_refined(:,:)
         real,    allocatable :: scores_refined(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks, ioff, joff
+        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks
         real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
         logical     :: outside, l_err
 
