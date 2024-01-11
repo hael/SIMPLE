@@ -916,13 +916,13 @@ contains
             deallocate(self%boximgs1)
         endif
         allocate(self%boximgs1(self%nboxes1))
-        !$omp parallel do schedule(static) default(shared) private(ibox,outside,pos) proc_bind(close)
+        !omp parallel do schedule(static) default(shared) private(ibox,outside,pos) proc_bind(close)
         do ibox = 1,self%nboxes1
             call self%boximgs1(ibox)%new(self%ldim_box1, SMPD_SHRINK1)
             pos = self%positions1(ibox,:)
             call self%mic_shrink1%window_slim(pos, self%ldim_box1(1), self%boximgs1(ibox), outside)
         end do
-        !$omp end parallel do
+        !omp end parallel do
     end subroutine extract_boximgs1
 
     subroutine extract_boximgs2( self, box_in )
@@ -944,24 +944,24 @@ contains
             ldim    =  [box_in,box_in,1]
             smpd    =  self%smpd_raw
             mic_ptr => self%mic_raw
-            !$omp parallel do schedule(static) default(shared) private(pos,ibox,noutside) proc_bind(close)
+            !omp parallel do schedule(static) default(shared) private(pos,ibox,noutside) proc_bind(close)
             do ibox = 1,self%nboxes2
                 call self%boximgs2(ibox)%new(ldim, smpd)
                 pos = self%positions2(ibox,:)
                 call mic_ptr%window(pos, ldim(1), self%boximgs2(ibox), noutside)
             end do
-            !$omp end parallel do
+            !omp end parallel do
         else
             ldim    =  self%ldim_box2
             smpd    =  SMPD_SHRINK2
             mic_ptr => self%mic_shrink2
-            !$omp parallel do schedule(static) default(shared) private(pos,ibox,outside) proc_bind(close)
+            !omp parallel do schedule(static) default(shared) private(pos,ibox,outside) proc_bind(close)
             do ibox = 1,self%nboxes2
                 call self%boximgs2(ibox)%new(ldim, smpd)
                 pos = self%positions2(ibox,:)
                 call mic_ptr%window_slim(pos, ldim(1), self%boximgs2(ibox), outside)
             end do
-            !$omp end parallel do
+            !omp end parallel do
         endif
     end subroutine extract_boximgs2
 
@@ -979,7 +979,7 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
         if( self%refpick )then
-            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
+            !omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
                     if( self%inds_offset(ioff,joff) == 0 )then
@@ -1009,9 +1009,9 @@ contains
                     endif
                 end do
             end do
-            !$omp end parallel do
+            !omp end parallel do
         else
-            !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos) proc_bind(close)
+            !omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos) proc_bind(close)
             do ioff = 1,self%nx_offset
                 do joff = 1,self%ny_offset
                     if( self%inds_offset(ioff,joff) == 0 )then
@@ -1028,15 +1028,12 @@ contains
                     endif
                 end do
             end do
-            !$omp end parallel do
+            !omp end parallel do
         endif
         tmp = pack(box_scores, mask=(box_scores>-1.+TINY))
         call detect_peak_thres(size(tmp), int(self%nboxes_ub), tmp, t)
         deallocate(tmp)
         t = max(0.,t)
-        print *, '*******'
-        print *, 'Threshold for peak detection is ', t
-        print *, '*******'
         is_peak = .false.
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
@@ -1087,12 +1084,12 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1)
         end do
-        !$omp parallel do schedule(static) default(shared) private(ibox) proc_bind(close)
+        !omp parallel do schedule(static) default(shared) private(ibox) proc_bind(close)
         do ibox = 1,self%nboxes1
             ithr  = omp_get_thread_num() + 1
             scores(ibox) = self%boximgs1(ibox)%box_cen_arg(boximgs_heap(ithr))
         end do
-        !$omp end parallel do
+        !omp end parallel do
         mask   = scores(:) <= real(OFFSET)
         npeaks = count(mask)
         write(logfhandle,'(a,1x,I5)') '# positions before center   filtering: ', self%nboxes1
@@ -1122,7 +1119,6 @@ contains
         real        :: box_score, box_score_trial, factor, rpos(2), scores(self%nrefs)
         logical     :: outside, l_err
         type(image) :: boximgs_heap(nthr_glob)
-        print *, 'ENTERED REFINE_POSITIONS'
         if( .not. allocated(self%positions1) ) THROW_HARD('positions1 need to be set')
         self%nboxes2 = self%nboxes1
         allocate(self%positions2(self%nboxes2,2), source=nint((SMPD_SHRINK1/SMPD_SHRINK2) * real(self%positions1)))
@@ -1131,7 +1127,6 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box2, SMPD_SHRINK2)
         end do
         factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
-        print *, 'FACTOR = ', factor
         if( self%refpick )then
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
@@ -1169,7 +1164,6 @@ contains
             end do
             !$omp end parallel do
         else
-            print *, 'SELF%NBOXES2 = ', self%nboxes2
             !$omp parallel do schedule(static) default(shared) proc_bind(close)&
             !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,box_score_trial)
             do ibox= 1,self%nboxes2
@@ -1197,7 +1191,6 @@ contains
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
-        print *, 'END OF REFINE_POSITIONS'
     end subroutine refine_positions
 
     subroutine distance_filter( self, nbox, box_scores, positions, threshold )
@@ -1216,12 +1209,12 @@ contains
         selected_pos = .true.
         do ibox = 1,nbox
             mask = .false.
-            !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
+            !omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
             do jbox = 1,nbox
                 dist = euclid(real(positions(ibox,:)),real(positions(jbox,:)))
                 if( dist <= threshold ) mask(jbox) = .true.
             end do
-            !$omp end parallel do
+            !omp end parallel do
             ! find best match in the neigh
             loc = maxloc(box_scores, mask=mask, dim=1)
             ! eliminate all but the best
@@ -1261,13 +1254,13 @@ contains
             call boximgs_heap(ithr)%new(self%ldim_box1, SMPD_SHRINK1) !changing from 2 to 1
         end do
         !factor = real(OFFSET) * (SMPD_SHRINK1 / SMPD_SHRINK2)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside)
+        !omp parallel do schedule(static) default(shared) proc_bind(close) private(ibox,ithr,outside)
         do ibox = 1,self%nboxes1
             ithr            = omp_get_thread_num() + 1
             call self%mic_shrink1%window_slim([self%positions1(ibox,1),self%positions1(ibox,2)], self%ldim_box1(1), boximgs_heap(ithr), outside)
             loc_sdevs(ibox) = boximgs_heap(ithr)%avg_loc_sdev(OFFSET)
         end do
-        !$omp end parallel do
+        !omp end parallel do
         call avg_sdev(loc_sdevs, avg, sdev)
         ! write(logfhandle,'(a,1x,I5)') '# positions after 1.0 sigma outlier removal: ', count(loc_sdevs < avg + 1.0 * sdev)
         ! write(logfhandle,'(a,1x,I5)') '# positions after 1.5 sigma outlier removal: ', count(loc_sdevs < avg + 1.5 * sdev)

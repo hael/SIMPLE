@@ -4,12 +4,13 @@ program simple_test_picker_comp
 include 'simple_lib.f08'
 use simple_picker_utils, only: picker_utils
 use simple_pickgau, only: pickgau, read_mic_raw
+use simple_linalg
 
 implicit none
 character(len = 200) :: micname 
 real, parameter :: SMPD = 1.72, MOLDIAM = 180., SMPD_SHRINK = 4., MOLDIAM_MAX = 180.
 integer, parameter :: OFFSET = 3
-integer :: nptcls, nthr, i, iostat, cnt, j, nlines_pickgau, nlines_picker_utils
+integer :: nptcls, nthr, i, iostat, cnt, nlines_pickgau, nlines_picker_utils
 integer, allocatable :: coords_pickgau(:,:), coords_picker_utils(:,:)
 logical :: match
 character(len=LONGSTRLEN) :: boxname_out, cwd
@@ -26,6 +27,7 @@ allocate(CWD_GLOB, source=trim(cwd))
 
 ! Testing to make sure the file opens correctly
 micname = trim( CWD_GLOB // trim('/simulate_movie_1_intg.mrc'))
+!micname = trim( CWD_GLOB // trim('/SLC22A6_intg_1.mrc'))
 
 open(unit=16,file=micname,iostat=iostat,status='old')
 if (iostat .eq. 0) then
@@ -51,13 +53,13 @@ call read_mic_raw(micname=micname,smpd=SMPD)
 print *, 'READ MICROGRAPH'
 call pgau%new_gaupicker(pcontrast='black', smpd_shrink=SMPD_SHRINK, moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=OFFSET)
 print *, 'CREATED NEW PICKGAU OBJECT'
-call pgau_refine%new_gaupicker(pcontrast='black', smpd_shrink=(SMPD_SHRINK / 2), moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=OFFSET)
+call pgau_refine%new_gaupicker(pcontrast='black', smpd_shrink=(SMPD_SHRINK / 2), moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=1)
 print *, 'CREATED REFINED PICKGAU OBJECT'
 call pgau%gaupick(pgau_refine)
 print *, 'GAUPICK IS COMPLETE'
 call pgau%kill
 call pgau_refine%kill
-
+print *, ' '
 
 ! Check that box files match
 ! after_center_filter
@@ -128,14 +130,17 @@ allocate(coords_picker_utils(nlines_picker_utils,2))
 call extract_coords('pickgau_after_refine_upscaled.box', nlines_pickgau, coords_pickgau)
 call extract_coords('picker_utils_after_refine_positions.box', nlines_picker_utils, coords_picker_utils)
 match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_picker_utils)
+!match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_pickgau)
 if (match) then
     print *, 'REFINED BOX FILES MATCH'
 else
     print *, 'REFINED BOX FILES DO NOT MATCH'
 end if
+call find_closest(  coords_picker_utils, coords_pickgau, nlines_picker_utils , nlines_pickgau)
 deallocate(coords_pickgau)
 deallocate(coords_picker_utils)
 
+print *, ' '
 print *, 'TEST COMPLETE!'
 
 contains
@@ -143,14 +148,12 @@ contains
 function count_lines(filename) result (cnt)
     character(len=*),     intent(in) :: filename
     integer :: cnt, iostat
-    character(len=80) :: line
     open(unit=20, file=filename, status='old', iostat=iostat)
     if (iostat == 0) then
         !file has been opened successfully
         cnt = 0
         do 
-            !read(20, *, iostat=iostat) 
-            read(20, '(a)', iostat=iostat) line
+            read(20, *, iostat=iostat)
             if (iostat /= 0) EXIT
             cnt = cnt + 1
         end do
@@ -208,5 +211,35 @@ function compare_coords(coords_1, coords_2, length_1, length_2) result(coords_sa
         print *, 'SIZE COORDS_1 = ', size(coords_1, dim=1), ' BUT SIZE COORDS_2 = ', size(coords_2, dim=1)
     end if
 end function compare_coords
+
+subroutine find_closest(coords_1, coords_2, length_1, length_2, filename)
+    integer,                    intent(in) :: length_1, length_2
+    integer,                    intent(in) :: coords_1(length_1,2), coords_2(length_2,2)
+    character(len=*), optional, intent(in) :: filename
+    integer :: i, j, closest_coord(2), min_loc(1)
+    real, allocatable :: dists(:)
+    character(len=1) :: diff
+    real :: min_dist
+
+    if (present(filename)) then
+        open(unit=22, file=filename)
+    else
+        open(unit=22, file='combined_coords.csv')
+    end if
+
+    do i = 1, size(coords_1,dim=1)
+        allocate(dists(size(coords_2, dim=1)))
+        do j = 1, size(coords_2,dim=1)
+            dists(j) = euclid(real(coords_1(i,:)),real(coords_2(j,:)))
+        end do
+        min_loc = minloc(dists)
+        min_dist = minval(dists)
+        closest_coord = coords_2(min_loc(1),:)
+        write(22,'(I7,I7,I7,I7,f6.2)') coords_1(i,:), closest_coord(1), closest_coord(2), min_dist
+        deallocate(dists)
+    end do
+
+    close(22)
+end subroutine find_closest
 
 end program simple_test_picker_comp
