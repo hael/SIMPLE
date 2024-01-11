@@ -320,7 +320,6 @@ contains
         integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
         real        :: scale, mskrad, pixrad_shrink1, pixrad_shrink2, smpd, ang, rot
         smpd       = imgs(1)%get_smpd()
-        if( abs(smpd - smpd_raw) > 0.01 ) THROW_HARD('raw micrograph and picking references of different scale')
         ldim       = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
         nimgs      = size(imgs)
@@ -351,7 +350,7 @@ contains
             deallocate(self%boxrefs)
         endif
         if( allocated(self%l_err_refs) ) deallocate(self%l_err_refs)
-        allocate(self%l_err_refs(self%nrefs))
+        allocate(self%l_err_refs(self%nrefs), self%boxrefs(self%nrefs))
         call img_rot%new(ldim, smpd)
         ang = 360./real(nrots)
         cnt = 0
