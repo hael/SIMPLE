@@ -54,7 +54,8 @@ contains
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
-    procedure, private :: get_positions
+    procedure          :: get_positions
+    procedure          :: get_nboxes
     procedure, private :: write_boxfile
     procedure, private :: refine_upscaled
     procedure          :: kill
@@ -126,18 +127,18 @@ contains
             endif
         endif
         call self%detect_peaks
-        call self%write_boxfile('pickgau_after_detect_peaks.box')
+        if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
         call self%center_filter
-        call self%write_boxfile('pickgau_after_center_filter.box')
+        if( L_WRITE ) call self%write_boxfile('pickgau_after_center_filter.box')
         call self%distance_filter
-        call self%write_boxfile('pickgau_after_distance_filter.box')
+        if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
-        call self%write_boxfile('pickgau_after_remove_outliers.box')
+        if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
-            call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
+            if( L_WRITE ) call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
             deallocate(pos)
         endif
     end subroutine gaupick
@@ -1079,8 +1080,8 @@ contains
             end do
         end do
         !$omp end parallel do
-        npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', npeaks
+        self%npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
     end subroutine distance_filter
 
     subroutine remove_outliers( self )
@@ -1126,8 +1127,8 @@ contains
             end do
         end do
         !$omp end parallel do
-        npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', npeaks
+        self%npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
@@ -1211,6 +1212,12 @@ contains
         end do
     end subroutine get_positions
 
+    pure function get_nboxes( self ) result( nboxes )
+        class(pickgau), intent(in) :: self
+        integer :: nboxes
+        nboxes = self%npeaks
+    end function get_nboxes
+
     subroutine write_boxfile( self, fname )
         class(pickgau),   intent(in) :: self
         character(len=*), intent(in) :: fname
@@ -1233,12 +1240,10 @@ contains
         integer, allocatable :: pos_refined(:,:)
         real,    allocatable :: scores_refined(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1), npeaks
+        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1)
         real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
         logical     :: outside, l_err
-
         if( self%offset /= 1 ) THROW_HARD('Pixel offset in pickgau instance subjected to refinement must be 1')
-
         nbox = size(pos, dim=1)
         allocate(pos_refined(nbox,2),  source= 0 )
         allocate(scores_refined(nbox), source=-1.)
@@ -1319,10 +1324,8 @@ contains
             loc = minloc(dists)
             where(self%inds_offset(:,:) == loc(1)) self%box_scores(:,:) = scores_refined(ibox)
         end do
-
-        npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', npeaks
-    
+        self%npeaks = count(self%box_scores >= self%t)
+        write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', self%npeaks
         ! destruct
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
