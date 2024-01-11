@@ -1514,7 +1514,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         real(sp),                intent(out)   :: prob(self%nrots)
         real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
+        integer  :: k, i, j, ithr
         logical  :: even
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
@@ -1545,7 +1545,7 @@ contains
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
-        prob = real( abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp) )
+        prob = real( self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/))) )
     end subroutine gencorrs_prob
 
     subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, prob)
@@ -1554,7 +1554,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         real(sp),                intent(out)   :: prob(self%nrots)
         real(dp) :: w, sumsqptcl
-        integer  :: k, i, ithr
+        integer  :: k, i, j, ithr
         logical  :: even
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
@@ -1585,7 +1585,7 @@ contains
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
-        prob = abs(dsqrt(self%heap_vars(ithr)%kcorrs) - 1._dp)
+        prob = real( self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/))) )
     end subroutine gencorrs_shifted_prob
 
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot, pfts_refs)
@@ -1670,7 +1670,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(dp), pointer,    intent(inout) :: pft_ref(:,:)
         integer,                 intent(in)    :: iptcl
-        integer  :: i,k
+        integer  :: i,j,k
         i       = self%pinds(iptcl)
         pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
         gencorr_prob_for_rot_8 = 0.d0
@@ -1678,7 +1678,7 @@ contains
             gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 +&
                 &(real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp)) / (2.d0*real(self%pftsz,dp))
         end do
-        gencorr_prob_for_rot_8 = abs(dsqrt(gencorr_prob_for_rot_8) - 1._dp)
+        gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)))
     end function gencorr_prob_for_rot_8
 
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
@@ -1833,7 +1833,7 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_diff(:,:)
         real(dp) :: w
-        integer  :: k, i, ithr
+        integer  :: k, i, j, ithr
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         f     = 0.d0
@@ -1855,13 +1855,8 @@ contains
             w      = real(k,dp) / real(self%sigma2_noise(k,iptcl)) / (2.d0*real(self%pftsz,dp))
             grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
         end do
-        grad = grad / dsqrt(f)
-        f    = abs(dsqrt(f) - 1._dp)
-        if( f < DTINY )then
-            grad = 0._dp
-        else
-            grad = grad / f
-        endif
+        f    = f    / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)))
+        grad = grad / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)))
     end subroutine gencorr_prob_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )

@@ -72,7 +72,6 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
-    character(len=3)          :: reg_sh_samp='no'     !< sampling shifts in reg (yes|no){no}
     character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -380,7 +379,6 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: reg_athres=15.      !< angle threshold for reg samplings
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -429,7 +427,6 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_norm     = .false.
-    logical :: l_reg_sh_samp  = .false.
     logical :: l_reg_opt_ang  = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
@@ -567,7 +564,6 @@ contains
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_init',       self%reg_init)
         call check_carg('reg_norm',       self%reg_norm)
-        call check_carg('reg_sh_samp',    self%reg_sh_samp)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -788,7 +784,6 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
-        call check_rarg('reg_athres',     self%reg_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -1456,7 +1451,6 @@ contains
         ! reg options
         self%l_reg_init    = trim(self%reg_init    ).eq.'yes'
         self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
-        self%l_reg_sh_samp = trim(self%reg_sh_samp ).eq.'yes'
         self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
