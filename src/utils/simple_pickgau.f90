@@ -1145,7 +1145,7 @@ contains
         call self%get_positions(pos)
         mask_backgr   = .true. 
         pixrad_shrink = (self%maxdiam / 2.) / self%smpd_shrink
-        do ibox = 1,self%nboxes
+        do ibox = 1,size(pos,dim=1)
             rpos      = real(pos(ibox,:))
             xrange(1) = max(0,       nint(rpos(1) - pixrad_shrink))
             xrange(2) = min(self%nx, nint(rpos(1) + pixrad_shrink))

@@ -32,11 +32,11 @@ contains
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         call read_mic_raw(micname, smpd)
         if( present(pickrefs) )then
-            call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, offset=OFFSET)
-            call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, offset=1)
-        else
             call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET)
             call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%mskdiam, pickrefs, offset=1)
+        else
+            call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET)
+            call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)
         endif
         call gaup%gaupick(gaup_refine)
         nptcls = gaup_refine%get_nboxes()
