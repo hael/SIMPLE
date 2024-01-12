@@ -19,15 +19,18 @@ type reg_params
     real    :: prob, sh(2)  !< probability, shift
 end type reg_params
 
+real, parameter :: SMPL_ATHRES = 7.
 type :: regularizer
     integer              :: nrots
     integer              :: nrefs
     integer              :: pftsz
     integer              :: kfromto(2)
+    integer              :: inpl_ns, refs_ns
+    
     real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
     integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
-    real,    allocatable :: irot_corr(:,:), refs_corr(:,:)
-    integer, allocatable :: irot_inds(:,:), refs_inds(:,:)
+    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:)
+    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -38,7 +41,7 @@ type :: regularizer
     procedure          :: tab_normalize
     procedure          :: shift_search
     procedure          :: nonuni_tab_align
-    procedure, private :: calc_raw_frc, calc_pspec, ref_multinomal, inpl_multinomal
+    procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -54,10 +57,12 @@ contains
         self%nrefs   = pftcc%nrefs
         self%pftsz   = pftcc%pftsz
         self%kfromto = pftcc%kfromto
+        self%inpl_ns = SMPL_ATHRES * self%nrots / 180.
+        self%refs_ns = SMPL_ATHRES * self%nrefs / 180.
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
-                &self%refs_corr(self%nrefs,params_glob%nthr), self%irot_corr(self%nrots,params_glob%nthr), source=0.)
-        allocate(self%irot_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
+                &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr), source=0.)
+        allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         do iptcl = params_glob%fromp,params_glob%top
@@ -74,32 +79,19 @@ contains
     subroutine fill_tab_inpl_smpl( self, glob_pinds )
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer :: i, j, iref, iptcl, irnd, ithr
-        real    :: inpl_corrs(self%nrots), rnd_num, inpl_corrs_norm(self%nrots)
+        integer :: i, iref, iptcl, irnd
+        real    :: inpl_corrs(self%nrots)
         call seed_rnd
-        !$omp parallel do collapse(2) default(shared) private(i,j,iref,iptcl,inpl_corrs,inpl_corrs_norm,irnd,rnd_num,ithr) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
-                ithr  = omp_get_thread_num() + 1
                 iptcl = glob_pinds(i)
-                ! find best irot/shift for this pair of iref, iptcl
+                ! sampling the inpl rotation
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                if( maxval(inpl_corrs) < TINY )then
-                    self%irot_inds(:,ithr) = (/(j,j=1,self%nrots)/)
-                    call hpsort(inpl_corrs, self%irot_inds(:,ithr))
-                    call random_number(rnd_num)
-                    irnd = 1 + floor(real(self%nrots) * rnd_num)
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%loc = self%irot_inds(irnd, ithr)
-                    self%ref_ptcl_cor(iref,iptcl)     =     inpl_corrs(irnd)
-                else
-                    inpl_corrs_norm = 1. - inpl_corrs/maxval(inpl_corrs)
-                    inpl_corrs_norm = inpl_corrs_norm/sum(inpl_corrs_norm)
-                    irnd            = self%inpl_multinomal(inpl_corrs_norm)
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%loc = irnd
-                    self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
-                endif
+                irnd = self%inpl_multinomal(inpl_corrs)
+                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                self%ref_ptcl_tab(iref,iptcl)%loc = irnd
+                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
             enddo
         enddo
         !$omp end parallel do
@@ -182,8 +174,6 @@ contains
                 min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
             enddo
             !$omp end parallel do
-            min_ir     = 1. - min_ir / maxval(min_ir)
-            min_ir     = min_ir / sum(min_ir)
             min_ind_ir = self%ref_multinomal(min_ir)
             min_ind_ip = min_ip(min_ind_ir)
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
@@ -203,66 +193,49 @@ contains
         self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
         call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
         rnd = ran3()
-        do which=self%nrefs,1,-1
-            bound = sum(self%refs_corr(which:self%nrefs, ithr))
-            if( rnd <= bound )exit
-        enddo
-        which = self%refs_inds(max(which,1),ithr)
+        if( sum(self%refs_corr(1:self%refs_ns,ithr)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(self%refs_ns) * rnd)
+        else
+            ! normalizing within the hard-limit
+            self%refs_corr(1:self%refs_ns,ithr) = self%refs_corr(1:self%refs_ns,ithr) / sum(self%refs_corr(1:self%refs_ns,ithr))
+            do which=1,self%refs_ns
+                bound = sum(self%refs_corr(1:which, ithr))
+                if( rnd >= bound )exit
+            enddo
+            which = self%refs_inds(min(which,self%refs_ns),ithr)
+        endif
     end function ref_multinomal
 
-    !>  \brief  generates a multinomal 1-of-K random number according to the
-    !!          distribution in pvec
+    ! inpl multinomal based on unnormalized pvec
     function inpl_multinomal( self, pvec ) result( which )
         class(regularizer), intent(inout) :: self
         real,               intent(in)    :: pvec(:) !< probabilities
         integer :: i, which, ithr
         real    :: rnd, bound
         ithr = omp_get_thread_num() + 1
-        self%irot_corr(:,ithr) = pvec
-        self%irot_inds(:,ithr) = (/(i,i=1,self%nrots)/)
-        call hpsort(self%irot_corr(:,ithr), self%irot_inds(:,ithr) )
+        self%inpl_corr(:,ithr) = pvec
+        self%inpl_inds(:,ithr) = (/(i,i=1,self%nrots)/)
+        call hpsort(self%inpl_corr(:,ithr), self%inpl_inds(:,ithr) )
         rnd = ran3()
-        do which=self%nrots,1,-1
-            bound = sum(self%irot_corr(which:self%nrots, ithr))
-            if( rnd <= bound )exit
-        enddo
-        which = self%irot_inds(max(which,1),ithr)
+        if( sum(self%inpl_corr(1:self%inpl_ns,ithr)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(self%inpl_ns) * rnd)
+        else
+            ! normalizing within the hard-limit
+            self%inpl_corr(1:self%inpl_ns,ithr) = self%inpl_corr(1:self%inpl_ns,ithr) / sum(self%inpl_corr(1:self%inpl_ns,ithr))
+            do which=1,self%inpl_ns
+                bound = sum(self%inpl_corr(1:which, ithr))
+                if( rnd >= bound )exit
+            enddo
+            which = self%inpl_inds(min(which,self%inpl_ns),ithr)
+        endif
     end function inpl_multinomal
-
-    ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
-    subroutine calc_raw_frc( self, pft1, pft2, frc )
-        class(regularizer), intent(inout) :: self
-        complex(sp),        intent(in)    :: pft1(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),        intent(in)    :: pft2(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real,               intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
-        real(dp) :: num, denom
-        integer  :: k
-        do k = self%kfromto(1),self%kfromto(2)
-            num   = real(sum(pft1(:,k)*conjg(pft2(:,k))),dp)
-            denom = real(sum(pft1(:,k)*conjg(pft1(:,k))),dp) * real(sum(pft2(:,k)*conjg(pft2(:,k))),dp)
-            if( denom > DTINY )then
-                frc(k) = real(num / dsqrt(denom))
-            else
-                frc(k) = 0.0
-            endif
-        end do
-    end subroutine calc_raw_frc
-
-    ! Calculates normalized PFT power spectrum
-    subroutine calc_pspec( self, pft, pspec )
-        class(regularizer), intent(inout) :: self
-        complex(dp),        intent(in)    :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real,               intent(out)   :: pspec(self%kfromto(1):self%kfromto(2))
-        integer :: k
-        do k = self%kfromto(1),self%kfromto(2)
-            pspec(k) = real( real(sum(pft(:,k)*conjg(pft(:,k))),dp) / real(self%pftsz,dp) )
-        end do
-    end subroutine calc_pspec
 
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%irot_corr,self%refs_corr,self%irot_inds,self%refs_inds)
+        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%inpl_inds,self%refs_inds)
     end subroutine kill
 end module simple_regularizer
