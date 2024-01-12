@@ -127,18 +127,18 @@ contains
             endif
         endif
         call self%detect_peaks
-        if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
+        ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
         call self%center_filter
-        if( L_WRITE ) call self%write_boxfile('pickgau_after_center_filter.box')
+        ! if( L_WRITE ) call self%write_boxfile('pickgau_after_center_filter.box')
         call self%distance_filter
-        if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
+        ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
-        if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')
+        ! if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
-            if( L_WRITE ) call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
+            ! if( L_WRITE ) call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
             deallocate(pos)
         endif
     end subroutine gaupick
@@ -177,16 +177,17 @@ contains
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
-        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, mskdiam=mskdiam, offset=offset, ndev=ndev )
+        integer :: ldim(3)
+        ldim = imgs(1)%get_ldim()
+        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, box=ldim(1), offset=offset, ndev=ndev )
         call self%set_refs( imgs, mskdiam )
-        call self%setup_iterators
     end subroutine new_refpicker
 
-    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, mskdiam, offset, ndev )
+    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink, moldiam, moldiam_max
-        real,    optional, intent(in)    :: mskdiam !< reference-based picking if present
+        integer, optional, intent(in)    :: box     !< reference-based picking if present
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         character(len=:), allocatable   :: numstr
@@ -219,26 +220,29 @@ contains
         self%ldim(2)     = round2even(real(ldim_raw(2)) * scale)
         self%ldim(3)     = 1
         ! set logical dimensions of boxes
-        if( present(mskdiam) )then ! reference-based picking
-            self%maxdiam = mskdiam
+        if( present(box) )then ! reference-based picking
+            self%maxdiam     = smpd_raw * real(box)
+            ldim_raw_box(1)  = box
+            ldim_raw_box(2)  = ldim_raw_box(1)
+            ldim_raw_box(3)  = 1
+            self%ldim_box(1) = round2even(real(box) * scale)
+            self%ldim_box(2) = self%ldim_box(1)
+            self%ldim_box(3) = 1
+            maxdiam_max      = self%maxdiam     ! only one box size considered
+            box_max          = self%ldim_box(1) ! only one box size considered
         else
             self%maxdiam = moldiam + moldiam * BOX_EXP_FAC
-        endif
-        ldim_raw_box(1)  = round2even(self%maxdiam / smpd_raw)
-        ldim_raw_box(2)  = ldim_raw_box(1)
-        ldim_raw_box(3)  = 1
-        self%ldim_box(1) = round2even(self%maxdiam / self%smpd_shrink)
-        self%ldim_box(2) = self%ldim_box(1)
-        self%ldim_box(3) = 1
-        ! set # pixels in x/y based on maximum expected box size
-        if( present(mskdiam) )then ! reference-based picking
-            maxdiam_max  = mskdiam
-        else
-            maxdiam_max  = moldiam_max + moldiam_max * BOX_EXP_FAC
-        endif
-        box_max          = round2even(maxdiam_max / self%smpd_shrink)
-        self%nx          = self%ldim(1) - box_max
-        self%ny          = self%ldim(2) - box_max
+            ldim_raw_box(1)  = round2even(self%maxdiam / smpd_raw)
+            ldim_raw_box(2)  = ldim_raw_box(1)
+            ldim_raw_box(3)  = 1
+            self%ldim_box(1) = round2even(self%maxdiam / self%smpd_shrink)
+            self%ldim_box(2) = self%ldim_box(1)
+            self%ldim_box(3) = 1
+            maxdiam_max      = moldiam_max + moldiam_max * BOX_EXP_FAC    ! iteration bounds based on maximum box size
+            box_max          = round2even(maxdiam_max / self%smpd_shrink) ! iteration bounds based on maximum box size
+        endif 
+        self%nx = self%ldim(1) - box_max
+        self%ny = self%ldim(2) - box_max
         ! set Gaussian
         self%sig = ((self%maxdiam / 2.) / self%smpd_shrink) / GAUSIG
         call self%gauref%new(self%ldim_box, self%smpd_shrink)
@@ -276,10 +280,9 @@ contains
         call mic_raw%ifft
         call self%mic_shrink%ifft
         if( L_WRITE )then
-            if( present(mskdiam) )then ! reference-based picking
-                numstr = int2str(nint(mskdiam))
-                call self%mic_shrink%write('mic_shrink_mskdiam'//numstr//'.mrc')
-                call self%gauref%write('gauref_mskdiam'//numstr//'.mrc')
+            if( present(box) )then ! reference-based picking
+                call self%mic_shrink%write('mic_shrink.mrc')
+                call self%gauref%write('gauref.mrc')
             else
                 numstr = int2str(nint(moldiam))
                 call self%mic_shrink%write('mic_shrink_moldiam'//numstr//'.mrc')
@@ -295,18 +298,14 @@ contains
         call self%mic_shrink%ifft
         call gauimg%kill
         if( L_WRITE )then
-            if( present(mskdiam) )then ! reference-based picking
-                call self%mic_shrink%write('gauconv_mic_shrink_mskdiam'//numstr//'.mrc')
+            if( present(box) )then ! reference-based picking
+                call self%mic_shrink%write('gauconv_mic_shrink.mrc')
             else
                 call self%mic_shrink%write('gauconv_mic_shrink_moldiam'//numstr//'.mrc')
             endif
         endif
-        if( present(mskdiam) )then ! reference-based picking
-            ! iterators are established after calling set_refs because ldim_box, nx & ny are updated
-        else
-            ! establish iterators
-            call self%setup_iterators
-        endif
+        ! establish iterators
+        call self%setup_iterators
         ! flag existence
         self%exists = .true.
     end subroutine new
@@ -325,23 +324,10 @@ contains
         nimgs      = size(imgs)
         nrots      = nint(real(MAXNREFS) / real(nimgs))
         self%nrefs = nimgs * nrots
-        ! set shrunken logical dimensions of boxes
-        scale            = smpd / self%smpd_shrink
-        self%ldim_box(1) = round2even(real(ldim(1)) * scale)
-        self%ldim_box(2) = round2even(real(ldim(2)) * scale)
-        self%ldim_box(3) = 1
         ! set # pixels in x/y for both box sizes
-        self%nx          = self%ldim(1) - self%ldim_box(1)
-        self%ny          = self%ldim(2) - self%ldim_box(2)
-        mskrad           = (mskdiam / self%smpd_shrink) / 2.
-        ! set Gaussian
-        call self%gauref%new(self%ldim_box, self%smpd_shrink)
-        call self%gauref%gauimg2D(self%sig, self%sig)
-        call self%gauref%prenorm4real_corr(self%sxx)
-        if( L_WRITE )then
-            numstr = int2str(nint(mskdiam))
-            call self%gauref%write('gauref_mskdiam'//numstr//'.mrc')
-        endif
+        self%nx    = self%ldim(1) - self%ldim_box(1)
+        self%ny    = self%ldim(2) - self%ldim_box(2)
+        mskrad     = (mskdiam / self%smpd_shrink) / 2.
         call self%gauref%fft ! prep for convolution
         if( allocated(self%boxrefs) )then
             do iimg = 1,size(self%boxrefs)
