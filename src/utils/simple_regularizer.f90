@@ -84,7 +84,7 @@ contains
                 iptcl = glob_pinds(i)
                 ! find best irot/shift for this pair of iref, iptcl
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                if( sum(inpl_corrs) < TINY )then
+                if( maxval(inpl_corrs) < TINY )then
                     self%irot_inds(:,ithr) = (/(j,j=1,self%nrots)/)
                     call hpsort(inpl_corrs, self%irot_inds(:,ithr))
                     call random_number(rnd_num)
@@ -93,7 +93,8 @@ contains
                     self%ref_ptcl_tab(iref,iptcl)%loc = self%irot_inds(irnd, ithr)
                     self%ref_ptcl_cor(iref,iptcl)     =     inpl_corrs(irnd)
                 else
-                    inpl_corrs_norm = inpl_corrs/sum(inpl_corrs)
+                    inpl_corrs_norm = 1. - inpl_corrs/maxval(inpl_corrs)
+                    inpl_corrs_norm = inpl_corrs_norm/sum(inpl_corrs_norm)
                     irnd            = self%inpl_multinomal(inpl_corrs_norm)
                     self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
                     self%ref_ptcl_tab(iref,iptcl)%loc = irnd
@@ -181,6 +182,7 @@ contains
                 min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
             enddo
             !$omp end parallel do
+            min_ir     = 1. - min_ir / maxval(min_ir)
             min_ir     = min_ir / sum(min_ir)
             min_ind_ir = self%ref_multinomal(min_ir)
             min_ind_ip = min_ip(min_ind_ir)
@@ -201,11 +203,11 @@ contains
         self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
         call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
         rnd = ran3()
-        do which=1,self%nrefs
-            bound = sum(self%refs_corr(1:which, ithr))
-            if( rnd >= bound )exit
+        do which=self%nrefs,1,-1
+            bound = sum(self%refs_corr(which:self%nrefs, ithr))
+            if( rnd <= bound )exit
         enddo
-        which = self%refs_inds(min(which,self%nrefs),ithr)
+        which = self%refs_inds(max(which,1),ithr)
     end function ref_multinomal
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
@@ -220,11 +222,11 @@ contains
         self%irot_inds(:,ithr) = (/(i,i=1,self%nrots)/)
         call hpsort(self%irot_corr(:,ithr), self%irot_inds(:,ithr) )
         rnd = ran3()
-        do which=1,self%nrots,1
-            bound = sum(self%irot_corr(1:which, ithr))
-            if( rnd >= bound )exit
+        do which=self%nrots,1,-1
+            bound = sum(self%irot_corr(which:self%nrots, ithr))
+            if( rnd <= bound )exit
         enddo
-        which = self%irot_inds(min(which,self%nrots),ithr)
+        which = self%irot_inds(max(which,1),ithr)
     end function inpl_multinomal
 
     ! Calculates frc between two PFTs, rotation, shift & ctf are not factored in
