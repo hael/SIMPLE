@@ -32,6 +32,7 @@ public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
 public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander
+public :: cavgsproc_nano_commander
 public :: graphene_subtr_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
@@ -103,6 +104,11 @@ type, extends(commander_base) :: autorefine3D_nano_commander
   contains
     procedure :: execute      => exec_autorefine3D_nano
 end type autorefine3D_nano_commander
+
+type, extends(commander_base) :: cavgsproc_nano_commander
+  contains
+    procedure :: execute      => exec_cavgsproc_nano
+end type cavgsproc_nano_commander
 
 type, extends(commander_base) :: refine3D_nano_commander
   contains
@@ -1216,6 +1222,112 @@ contains
         ! end gracefully
         call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
     end subroutine exec_autorefine3D_nano
+
+    subroutine exec_cavgsproc_nano( self, cline )
+        use simple_commander_atoms, only: detect_atoms_commander
+        class(cavgsproc_nano_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        class(parameters), pointer    :: params_ptr => null()
+        type(parameters)              :: params
+        type(refine3D_nano_commander) :: xrefine3D_nano
+        type(reproject_commander)     :: xreproject
+        type(cmdline)                 :: cline_refine3D_cavgs, cline_reproject
+        type(image), allocatable      :: imgs(:)
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: cavgs_stk
+        real,             allocatable :: rstates(:)
+        logical,          allocatable :: state_mask(:)
+        integer :: ncavgs, i, cnt, cnt2
+        real    :: smpd
+        call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
+        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
+        call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
+        ! read the project file
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
+        if( ncavgs /= 0 )then
+            ! update cline_refine3D_cavgs accordingly
+            call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
+            call cline_refine3D_cavgs%set('vol1',      params%vols(1))
+            call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
+            call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
+            call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
+            call cline_refine3D_cavgs%set('mkdir',               'no')
+            call cline_refine3D_cavgs%set('maxits',                1.)
+            call cline_refine3D_cavgs%set('projfile', params%projfile)
+            call cline_refine3D_cavgs%set('oritype',          'cls3D')
+            call cline_refine3D_cavgs%set('objfun',              'cc')
+            call cline_refine3D_cavgs%set('lp',                   1.0)
+            call cline_refine3D_cavgs%set('silence_fsc',        'yes')
+            call cline_refine3D_cavgs%set('trs',                  5.0)
+            call cline_refine3D_cavgs%set('nspace',            10000.)
+            call cline_refine3D_cavgs%set('center',              'no')
+            ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D_nano%execute(cline_refine3D_cavgs)
+            params_glob => params_ptr
+            params_ptr  => null()
+            ! align cavgs
+            call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
+            ! ...so write out its content
+            call spproj%os_cls3D%write('cavgs_oris.txt')
+            ! ...and get the state flags
+            if( allocated(rstates) ) deallocate(rstates)
+            rstates = spproj%os_cls3D%get_all('state')
+            ! prepare for re-projection
+            call cline_reproject%set('vol1',      params%vols(1))
+            call cline_reproject%set('outstk',     'reprojs.mrc')
+            call cline_reproject%set('smpd',                smpd)
+            call cline_reproject%set('oritab',  'cavgs_oris.txt')
+            call cline_reproject%set('pgrp',         params%pgrp)
+            call cline_reproject%set('nthr',   real(params%nthr))
+            params_ptr  => params_glob
+            params_glob => null()
+            call xreproject%execute(cline_reproject)
+            params_glob => params_ptr
+            params_ptr  => null()
+            ! write cavgs & reprojections
+            allocate(imgs(2*ncavgs), state_mask(ncavgs))
+            cnt = 0
+            do i = 1,2*ncavgs,2
+                cnt = cnt + 1
+                if( rstates(cnt) > 0.5 )then
+                    call imgs(i    )%new([params%box,params%box,1], smpd)
+                    call imgs(i + 1)%new([params%box,params%box,1], smpd)
+                    call imgs(i    )%read(cavgs_stk,     cnt)
+                    call imgs(i + 1)%read('reprojs.mrc', cnt)
+                    call imgs(i    )%norm
+                    call imgs(i + 1)%norm
+                    state_mask(cnt) = .true.
+                else
+                    state_mask(cnt) = .false.
+                endif
+            end do
+            cnt  = 0
+            cnt2 = 1 ! needed because we have omissions
+            do i = 1,2*ncavgs,2
+                cnt = cnt + 1
+                if( state_mask(cnt) )then
+                    call imgs(i    )%write('cavgs_vs_reprojections.mrc', cnt2    )
+                    call imgs(i + 1)%write('cavgs_vs_reprojections.mrc', cnt2 + 1)
+                    call imgs(i    )%kill
+                    call imgs(i + 1)%kill
+                    cnt2 = cnt2 + 2
+                endif
+            end do
+            deallocate(imgs)
+        endif ! end of class average-based validation
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
+        ! deallocate
+        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        ! end gracefully
+        call simple_end('**** CAVGSPROC_NANO NORMAL STOP ****')
+    end subroutine exec_cavgsproc_nano
 
     subroutine exec_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
