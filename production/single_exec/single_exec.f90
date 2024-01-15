@@ -46,6 +46,7 @@ type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
 ! VALIDATION PROGRAMS
 type(vizoris_commander)                       :: xvizoris
+type(cavgsproc_nano_commander)                :: xcavgsproc
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
 type(detect_atoms_commander)                  :: xdetect_atoms
@@ -139,6 +140,8 @@ select case(prg)
     ! VALIDATION PROGRAMS
     case( 'vizoris' )
         call xvizoris%execute(cline)
+    case('cavgsproc_nano')
+        call xcavgsproc%execute(cline)
 
     ! MODEL BUILDING/ANALYSIS PROGRAMS
     case( 'detect_atoms' )
@@ -161,7 +164,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3495a0c6')
+call simple_print_git_version('e651d6eb')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

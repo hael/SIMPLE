@@ -82,6 +82,7 @@ type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavg_filter2D
+type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: check_align
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -354,6 +355,7 @@ contains
         call new_binarize
         call new_calc_pspec
         call new_cavg_filter2D
+        call new_cavgsproc_nano
         call new_check_align
         call new_center
         call new_cleanup2D
@@ -466,6 +468,7 @@ contains
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(cavg_filter2D)
+        call push2prg_ptr_array(cavgsproc_nano)
         call push2prg_ptr_array(check_align)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -592,6 +595,8 @@ contains
                 ptr2prg => calc_pspec
             case('cavg_filter2D')
                 ptr2prg => cavg_filter2D
+            case('cavgsproc_nano')
+                ptr2prg => cavgsproc_nano
             case('check_align')
                 ptr2prg => check_align
             case('center')
@@ -917,6 +922,7 @@ contains
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
+        write(logfhandle,'(A)') cavgsproc_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') detect_atoms%name
@@ -1381,6 +1387,32 @@ contains
         ! computer controls
         call cavg_filter2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cavg_filter2D
+
+    subroutine new_cavgsproc_nano
+        ! PROGRAM SPECIFICATION
+        call cavgsproc_nano%new(&
+        &'cavgsproc_nano',&                                           ! name
+        &'Analysis of class averages along nanocrystal time-series',& ! descr_short
+        &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! descr_long
+        &'single_exec',&                                              ! executable
+        &1, 1, 0, 1, 0, 1, 2, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cavgsproc_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call cavgsproc_nano%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cavgsproc_nano%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call cavgsproc_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call cavgsproc_nano%set_input('comp_ctrls', 1, nthr)
+        call cavgsproc_nano%set_input('comp_ctrls', 2, script)
+    end subroutine new_cavgsproc_nano
 
     subroutine new_check_align
         ! PROGRAM SPECIFICATION
