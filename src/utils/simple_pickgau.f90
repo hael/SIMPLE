@@ -264,8 +264,8 @@ contains
         ! shrink micrograph
         call self%mic_shrink%new(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
+        call mic_raw%mul(real(ldim_raw(1))) ! to prevent numerical underflow when performing FFT
         call mic_raw%fft
-        call mic_raw%clip(self%mic_shrink)
         call mic_raw%clip(self%mic_shrink)
         select case(trim(pcontrast))
             case('black')
@@ -917,7 +917,6 @@ contains
                         pos = self%positions(self%inds_offset(ioff,joff),:)
                         if( self%l_mic_mask(pos(1)+1,pos(2)+1) )then
                             ithr = omp_get_thread_num() + 1
-                            pos  = self%positions(self%inds_offset(ioff,joff),:)
                             call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
                             call boximgs_heap(ithr)%prenorm4real_corr(l_err)
                             if( l_err )then

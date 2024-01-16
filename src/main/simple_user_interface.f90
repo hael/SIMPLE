@@ -3062,7 +3062,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 4, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 5, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3078,6 +3078,9 @@ contains
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
         call pick%set_input('parm_ios', 4, picker)
         call pick%set_gui_params('parm_ios', 4, submenu="picking")
+        call pick%set_input('parm_ios', 5, mskdiam)
+        call pick%set_gui_params('parm_ios', 5, submenu="picking")
+        pick%parm_ios(5)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3150,7 +3153,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 13, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 14, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -3170,6 +3173,8 @@ contains
         call preprocess%set_input('parm_ios',11,  ctfpatch)
         call preprocess%set_input('parm_ios',12,  moldiam)
         call preprocess%set_input('parm_ios',13,  picker)
+        call preprocess%set_input('parm_ios',14,  mskdiam)
+        preprocess%parm_ios(14)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
