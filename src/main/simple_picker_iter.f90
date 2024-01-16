@@ -55,10 +55,10 @@ contains
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs)
                 else if( cline%defined('moldiam') )then
                     ! at least moldiam is required
+                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out)
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
-                call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out)
         end select
     end subroutine iterate
 
