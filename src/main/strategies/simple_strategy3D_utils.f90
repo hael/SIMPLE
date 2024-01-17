@@ -13,11 +13,12 @@ private
 
 contains
 
-    subroutine assign_ori( s, ref, inpl, corr, sh_in )
+    subroutine assign_ori( s, ref, inpl, corr, sh_in, weight )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl
         real,                   intent(in)    :: corr
         real,         optional, intent(in)    :: sh_in(2)
+        real,         optional, intent(in)    :: weight
         type(ori) :: osym, o_prev, o_new
         integer   :: state, neff_states, loc(1), nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
@@ -100,9 +101,13 @@ contains
         frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
         call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
-        pw = 1.
-        if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
-        call build_glob%spproj_field%set(s%iptcl, 'w', pw)
+        if( present(weight) )then
+            call build_glob%spproj_field%set(s%iptcl, 'w', weight)
+        else
+            pw = s3D%proj_space_w(s%ithr, ref)
+            if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
+            call build_glob%spproj_field%set(s%iptcl, 'w', pw)
+        endif
         ! destruct
         call osym%kill
         call o_prev%kill

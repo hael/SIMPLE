@@ -16,7 +16,9 @@ type reg_params
     integer :: iptcl        !< iptcl index
     integer :: iref         !< iref index
     integer :: loc          !< inpl index
-    real    :: prob, sh(2)  !< probability, shift
+    real    :: prob         !< probability/corr
+    real    :: sh(2)        !< shift
+    real    :: w            !< weight
 end type reg_params
 
 type :: regularizer
@@ -69,6 +71,7 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%loc   = 0
                 self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
+                self%ref_ptcl_tab(iref,iptcl)%w     = 0.
             enddo
         enddo
     end subroutine new
@@ -99,7 +102,7 @@ contains
         class(regularizer), intent(inout) :: self
         type(ori) :: o
         integer   :: iref, iptcl, iref2
-        real      :: sum_corr(self%nrefs), sum_corr_all
+        real      :: sum_corr(self%nrefs), sum_corr_all, min_corr, max_corr
         logical   :: lnns(self%nrefs), ref_neigh_tab(self%nrefs,self%nrefs)
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
@@ -142,15 +145,18 @@ contains
             enddo
             !$omp end parallel do
         endif
-        if( maxval(self%ref_ptcl_cor) < TINY )then
+        max_corr = maxval(self%ref_ptcl_cor)
+        min_corr = minval(self%ref_ptcl_cor)
+        if( (max_corr - min_corr) < TINY )then
             self%ref_ptcl_cor = 0.
         else
-            self%ref_ptcl_cor = self%ref_ptcl_cor / maxval(self%ref_ptcl_cor)
+            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
         do iptcl = params_glob%fromp,params_glob%top
             do iref = 1, self%nrefs
                 self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+                self%ref_ptcl_tab(iref,iptcl)%w    = 1. - self%ref_ptcl_cor(iref,iptcl)
             enddo
         enddo
         !$omp end parallel do
@@ -160,7 +166,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer   :: iref, iptcl, i
-        real      :: sum_corr_all, max_corr
+        real      :: sum_corr_all, max_corr, min_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,sum_corr_all)
@@ -176,22 +182,25 @@ contains
             !$omp end parallel do
         endif
         max_corr = 0.
+        min_corr = huge(min_corr)
         do i = 1, self%pftcc%nptcls
             iptcl = glob_pinds(i)
             do iref = 1, self%nrefs
                 if( self%ref_ptcl_cor(iref, iptcl) > max_corr ) max_corr = self%ref_ptcl_cor(iref, iptcl)
+                if( self%ref_ptcl_cor(iref, iptcl) < min_corr ) min_corr = self%ref_ptcl_cor(iref, iptcl)
             enddo
         enddo
-        if( max_corr < TINY )then
+        if( (max_corr - min_corr) < TINY )then
             self%ref_ptcl_cor = 0.
         else
-            self%ref_ptcl_cor = self%ref_ptcl_cor / max_corr
+            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iref,iptcl)
         do i = 1, self%pftcc%nptcls
             iptcl = glob_pinds(i)
             do iref = 1, self%nrefs
                 self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+                self%ref_ptcl_tab(iref,iptcl)%w    = 1. - self%ref_ptcl_cor(iref,iptcl)
             enddo
         enddo
         !$omp end parallel do

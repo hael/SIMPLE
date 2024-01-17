@@ -198,10 +198,18 @@ contains
                 batchsz     = batch_end - batch_start + 1
                 call build_batch_particles(batchsz, pinds(batch_start:batch_end))
                 call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
-                call reg_obj%batch_tab_normalize(pinds(batch_start:batch_end))
-                call reg_obj%batch_tab_align(pinds(batch_start:batch_end))
-                if( params_glob%l_doshift ) call reg_obj%shift_search(pinds(batch_start:batch_end))
             enddo
+            call reg_obj%tab_normalize
+            call reg_obj%tab_align
+            if( params_glob%l_doshift )then
+                do ibatch=1,nbatches
+                    batch_start = batches(ibatch,1)
+                    batch_end   = batches(ibatch,2)
+                    batchsz     = batch_end - batch_start + 1
+                    call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                    call reg_obj%shift_search(pinds(batch_start:batch_end))
+                enddo
+            endif
         endif
 
         ! Batch loop
