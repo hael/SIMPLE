@@ -19,7 +19,7 @@ integer                     :: ldim1(3), ldim2(3), ldim_refs(3), n, nshells, ifo
 real                        :: mean, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
 logical                     :: err
 if( command_argument_count() /= 2 )then
-    write(logfhandle,'(a)')  'Usage: simple_test_3D_core_finder vol_part1.mrc vol_part2.mrc radius_core'
+    write(logfhandle,'(a)')  'Usage: simple_test_3D_core_finder vol_part1.mrc vol_part2.mrc'
     write(logfhandle,'(a)')  'vol_part1.mrc: 3D volume density map of part1'
     write(logfhandle,'(a)')  'vol_part2.mrc: 3D volume density map of part2', NEW_LINE('a')
     stop
