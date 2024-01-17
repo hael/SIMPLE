@@ -36,8 +36,10 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: fill_tab_inpl_smpl
     procedure          :: tab_normalize
+    procedure          :: batch_tab_normalize
     procedure          :: shift_search
-    procedure          :: nonuni_tab_align
+    procedure          :: tab_align
+    procedure          :: batch_tab_align
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
@@ -154,6 +156,47 @@ contains
         !$omp end parallel do
     end subroutine tab_normalize
 
+    subroutine batch_tab_normalize( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer   :: iref, iptcl, i
+        real      :: sum_corr_all, max_corr
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        if( params_glob%l_reg_norm )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,sum_corr_all)
+            do i = 1, self%pftcc%nptcls
+                iptcl        = glob_pinds(i)
+                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
+                if( sum_corr_all < TINY )then
+                    self%ref_ptcl_cor(:,iptcl) = 0.
+                else
+                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                endif
+            enddo
+            !$omp end parallel do
+        endif
+        max_corr = 0.
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            do iref = 1, self%nrefs
+                if( self%ref_ptcl_cor(iref, iptcl) > max_corr ) max_corr = self%ref_ptcl_cor(iref, iptcl)
+            enddo
+        enddo
+        if( max_corr < TINY )then
+            self%ref_ptcl_cor = 0.
+        else
+            self%ref_ptcl_cor = self%ref_ptcl_cor / max_corr
+        endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iref,iptcl)
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            do iref = 1, self%nrefs
+                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine batch_tab_normalize
+
     subroutine shift_search( self, glob_pinds )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
@@ -184,7 +227,7 @@ contains
         !$omp end parallel do
     end subroutine shift_search
 
-    subroutine nonuni_tab_align( self )
+    subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
         integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs)
         real    :: min_ir(self%nrefs)
@@ -205,7 +248,33 @@ contains
             self%ptcl_ref_map(min_ind_ip) = min_ind_ir
             mask_ip(min_ind_ip) = .false.
         enddo
-    end subroutine nonuni_tab_align
+    end subroutine tab_align
+
+    subroutine batch_tab_align( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs), i
+        real    :: min_ir(self%nrefs)
+        logical :: mask_ip(params_glob%fromp:params_glob%top)
+        mask_ip = .false.
+        do i = 1, self%pftcc%nptcls
+            mask_ip(glob_pinds(i)) = .true.
+        enddo
+        call seed_rnd
+        do while( any(mask_ip) )
+            min_ir = 0.
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
+            do ir = 1, self%nrefs
+                min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
+                min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
+            enddo
+            !$omp end parallel do
+            min_ind_ir = self%ref_multinomal(min_ir)
+            min_ind_ip = min_ip(min_ind_ir)
+            self%ptcl_ref_map(min_ind_ip) = min_ind_ir
+            mask_ip(min_ind_ip) = .false.
+        enddo
+    end subroutine batch_tab_align
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
