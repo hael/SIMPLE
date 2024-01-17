@@ -985,7 +985,7 @@ contains
             print *, 'Aligning the particles ...'
             ! Memoize particles FFT parameters
             call pftcc%memoize_ptcls
-            call reg_obj%fill_tab_inpl_smpl
+            call reg_obj%fill_tab_inpl_smpl(pinds)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
             call reg_obj%tab_normalize
             call reg_obj%nonuni_tab_align

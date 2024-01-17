@@ -197,7 +197,7 @@ contains
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
                 call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call reg_obj%fill_tab_inpl_smpl
+                call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
             enddo
             call reg_obj%tab_normalize
             call reg_obj%nonuni_tab_align
@@ -207,7 +207,7 @@ contains
                     batch_end   = batches(ibatch,2)
                     batchsz     = batch_end - batch_start + 1
                     call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                    call reg_obj%shift_search
+                    call reg_obj%shift_search(pinds(batch_start:batch_end))
                 enddo
             endif
         endif
