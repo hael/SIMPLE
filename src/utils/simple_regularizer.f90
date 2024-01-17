@@ -101,8 +101,9 @@ contains
         class(regularizer), intent(inout) :: self
         type(ori) :: o
         integer   :: iref, iptcl, iref2
-        real      :: sum_corr
+        real      :: sum_corr(self%nrefs)
         logical   :: lnns(self%nrefs), ref_neigh_tab(self%nrefs,self%nrefs)
+        ref_neigh_tab = .false.
         do iref = 1, self%nrefs
             lnns = .false.
             call build_glob%eulspace%get_ori(iref, o)
@@ -120,11 +121,13 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr,iref)
             do iptcl = params_glob%fromp, params_glob%top
                 do iref = 1, self%nrefs
-                    sum_corr = sum(self%ref_ptcl_cor(:,iptcl), mask=ref_neigh_tab(:,iref))
-                    if( sum_corr < TINY )then
+                    sum_corr(iref) = sum(self%ref_ptcl_cor(:,iptcl), mask=ref_neigh_tab(:,iref))
+                enddo
+                do iref = 1, self%nrefs
+                    if( sum_corr(iref) < TINY )then
                         self%ref_ptcl_cor(iref,iptcl) = 0.
                     else
-                        self%ref_ptcl_cor(iref,iptcl) = self%ref_ptcl_cor(iref,iptcl) / sum_corr
+                        self%ref_ptcl_cor(iref,iptcl) = self%ref_ptcl_cor(iref,iptcl) / sum_corr(iref)
                     endif
                 enddo
             enddo
