@@ -1445,6 +1445,7 @@ contains
         type(cmdline)    :: cline_make_pickrefs
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        integer :: nmics
         logical :: templates_provided
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
@@ -1457,10 +1458,15 @@ contains
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
-        if( spproj%get_nintgs() ==0 ) THROW_HARD('No micrograph to process! exec_pick_distr')
+        nmics = spproj%get_nintgs()
+        if( nmics == 0 ) THROW_HARD('No micrograph to process! exec_pick_distr')
         call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
+        if( cline%defined('nparts') )then
+            params%nparts = min(params%nparts, nmics)
+            call cline%set('nparts', params%nparts)
+        endif
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! more sanity checks

@@ -1,4 +1,5 @@
 module CPlot2D_wrapper_module
+#include "simple_local_flags.inc"
     use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_char, C_double, C_bool
     implicit none
 
@@ -231,6 +232,47 @@ contains
         call CDataSet__AddDataPoint(this, point)
         call CDataPoint__delete(point)
     end subroutine CDataSet_addpoint
+
+    subroutine scatter_plot( n, x, y, tmpl_fname )
+        include 'simple_lib.f08'
+        integer,           intent(in) :: n
+        real,              intent(in) :: x(n), y(n)
+        character(len=*),  intent(in) :: tmpl_fname
+        type(str4arr)             :: title
+        type(CPlot2D_type)        :: plot2D
+        type(CDataSet_type)       :: dataSet
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
+        integer  :: k,iostat
+        if( n == 0 ) THROW_HARD('Empty vectors; scatter_plot')
+        fname_eps  = trim(tmpl_fname)//'.eps'
+        fname_pdf  = trim(tmpl_fname)//'.pdf'
+        call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_TRUE)
+        call CDataSet__SetMarkerSize(dataSet, real(2.0, c_double))
+        call CDataSet__SetDrawLine(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
+        do k = 1,n
+            call CDataSet_addpoint(dataSet, x(k), y(k))
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        title%str = 'X'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str = 'Y'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ! conversion to PDF
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
+            &//trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine scatter_plot
 
     subroutine test_CPlot2D
         include 'simple_lib.f08'
