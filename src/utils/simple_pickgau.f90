@@ -26,7 +26,8 @@ character(len=:), allocatable :: fbody
 type pickgau
     private
     real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
-    real                     :: dist_thres  = 0., smd = 0., ksstat = 0., prob = 0., a_peak = 0., s_peak = 0.
+    real                     :: dist_thres  = 0., refine_dist_thres = 0.
+    real                     :: smd = 0., ksstat = 0., prob = 0., a_peak = 0., s_peak = 0.
     real                     :: a_nonpeak = 0., s_nonpeak = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
@@ -138,6 +139,7 @@ contains
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
+            call self_refine%distance_filter(dist_thres=self_refine%refine_dist_thres)
             ! if( L_WRITE ) call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
             deallocate(pos)
         endif
@@ -261,6 +263,7 @@ contains
         else
             self%dist_thres = self%offset
         endif
+        self%refine_dist_thres = (self%maxdiam/4.)/self%smpd_shrink
         ! shrink micrograph
         call self%mic_shrink%new(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)

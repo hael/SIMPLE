@@ -3443,7 +3443,7 @@ contains
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
-        preprocess_stream_dev%mask_ctrls(1)%required = .false.
+        preprocess_stream_dev%mask_ctrls(1)%required    = .false.
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
         call preprocess_stream_dev%set_input('comp_ctrls', 1, nchunks)

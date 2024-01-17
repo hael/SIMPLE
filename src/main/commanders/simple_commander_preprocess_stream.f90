@@ -57,7 +57,7 @@ contains
         integer                                :: nchunks_imported_glob, nchunks_imported, box_extract
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, iproj
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in, nmic_star
-        logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed, l_whether2D
+        logical                                :: l_pick, l_templates_provided, l_movies_left, l_haschanged, l_cluster2d, l_nchunks_maxed, l_whether2D
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
@@ -146,20 +146,23 @@ contains
         call spproj%write(micspproj_fname)
         ! picking
         l_pick = .false.
+        l_templates_provided = cline%defined('pickrefs')
         if( cline%defined('picker') )then
             select case(trim(params%picker))
             case('old')
-                if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+                if( .not.l_templates_provided ) THROW_HARD('PICKREFS required for picker=old')
             case('new')
-                if(cline%defined('pickrefs'))then
+                if( l_templates_provided )then
                     if( .not. cline%defined('mskdiam') )then
                         THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
                     endif
+                else if( .not.cline%defined('moldiam') )then
+                    THROW_HARD('MOLDIAM required for picker=new reference-free picking')
                 else
-                    if( .not.cline%defined('moldiam') )then
-                        THROW_HARD('MOLDIAM required for picker=new')
-                    endif
+                    THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
+            case DEFAULT
+                THROW_HARD('Unsupported picker')
             end select
             l_pick = .true.
         endif
