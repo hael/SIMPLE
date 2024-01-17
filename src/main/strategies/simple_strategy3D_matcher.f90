@@ -197,7 +197,7 @@ contains
                 batch_end   = batches(ibatch,2)
                 batchsz     = batch_end - batch_start + 1
                 call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
+                call reg_obj%fill_tab_inpl_smpl
             enddo
             call reg_obj%tab_normalize
             call reg_obj%nonuni_tab_align

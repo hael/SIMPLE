@@ -22,8 +22,6 @@ end type reg_params
 type :: regularizer
     integer              :: nrots
     integer              :: nrefs
-    integer              :: pftsz
-    integer              :: kfromto(2)
     integer              :: inpl_ns, refs_ns
     
     real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
@@ -54,8 +52,6 @@ contains
         integer :: iptcl, iref
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
-        self%pftsz   = pftcc%pftsz
-        self%kfromto = pftcc%kfromto
         self%inpl_ns = params_glob%reg_athres * self%nrots / 180.
         self%refs_ns = params_glob%reg_athres * self%nrefs / 180.
         self%pftcc => pftcc
@@ -75,16 +71,15 @@ contains
         enddo
     end subroutine new
 
-    subroutine fill_tab_inpl_smpl( self, glob_pinds )
+    subroutine fill_tab_inpl_smpl( self )
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer :: i, iref, iptcl, irnd
         real    :: inpl_corrs(self%nrots)
         call seed_rnd
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
-                iptcl = glob_pinds(i)
+                iptcl = self%pftcc%pinds(i)
                 ! sampling the inpl rotation
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 irnd = self%inpl_multinomal(inpl_corrs)
@@ -151,7 +146,7 @@ contains
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
         type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: iref, iptcl, ithr, irot
+        integer :: iref, iptcl, ithr, irot, i
         real    :: lims(2,2), cxy(3)
         lims(1,1) = -params_glob%trs
         lims(1,2) =  params_glob%trs
@@ -160,18 +155,17 @@ contains
         do ithr = 1, params_glob%nthr
             call grad_shsrch_obj(ithr)%new(lims, opt_angle=params_glob%l_reg_opt_ang)
         enddo
-        !$omp parallel do default(shared) private(iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
-            iptcl = self%ptcl_ref_map(iref)
-            if( iptcl >= self%pftcc%pfromto(1) .and. iptcl <= self%pftcc%pfromto(2))then
-                ithr = omp_get_thread_num() + 1
-                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                irot = self%ref_ptcl_tab(iref,iptcl)%loc
-                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
-                if( irot > 0 )then
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
-                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
-                endif
+        !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
+        do i = 1, self%pftcc%nptcls
+            iptcl = self%pftcc%pinds(i)
+            iref  = self%ptcl_ref_map(iptcl)
+            ithr  = omp_get_thread_num() + 1
+            call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+            irot = self%ref_ptcl_tab(iref,iptcl)%loc
+            cxy  = grad_shsrch_obj(ithr)%minimize(irot)
+            if( irot > 0 )then
+                self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
+                self%ref_ptcl_tab(iref,iptcl)%loc = irot
             endif
         enddo
         !$omp end parallel do
