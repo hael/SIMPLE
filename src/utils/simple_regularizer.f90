@@ -96,23 +96,23 @@ contains
         class(regularizer), intent(inout) :: self
         type(ori) :: o
         integer   :: iref, iptcl, iref2
-        real      :: sum_corr(self%nrefs)
+        real      :: sum_corr(self%nrefs), sum_corr_all
         logical   :: lnns(self%nrefs), ref_neigh_tab(self%nrefs,self%nrefs)
-        ref_neigh_tab = .false.
-        do iref = 1, self%nrefs
-            lnns = .false.
-            call build_glob%eulspace%get_ori(iref, o)
-            call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%reg_athres, lnns)
-            do iref2 = 1, self%nrefs
-                if( iref2 /= iref .and. lnns(iref2) )then
-                    ref_neigh_tab(iref,  iref2) = .true.
-                    ref_neigh_tab(iref2, iref ) = .true.
-                endif
-            enddo
-            ref_neigh_tab(iref, iref) = .true.
-        enddo
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
+            ref_neigh_tab = .false.
+            do iref = 1, self%nrefs
+                lnns = .false.
+                call build_glob%eulspace%get_ori(iref, o)
+                call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%reg_athres, lnns)
+                do iref2 = 1, self%nrefs
+                    if( iref2 /= iref .and. lnns(iref2) )then
+                        ref_neigh_tab(iref,  iref2) = .true.
+                        ref_neigh_tab(iref2, iref ) = .true.
+                    endif
+                enddo
+                ref_neigh_tab(iref, iref) = .true.
+            enddo
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr,iref)
             do iptcl = params_glob%fromp, params_glob%top
                 do iref = 1, self%nrefs
@@ -125,6 +125,17 @@ contains
                         self%ref_ptcl_cor(iref,iptcl) = self%ref_ptcl_cor(iref,iptcl) / sum_corr(iref)
                     endif
                 enddo
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
+            do iptcl = params_glob%fromp, params_glob%top
+                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
+                if( sum_corr_all < TINY )then
+                    self%ref_ptcl_cor(:,iptcl) = 0.
+                else
+                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                endif
             enddo
             !$omp end parallel do
         endif
