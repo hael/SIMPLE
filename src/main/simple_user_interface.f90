@@ -1145,7 +1145,7 @@ contains
         ! PROGRAM SPECIFICATION
         call analysis2D_nano%new(&
         &'analysis2D_nano', &                                         ! name
-        &'2D analysis (centering, diameter estimation & clustering) for nanycrystal time-series',& ! descr_short
+        &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! descr_short
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
         &0, 1, 0, 1, 0, 1, 3, .true.)                                 ! # entries in each group, requires sp_project
