@@ -71,15 +71,16 @@ contains
         enddo
     end subroutine new
 
-    subroutine fill_tab_inpl_smpl( self )
+    subroutine fill_tab_inpl_smpl( self, glob_pinds )
         class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         integer :: i, iref, iptcl, irnd
         real    :: inpl_corrs(self%nrots)
         call seed_rnd
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
-                iptcl = self%pftcc%pinds(i)
+                iptcl = glob_pinds(i)
                 ! sampling the inpl rotation
                 call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                 irnd = self%inpl_multinomal(inpl_corrs)
@@ -153,9 +154,10 @@ contains
         !$omp end parallel do
     end subroutine tab_normalize
 
-    subroutine shift_search( self )
+    subroutine shift_search( self, glob_pinds )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
         type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
         integer :: iref, iptcl, ithr, irot, i
         real    :: lims(2,2), cxy(3)
@@ -168,7 +170,7 @@ contains
         enddo
         !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
         do i = 1, self%pftcc%nptcls
-            iptcl = self%pftcc%pinds(i)
+            iptcl = glob_pinds(i)
             iref  = self%ptcl_ref_map(iptcl)
             ithr  = omp_get_thread_num() + 1
             call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
