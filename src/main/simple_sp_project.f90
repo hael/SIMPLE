@@ -855,7 +855,7 @@ contains
         type(ori)                     :: o
         character(len=LONGSTRLEN)     :: stk_relpath, cwd
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
-        integer :: i, fromp, top
+        integer :: i, fromp, top, pind
         ! full path and existence check
         call simple_getcwd(cwd)
         call make_relativepath(cwd, stk, stk_relpath)
@@ -906,6 +906,7 @@ contains
         end select
         call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
         ! update particle oris objects
+        pind = fromp
         do i = 1, nptcls
             call o%new(is_ptcl=.true.)
             call o%set_dfx(      ctfvars%dfx)
@@ -913,9 +914,11 @@ contains
             call o%set('angast', ctfvars%angast)
             if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', real(n_os_stk))
-            call o%set('state',1.) ! default on import
+            call o%set('state',1.)         ! default on import
+            call o%set('pind', real(pind)) ! to keep track of particle indices
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
+            pind = pind + 1
         enddo
         call o%kill
     end subroutine add_stk
@@ -927,7 +930,7 @@ contains
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
         character(len=:), allocatable :: stk_abspath, projname, fbody
         character(len=LONGSTRLEN)     :: stk_relpath
-        integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls
+        integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
         call self%projinfo%getter(1, 'projname', projname)
         if( str_has_substr(stk, 'mrc') )then
             fbody = get_fbody(basename(stk), 'mrc')
@@ -954,6 +957,11 @@ contains
             write(logfhandle,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
             THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
+        ! set particle indices
+        do pind = 1,os%get_noris()
+            call os%set(pind, 'pind', real(pind))
+        end do
+        ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
         call self%os_ptcl2D%set_all2single('stkind', 1.)
@@ -1012,7 +1020,7 @@ contains
         type(ori)             :: o_ptcl, o_stk
         character(LONGSTRLEN) :: stk_relpath
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
-        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
+        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
         nstks = size(stkfnames)
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
@@ -1104,9 +1112,12 @@ contains
             if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
             call o_ptcl%set('stkind', real(stk_ind))
             call o_ptcl%set('state',  real(istate))
+            pind = fromp
             do i=1,nptcls_arr(istk)
+                call o_ptcl%set('pind', real(pind)) ! to keep track of particle indices
                 call self%os_ptcl2D%set_ori(fromp+i-1, o_ptcl)
                 call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
+                pind = pind + 1
             enddo
             ! update
             fromp = top + 1 ! global index
@@ -1221,6 +1232,7 @@ contains
                 pind = fromp+i-1
                 call os%get_ori(pind, o_ptcl)
                 call o_ptcl%set('stkind', real(stk_ind))
+                call o_ptcl%set('pind',   real(pind)) ! to keep track of particle indices
                 istate = 1
                 if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
                 call o_ptcl%set('state',  real(istate))
