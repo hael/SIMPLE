@@ -38,11 +38,12 @@ type :: regularizer
     ! PROCEDURES
     procedure          :: fill_tab_inpl_smpl
     procedure          :: tab_normalize
-    procedure          :: batch_tab_normalize
-    procedure          :: shift_search
     procedure          :: tab_align
-    procedure          :: adjust_weights
+    procedure          :: normalize_weight
+    procedure          :: shift_search
+    procedure          :: batch_tab_normalize
     procedure          :: batch_tab_align
+    procedure          :: batch_normalize_weight
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
@@ -72,7 +73,7 @@ contains
                 self%ref_ptcl_tab(iref,iptcl)%loc   = 0
                 self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
                 self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
-                self%ref_ptcl_tab(iref,iptcl)%w     = 0.
+                self%ref_ptcl_tab(iref,iptcl)%w     = 1.
             enddo
         enddo
     end subroutine new
@@ -102,39 +103,10 @@ contains
         use simple_builder,           only: build_glob
         class(regularizer), intent(inout) :: self
         type(ori) :: o
-        integer   :: iref, iptcl, iref2
-        real      :: sum_corr(self%nrefs), sum_corr_all, min_corr, max_corr
-        logical   :: lnns(self%nrefs), ref_neigh_tab(self%nrefs,self%nrefs)
+        integer   :: iref, iptcl
+        real      :: sum_corr_all, min_corr, max_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
-            ref_neigh_tab = .false.
-            do iref = 1, self%nrefs
-                lnns = .false.
-                call build_glob%eulspace%get_ori(iref, o)
-                call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%reg_athres, lnns)
-                do iref2 = 1, self%nrefs
-                    if( iref2 /= iref .and. lnns(iref2) )then
-                        ref_neigh_tab(iref,  iref2) = .true.
-                        ref_neigh_tab(iref2, iref ) = .true.
-                    endif
-                enddo
-                ref_neigh_tab(iref, iref) = .true.
-            enddo
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr,iref)
-            do iptcl = params_glob%fromp, params_glob%top
-                do iref = 1, self%nrefs
-                    sum_corr(iref) = sum(self%ref_ptcl_cor(:,iptcl), mask=ref_neigh_tab(:,iref))
-                enddo
-                do iref = 1, self%nrefs
-                    if( sum_corr(iref) < TINY )then
-                        self%ref_ptcl_cor(iref,iptcl) = 0.
-                    else
-                        self%ref_ptcl_cor(iref,iptcl) = self%ref_ptcl_cor(iref,iptcl) / sum_corr(iref)
-                    endif
-                enddo
-            enddo
-            !$omp end parallel do
-        else
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
             do iptcl = params_glob%fromp, params_glob%top
                 sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
@@ -157,55 +129,10 @@ contains
         do iptcl = params_glob%fromp,params_glob%top
             do iref = 1, self%nrefs
                 self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
-                self%ref_ptcl_tab(iref,iptcl)%w    = 1. - self%ref_ptcl_cor(iref,iptcl)
             enddo
         enddo
         !$omp end parallel do
     end subroutine tab_normalize
-
-    subroutine batch_tab_normalize( self, glob_pinds )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: iref, iptcl, i
-        real      :: sum_corr_all, max_corr, min_corr
-        ! normalize so prob of each ptcl is between [0,1] for all refs
-        if( params_glob%l_reg_norm )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,sum_corr_all)
-            do i = 1, self%pftcc%nptcls
-                iptcl        = glob_pinds(i)
-                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
-                if( sum_corr_all < TINY )then
-                    self%ref_ptcl_cor(:,iptcl) = 0.
-                else
-                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
-                endif
-            enddo
-            !$omp end parallel do
-        endif
-        max_corr = 0.
-        min_corr = huge(min_corr)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            do iref = 1, self%nrefs
-                if( self%ref_ptcl_cor(iref, iptcl) > max_corr ) max_corr = self%ref_ptcl_cor(iref, iptcl)
-                if( self%ref_ptcl_cor(iref, iptcl) < min_corr ) min_corr = self%ref_ptcl_cor(iref, iptcl)
-            enddo
-        enddo
-        if( (max_corr - min_corr) < TINY )then
-            self%ref_ptcl_cor = 0.
-        else
-            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
-        endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iref,iptcl)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            do iref = 1, self%nrefs
-                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
-                self%ref_ptcl_tab(iref,iptcl)%w    = 1. - self%ref_ptcl_cor(iref,iptcl)
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine batch_tab_normalize
 
     subroutine shift_search( self, glob_pinds )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
@@ -260,7 +187,7 @@ contains
         enddo
     end subroutine tab_align
 
-    subroutine adjust_weights( self )
+    subroutine normalize_weight( self )
         class(regularizer), intent(inout) :: self
         integer :: iptcl, iref
         real    :: min_w, max_w
@@ -268,6 +195,7 @@ contains
         max_w = 0.
         do iptcl = params_glob%fromp, params_glob%top
             iref = self%ptcl_ref_map(iptcl)
+            self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
             if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
             if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
         enddo
@@ -275,7 +203,50 @@ contains
             iref = self%ptcl_ref_map(iptcl)
             self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
         enddo
-    end subroutine adjust_weights
+    end subroutine normalize_weight
+
+    subroutine batch_tab_normalize( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer   :: iref, iptcl, i
+        real      :: sum_corr_all, max_corr, min_corr
+        ! normalize so prob of each ptcl is between [0,1] for all refs
+        if( params_glob%l_reg_norm )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,sum_corr_all)
+            do i = 1, self%pftcc%nptcls
+                iptcl        = glob_pinds(i)
+                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
+                if( sum_corr_all < TINY )then
+                    self%ref_ptcl_cor(:,iptcl) = 0.
+                else
+                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                endif
+            enddo
+            !$omp end parallel do
+        endif
+        max_corr = 0.
+        min_corr = huge(min_corr)
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            do iref = 1, self%nrefs
+                if( self%ref_ptcl_cor(iref, iptcl) > max_corr ) max_corr = self%ref_ptcl_cor(iref, iptcl)
+                if( self%ref_ptcl_cor(iref, iptcl) < min_corr ) min_corr = self%ref_ptcl_cor(iref, iptcl)
+            enddo
+        enddo
+        if( (max_corr - min_corr) < TINY )then
+            self%ref_ptcl_cor = 0.
+        else
+            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
+        endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iref,iptcl)
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            do iref = 1, self%nrefs
+                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine batch_tab_normalize
 
     subroutine batch_tab_align( self, glob_pinds )
         class(regularizer), intent(inout) :: self
@@ -302,6 +273,27 @@ contains
             mask_ip(min_ind_ip) = .false.
         enddo
     end subroutine batch_tab_align
+
+    subroutine batch_normalize_weight( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer :: iptcl, iref, i
+        real    :: min_w, max_w
+        min_w = huge(min_w)
+        max_w = 0.
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            iref  = self%ptcl_ref_map(iptcl)
+            self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
+            if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
+            if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
+        enddo
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            iref  = self%ptcl_ref_map(iptcl)
+            self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
+        enddo
+    end subroutine batch_normalize_weight
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec

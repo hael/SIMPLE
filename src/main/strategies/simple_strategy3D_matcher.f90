@@ -201,7 +201,7 @@ contains
             enddo
             call reg_obj%tab_normalize
             call reg_obj%tab_align
-            call reg_obj%adjust_weights
+            if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%normalize_weight
             if( params_glob%l_doshift )then
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
@@ -211,6 +211,19 @@ contains
                     call reg_obj%shift_search(pinds(batch_start:batch_end))
                 enddo
             endif
+        elseif( trim(params_glob%refine) .eq. 'batch_prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
+            ! Batch loop
+            do ibatch=1,nbatches
+                batch_start = batches(ibatch,1)
+                batch_end   = batches(ibatch,2)
+                batchsz     = batch_end - batch_start + 1
+                call build_batch_particles(batchsz, pinds(batch_start:batch_end))
+                call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
+                call reg_obj%batch_tab_normalize(pinds(batch_start:batch_end))
+                call reg_obj%batch_tab_align(pinds(batch_start:batch_end))
+                if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%batch_normalize_weight(pinds(batch_start:batch_end))
+                if( params_glob%l_doshift )            call reg_obj%shift_search(pinds(batch_start:batch_end))
+            enddo
         endif
 
         ! Batch loop
