@@ -41,6 +41,7 @@ type :: regularizer
     procedure          :: batch_tab_normalize
     procedure          :: shift_search
     procedure          :: tab_align
+    procedure          :: adjust_weights
     procedure          :: batch_tab_align
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
@@ -258,6 +259,23 @@ contains
             mask_ip(min_ind_ip) = .false.
         enddo
     end subroutine tab_align
+
+    subroutine adjust_weights( self )
+        class(regularizer), intent(inout) :: self
+        integer :: iptcl, iref
+        real    :: min_w, max_w
+        min_w = huge(min_w)
+        max_w = 0.
+        do iptcl = params_glob%fromp, params_glob%top
+            iref = self%ptcl_ref_map(iptcl)
+            if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
+            if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
+        enddo
+        do iptcl = params_glob%fromp, params_glob%top
+            iref = self%ptcl_ref_map(iptcl)
+            self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
+        enddo
+    end subroutine adjust_weights
 
     subroutine batch_tab_align( self, glob_pinds )
         class(regularizer), intent(inout) :: self
