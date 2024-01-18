@@ -201,6 +201,7 @@ contains
             enddo
             call reg_obj%tab_normalize
             call reg_obj%tab_align
+            call reg_obj%adjust_weights
             if( params_glob%l_doshift )then
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)
