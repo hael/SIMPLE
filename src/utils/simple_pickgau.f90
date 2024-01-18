@@ -43,6 +43,7 @@ contains
     procedure          :: gaupick
     procedure          :: new_gaupicker
     procedure          :: new_refpicker
+    procedure          :: get_stats
     procedure, private :: new
     procedure, private :: set_refs
     procedure, private :: setup_iterators
@@ -64,16 +65,17 @@ end type
 
 contains
 
-    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev )
-        character(len=*),  intent(in) :: pcontrast
-        real,              intent(in) :: smpd_shrink, moldiams(:)
-        integer, optional, intent(in) :: offset
-        real,    optional, intent(in) :: ndev
+    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev, mic_stats )
+        character(len=*),  intent(in)  :: pcontrast
+        real,              intent(in)  :: smpd_shrink, moldiams(:)
+        integer, optional, intent(in)  :: offset
+        real,    optional, intent(in)  :: ndev
+        real,    optional, intent(out) :: mic_stats(params_glob%nmoldiams,5)
         type(pickgau), allocatable :: pickers(:)
         integer,       allocatable :: picker_map(:,:)
         type(pickgau) :: picker_merged
         integer :: npickers, ipick, ioff, joff
-        real    :: moldiam_max
+        real    :: moldiam_max, pick_stats(5)
         npickers    = size(moldiams)
         moldiam_max = maxval(moldiams)
         allocate(pickers(npickers))
@@ -81,6 +83,12 @@ contains
         do ipick = 1,npickers
             call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
             call pickers(ipick)%gaupick
+            call pickers(ipick)%get_stats(pick_stats)
+            mic_stats(ipick,1) = moldiams(ipick)
+            mic_stats(ipick,2) = pick_stats(1)
+            mic_stats(ipick,3) = pick_stats(2)
+            mic_stats(ipick,4) = pick_stats(3)
+            mic_stats(ipick,5) = pick_stats(4)
         end do
         ! merged pick
         call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
@@ -184,6 +192,15 @@ contains
         call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, box=ldim(1), offset=offset, ndev=ndev )
         call self%set_refs( imgs, mskdiam )
     end subroutine new_refpicker
+
+    subroutine get_stats( self, stats )
+        class(pickgau),    intent(inout) :: self
+        real,              intent(out)   :: stats(4)
+        stats(1) = self%smd
+        stats(2) = self%ksstat
+        stats(3) = self%a_peak
+        stats(4) = self%s_peak
+    end subroutine get_stats
 
     subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev )
         class(pickgau),    intent(inout) :: self
