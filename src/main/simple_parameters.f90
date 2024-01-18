@@ -249,6 +249,7 @@ type :: parameters
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: nmics=0             !< # micographs
+    integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
@@ -365,6 +366,7 @@ type :: parameters
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
+    real    :: moldiam_max=200.    !< upper bound molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
@@ -671,6 +673,7 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
+        call check_iarg('nmoldiams',      self%nmoldiams)
         call check_iarg('nsearch',        self%nsearch)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
@@ -772,6 +775,7 @@ contains
         call check_rarg('lpthres',        self%lpthres)
         call check_rarg('max_dose',       self%max_dose)
         call check_rarg('moldiam',        self%moldiam)
+        call check_rarg('moldiam_max',    self%moldiam_max)
         call check_rarg('msk',            self%msk)
         call check_rarg('msk_crop',       self%msk_crop)
         call check_rarg('mskdiam',        self%mskdiam)

@@ -3062,7 +3062,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 5, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 7, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3080,6 +3080,10 @@ contains
         call pick%set_gui_params('parm_ios', 4, submenu="picking")
         call pick%set_input('parm_ios', 5, mskdiam)
         call pick%set_gui_params('parm_ios', 5, submenu="picking")
+        call pick%set_input('parm_ios', 6, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5', .false., 5.)
+        call pick%set_gui_params('parm_ios', 6, submenu="picking")
+        call pick%set_input_1('parm_ios', 7, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
+        call pick%set_gui_params('parm_ios', 7, submenu="picking")
         pick%parm_ios(5)%required = .false.
         ! alternative inputs
         ! <empty>

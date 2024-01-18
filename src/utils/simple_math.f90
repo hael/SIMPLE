@@ -802,6 +802,32 @@ contains
         endif
     end function sinc
 
+    !> finds local and absolute maxima based on xcoords and ycoords input vectors
+    !> returns 2D vector maxima with maxima in ycoords and where they occur in xcoords
+    function find_local_maxima(xcoords, ycoords, nentries) result(maxima)
+        integer, intent(in)            :: nentries
+        real, intent(in)               :: xcoords(nentries), ycoords(nentries)
+        real, allocatable :: maxima(:,:)
+        real    :: slopes(nentries-1)
+        integer :: i, j, nmaxima, locmax(nentries), maxloc_front(1), maxloc_back(1)
+        nmaxima = 0
+        do i=1, nentries-1
+            slopes(i) = (ycoords(i+1)-ycoords(i)) / (xcoords(i+1)-xcoords(i))
+            if (i>1) then
+                if (slopes(i-1) .ge. 0 .and. slopes(i) .le. 0) then
+                    ! we found a local max at i
+                    nmaxima = nmaxima + 1
+                    locmax(nmaxima) = i
+                end if
+            end if   
+        end do
+        allocate(maxima(nmaxima,2))
+        do j=1, nmaxima
+            maxima(j,1) = xcoords(locmax(j))
+            maxima(j,2) = ycoords(locmax(j))
+        end do
+    end function
+
     !>   is a truncated Gaussian window function
     function gauwfun( x, alpha ) result( w )
         real, intent(in) :: x, alpha
