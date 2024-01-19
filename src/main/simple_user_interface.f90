@@ -148,7 +148,7 @@ type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_nano
-type(simple_program), target :: remoc
+type(simple_program), target :: fractionate_movies
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: selection
 type(simple_program), target :: reproject
@@ -423,7 +423,7 @@ contains
         call new_reextract
         call new_refine3D
         call new_refine3D_nano
-        call new_remoc
+        call new_fractionate_movies
         call new_replace_project_field
         call new_selection
         call new_scale
@@ -732,8 +732,8 @@ contains
                 ptr2prg => refine3D
             case('refine3D_nano')
                 ptr2prg => refine3D_nano
-            case('remoc')
-                ptr2prg => remoc
+            case('fractionate_movies')
+                ptr2prg => fractionate_movies
             case('replace_project_field')
                 ptr2prg => replace_project_field
             case('selection')
@@ -871,7 +871,7 @@ contains
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_nano%name
-        write(logfhandle,'(A)') remoc%name
+        write(logfhandle,'(A)') fractionate_movies%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
@@ -4086,40 +4086,33 @@ contains
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_nano
 
-    subroutine new_remoc
+    subroutine new_fractionate_movies
         ! PROGRAM SPECIFICATION
-        call remoc%new(&
-        &'remoc', &                             ! name
-        &'Regularized motion correction of movies',&     ! descr_short
-        &'Regularized motion correction of movies',&     ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &0, 4, 0, 1, 2, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        call fractionate_movies%new(&
+        &'fractionate_movies', &                                        ! name
+        &'Re-generation of micrographs with subsets of movie frames',&  ! descr_short
+        &'Re-generation of micrographs with subsets of movie frames',&  ! descr_long
+        &'simple_exec',&                                                ! executable
+        &0, 3, 0, 0, 0, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call remoc%set_input('parm_ios', 1, star_ptcl)
-        call remoc%set_input('parm_ios', 2, star_mic)
-        call remoc%set_input('parm_ios', 3, star_model)
-        call remoc%set_input('parm_ios', 4, star_datadir)
-        remoc%parm_ios(4)%required = .true.
+        call fractionate_movies%set_input('parm_ios', 1, 'fromf', 'num', 'Starting fraction', 'starting fraction', '{>0}',.false., 1.)
+        call fractionate_movies%set_input('parm_ios', 2, 'tof',   'num', 'Final    fraction', 'Final fraction',    '{>0}',.false., 0.)
+        call fractionate_movies%set_input('parm_ios', 3, 'dw', 'binary', 'Whether to preform dose-weighing',&
+        &'Whether to perform dose-weighing of movie fractions(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
-        call remoc%set_input('srch_ctrls', 1, trs)
-        remoc%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        remoc%srch_ctrls(1)%rval_default      = 20.
-        ! call motion_correct%set_input('srch_ctrls', 2, mcconvention)
+        ! <empty>
         ! filter controls
-        call remoc%set_input('filt_ctrls', 1, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
-        call remoc%set_input('filt_ctrls', 2, wcrit)
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call remoc%set_input('comp_ctrls', 1, nparts)
-        call remoc%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_remoc
+        call fractionate_movies%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_fractionate_movies
 
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION
