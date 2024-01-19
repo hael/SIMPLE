@@ -30,6 +30,7 @@ type :: parameters
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
     character(len=3)          :: doprint='no'
+    character(len=3)          :: dw='no'
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
@@ -228,6 +229,7 @@ type :: parameters
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
+    integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: iptcl=1
@@ -289,7 +291,7 @@ type :: parameters
     integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
     integer :: tofny=0
     integer :: top=1
-    integer :: tos=1
+    integer :: tof=0               !< end index
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=8        !< smoothing window extension
@@ -496,6 +498,7 @@ contains
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
+        call check_carg('dw',             self%dw)
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
@@ -657,6 +660,7 @@ contains
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromp',          self%fromp)
+        call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
@@ -708,7 +712,7 @@ contains
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('szsn',           self%szsn)
         call check_iarg('top',            self%top)
-        call check_iarg('tos',            self%tos)
+        call check_iarg('tof',            self%tof)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('walltime',       self%walltime)

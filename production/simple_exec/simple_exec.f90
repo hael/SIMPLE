@@ -89,7 +89,7 @@ type(symmetrize_map_commander)              :: xsymmetrize_map
 type(dock_volpair_commander)                :: xdock_volpair
 type(postprocess_commander)                 :: xpostprocess
 type(automask_commander)                    :: xautomask
-type(remoc_commander)                       :: xremoc
+type(fractionate_movies_commander)          :: xfractionate_movies
 type(comparemc_commander)                   :: xcomparemc
 
 ! IMAGE PROCESSING PROGRAMS
@@ -280,8 +280,8 @@ select case(trim(prg))
         call xpostprocess%execute(cline)
     case( 'automask' )
         call xautomask%execute(cline)
-    case( 'remoc' )
-        call xremoc%execute(cline)
+    case( 'fractionate_movies' )
+        call xfractionate_movies%execute(cline)
     case( 'comparemc' )
         call xcomparemc%execute(cline)
 
@@ -384,7 +384,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3d863950')
+call simple_print_git_version('6704ec7a')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
