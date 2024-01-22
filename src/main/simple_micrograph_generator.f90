@@ -20,7 +20,6 @@ type :: mic_generator
     type(image),      allocatable :: frames(:)
     real,             allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
     integer,          allocatable :: hotpix_coords(:,:)
-    logical,          allocatable :: frames_mask(:)
     character(len=:), allocatable :: gainrefname, moviename, docname
     type(image)                   :: gain
     type(eer_decoder)             :: eer
@@ -85,14 +84,13 @@ contains
             self%total_dose = real(self%nframes) * self%doseperframe
         endif
         ! frames range
-        allocate(self%frames_mask(1:self%nframes),source=.false.)
         if( frames_range(1) < 1 ) THROW_HARD('Invalid starting frame')
         if( frames_range(2) > self%nframes )then
             THROW_HARD('Invalid final frame: '//int2str(frames_range(2))//'/'//int2str(self%nframes))
         endif
         self%fromtof = frames_range
         if( self%fromtof(2) == 0 ) self%fromtof(2) = self%nframes
-        self%frames_mask(self%fromtof(1):self%fromtof(2)) = .true.
+        self%weights = self%weights / sum(self%weights(self%fromtof(2):self%fromtof(2)))
         ! frame of reference
         self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
         self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
@@ -126,14 +124,14 @@ contains
         allocate(self%frames(self%nframes))
         if( self%l_eer )then
             call self%eer%new(self%moviename, self%smpd, self%eer_upsampling)
-            call self%eer%decode(self%frames, self%eer_fraction)
+            call self%eer%decode(self%frames, self%eer_fraction, frames_range=self%fromtof)
         else
             !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-            do iframe=1,self%nframes
+            do iframe = self%fromtof(1),self%fromtof(2)
                 call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
             enddo
             !$omp end parallel do
-            do iframe=1,self%nframes
+            do iframe = 1,self%fromtof(1),self%fromtof(2)
                 call self%frames(iframe)%read(self%moviename, iframe)
             end do
         endif
@@ -143,9 +141,9 @@ contains
                 THROW_HARD('gain reference: '//trim(self%gainrefname)//' not found')
             endif
             if( self%l_eer )then
-                call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer)
+                call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer, frames_range=self%fromtof)
             else
-                call correct_gain(self%frames, self%gainrefname, self%gain)
+                call correct_gain(self%frames, self%gainrefname, self%gain, frames_range=self%fromtof)
             endif
         endif
         ! outliers curation
@@ -161,11 +159,6 @@ contains
         enddo
         !$omp end parallel do
         call self%apply_dose_weighing
-        !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-        do iframe = self%fromtof(1),self%fromtof(2)
-            call self%frames(iframe)%ifft
-        enddo
-        !$omp end parallel do
         ! all done
         call self%eer%kill
         self%exists = .true.
@@ -383,7 +376,6 @@ contains
         print *, 'eer_fraction    ', self%eer_fraction
         print *, 'eer_upsampling  ', self%eer_upsampling
         print *, 'align_frame     ', self%align_frame
-        print *, 'nselectedframes ', count(self%frames_mask)
         if( allocated(self%isoshifts) )then
             do i = 1,size(self%isoshifts,dim=2)
                 print *,'isoshifts ',i,self%isoshifts(:,i),self%weights(i)
@@ -412,7 +404,7 @@ contains
         allocate(rsum(self%ldim(1),self%ldim(2)),source=0.)
         write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
         ! sum
-        do iframe = 1,self%nframes
+        do iframe = self%fromtof(1),self%fromtof(2)
             call self%frames(iframe)%get_rmat_ptr(prmat)
             !$omp parallel workshare
             rsum(:,:) = rsum(:,:) + prmat(:self%ldim(1),:self%ldim(2),1)
@@ -485,7 +477,7 @@ contains
             lthresh = lthresh / real(self%nframes)
             !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
-            do iframe=1,self%nframes
+            do iframe = self%fromtof(1),self%fromtof(2)
                 call self%frames(iframe)%get_rmat_ptr(prmats(iframe)%rmat)
                 ! calulate new values
                 do k = 1,noutliers
@@ -645,7 +637,6 @@ contains
         endif
         if( allocated(self%doses) )         deallocate(self%doses)
         if( allocated(self%hotpix_coords) ) deallocate(self%hotpix_coords)
-        if( allocated(self%frames_mask)   ) deallocate(self%frames_mask)
         self%l_doseweighing = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.

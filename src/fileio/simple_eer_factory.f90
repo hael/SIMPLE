@@ -159,19 +159,29 @@ contains
         self%upsampling = upsampling
     end subroutine set_dims
 
-    subroutine decode( self, imgs, fraction )
+    subroutine decode( self, imgs, fraction, frames_range )
         class(eer_decoder), intent(in)    :: self
         class(image),       intent(inout) :: imgs(:)
         integer,            intent(in)    :: fraction
-        integer :: i,nimgs
+        integer, optional,  intent(in)    :: frames_range(2)
+        integer :: i,nimgs, from, to
         if( .not.self%l_exists ) THROW_HARD('EER decoder object has not been instantiated! decode')
         nimgs  = size(imgs)
         if( nimgs*fraction > self%nframes )then
             THROW_HARD('EER fraction is too large! decode')
         endif
+        if( present(frames_range) )then
+            from = frames_range(1)
+            to   = frames_range(2)
+        else
+            from = 1
+            to   = nimgs
+        endif
+        if( to > nimgs ) THROW_HARD('Invalid frame range 1; decode')
+        if( (from < 1) .or. (from > to) ) THROW_HARD('Invalid frame range 2; decode')
         ! the last overhanging raw frames (and most dose-damaged) are simply abandoned
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
-        do i = 1,nimgs
+        do i = from,to
             call imgs(i)%kill
             call self%decode_frames(imgs(i), (i-1)*fraction+1, i*fraction)
         enddo
