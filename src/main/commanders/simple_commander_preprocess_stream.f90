@@ -235,14 +235,13 @@ contains
                 call movie_buff%kill
                 nmovies = 0
             else
-                call movie_buff%watch( nmovies, movies )
+                call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts )
             endif
             ! append movies to processing stack
             if( nmovies > 0 )then
                 cnt = 0
                 do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
-                    if( movie_buff%is_past(movie) )cycle
                     call create_individual_project(movie)
                     call qenv%qscripts%add_to_streaming( cline )
                     call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
@@ -251,6 +250,7 @@ contains
                     n_added = n_added+1
                     if( cnt == min(params%nparts,nmovies) ) exit
                 enddo
+                write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
             else
                 l_movies_left = .false.
@@ -370,7 +370,6 @@ contains
                     ! # of chunks is above desired threshold
                     if( is_pool_available() ) exit
                 endif
-                
                 call sleep(WAITTIME)
             endif
         end do
