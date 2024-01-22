@@ -172,19 +172,37 @@ contains
         self%ptcl_ref_map = 1   
         mask_ip           = .true.
         call seed_rnd
-        do while( any(mask_ip) )
-            min_ir = 0.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
-            do ir = 1, self%nrefs
-                min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
-                min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
+        if( params_glob%l_reg_smpl )then
+            do while( any(mask_ip) )
+                min_ir = 1.
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
+                do ir = 1, self%nrefs
+                    if( ran3() < params_glob%reg_sthres )then
+                        min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
+                        min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
+                    endif
+                enddo
+                !$omp end parallel do
+                min_ind_ir = self%ref_multinomal(min_ir)
+                min_ind_ip = min_ip(min_ind_ir)
+                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
+                mask_ip(min_ind_ip) = .false.
             enddo
-            !$omp end parallel do
-            min_ind_ir = self%ref_multinomal(min_ir)
-            min_ind_ip = min_ip(min_ind_ir)
-            self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-            mask_ip(min_ind_ip) = .false.
-        enddo
+        else
+            do while( any(mask_ip) )
+                min_ir = 0.
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
+                do ir = 1, self%nrefs
+                    min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
+                    min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
+                enddo
+                !$omp end parallel do
+                min_ind_ir = self%ref_multinomal(min_ir)
+                min_ind_ip = min_ip(min_ind_ir)
+                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
+                mask_ip(min_ind_ip) = .false.
+            enddo
+        endif
     end subroutine tab_align
 
     subroutine normalize_weight( self )

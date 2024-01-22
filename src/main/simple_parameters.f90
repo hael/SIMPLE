@@ -74,6 +74,7 @@ type :: parameters
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
     character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
+    character(len=3)          :: reg_smpl='no'        !< reg sampling (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -304,7 +305,6 @@ type :: parameters
     real    :: alpha=KBALPHA
     real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
-    real    :: arc_thres=30.       !< arc threshold in the reg scheme (in degrees)
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
@@ -381,7 +381,8 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: reg_athres=7.       !< angle threshold for reg samplings
+    real    :: reg_athres=7.       !< angle threshold for reg distribution samplings
+    real    :: reg_sthres=1.       !< reg sampling threshold for references used for alignment
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -431,6 +432,7 @@ type :: parameters
     logical :: l_reg_init     = .false.
     logical :: l_reg_norm     = .false.
     logical :: l_reg_opt_ang  = .false.
+    logical :: l_reg_smpl     = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -569,6 +571,7 @@ contains
         call check_carg('reg_init',       self%reg_init)
         call check_carg('reg_norm',       self%reg_norm)
         call check_carg('reg_opt_ang',    self%reg_opt_ang)
+        call check_carg('reg_smpl',       self%reg_smpl)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -724,7 +727,6 @@ contains
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
         call check_rarg('angerr',         self%angerr)
-        call check_rarg('arc_thres',      self%arc_thres)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigtol',       self%astigtol)
@@ -790,6 +792,7 @@ contains
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('reg_athres',     self%reg_athres)
+        call check_rarg('reg_sthres',     self%reg_sthres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -1458,6 +1461,7 @@ contains
         self%l_reg_init    = trim(self%reg_init    ).eq.'yes'
         self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
         self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
+        self%l_reg_smpl    = trim(self%reg_smpl    ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
