@@ -809,14 +809,24 @@ contains
     ! PUBLIC UTILITY METHODS
 
     ! gain correction, calculate image sum and identify outliers
-    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder )
+    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range )
         type(image),     allocatable, intent(inout) :: frames_here(:)
         character(len=*),             intent(in)    :: gainref_fname
         class(image),                 intent(inout) :: gainimg
         class(eer_decoder), optional, intent(in)    :: eerdecoder
-        integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here
+        integer,            optional, intent(in)    :: frames_range(2)
+        integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here, from, to
         write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
         nframes_here = size(frames_here)
+        if( present(frames_range) )then
+            from = frames_range(1)
+            to   = frames_range(2)
+        else
+            from = 1
+            to   = nframes_here
+        endif
+        if( to > nframes_here ) THROW_HARD('Invalid frame range 1; correct_gain')
+        if( (from < 1) .or. (from > to) ) THROW_HARD('Invalid frame range 2; correct_gain')
         if( present(eerdecoder) )then
             call eerdecoder%prep_gainref(gainref_fname, gainimg)
         else
@@ -832,7 +842,7 @@ contains
             call gainimg%read(gainref_fname)
         endif
         !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
-        do iframe = 1,nframes_here
+        do iframe = from,to
             call frames_here(iframe)%mul(gainimg)
         enddo
         !$omp end parallel do
