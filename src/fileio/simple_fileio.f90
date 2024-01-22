@@ -9,7 +9,7 @@ public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_
 public :: add2fbody, rm_from_fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname
 public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
 public :: write_singlelineoftext, read_exit_code, arr2file, arr2txtfile, file2rarr, file2drarr
-public :: simple_copy_file, make_relativepath
+public :: simple_copy_file, make_relativepath, basename_safe
 private
 #include "simple_local_flags.inc"
 
@@ -455,6 +455,20 @@ contains
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
     end function basename
+
+    ! thread-safe version of basename
+    elemental function basename_safe( fname )result( new_fname)
+        character(len=LONGSTRLEN), intent(in) :: fname
+        character(len=LONGSTRLEN) :: new_fname
+        integer :: length, pos
+        length = len_trim(fname)
+        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
+        if( pos == 0 )then
+            new_fname = trim(fname)
+        else
+            new_fname = trim(fname(pos+1:length))
+        endif
+    end function basename_safe
 
     pure function stemname( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename

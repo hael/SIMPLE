@@ -71,10 +71,11 @@ contains
     end function constructor
 
     !>  \brief  is the watching procedure
-    subroutine watch( self, n_movies, movies )
+    subroutine watch( self, n_movies, movies, max_nmovies )
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
+        integer,          optional,    intent(in)    :: max_nmovies
         character(len=LONGSTRLEN), allocatable :: farray(:)
         integer,                   allocatable :: fileinfo(:)
         logical,                   allocatable :: is_new_movie(:)
@@ -92,13 +93,18 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! get file list
-        call self%check4dirs
+        ! call self%check4dirs ! Only necessary for multiple directories!
         call self%watchdirs(farray)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
         ! identifies closed & untouched files
         allocate(is_new_movie(n_lsfiles), source=.false.)
+        cnt = 0
         do i = 1, n_lsfiles
+            if( present(max_nmovies) )then
+                ! maximum required of new movies reached
+                if( cnt >= max_nmovies ) exit
+            endif
             fname           = trim(adjustl(farray(i)))
             is_new_movie(i) = .not. self%is_past(fname)
             if( .not.is_new_movie(i) )cycle
@@ -110,7 +116,10 @@ contains
                 last_status_change = tnow - fileinfo(11)
                 if(        (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
-                    &.and. (last_status_change > self%report_time) ) is_new_movie(i) = .true.
+                    &.and. (last_status_change > self%report_time) )then
+                    is_new_movie(i) = .true.
+                    cnt = cnt + 1
+                endif
             else
                 ! some error occured
                 fail_cnt = fail_cnt + 1
@@ -126,8 +135,7 @@ contains
             do i = 1, n_lsfiles
                 if( is_new_movie(i) )then
                     cnt   = cnt + 1
-                    fname = trim(adjustl(farray(i)))
-                    movies(cnt) = trim(fname)
+                    movies(cnt) = trim(adjustl(farray(i)))
                 endif
             enddo
         endif
@@ -167,7 +175,7 @@ contains
         abs_fname = simple_abspath(fname)
         self%history(n+1) = trim(adjustl(abs_fname))
         self%n_history    = self%n_history + 1
-        write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
+        ! write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
         call lastfoundfile_update()
     end subroutine add2history_2
 
@@ -176,17 +184,25 @@ contains
     logical function is_past( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
+        character(len=LONGSTRLEN) :: fname1, fname2
         integer :: i
         is_past = .false.
         if( allocated(self%history) )then
+            ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
+            ! which would cause all movies to be declared as new because of the path mismatch
+            fname1 = adjustl(basename_safe(fname))
+            !$omp parallel do private(i,fname2) default(shared) proc_bind(close)
             do i = 1, size(self%history)
-                ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
-                ! which would cause all movies to be declared as new because of the path mismatch
-                if( trim(adjustl(basename(fname))) .eq. trim(adjustl(basename(self%history(i)))) )then
-                    is_past = .true.
-                    exit
+                if( .not.is_past )then
+                    fname2 = adjustl(basename_safe(self%history(i)))
+                    if( trim(fname1) .eq. trim(fname2) )then
+                        !$omp critical
+                        is_past = .true.
+                        !$omp end critical
+                    endif
                 endif
             enddo
+            !$omp end parallel do
         endif
     end function is_past
 
