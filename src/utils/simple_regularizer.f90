@@ -171,10 +171,10 @@ contains
         logical :: mask_ip(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
         mask_ip           = .true.
-        call seed_rnd
         if( params_glob%l_reg_smpl )then
             do while( any(mask_ip) )
                 min_ir = 1.
+                call seed_rnd
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
                 do ir = 1, self%nrefs
                     if( ran3() < params_glob%reg_sthres )then
@@ -183,6 +183,7 @@ contains
                     endif
                 enddo
                 !$omp end parallel do
+                call seed_rnd
                 min_ind_ir = self%ref_multinomal(min_ir)
                 min_ind_ip = min_ip(min_ind_ir)
                 self%ptcl_ref_map(min_ind_ip) = min_ind_ir
@@ -197,6 +198,7 @@ contains
                     min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
                 enddo
                 !$omp end parallel do
+                call seed_rnd
                 min_ind_ir = self%ref_multinomal(min_ir)
                 min_ind_ip = min_ip(min_ind_ir)
                 self%ptcl_ref_map(min_ind_ip) = min_ind_ir
