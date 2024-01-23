@@ -36,16 +36,16 @@ type :: mic_generator
     logical                       :: l_gain         = .false.
     logical                       :: l_eer          = .false.
     logical                       :: l_poly         = .false.
+    logical                       :: l_nn_interp    = .false.
+    logical                       :: l_frameweights = .false.
     logical                       :: exists         = .false.
   contains
     procedure          :: new
     procedure, private :: parse_movie_metadata
     procedure, private :: apply_dose_weighing
-    procedure          :: generate_micrograph
+    procedure          :: generate_micrographs
     procedure          :: display
     procedure, private :: cure_outliers
-    procedure, private :: pix2polycoords
-    procedure, private :: get_local_shift
     procedure          :: get_moviename
     ! Destructor
     procedure :: kill
@@ -54,11 +54,11 @@ end type mic_generator
 contains
 
     !>  Constructor
-    subroutine new( self, omic, dw, frames_range )
+    subroutine new( self, omic, convention, frames_range )
         use simple_ori, only: ori
         class(mic_generator), intent(inout) :: self
         class(ori),           intent(in)    :: omic
-        logical,              intent(in)    :: dw
+        character(len=*),     intent(in)    :: convention
         integer,              intent(in)    :: frames_range(2)
         character(len=:), allocatable :: poly_fname
         real(dp),         allocatable :: poly(:)
@@ -72,16 +72,31 @@ contains
         if( .not.file_exists(self%docname) )then
             THROW_HARD('Movie star doc is absent 2')
         endif
+        ! weights & inteporlation convention
+        select case(trim(convention))
+        case('simple')
+            self%l_nn_interp    = .false.
+            self%l_frameweights = .true.
+        case('motioncorr')
+            self%l_nn_interp    = .true.
+            self%l_frameweights = .false.
+        case('relion')
+            self%l_nn_interp    = .false.
+            self%l_frameweights = .false.
+        case('cryosparc')
+            self%l_nn_interp    = .true.
+            self%l_frameweights = .false.
+        case DEFAULT
+            THROW_HARD('Unsupported convention!')
+        end select
         ! get movie info
         call self%parse_movie_metadata
         if( .not.file_exists(self%moviename) ) THROW_HARD('Movie cannot be found: '//trim(self%moviename))
         ! dose-weighing
-        if( dw .and. (.not.self%l_doseweighing) )then
-            THROW_HARD('Dose-weighing metadata cannot be found in: '//trim(self%docname))
-        endif
-        self%l_doseweighing = dw
         if( self%l_doseweighing )then
             self%total_dose = real(self%nframes) * self%doseperframe
+        else
+            THROW_WARN('Dose-weighing metadata cannot be found in: '//trim(self%docname))
         endif
         ! frames range
         if( frames_range(1) < 1 ) THROW_HARD('Invalid starting frame')
@@ -90,7 +105,12 @@ contains
         endif
         self%fromtof = frames_range
         if( self%fromtof(2) == 0 ) self%fromtof(2) = self%nframes
-        self%weights = self%weights / sum(self%weights(self%fromtof(2):self%fromtof(2)))
+        ! weights
+        if( self%l_frameweights )then
+            self%weights = self%weights / sum(self%weights(self%fromtof(1):self%fromtof(2)))
+        else
+            self%weights = 1.0 / real(self%fromtof(2)-self%fromtof(1)+1)
+        endif
         ! frame of reference
         self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
         self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
@@ -158,7 +178,6 @@ contains
             call self%frames(iframe)%clip_inplace(self%ldim_sc)
         enddo
         !$omp end parallel do
-        call self%apply_dose_weighing
         ! all done
         call self%eer%kill
         self%exists = .true.
@@ -256,63 +275,100 @@ contains
     end subroutine parse_movie_metadata
 
     !>  Regenerates micrograph from movie
-    subroutine generate_micrograph( self, micrograph )
+    subroutine generate_micrographs( self, micrograph_dw, micrograph_nodw )
         class(mic_generator), intent(inout) :: self
-        type(image),           intent(inout) :: micrograph
-        real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
-        real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
-        integer       :: ldim(3), i, j, iframe
-        real          :: w, pixx,pixy
+        type(image),          intent(inout) :: micrograph_dw, micrograph_nodw
+        real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
+        type(image), allocatable :: local_frames(:)
+        type(image)              :: gridcorrimg
+        integer                  :: ldim(3), iframe
+
+        integer :: lims(3,2), phys(3), h,k
+        real    :: pid, dsq
+        allocate(local_frames(self%fromtof(1):self%fromtof(2)))
+        ldim = self%ldim_sc
         ! Stage drift
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe = self%fromtof(1),self%fromtof(2)
             call self%frames(iframe)%fft
             call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
-            call self%frames(iframe)%ifft
+            call local_frames(iframe)%copy(self%frames(iframe))
+            call local_frames(iframe)%ifft
         end do
         !$omp end parallel do
         ! Beam-induced motion
-        ldim = self%ldim_sc
-        call micrograph%new(ldim, self%smpd_out)
-        call micrograph%zero_and_unflag_ft
-        call micrograph%get_rmat_ptr(rmatout)
-        ti = 0.d0
-        do iframe = self%fromtof(1),self%fromtof(2)
-            call self%frames(iframe)%get_rmat_ptr(rmatin)
-            w = self%weights(iframe)
-            t = real(iframe-self%align_frame, dp)
-            dt  = ti-t
-            dt2 = ti*ti - t*t
-            dt3 = ti*ti*ti - t*t*t
-            B1x  = sum(self%polyx(4:6)   * [dt,dt2,dt3])
-            B1x2 = sum(self%polyx(7:9)   * [dt,dt2,dt3])
-            B1xy = sum(self%polyx(16:18) * [dt,dt2,dt3])
-            B2x  = sum(self%polyy(4:6)   * [dt,dt2,dt3])
-            B2x2 = sum(self%polyy(7:9)   * [dt,dt2,dt3])
-            B2xy = sum(self%polyy(16:18) * [dt,dt2,dt3])
-            !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
-            !$omp proc_bind(close) schedule(static)
-            do j = 1, ldim(2)
-                y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
-                y2 = y*y
-                A1 =           sum(self%polyx(1:3)   * [dt,dt2,dt3])
-                A1 = A1 + y  * sum(self%polyx(10:12) * [dt,dt2,dt3])
-                A1 = A1 + y2 * sum(self%polyx(13:15) * [dt,dt2,dt3])
-                A2 =           sum(self%polyy(1:3)   * [dt,dt2,dt3])
-                A2 = A2 + y  * sum(self%polyy(10:12) * [dt,dt2,dt3])
-                A2 = A2 + y2 * sum(self%polyy(13:15) * [dt,dt2,dt3])
-                do i = 1, ldim(1)
-                    x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
-                    x2 = x*x
-                    xy = x*y
-                    pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
-                    pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
-                    rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
-                end do
+        ! non dose-weighted
+        call bimc(micrograph_nodw)
+        ! dose-weighted
+        if( self%l_doseweighing )then
+            call self%apply_dose_weighing
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call local_frames(iframe)%copy_fast(self%frames(iframe))
+                call local_frames(iframe)%ifft
             end do
             !$omp end parallel do
-        enddo
+            call bimc(micrograph_dw)
+        endif
+        ! cleanup
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        do iframe = self%fromtof(1),self%fromtof(2)
+            call local_frames(iframe)%kill
+        end do
+        !$omp end parallel do
+        deallocate(local_frames)
     contains
+
+        subroutine bimc( mic )
+            class(image), intent(inout) :: mic
+            real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2
+            real(dp)      :: B1x,B1x2,B1xy,B2x,B2x2,B2xy
+            integer       :: i, j
+            real          :: w, pixx,pixy
+            call mic%new(ldim, self%smpd_out)
+            call mic%zero_and_unflag_ft
+            call mic%get_rmat_ptr(rmatout)
+            ti = 0.d0
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call local_frames(iframe)%get_rmat_ptr(rmatin)
+                w = self%weights(iframe)
+                t = real(iframe-self%align_frame, dp)
+                dt  = ti-t
+                dt2 = ti*ti - t*t
+                dt3 = ti*ti*ti - t*t*t
+                B1x  = sum(self%polyx(4:6)   * [dt,dt2,dt3])
+                B1x2 = sum(self%polyx(7:9)   * [dt,dt2,dt3])
+                B1xy = sum(self%polyx(16:18) * [dt,dt2,dt3])
+                B2x  = sum(self%polyy(4:6)   * [dt,dt2,dt3])
+                B2x2 = sum(self%polyy(7:9)   * [dt,dt2,dt3])
+                B2xy = sum(self%polyy(16:18) * [dt,dt2,dt3])
+                !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
+                !$omp proc_bind(close) schedule(static)
+                do j = 1, ldim(2)
+                    y  = real(j-1,dp) / real(ldim(2)-1,dp) - 0.5d0
+                    y2 = y*y
+                    A1 =           sum(self%polyx(1:3)   * [dt,dt2,dt3])
+                    A1 = A1 + y  * sum(self%polyx(10:12) * [dt,dt2,dt3])
+                    A1 = A1 + y2 * sum(self%polyx(13:15) * [dt,dt2,dt3])
+                    A2 =           sum(self%polyy(1:3)   * [dt,dt2,dt3])
+                    A2 = A2 + y  * sum(self%polyy(10:12) * [dt,dt2,dt3])
+                    A2 = A2 + y2 * sum(self%polyy(13:15) * [dt,dt2,dt3])
+                    do i = 1, ldim(1)
+                        x  = real(i-1,dp) / real(ldim(1)-1,dp) - 0.5d0
+                        x2 = x*x
+                        xy = x*y
+                        pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
+                        pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
+                        if( self%l_nn_interp )then
+                            rmatout(i,j,1) = rmatout(i,j,1) + w*interp_nn(pixx,pixy)
+                        else
+                            rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
+                        endif
+                    end do
+                end do
+                !$omp end parallel do
+            enddo
+        end subroutine bimc
 
         pure real function interp_bilin( xval, yval )
             real, intent(in) :: xval, yval
@@ -352,7 +408,15 @@ contains
                            &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
         end function interp_bilin
 
-    end subroutine generate_micrograph
+        pure real function interp_nn( xval, yval )
+            real, intent(in) :: xval, yval
+            integer  :: x, y
+            x = min(max(nint(xval),1),ldim(1))
+            y = min(max(nint(yval),1),ldim(2))
+            interp_nn = rmatin(x,y,1)
+        end function interp_nn
+
+    end subroutine generate_micrographs
 
     subroutine display( self )
         class(mic_generator), intent(in) :: self
@@ -519,7 +583,7 @@ contains
         endif
     end subroutine cure_outliers
 
-        ! Frames assumed in fourier space
+    ! Frames assumed in fourier space
     subroutine apply_dose_weighing( self )
         class(mic_generator), intent(inout) :: self
         real, parameter :: A=0.245, B=-1.665, C=2.81
@@ -559,27 +623,6 @@ contains
         !$omp end parallel do
     end subroutine apply_dose_weighing
 
-    !>  pixels to coordinates for polynomial evaluation (scaled in/out)
-    elemental subroutine pix2polycoords( self, xin, yin, x, y )
-        class(mic_generator), intent(in)  :: self
-        real(dp),             intent(in)  :: xin, yin
-        real(dp),             intent(out) :: x, y
-        x = (xin-1.d0) / real(self%ldim_sc(1)-1,dp) - 0.5d0
-        y = (yin-1.d0) / real(self%ldim_sc(2)-1,dp) - 0.5d0
-    end subroutine pix2polycoords
-
-    pure subroutine get_local_shift( self, iframe, x, y, shift )
-        class(mic_generator), intent(in)  :: self
-        integer,              intent(in)  :: iframe
-        real(dp),             intent(in)  :: x, y
-        real,                 intent(out) :: shift(2)
-        real(dp) :: t, xx, yy
-        t = real(iframe-self%align_frame, dp)
-        call self%pix2polycoords(x,y, xx,yy)
-        shift(1) = polyfun(self%polyx(:), xx,yy,t)
-        shift(2) = polyfun(self%polyy(:), xx,yy,t)
-    end subroutine get_local_shift
-
     pure function get_moviename( self )result( fname )
         class(mic_generator), intent(in)  :: self
         character(len=:), allocatable :: fname
@@ -587,18 +630,6 @@ contains
     end function get_moviename
 
     ! Utilities
-
-    pure real function polyfun(c, x, y, t)
-        real(dp), intent(in) :: c(POLYDIM), x, y, t
-        real(dp) :: res, t2, t3
-        t2 = t * t
-        t3 = t2 * t
-        res =       dot_product( c(1:3),         [t,t2,t3])
-        res = res + dot_product( c(4:6),     x * [t,t2,t3]) + dot_product( c(7:9),   x*x * [t,t2,t3])
-        res = res + dot_product( c(10:12),   y * [t,t2,t3]) + dot_product( c(13:15), y*y * [t,t2,t3])
-        res = res + dot_product( c(16:18), x*y * [t,t2,t3])
-        polyfun = real(res)
-    end function polyfun
 
     integer function parse_int( table, emdl_id, err )
         class(starfile_table_type) :: table
@@ -640,6 +671,8 @@ contains
         self%l_doseweighing = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.
+        self%l_nn_interp    = .false.
+        self%l_frameweights = .false.
         self%nframes        = 0
         self%nhotpix        = 0
         self%doseperframe   = 0.

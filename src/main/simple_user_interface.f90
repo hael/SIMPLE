@@ -379,6 +379,7 @@ contains
         call new_export_relion
         call new_export_starproject
         call new_filter
+        call new_fractionate_movies
         call new_fsc
         call new_gen_pspecs_and_thumbs
         call new_info_image
@@ -423,7 +424,6 @@ contains
         call new_reextract
         call new_refine3D
         call new_refine3D_nano
-        call new_fractionate_movies
         call new_replace_project_field
         call new_selection
         call new_scale
@@ -492,6 +492,7 @@ contains
         call push2prg_ptr_array(export_relion)
         call push2prg_ptr_array(export_starproject)
         call push2prg_ptr_array(filter)
+        call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(info_image)
@@ -4098,10 +4099,10 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call fractionate_movies%set_input('parm_ios', 1, 'fromf', 'num', 'Starting fraction', 'starting fraction', '{>0}',.false., 1.)
-        call fractionate_movies%set_input('parm_ios', 2, 'tof',   'num', 'Final    fraction', 'Final fraction',    '{>0}',.false., 0.)
-        call fractionate_movies%set_input('parm_ios', 3, 'dw', 'binary', 'Whether to preform dose-weighing',&
-        &'Whether to perform dose-weighing of movie fractions(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call fractionate_movies%set_input('parm_ios', 1, 'fromf', 'num', 'Starting fraction', 'starting fraction{1}', '{1}', .false., 1.)
+        call fractionate_movies%set_input('parm_ios', 2, 'tof',   'num', 'Final fraction', 'Final fraction(0=all){0}','{0}', .false., 0.)
+        call fractionate_movies%set_input('parm_ios', 3, 'mcconvention', 'multi', 'Application-specific image processing',&
+        &'Application specific image processing: interpolation & frame weights(simple|relion|cryosparc){simple}', '(simple|relion|cryosparc){simple}', .false., 'simple')
         ! alternative inputs
         ! <empty>
         ! search controls

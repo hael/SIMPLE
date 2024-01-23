@@ -30,7 +30,6 @@ type :: parameters
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
     character(len=3)          :: doprint='no'
-    character(len=3)          :: dw='no'
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
@@ -500,7 +499,6 @@ contains
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('doprint',        self%doprint)
-        call check_carg('dw',             self%dw)
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
@@ -1543,7 +1541,7 @@ contains
             self%nypatch = 0
         endif
         select case(trim(self%mcconvention))
-            case('simple','unblur','motioncorr','relion','first','central')
+            case('simple','unblur','motioncorr','relion','first','central','cryosparc')
             case DEFAULT
                 THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
         end select

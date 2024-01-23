@@ -341,24 +341,24 @@ contains
     end subroutine exec_mkdir
 
     subroutine exec_fractionate_movies( self, cline )
-        ! use simple_starfile_wrappers
         use simple_micrograph_generator
         class(fractionate_movies_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        character(len=:), allocatable :: mic_fname, ext, mov_fname
+        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname, mic_fbody
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(mic_generator)           :: generator
         type(ori)                     :: o
-        type(image)                   :: micrograph
+        type(image)                   :: micrograph_dw, micrograph_nodw
         character(len=LONGSTRLEN)     :: rel_fname
         integer :: nmovies, imov, cnt
         call cline%set('mkdir',   'yes')
         call cline%set('oritype', 'mic')
-        if( .not.cline%defined('dw') ) call cline%set('dw', 'yes')
+        if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
+        if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
+        if( .not.cline%defined('tof') )          call cline%set('tof',          0)
         call params%new(cline)
         call spproj%read(params%projfile)
-        params%l_dose_weight = trim(params%dw).eq.'yes'
         ! sanity checks
         if( (params%fromf < 1) ) THROW_HARD('Invalid fractions range!')
         nmovies = spproj%get_nmovies()
@@ -371,22 +371,41 @@ contains
             if( o%get_state() == 0 ) cycle
             cnt = cnt + 1
             ! new micrograph
-            call generator%new(o, params%l_dose_weight, [params%fromf, params%tof])
-            call generator%generate_micrograph(micrograph)
+            call generator%new(o, params%mcconvention, [params%fromf, params%tof])
+            call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
             ! write
             mov_fname = generator%get_moviename()
-            mic_fname = basename(mov_fname)
-            ext       = fname2ext(trim(mic_fname))
-            mic_fname = get_fbody(trim(mic_fname), trim(ext))
-            mic_fname = trim(adjustl(mic_fname))//INTGMOV_SUFFIX//trim(params%ext)
-            call micrograph%write(mic_fname)
-            call make_relativepath(CWD_GLOB, mic_fname, rel_fname)
+            mic_fbody = basename(mov_fname)
+            ext       = fname2ext(trim(mic_fbody))
+            mic_fbody = get_fbody(trim(mic_fbody), trim(ext))
+            select case(trim(params%mcconvention))
+            case('simple')
+                mic_fname    = trim(adjustl(mic_fbody))//INTGMOV_SUFFIX//trim(params%ext)
+                forctf_fname = trim(adjustl(mic_fbody))//FORCTF_SUFFIX //trim(params%ext)
+            case('motioncorr', 'relion')
+                mic_fname    = trim(adjustl(mic_fbody))//'_DW'  //trim(params%ext)
+                forctf_fname = trim(adjustl(mic_fbody))//'_noDW'//trim(params%ext)
+            case('cryosparc')
+                mic_fname    = trim(adjustl(mic_fbody))//'_patch_aligned_doseweighted'//trim(params%ext)
+                forctf_fname = trim(adjustl(mic_fbody))//'_patch_aligned'             //trim(params%ext)
+            case DEFAULT
+                THROW_HARD('Unsupported convention!')
+            end select
+            ! doses not defined
+            if( .not.micrograph_dw%exists() ) call micrograph_dw%copy(micrograph_nodw)
+            call micrograph_dw%write(mic_fname)
+            call micrograph_nodw%write(forctf_fname)
             ! parameters update
+            call make_relativepath(CWD_GLOB, mic_fname,    rel_fname)
             call o%set('intg',   rel_fname)
+            call make_relativepath(CWD_GLOB, forctf_fname, rel_fname)
+            call o%set('forctf', rel_fname)
             call o%set('imgkind','mic')
-            call o%set('smpd',    micrograph%get_smpd())
+            call o%set('smpd',   micrograph_dw%get_smpd())
+            call o%delete_entry('thumb')
             call spproj%os_mic%set_ori(imov, o)
         enddo
+        call spproj%write_segment_inside('mic', params%projfile)
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
 
