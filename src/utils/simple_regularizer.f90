@@ -178,7 +178,7 @@ contains
         real    :: inpl_corrs(self%nrots*SH_STEPS*SH_STEPS), sh(self%nrots*SH_STEPS*SH_STEPS,2)
         sh_max = params_glob%trs
         step   = sh_max*2./real(SH_STEPS)
-        !$omp parallel do default(shared) private(i,j,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,irnd) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(i,j,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,irnd,sh,rots) proc_bind(close) schedule(static)
         do i = 1, self%pftcc%nptcls
             iptcl = glob_pinds(i)
             iref  = self%ptcl_ref_map(iptcl)
