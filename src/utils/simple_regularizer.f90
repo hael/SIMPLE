@@ -25,11 +25,10 @@ type :: regularizer
     integer              :: nrots
     integer              :: nrefs
     integer              :: inpl_ns, refs_ns
-    
     real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
     integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
-    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:), ptcl_corr(:,:)
-    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:), ptcl_inds(:,:)
+    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:), ptcl_corr(:,:), sh_corr(:,:)
+    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:), ptcl_inds(:,:), sh_inds(:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -41,13 +40,16 @@ type :: regularizer
     procedure          :: tab_align
     procedure          :: normalize_weight
     procedure          :: shift_search
+    procedure          :: shift_smpl
     procedure          :: batch_tab_normalize
     procedure          :: batch_tab_align
     procedure          :: batch_normalize_weight
-    procedure, private :: ref_multinomal, inpl_multinomal, ptcl_multinomal
+    procedure, private :: ref_multinomal, inpl_multinomal, ptcl_multinomal, sh_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
+
+integer, parameter :: SH_STEPS = 5
 
 contains
     ! CONSTRUCTORS
@@ -63,9 +65,11 @@ contains
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&
-                &self%ptcl_corr(params_glob%fromp:params_glob%top,params_glob%nthr), source=0.)
+                &self%ptcl_corr(params_glob%fromp:params_glob%top,params_glob%nthr),&
+                &self%sh_corr(self%nrots*SH_STEPS*SH_STEPS,params_glob%nthr), source=0.)
         allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr),&
-                &self%ptcl_inds(params_glob%fromp:params_glob%top,params_glob%nthr), source=0)
+                &self%ptcl_inds(params_glob%fromp:params_glob%top,params_glob%nthr),&
+                &self%sh_inds(self%nrots*SH_STEPS*SH_STEPS,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         do iptcl = params_glob%fromp,params_glob%top
@@ -165,6 +169,37 @@ contains
         enddo
         !$omp end parallel do
     end subroutine shift_search
+
+    subroutine shift_smpl( self, glob_pinds )
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer :: iref, iptcl, i, j, ix, iy, cnt, irnd, rots(self%nrots*SH_STEPS*SH_STEPS)
+        real    :: sh_max, step, x, y
+        real    :: inpl_corrs(self%nrots*SH_STEPS*SH_STEPS), sh(self%nrots*SH_STEPS*SH_STEPS,2)
+        sh_max = params_glob%trs
+        step   = sh_max*2./real(SH_STEPS)
+        !$omp parallel do default(shared) private(i,j,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,irnd) proc_bind(close) schedule(static)
+        do i = 1, self%pftcc%nptcls
+            iptcl = glob_pinds(i)
+            iref  = self%ptcl_ref_map(iptcl)
+            cnt   = 0
+            do ix = 1, SH_STEPS
+                x = -sh_max + step/2. + real(ix-1)*step
+                do iy = 1, SH_STEPS
+                    y = -sh_max + step/2. + real(iy-1)*step
+                    call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs(cnt*self%nrots+1:(cnt+1)*self%nrots) )
+                    rots(cnt*self%nrots+1:(cnt+1)*self%nrots)   = (/(j,j=1,self%nrots)/)
+                    sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,1) = x
+                    sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,2) = y
+                    cnt = cnt + 1
+                enddo
+            enddo
+            irnd = self%sh_multinomal(inpl_corrs)
+            self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(irnd,:)
+            self%ref_ptcl_tab(iref,iptcl)%loc = rots(irnd)
+        enddo
+        !$omp end parallel do
+    end subroutine shift_smpl
 
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
@@ -390,10 +425,34 @@ contains
         endif
     end function ptcl_multinomal
 
+    function sh_multinomal( self, pvec ) result( which )
+        class(regularizer), intent(inout) :: self
+        real,               intent(in)    :: pvec(:) !< probabilities
+        integer :: i, which, ithr
+        real    :: rnd, bound
+        ithr = omp_get_thread_num() + 1
+        self%sh_corr(:,ithr) = pvec
+        self%sh_inds(:,ithr) = (/(i,i=1,self%nrots*SH_STEPS*SH_STEPS)/)
+        call hpsort(self%sh_corr(:,ithr), self%sh_inds(:,ithr) )
+        rnd = ran3()
+        if( sum(self%sh_corr(1:self%inpl_ns,ithr)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(self%inpl_ns) * rnd)
+        else
+            ! normalizing within the hard-limit
+            self%sh_corr(1:self%inpl_ns,ithr) = self%sh_corr(1:self%inpl_ns,ithr) / sum(self%sh_corr(1:self%inpl_ns,ithr))
+            do which=1,self%inpl_ns
+                bound = sum(self%sh_corr(1:which, ithr))
+                if( rnd >= bound )exit
+            enddo
+            which = self%sh_inds(min(which,self%inpl_ns),ithr)
+        endif
+    end function sh_multinomal
+
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%inpl_inds,self%refs_inds)
+        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%ptcl_corr,self%sh_corr,self%inpl_inds,self%refs_inds,self%ptcl_inds,self%sh_inds)
     end subroutine kill
 end module simple_regularizer
