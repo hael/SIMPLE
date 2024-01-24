@@ -1360,7 +1360,7 @@ contains
         endif
         ! interpolation function
         select case(trim(self%interpfun))
-            case('kb','linear')
+            case('kb','linear', 'nn')
                 ! supported
             case DEFAULT
                 THROW_HARD('Unsupported interpolation function')

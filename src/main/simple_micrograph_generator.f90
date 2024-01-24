@@ -24,6 +24,7 @@ type :: mic_generator
     type(image)                   :: gain
     type(eer_decoder)             :: eer
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
+    real(dp)                      :: polyx_bak(POLYDIM), polyy_bak(POLYDIM)
     real                          :: smpd, smpd_out
     real                          :: scale
     real                          :: total_dose, doseperframe, preexposure, kv
@@ -44,6 +45,7 @@ type :: mic_generator
     procedure, private :: parse_movie_metadata
     procedure, private :: apply_dose_weighing
     procedure          :: generate_micrographs
+    procedure          :: write_star
     procedure          :: display
     procedure, private :: cure_outliers
     procedure          :: get_moviename
@@ -54,12 +56,13 @@ end type mic_generator
 contains
 
     !>  Constructor
-    subroutine new( self, omic, convention, frames_range )
+    subroutine new( self, omic, convention, frames_range, bilinear_interp )
         use simple_ori, only: ori
         class(mic_generator), intent(inout) :: self
         class(ori),           intent(in)    :: omic
         character(len=*),     intent(in)    :: convention
         integer,              intent(in)    :: frames_range(2)
+        logical,              intent(in)    :: bilinear_interp
         character(len=:), allocatable :: poly_fname
         real(dp),         allocatable :: poly(:)
         integer  :: iframe
@@ -72,19 +75,12 @@ contains
         if( .not.file_exists(self%docname) )then
             THROW_HARD('Movie star doc is absent 2')
         endif
-        ! weights & inteporlation convention
+        ! weights & interpolation
+        self%l_nn_interp    = .not.bilinear_interp
         select case(trim(convention))
         case('simple')
-            self%l_nn_interp    = .false.
             self%l_frameweights = .true.
-        case('motioncorr')
-            self%l_nn_interp    = .true.
-            self%l_frameweights = .false.
-        case('relion')
-            self%l_nn_interp    = .false.
-            self%l_frameweights = .false.
-        case('cryosparc')
-            self%l_nn_interp    = .true.
+        case('motioncorr','relion','cryosparc')
             self%l_frameweights = .false.
         case DEFAULT
             THROW_HARD('Unsupported convention!')
@@ -109,8 +105,14 @@ contains
         if( self%l_frameweights )then
             self%weights = self%weights / sum(self%weights(self%fromtof(1):self%fromtof(2)))
         else
-            self%weights = 1.0 / real(self%fromtof(2)-self%fromtof(1)+1)
+            where(self%weights(self%fromtof(1):self%fromtof(2)) > 0.000001)
+                self%weights(self%fromtof(1):self%fromtof(2)) = 1.0 / real(self%fromtof(2)-self%fromtof(1)+1)
+            elsewhere
+                self%weights(self%fromtof(1):self%fromtof(2)) = 0.0
+            end where
         endif
+        if( self%fromtof(1) > 1 ) self%weights(1:self%fromtof(1)) = 0.
+        if( self%fromtof(2) < self%nframes ) self%weights(self%fromtof(2)+1:) = 0.
         ! frame of reference
         self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
         self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
@@ -179,7 +181,6 @@ contains
         enddo
         !$omp end parallel do
         ! all done
-        call self%eer%kill
         self%exists = .true.
     end subroutine new
 
@@ -254,6 +255,8 @@ contains
                     endif
                     object_id = starfile_table__nextobject(table)
                 end do
+                self%polyx_bak = self%polyx
+                self%polyy_bak = self%polyy
             case('hot_pixels')
                 object_id  = starfile_table__firstobject(table)
                 num_objs   = starfile_table__numberofobjects(table)
@@ -266,6 +269,7 @@ contains
                     self%hotpix_coords(2,j) = nint(parse_double(table, EMDL_IMAGE_COORD_Y, err))
                     object_id = starfile_table__nextobject(table)
                 end do
+                self%hotpix_coords = self%hotpix_coords + 1 ! Fortran indexing!
             case DEFAULT
                 THROW_HARD('Invalid table: '//trim(names(i)%str))
             end select
@@ -274,49 +278,84 @@ contains
         if( DEBUG_HERE ) print *,'movie doc parsed'
     end subroutine parse_movie_metadata
 
-    !>  Regenerates micrograph from movie
+    !>  Regenerates micrograph from movie frames
     subroutine generate_micrographs( self, micrograph_dw, micrograph_nodw )
         class(mic_generator), intent(inout) :: self
         type(image),          intent(inout) :: micrograph_dw, micrograph_nodw
         real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
+        complex,     pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
         type(image), allocatable :: local_frames(:)
-        type(image)              :: gridcorrimg
         integer                  :: ldim(3), iframe
-
-        integer :: lims(3,2), phys(3), h,k
-        real    :: pid, dsq
-        allocate(local_frames(self%fromtof(1):self%fromtof(2)))
         ldim = self%ldim_sc
-        ! Stage drift
-        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-        do iframe = self%fromtof(1),self%fromtof(2)
-            call self%frames(iframe)%fft
-            call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
-            call local_frames(iframe)%copy(self%frames(iframe))
-            call local_frames(iframe)%ifft
-        end do
-        !$omp end parallel do
-        ! Beam-induced motion
-        ! non dose-weighted
-        call bimc(micrograph_nodw)
-        ! dose-weighted
-        if( self%l_doseweighing )then
-            call self%apply_dose_weighing
+        if( self%l_poly )then
+            ! STAGE DRIFT + BIM
+            allocate(local_frames(self%fromtof(1):self%fromtof(2)))
+            ! Stage drift
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
             do iframe = self%fromtof(1),self%fromtof(2)
-                call local_frames(iframe)%copy_fast(self%frames(iframe))
+                call self%frames(iframe)%fft
+                call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
+                call local_frames(iframe)%copy(self%frames(iframe))
                 call local_frames(iframe)%ifft
             end do
             !$omp end parallel do
-            call bimc(micrograph_dw)
+            ! Beam-induced motion
+            ! non dose-weighted
+            call bimc(micrograph_nodw)
+            ! dose-weighted
+            if( self%l_doseweighing )then
+                call self%apply_dose_weighing
+                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call local_frames(iframe)%copy_fast(self%frames(iframe))
+                    call local_frames(iframe)%ifft
+                end do
+                !$omp end parallel do
+                call bimc(micrograph_dw)
+            else
+                call micrograph_dw%kill
+            endif
+            ! cleanup
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call local_frames(iframe)%kill
+            end do
+            !$omp end parallel do
+            deallocate(local_frames)
+        else
+            ! STAGE DRIFT ONLY
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call self%frames(iframe)%fft
+                call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
+            end do
+            !$omp end parallel do
+            call micrograph_nodw%new(ldim, self%smpd_out)
+            call micrograph_nodw%zero_and_flag_ft
+            call micrograph_nodw%get_cmat_ptr(cmat_sum)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call self%frames(iframe)%get_cmat_ptr(cmat)
+                !$omp parallel workshare proc_bind(close)
+                cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
+                !$omp end parallel workshare
+            end do
+            call micrograph_nodw%ifft
+            if( self%l_doseweighing )then
+                call self%apply_dose_weighing
+                call micrograph_dw%new(ldim, self%smpd_out)
+                call micrograph_dw%zero_and_flag_ft
+                call micrograph_dw%get_cmat_ptr(cmat_sum)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call self%frames(iframe)%get_cmat_ptr(cmat)
+                    !$omp parallel workshare proc_bind(close)
+                    cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
+                    !$omp end parallel workshare
+                end do
+                call micrograph_dw%ifft
+            else
+                call micrograph_dw%kill
+            endif
         endif
-        ! cleanup
-        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-        do iframe = self%fromtof(1),self%fromtof(2)
-            call local_frames(iframe)%kill
-        end do
-        !$omp end parallel do
-        deallocate(local_frames)
     contains
 
         subroutine bimc( mic )
@@ -417,6 +456,104 @@ contains
         end function interp_nn
 
     end subroutine generate_micrographs
+
+    subroutine write_star( self, star_fname )
+        class(mic_generator), intent(in) :: self
+        character(len=*),     intent(in) :: star_fname
+        type(starfile_table_type) :: starfile
+        real(dp) :: polyx(POLYDIM), polyy(POLYDIM), isoshifts(2,self%nframes), shift(2), dpscale
+        real     :: doseperframe
+        integer  :: i, iframe, motion_model
+        dpscale      = real(self%scale,dp)
+        motion_model = 0
+        isoshifts    = real(self%isoshifts)
+        if( self%l_scale ) isoshifts = isoshifts / dpscale
+        if( self%l_poly )then
+            motion_model = 1
+            polyx        = self%polyx_bak
+            polyy        = self%polyy_bak
+        endif
+        call starfile_table__new(starfile)
+        call starfile_table__open_ofile(starfile, star_fname)
+        ! global fields
+        call starfile_table__addObject(starfile)
+        call starfile_table__setIsList(starfile, .true.)
+        call starfile_table__setname(starfile, "general")
+        call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_X, self%ldim(1))
+        call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_Y, self%ldim(2))
+        call starfile_table__setValue_int(starfile,    EMDL_IMAGE_SIZE_Z, self%nframes)
+        call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_MOVIE_NAME, trim(self%moviename))
+        if( self%l_gain ) call starfile_table__setValue_string(starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(self%gainrefname))
+        call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_BINNING, 1.d0/dpscale)
+        if( self%l_eer )then
+            call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%eer%get_smpd_out(),dp))
+        else
+            call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%smpd,dp))
+        endif
+        doseperframe = 0.
+        if( self%l_doseweighing ) doseperframe = self%doseperframe
+        call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doseperframe, dp))
+        call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, real(self%preexposure,dp))
+        call starfile_table__setValue_double(starfile, EMDL_CTF_VOLTAGE, real(self%kv, dp))
+        call starfile_table__setValue_int(starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
+        if( self%l_eer )then
+            call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_EER_UPSAMPLING, self%eer_upsampling)
+            call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_EER_GROUPING, self%eer_fraction)
+        endif
+        call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, motion_model)
+        call starfile_table__setValue_int(starfile, SMPL_MOVIE_FRAME_ALIGN, self%align_frame)
+        call starfile_table__write_ofile(starfile)
+        ! isotropic shifts
+        call starfile_table__clear(starfile)
+        call starfile_table__setIsList(starfile, .false.)
+        call starfile_table__setName(starfile, "global_shift")
+        do iframe = 1,self%nframes
+            call starfile_table__addObject(starfile)
+            call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
+            if( self%weights(iframe) > 0.000001 )then
+                shift = isoshifts(:,iframe) - isoshifts(:,1)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, shift(1))
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, shift(2))
+                call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, real(self%weights(iframe),dp))
+            else
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
+                call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
+            endif
+        enddo
+        call starfile_table__write_ofile(starfile)
+        if( self%l_poly )then
+            ! anisotropic shifts
+            call starfile_table__clear(starfile)
+            call starfile_table__setIsList(starfile, .false.)
+            call starfile_table__setName(starfile, "local_motion_model")
+            do i = 1, POLYDIM
+                call starfile_table__addObject(starfile)
+                call starfile_table__setValue_int(starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, i-1)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_MOTION_COEFF,      polyx(i))
+            end do
+            do i = POLYDIM+1,2*POLYDIM
+                call starfile_table__addObject(starfile)
+                call starfile_table__setValue_int(starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, i-1)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_MOTION_COEFF,      polyy(i-POLYDIM))
+            end do
+            call starfile_table__write_ofile(starfile)
+        endif
+        ! Defects & hot pixels
+        if( self%nhotpix > 0 )then
+            call starfile_table__clear(starfile)
+            call starfile_table__setIsList(starfile, .false.)
+            call starfile_table__setName(starfile, "hot_pixels")
+            do i = 1,self%nhotpix
+                call starfile_table__addObject(starfile)
+                call starfile_table__setValue_double(starfile, EMDL_IMAGE_COORD_X, real(self%hotpix_coords(1,i)-1,dp))
+                call starfile_table__setValue_double(starfile, EMDL_IMAGE_COORD_y, real(self%hotpix_coords(2,i)-1,dp))
+            end do
+            call starfile_table__write_ofile(starfile)
+        endif
+        call starfile_table__close_ofile(starfile)
+        call starfile_table__delete(starfile)
+    end subroutine write_star
 
     subroutine display( self )
         class(mic_generator), intent(in) :: self
@@ -668,6 +805,7 @@ contains
         endif
         if( allocated(self%doses) )         deallocate(self%doses)
         if( allocated(self%hotpix_coords) ) deallocate(self%hotpix_coords)
+        call self%eer%kill
         self%l_doseweighing = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.

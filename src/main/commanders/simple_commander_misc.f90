@@ -342,27 +342,40 @@ contains
 
     subroutine exec_fractionate_movies( self, cline )
         use simple_micrograph_generator
+        use simple_fsc, only: plot_fsc
         class(fractionate_movies_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname, mic_fbody
+        logical,            parameter :: L_DEBUG = .true.
+        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname, mic_fbody, star_fname
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(mic_generator)           :: generator
         type(ori)                     :: o
-        type(image)                   :: micrograph_dw, micrograph_nodw
-        character(len=LONGSTRLEN)     :: rel_fname
-        integer :: nmovies, imov, cnt
+        type(image)                   :: micrograph_dw, micrograph_nodw, mic
+        real,             allocatable :: frc(:), res(:)
+        character(len=LONGSTRLEN)     :: rel_fname, orig_mic
+        integer :: nmovies, imov, cnt, n
+        logical :: l_bilinear_interp
         call cline%set('mkdir',   'yes')
         call cline%set('oritype', 'mic')
         if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
         if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
         if( .not.cline%defined('tof') )          call cline%set('tof',          0)
+        if( .not.cline%defined('interpfun') )    call cline%set('interpfun',    'linear')
         call params%new(cline)
         call spproj%read(params%projfile)
         ! sanity checks
         if( (params%fromf < 1) ) THROW_HARD('Invalid fractions range!')
         nmovies = spproj%get_nmovies()
         if( nmovies == 0 ) THROW_HARD('No movie to process!')
+        select case(trim(params%interpfun))
+        case('linear')
+            l_bilinear_interp = .true.
+        case('nn')
+            l_bilinear_interp = .false.
+        case DEFAULT
+            THROW_HARD('Invalid interpolation scheme: '//trim(params%interpfun))
+        end select
         ! Main loop
         cnt = 0
         do imov = 1,nmovies
@@ -370,10 +383,11 @@ contains
             if( .not.o%isthere('movie') ) cycle
             if( o%get_state() == 0 ) cycle
             cnt = cnt + 1
+            orig_mic = o%get_static('intg')
             ! new micrograph
-            call generator%new(o, params%mcconvention, [params%fromf, params%tof])
+            call generator%new(o, params%mcconvention, [params%fromf, params%tof], l_bilinear_interp)
             call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
-            ! write
+            ! file naming
             mov_fname = generator%get_moviename()
             mic_fbody = basename(mov_fname)
             ext       = fname2ext(trim(mic_fbody))
@@ -391,19 +405,40 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported convention!')
             end select
-            ! doses not defined
-            if( .not.micrograph_dw%exists() ) call micrograph_dw%copy(micrograph_nodw)
-            call micrograph_dw%write(mic_fname)
-            call micrograph_nodw%write(forctf_fname)
+            star_fname = trim(adjustl(mic_fbody))//'.star'
+            ! write
+            if( .not.micrograph_dw%exists() )then
+                ! doses not defined
+                call micrograph_nodw%write(mic_fname)
+                forctf_fname = mic_fname
+            else
+                call micrograph_dw%write(mic_fname)
+                call micrograph_nodw%write(forctf_fname)
+            endif
+            call generator%write_star(star_fname)
             ! parameters update
             call make_relativepath(CWD_GLOB, mic_fname,    rel_fname)
             call o%set('intg',   rel_fname)
             call make_relativepath(CWD_GLOB, forctf_fname, rel_fname)
             call o%set('forctf', rel_fname)
+            call make_relativepath(CWD_GLOB, star_fname,   rel_fname)
+            call o%set('mc_starfile', rel_fname)
             call o%set('imgkind','mic')
-            call o%set('smpd',   micrograph_dw%get_smpd())
+            call o%set('smpd',   micrograph_nodw%get_smpd())
             call o%delete_entry('thumb')
             call spproj%os_mic%set_ori(imov, o)
+            if( L_DEBUG )then
+                call mic%copy(micrograph_dw)
+                call mic%read(orig_mic)
+                call mic%fft
+                call micrograph_dw%fft
+                n = fdim(mic%get_box())-1
+                allocate(frc(n))
+                res = mic%get_res()
+                call mic%fsc(micrograph_dw, frc)
+                call plot_fsc(n, frc, res, o%get('smpd'), mic_fbody)
+                deallocate(frc,res)
+            endif
         enddo
         call spproj%write_segment_inside('mic', params%projfile)
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')

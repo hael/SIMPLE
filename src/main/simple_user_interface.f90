@@ -4094,7 +4094,7 @@ contains
         &'Re-generation of micrographs with subsets of movie frames',&  ! descr_short
         &'Re-generation of micrographs with subsets of movie frames',&  ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 3, 0, 0, 0, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4102,8 +4102,9 @@ contains
         call fractionate_movies%set_input('parm_ios', 1, 'fromf', 'num', 'Starting fraction', 'starting fraction{1}', '{1}', .false., 1.)
         call fractionate_movies%set_input('parm_ios', 2, 'tof',   'num', 'Final fraction', 'Final fraction(0=all){0}','{0}', .false., 0.)
         call fractionate_movies%set_input('parm_ios', 3, 'mcconvention', 'multi', 'Application-specific image processing',&
-        &'Application specific image processing: interpolation & frame weights(simple|relion|cryosparc){simple}', '(simple|relion|cryosparc){simple}', .false., 'simple')
-        ! alternative inputs
+        &'Application specific image processing: file naming & frame weights(simple|relion|cryosparc){simple}', '(simple|relion|cryosparc){simple}', .false., 'simple')
+        call fractionate_movies%set_input('parm_ios', 4, 'interpfun', 'multi', 'Interpolation for micrograph generation',&
+        &'Interpolation scheme for beam-induced motion correction micrograph generation(bilinear|nn){bilinear}', '(bilinear|nn){bilinear}', .false., 'simple')        ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
