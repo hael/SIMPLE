@@ -51,11 +51,11 @@ contains
         character(len=*), intent(inout) :: line
         class(hash),      intent(inout) :: htab
         class(chash),     intent(inout) :: chtab
-        logical               :: is_real(96)
-        character(len=32)     :: keys(96)
-        character(len=STDLEN) :: args(96), vals(96), arg
-        real                  :: rvals(96)
-        integer               :: eq_pos(96), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i
+        logical               :: is_real(196)
+        character(len=32)     :: keys(196)
+        character(len=STDLEN) :: args(196), vals(196), arg
+        real                  :: rvals(196)
+        integer               :: eq_pos(196), nargs, iarg, lenstr, ipos, ipos_prev, nreals, i
         call compact(line)
         lenstr = len_trim(line)
         if(lenstr == 0) return

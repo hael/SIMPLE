@@ -972,7 +972,7 @@ contains
     pure function ori2str( self ) result( str )
         class(ori), intent(in)        :: self
         character(len=:), allocatable :: str
-        character(len=LONGSTRLEN)     :: str_pparms, str_htab
+        character(len=XLONGSTRLEN)     :: str_pparms, str_htab
         character(len=XLONGSTRLEN)    :: str_chtab
         integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()

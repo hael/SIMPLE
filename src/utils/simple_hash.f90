@@ -292,7 +292,7 @@ contains
     !>  \brief  convert hash to string
     pure function hash2str( self ) result( str )
         class(hash),intent(in)     :: self
-        character(len=LONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN)  :: str
         character(len=XLONGSTRLEN) :: tmpstr
         integer :: i,cnt
         str = repeat(' ',LONGSTRLEN)
