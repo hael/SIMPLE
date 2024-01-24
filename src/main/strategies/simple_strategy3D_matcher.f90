@@ -208,7 +208,7 @@ contains
                     batch_end   = batches(ibatch,2)
                     batchsz     = batch_end - batch_start + 1
                     call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                    call reg_obj%shift_search(pinds(batch_start:batch_end))
+                    call reg_obj%shift_smpl(pinds(batch_start:batch_end))
                 enddo
             endif
         elseif( trim(params_glob%refine) .eq. 'batch_prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
