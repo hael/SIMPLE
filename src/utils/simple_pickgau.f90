@@ -70,7 +70,7 @@ contains
         real,              intent(in)  :: smpd_shrink, moldiams(:)
         integer, optional, intent(in)  :: offset
         real,    optional, intent(in)  :: ndev
-        real,    optional, intent(out) :: mic_stats(params_glob%nmoldiams,5)
+        real,    optional, intent(out) :: mic_stats(:,:)
         type(pickgau), allocatable :: pickers(:)
         integer,       allocatable :: picker_map(:,:)
         type(pickgau) :: picker_merged
@@ -89,8 +89,9 @@ contains
             mic_stats(ipick,3) = pick_stats(2)
             mic_stats(ipick,4) = pick_stats(3)
             mic_stats(ipick,5) = pick_stats(4)
+            call pickers(ipick)%mic_shrink%kill
         end do
-        ! merged pick
+        !merged pick
         call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
         allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
         picker_merged%box_scores = -1.
@@ -117,6 +118,7 @@ contains
                 endif
             end do
         end do
+        deallocate(pickers)
     end subroutine gaupick_multi
 
     subroutine gaupick( self, self_refine )
@@ -284,7 +286,7 @@ contains
         ! shrink micrograph
         call self%mic_shrink%new(self%ldim, self%smpd_shrink)
         call self%mic_shrink%set_ft(.true.)
-        call mic_raw%mul(real(ldim_raw(1))) ! to prevent numerical underflow when performing FFT
+        call mic_raw%mul(real(product(ldim_raw))) ! to prevent numerical underflow when performing FFT
         call mic_raw%fft
         call mic_raw%clip(self%mic_shrink)
         select case(trim(pcontrast))
@@ -298,6 +300,7 @@ contains
         end select
         ! back to real-space
         call mic_raw%ifft
+        call mic_raw%div(real(product(ldim_raw)))
         call self%mic_shrink%ifft
         if( L_WRITE )then
             if( present(box) )then ! reference-based picking

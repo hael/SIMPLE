@@ -6,7 +6,7 @@ integer, parameter :: MAXNKEYS=100, KEYLEN=32
 integer, parameter :: SHORTSTRLEN  = 12   !< shorter string length
 integer, parameter :: STDLEN       = 256  !< standard string length
 integer, parameter :: LONGSTRLEN   = 1024 !< longer string length
-integer, parameter :: XLONGSTRLEN  = 4096 !< extra longer string length
+integer, parameter :: XLONGSTRLEN  = 8192 !< extra longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
 character(len=*), parameter :: JOB_FINISHED_FBODY   = 'JOB_FINISHED_'
