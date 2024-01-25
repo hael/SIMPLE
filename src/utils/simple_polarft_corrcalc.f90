@@ -55,7 +55,6 @@ type :: polarft_corrcalc
     real(dp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),            allocatable :: ksqsums_ptcls(:)            !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),            allocatable :: wsqsums_ptcls(:)            !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
-    real(dp),            allocatable :: kwsqsums_ptcls(:,:)         !< memoized square sums weighted by k and  sigmas^2 (for each k)
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
@@ -292,8 +291,7 @@ contains
                     &self%pfts_drefs_even(self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                    &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
-                    &self%kwsqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),self%heap_vars(params_glob%nthr))
+                    &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls))
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -315,7 +313,6 @@ contains
         self%sqsums_ptcls    = 0.d0
         self%ksqsums_ptcls   = 0.d0
         self%wsqsums_ptcls   = 0.d0
-        self%kwsqsums_ptcls  = 0.d0
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -347,11 +344,10 @@ contains
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
             if( allocated(self%ksqsums_ptcls)) deallocate(self%ksqsums_ptcls)
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)
-            if( allocated(self%kwsqsums_ptcls))deallocate(self%kwsqsums_ptcls)
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
-            allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),self%kwsqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                        &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
+            allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
+                     &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
             call self%kill_memoized_ptcls
             call self%allocate_ptcls_memoization
         endif
@@ -359,7 +355,6 @@ contains
         self%sqsums_ptcls  = 0.d0
         self%ksqsums_ptcls = 0.d0
         self%wsqsums_ptcls = 0.d0
-        self%kwsqsums_ptcls= 0.d0
         self%iseven        = .true.
         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
         do i = 1,self%nptcls
@@ -735,7 +730,6 @@ contains
         do ik = self%kfromto(1),self%kfromto(2)
             sumsqk                = real(sum(csq_fast(self%pfts_ptcls(:,ik,i))),dp)
             self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
-            if( l_sigma ) self%kwsqsums_ptcls(ik,i) =                         sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
             sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
             if( l_sigma ) self%wsqsums_ptcls(i)     = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
@@ -1588,12 +1582,11 @@ contains
         prob = real( self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/))) )
     end subroutine gencorrs_shifted_prob
 
-    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot, pfts_refs)
+    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        complex(dp), optional,   intent(in)    :: pfts_refs(:,:)
         complex(dp), pointer :: pft_ref_8(:,:), pft_ref_tmp_8(:,:), shmat_8(:,:)
         integer              :: ithr, i
         i    =  self%pinds(iptcl)
@@ -1601,20 +1594,16 @@ contains
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        if( present(pfts_refs) )then
-            pft_ref_tmp_8 = pfts_refs
+        if( self%iseven(i) )then
+            pft_ref_8 = self%pfts_refs_even(:,:,iref)
         else
-            if( self%iseven(i) )then
-                pft_ref_8 = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref_8 = self%pfts_refs_odd(:,:,iref)
-            endif
-            ! shift
-            call self%gen_shmat_8(ithr, shvec, shmat_8)
-            pft_ref_8 = pft_ref_8 * shmat_8
-            ! rotation
-            call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
+            pft_ref_8 = self%pfts_refs_odd(:,:,iref)
         endif
+        ! shift
+        call self%gen_shmat_8(ithr, shvec, shmat_8)
+        pft_ref_8 = pft_ref_8 * shmat_8
+        ! rotation
+        call self%rotate_ref(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         if( self%with_ctf ) pft_ref_tmp_8 = pft_ref_tmp_8 * self%ctfmats(:,:,i)
         gencorr_for_rot_8 = 0.d0
@@ -2234,7 +2223,7 @@ contains
             end do
             if( allocated(self%ctfmats)        ) deallocate(self%ctfmats)
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
-            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%kwsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
+            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd)
             call self%kill_memoized_ptcls
