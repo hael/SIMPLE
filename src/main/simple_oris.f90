@@ -264,6 +264,7 @@ contains
         do i=1,old_n
             self%o(i) = tmp%o(i)
         end do
+        call tmp%kill
     end subroutine reallocate
 
     ! GETTERS
@@ -2674,7 +2675,7 @@ contains
         real,    allocatable :: vals(:)
         logical, allocatable :: msk(:)
         integer :: icls
-        logical :: has_mean, has_var, has_skew, has_kurt, has_tvd, l_err
+        logical :: has_mean, has_var, has_skew, has_tvd, l_err
         msk = mask
         if( self%isthere('pop') )then
             do icls=1,self%n
@@ -2684,7 +2685,6 @@ contains
         has_mean = self%isthere('mean')
         has_var  = self%isthere('var')
         has_skew = self%isthere('skew')
-        has_kurt = self%isthere('kurt')
         has_tvd  = self%isthere('tvd')
         if( has_mean )then
             vals = self%get_all('mean')
@@ -2709,15 +2709,6 @@ contains
             do icls = 1,self%n
                 if( msk(icls) ) msk(icls) = vals(icls) > 0.0
             enddo
-        endif
-        if( has_kurt )then
-            vals = self%get_all('kurt')
-            call normalize_vals(vals, l_err)
-            if( .not.l_err )then
-                do icls = 1,self%n
-                    if( msk(icls) ) msk(icls) = abs(vals(icls)) < 4.0
-                enddo
-            endif
         endif
         if( has_tvd )then
             vals = self%get_all('tvd')

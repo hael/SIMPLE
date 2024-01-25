@@ -159,7 +159,6 @@ contains
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
-        character(len=LONGSTRLEN)              :: abs_fname
         integer :: n
         if( .not.file_exists(fname) )return ! petty triple checking
         if( .not.allocated(self%history) )then
@@ -172,8 +171,7 @@ contains
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif
-        abs_fname = simple_abspath(fname)
-        self%history(n+1) = trim(adjustl(abs_fname))
+        self%history(n+1) = trim(adjustl(basename_safe(fname)))
         self%n_history    = self%n_history + 1
         ! write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
         call lastfoundfile_update()
@@ -184,18 +182,17 @@ contains
     logical function is_past( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        character(len=LONGSTRLEN) :: fname1, fname2
+        character(len=LONGSTRLEN) :: fname1
         integer :: i
         is_past = .false.
         if( allocated(self%history) )then
             ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
             ! which would cause all movies to be declared as new because of the path mismatch
             fname1 = adjustl(basename_safe(fname))
-            !$omp parallel do private(i,fname2) default(shared) proc_bind(close)
+            !$omp parallel do private(i) default(shared) proc_bind(close)
             do i = 1, size(self%history)
                 if( .not.is_past )then
-                    fname2 = adjustl(basename_safe(self%history(i)))
-                    if( trim(fname1) .eq. trim(fname2) )then
+                    if( trim(fname1) .eq. trim(self%history(i)) )then
                         !$omp critical
                         is_past = .true.
                         !$omp end critical
