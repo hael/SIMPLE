@@ -134,7 +134,7 @@ contains
     subroutine test_all_optimizers
         integer :: i, j, k, cnt, nfuns
         real    :: maxeval, neval
-        logical :: err
+        !logical :: err
         str_opts(1) = 'simplex'
         str_opts(2) = 'de'
         if( NRDIMS == 2 )then

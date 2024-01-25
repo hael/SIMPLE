@@ -12,14 +12,14 @@ character(len=:),   allocatable :: cmd
 integer,            parameter   :: N_PTCLS = 1, N_SAMPLES = 500, N_ITERS_SHC = 100, INPL_ITERS = 100
 type(cmdline)           :: cline
 type(parameters)        :: p
-integer                 :: ifoo, rc, iptcl, iter, isample, cnt, j, iinpl
+integer                 :: ifoo, rc, iptcl, iter, isample, iinpl
 type(projector)         :: vol_proj
 type(sym)               :: pgrpsyms
-type(ori)               :: o, o_truth, o_best, o_init, o_ret_1, o_ret_2, o_ret_3
+type(ori)               :: o, o_truth, o_best, o_init, o_ret_1, o_ret_2
 type(image)             :: o_proj
 type(cartft_corrcalc)   :: cftcc
 logical                 :: mrc_exists
-real                    :: corr, p_cur, p_best, corr_best
+real                    :: corr, corr_best
 real, allocatable       :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_cont_inplane smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'

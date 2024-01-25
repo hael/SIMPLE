@@ -39,7 +39,6 @@ program simple_test_bfactor
     logical                     :: test_passed
     character(len=256)          :: invol, incc, inpdb
     character(len=2)            :: element
-    character(len=256)          :: junk(7)
     character(*), parameter     :: dir='simple_test_bfactor_out'
     character(*), parameter     :: isodir='test_isotropic_bfactor'
     character(*), parameter     :: anisodir='test_anisotropic_bfactor'

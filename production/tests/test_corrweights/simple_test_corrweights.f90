@@ -5,7 +5,8 @@ implicit none
 integer, parameter :: NCORRS=38, NDISTR=5
 real               :: corrs(NCORRS), x(NCORRS), ws(NCORRS)
 character(len=32)  :: fname='corrs4wtst.txt'
-integer            :: funit, i, order(NCORRS)
+!integer            :: funit, i, order(NCORRS)
+integer            :: funit, i
 
 do i=1,NCORRS
     x(i) = real(i)
@@ -22,18 +23,18 @@ call fclose(funit)
 
 contains
 
-    subroutine corrs2w_factorial
-        real    :: logws(NCORRS)
-        integer :: order(NCORRS), ipeak
-        ws    = exp(-(1.-corrs))
-        logws = log(ws)
-        order = (/(ipeak,ipeak=1,NCORRS)/)
-        call hpsort(logws, order)
-        call reverse(order)
-        call reverse(logws)
-        forall(ipeak=1:NCORRS) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
-        ws = ws / sum(ws)
-    end subroutine corrs2w_factorial
+    !subroutine corrs2w_factorial
+    !    real    :: logws(NCORRS)
+    !    integer :: order(NCORRS), ipeak
+    !    ws    = exp(-(1.-corrs))
+    !    logws = log(ws)
+    !    order = (/(ipeak,ipeak=1,NCORRS)/)
+    !    call hpsort(logws, order)
+    !    call reverse(order)
+    !    call reverse(logws)
+    !    forall(ipeak=1:NCORRS) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
+    !    ws = ws / sum(ws)
+    !end subroutine corrs2w_factorial
 
     subroutine corrs2w_softmax
         real, parameter :: TAU=0.005

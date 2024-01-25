@@ -10,9 +10,8 @@ integer,          parameter :: box           = 300
 integer,          parameter :: ldim(3)       = [box,box,box]
 real,             parameter :: smpd          = 1.2156
 type(image)       :: vol, vol_even, vol_odd, vol_noise
-integer           :: k, filtsz
-real              :: res_fsc05, res_fsc0143
-real, allocatable :: noise_power(:), even_power(:), power(:), res(:), corrs(:)
+integer           :: filtsz
+real, allocatable :: res(:), corrs(:)
 call vol%new(ldim, smpd)
 call vol_even%new(ldim, smpd)
 call vol_odd%new(ldim, smpd)

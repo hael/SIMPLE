@@ -12,14 +12,14 @@ type(cmdline)          :: cline
 type(builder)          :: b
 type(parameters)       :: p
 type(polarft_corrcalc) :: pftcc
-type(polarizer)        :: img_copy, img
-type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+type(polarizer)        :: img_copy
+!type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 1
-real,    allocatable   :: corrs(:), sig(:)
-real                   :: shift(2), corrmax, corr, cxy(3), lims(2,2), rmsd, df
-integer                :: i, irot, nrots
+real,    allocatable   :: corrs(:)
+real                   :: shift(2), corr, df
+integer                :: irot, nrots
 real, allocatable      :: sigma2_noise(:,:)
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_fast_corrcalc stk=<particles.ext> mskdiam=<mask radius(in pixels)>'

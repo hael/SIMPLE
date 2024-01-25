@@ -19,9 +19,11 @@ logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 1
 real,    allocatable   :: corrs(:)
-real                   :: shift(2), corr, cxy(3), lims(2,2), rmsd, df
+!real                   :: shift(2), corr, cxy(3), lims(2,2), rmsd, df
+real                   :: cxy(3), lims(2,2)
 complex, allocatable   :: cmat(:,:), pft(:,:), pft_bak(:,:)
-integer                :: xsh, ysh, xbest, ybest, i, irot, nrots, box
+!integer                :: xsh, ysh, xbest, ybest, i, irot, nrots, box
+integer                :: irot, nrots, box
 real, allocatable      :: sigma2_noise(:,:)
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_fast_corrcalc stk=<particles.ext> mskdiam=<mask radius(in pixels)>'

@@ -10,10 +10,10 @@ implicit none
 character(len = 200) :: micname 
 real, parameter :: SMPD = 1.72, MOLDIAM = 180., SMPD_SHRINK = 4., MOLDIAM_MAX = 180.
 integer, parameter :: OFFSET = 3
-integer :: nptcls, nthr, i, iostat, cnt, nlines_pickgau, nlines_picker_utils
+integer :: nthr, iostat, nlines_pickgau, nlines_picker_utils
 integer, allocatable :: coords_pickgau(:,:), coords_picker_utils(:,:)
 logical :: match
-character(len=LONGSTRLEN) :: boxname_out, cwd
+character(len=LONGSTRLEN) :: cwd
 character(len=:), allocatable :: dir_out
 type(pickgau) :: pgau, pgau_refine
 
@@ -137,30 +137,29 @@ print *, 'TEST COMPLETE!'
 
 contains
 
-function count_lines(filename) result (cnt)
+function count_lines( filename ) result ( cnt )
     character(len=*),     intent(in) :: filename
     integer :: cnt, iostat
     open(unit=20, file=filename, status='old', iostat=iostat)
-    if (iostat == 0) then
+    cnt = 0
+    if( iostat == 0 )then
         !file has been opened successfully
-        cnt = 0
         do 
             read(20, *, iostat=iostat)
-            if (iostat /= 0) EXIT
+            if( iostat /= 0 ) exit 
             cnt = cnt + 1
         end do
     else
-        print *, 'CANNOT OPEN FILE ' // filename
-        RETURN
-    end if
+        print *, 'Cannot open file' // filename
+        return 
+    endif
     close(20)
 end function count_lines
 
-subroutine extract_coords(filename, cnt, coords)
-    character(len=*),     intent(in) :: filename
-    integer,              intent(in) :: cnt
+subroutine extract_coords( filename, cnt, coords )
+    character(len=*),     intent(in)  :: filename
+    integer,              intent(in)  :: cnt
     integer,              intent(out) :: coords(cnt,2)
-    character(len=80) :: line
     integer :: iostat, i
     coords = 0
     open(unit=21, file=filename, status='old', iostat=iostat)
@@ -171,7 +170,7 @@ subroutine extract_coords(filename, cnt, coords)
     close(21)
 end subroutine extract_coords
 
-function compare_coords(coords_1, coords_2, length_1, length_2) result(coords_same)
+function compare_coords( coords_1, coords_2, length_1, length_2 ) result( coords_same )
     integer, intent(in) :: length_1, length_2
     integer, intent(in) :: coords_1(length_1,2), coords_2(length_2,2)
     logical :: coords_same 
@@ -204,13 +203,12 @@ function compare_coords(coords_1, coords_2, length_1, length_2) result(coords_sa
     end if
 end function compare_coords
 
-subroutine find_closest(coords_1, coords_2, length_1, length_2, filename)
+subroutine find_closest( coords_1, coords_2, length_1, length_2, filename )
     integer,                    intent(in) :: length_1, length_2
     integer,                    intent(in) :: coords_1(length_1,2), coords_2(length_2,2)
     character(len=*), optional, intent(in) :: filename
     integer :: i, j, closest_coord(2), min_loc(1)
     real, allocatable :: dists(:)
-    character(len=1) :: diff
     real :: min_dist
 
     if (present(filename)) then

@@ -12,7 +12,7 @@ integer,          parameter   :: ONE_M     = 1024**2
 integer(kind=8),  parameter   :: NVOLBYTES = NVOLRWS * BOX * BOX * BOX * 4
 real,             parameter   :: SMPD      = 1.0
 real(kind=c_float),            pointer :: rmat_ptr(:,:,:)=>null()  !< image pixels/voxels (in data)
-complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)=>null()  !< Fourier components
+!complex(kind=c_float_complex), pointer :: cmat_ptr(:,:,:)=>null()  !< Fourier components
 type(image)                   :: vols(NVOLS)
 type(imgfile)                 :: ioimg(NVOLS)
 integer(timer_int_kind)       ::  t_vol_w,  t_vol_w_para,  t_vol_r,  t_vol_r_para

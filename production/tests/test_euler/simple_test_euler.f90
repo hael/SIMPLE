@@ -4,8 +4,10 @@ implicit none
 type(oris) :: oris_obj
 type(sym)  :: pgrpsyms               !< symmetry elements object
 type(ori)  :: o1, o2
-real       :: eullims(3,2), diff_max, norm_diff, min_e(3), euls(3)
-integer    :: athres, isample
+real       :: eullims(3,2), euls(3)
+!real       :: eullims(3,2), norm_diff, diff_max, min_e(3), euls(3)
+!integer    :: athres, isample
+integer    :: isample
 integer, parameter :: NSAMPLE = 100
 call pgrpsyms%new('c4')
 oris_obj = oris(1, is_ptcl=.false.)

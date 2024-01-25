@@ -55,7 +55,6 @@ contains
     function objective_cont(bitstring) result(val)
         integer, intent(in) :: bitstring(:)
         real    :: val
-        integer :: k
         val = 2. - (to_int(bitstring) - (-4.))**2
     end function objective_cont
 end program simple_test_opt_genetic

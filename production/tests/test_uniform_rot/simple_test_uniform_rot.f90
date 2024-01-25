@@ -37,12 +37,12 @@ do i = 1, N_ARR
 enddo
 contains
     ! Box—Muller method
-    subroutine rgauss(sig, y1, y2)
+    subroutine rgauss( sig, y1, y2 )
         real, intent(in)    :: sig
         real, intent(inout) :: y1, y2
         real :: x1, x2, w
-        w = 0.
-        do while ( (w .ge. 1.0).or.(w.eq.0) )
+        w = 0. ; x1 = 0. ; x2 = 0.
+        do while( ( w .ge. 1.0 ) .or. ( w .eq. 0. ) )
             x1 = 2.0 * rand(0) - 1.0
             x2 = 2.0 * rand(0) - 1.0
             w  = x1 * x1 + x2 * x2

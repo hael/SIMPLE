@@ -11,9 +11,8 @@ type(polarft_corrcalc)  :: pftcc
 type(cmdline)           :: cline
 type(builder)           :: b
 real, allocatable       :: cc(:), cc_fft(:)
-integer                 :: iptcl, jptcl, irot, loc_cc(1), loc_cc_fft(1), nerrors, cnt
-integer(timer_int_kind) :: torig, tfft
-real                    :: err, erravg, errmax
+integer                 :: iptcl, jptcl
+integer(timer_int_kind) :: tfft
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)>'

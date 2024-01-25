@@ -1,9 +1,8 @@
 program simple_test_binoris
 include 'simple_lib.f08'
 implicit none
-type(oris)         :: a1, a2, os_peak1, os_peak2
+type(oris)         :: a1, os_peak1, os_peak2
 !type(binoris)      :: bos
-integer            :: i
 logical            :: mask(5)
 mask = [.true.,.false.,.true.,.false.,.true.]
 call a1%new(5, is_ptcl=.false.)
