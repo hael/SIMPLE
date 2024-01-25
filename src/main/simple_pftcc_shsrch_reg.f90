@@ -96,7 +96,7 @@ contains
         real(dp)                :: cost
         select type(self)
             class is (pftcc_shsrch_reg)
-                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                cost = pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
