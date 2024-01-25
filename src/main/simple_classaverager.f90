@@ -1005,7 +1005,7 @@ contains
         type(image)          :: tmpimg
         type(histogram)      :: hists(ncls), hist_avg
         logical, allocatable :: lmsk(:,:,:), cls_mask(:)
-        real    :: minmax(2),mean,skew,kurt,tvd,overall_min,overall_max,mskrad,std
+        real    :: minmax(2),mean,skew,tvd,overall_min,overall_max,mskrad,std
         integer :: icls,n
         cls_mask = nint(os%get_all('pop')) > 0
         n        = count(cls_mask)
@@ -1014,7 +1014,7 @@ contains
         call tmpimg%disc(ldim_crop, smpd_crop, mskrad, lmsk)
         overall_min =  huge(0.)
         overall_max = -999999.
-        !$omp parallel private(icls,minmax,mean,std,skew,kurt,tvd) proc_bind(close) default(shared)
+        !$omp parallel private(icls,minmax,mean,std,skew,tvd) proc_bind(close) default(shared)
         !$omp do reduction(min:overall_min) reduction(max:overall_max)
         do icls = 1,ncls
             if( cls_mask(icls) )then
@@ -1024,9 +1024,7 @@ contains
                 call os%set(icls, 'mean', mean)
                 call os%set(icls, 'var',  std*std)
                 skew = cavgs_merged(icls)%skew(lmsk(:ldim_crop(1),:ldim_crop(2),1))
-                kurt = cavgs_merged(icls)%kurt(lmsk(:ldim_crop(1),:ldim_crop(2),1))
                 call os%set(icls, 'skew', skew)
-                call os%set(icls, 'kurt', kurt)
             endif
         enddo
         !$omp end do

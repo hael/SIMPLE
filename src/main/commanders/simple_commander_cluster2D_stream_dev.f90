@@ -1105,6 +1105,7 @@ contains
                 !$omp parallel do private(iptcl,icls,eo) proc_bind(close) default(shared)&
                 !$omp reduction(+:prev_eo_pops_thread)
                 do iptcl = fromp,top
+                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     icls = pool_proj%os_ptcl2D%get_class(iptcl)
                     eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
                     prev_eo_pops_thread(icls,eo) = prev_eo_pops_thread(icls,eo) + 1
