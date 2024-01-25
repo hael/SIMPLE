@@ -233,12 +233,11 @@ contains
                 min_ir = 1.
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
                 do ir = 1, self%nrefs
-                    min_ip(ir) = self%ptcl_multinomal(self%ref_ptcl_cor(ir,:),mask_ip)
-                    min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
+                    min_ir(ir) = minval(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip)
                 enddo
                 !$omp end parallel do
                 min_ind_ir = self%ref_multinomal(min_ir)
-                min_ind_ip = min_ip(min_ind_ir)
+                min_ind_ip = self%ptcl_multinomal(self%ref_ptcl_cor(min_ind_ir,:),mask_ip)
                 self%ptcl_ref_map(min_ind_ip) = min_ind_ir
                 mask_ip(min_ind_ip) = .false.
             enddo
@@ -431,17 +430,17 @@ contains
         self%ptcl_inds(:,ithr) = (/(i,i=params_glob%fromp,params_glob%top)/)
         call hpsort(self%ptcl_corr(:,ithr), self%ptcl_inds(:,ithr) )
         rnd = ran3()
-        if( sum(self%ptcl_corr(1:self%inpl_ns,ithr)) < TINY )then
+        if( sum(self%ptcl_corr(1:self%refs_ns,ithr)) < TINY )then
             ! uniform sampling
-            which = params_glob%fromp + floor(real(self%inpl_ns) * rnd)
+            which = params_glob%fromp + floor(real(self%refs_ns) * rnd)
         else
             ! normalizing within the hard-limit
-            self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%inpl_ns,ithr) = self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%inpl_ns,ithr) / sum(self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%inpl_ns,ithr))
-            do which=params_glob%fromp,params_glob%fromp+self%inpl_ns
+            self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr) = self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr) / sum(self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr))
+            do which=params_glob%fromp,params_glob%fromp+self%refs_ns
                 bound = sum(self%ptcl_corr(params_glob%fromp:params_glob%fromp+which, ithr))
                 if( rnd >= bound )exit
             enddo
-            which = self%ptcl_inds(min(which,params_glob%fromp+self%inpl_ns),ithr)
+            which = self%ptcl_inds(min(which,params_glob%fromp+self%refs_ns),ithr)
         endif
     end function ptcl_multinomal
 
