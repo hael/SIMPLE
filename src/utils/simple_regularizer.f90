@@ -44,7 +44,7 @@ type :: regularizer
     procedure          :: batch_tab_normalize
     procedure          :: batch_tab_align
     procedure          :: batch_normalize_weight
-    procedure, private :: ref_multinomal, inpl_multinomal, ptcl_multinomal, sh_multinomal
+    procedure, private :: ref_multinomal, inpl_multinomal, ptcl_multinomal, sh_multinomal, sh_opt_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -178,27 +178,47 @@ contains
         real    :: inpl_corrs(self%nrots*SH_STEPS*SH_STEPS), sh(self%nrots*SH_STEPS*SH_STEPS,2)
         sh_max = params_glob%trs
         step   = sh_max*2./real(SH_STEPS)
-        !$omp parallel do default(shared) private(i,j,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,irnd,sh,rots) proc_bind(close) schedule(static)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            iref  = self%ptcl_ref_map(iptcl)
-            cnt   = 0
-            do ix = 1, SH_STEPS
-                x = -sh_max + step/2. + real(ix-1)*step
-                do iy = 1, SH_STEPS
-                    y = -sh_max + step/2. + real(iy-1)*step
-                    call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs(cnt*self%nrots+1:(cnt+1)*self%nrots) )
-                    rots(cnt*self%nrots+1:(cnt+1)*self%nrots)   = (/(j,j=1,self%nrots)/)
-                    sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,1) = x
-                    sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,2) = y
-                    cnt = cnt + 1
+        if( params_glob%l_reg_opt_ang )then
+            !$omp parallel do default(shared) private(i,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,sh) proc_bind(close) schedule(static)
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                iref  = self%ptcl_ref_map(iptcl)
+                cnt   = 0
+                do ix = 1, SH_STEPS
+                    x = -sh_max + step/2. + real(ix-1)*step
+                    do iy = 1, SH_STEPS
+                        cnt = cnt + 1
+                        y   = -sh_max + step/2. + real(iy-1)*step
+                        inpl_corrs(cnt) = self%pftcc%gencorr_for_rot_8(iref, iptcl, real([x,y],dp), self%ref_ptcl_tab(iref,iptcl)%loc)
+                        sh(cnt,:)       = [x, y]
+                    enddo
                 enddo
+                self%ref_ptcl_tab(iref,iptcl)%sh = sh(self%sh_multinomal(inpl_corrs(1:cnt)),:)
             enddo
-            irnd = self%sh_multinomal(inpl_corrs)
-            self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(irnd,:)
-            self%ref_ptcl_tab(iref,iptcl)%loc = rots(irnd)
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            !$omp parallel do default(shared) private(i,j,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,irnd,sh,rots) proc_bind(close) schedule(static)
+            do i = 1, self%pftcc%nptcls
+                iptcl = glob_pinds(i)
+                iref  = self%ptcl_ref_map(iptcl)
+                cnt   = 0
+                do ix = 1, SH_STEPS
+                    x = -sh_max + step/2. + real(ix-1)*step
+                    do iy = 1, SH_STEPS
+                        y = -sh_max + step/2. + real(iy-1)*step
+                        call self%pftcc%gencorrs( iref, iptcl, [x,y], inpl_corrs(cnt*self%nrots+1:(cnt+1)*self%nrots) )
+                        rots(cnt*self%nrots+1:(cnt+1)*self%nrots)   = (/(j,j=1,self%nrots)/)
+                        sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,1) = x
+                        sh(  cnt*self%nrots+1:(cnt+1)*self%nrots,2) = y
+                        cnt = cnt + 1
+                    enddo
+                enddo
+                irnd = self%sh_opt_multinomal(inpl_corrs)
+                self%ref_ptcl_tab(iref,iptcl)%sh  =   sh(irnd,:)
+                self%ref_ptcl_tab(iref,iptcl)%loc = rots(irnd)
+            enddo
+            !$omp end parallel do
+        endif
     end subroutine shift_smpl
 
     subroutine tab_align( self )
@@ -428,6 +448,31 @@ contains
     function sh_multinomal( self, pvec ) result( which )
         class(regularizer), intent(inout) :: self
         real,               intent(in)    :: pvec(:) !< probabilities
+        integer :: i, which, ithr, nsteps
+        real    :: rnd, bound
+        ithr   = omp_get_thread_num() + 1
+        nsteps = SH_STEPS * SH_STEPS
+        self%sh_corr(1:nsteps,ithr) = pvec
+        self%sh_inds(1:nsteps,ithr) = (/(i,i=1,nsteps)/)
+        call hpsort(self%sh_corr(1:nsteps,ithr), self%sh_inds(1:nsteps,ithr) )
+        rnd = ran3()
+        if( sum(self%sh_corr(1:nsteps,ithr)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(nsteps) * rnd)
+        else
+            ! normalizing within the hard-limit
+            self%sh_corr(1:nsteps,ithr) = self%sh_corr(1:nsteps,ithr) / sum(self%sh_corr(1:nsteps,ithr))
+            do which=1,nsteps
+                bound = sum(self%sh_corr(1:which, ithr))
+                if( rnd >= bound )exit
+            enddo
+            which = self%sh_inds(min(which,nsteps),ithr)
+        endif
+    end function sh_multinomal
+
+    function sh_opt_multinomal( self, pvec ) result( which )
+        class(regularizer), intent(inout) :: self
+        real,               intent(in)    :: pvec(:) !< probabilities
         integer :: i, which, ithr
         real    :: rnd, bound
         ithr = omp_get_thread_num() + 1
@@ -447,7 +492,7 @@ contains
             enddo
             which = self%sh_inds(min(which,self%inpl_ns),ithr)
         endif
-    end function sh_multinomal
+    end function sh_opt_multinomal
 
     ! DESTRUCTOR
 
