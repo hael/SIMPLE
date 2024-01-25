@@ -2,7 +2,7 @@ program simple_test_eval_polarftcc
     include 'simple_lib.f08'
     use simple_polarft_corrcalc,    only: polarft_corrcalc
     use simple_cmdline,             only: cmdline
-    use simple_builder,             only: builder, build_glob
+    use simple_builder,             only: builder
     use simple_parameters,          only: parameters
     use simple_pftcc_shsrch_grad,   only: pftcc_shsrch_grad
     use simple_strategy2D3D_common, only: set_bp_range

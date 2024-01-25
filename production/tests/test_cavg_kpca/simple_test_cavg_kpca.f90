@@ -48,7 +48,7 @@ call simple_chdir( filepath(PATH_HERE, trim(cline%get_carg('exec_dir'))))
 !!!!!!!
 call build%init_params_and_build_general_tbox(cline, p, do3d=.false.)
 classes = 0
-classes = build%spproj_field%get_all('class')
+classes = int(build%spproj_field%get_all('class'))
 n_cls   = maxval(classes)
 do cur_class = 1, n_cls
     call build%spproj_field%get_pinds(cur_class, 'class', pinds)

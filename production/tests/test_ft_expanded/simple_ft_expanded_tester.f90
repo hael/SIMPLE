@@ -22,8 +22,6 @@ integer                  :: x, y
 contains
 
     subroutine exec_ft_expanded_test
-        type(image)       :: img, img2
-        type(ft_expanded) :: ftexp
         call setup_testenv
         call test_shifted_correlator
         call profile_corrs
@@ -55,7 +53,6 @@ contains
     subroutine test_shifted_correlator
         real    :: dist, corr, corravg, distavg
         integer :: itst
-        real    :: shvec(3)
         write(logfhandle,*) 'testing ft_expanded :: shifted correlator'
         corravg = 0.
         distavg = 0.
@@ -115,7 +112,7 @@ contains
         type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
         type(ftexp_shsrch)   :: ftexp_shsrch1
         real, allocatable    :: shvecs(:,:)
-        real(4)    :: corr, actual, delta, shvec(3), tarray(2)
+        real(4)    :: corr, actual, delta, tarray(2)
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran
         call img_ref%fft()

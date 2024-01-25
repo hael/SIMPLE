@@ -4,9 +4,9 @@ use simple_image,   only: image
 use simple_imgfile, only: imgfile
 implicit none
 #include "simple_local_flags.inc"
-integer       :: ldim(3), i, j, cnt
-real          :: smpd=2., corr, corrs(20)
-type(image)   :: img, img_2
+integer       :: ldim(3), i, j
+real          :: smpd=2., corr
+type(image)   :: img
 type(image)   :: imgs(20)
 logical       :: ft=.false.
 

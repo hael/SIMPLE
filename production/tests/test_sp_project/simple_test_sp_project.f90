@@ -4,8 +4,6 @@ use simple_sp_project, only: sp_project
 implicit none
 
 type(sp_project)     :: myproject
-type(binoris)        :: bos
-integer, allocatable :: strlens(:)
 
 ! prepare stack oris in project
 call myproject%os_stk%new(2, is_ptcl=.false.)

@@ -1,6 +1,5 @@
 program simple_test_fftw_plan_many_1D
     include 'simple_lib.f08'
-    use simple_parameters, only: params_glob
 
     implicit none
 

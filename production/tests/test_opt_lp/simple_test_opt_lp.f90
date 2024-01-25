@@ -9,10 +9,10 @@ use simple_opt_filter,         only: butterworth_filter
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection
-type(image)                   :: img, noise, res_map, img_noisy, img_filt
+type(image)                   :: img, noise, img_noisy, img_filt
 type(reproject_commander)     :: xreproject
-integer                       :: k, nyq, nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
-real                          :: ave, sdev, maxv, minv, med, noise_mean, noise_std
+integer                       :: nptcls, rc, iptcl, find_stop, find_start, n_bin, n_vec, find_cur
+real                          :: ave, sdev, maxv, minv, noise_mean, noise_std
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:), yest(:)

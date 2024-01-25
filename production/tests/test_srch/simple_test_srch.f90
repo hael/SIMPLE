@@ -4,7 +4,7 @@ use simple_optimiser_tester
 use simple_volpft_srch_tester
 use simple_cmdline, only: cmdline
 implicit none
-type(cmdline) :: cline
+!type(cmdline) :: cline
 logical       :: be_verbose=.false.
 ! if( command_argument_count() < 3 )then
 !     write(logfhandle,'(a)',advance='no') 'simple_test_srch vol1=<volume.mrc> msk=<mask radius(in pixels)>'

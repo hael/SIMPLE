@@ -9,13 +9,13 @@ use simple_image,              only: image
 implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt, cline_projection
-type(image)                   :: even, odd, noise, res_map
+type(image)                   :: even, odd, noise
 type(nununiform_filter2D_commander) :: xnununiform_filter2D
 type(reproject_commander)     :: xreproject
 integer                       :: k, nyq, nptcls, smooth_ext, rc, iptcl, ext
-real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
+real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv
 real, allocatable             :: res(:), corrs(:)
-character(len=20)             :: filter
+character(len=STDLEN)         :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real, parameter               :: LP_LOWRES_PHASE = 7.

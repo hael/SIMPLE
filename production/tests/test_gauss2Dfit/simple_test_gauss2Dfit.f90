@@ -16,7 +16,7 @@ real                        :: sdevs(2), eigenvals(2), eigenvecs(2,2)
 integer,          parameter :: NTESTS=2
 integer,       allocatable  :: irefs(:)
 integer                     :: ldim(3), ldim_refs(3), iref, nrefs, ifoo, nrot
-integer                     :: i, j, funit, tpassed
+integer                     :: i, funit, tpassed
 integer(timer_int_kind)     :: t
 real(timer_int_kind)        :: rt1, rt2
 logical                     :: match

@@ -14,12 +14,11 @@ program simple_test_2D_core_finder
     logical, parameter  :: normalize_real_space = .false.
 
     type(image)                     :: cavg, reproj, diff
-    type(image)                     :: temp
     real(kind=c_float), pointer     :: rmat(:,:,:)=>null()
     real                :: nprad_vox=nprad_A/smpd, shell_size_vox=shell_size_A/smpd, mskdiam_vox=maskdiam_A/smpd
     real                :: r, mean, center(2), minmax(2)
     integer             :: iref, icavg, ldim1(3), ldim2(3), ldim_refs(3), ifoo, nshells, i, j, n, funit
-    logical, allocatable       :: is_populated(:), mask(:,:,:)
+    logical, allocatable       :: mask(:,:,:)
     character(len=256)         :: fn_cavgs, fn_reprojs
     character(*), parameter    :: mask_type="soft"
     character(*), parameter    :: fn_diff='cavgs_minus_reprojections.mrc', fn_shells='shells.mrc'
@@ -71,11 +70,11 @@ program simple_test_2D_core_finder
         call cavg%read(fn_cavgs, icavg)
         ! If cavg is empty then ignore
         minmax = cavg%minmax()
-        if (minmax(1) == 0. .and. minmax(2) == 0.) then
+        if( minmax(1) == 0. .and. minmax(2) == 0. )then
             call cavg%zero()
             call reproj%zero()
             cycle
-        end if
+        endif
         call reproj%read(fn_reprojs, icavg)
 
         ! Apply circular mask prior to normalization
@@ -161,7 +160,6 @@ contains
         complex                                :: phase
         real(kind=c_float),            pointer :: rmat2(:,:,:)=>null()
         real, allocatable                      :: img1_shavgs(:), img2_shavgs(:)
-        real                                   :: minmax(2)
         integer, allocatable        :: sh_counts(:)
         integer, parameter          :: niter=1
         integer                     :: iter, i, j, h, k, sh, lims(3,2), phys(3), ldim(3), array_shape(3), nshells

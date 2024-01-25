@@ -9,8 +9,6 @@ real,    parameter  :: shell_size_vox=shell_size_A/smpd
 type(image)                 :: img_part1, img_part2, dists_img
 real,    allocatable        :: rvec1(:), rvec2(:)
 logical, allocatable        :: mask(:,:,:), shell_mask(:,:,:)
-real(kind=c_float), pointer :: rmat_img_part1(:,:,:)=>null()
-real(kind=c_float), pointer :: rmat_img_part2(:,:,:)=>null()
 real(kind=c_float), pointer :: rmat_dists_img(:,:,:)=>null()
 real                        :: np_rad_A, np_rad_vox
 real                        :: corr

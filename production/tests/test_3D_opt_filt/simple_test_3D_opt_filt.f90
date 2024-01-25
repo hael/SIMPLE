@@ -13,7 +13,7 @@ type(nununiform_filter3D_commander) :: xnununiform_filter3D
 integer                       :: nyq, ifoo, smooth_ext, rc
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)
-character(len=20)             :: filter
+character(len=STDLEN)         :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real, parameter               :: LP_LOWRES_PHASE = 7.

@@ -10,7 +10,7 @@ real, parameter                  :: smpd=0.358
 real                             :: res_fsc05, res_fsc0143
 type(image)                      :: even, odd
 real,allocatable                 :: res(:), corrs(:)
-integer                          :: ldim(3), i, nptcls, nptcls1, nptcls2, iptcl, nyq
+integer                          :: ldim(3), nptcls, nptcls1, nptcls2, iptcl, nyq
 call find_ldim_nptcls( fn_cavgs, ldim, nptcls )
 !write(logfhandle,'(a,1x,i6)') "Number of 2D images in the stack", nptcls
 call find_ldim_nptcls( fn_cavgs_even, ldim, nptcls1 )

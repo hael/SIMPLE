@@ -3,8 +3,7 @@ include 'simple_lib.f08'
 use simple_timer
 implicit none
 type(sym)                     :: se
-integer                       :: nsubgrps, i
-character(len=:), allocatable :: pgrp_str
+integer                       :: nsubgrps
 call se%new('d6')
 nsubgrps = se%get_nsubgrp()
 ! print *, '# subgroups: ', nsubgrps

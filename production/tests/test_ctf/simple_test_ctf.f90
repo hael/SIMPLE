@@ -11,9 +11,6 @@ integer, parameter :: LDIM(3) = [256,256,1]
 real,    parameter :: SMPD = 1.0, DFX = 2.0, DFY = 2.0, ANGAST = 0., KV = 300., CS = 2.0, AC = 0.1, PHSH = 0.
 type(image)        :: img, img_spec
 type(ctf)          :: tfun
-real, allocatable  :: tvals(:,:)
-real    :: maxSpaFreqSq
-integer :: logi_lims(3,2), fdims(3)
 
 call img%new(LDIM, SMPD)
 call img_spec%new(LDIM, SMPD)

@@ -11,7 +11,6 @@ implicit none
 #include "simple_local_flags.inc"
 character(8)          :: datestr
 character(len=STDLEN) :: folder
-character(len=300)    :: command
 call seed_rnd
 call date_and_time(date=datestr)
 folder = './SIMPLE_TEST_UNITS_'//datestr

@@ -74,9 +74,11 @@ contains
     end subroutine setup_testenv
 
     subroutine test_volpft_srch
-        type(ori) :: o_best, ranori
-        real      :: corr_best, dist, sumdist, sumcorr, corr
-        integer   :: itest
+        !type(ori) :: o_best, ranori
+        type(ori) :: o_best
+        !real      :: corr_best, dist, sumdist, sumcorr, corr
+        real      :: sumdist, sumcorr
+        !integer   :: itest
         sumdist = 0.
         sumcorr = 0.
 
