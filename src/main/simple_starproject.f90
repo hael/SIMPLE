@@ -51,6 +51,9 @@ contains
     procedure, private :: sort_optics_maxpop
     procedure, private :: apply_optics_offset
     procedure, private :: get_image_basename
+    procedure, private :: propagate_optics2D
+    procedure, private :: propagate_optics3D
+    procedure, private :: propagate_optics_box
     !other
     procedure          :: set_verbose
     procedure          :: kill
@@ -848,6 +851,8 @@ contains
         endif
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
+        call self%propagate_optics_box(spproj)
+        call self%propagate_optics2D(spproj)
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_ptcl2D, self%starfile%particles2D%flags)
         call center_boxes(spproj, spproj%os_ptcl2D)
@@ -868,6 +873,8 @@ contains
         endif
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
+        call self%propagate_optics_box(spproj)
+        call self%propagate_optics3D(spproj)
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_ptcl3D, self%starfile%particles3D%flags)
         call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics")
@@ -1295,6 +1302,57 @@ contains
             self%tiltinfo(i)%finaltiltgroupid = self%tiltinfo(i)%finaltiltgroupid + offset
         end do
     end subroutine apply_optics_offset
+
+    subroutine propagate_optics_box(self, spproj)
+        class(starproject),    intent(inout)   :: self
+        class(sp_project),     intent(inout)   :: spproj
+        integer :: stkbox, stkind, stkogid, i
+        if(spproj%os_stk%get_noris() > 0) then
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring optics groups in project file have correct box ... "
+            do i = 1, spproj%os_stk%get_noris()
+                stkbox  = int(spproj%os_stk%get(i, 'box'))
+                stkogid = int(spproj%os_stk%get(i, 'ogid'))
+                if(stkbox > 0 .and. stkogid > 0 .and. spproj%os_optics%get(stkogid, 'box') .eq. 0.0) then
+                    call spproj%os_optics%set(stkogid, 'box', real(stkbox))
+                end if
+            end do
+        end if
+    end subroutine propagate_optics_box
+   
+    subroutine propagate_optics2D(self, spproj)
+        class(starproject),    intent(inout)   :: self
+        class(sp_project),     intent(inout)   :: spproj
+        integer :: ogid, stkind, stkogid, i
+        if(spproj%os_ptcl2D%get_noris() > 0) then
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 2d in project file have updated optics groups ... "
+            do i = 1, spproj%os_ptcl2D%get_noris()
+                ogid = int(spproj%os_ptcl2D%get(i, 'ogid'))
+                stkind = int(spproj%os_ptcl2D%get(i, 'stkind'))
+                if(ogid .eq. 0 .and. stkind .ne. 0) then
+                    call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(stkind, 'ogid'))
+                end if
+            end do
+        end if
+    end subroutine propagate_optics2D
+
+    subroutine propagate_optics3D(self, spproj)
+        class(starproject),    intent(inout)   :: self
+        class(sp_project),     intent(inout)   :: spproj
+        integer :: ogid, stkind, stkogid, i
+        if(spproj%os_ptcl3D%get_noris() > 0) then
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring particles 3d in project file have updated optics groups ... "
+            do i = 1, spproj%os_ptcl3D%get_noris()
+                ogid = int(spproj%os_ptcl3D%get(i, 'ogid'))
+                stkind = int(spproj%os_ptcl3D%get(i, 'stkind'))
+                if(ogid .eq. 0 .and. stkind .ne. 0) then
+                    call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(stkind, 'ogid'))
+                end if
+            end do
+        end if
+    end subroutine propagate_optics3D
 
     subroutine get_image_basename(self, sporis, splflag)
         class(starproject), intent(inout) :: self
