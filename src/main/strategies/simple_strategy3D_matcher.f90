@@ -211,19 +211,6 @@ contains
                     call reg_obj%shift_search(pinds(batch_start:batch_end))
                 enddo
             endif
-        elseif( trim(params_glob%refine) .eq. 'batch_prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            ! Batch loop
-            do ibatch=1,nbatches
-                batch_start = batches(ibatch,1)
-                batch_end   = batches(ibatch,2)
-                batchsz     = batch_end - batch_start + 1
-                call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
-                call reg_obj%batch_tab_normalize(pinds(batch_start:batch_end))
-                call reg_obj%batch_tab_align(pinds(batch_start:batch_end))
-                if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%batch_normalize_weight(pinds(batch_start:batch_end))
-                if( params_glob%l_doshift )            call reg_obj%shift_search(pinds(batch_start:batch_end))
-            enddo
         endif
 
         ! Batch loop
@@ -292,7 +279,7 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob','batch_prob')
+                    case('prob')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sto_samp')
                         allocate(strategy3D_sto_samp             :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -306,7 +293,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( trim(params_glob%refine) == 'prob' .or. trim(params_glob%refine) == 'batch_prob' ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
+                if( trim(params_glob%refine) == 'prob' ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -366,7 +353,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( trim(params_glob%refine) .eq. 'prob' .or. trim(params_glob%refine) == 'batch_prob' ) call reg_obj%kill
+            if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
@@ -460,7 +447,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( trim(params_glob%refine) .eq. 'prob' .or. trim(params_glob%refine) == 'batch_prob' ) call reg_obj%new(pftcc)
+        if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%new(pftcc)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)

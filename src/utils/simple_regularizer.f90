@@ -27,8 +27,8 @@ type :: regularizer
     integer              :: inpl_ns, refs_ns
     real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
     integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
-    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:), ptcl_corr(:,:), sh_corr(:,:)
-    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:), ptcl_inds(:,:), sh_inds(:,:)
+    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:), sh_corr(:,:)
+    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:), sh_inds(:,:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -41,10 +41,7 @@ type :: regularizer
     procedure          :: normalize_weight
     procedure          :: shift_search
     procedure          :: shift_smpl
-    procedure          :: batch_tab_normalize
-    procedure          :: batch_tab_align
-    procedure          :: batch_normalize_weight
-    procedure, private :: ref_multinomal, inpl_multinomal, ptcl_multinomal, sh_multinomal, sh_opt_multinomal
+    procedure, private :: ref_multinomal, inpl_multinomal, sh_multinomal, sh_opt_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -65,10 +62,8 @@ contains
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&
-                &self%ptcl_corr(params_glob%fromp:params_glob%top,params_glob%nthr),&
                 &self%sh_corr(self%nrots*SH_STEPS*SH_STEPS,params_glob%nthr), source=0.)
         allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr),&
-                &self%ptcl_inds(params_glob%fromp:params_glob%top,params_glob%nthr),&
                 &self%sh_inds(self%nrots*SH_STEPS*SH_STEPS,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
@@ -266,96 +261,6 @@ contains
         enddo
     end subroutine normalize_weight
 
-    subroutine batch_tab_normalize( self, glob_pinds )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer   :: iref, iptcl, i
-        real      :: sum_corr_all, max_corr, min_corr
-        ! normalize so prob of each ptcl is between [0,1] for all refs
-        if( params_glob%l_reg_norm )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iptcl,sum_corr_all)
-            do i = 1, self%pftcc%nptcls
-                iptcl        = glob_pinds(i)
-                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
-                if( sum_corr_all < TINY )then
-                    self%ref_ptcl_cor(:,iptcl) = 0.
-                else
-                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
-                endif
-            enddo
-            !$omp end parallel do
-        endif
-        max_corr = 0.
-        min_corr = huge(min_corr)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            do iref = 1, self%nrefs
-                if( self%ref_ptcl_cor(iref, iptcl) > max_corr ) max_corr = self%ref_ptcl_cor(iref, iptcl)
-                if( self%ref_ptcl_cor(iref, iptcl) < min_corr ) min_corr = self%ref_ptcl_cor(iref, iptcl)
-            enddo
-        enddo
-        if( (max_corr - min_corr) < TINY )then
-            self%ref_ptcl_cor = 0.
-        else
-            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
-        endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,iref,iptcl)
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            do iref = 1, self%nrefs
-                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine batch_tab_normalize
-
-    subroutine batch_tab_align( self, glob_pinds )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs), i
-        real    :: min_ir(self%nrefs)
-        logical :: mask_ip(params_glob%fromp:params_glob%top)
-        mask_ip = .false.
-        do i = 1, self%pftcc%nptcls
-            mask_ip(glob_pinds(i)) = .true.
-        enddo
-        call seed_rnd
-        do while( any(mask_ip) )
-            min_ir = 0.
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
-            do ir = 1, self%nrefs
-                min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
-                min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
-            enddo
-            !$omp end parallel do
-            min_ind_ir = self%ref_multinomal(min_ir)
-            min_ind_ip = min_ip(min_ind_ir)
-            self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-            mask_ip(min_ind_ip) = .false.
-        enddo
-    end subroutine batch_tab_align
-
-    subroutine batch_normalize_weight( self, glob_pinds )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer :: iptcl, iref, i
-        real    :: min_w, max_w
-        min_w = huge(min_w)
-        max_w = 0.
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            iref  = self%ptcl_ref_map(iptcl)
-            self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
-            if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
-            if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
-        enddo
-        do i = 1, self%pftcc%nptcls
-            iptcl = glob_pinds(i)
-            iref  = self%ptcl_ref_map(iptcl)
-            self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
-        enddo
-    end subroutine batch_normalize_weight
-
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
     function ref_multinomal( self, pvec ) result( which )
@@ -406,33 +311,6 @@ contains
             which = self%inpl_inds(min(which,self%inpl_ns),ithr)
         endif
     end function inpl_multinomal
-
-    ! ptcl multinomal based on unnormalized pvec
-    function ptcl_multinomal( self, pvec, mask ) result( which )
-        class(regularizer), intent(inout) :: self
-        real,               intent(in)    :: pvec(:) !< probabilities
-        logical,            intent(in)    :: mask(:) !< available ptcls
-        integer :: i, which, ithr
-        real    :: rnd, bound
-        ithr = omp_get_thread_num() + 1
-        self%ptcl_corr(:,ithr) = pvec
-        where( .not.(mask) ) self%ptcl_corr(:,ithr) = 1.
-        self%ptcl_inds(:,ithr) = (/(i,i=params_glob%fromp,params_glob%top)/)
-        call hpsort(self%ptcl_corr(:,ithr), self%ptcl_inds(:,ithr) )
-        rnd = ran3()
-        if( sum(self%ptcl_corr(1:self%refs_ns,ithr)) < TINY )then
-            ! uniform sampling
-            which = params_glob%fromp + floor(real(self%refs_ns) * rnd)
-        else
-            ! normalizing within the hard-limit
-            self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr) = self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr) / sum(self%ptcl_corr(params_glob%fromp:params_glob%fromp+self%refs_ns,ithr))
-            do which=params_glob%fromp,params_glob%fromp+self%refs_ns
-                bound = sum(self%ptcl_corr(params_glob%fromp:params_glob%fromp+which, ithr))
-                if( rnd >= bound )exit
-            enddo
-            which = self%ptcl_inds(min(which,params_glob%fromp+self%refs_ns),ithr)
-        endif
-    end function ptcl_multinomal
 
     function sh_multinomal( self, pvec ) result( which )
         class(regularizer), intent(inout) :: self
@@ -487,6 +365,6 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%ptcl_corr,self%sh_corr,self%inpl_inds,self%refs_inds,self%ptcl_inds,self%sh_inds)
+        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%sh_corr,self%inpl_inds,self%refs_inds,self%sh_inds)
     end subroutine kill
 end module simple_regularizer
