@@ -809,7 +809,8 @@ contains
         real, intent(in)               :: xcoords(nentries), ycoords(nentries)
         real, allocatable :: maxima(:,:)
         real    :: slopes(nentries-1)
-        integer :: i, j, nmaxima, locmax(nentries), maxloc_front(1), maxloc_back(1)
+        !integer :: i, j, nmaxima, locmax(nentries), maxloc_front(1), maxloc_back(1)
+        integer :: i, j, nmaxima, locmax(nentries)
         nmaxima = 0
         do i=1, nentries-1
             slopes(i) = (ycoords(i+1)-ycoords(i)) / (xcoords(i+1)-xcoords(i))

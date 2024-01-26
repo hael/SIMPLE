@@ -560,7 +560,7 @@ contains
         real(dp),         allocatable :: denom_even(:,:), denom_odd(:,:), R2s(:), RmI2s(:), weights(:)
         real(sp), target, allocatable :: sig2(:,:)
         real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:)
-        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), res(:), bin_purity(:)
+        real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), bin_purity(:)
         real(sp),         allocatable :: all_r2(:), all_purity(:), all_rmi2(:), all_mag2(:), ptcl_scores(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
         integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:), cls_pops(:)
@@ -569,7 +569,7 @@ contains
         real(dp) :: rmi2
         real     :: threshold, pu, ice_score, mean, sdev, cavgs_smpd, sdev_noise
         integer  :: nstks, nptcls, iptcl, n_lines, icls, nbins, batch_start, batch_end
-        integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, ini_pop, cavgs_ncls
+        integer  :: ibatch, batchsz, ibin, binpop, ithr, ini_pop, cavgs_ncls
         integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel, fromc, toc, n
         logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_write, l_ice, l_calc_corr
         call cline%set('oritype', 'ptcl2D')
@@ -1111,7 +1111,6 @@ contains
         real(sp), target, allocatable :: sig2(:,:)
         real(sp),         allocatable :: purity(:),inpl_corrs(:), corrs(:), ctf_rot(:,:), shifts(:,:), dfs(:), bindiff(:)
         real(sp),         allocatable :: frc(:), sig2_even(:,:), sig2_odd(:,:), tmp(:), binccs(:), res(:), bin_purity(:)
-        real(sp),         allocatable :: all_r2(:), all_purity(:), all_rmi2(:), all_mag2(:), ptcl_r2(:)
         integer,          allocatable :: rots(:),pinds(:), states(:), order(:), labels(:), batches(:,:)
         integer,          allocatable :: bin_inds(:,:), bins(:), cls2batch(:), cls_pops(:)
         logical,          allocatable :: selected(:), cls_mask(:)
@@ -1119,8 +1118,8 @@ contains
         type(ctf)        :: tfun
         type(ctfparams)  :: ctfparms
         real(dp) :: rmi2, r2
-        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, cc, pu, ice_score, score, mean, sdev
-        real     :: df, cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd, sdev_noise
+        real     :: cxy(3), lims(2,2), lims_init(2,2), threshold, pu, ice_score, mean, sdev
+        real     :: cc_df_corrs, prev_threshold, mdf,mcorr,sdf,scorr, cavgs_smpd, sdev_noise
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end
         integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel, ini_pop, cavgs_ncls
         integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel, fromc, toc

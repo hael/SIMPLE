@@ -266,7 +266,7 @@ contains
         type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         ! command lines
         type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
-        type(cmdline)                       :: cline_rank_cavgs, cline_scale, cline_scalerefs
+        type(cmdline)                       :: cline_rank_cavgs, cline_scalerefs
         type(cmdline)                       :: cline_calc_pspec_distr
         ! other variables
         class(parameters), pointer          :: params_ptr => null()
@@ -278,7 +278,7 @@ contains
         integer                             :: last_iter
         logical                             :: l_scaling, l_shmem, l_euclid
         ! parameters
-        character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
+        !character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
         integer, parameter    :: MINBOX      = 128
         real,    parameter    :: TARGET_LP   = 15.
         real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.

@@ -98,7 +98,7 @@ contains
         real, allocatable :: max_smds(:,:)
         real, allocatable :: max_ksstats(:,:)
         real, allocatable :: max_a_peaks(:,:)
-        integer           :: nmicrographs, imic, imic_3, idiam, idiam_2, idiam_3, iapeak, ismd, iksstat, inpeak, loc_max(1)
+        integer           :: nmicrographs, imic, imic_3, idiam, idiam_2, idiam_3, iapeak, ismd, iksstat, loc_max(1)
    
         nmicrographs = spproj%os_mic%get_noris()
         allocate(mic_stats(nmoldiams,5))

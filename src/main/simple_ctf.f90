@@ -671,7 +671,7 @@ contains
         real,             intent(out)   :: score
         real, allocatable :: res(:)
         real    :: phshift, start_freq, end_freq, ice_avg, band_avg, mag_max, mag, g
-        integer :: lims(3,2), box, sh, h,k, start_find, end_find, peak_maxind, ice_maxind, hmax, kmax, cnt
+        integer :: lims(3,2), box, sh, h,k, start_find, end_find, ice_maxind, hmax, kmax, cnt
         score = 0.
         if( abs(self%smpd-ctfparms%smpd) > 1.d-4) THROW_HARD('Inconsistent SMPD; calc_ice_frac')
         if( self%smpd > (ICE_BAND1/2.) ) return

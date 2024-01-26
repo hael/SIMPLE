@@ -4453,7 +4453,7 @@ contains
         real,   parameter :: END_FREQ   = 6.
         real, allocatable :: res(:), tmp(:)
         real    :: powspec(fdim(self%ldim(1)) - 1)
-        real    :: g, gs, ge, mag, mag_max, band_max, band_avg, ice_avg
+        real    :: g, gs, ge, mag, mag_max, band_avg, ice_avg
         integer :: lims(3,2), ice_maxind, start_find, end_find
         integer :: nbands, s, e, h, k, hmax, kmax, sh, cnt
         score = 0.
@@ -7675,8 +7675,9 @@ contains
 
     subroutine kill_thread_safe_tmp_imgs( self )
         class(image), intent(in) :: self
-        integer :: i, sz, ldim(3)
-        logical :: do_allocate
+        integer :: i
+        !integer :: i, sz, ldim(3)
+        !logical :: do_allocate
         if( allocated(thread_safe_tmp_imgs) )then
             do i=1,size(thread_safe_tmp_imgs)
                 call thread_safe_tmp_imgs(i)%kill
