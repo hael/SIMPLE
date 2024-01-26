@@ -107,9 +107,7 @@ contains
     end subroutine fill_tab_inpl_smpl
 
     subroutine tab_normalize( self )
-        use simple_builder,           only: build_glob
         class(regularizer), intent(inout) :: self
-        type(ori) :: o
         integer   :: iref, iptcl
         real      :: sum_corr_all, min_corr, max_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs

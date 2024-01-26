@@ -336,11 +336,11 @@ contains
         allocate( opt_shifts(self%nframes, 2), source=self%opt_shifts )
     end subroutine get_opt_shifts
 
-    subroutine set_maxits( self, maxits )
-        class(motion_align_nano), intent(inout) :: self
-        integer,                    intent(in)    :: maxits
-        self%maxits_dcorr = maxits
-    end subroutine set_maxits
+    !subroutine set_maxits( self, maxits )
+    !    class(motion_align_nano), intent(inout) :: self
+    !    integer,                    intent(in)    :: maxits
+    !    self%maxits_dcorr = maxits
+    !end subroutine set_maxits
 
     subroutine set_bfactor( self, bfac )
         class(motion_align_nano), intent(inout) :: self

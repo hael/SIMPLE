@@ -75,7 +75,7 @@ contains
         character(len=STDLEN) :: sigma2_fname, sigma2_fname_sc, orig_objfun
         real                  :: smpd_target, lplims(2), cenlp
         real                  :: scale_factor1, scale_factor2
-        integer               :: icls, ncavgs, box, istk, cnt, iter, ipart
+        integer               :: icls, ncavgs, cnt, iter, ipart
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_euclid
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)

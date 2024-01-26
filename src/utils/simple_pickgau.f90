@@ -337,10 +337,9 @@ contains
         class(pickgau), intent(inout) :: self
         class(image),   intent(inout) :: imgs(:)
         real,           intent(in)    :: mskdiam
-        character(len=:), allocatable :: numstr
         type(image) :: img_rot
         integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
-        real        :: scale, mskrad, pixrad_shrink1, pixrad_shrink2, smpd, ang, rot
+        real        :: mskrad, smpd, ang, rot
         smpd       = imgs(1)%get_smpd()
         ldim       = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
@@ -976,7 +975,6 @@ contains
     subroutine detect_peaks( self )
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
-        integer :: ioff, joff
         tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
         call detect_peak_thres(size(tmp), self%nboxes_ub, tmp, self%t)
         deallocate(tmp)
@@ -1095,7 +1093,7 @@ contains
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ibox, ithr, npeaks, pos(2), ioff, joff
+        integer     :: ithr, npeaks, pos(2), ioff, joff
         logical     :: outside
         real        :: loc_sdevs(self%nx_offset,self%ny_offset), avg, sdev, t
         do ithr = 1,nthr_glob

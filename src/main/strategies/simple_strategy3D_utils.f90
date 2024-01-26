@@ -20,7 +20,7 @@ contains
         real,         optional, intent(in)    :: sh_in(2)
         real,         optional, intent(in)    :: weight
         type(ori) :: osym, o_prev, o_new
-        integer   :: state, neff_states, loc(1), nrefs_eval, nrefs_tot
+        integer   :: state, neff_states, nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
