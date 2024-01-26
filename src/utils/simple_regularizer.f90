@@ -38,7 +38,6 @@ type :: regularizer
     procedure          :: fill_tab_inpl_smpl
     procedure          :: tab_normalize
     procedure          :: tab_align
-    procedure          :: tab_align_test
     procedure          :: normalize_weight
     procedure          :: shift_search
     procedure          :: shift_smpl
@@ -177,7 +176,7 @@ contains
         real    :: inpl_corrs(self%nrots*SH_STEPS*SH_STEPS), sh(self%nrots*SH_STEPS*SH_STEPS,2)
         sh_max = params_glob%trs
         step   = sh_max*2./real(SH_STEPS)
-        if( params_glob%l_reg_opt_ang )then
+        if( .not. params_glob%l_reg_opt_ang )then
             !$omp parallel do default(shared) private(i,iref,iptcl,cnt,ix,iy,x,y,inpl_corrs,sh) proc_bind(close) schedule(static)
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -222,76 +221,32 @@ contains
 
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: ir, min_ind_ir, min_ind_ip, min_ip(self%nrefs)
+        integer :: ir, min_ind_ir, min_ind_ip, iptcl
         real    :: min_ir(self%nrefs)
         logical :: mask_ip(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
-        mask_ip           = .true.
         if( params_glob%l_reg_smpl )then
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
+            do iptcl = params_glob%fromp, params_glob%top
+                self%ptcl_ref_map(iptcl) = self%ref_multinomal(self%ref_ptcl_cor(:,iptcl))
+            enddo
+            !$omp end parallel do
+        else
+            mask_ip = .true.
             do while( any(mask_ip) )
-                min_ir = 1.
+                min_ir = 0.
                 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
                 do ir = 1, self%nrefs
                     min_ir(ir) = minval(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip)
                 enddo
                 !$omp end parallel do
                 min_ind_ir = self%ref_multinomal(min_ir)
-                min_ind_ip = self%ptcl_multinomal(self%ref_ptcl_cor(min_ind_ir,:),mask_ip)
-                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-                mask_ip(min_ind_ip) = .false.
-            enddo
-        else
-            do while( any(mask_ip) )
-                min_ir = 0.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
-                do ir = 1, self%nrefs
-                    min_ip(ir) = params_glob%fromp + minloc(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip) - 1
-                    min_ir(ir) = self%ref_ptcl_cor(ir,min_ip(ir))
-                enddo
-                !$omp end parallel do
-                min_ind_ir = self%ref_multinomal(min_ir)
-                min_ind_ip = min_ip(min_ind_ir)
+                min_ind_ip = params_glob%fromp + minloc(self%ref_ptcl_cor(min_ind_ir,:), dim=1, mask=mask_ip) - 1
                 self%ptcl_ref_map(min_ind_ip) = min_ind_ir
                 mask_ip(min_ind_ip) = .false.
             enddo
         endif
     end subroutine tab_align
-
-    subroutine tab_align_test( self )
-        class(regularizer), intent(inout) :: self
-        integer :: ip, min_ind_ir, min_ind_ip
-        real    ::  min_ip(params_glob%fromp:params_glob%top)
-        logical :: mask_ip(params_glob%fromp:params_glob%top)
-        self%ptcl_ref_map = 1
-        mask_ip           = .true.
-        if( params_glob%l_reg_smpl )then
-            do while( any(mask_ip) )
-                min_ip = 1.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ip)
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) ) min_ip(ip) = minval(self%ref_ptcl_cor(:,ip), dim=1)
-                enddo
-                !$omp end parallel do
-                min_ind_ip = self%ptcl_multinomal(min_ip, mask_ip)
-                min_ind_ir = self%ref_multinomal(self%ref_ptcl_cor(:,min_ind_ip))
-                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-                mask_ip(min_ind_ip) = .false.
-            enddo
-        else
-            do while( any(mask_ip) )
-                min_ip = 1.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ip)
-                do ip = params_glob%fromp, params_glob%top
-                    if( mask_ip(ip) ) min_ip(ip) = minval(self%ref_ptcl_cor(:,ip), dim=1)
-                enddo
-                !$omp end parallel do
-                min_ind_ip = self%ptcl_multinomal(min_ip, mask_ip)
-                min_ind_ir = minloc(self%ref_ptcl_cor(:,min_ind_ip), dim = 1)
-                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-                mask_ip(min_ind_ip) = .false.
-            enddo
-        endif
-    end subroutine tab_align_test
 
     subroutine normalize_weight( self )
         class(regularizer), intent(inout) :: self
