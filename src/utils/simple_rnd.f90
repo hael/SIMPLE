@@ -28,6 +28,11 @@ interface randn
     module procedure randn_2
 end interface
 
+interface reverse_multinomal
+    module procedure reverse_multinomal_1
+    module procedure reverse_multinomal_2
+end interface
+
 integer(long), save :: idum
 
 contains
@@ -147,7 +152,7 @@ contains
         deallocate(pvec_sorted,inds)
     end function multinomal
 
-    function reverse_multinomal( pvec, thres ) result( which )
+    function reverse_multinomal_1( pvec, thres ) result( which )
         use simple_math, only: hpsort
         real,     intent(in) :: pvec(:) !< probabilities
         integer,  intent(in) :: thres
@@ -172,7 +177,32 @@ contains
             enddo
             which = inds(min(which,thres))
         endif
-    end function reverse_multinomal
+    end function reverse_multinomal_1
+
+    function reverse_multinomal_2( pvec_sorted, inds, thres ) result( which )
+        use simple_math,           only: hpsort
+        real,            intent(inout) :: pvec_sorted(:) !< probabilities
+        integer,         intent(inout) :: inds(:)
+        integer,         intent(in)    :: thres
+        integer :: i, which, n
+        real    :: rnd, bound
+        n    = size(pvec_sorted)
+        inds = (/(i,i=1,n)/)
+        call hpsort(pvec_sorted, inds)
+        rnd = ran3()
+        if( sum(pvec_sorted(1:thres)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(thres) * rnd)
+        else
+            ! normalizing within the hard-limit
+            pvec_sorted(1:thres) = pvec_sorted(1:thres) / sum(pvec_sorted(1:thres))
+            do which=1,thres
+                bound = sum(pvec_sorted(1:which))
+                if( rnd >= bound )exit
+            enddo
+            which = min(which,thres)
+        endif
+    end function reverse_multinomal_2
 
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
