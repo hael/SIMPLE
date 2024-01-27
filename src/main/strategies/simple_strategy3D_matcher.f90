@@ -15,7 +15,7 @@ use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
 use simple_strategy3D_shc,          only: strategy3D_shc
-use simple_strategy3D_sto_samp,     only: strategy3D_sto_samp
+use simple_strategy3D_smpl,         only: strategy3D_smpl
 use simple_strategy3D_shc3,         only: strategy3D_shc3
 use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
@@ -281,8 +281,8 @@ contains
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('prob')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('sto_samp')
-                        allocate(strategy3D_sto_samp             :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('smpl')
+                        allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
