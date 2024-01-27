@@ -40,7 +40,9 @@ contains
         real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
-            ! set thread index
+            ! init threaded search arrays
+            self%s%ithr = ithr
+            call prep_strategy3D_thread(ithr)
             self%s%nrefs_eval = self%s%nrefs
             inpl_ns = int(params_glob%reg_athres * self%s%nrots / 180.)
             ref_ns  = int(params_glob%reg_athres * self%s%nrefs / 180.)
