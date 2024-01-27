@@ -7,7 +7,7 @@ use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-public :: seed_rnd, ran3, ran3arr, randn, multinomal, gasdev, irnd_uni, irnd_uni_pair
+public :: seed_rnd, ran3, ran3arr, randn, multinomal, reverse_multinomal, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa
 private
 #include "simple_local_flags.inc"
@@ -146,6 +146,33 @@ contains
         which = inds(max(which,1))
         deallocate(pvec_sorted,inds)
     end function multinomal
+
+    function reverse_multinomal( pvec, thres ) result( which )
+        use simple_math, only: hpsort
+        real,     intent(in) :: pvec(:) !< probabilities
+        integer,  intent(in) :: thres
+        real,    allocatable :: pvec_sorted(:)
+        integer, allocatable :: inds(:)
+        integer :: i, which, n
+        real    :: rnd, bound
+        n = size(pvec)
+        allocate(pvec_sorted(n), source=pvec)
+        inds = (/(i,i=1,n)/)
+        call hpsort(pvec_sorted, inds)
+        rnd = ran3()
+        if( sum(pvec_sorted(1:thres)) < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(thres) * rnd)
+        else
+            ! normalizing within the hard-limit
+            pvec_sorted(1:thres) = pvec_sorted(1:thres) / sum(pvec_sorted(1:thres))
+            do which=1,thres
+                bound = sum(pvec_sorted(1:which))
+                if( rnd >= bound )exit
+            enddo
+            which = inds(min(which,thres))
+        endif
+    end function reverse_multinomal
 
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
