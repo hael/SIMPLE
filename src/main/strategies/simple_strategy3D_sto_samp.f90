@@ -37,7 +37,7 @@ contains
         class(strategy3D_sto_samp), intent(inout) :: self
         integer,                    intent(in)    :: ithr
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), sorted_ind
-        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs)
+        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -48,7 +48,8 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    sorted_ind      = reverse_multinomal(inpl_corrs, inds, int(params_glob%reg_athres * self%s%nrots / 180.))
+                    sorted_corrs    = inpl_corrs
+                    sorted_ind      = reverse_multinomal(sorted_corrs, inds, int(params_glob%reg_athres * self%s%nrots / 180.))
                     locs(iref)      = inds(sorted_ind)
                     ref_corrs(iref) = inpl_corrs(sorted_ind)
                 endif
