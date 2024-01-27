@@ -179,15 +179,17 @@ contains
         endif
     end function reverse_multinomal_1
 
-    function reverse_multinomal_2( pvec_sorted, inds, thres ) result( which )
+    function reverse_multinomal_2( pvec, pvec_sorted, inds, thres ) result( which )
         use simple_math,           only: hpsort
-        real,            intent(inout) :: pvec_sorted(:) !< probabilities
+        real,            intent(in)    :: pvec(:)        !< probabilities
+        real,            intent(inout) :: pvec_sorted(:) !< sorted probabilities
         integer,         intent(inout) :: inds(:)
         integer,         intent(in)    :: thres
         integer :: i, which, n
         real    :: rnd, bound
-        n    = size(pvec_sorted)
-        inds = (/(i,i=1,n)/)
+        n           = size(pvec)
+        inds        = (/(i,i=1,n)/)
+        pvec_sorted = pvec
         call hpsort(pvec_sorted, inds)
         rnd = ran3()
         if( sum(pvec_sorted(1:thres)) < TINY )then
