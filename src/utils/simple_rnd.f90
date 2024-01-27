@@ -200,7 +200,7 @@ contains
                 bound = sum(pvec_sorted(1:which))
                 if( rnd >= bound )exit
             enddo
-            which = min(which,thres)
+            which = inds(min(which,thres))
         endif
     end function reverse_multinomal_2
 

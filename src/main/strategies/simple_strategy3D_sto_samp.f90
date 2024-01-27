@@ -49,9 +49,8 @@ contains
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     sorted_corrs    = inpl_corrs
-                    sorted_ind      = reverse_multinomal(sorted_corrs, inds, int(params_glob%reg_athres * self%s%nrots / 180.))
-                    locs(iref)      = inds(sorted_ind)
-                    ref_corrs(iref) = inpl_corrs(sorted_ind)
+                    locs(iref)      = reverse_multinomal(sorted_corrs, inds, int(params_glob%reg_athres * self%s%nrots / 180.))
+                    ref_corrs(iref) = inpl_corrs(locs(iref))
                 endif
             enddo
             iref              = reverse_multinomal(ref_corrs, int(params_glob%reg_athres * self%s%nrefs / 180.))
