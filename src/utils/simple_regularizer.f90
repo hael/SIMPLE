@@ -63,9 +63,9 @@ contains
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
         athres       = params_glob%reg_athres
-        if( dist_thres > 0. ) athres = min(params_glob%reg_athres, dist_thres)
-        self%inpl_ns = athres * self%nrots / 180.
-        self%refs_ns = athres * self%nrefs / 180.
+        if( dist_thres > TINY ) athres = min(params_glob%reg_athres, dist_thres/2.)
+        self%inpl_ns = int(athres * real(self%nrots) / 180.)
+        self%refs_ns = int(athres * real(self%nrefs) / 180.)
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&

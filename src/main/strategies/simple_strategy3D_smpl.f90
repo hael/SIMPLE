@@ -44,8 +44,8 @@ contains
             self%s%ithr = ithr
             call prep_strategy3D_thread(ithr)
             self%s%nrefs_eval = self%s%nrefs
-            inpl_ns = int(params_glob%reg_athres * self%s%nrots / 180.)
-            ref_ns  = int(params_glob%reg_athres * self%s%nrefs / 180.)
+            inpl_ns = 1 + int(params_glob%reg_athres * self%s%nrots / 180.)
+            ref_ns  = 1 + int(params_glob%reg_athres * self%s%nrefs / 180.)
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
