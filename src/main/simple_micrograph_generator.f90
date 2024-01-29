@@ -103,13 +103,12 @@ contains
         if( self%fromtof(2) == 0 ) self%fromtof(2) = self%nframes
         ! weights
         if( self%l_frameweights )then
+            if( self%fromtof(1) > 1            ) self%weights(:self%fromtof(1)-1) = 0.
+            if( self%fromtof(2) < self%nframes ) self%weights(self%fromtof(2)+1:) = 0.
             self%weights = self%weights / sum(self%weights(self%fromtof(1):self%fromtof(2)))
         else
-            where(self%weights(self%fromtof(1):self%fromtof(2)) > 0.000001)
-                self%weights(self%fromtof(1):self%fromtof(2)) = 1.0 / real(self%fromtof(2)-self%fromtof(1)+1)
-            elsewhere
-                self%weights(self%fromtof(1):self%fromtof(2)) = 0.0
-            end where
+            self%weights = 0.
+            self%weights(self%fromtof(1):self%fromtof(2)) = 1.0
         endif
         if( self%fromtof(1) > 1 ) self%weights(1:self%fromtof(1)) = 0.
         if( self%fromtof(2) < self%nframes ) self%weights(self%fromtof(2)+1:) = 0.
@@ -585,11 +584,6 @@ contains
         do i = 1,POLYDIM
             print *,'polycoeffs    ',i,self%polyx(i),self%polyy(i)
         enddo
-        ! if( self%nhotpix > 0 )then
-        !     do i = 1,self%nhotpix
-        !         print *,'hotpix    ',i,self%hotpix_coords(:,i)
-        !     enddo
-        ! endif
     end subroutine display
 
     subroutine cure_outliers( self )

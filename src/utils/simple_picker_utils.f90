@@ -25,14 +25,16 @@ contains
         integer,                   intent(out)   :: nptcls
         class(image), optional,    intent(inout) :: pickrefs(:)
         real,         optional,    intent(out)   :: mic_stats(params_glob%nmoldiams,5)
+        type(pickgau)             :: gaup, gaup_refine
+        real,         allocatable :: moldiams(:)
+        integer,      allocatable :: pos(:,:)
         character(len=LONGSTRLEN) :: boxfile
-        type(pickgau) :: gaup, gaup_refine
-        integer, allocatable :: pos(:,:)
-        integer :: box, idiam
         real    :: maxdiam, stepsz, moldiam_cur
-        real, allocatable :: moldiams(:)
+        integer :: box, idiam
+        logical :: l_roi
         boxfile = basename(fname_new_ext(trim(micname),'box'))
-        call read_mic_raw(micname, smpd)
+        l_roi   = trim(params_glob%pick_roi).eq.'yes'
+        call read_mic_raw(micname, smpd, subtr_backgr=l_roi)
         if (params_glob%nmoldiams > 1) then
             allocate(moldiams(params_glob%nmoldiams))
             ! create moldiams array
@@ -46,10 +48,10 @@ contains
             deallocate(moldiams)
         else
             if( present(pickrefs) )then
-                call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET)
+                call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET, roi=l_roi)
                 call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%mskdiam, pickrefs, offset=1)
             else
-                call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET)
+                call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET, roi=l_roi)
                 call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)
             endif
             call gaup%gaupick(gaup_refine)
