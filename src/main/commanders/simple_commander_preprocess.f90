@@ -1931,15 +1931,6 @@ contains
             call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
-            if( trim(params%pick_roi).eq.'yes' )then
-                ! under testing
-                ldim_pd(1:2) = find_larger_magic_box(ldim(1:2)+1)
-                if( minval(ldim_pd(1:2)-ldim(1:2)) < 16 )then
-                    ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
-                endif
-                ldim_pd(3) = 1
-                call micrograph_pad%new(ldim_pd, params%smpd)
-            endif
             if( trim(params%extractfrommov).ne.'yes' ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
             box_first = 0
             ! main loop
@@ -2025,14 +2016,7 @@ contains
                 else
                     ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
-                    if( trim(params%pick_roi).eq.'yes' )then
-                        ! under testing
-                        call micrograph%pad_mirr(micrograph_pad)
-                        call micrograph_pad%fft
-                        call micrograph_pad%bp(real(minval(ldim_pd(1:2)))*params%smpd/8.,0.)
-                        call micrograph_pad%ifft
-                        call micrograph_pad%clip(micrograph)
-                    endif
+                    if( trim(params%pick_roi).eq.'yes' ) call micrograph%subtract_background(HP_BACKGR_SUBTR)
                     ! phase-flip micrograph
                     if( cline%defined('ctf') )then
                         if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then

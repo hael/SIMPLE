@@ -176,6 +176,7 @@ real, parameter    :: DFMAX_DEFAULT            = 5.0   !< Default maximum bound 
 real, parameter    :: DFMIN_DEFAULT            = 0.2   !< Default minimum bound for defocus search (microns)
 real, parameter    :: LP_CTF_ESTIMATE          = 5.0   !< Default low-pass limit for defocus search (Angstroms)
 real, parameter    :: HP_CTF_ESTIMATE          = 30.0  !< Default high-pass limit for defocus search (Angstroms)
+real, parameter    :: HP_BACKGR_SUBTR          = 400.0 !< High-pass frequency for micrograph background subtraction (Angstroms)
 real, parameter    :: CTFRES_THRESHOLD         = 50.0  !< Ctfres rejection threshold (Angstroms)
 real, parameter    :: CTFRES_THRESHOLD_STREAM  = 10.0  !< Stream ctfres rejection threshold (Angstroms)
 real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection threshold

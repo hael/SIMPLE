@@ -266,6 +266,7 @@ contains
     procedure          :: dead_hot_positions
     procedure          :: taper_edges, taper_edges_hann
     procedure          :: subtr_backgr_ramp
+    procedure          :: subtract_background, estimate_background
     procedure          :: zero
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
@@ -3941,23 +3942,23 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
 
-    subroutine lpgau2D( self, sig )
+    subroutine lpgau2D( self, freq )
         class(image), intent(inout) :: self
-        real,         intent(in)    :: sig ! half-width in Angs
-        real    :: gau, fsq, sigsq
-        integer :: phys(2), lims(3,2), h, k
+        real,         intent(in)    :: freq ! half-width in Angs
+        real    :: fwhm(2), halfinvsigsq(2), a
+        integer :: phys(2), lims(3,2), h,k
         if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
         if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
-        lims  = self%fit%loop_lims(2)
-        sigsq = (sig/self%smpd)**2 ! in pixels
+        fwhm         = freq / self%smpd / real(self%ldim(1:2))
+        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.235482)**2
+        lims         = self%fit%loop_lims(2)
         !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
-        !$omp private(h,k,fsq,phys,gau)
+        !$omp private(h,k,a,phys)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
-                fsq  = h*h+k*k
-                gau  = exp(-min(65., fsq / sigsq))
+                a    = real(h*h) * halfinvsigsq(1) + real(k*k) * halfinvsigsq(2)
                 phys = self%comp_addr_phys(h,k)
-                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * gau
+                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * exp(-a)
             enddo
         enddo
         !$omp end parallel do
@@ -5819,6 +5820,71 @@ contains
             enddo
         enddo
     end subroutine subtr_backgr_ramp
+
+    !>  Subtracts background, for micrographs
+    subroutine subtract_background( self, freq, backgr )
+        class(image),           intent(inout) :: self
+        real,                   intent(in)    :: freq
+        class(image), optional, intent(inout) :: backgr
+        type(image) :: tmpimg
+        if( self%ft )      THROW_HARD('Real space only!, subtract_background')
+        if( self%is_3d() ) THROW_HARD('2D images only!, subtract_background')
+        if( present(backgr) )then
+            call self%estimate_background(freq, backgr)
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat - backgr%rmat
+            !$omp end parallel workshare
+        else
+            call self%estimate_background(freq, tmpimg)
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat - tmpimg%rmat
+            !$omp end parallel workshare
+            call tmpimg%kill
+        endif
+    end subroutine subtract_background
+
+    !>  Estimates background from gaussian filtered image, for micrographs
+    subroutine estimate_background( self, freq, backgr )
+        class(image), intent(in)    :: self
+        real,         intent(in)    :: freq
+        class(image), intent(inout) :: backgr
+        real, parameter :: PADDING = sqrt(2.)
+        type(image)     :: img_pad, msk
+        integer         :: ldim_pd(3)
+        if( self%ft )      THROW_HARD('Real space only!, estimate_background')
+        if( self%is_3d() ) THROW_HARD('2D images only!, estimate_background')
+        ! padded dimensions
+        ldim_pd(1:2) = nint(PADDING*real(self%ldim(1:2)))
+        ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2))
+        ldim_pd(3) = 1
+        ! low-pass image
+        call backgr%copy(self)
+        call img_pad%new(ldim_pd, self%smpd)
+        call backgr%pad(img_pad)
+        call img_pad%fft
+        call img_pad%lpgau2D(freq)
+        call img_pad%ifft
+        call img_pad%clip(backgr)
+        ! low pass padding mask
+        call msk%new(self%ldim, self%smpd)
+        msk = 1.
+        call msk%pad(img_pad)
+        call img_pad%fft
+        call img_pad%lpgau2D(freq)
+        call img_pad%ifft
+        call img_pad%clip(msk)
+        ! correct for padding
+        !$omp parallel workshare proc_bind(close)
+        where( msk%rmat(1:self%ldim(1),1:self%ldim(2),1) > TINY )
+            backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = &
+                &backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) / msk%rmat(1:self%ldim(1),1:self%ldim(2),1)
+        else where
+            backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = 0.
+        end where
+        !$omp end parallel workshare
+        call img_pad%kill
+        call msk%kill
+    end subroutine estimate_background
 
     !> \brief salt_n_pepper  is for adding salt and pepper noise to an image
     !! \param pos 2D mask

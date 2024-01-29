@@ -31,7 +31,7 @@ type pickgau
     real                     :: a_nonpeak = 0., s_nonpeak = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
-    type(image)              :: mic_shrink, gauref
+    type(image)              :: mic_shrink, gauref, mic_roi
     type(image), allocatable :: boxrefs(:)
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
@@ -125,17 +125,22 @@ contains
         class(pickgau),           intent(inout) :: self
         class(pickgau), optional, intent(inout) :: self_refine
         integer, allocatable :: pos(:,:)
+        if( self%l_roi )then
+            call self%flag_ice
+            call self%flag_amorphous_carbon
+            if( count(self%l_mic_mask) < nint(0.01*product(self%ldim)) )then
+                self%npeaks = 0
+                if( present(self_refine) ) self_refine%npeaks = 0
+                return
+            endif
+        endif
+        ! establish iterators
+        call self%setup_iterators
+        ! matching
         if( self%refpick )then
             call self%refmatch_boximgs
         else
             call self%gaumatch_boximgs
-        endif
-        if( self%l_roi )then
-            call self%flag_ice
-            call self%flag_amorphous_carbon
-            if( count(self%l_mic_mask) < nint(0.02*product(self%ldim)) )then
-                return
-            endif
         endif
         call self%detect_peaks
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
@@ -148,6 +153,7 @@ contains
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
+            call self_refine%setup_iterators
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
             call self_refine%distance_filter(dist_thres=self_refine%refine_dist_thres)
             ! if( L_WRITE ) call self_refine%write_boxfile('pickgau_after_refine_upscaled.box')
@@ -155,9 +161,10 @@ contains
         endif
     end subroutine gaupick
 
-    subroutine read_mic_raw( micname, smpd )
+    subroutine read_mic_raw( micname, smpd, subtr_backgr )
         character(len=*), intent(in) :: micname !< micrograph file name
         real,             intent(in) :: smpd    !< sampling distance in A
+        logical, optional, intent(in) :: subtr_backgr
         character(len=:), allocatable :: ext
         integer :: nframes
         ! set micrograph info
@@ -167,31 +174,36 @@ contains
         ! read micrograph
         call mic_raw%new(ldim_raw, smpd_raw)
         call mic_raw%read(micname)
+        if( present(subtr_backgr) )then
+            if( subtr_backgr ) call mic_raw%subtract_background(HP_BACKGR_SUBTR)
+        endif
         ! set fbody
         ext   = fname2ext(trim(micname))
         fbody = trim(get_fbody(basename(trim(micname)), ext))
     end subroutine read_mic_raw
 
-    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev )
+    subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink, moldiam
         real,    optional, intent(in)    :: moldiam_max
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
-        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev )
+        logical, optional, intent(in)    :: roi
+        call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev, roi=roi )
     end subroutine new_gaupicker
 
-    subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, offset, ndev )
+    subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink, mskdiam
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        logical, optional, intent(in)    :: roi
         integer :: ldim(3)
         ldim = imgs(1)%get_ldim()
-        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, box=ldim(1), offset=offset, ndev=ndev )
+        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
         call self%set_refs( imgs, mskdiam )
     end subroutine new_refpicker
 
@@ -204,36 +216,24 @@ contains
         stats(4) = self%s_peak
     end subroutine get_stats
 
-    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev )
+    subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
         real,              intent(in)    :: smpd_shrink, moldiam, moldiam_max
         integer, optional, intent(in)    :: box     !< reference-based picking if present
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        logical, optional, intent(in)    :: roi
         character(len=:), allocatable   :: numstr
-        integer     :: ldim_pd(3), box_max
-        type(image) :: mic_pad, gauimg
-        real        :: hpfreq, scale, maxdiam_max
+        integer     :: box_max
+        type(image) :: gauimg
+        real        :: scale, maxdiam_max
         if( self%exists ) call self%kill
         self%smpd_shrink = smpd_shrink
-        ! self%l_roi       = trim(params_glob%pick_roi).eq.'yes'
-        self%l_roi       = .false. ! turned off for now
-        if( self%l_roi )then
-            ! high-pass micrograph
-            ldim_pd(1:2) = find_larger_magic_box(ldim_raw(1:2)+1)
-            if( minval(ldim_pd(1:2) - ldim_raw(1:2)) < 16 )then
-               ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2)+1)
-            endif
-            ldim_pd(3) = 1
-            call mic_pad%new(ldim_pd, smpd_raw)
-            call mic_raw%pad_mirr(mic_pad)
-            call mic_pad%fft
-            hpfreq = real(minval(ldim_pd(1:2)))*self%smpd_shrink/16.
-            call mic_pad%bp(hpfreq,0.)
-            call mic_pad%ifft
-            call mic_pad%clip(mic_raw)
-            call mic_pad%kill
+        if( present(roi) )then
+            self%l_roi = roi
+        else
+            self%l_roi = .false.
         endif
         ! set shrunken logical dimensions
         scale            = smpd_raw / self%smpd_shrink
@@ -312,6 +312,10 @@ contains
                 call self%gauref%write('gauref_moldiam'//numstr//'.mrc')
             endif
         endif
+        if( self%l_roi )then
+            ! backup of shrunk micrograph
+            call self%mic_roi%copy(self%mic_shrink)
+        endif
         ! denoise mic_shrink
         call gauimg%new(self%ldim, self%smpd_shrink)
         call gauimg%gauimg2D(self%sig,self%sig)
@@ -327,8 +331,8 @@ contains
                 call self%mic_shrink%write('gauconv_mic_shrink_moldiam'//numstr//'.mrc')
             endif
         endif
-        ! establish iterators
-        call self%setup_iterators
+        if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
+        allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         ! flag existence
         self%exists = .true.
     end subroutine new
@@ -397,9 +401,6 @@ contains
     subroutine setup_iterators( self )
         class(pickgau), intent(inout) :: self
         integer :: xind, yind
-        ! allocate and set l_mic_mask
-        if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
-        allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         self%nboxes    = 0
         self%nx_offset = 0
         do xind = 0,self%nx,self%offset
@@ -553,8 +554,7 @@ contains
         dims   = self%ldim
         string = trim(fbody)
         allocate(final_mask(dims(1),dims(2)),source=.true.)
-        call mic%copy(self%mic_shrink)
-        ! call gradients_variance_rejection( found )
+        call mic%copy(self%mic_roi)
         call clustering_rejection( found )
         if( found )then
             self%l_mic_mask = self%l_mic_mask .and. final_mask
@@ -1093,20 +1093,25 @@ contains
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
         type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ithr, npeaks, pos(2), ioff, joff
+        integer     :: ithr, npeaks, pos(2), ioff, joff, ind
         logical     :: outside
         real        :: loc_sdevs(self%nx_offset,self%ny_offset), avg, sdev, t
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
         end do
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos) proc_bind(close)
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos,ind) proc_bind(close)
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
                 ithr = omp_get_thread_num() + 1
-                pos  = self%positions(self%inds_offset(ioff,joff),:)
-                if( self%box_scores(ioff,joff) >= self%t )then
-                    call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-                    loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
+                ind  = self%inds_offset(ioff,joff)
+                if( ind > 0 )then
+                    pos  = self%positions(ind,:)
+                    if( self%box_scores(ioff,joff) >= self%t )then
+                        call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
+                        loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
+                    else
+                        loc_sdevs(ioff,joff) = -1.
+                    endif
                 else
                     loc_sdevs(ioff,joff) = -1.
                 endif
@@ -1343,6 +1348,7 @@ contains
         if( self%exists )then
             call self%mic_shrink%kill
             call self%gauref%kill
+            call self%mic_roi%kill
             if( allocated(self%l_mic_mask)     ) deallocate(self%l_mic_mask)
             if( allocated(self%l_err_refs)     ) deallocate(self%l_err_refs)
             if( allocated(self%positions)      ) deallocate(self%positions)

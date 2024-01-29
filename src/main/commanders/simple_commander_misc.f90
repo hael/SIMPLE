@@ -440,6 +440,7 @@ contains
                 deallocate(frc,res)
             endif
         enddo
+        call generator%kill
         call spproj%write_segment_inside('mic', params%projfile)
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
