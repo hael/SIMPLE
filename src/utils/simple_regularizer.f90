@@ -42,6 +42,7 @@ type :: regularizer
     procedure          :: shift_search
     procedure          :: shift_smpl
     procedure, private :: ref_multinomal, inpl_multinomal, sh_multinomal, sh_opt_multinomal
+    procedure, private :: ref_multinomal2
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -293,6 +294,33 @@ contains
             which = self%refs_inds(min(which,self%refs_ns),ithr)
         endif
     end function ref_multinomal
+
+    !>  \brief  generates a multinomal 1-of-K random number according to the
+    !!          distribution in pvec
+    function ref_multinomal2( self, pvec ) result( which )
+        class(regularizer), intent(inout) :: self
+        real,               intent(in)    :: pvec(:) !< probabilities
+        integer :: i, which, ithr
+        real    :: rnd, bound, sum_refs_corr
+        ithr = omp_get_thread_num() + 1
+        self%refs_corr(:,ithr) = pvec
+        self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
+        call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
+        rnd = ran3()
+        sum_refs_corr = sum(self%refs_corr(1:self%refs_ns,ithr))
+        if( sum_refs_corr < TINY )then
+            ! uniform sampling
+            which = 1 + floor(real(self%refs_ns) * rnd)
+        else
+            rnd   = rnd * sum_refs_corr
+            bound = 0.
+            do which=1,self%refs_ns
+                bound = bound + self%refs_corr(which, ithr)
+                if( rnd >= bound )exit
+            enddo
+            which = self%refs_inds(min(which,self%refs_ns),ithr)
+        endif
+    end function ref_multinomal2
 
     ! inpl multinomal based on unnormalized pvec
     function inpl_multinomal( self, pvec ) result( which )
