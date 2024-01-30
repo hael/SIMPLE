@@ -63,7 +63,7 @@ contains
         self%nrots   = pftcc%nrots
         self%nrefs   = pftcc%nrefs
         athres       = params_glob%reg_athres
-        if( dist_thres > TINY ) athres = min(params_glob%reg_athres, dist_thres/2.)
+        if( dist_thres > TINY ) athres = min(params_glob%reg_athres, dist_thres)
         self%inpl_ns = int(athres * real(self%nrots) / 180.)
         self%refs_ns = int(athres * real(self%nrefs) / 180.)
         self%pftcc => pftcc
