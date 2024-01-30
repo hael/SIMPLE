@@ -56,16 +56,20 @@ contains
         use simple_builder, only: build_glob
         class(regularizer),      target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
-        real, allocatable :: dist(:)       !< angular distance stats
+        real, allocatable :: dist(:), dist_inpl(:)
         integer :: iptcl, iref
         real    :: dist_thres, athres
-        dist         = build_glob%spproj_field%get_all('dist')
-        dist_thres   = sum(dist) / real(size(dist))
-        self%nrots   = pftcc%nrots
-        self%nrefs   = pftcc%nrefs
-        athres       = params_glob%reg_athres
-        if( dist_thres > TINY ) athres = min(params_glob%reg_athres, dist_thres)
+        self%nrots = pftcc%nrots
+        self%nrefs = pftcc%nrefs
+        dist       = build_glob%spproj_field%get_all('dist')
+        dist_thres = sum(dist) / real(size(dist))
+        athres     = params_glob%reg_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
         self%inpl_ns = 1 + int(athres * real(self%nrots) / 180.)
+        dist_inpl    = build_glob%spproj_field%get_all('dist_inpl')
+        dist_thres   = sum(dist_inpl) / real(size(dist_inpl))
+        athres       = params_glob%reg_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
         self%refs_ns = 1 + int(athres * real(self%nrefs) / 180.)
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
