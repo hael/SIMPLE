@@ -1056,7 +1056,7 @@ contains
                     &iter_dir//trim(SIGMA2_GROUP_FBODY)//int2str_pad(i,3)//'.star')
             endif
             ! clean
-            call exec_cmdline('rm -f recvol_state01_iter* *part*')
+            call exec_cmdline('rm -f recvol_state01_iter*')
             if( params%l_needs_sigma ) call exec_cmdline('rm -f '//trim(SIGMA2_GROUP_FBODY)//'*.star')
             call del_file(ATOMS)
             call del_file(BINARY)
