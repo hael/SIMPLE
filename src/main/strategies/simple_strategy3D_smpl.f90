@@ -36,14 +36,18 @@ contains
     subroutine srch_smpl( self, ithr )
         class(strategy3D_smpl), intent(inout) :: self
         integer,                intent(in)    :: ithr
+        real, allocatable :: dist(:)       !< angular distance stats
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), inpl_ns, ref_ns
-        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots)
+        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), athres, dist_thres
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! init threaded search arrays
             self%s%ithr = ithr
             call prep_strategy3D_thread(ithr)
-            self%s%nrefs_eval = self%s%nrefs
+            dist       = build_glob%spproj_field%get_all('dist')
+            dist_thres = sum(dist) / real(size(dist))
+            athres     = params_glob%reg_athres
+            if( dist_thres > TINY ) athres = min(params_glob%reg_athres, dist_thres)
             inpl_ns = 1 + int(params_glob%reg_athres * self%s%nrots / 180.)
             ref_ns  = 1 + int(params_glob%reg_athres * self%s%nrefs / 180.)
             do iref=1,self%s%nrefs
@@ -56,6 +60,7 @@ contains
             enddo
             iref = reverse_multinomal(ref_corrs, ref_ns)
             call assign_ori(self%s, iref, locs(iref), ref_corrs(iref))
+            self%s%nrefs_eval = self%s%nrefs
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
@@ -72,3 +77,4 @@ contains
     end subroutine kill_smpl
 
 end module simple_strategy3D_smpl
+    
