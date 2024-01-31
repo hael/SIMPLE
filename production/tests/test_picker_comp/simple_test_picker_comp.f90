@@ -3,19 +3,24 @@ program simple_test_picker_comp
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_picker_utils
-use simple_pickgau, only: pickgau, read_mic_raw
+use simple_pickgau, only: pickgau, read_mic_raw, gaupick_multi
 use simple_linalg
+use simple_image
 
 implicit none
 character(len = 200) :: micname 
-real, parameter :: SMPD = 1.72, MOLDIAM = 180., SMPD_SHRINK = 4., MOLDIAM_MAX = 180.
+real, parameter :: SMPD = 1.72, MOLDIAM = 100., SMPD_SHRINK = 4., MOLDIAM_MAX = 200., SMPD_SHRINK2 = 2.
 integer, parameter :: OFFSET = 3
-integer :: nthr, iostat, nlines_pickgau, nlines_picker_utils
-integer, allocatable :: coords_pickgau(:,:), coords_picker_utils(:,:)
-logical :: match
+integer :: nthr, iostat, idiam, nmoldiams, loc_max(1)
+real :: moldiams(11), mic_stats(11,5), moldiams_optimal(2)
 character(len=LONGSTRLEN) :: cwd
 character(len=:), allocatable :: dir_out
-type(pickgau) :: pgau, pgau_refine
+real, allocatable :: max_smds(:,:)
+real, allocatable :: max_ksstats(:,:)
+real, allocatable :: max_a_peaks(:,:)
+type(image) :: ref_imgs(2)
+type(pickgau) :: gaup, gaup_refine
+
 
 !$ nthr = omp_get_max_threads()
 !$ call omp_set_num_threads(nthr)
@@ -25,8 +30,7 @@ call simple_getcwd(cwd)
 allocate(CWD_GLOB, source=trim(cwd))
 
 ! Testing to make sure the file opens correctly
-micname = trim( CWD_GLOB // trim('/simulate_movie_1_intg.mrc'))
-!micname = trim( CWD_GLOB // trim('/SLC22A6_intg_1.mrc'))
+micname = trim( CWD_GLOB // trim('/short_linker_intg.mrc'))
 
 open(unit=16,file=micname,iostat=iostat,status='old')
 if (iostat .eq. 0) then
@@ -39,101 +43,55 @@ close(16)
 
 print *, ' '
 
-! single moldiam pick, pickgau
-print *, 'EXECUTING PICK FROM SIMPLE_PICKGAU'
+! ! single moldiam pick, pickgau
+! print *, 'EXECUTING PICK FROM SIMPLE_PICKGAU'
+! call read_mic_raw(micname=micname,smpd=SMPD)
+! print *, 'READ MICROGRAPH'
+! call pgau%new_gaupicker(pcontrast='black', smpd_shrink=SMPD_SHRINK, moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=OFFSET)
+! print *, 'CREATED NEW PICKGAU OBJECT'
+! call pgau_refine%new_gaupicker(pcontrast='black', smpd_shrink=(SMPD_SHRINK / 2), moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=1)
+! print *, 'CREATED REFINED PICKGAU OBJECT'
+! call pgau%gaupick(pgau_refine)
+! print *, 'GAUPICK IS COMPLETE'
+! call pgau%kill
+! call pgau_refine%kill
+! print *, ' '
+
+
+! multiple moldiam pick, pickgau
 call read_mic_raw(micname=micname,smpd=SMPD)
-print *, 'READ MICROGRAPH'
-call pgau%new_gaupicker(pcontrast='black', smpd_shrink=SMPD_SHRINK, moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=OFFSET)
-print *, 'CREATED NEW PICKGAU OBJECT'
-call pgau_refine%new_gaupicker(pcontrast='black', smpd_shrink=(SMPD_SHRINK / 2), moldiam=MOLDIAM, moldiam_max=MOLDIAM_MAX, offset=1)
-print *, 'CREATED REFINED PICKGAU OBJECT'
-call pgau%gaupick(pgau_refine)
-print *, 'GAUPICK IS COMPLETE'
-call pgau%kill
-call pgau_refine%kill
-print *, ' '
+! print *, 'EXECUTING GAUPICK_MULTI FROM SIMPLE_PICKGAU'
+! moldiams = [100.,110.,120.,130.,140.,150.,160.,170.,180.,190.,200.]
+! call gaupick_multi( pcontrast='black', smpd_shrink=SMPD_SHRINK, moldiams=moldiams, offset=OFFSET, mic_stats=mic_stats )
+! open(unit=30,file='mic_stats.csv')
+! do idiam = 1,11
+!     write(30,'(5(f7.3))') mic_stats(idiam,:)
+! end do
 
-! Check that box files match
-! after_center_filter
-nlines_pickgau = count_lines('pickgau_after_center_filter.box')
-nlines_picker_utils = count_lines('picker_utils_after_center_filter.box')
-allocate(coords_pickgau(nlines_pickgau,2))
-allocate(coords_picker_utils(nlines_picker_utils,2))
-call extract_coords('pickgau_after_center_filter.box', nlines_pickgau, coords_pickgau)
-call extract_coords('picker_utils_after_center_filter.box', nlines_picker_utils, coords_picker_utils)
-match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_picker_utils)
-if (match) then
-    print *, 'CENTER_FILTER BOX FILES MATCH'
-else
-    print *, 'CENTER_FILTER BOX FILES DO NOT MATCH'
-end if
-deallocate(coords_pickgau)
-deallocate(coords_picker_utils)
+! ! find local and absolute maxima
+! ! local maxima
+! nmoldiams = size(moldiams)
+! max_smds = find_local_maxima(mic_stats(:,1),mic_stats(:,2),nmoldiams)
+! max_ksstats = find_local_maxima(mic_stats(:,1),mic_stats(:,3),nmoldiams)
+! max_a_peaks = find_local_maxima(mic_stats(:,1),mic_stats(:,4),nmoldiams)
 
-!reset
-nlines_pickgau = 0
-nlines_picker_utils = 0
+! print *, 'local max smds occur at ', max_smds(:,1)
+! print *, 'local max ksstats occur at ', max_ksstats(:,1)
+! print *, 'local max a_peaks occur at ', max_a_peaks(:,1)
 
-! after_distance_filter
-nlines_pickgau = count_lines('pickgau_after_distance_filter.box')
-nlines_picker_utils = count_lines('picker_utils_after_distance_filter.box')
-allocate(coords_pickgau(nlines_pickgau,2))
-allocate(coords_picker_utils(nlines_picker_utils,2))
-call extract_coords('pickgau_after_distance_filter.box', nlines_pickgau, coords_pickgau)
-call extract_coords('picker_utils_after_distance_filter.box', nlines_picker_utils, coords_picker_utils)
-match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_picker_utils)
-if (match) then
-    print *, 'DISTANCE_FILTER BOX FILES MATCH'
-else
-    print *, 'DISTANCE_FILTER BOX FILES DO NOT MATCH'
-end if
-deallocate(coords_pickgau)
-deallocate(coords_picker_utils)
+! ! absolute maxima
+! loc_max = maxloc(mic_stats(:,2))
+! print *, 'absolute max smd occurs at ', mic_stats(loc_max(1),1)
 
-!reset
-nlines_pickgau = 0
-nlines_picker_utils = 0
+! loc_max = maxloc(mic_stats(:,3))
+! print *, 'absolute max ksstat occurs at ', mic_stats(loc_max(1),1)
 
-! after_remove_outliers
-nlines_pickgau = count_lines('pickgau_after_remove_outliers.box')
-nlines_picker_utils = count_lines('picker_utils_after_remove_outliers.box')
-allocate(coords_pickgau(nlines_pickgau,2))
-allocate(coords_picker_utils(nlines_picker_utils,2))
-call extract_coords('pickgau_after_remove_outliers.box', nlines_pickgau, coords_pickgau)
-call extract_coords('picker_utils_after_remove_outliers.box', nlines_picker_utils, coords_picker_utils)
-match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_picker_utils)
-if (match) then
-    print *, 'REMOVE_OUTLIERS BOX FILES MATCH'
-else
-    print *, 'REMOVE_OUTLIERS BOX FILES DO NOT MATCH'
-end if
-deallocate(coords_pickgau)
-deallocate(coords_picker_utils)
+! loc_max = maxloc(mic_stats(:,4))
+! print *, 'absolute max a_peak occurs at ', mic_stats(loc_max(1),1)
 
-!reset
-nlines_pickgau = 0
-nlines_picker_utils = 0
-
-! after_refine_upscaled
-nlines_pickgau = count_lines('pickgau_after_refine_upscaled.box')
-nlines_picker_utils = count_lines('picker_utils_after_refine_positions.box')
-allocate(coords_pickgau(nlines_pickgau,2))
-allocate(coords_picker_utils(nlines_picker_utils,2))
-call extract_coords('pickgau_after_refine_upscaled.box', nlines_pickgau, coords_pickgau)
-call extract_coords('picker_utils_after_refine_positions.box', nlines_picker_utils, coords_picker_utils)
-match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_picker_utils)
-!match = compare_coords(coords_pickgau, coords_picker_utils, nlines_pickgau, nlines_pickgau)
-if (match) then
-    print *, 'REFINED BOX FILES MATCH'
-else
-    print *, 'REFINED BOX FILES DO NOT MATCH'
-end if
-call find_closest(  coords_picker_utils, coords_pickgau, nlines_picker_utils , nlines_pickgau)
-deallocate(coords_pickgau)
-deallocate(coords_picker_utils)
-
-print *, ' '
-print *, 'TEST COMPLETE!'
+moldiams_optimal = [100.,200.]
+call gaup%new_gaupicker_multi('black', SMPD_SHRINK, moldiams_optimal, offset=OFFSET, roi=.false.)
+call gaup%gaupick
 
 contains
 
