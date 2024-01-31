@@ -101,6 +101,7 @@ contains
         endif
         self%fromtof = frames_range
         if( self%fromtof(2) == 0 ) self%fromtof(2) = self%nframes
+        self%start_frame = self%fromtof(1)
         ! weights
         if( self%l_frameweights )then
             if( self%fromtof(1) > 1            ) self%weights(:self%fromtof(1)-1) = 0.
@@ -110,8 +111,6 @@ contains
             self%weights = 0.
             self%weights(self%fromtof(1):self%fromtof(2)) = 1.0
         endif
-        if( self%fromtof(1) > 1 ) self%weights(1:self%fromtof(1)) = 0.
-        if( self%fromtof(2) < self%nframes ) self%weights(self%fromtof(2)+1:) = 0.
         ! frame of reference
         self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
         self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
@@ -494,7 +493,7 @@ contains
         call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doseperframe, dp))
         call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, real(self%preexposure,dp))
         call starfile_table__setValue_double(starfile, EMDL_CTF_VOLTAGE, real(self%kv, dp))
-        call starfile_table__setValue_int(starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
+        call starfile_table__setValue_int(starfile,    EMDL_MICROGRAPH_START_FRAME, self%fromtof(1))
         if( self%l_eer )then
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_EER_UPSAMPLING, self%eer_upsampling)
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_EER_GROUPING, self%eer_fraction)
@@ -506,7 +505,16 @@ contains
         call starfile_table__clear(starfile)
         call starfile_table__setIsList(starfile, .false.)
         call starfile_table__setName(starfile, "global_shift")
-        do iframe = 1,self%nframes
+        if( self%fromtof(1) > 1 )then
+            do iframe = 1,self%fromtof(1)-1,1
+                call starfile_table__addObject(starfile)
+                call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
+                call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
+            enddo
+        endif
+        do iframe = self%fromtof(1),self%fromtof(2)
             call starfile_table__addObject(starfile)
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             if( self%weights(iframe) > 0.000001 )then
@@ -520,6 +528,15 @@ contains
                 call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
             endif
         enddo
+        if( self%fromtof(2) < self%nframes )then
+            do iframe = self%fromtof(2)+1,self%nframes
+                call starfile_table__addObject(starfile)
+                call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
+                call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
+                call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, 0d0)
+            enddo
+        endif
         call starfile_table__write_ofile(starfile)
         if( self%l_poly )then
             ! anisotropic shifts

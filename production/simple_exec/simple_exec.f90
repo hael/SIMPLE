@@ -89,7 +89,7 @@ type(symmetrize_map_commander)              :: xsymmetrize_map
 type(dock_volpair_commander)                :: xdock_volpair
 type(postprocess_commander)                 :: xpostprocess
 type(automask_commander)                    :: xautomask
-type(fractionate_movies_commander)          :: xfractionate_movies
+type(fractionate_movies_commander_distr)    :: xfractionate_movies
 type(comparemc_commander)                   :: xcomparemc
 
 ! IMAGE PROCESSING PROGRAMS
@@ -384,7 +384,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('442b64ab')
+call simple_print_git_version('f7a39971')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
