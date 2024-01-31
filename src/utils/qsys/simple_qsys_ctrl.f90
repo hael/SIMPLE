@@ -560,8 +560,9 @@ contains
                     if(submission_exitstat == 0) then
                         exit
                     else
-                        write(logfhandle,'(A,I2,A,I2)')'qsys submission failed. Retrying ', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
-                        call sleep(QSYS_SUBMISSION_RETRY_SLEEP)
+                        write(logfhandle,'(A,A,A)')'qsys submission failed. Retrying in ', int2str(QSYS_SUBMISSION_RETRY_SLEEP * QSYS_SUBMISSION_RETRY_MULTI), ' seconds'
+                        call sleep(QSYS_SUBMISSION_RETRY_SLEEP * QSYS_SUBMISSION_RETRY_MULTI)
+                        write(logfhandle,'(A,I2,A,I2)')'Retrying qsys submission', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
                     end if
                     if(submission_retry == QSYS_SUBMISSION_RETRY_LIMIT) THROW_HARD('qsys submission failed after multiple retries!')
                 end do
@@ -592,8 +593,9 @@ contains
         do submission_retry = 1, QSYS_SUBMISSION_RETRY_LIMIT
             call exec_cmdline(trim(cmd), exitstat=submission_exitstat)
             if(submission_exitstat == 0) return    
-            write(logfhandle,'(A,I2,A,I2)')'qsys submission failed. Retrying ', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
-            call sleep(QSYS_SUBMISSION_RETRY_SLEEP)
+            write(logfhandle,'(A,A,A)')'qsys submission failed. Retrying in ', int2str(QSYS_SUBMISSION_RETRY_SLEEP * QSYS_SUBMISSION_RETRY_MULTI), ' seconds'
+            call sleep(QSYS_SUBMISSION_RETRY_SLEEP * QSYS_SUBMISSION_RETRY_MULTI)
+            write(logfhandle,'(A,I2,A,I2)')'Retrying qsys submission', submission_retry, '/', QSYS_SUBMISSION_RETRY_LIMIT
         end do
         THROW_HARD('qsys submission failed after multiple retries!')
     end subroutine submit_script
