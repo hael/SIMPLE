@@ -232,7 +232,7 @@ integer, parameter :: SZSN_MAX   = 20
 ! qsys related
 integer, parameter :: QSYS_SUBMISSION_RETRY_LIMIT = 5
 integer, parameter :: QSYS_SUBMISSION_RETRY_SLEEP = 5
-integer, parameter :: QSYS_SUBMISSION_RETRY_MULTI = 5
+integer, parameter :: QSYS_SUBMISSION_RETRY_MULTI = 3
 
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
