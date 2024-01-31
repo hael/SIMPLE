@@ -279,24 +279,27 @@ contains
         class(regularizer), intent(inout) :: self
         real,               intent(in)    :: pvec(:) !< probabilities
         integer :: i, which, ithr
-        real    :: rnd, bound
+        real    :: rnd, bound, sum_refs_corr
         ithr = omp_get_thread_num() + 1
+        rnd  = ran3()
         self%refs_corr(:,ithr) = pvec
         self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
         call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
-        rnd = ran3()
-        if( sum(self%refs_corr(1:self%refs_ns,ithr)) < TINY )then
+        sum_refs_corr = sum(self%refs_corr(1:self%refs_ns,ithr))
+        if( sum_refs_corr < TINY )then
             ! uniform sampling
             which = 1 + floor(real(self%refs_ns) * rnd)
         else
             ! normalizing within the hard-limit
-            self%refs_corr(1:self%refs_ns,ithr) = self%refs_corr(1:self%refs_ns,ithr) / sum(self%refs_corr(1:self%refs_ns,ithr))
+            self%refs_corr(1:self%refs_ns,ithr) = self%refs_corr(1:self%refs_ns,ithr) / sum_refs_corr
+            bound = 0.
             do which=1,self%refs_ns
-                bound = sum(self%refs_corr(1:which, ithr))
+                bound = bound + self%refs_corr(which, ithr)
                 if( rnd >= bound )exit
             enddo
-            which = self%refs_inds(min(which,self%refs_ns),ithr)
+            which = min(which, self%refs_ns)
         endif
+        which = self%refs_inds(which, ithr)
     end function ref_multinomal
 
     !>  \brief  generates a multinomal 1-of-K random number according to the

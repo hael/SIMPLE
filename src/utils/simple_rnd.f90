@@ -158,52 +158,37 @@ contains
         integer,  intent(in) :: thres
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
-        integer :: i, which, n
-        real    :: rnd, bound
+        integer :: which, n
         n = size(pvec)
-        allocate(pvec_sorted(n), source=pvec)
-        inds = (/(i,i=1,n)/)
-        call hpsort(pvec_sorted, inds)
-        rnd = ran3()
-        if( sum(pvec_sorted(1:thres)) < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(thres) * rnd)
-        else
-            ! normalizing within the hard-limit
-            pvec_sorted(1:thres) = pvec_sorted(1:thres) / sum(pvec_sorted(1:thres))
-            do which=1,thres
-                bound = sum(pvec_sorted(1:which))
-                if( rnd >= bound )exit
-            enddo
-            which = inds(min(which,thres))
-        endif
+        allocate(pvec_sorted(n),inds(n))
+        which = reverse_multinomal_2(pvec, pvec_sorted, inds, thres)
     end function reverse_multinomal_1
 
     function reverse_multinomal_2( pvec, pvec_sorted, inds, thres ) result( which )
-        use simple_math,           only: hpsort
-        real,            intent(in)    :: pvec(:)        !< probabilities
-        real,            intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer,         intent(inout) :: inds(:)
-        integer,         intent(in)    :: thres
-        integer :: i, which, n
-        real    :: rnd, bound
-        n           = size(pvec)
-        inds        = (/(i,i=1,n)/)
+        use simple_math, only: hpsort
+        real,              intent(in)    :: pvec(:)        !< probabilities
+        real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        integer,           intent(inout) :: inds(:)
+        integer,           intent(in)    :: thres
+        integer :: which, i
+        real    :: bound, sum_pvec, rnd
         pvec_sorted = pvec
+        rnd         = ran3()
+        inds        = (/(i,i=1,size(pvec))/)
         call hpsort(pvec_sorted, inds)
-        rnd = ran3()
-        if( sum(pvec_sorted(1:thres)) < TINY )then
+        sum_pvec = sum(pvec_sorted(1:thres))
+        if( sum_pvec < TINY )then
             ! uniform sampling
             which = 1 + floor(real(thres) * rnd)
         else
-            ! normalizing within the hard-limit
-            pvec_sorted(1:thres) = pvec_sorted(1:thres) / sum(pvec_sorted(1:thres))
-            do which=1,thres
-                bound = sum(pvec_sorted(1:which))
+            pvec_sorted = pvec_sorted/sum_pvec
+            bound = 0.
+            do which = 1, thres-1
+                bound = bound + pvec_sorted(which)
                 if( rnd >= bound )exit
             enddo
-            which = inds(min(which,thres))
         endif
+        which = inds(which)
     end function reverse_multinomal_2
 
     !>  \brief  random number generator yielding normal distribution
