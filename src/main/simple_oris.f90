@@ -88,6 +88,7 @@ type :: oris
     procedure          :: prec2ori
     procedure          :: get_ctfvars
     ! SETTERS
+    procedure          :: append
     procedure          :: copy
     procedure          :: reject
     generic            :: delete_entry => delete_entry_1, delete_entry_2
@@ -1332,6 +1333,17 @@ contains
     end function get_ctfvars
 
     ! SETTERS
+
+    subroutine append( self, i, ori_in )
+        class(oris), intent(inout) :: self
+        class(ori),  intent(in)    :: ori_in
+        integer,     intent(in)    :: i
+        if( i < 0 .or. i > self%n )then
+            THROW_WARN('index out of range; simple_oris % append')
+            return
+        endif
+        call self%o(i)%append_ori(ori_in)
+    end subroutine append
 
     subroutine copy( self_out, self_in, is_ptcl )
         class(oris), intent(inout) :: self_out

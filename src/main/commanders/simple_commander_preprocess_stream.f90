@@ -10,6 +10,7 @@ use simple_sp_project,                     only: sp_project
 use simple_qsys_env,                       only: qsys_env
 use simple_stack_io,                       only: stack_io
 use simple_starproject,                    only: starproject
+use simple_guistats,                       only: guistats
 use simple_commander_cluster2D_stream_dev
 use simple_qsys_funs
 use simple_commander_preprocess
@@ -37,6 +38,7 @@ contains
         class(preprocess_commander_stream_dev), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)                       :: params
+        type(guistats)                         :: gui_stats
         integer,                   parameter   :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
@@ -158,8 +160,8 @@ contains
                     endif
                 else if( .not.cline%defined('moldiam') )then
                     THROW_HARD('MOLDIAM required for picker=new reference-free picking')
-                else
-                    THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
+            !    else
+             !       THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
             case DEFAULT
                 THROW_HARD('Unsupported picker')
@@ -224,6 +226,8 @@ contains
         l_nchunks_maxed       = .false.
         l_cluster2D           = .false.
         do
+            ! guistats init each loop
+            call gui_stats%init
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -261,6 +265,8 @@ contains
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
                 write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz
+                ! guistats
+               call gui_stats%set('movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz + spproj%os_mic%get_noris()))
             endif
             ! fetch completed jobs list & updates of cluster2D_stream
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -291,6 +297,11 @@ contains
                 if( l_pick ) write(logfhandle,'(A,I8)')            '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
+                ! guistats
+                call gui_stats%set('movies',  int2str(n_imported) // '/' // int2str(stacksz))
+                call gui_stats%set('compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
+                if( l_pick ) call gui_stats%set('ptcls_extracted', nptcls_glob)
+                if( n_failed_jobs > 0 ) call gui_stats%set('failed', n_failed_jobs)
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
@@ -372,6 +383,9 @@ contains
                 endif
                 call sleep(WAITTIME)
             endif
+            ! guistats
+            call gui_stats%merge(POOLSTATS_FILE)
+            call gui_stats%write
         end do
         ! termination
         if( l_cluster2D )then
@@ -387,6 +401,11 @@ contains
         endif
         call update_user_params(cline)
         call write_migrographs_starfile
+        ! final stats
+        call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
+        call gui_stats%remove('compute')
+        call gui_stats%write
+        call gui_stats%kill
         ! cleanup
         call spproj%kill
         call qsys_cleanup

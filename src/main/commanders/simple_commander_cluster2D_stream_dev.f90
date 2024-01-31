@@ -12,6 +12,7 @@ use simple_class_frcs,     only: class_frcs
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
 use simple_euclid_sigma2,  only: consolidate_sigma2_groups, split_sigma2_into_groups, sigma2_star_from_iter
+use simple_guistats,       only: guistats
 use simple_qsys_funs
 use simple_commander_cluster2D
 use FoX_dom
@@ -999,16 +1000,19 @@ contains
         logical,                   parameter   :: L_BENCH = .false.
         type(ran_tabu)                         :: random_generator
         type(sp_project)                       :: spproj
+        type(guistats)                         :: pool_stats
         integer,                   allocatable :: min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
         integer,                   allocatable :: prev_eo_pops(:,:), prev_eo_pops_thread(:,:)
         character(len=:),          allocatable :: stack_fname, ext, fbody
         character(len=LONGSTRLEN), allocatable :: sigma_fnames(:)
         real                    :: frac_update
-        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, rejection_fhandle, ok
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
         if( .not.pool_available )return
         if( L_BENCH ) t_tot  = tic()
+        !poolstats init
+        call pool_stats%init(POOLSTATS_FILE)
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
         nptcls_rejected_glob = 0
@@ -1049,10 +1053,13 @@ contains
         ! update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
-        if( file_exists('.rejection')) call del_file('.rejection')
-        call fopen(rejection_fhandle,file='.rejection', status='new', iostat=ok)
-        write(rejection_fhandle, '(RD,I10,I10)') nptcls_glob, nptcls_rejected_glob
-        call fclose(rejection_fhandle)
+        ! poolstats
+        call pool_stats%set('ptcls',          nptcls_glob)
+        call pool_stats%set('rejected_ptcls', nptcls_rejected_glob)
+        call pool_stats%set('pool_iters',     pool_iter)
+        call pool_stats%set('ncls',           ncls_glob)
+        call pool_stats%set('res',            current_resolution)
+        call pool_stats%write(POOLSTATS_FILE)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
@@ -1147,6 +1154,7 @@ contains
         endif
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call spproj%kill
+        call pool_stats%kill
         ! execution in correct directory
         call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
         pool_available = .false.

@@ -48,6 +48,7 @@ contains
     procedure          :: assign_optics
     procedure, private :: populate_opticsmap
     procedure, private :: plot_opticsgroups
+    procedure, private :: export_opticsgroups
     procedure, private :: sort_optics_maxpop
     procedure, private :: apply_optics_offset
     procedure, private :: get_image_basename
@@ -1143,6 +1144,7 @@ contains
         if(cline%get_rarg("optics_offset") > 0) then
             call self%apply_optics_offset(int(cline%get_rarg("optics_offset")))
         end if
+        call self%export_opticsgroups("optics_groups.star")
         if(spproj%os_mic%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
@@ -1272,6 +1274,36 @@ contains
         call CPlot2D__delete(plot2D)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_eps
     end subroutine plot_opticsgroups
+
+   subroutine export_opticsgroups(self, fname_star)
+        class(starproject), intent(inout) :: self
+        character(len=*),   intent(in)    :: fname_star
+        integer :: i, j, fhandle, ok
+        logical :: ex
+        inquire(file=trim(adjustl(fname_star)), exist=ex)
+        if (ex) then
+            call del_file(trim(adjustl(fname_star)))
+        endif
+        call fopen(fhandle,file=trim(adjustl(fname_star)), status='new', iostat=ok)
+        write(fhandle, *) ""
+        write(fhandle, *) "data_beamshift"
+        write(fhandle, *) ""
+        write(fhandle, *) "loop_"
+        write(fhandle, "(A)") "_splBeamshiftX"
+        write(fhandle, "(A)") "_splBeamshiftY"
+        write(fhandle, "(A)") "_splTiltGroup"
+        do i=1, maxval(self%tiltinfo%finaltiltgroupid)
+            do j=1, size(self%tiltinfo)
+                if(self%tiltinfo(j)%finaltiltgroupid .eq. i) then
+                    write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tiltx, " "
+                    write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tilty, " "
+                    write(fhandle, "(I6)") self%tiltinfo(j)%finaltiltgroupid
+                end if
+            end do
+        end do
+        call fclose(fhandle)
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_star
+    end subroutine export_opticsgroups
 
     subroutine sort_optics_maxpop(self, maxpop)
         class(starproject), intent(inout) :: self
