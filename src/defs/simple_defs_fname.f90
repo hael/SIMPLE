@@ -85,6 +85,8 @@ character(len=*), parameter :: STREAM_REJECT_CLS    = './SIMPLE_REJECT_CLS'
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
 character(len=*), parameter :: IOLOCK               = 'io.lock'
+character(len=*), parameter :: GUISTATS_FILE        = '.guistats'
+character(len=*), parameter :: POOLSTATS_FILE       = '.poolstats'
 ! character constants
 character(len=*), parameter :: NEWLINE              = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG         = '2>/dev/null'
