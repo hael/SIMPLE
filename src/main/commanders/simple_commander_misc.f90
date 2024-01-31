@@ -19,6 +19,7 @@ public :: print_dose_weights_commander
 public :: kstest_commander
 public :: pearsn_commander
 public :: mkdir_commander
+public :: fractionate_movies_commander_distr
 public :: fractionate_movies_commander
 public :: comparemc_commander
 private
@@ -58,6 +59,11 @@ type, extends(commander_base) :: mkdir_commander
   contains
     procedure :: execute       => exec_mkdir
 end type mkdir_commander
+
+type, extends(commander_base) :: fractionate_movies_commander_distr
+  contains
+    procedure :: execute       => exec_fractionate_movies_distr
+end type fractionate_movies_commander_distr
 
 type, extends(commander_base) :: fractionate_movies_commander
   contains
@@ -340,8 +346,59 @@ contains
         call params%new(cline)
     end subroutine exec_mkdir
 
+    subroutine exec_fractionate_movies_distr( self, cline )
+        use simple_qsys_env, only: qsys_env
+        use simple_qsys_funs
+        class(fractionate_movies_commander_distr), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(chash)      :: job_descr
+        type(qsys_env)   :: qenv
+        integer          :: nmovies
+        call cline%set('oritype', 'mic')
+        call cline%set('mkdir',   'yes')
+        if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
+        if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
+        if( .not.cline%defined('tof') )          call cline%set('tof',          0)
+        if( .not.cline%defined('interpfun') )    call cline%set('interpfun',    'linear')
+        call params%new(cline)
+        call spproj%read_segment(params%oritype, params%projfile)
+        ! sanity checks
+        if( (params%fromf < 1) ) THROW_HARD('Invalid fractions range!')
+        nmovies = spproj%get_nmovies()
+        if( nmovies == 0 ) THROW_HARD('No movie to process!')
+        call spproj%kill
+        select case(trim(params%interpfun))
+        case('linear', 'nn')
+            ! all good
+        case DEFAULT
+            THROW_HARD('Invalid interpolation scheme: '//trim(params%interpfun))
+        end select
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! setup the environment for distributed execution
+        params%nparts = min(nmovies, params%nparts)
+        call cline%set('nparts', params%nparts)
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+        ! merge docs
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
+        ! cleanup
+        call spproj%kill
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_FRACTIONATE_MOVIES_DISTR NORMAL STOP ****')
+    end subroutine exec_fractionate_movies_distr
+
     subroutine exec_fractionate_movies( self, cline )
         use simple_micrograph_generator
+        use simple_qsys_funs
         use simple_fsc, only: plot_fsc
         class(fractionate_movies_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -356,7 +413,7 @@ contains
         character(len=LONGSTRLEN)     :: rel_fname, orig_mic
         integer :: nmovies, imov, cnt, n
         logical :: l_bilinear_interp
-        call cline%set('mkdir',   'yes')
+        call cline%set('mkdir',   'no')
         call cline%set('oritype', 'mic')
         if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
         if( .not.cline%defined('fromf') )        call cline%set('fromf',        1)
@@ -378,9 +435,10 @@ contains
         end select
         ! Main loop
         cnt = 0
-        do imov = 1,nmovies
+        do imov = params%fromp,params%top
             call spproj%os_mic%get_ori(imov, o)
             if( .not.o%isthere('movie') ) cycle
+            if( .not.o%isthere('intg')  ) cycle
             if( o%get_state() == 0 ) cycle
             cnt = cnt + 1
             orig_mic = o%get_static('intg')
@@ -397,7 +455,7 @@ contains
                 mic_fname    = trim(adjustl(mic_fbody))//INTGMOV_SUFFIX//trim(params%ext)
                 forctf_fname = trim(adjustl(mic_fbody))//FORCTF_SUFFIX //trim(params%ext)
             case('motioncorr', 'relion')
-                mic_fname    = trim(adjustl(mic_fbody))//'_DW'  //trim(params%ext)
+                mic_fname    = trim(adjustl(mic_fbody))//         trim(params%ext)
                 forctf_fname = trim(adjustl(mic_fbody))//'_noDW'//trim(params%ext)
             case('cryosparc')
                 mic_fname    = trim(adjustl(mic_fbody))//'_patch_aligned_doseweighted'//trim(params%ext)
@@ -438,10 +496,15 @@ contains
                 call mic%fsc(micrograph_dw, frc)
                 call plot_fsc(n, frc, res, o%get('smpd'), mic_fbody)
                 deallocate(frc,res)
+                call mic%kill
             endif
+            ! tidy
+            call micrograph_dw%kill
+            call micrograph_nodw%kill
         enddo
         call generator%kill
-        call spproj%write_segment_inside('mic', params%projfile)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
+        call qsys_job_finished(  'simple_commander_mic :: exec_fractionate_movies' )
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
 

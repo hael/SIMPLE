@@ -33,6 +33,7 @@ type(ctf_estimate_commander)            :: xctf_estimate
 type(pick_extract_commander)            :: xpick_extract
 type(pick_commander)                    :: xpick
 type(make_pickrefs_commander)           :: xmake_pickrefs
+type(fractionate_movies_commander)      :: xfractionate_movies
 
 ! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)              :: xmake_cavgs
@@ -140,6 +141,8 @@ select case(prg)
         call xpick%execute(cline)
     case( 'make_pickrefs' )
         call xmake_pickrefs%execute(cline)
+    case( 'fractionate_movies' )
+        call xfractionate_movies%execute(cline)
 
     ! CLUSTER2D PROGRAMS
     case( 'make_cavgs' )

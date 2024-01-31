@@ -3950,7 +3950,7 @@ contains
         if(.not.self%ft) THROW_HARD('Input image must be in the reciprocal domain')
         if(.not.self%is_2d()) THROW_HARD('Input image must be two-dimensional')
         fwhm         = freq / self%smpd / real(self%ldim(1:2))
-        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.235482)**2
+        halfinvsigsq = 0.5 * (PI * 2.0 * fwhm / 2.35482)**2
         lims         = self%fit%loop_lims(2)
         !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
         !$omp private(h,k,a,phys)
@@ -5822,66 +5822,164 @@ contains
     end subroutine subtr_backgr_ramp
 
     !>  Subtracts background, for micrographs
-    subroutine subtract_background( self, freq, backgr )
-        class(image),           intent(inout) :: self
-        real,                   intent(in)    :: freq
-        class(image), optional, intent(inout) :: backgr
-        type(image) :: tmpimg
+    subroutine subtract_background( self, freq, backgr, mode)
+        class(image),               intent(inout) :: self
+        real,                       intent(in)    :: freq
+        class(image),     optional, intent(inout) :: backgr
+        character(len=*), optional, intent(in)    :: mode
+        integer,    parameter :: CS_DIM  = 1024
+        type(image)           :: tmpimg, mic_pad
+        real                  :: x,y,dx,dy,scale,b
+        integer               :: ldim_pd(3), ldim(3), i,j,fx,fy, fpx,fpy,binning
+        character(len=STDLEN) :: cmode
         if( self%ft )      THROW_HARD('Real space only!, subtract_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, subtract_background')
-        if( present(backgr) )then
-            call self%estimate_background(freq, backgr)
-            !$omp parallel workshare proc_bind(close)
-            self%rmat = self%rmat - backgr%rmat
-            !$omp end parallel workshare
-        else
-            call self%estimate_background(freq, tmpimg)
+        cmode = trim(NIL)
+        if( present(mode) ) cmode = mode
+        call self%estimate_background(freq, tmpimg, cmode)
+        select case(trim(mode))
+        case('cryosparc')
+            ! subtraction of linearly interpolated background
+            ldim    = tmpimg%get_ldim()
+            binning = ceiling(real(self%ldim(1)) / real(ldim(1)))
+            ldim_pd = [binning*ldim(1), binning*ldim(2), 1]
+            scale   = real(binning**2)
+            call mic_pad%new(ldim_pd, self%smpd)
+            call self%pad(mic_pad)
+            !$omp parallel do default(shared) collapse(2) proc_bind(close)&
+            !$omp private(i,j,x,y,fx,fy,fpx,fpy,dx,dy,b)
+            do j = 1,ldim_pd(1)
+                do i = 1,ldim_pd(2)
+                    x   = (real(i-1) / real(binning)) + 1.
+                    y   = (real(j-1) / real(binning)) + 1.
+                    fx  = floor(x)
+                    fy  = floor(y)
+                    if( fx == ldim(1) )then
+                        fpx = fx-1
+                    else
+                        fpx = fx+1
+                    endif
+                    if( fy == ldim(2) )then
+                        fpy = fy-1
+                    else
+                        fpy = fy+1
+                    endif
+                    dx = x - real(fx)
+                    dy = y - real(fy)
+                    b =     tmpimg%rmat(fx, fy, 1) * (1.-dx) * (1.-dy)
+                    b = b + tmpimg%rmat(fpx,fy, 1) *     dx  * (1.-dy)
+                    b = b + tmpimg%rmat(fx, fpy,1) * (1.-dx) * dy
+                    b = b + tmpimg%rmat(fpx,fpy,1) *     dx  * dy
+                    mic_pad%rmat(i,j,1) = mic_pad%rmat(i,j,1) - b / scale
+                enddo
+            enddo
+            !$omp end parallel do
+            call mic_pad%clip(self)
+            call mic_pad%kill
+        case DEFAULT
+            ! direct subtraction of background
             !$omp parallel workshare proc_bind(close)
             self%rmat = self%rmat - tmpimg%rmat
             !$omp end parallel workshare
-            call tmpimg%kill
-        endif
+        end select
+        call mic_pad%kill
+        if( present(backgr) ) call backgr%copy(tmpimg)
+        call tmpimg%kill
     end subroutine subtract_background
 
     !>  Estimates background from gaussian filtered image, for micrographs
-    subroutine estimate_background( self, freq, backgr )
-        class(image), intent(in)    :: self
-        real,         intent(in)    :: freq
-        class(image), intent(inout) :: backgr
-        real, parameter :: PADDING = sqrt(2.)
+    subroutine estimate_background( self, freq, backgr, mode )
+        class(image),     intent(in)    :: self
+        real,             intent(in)    :: freq
+        class(image),     intent(inout) :: backgr
+        character(len=*), intent(in)    :: mode
+        real,    parameter :: PADDING = sqrt(2.)
+        integer, parameter :: CS_DIM  = 1024
         type(image)     :: img_pad, msk
-        integer         :: ldim_pd(3)
+        real            :: smpd_bin
+        integer         :: ldim_pd(3), ldim_bin(3), ldim_cs(3), bin_dim
+        integer         :: i,j,is,js,ie,je, binning
         if( self%ft )      THROW_HARD('Real space only!, estimate_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, estimate_background')
-        ! padded dimensions
-        ldim_pd(1:2) = nint(PADDING*real(self%ldim(1:2)))
-        ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2))
-        ldim_pd(3) = 1
-        ! low-pass image
-        call backgr%copy(self)
-        call img_pad%new(ldim_pd, self%smpd)
-        call backgr%pad(img_pad)
-        call img_pad%fft
-        call img_pad%lpgau2D(freq)
-        call img_pad%ifft
-        call img_pad%clip(backgr)
-        ! low pass padding mask
-        call msk%new(self%ldim, self%smpd)
-        msk = 1.
-        call msk%pad(img_pad)
-        call img_pad%fft
-        call img_pad%lpgau2D(freq)
-        call img_pad%ifft
-        call img_pad%clip(msk)
-        ! correct for padding
-        !$omp parallel workshare proc_bind(close)
-        where( msk%rmat(1:self%ldim(1),1:self%ldim(2),1) > TINY )
-            backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = &
-                &backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) / msk%rmat(1:self%ldim(1),1:self%ldim(2),1)
-        else where
-            backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = 0.
-        end where
-        !$omp end parallel workshare
+        select case(trim(mode))
+        case('cryosparc')
+            ! produces backround of shape CS_DIM x CS_DIM
+            ! bin micrograph
+            ldim_cs = [CS_DIM, CS_DIM,1]
+            bin_dim = 2**ceiling( log(real(maxval(self%ldim))) / log(2.0) )
+            binning = ceiling(real(bin_dim) / real(CS_DIM))
+            ldim_bin(1:2) = nint(self%ldim(1:2) / real(binning))
+            ldim_bin(3)   = 1
+            smpd_bin      = self%smpd * real(binning)
+            call backgr%new(ldim_bin, smpd_bin)
+            !$omp parallel do private(i,j,is,ie,js,je) proc_bind(close) collapse(2) default(shared)
+            do j = 1,ldim_bin(2)
+                do i = 1,ldim_bin(1)
+                    is = (i-1)*binning + 1
+                    ie = i*binning
+                    js = (j-1)*binning + 1
+                    je = j*binning
+                    backgr%rmat(i,j,1) = sum(self%rmat(is:ie,js:je,1))
+                enddo
+            enddo
+            !$omp end parallel do
+            ! low-pass padded mic & crop
+            ldim_pd = [2*CS_DIM, 2*CS_DIM, 1]
+            call img_pad%new(ldim_pd, smpd_bin)
+            call backgr%pad(img_pad)
+            call img_pad%fft
+            call img_pad%lpgau2D(2.*freq)
+            call img_pad%ifft
+            call img_pad%clip(backgr)
+            ! low pass padded mask & crop
+            call msk%new(ldim_cs,smpd_bin)
+            msk = 1.
+            call msk%pad(img_pad)
+            call img_pad%fft
+            call img_pad%lpgau2D(2.*freq)
+            call img_pad%ifft
+            call img_pad%clip(msk)
+            ! correct for padding
+            !$omp parallel workshare proc_bind(close)
+            where( msk%rmat(1:ldim_cs(1),1:ldim_cs(2),1) > TINY )
+                backgr%rmat(1:ldim_cs(1),1:ldim_cs(2),1) = &
+                    &backgr%rmat(1:ldim_cs(1),1:ldim_cs(2),1) / msk%rmat(1:ldim_cs(1),1:ldim_cs(2),1)
+            else where
+                backgr%rmat(1:ldim_cs(1),1:ldim_cs(2),1) = 0.
+            end where
+            !$omp end parallel workshare
+        case DEFAULT
+            ! produces backround of shape self%ldim
+            ! padded dimensions
+            ldim_pd(1:2) = nint(PADDING*real(self%ldim(1:2)))
+            ldim_pd(1:2) = find_larger_magic_box(ldim_pd(1:2))
+            ldim_pd(3)   = 1
+            ! low-pass padded mic & crop
+            call backgr%copy(self)
+            call img_pad%new(ldim_pd, self%smpd)
+            call backgr%pad(img_pad)
+            call img_pad%fft
+            call img_pad%lpgau2D(freq)
+            call img_pad%ifft
+            call img_pad%clip(backgr)
+            ! low pass padded mask & crop
+            call msk%new(self%ldim, self%smpd)
+            msk = 1.
+            call msk%pad(img_pad)
+            call img_pad%fft
+            call img_pad%lpgau2D(freq)
+            call img_pad%ifft
+            call img_pad%clip(msk)
+            ! correct for padding
+            !$omp parallel workshare proc_bind(close)
+            where( msk%rmat(1:self%ldim(1),1:self%ldim(2),1) > TINY )
+                backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = &
+                    &backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) / msk%rmat(1:self%ldim(1),1:self%ldim(2),1)
+            else where
+                backgr%rmat(1:self%ldim(1),1:self%ldim(2),1) = 0.
+            end where
+            !$omp end parallel workshare
+        end select
         call img_pad%kill
         call msk%kill
     end subroutine estimate_background

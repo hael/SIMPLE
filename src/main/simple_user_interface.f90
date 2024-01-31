@@ -4094,7 +4094,7 @@ contains
         &'Re-generation of micrographs with subsets of movie frames',&  ! descr_short
         &'Re-generation of micrographs with subsets of movie frames',&  ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 4, 0, 0, 0, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4104,7 +4104,7 @@ contains
         call fractionate_movies%set_input('parm_ios', 3, 'mcconvention', 'multi', 'Application-specific image processing',&
         &'Application specific image processing: file naming & frame weights(simple|relion|cryosparc){simple}', '(simple|relion|cryosparc){simple}', .false., 'simple')
         call fractionate_movies%set_input('parm_ios', 4, 'interpfun', 'multi', 'Interpolation for micrograph generation',&
-        &'Interpolation scheme for beam-induced motion correction micrograph generation(bilinear|nn){bilinear}', '(bilinear|nn){bilinear}', .false., 'simple')        ! alternative inputs
+        &'Interpolation scheme for beam-induced motion correction micrograph generation(linear|nn){linear}', '(linear|nn){linear}', .false., 'simple')        ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
@@ -4113,7 +4113,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call fractionate_movies%set_input('comp_ctrls', 1, nthr)
+        call fractionate_movies%set_input('comp_ctrls', 1, nparts)
+        call fractionate_movies%set_input('comp_ctrls', 2, nthr)
     end subroutine new_fractionate_movies
 
     subroutine new_replace_project_field
