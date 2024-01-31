@@ -42,10 +42,12 @@ type pickgau
 contains
     procedure          :: gaupick
     procedure          :: new_gaupicker
+    procedure          :: new_gaupicker_multi
     procedure          :: new_refpicker
     procedure          :: get_stats
     procedure, private :: new
     procedure, private :: set_refs
+    procedure, private :: set_gaurefs
     procedure, private :: setup_iterators
     procedure, private :: flag_ice
     procedure, private :: flag_amorphous_carbon
@@ -92,33 +94,34 @@ contains
             call pickers(ipick)%mic_shrink%kill
         end do
         !merged pick
-        call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
-        allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
-        picker_merged%box_scores = -1.
-        do ioff = 1,picker_merged%nx_offset
-            do joff = 1,picker_merged%ny_offset
-                do ipick = 1,npickers
-                    if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
-                        if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
-                            picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
-                            picker_map(ioff,joff) = ipick
-                        endif
-                    endif
-                end do
-            end do
-        end do
-        picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
-        ! apply distance filter to merged
-        call picker_merged%distance_filter
-        ! update picker_map
-        do ioff = 1,picker_merged%nx_offset
-            do joff = 1,picker_merged%ny_offset
-                if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
-                    picker_map(ioff,joff) = 0
-                endif
-            end do
-        end do
+        ! call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
+        ! allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
+        ! picker_merged%box_scores = -1.
+        ! do ioff = 1,picker_merged%nx_offset
+        !     do joff = 1,picker_merged%ny_offset
+        !         do ipick = 1,npickers
+        !             if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+        !                 if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
+        !                     picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
+        !                     picker_map(ioff,joff) = ipick
+        !                 endif
+        !             endif
+        !         end do
+        !     end do
+        ! end do
+        ! picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
+        ! ! apply distance filter to merged
+        ! call picker_merged%distance_filter
+        ! ! update picker_map
+        ! do ioff = 1,picker_merged%nx_offset
+        !     do joff = 1,picker_merged%ny_offset
+        !         if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
+        !             picker_map(ioff,joff) = 0
+        !         endif
+        !     end do
+        ! end do
         deallocate(pickers)
+        !call picker_merged%write_boxfile('pick_merged.box')
     end subroutine gaupick_multi
 
     subroutine gaupick( self, self_refine )
@@ -150,6 +153,7 @@ contains
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')
+        call self%write_boxfile('pickgau_after_remove_outliers.box')
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
@@ -182,6 +186,7 @@ contains
         fbody = trim(get_fbody(basename(trim(micname)), ext))
     end subroutine read_mic_raw
 
+
     subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
@@ -192,6 +197,24 @@ contains
         logical, optional, intent(in)    :: roi
         call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev, roi=roi )
     end subroutine new_gaupicker
+
+
+    subroutine new_gaupicker_multi( self, pcontrast, smpd_shrink, moldiams, offset, ndev, roi)
+        class(pickgau),    intent(inout) :: self
+        character(len=*),  intent(in)    :: pcontrast
+        real,              intent(in)    :: smpd_shrink
+        real,              intent(in)    :: moldiams(:)
+        integer, optional, intent(in)    :: offset
+        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
+        logical, optional, intent(in)    :: roi
+        real    :: moldiam_max, maxdiam
+        integer :: box
+        moldiam_max = maxval(moldiams)
+        maxdiam     = moldiam_max + moldiam_max * BOX_EXP_FAC
+        box         = round2even(maxdiam / smpd_raw)
+        call self%new(pcontrast, smpd_shrink, moldiam_max, moldiam_max, box=box, offset=offset, ndev=ndev, roi=roi)
+        call self%set_gaurefs(moldiams)
+    end subroutine new_gaupicker_multi
 
     subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
@@ -337,6 +360,7 @@ contains
         self%exists = .true.
     end subroutine new
 
+
     subroutine set_refs( self, imgs, mskdiam )
         class(pickgau), intent(inout) :: self
         class(image),   intent(inout) :: imgs(:)
@@ -397,6 +421,39 @@ contains
         call img_rot%kill
         self%refpick = .true.
     end subroutine set_refs
+
+    subroutine set_gaurefs(self, moldiams)
+        class(pickgau), intent(inout) :: self
+        real,          intent(in)     :: moldiams(:)
+        integer                       :: nmoldiams, idiam, iimg
+        real                          :: maxdiam, sig, sxx, moldiam_max
+        character(len=:), allocatable :: numstr
+        nmoldiams = size(moldiams)
+        self%nrefs = nmoldiams ! one ref per moldiam
+        if( allocated(self%boxrefs) )then
+            do iimg = 1,size(self%boxrefs)
+                call self%boxrefs(iimg)%kill
+            end do
+            deallocate(self%boxrefs)
+        endif
+        allocate(self%boxrefs(self%nrefs))
+        if( allocated(self%l_err_refs) ) deallocate(self%l_err_refs)
+        allocate(self%l_err_refs(self%nrefs))
+        do idiam=1,nmoldiams
+            ! define constants used in subsequent calculations (per molecular diameter)
+            maxdiam = moldiams(idiam) + moldiams(idiam) * BOX_EXP_FAC
+            sig = maxdiam / self%smpd_shrink / GAUSIG
+            ! create new gaussian reference image for each molecular diameter 
+            call self%boxrefs(idiam)%new(self%ldim_box, self%smpd_shrink)
+            call self%boxrefs(idiam)%gauimg2D(sig,sig)
+            call self%boxrefs(idiam)%prenorm4real_corr(sxx)
+            call self%boxrefs(idiam)%prenorm4real_corr(self%l_err_refs(idiam))
+            numstr = int2str(nint(moldiams(idiam)))
+            call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
+        end do
+        self%refpick = .true.
+    end subroutine set_gaurefs
+
 
     subroutine setup_iterators( self )
         class(pickgau), intent(inout) :: self

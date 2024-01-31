@@ -178,6 +178,7 @@ type :: parameters
     character(len=STDLEN)     :: kweight_pool='default'  !< k-weighted options for cc in pool(default|all|inpl|none){default}
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: msktype='soft'       !< type of mask(hard|soft){soft}
+    character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
@@ -533,6 +534,7 @@ contains
         call check_carg('ml_reg_pool',    self%ml_reg_pool)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
+        call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('noise_norm',     self%noise_norm)

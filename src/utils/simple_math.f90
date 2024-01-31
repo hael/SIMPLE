@@ -809,19 +809,17 @@ contains
         real, intent(in)               :: xcoords(nentries), ycoords(nentries)
         real, allocatable :: maxima(:,:)
         real    :: slopes(nentries-1)
-        !integer :: i, j, nmaxima, locmax(nentries), maxloc_front(1), maxloc_back(1)
         integer :: i, j, nmaxima, locmax(nentries)
         nmaxima = 0
-        do i=1, nentries-1
-            slopes(i) = (ycoords(i+1)-ycoords(i)) / (xcoords(i+1)-xcoords(i))
-            if (i>1) then
-                if (slopes(i-1) .ge. 0 .and. slopes(i) .le. 0) then
-                    ! we found a local max at i
-                    nmaxima = nmaxima + 1
-                    locmax(nmaxima) = i
-                end if
+
+        do i=3, nentries-2
+            if (ycoords(i)>ycoords(i-2) .and. ycoords(i)>ycoords(i-1) .and. ycoords(i)>ycoords(i+1) .and. ycoords(i)>ycoords(i+2)) then
+                ! we found a local max at i
+                nmaxima = nmaxima + 1
+                locmax(nmaxima) = i
             end if   
         end do
+
         allocate(maxima(nmaxima,2))
         do j=1, nmaxima
             maxima(j,1) = xcoords(locmax(j))

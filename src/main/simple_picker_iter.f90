@@ -54,7 +54,7 @@ contains
                     if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')  
                     call self%read_pickrefs(params_glob%pickrefs)
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs)
-                else if( cline%defined('moldiam') )then
+                else if( cline%defined('moldiam') .or.  cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, mic_stats=mic_stats)
                 else

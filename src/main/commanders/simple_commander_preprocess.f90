@@ -1478,7 +1478,7 @@ contains
             case('new')
                 if( templates_provided )then
                     if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
-                else if( cline%defined('moldiam') )then
+                else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams') )then
                     ! at least moldiam is required
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')

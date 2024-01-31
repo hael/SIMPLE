@@ -19,6 +19,7 @@ logical, parameter :: L_DEBUG      = .false.
 contains
 
     subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, mic_stats )
+        use simple_strings, only: str2real
         character(len=*),          intent(in)    :: micname
         character(len=LONGSTRLEN), intent(out)   :: boxfile_out
         real,                      intent(in)    :: smpd    !< sampling distance in A
@@ -29,8 +30,9 @@ contains
         real,         allocatable :: moldiams(:)
         integer,      allocatable :: pos(:,:)
         character(len=LONGSTRLEN) :: boxfile
-        real    :: maxdiam, stepsz, moldiam_cur
-        integer :: box, idiam
+        character(len=STDLEN)   :: multi_moldiams
+        real    :: maxdiam, stepsz, moldiam_cur, pick_stats(5), moldiam_entry
+        integer :: box, idiam, istr, beginning, num_entries
         logical :: l_roi
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         l_roi   = trim(params_glob%pick_roi).eq.'yes'
@@ -46,6 +48,70 @@ contains
             enddo
             call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, mic_stats=mic_stats)
             deallocate(moldiams)
+        else if(.not. (params_glob%multi_moldiams  .eq. '')) then
+            ! parse moldiams from underscore-separated string of numbers into real-valued array
+            istr=1
+            num_entries=0
+            ! find number of molecular diameters
+            do 
+                if(params_glob%multi_moldiams(istr:istr) .eq. ' ') then
+                    num_entries = num_entries + 1
+                    exit
+                end if
+                if(istr > len(params_glob%multi_moldiams)) exit
+                if(params_glob%multi_moldiams(istr:istr) .eq. '_') then
+                    num_entries = num_entries + 1
+                end if
+                istr = istr + 1
+            end do
+
+            allocate(moldiams(num_entries))
+            ! save in moldiams aray
+            istr=1
+            beginning=1
+            num_entries=0
+            do 
+                if(params_glob%multi_moldiams(istr:istr) .eq. ' ') then
+                    moldiam_entry = str2real(params_glob%multi_moldiams(beginning:istr-1)) 
+                    num_entries = num_entries + 1
+                    moldiams(num_entries) = moldiam_entry
+                    exit
+                end if
+                if(istr > len(params_glob%multi_moldiams)) exit
+                if(params_glob%multi_moldiams(istr:istr) .eq. '_') then
+                    moldiam_entry = str2real(params_glob%multi_moldiams(beginning:istr-1)) 
+                    beginning = istr + 1
+                    num_entries = num_entries + 1
+                    moldiams(num_entries) = moldiam_entry
+                end if
+                istr = istr + 1
+            end do
+            ! execute multiple gaussian pick
+            call gaup%new_gaupicker_multi(       params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, roi=l_roi)
+            call gaup_refine%new_gaupicker_multi(params_glob%pcontrast, SMPD_SHRINK2, moldiams, offset=1)
+            call gaup%gaupick(gaup_refine)
+            ! gather summary statistics so averages can be calculated
+            call gaup%get_stats(pick_stats)
+            mic_stats(1,1) = moldiams(1)
+            mic_stats(1,2) = pick_stats(1)
+            mic_stats(1,3) = pick_stats(2)
+            mic_stats(1,4) = pick_stats(3)
+            mic_stats(1,5) = pick_stats(4)
+            nptcls = gaup_refine%get_nboxes()
+            if( nptcls > 0 )then
+                ! write coordinates
+                call gaup_refine%get_positions(pos, smpd_new=smpd)
+                maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
+                box     = find_larger_magic_box(round2even(maxdiam / smpd))
+                call write_boxfile(nptcls, pos, box, boxfile)
+                call make_relativepath(CWD_GLOB, boxfile, boxfile_out) ! returns absolute path
+            else
+                ! no particles found
+                boxfile_out = ''
+            endif
+            call gaup%kill
+            call gaup_refine%kill
+
         else
             if( present(pickrefs) )then
                 call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET, roi=l_roi)
@@ -92,8 +158,8 @@ contains
         use simple_sp_project
         use simple_math
         use simple_strings, only: int2str
-        type(sp_project),  intent(inout) :: spproj
-        integer,           intent(in)    :: nmoldiams
+        type(sp_project),            intent(inout) :: spproj
+        integer,                     intent(in)    :: nmoldiams
         real, allocatable :: mic_stats(:,:) 
         real, allocatable :: avg_stats(:,:)
         real, allocatable :: all_stats(:,:,:)
@@ -137,12 +203,12 @@ contains
             max_ksstats = find_local_maxima(avg_stats(:,1),avg_stats(:,3),nmoldiams)
             max_a_peaks = find_local_maxima(avg_stats(:,1),avg_stats(:,4),nmoldiams)
 
+            loc_max = maxloc(avg_stats(:,2))
             do ismd=1, size(max_smds(:,1))
                 write(logfhandle,'(1x,2(a,f7.3))') 'Local max smd of ', max_smds(ismd,2), ' occurs at moldiam ', max_smds(ismd,1)
             end do
-            loc_max = maxloc(avg_stats(:,2))
             write(logfhandle,'(1x,2(a,f7.3))') 'Absolute max smd of ', avg_stats(loc_max(1),2), ' occurs at moldiam ', avg_stats(loc_max(1),1)
-
+            
             do iksstat=1, size(max_ksstats(:,1))
                 write(logfhandle,'(1x,2(a,f7.3))') 'Local max ksstat of ', max_ksstats(iksstat,2), ' occurs at moldiam ', max_ksstats(iksstat,1)
             end do
