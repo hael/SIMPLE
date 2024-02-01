@@ -5,10 +5,10 @@ use simple_parameters, only: parameters
 implicit none
 type(parameters)   :: p
 type(cmdline)      :: cline
-integer, parameter :: N_P = 100000, N_R = 10
-integer :: sorted_inds(N_R), assigned_ptcl, assigned_iref, iref
+integer, parameter :: N_P = 4, N_R = 3
+integer :: sorted_inds(N_R), assigned_ptcl, assigned_iref, iref, iptcl, stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt
 logical :: ptcl_avail(N_P)
-real    :: tab(N_P, N_R), ref_dist(N_R), sorted_dist(N_R)
+real    :: tab(N_P, N_R), ref_dist(N_R), sorted_dist(N_R), sorted_tab(N_P, N_R), rnd_list(N_P)
 if( command_argument_count() < 2 )then
     write(logfhandle,'(a)') 'Usage: simple_test_tab_align smpd=xx nthr=yy'
     stop
@@ -21,7 +21,11 @@ call cline%check
 call p%new(cline)
 call seed_rnd
 call random_number(tab)
+do iptcl = 1, N_P
+    rnd_list(iptcl) = ran3()
+enddo
 ptcl_avail = .true.
+cnt        = 1
 do while( any(ptcl_avail) )
     ref_dist = 0.
     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
@@ -29,16 +33,48 @@ do while( any(ptcl_avail) )
         ref_dist(iref) = minval(tab(:,iref), dim=1, mask=ptcl_avail)
     enddo
     !$omp end parallel do
-    assigned_iref = ref_multinomal(ref_dist)
+    assigned_iref = ref_multinomal(ref_dist, cnt)
     assigned_ptcl = minloc(tab(:,assigned_iref), dim=1, mask=ptcl_avail)
     ptcl_avail(assigned_ptcl) = .false.
+    cnt = cnt + 1
+    print *, assigned_ptcl, ' -> ', assigned_iref
+enddo
+print *, '-----------'
+! sorting each columns
+sorted_tab = tab
+!$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
+do iref = 1, N_R
+    stab_inds(:,iref) = (/(iptcl,iptcl=1,N_P)/)
+    call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
+enddo
+!$omp end parallel do
+ptcl_avail    = .true.
+ref_dist_inds = 1
+ref_dist      = sorted_tab(1,:)
+cnt           = 1
+do while( any(ptcl_avail) )
+    assigned_iref = ref_multinomal(ref_dist, cnt)
+    assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
+    ptcl_avail(assigned_ptcl) = .false.
+    print *, assigned_ptcl, ' -> ', assigned_iref
+    ! update the ref_dist and ref_dist_inds
+    !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
+    do iref = 1, N_R
+        do while( ref_dist_inds(iref) <= N_P .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+            ref_dist_inds(iref) = ref_dist_inds(iref) + 1
+            ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
+        enddo
+    enddo
+    !$omp end parallel do
+    cnt = cnt + 1
 enddo
 contains
-    function ref_multinomal( pvec ) result( which )
-        real, intent(in) :: pvec(:) !< probabilities
+    function ref_multinomal( pvec, cnt ) result( which )
+        real,    intent(in) :: pvec(:) !< probabilities
+        integer, intent(in) :: cnt
         integer :: i, which
         real    :: rnd, bound, sum_refs_corr
-        rnd         = ran3()
+        rnd         = rnd_list(cnt)
         sorted_dist = pvec
         sorted_inds = (/(i,i=1,N_R)/)
         call hpsort(sorted_dist, sorted_inds)
