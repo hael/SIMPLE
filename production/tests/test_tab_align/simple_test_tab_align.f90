@@ -5,8 +5,10 @@ use simple_parameters, only: parameters
 implicit none
 type(parameters)   :: p
 type(cmdline)      :: cline
-integer, parameter :: N_P = 4, N_R = 3
-integer :: sorted_inds(N_R), assigned_ptcl, assigned_iref, iref, iptcl, stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt
+integer, parameter :: N_P = 60000, N_R = 5
+integer(8) :: t_cur
+integer :: sorted_inds(N_R), assigned_ptcl, assigned_iref, iref, iptcl
+integer :: stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt, cur_map(N_P), imp_map(N_P)
 logical :: ptcl_avail(N_P)
 real    :: tab(N_P, N_R), ref_dist(N_R), sorted_dist(N_R), sorted_tab(N_P, N_R), rnd_list(N_P)
 if( command_argument_count() < 2 )then
@@ -26,6 +28,7 @@ do iptcl = 1, N_P
 enddo
 ptcl_avail = .true.
 cnt        = 1
+t_cur      = tic()
 do while( any(ptcl_avail) )
     ref_dist = 0.
     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
@@ -36,10 +39,12 @@ do while( any(ptcl_avail) )
     assigned_iref = ref_multinomal(ref_dist, cnt)
     assigned_ptcl = minloc(tab(:,assigned_iref), dim=1, mask=ptcl_avail)
     ptcl_avail(assigned_ptcl) = .false.
+    cur_map(assigned_ptcl)    = assigned_iref
     cnt = cnt + 1
-    print *, assigned_ptcl, ' -> ', assigned_iref
 enddo
+print *, 'current timing = ', toc(t_cur)
 print *, '-----------'
+t_cur = tic()
 ! sorting each columns
 sorted_tab = tab
 !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
@@ -56,7 +61,7 @@ do while( any(ptcl_avail) )
     assigned_iref = ref_multinomal(ref_dist, cnt)
     assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
     ptcl_avail(assigned_ptcl) = .false.
-    print *, assigned_ptcl, ' -> ', assigned_iref
+    imp_map(assigned_ptcl)    = assigned_iref
     ! update the ref_dist and ref_dist_inds
     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
     do iref = 1, N_R
@@ -68,6 +73,9 @@ do while( any(ptcl_avail) )
     !$omp end parallel do
     cnt = cnt + 1
 enddo
+print *, 'improved timing = ', toc(t_cur)
+print *, '-----------'
+if( all(cur_map == imp_map) ) print *, 'mappings match! PASSED!'
 contains
     function ref_multinomal( pvec, cnt ) result( which )
         real,    intent(in) :: pvec(:) !< probabilities
