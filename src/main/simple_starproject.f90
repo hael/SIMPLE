@@ -1279,27 +1279,37 @@ contains
         class(starproject), intent(inout) :: self
         character(len=*),   intent(in)    :: fname_star
         integer :: i, j, fhandle, ok
-        logical :: ex
+        logical :: ex, pres
         inquire(file=trim(adjustl(fname_star)), exist=ex)
         if (ex) then
             call del_file(trim(adjustl(fname_star)))
         endif
         call fopen(fhandle,file=trim(adjustl(fname_star)), status='new', iostat=ok)
-        write(fhandle, *) ""
-        write(fhandle, *) "data_beamshift"
-        write(fhandle, *) ""
-        write(fhandle, *) "loop_"
-        write(fhandle, "(A)") "_splBeamshiftX"
-        write(fhandle, "(A)") "_splBeamshiftY"
-        write(fhandle, "(A)") "_splTiltGroup"
+        
         do i=1, maxval(self%tiltinfo%finaltiltgroupid)
+            pres = .false.
             do j=1, size(self%tiltinfo)
                 if(self%tiltinfo(j)%finaltiltgroupid .eq. i) then
-                    write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tiltx, " "
-                    write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tilty, " "
-                    write(fhandle, "(I6)") self%tiltinfo(j)%finaltiltgroupid
+                    pres = .true.
+                    exit
                 end if
             end do
+            if(pres) then
+                write(fhandle, *) ""
+                write(fhandle, *) "data_tiltgroup_" // int2str(i)
+                write(fhandle, *) ""
+                write(fhandle, *) "loop_"
+                write(fhandle, "(A)") "_splBeamshiftX"
+                write(fhandle, "(A)") "_splBeamshiftY"
+                write(fhandle, "(A)") "_splTiltGroup"
+                do j=1, size(self%tiltinfo)
+                    if(self%tiltinfo(j)%finaltiltgroupid .eq. i) then
+                        write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tiltx, " "
+                        write(fhandle, "(F12.4,A)", advance="no") self%tiltinfo(j)%tilty, " "
+                        write(fhandle, "(I6)") self%tiltinfo(j)%finaltiltgroupid
+                    end if
+                end do
+            end if
         end do
         call fclose(fhandle)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_star
@@ -1338,15 +1348,22 @@ contains
     subroutine propagate_optics_box(self, spproj)
         class(starproject),    intent(inout)   :: self
         class(sp_project),     intent(inout)   :: spproj
-        integer :: stkbox, stkind, stkogid, i
+        integer :: stkbox, stkind, stkogid, i, j
         if(spproj%os_stk%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "ensuring optics groups in project file have correct box ... "
             do i = 1, spproj%os_stk%get_noris()
                 stkbox  = int(spproj%os_stk%get(i, 'box'))
                 stkogid = int(spproj%os_stk%get(i, 'ogid'))
-                if(stkbox > 0 .and. stkogid > 0 .and. spproj%os_optics%get(stkogid, 'box') .eq. 0.0) then
-                    call spproj%os_optics%set(stkogid, 'box', real(stkbox))
+                if(stkbox > 0 .and. stkogid > 0) then
+                    do j = 1, spproj%os_optics%get_noris()
+                        if(spproj%os_optics%get(j, 'ogid') == real(stkogid)) then
+                            if(spproj%os_optics%get(j, 'box') == 0.0) then
+                                call spproj%os_optics%set(j, 'box', real(stkbox))
+                            end if    
+                            exit
+                        end if
+                    end do
                 end if
             end do
         end if
