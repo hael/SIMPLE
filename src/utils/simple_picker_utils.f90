@@ -101,7 +101,7 @@ contains
             if( nptcls > 0 )then
                 ! write coordinates
                 call gaup_refine%get_positions(pos, smpd_new=smpd)
-                maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
+                maxdiam = maxval(moldiams) + maxval(moldiams) * BOX_EXP_FAC
                 box     = find_larger_magic_box(round2even(maxdiam / smpd))
                 call write_boxfile(nptcls, pos, box, boxfile)
                 call make_relativepath(CWD_GLOB, boxfile, boxfile_out) ! returns absolute path
