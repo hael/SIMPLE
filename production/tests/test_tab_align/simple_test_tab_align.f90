@@ -5,7 +5,7 @@ use simple_parameters, only: parameters
 implicit none
 type(parameters)   :: p
 type(cmdline)      :: cline
-integer, parameter :: N_P = 60000, N_R = 5
+integer, parameter :: N_P = 30000, N_R = 10
 integer(8) :: t_cur
 integer :: sorted_inds(N_R), assigned_ptcl, assigned_iref, iref, iptcl
 integer :: stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt, cur_map(N_P), imp_map(N_P)
@@ -18,7 +18,7 @@ else
     call cline%parse_oldschool
 endif
 call cline%checkvar('smpd', 1)
-call cline%checkvar('nthr', 1)
+call cline%checkvar('nthr', 2)
 call cline%check
 call p%new(cline)
 call seed_rnd
