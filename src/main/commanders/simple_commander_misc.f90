@@ -347,15 +347,17 @@ contains
     end subroutine exec_mkdir
 
     subroutine exec_fractionate_movies_distr( self, cline )
-        use simple_qsys_env, only: qsys_env
+        use simple_starproject, only: starproject
+        use simple_qsys_env,    only: qsys_env
         use simple_qsys_funs
         class(fractionate_movies_commander_distr), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(chash)      :: job_descr
-        type(qsys_env)   :: qenv
-        integer          :: nmovies
+        type(parameters)  :: params
+        type(sp_project)  :: spproj
+        type(chash)       :: job_descr
+        type(qsys_env)    :: qenv
+        type(starproject) :: starproj
+        integer           :: nmovies
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
         if( .not.cline%defined('mcconvention') ) call cline%set('mcconvention', 'simple')
@@ -390,9 +392,11 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
+        call starproj%export_mics(cline, spproj)
         ! cleanup
-        call spproj%kill
         call qsys_cleanup
+        call spproj%kill
+        call starproj%kill
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES_DISTR NORMAL STOP ****')
     end subroutine exec_fractionate_movies_distr
 
@@ -402,7 +406,7 @@ contains
         use simple_fsc, only: plot_fsc
         class(fractionate_movies_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        logical,            parameter :: L_DEBUG = .true.
+        logical,            parameter :: L_DEBUG = .false.
         character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname, mic_fbody, star_fname
         type(parameters)              :: params
         type(sp_project)              :: spproj
@@ -504,6 +508,7 @@ contains
         enddo
         call generator%kill
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
+        call spproj%kill
         call qsys_job_finished(  'simple_commander_mic :: exec_fractionate_movies' )
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
