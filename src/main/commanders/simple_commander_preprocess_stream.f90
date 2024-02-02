@@ -92,6 +92,7 @@ contains
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',        'no')
+        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',    'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
@@ -139,6 +140,10 @@ contains
             params_glob%maxnchunks = huge(params_glob%maxnchunks)
         endif
         call cline%delete('maxnchunks')
+        if( trim(params%pick_roi).eq.'yes' )then
+            params%backgr_subtr = 'yes'
+            call cline%set('backgr_subtr', params%backgr_subtr)
+        endif
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -160,8 +165,6 @@ contains
                     endif
                 else if( .not.cline%defined('moldiam') )then
                     THROW_HARD('MOLDIAM required for picker=new reference-free picking')
-            !    else
-             !       THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
             case DEFAULT
                 THROW_HARD('Unsupported picker')

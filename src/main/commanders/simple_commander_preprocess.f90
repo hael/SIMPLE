@@ -725,7 +725,8 @@ contains
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT )
         if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
         if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
-        if( .not. cline%defined('pick_roi')        )  call cline%set('pick_roi',       'no')
+        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',        'no')
+        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',    'no')
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',  'no')
@@ -769,6 +770,11 @@ contains
             l_pick = .true.
         else if( cline%defined('moldiam') )then
             l_pick = .true.
+        endif
+        ! options compatibility
+        if( trim(params%pick_roi).eq.'yes' )then
+            params%backgr_subtr = 'yes'
+            call cline%set('backgr_subtr', params%backgr_subtr)
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
@@ -945,7 +951,7 @@ contains
                 smpd_pick      = o_mov%get('smpd')
                 params_glob%lp = max(2.*smpd_pick, params%lp_pick)
                 call o_mov%getter('intg', moviename_intg)
-                call piter%iterate(cline, smpd_pick, moviename_intg, boxfile, nptcls_out, output_dir_picker)
+                call piter%iterate(cline, smpd_pick, moviename_intg, output_dir_picker, boxfile, nptcls_out)
                 call o_mov%set('nptcls',  real(nptcls_out))
                 if( nptcls_out > 0 )then
                     call o_mov%set('boxfile', trim(boxfile))
@@ -1448,14 +1454,15 @@ contains
         type(chash)      :: job_descr
         integer :: nmics
         logical :: templates_provided
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',           2.)
-        if( .not. cline%defined('thres')     ) call cline%set('thres',         24.)
-        if( .not. cline%defined('pick_roi')  ) call cline%set('pick_roi',     'no')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',PICK_LP_DEFAULT)
-        if( .not. cline%defined('picker')    ) call cline%set('picker',      'old')
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype',     'mic')
+        if( .not. cline%defined('ndev')        ) call cline%set('ndev',           2.)
+        if( .not. cline%defined('thres')       ) call cline%set('thres',         24.)
+        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
+        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no')
+        if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
+        if( .not. cline%defined('picker')      ) call cline%set('picker',      'old')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
@@ -1471,6 +1478,10 @@ contains
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! more sanity checks
+        if( trim(params%pick_roi).eq.'yes' )then
+            params%backgr_subtr = 'yes'
+            call cline%set('backgr_subtr', params%backgr_subtr)
+        endif
         templates_provided = cline%defined('pickrefs')
         select case(trim(params%picker))
             case('old')
@@ -1524,7 +1535,6 @@ contains
         character(len=LONGSTRLEN)     :: boxfile
         integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state, idiam
         real, allocatable             :: mic_stats(:,:)
-
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
@@ -1561,7 +1571,7 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
-                call piter%iterate(cline, params%smpd, intg_name, boxfile, nptcls_out, output_dir,mic_stats=mic_stats)
+                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out,mic_stats=mic_stats)
                 call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
                 do idiam=1,params%nmoldiams
                     ! writing picker statistics for each moldiam to binary file
@@ -1606,6 +1616,7 @@ contains
         if( .not. cline%defined('pcontrast')     ) call cline%set('pcontrast',    'black')
         if( .not. cline%defined('stream')        ) call cline%set('stream',          'no')
         if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
+        if( .not. cline%defined('backgr_subtr')  ) call cline%set('backgr_subtr',    'no')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -2016,7 +2027,7 @@ contains
                 else
                     ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
-                    if( trim(params%pick_roi).eq.'yes' ) call micrograph%subtract_background(HP_BACKGR_SUBTR)
+                    if( trim(params%backgr_subtr).eq.'yes') call micrograph%subtract_background(HP_BACKGR_SUBTR)
                     ! phase-flip micrograph
                     if( cline%defined('ctf') )then
                         if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
@@ -2139,6 +2150,7 @@ contains
         if( .not. cline%defined('pcontrast') )     call cline%set('pcontrast',    'black')
         if( .not. cline%defined('oritype')   )     call cline%set('oritype',     'ptcl3D')
         if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
+        if( .not. cline%defined('back_subtr'))     call cline%set('backgr_subtr',    'no')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! read in integrated movies
@@ -2453,6 +2465,7 @@ contains
                     else
                         ! preprocess micrograph
                         call micrograph%read(mic_name)
+                        if( trim(params%backgr_subtr).eq.'yes') call micrograph%subtract_background(HP_BACKGR_SUBTR)
                         if( ctfparms%ctfflag == CTFFLAG_FLIP )then
                             if( o_mic%isthere('dfx') )then
                                 ! phase flip micrograph
@@ -2596,7 +2609,7 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params_glob%smpd, micname, boxfile, nptcls_out, output_dir_picker)
+            call piter%iterate(cline, params_glob%smpd, micname, output_dir_picker, boxfile, nptcls_out)
             call o_mic%set_boxfile(boxfile, nptcls=nptcls_out)
             ! update project
             call spproj%os_mic%set_ori(imic, o_mic)

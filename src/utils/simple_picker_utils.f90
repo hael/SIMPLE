@@ -18,14 +18,15 @@ logical, parameter :: L_DEBUG      = .false.
 
 contains
 
-    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, mic_stats )
+    subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, mic_stats, dir_out )
         use simple_strings, only: str2real
-        character(len=*),          intent(in)    :: micname
-        character(len=LONGSTRLEN), intent(out)   :: boxfile_out
-        real,                      intent(in)    :: smpd    !< sampling distance in A
-        integer,                   intent(out)   :: nptcls
-        class(image), optional,    intent(inout) :: pickrefs(:)
-        real,         optional,    intent(out)   :: mic_stats(params_glob%nmoldiams,5)
+        character(len=*),           intent(in)    :: micname
+        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
+        real,                       intent(in)    :: smpd    !< sampling distance in A
+        integer,                    intent(out)   :: nptcls
+        character(len=*), optional, intent(in)    :: dir_out
+        class(image),     optional, intent(inout) :: pickrefs(:)
+        real,             optional, intent(out)   :: mic_stats(params_glob%nmoldiams,5)
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
         integer,      allocatable :: pos(:,:)
@@ -33,10 +34,12 @@ contains
         character(len=STDLEN)   :: multi_moldiams
         real    :: maxdiam, stepsz, moldiam_cur, pick_stats(5), moldiam_entry
         integer :: box, idiam, istr, beginning, num_entries
-        logical :: l_roi
+        logical :: l_roi, l_backgr_subtr
         boxfile = basename(fname_new_ext(trim(micname),'box'))
-        l_roi   = trim(params_glob%pick_roi).eq.'yes'
-        call read_mic_raw(micname, smpd, subtr_backgr=l_roi)
+        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        l_roi          = trim(params_glob%pick_roi).eq.'yes'
+        l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
+        call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
         if (params_glob%nmoldiams > 1) then
             allocate(moldiams(params_glob%nmoldiams))
             ! create moldiams array
@@ -97,17 +100,13 @@ contains
             mic_stats(1,3) = pick_stats(2)
             mic_stats(1,4) = pick_stats(3)
             mic_stats(1,5) = pick_stats(4)
-            nptcls = gaup_refine%get_nboxes()
-            if( nptcls > 0 )then
-                ! write coordinates
-                call gaup_refine%get_positions(pos, smpd_new=smpd)
-                maxdiam = maxval(moldiams) + maxval(moldiams) * BOX_EXP_FAC
-                box     = find_larger_magic_box(round2even(maxdiam / smpd))
-                call write_boxfile(nptcls, pos, box, boxfile)
-                call make_relativepath(CWD_GLOB, boxfile, boxfile_out) ! returns absolute path
-            else
-                ! no particles found
+            maxdiam = maxval(moldiams) + maxval(moldiams) * BOX_EXP_FAC
+            box     = find_larger_magic_box(round2even(maxdiam / smpd))
+            call gaup_refine%report_boxfile(box, smpd, boxfile, nptcls)
+            if( nptcls == 0 )then
                 boxfile_out = ''
+            else
+                call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
             endif
             call gaup%kill
             call gaup_refine%kill
@@ -121,35 +120,19 @@ contains
                 call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)
             endif
             call gaup%gaupick(gaup_refine)
-            nptcls = gaup_refine%get_nboxes()
-            if( nptcls > 0 )then
-                ! write coordinates
-                call gaup_refine%get_positions(pos, smpd_new=smpd)
-                maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
-                box     = find_larger_magic_box(round2even(maxdiam / smpd))
-                call write_boxfile(nptcls, pos, box, boxfile)
-                call make_relativepath(CWD_GLOB, boxfile, boxfile_out) ! returns absolute path
-            else
-                ! no particles found
+            ! write
+            maxdiam = params_glob%moldiam + params_glob%moldiam * BOX_EXP_FAC
+            box     = find_larger_magic_box(round2even(maxdiam / smpd))
+            call gaup_refine%report_boxfile(box, smpd, boxfile, nptcls)
+            if( nptcls == 0 )then
                 boxfile_out = ''
+            else
+                call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
             endif
             call gaup%kill
             call gaup_refine%kill
         endif
-        
     end subroutine exec_gaupick
-
-    subroutine write_boxfile( n, coordinates, box, fname )
-        integer,          intent(in) :: n, coordinates(n,2), box
-        character(len=*), intent(in) :: fname
-        integer :: funit, ibox, iostat
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
-        call fileiochk('simple_picker_utils; write_boxfile ', iostat)
-        do ibox = 1,n
-            write(funit,'(I7,I7,I7,I7,I7)') coordinates(ibox,1), coordinates(ibox,2), box, box, -3
-        end do
-        call fclose(funit)
-    end subroutine write_boxfile
 
     ! calc_multipick_avgs finds the average smd, ksstat, and a_peak for each moldiam specified in multi_pick, across all micrographs
     ! it creates a csv file called 'stats.csv' which contains this information

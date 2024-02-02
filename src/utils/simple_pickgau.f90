@@ -61,6 +61,7 @@ contains
     procedure          :: get_positions
     procedure          :: get_nboxes
     procedure, private :: write_boxfile
+    procedure          :: report_boxfile
     procedure, private :: refine_upscaled
     procedure          :: kill
 end type
@@ -153,7 +154,6 @@ contains
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_remove_outliers.box')
-        call self%write_boxfile('pickgau_after_remove_outliers.box')
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
@@ -284,7 +284,7 @@ contains
             self%ldim_box(3) = 1
             maxdiam_max      = moldiam_max + moldiam_max * BOX_EXP_FAC    ! iteration bounds based on maximum box size
             box_max          = round2even(maxdiam_max / self%smpd_shrink) ! iteration bounds based on maximum box size
-        endif 
+        endif
         self%nx = self%ldim(1) - box_max
         self%ny = self%ldim(2) - box_max
         ! set Gaussian
@@ -359,7 +359,6 @@ contains
         ! flag existence
         self%exists = .true.
     end subroutine new
-
 
     subroutine set_refs( self, imgs, mskdiam )
         class(pickgau), intent(inout) :: self
@@ -453,7 +452,6 @@ contains
         end do
         self%refpick = .true.
     end subroutine set_gaurefs
-
 
     subroutine setup_iterators( self )
         class(pickgau), intent(inout) :: self
@@ -1285,6 +1283,7 @@ contains
         nboxes = self%npeaks
     end function get_nboxes
 
+    ! for writing boxes with picking box size
     subroutine write_boxfile( self, fname )
         class(pickgau),   intent(in) :: self
         character(len=*), intent(in) :: fname
@@ -1298,6 +1297,70 @@ contains
         end do
         call fclose(funit)
     end subroutine write_boxfile
+
+    ! for writing boxes with arbitrary box size
+    subroutine report_boxfile( self, box, smpd, fname, nptcls )
+        class(pickgau),            intent(in)  :: self
+        integer,                   intent(in)  :: box
+        real,                      intent(in)  :: smpd
+        character(len=LONGSTRLEN), intent(in)  :: fname
+        integer,                   intent(out) :: nptcls
+        logical,   parameter :: l_write_outside = .false.
+        integer, allocatable :: pos(:,:), updated_pos(:,:)
+        logical, allocatable :: mask(:)
+        integer :: i,j, ninside, funit, iostat
+        nptcls  = self%npeaks
+        if( nptcls == 0 ) return
+        call self%get_positions(pos, smpd_new=smpd)
+        if( box == ldim_raw_box(1) )then
+            ! nothing to adjust
+            updated_pos = pos
+        else
+            ! transform
+            updated_pos = nint(real(pos) - real(box-ldim_raw_box(1))/2.)
+            ! to remove positions outside micrograph
+            if( l_write_outside )then
+                ! flag positions
+                allocate(mask(nptcls),source=.true.)
+                do i = 1,nptcls
+                    if( any(updated_pos(i,:) < 0) ) mask(i) = .false.
+                    if( updated_pos(i,1)+ldim_raw_box(1)-1 >= ldim_raw(1)) mask(i) = .false.
+                    if( updated_pos(i,2)+ldim_raw_box(2)-1 >= ldim_raw(2)) mask(i) = .false.
+                enddo
+                ninside = count(mask)
+                if( ninside == 0 )then
+                    ! all outside
+                    nptcls = 0
+                else if( ninside == nptcls )then
+                    ! all inside
+                else
+                    ! some outside
+                    deallocate(pos)
+                    allocate(pos(ninside,2),source=0)
+                    j = 0
+                    do i = 1,nptcls
+                        if( mask(i) ) then
+                            j = j+1
+                            pos(j,:) = updated_pos(i,:)
+                        endif
+                    enddo
+                    updated_pos = pos
+                    nptcls      = ninside
+                endif
+            endif
+        endif
+        ! write
+        if( nptcls == 0 )then
+            return
+        else
+            call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+            call fileiochk('simple_pickgau; write_boxfile ', iostat)
+            do i = 1,nptcls
+                write(funit,'(I7,I7,I7,I7,I7)')updated_pos(i,1),updated_pos(i,2),box,box,-3
+            end do
+            call fclose(funit)
+        endif
+    end subroutine report_boxfile
 
     subroutine refine_upscaled( self, pos, smpd_old, offset_old )
         class(pickgau), intent(inout) :: self

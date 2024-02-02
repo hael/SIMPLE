@@ -190,6 +190,7 @@ type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
+type(simple_input_param) :: backgr_subtr
 type(simple_input_param) :: box
 type(simple_input_param) :: box_extract
 type(simple_input_param) :: cc_iters
@@ -1128,6 +1129,7 @@ contains
         call set_param(kweight_chunk,  'kweight_chunk','multi',  'Subset correlation weighing scheme', 'Subset correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
+        call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2182,7 +2184,7 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &1, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &1, 5, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         extract%gui_submenu_list = "extract,compute"
         extract%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2199,6 +2201,8 @@ contains
         call extract%set_gui_params('parm_ios', 3, submenu="extract")
         call extract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         call extract%set_gui_params('parm_ios', 4, submenu="extract")
+        call extract%set_input('parm_ios', 5, backgr_subtr)
+        call extract%set_gui_params('parm_ios', 5, submenu="extract")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3069,7 +3073,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 8, 0, 4, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 8, 0, 5, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3106,6 +3110,8 @@ contains
         pick%srch_ctrls(3)%required = .false.
         call pick%set_input('srch_ctrls', 4, pick_roi)
         call pick%set_gui_params('srch_ctrls', 4, submenu="picking")
+        call pick%set_input('srch_ctrls', 5, backgr_subtr)
+        call pick%set_gui_params('srch_ctrls', 5, submenu="picking")
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., PICK_LP_DEFAULT)
         call pick%set_gui_params('filt_ctrls', 1, submenu="picking")
@@ -3166,7 +3172,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 14, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 14, 0, 16, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -3209,6 +3215,7 @@ contains
         call preprocess%set_input('srch_ctrls',13, algorithm)
         call preprocess%set_input('srch_ctrls',14, mcpatch_thres)
         call preprocess%set_input('srch_ctrls',15, pick_roi)
+        call preprocess%set_input('srch_ctrls',16, backgr_subtr)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3306,7 +3313,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 17, 0, 24, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 17, 0, 26, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3421,6 +3428,10 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 23, submenu="search")
         call preprocess_stream_dev%set_input('srch_ctrls',24, maxnchunks)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 24, submenu="cluster 2D", online=.true.)
+        call preprocess_stream_dev%set_input('srch_ctrls',25, pick_roi)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 25, submenu="cluster 2D", online=.true.)
+        call preprocess_stream_dev%set_input('srch_ctrls',26, backgr_subtr)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 26, submenu="cluster 2D", online=.true.)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3630,7 +3641,7 @@ contains
         &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                  ! executable
-        &0, 4, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3641,6 +3652,7 @@ contains
         reextract%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
         call reextract%set_input('parm_ios', 3, pcontrast)
         call reextract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
+        call reextract%set_input('parm_ios', 5, backgr_subtr)
         ! alternative inputs
         ! <empty>
         ! search controls
