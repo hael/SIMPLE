@@ -228,9 +228,10 @@ contains
 
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: ir, min_ind_ir, min_ind_ip, iptcl
-        real    :: min_ir(self%nrefs)
-        logical :: mask_ip(params_glob%fromp:params_glob%top)
+        integer :: iref, iptcl, assigned_iref, assigned_ptcl, &
+                  &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
+        real    :: min_ir(self%nrefs), sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
+        logical :: ptcl_avail(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
         if( params_glob%l_reg_smpl )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
@@ -239,18 +240,31 @@ contains
             enddo
             !$omp end parallel do
         else
-            mask_ip = .true.
-            do while( any(mask_ip) )
-                min_ir = 0.
-                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ir)
-                do ir = 1, self%nrefs
-                    min_ir(ir) = minval(self%ref_ptcl_cor(ir,:), dim=1, mask=mask_ip)
+            ! sorting each columns
+            sorted_tab = transpose(self%ref_ptcl_cor)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+            do iref = 1, self%nrefs
+                stab_inds(:,iref) = (/(iptcl,iptcl=params_glob%fromp,params_glob%top)/)
+                call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
+            enddo
+            !$omp end parallel do
+            ! first row is the current best ref distribution
+            ref_dist_inds = params_glob%fromp
+            ref_dist      = sorted_tab(params_glob%fromp,:)
+            ptcl_avail    = .true.
+            do while( any(ptcl_avail) )
+                ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
+                assigned_iref = self%ref_multinomal(ref_dist)
+                assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
+                ptcl_avail(assigned_ptcl)        = .false.
+                self%ptcl_ref_map(assigned_ptcl) = assigned_iref
+                ! update the ref_dist and ref_dist_inds
+                do iref = 1, self%nrefs
+                    do while( ref_dist_inds(iref) <= params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+                        ref_dist_inds(iref) = ref_dist_inds(iref) + 1
+                        ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
+                    enddo
                 enddo
-                !$omp end parallel do
-                min_ind_ir = self%ref_multinomal(min_ir)
-                min_ind_ip = params_glob%fromp + minloc(self%ref_ptcl_cor(min_ind_ir,:), dim=1, mask=mask_ip) - 1
-                self%ptcl_ref_map(min_ind_ip) = min_ind_ir
-                mask_ip(min_ind_ip) = .false.
             enddo
         endif
     end subroutine tab_align
