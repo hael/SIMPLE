@@ -130,16 +130,10 @@ contains
         call date_and_time(DATE=date,ZONE=zone)
         call date_and_time(TIME=time)
         call date_and_time(VALUES=values)
-        print '(a,2x,a,2x,a)', date, time, zone
-        print '(8i5)', values
-
         if( file_exists('.lastfound') ) call del_file('.lastfound')
         call fopen(lastfound_fhandle,file='.lastfound', status='new', iostat=ok)
-        !write(lastfound_fhandle, '(A)') cast_time_char(simple_gettime())
         write(lastfound_fhandle, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
         call fclose(lastfound_fhandle)
     end subroutine lastfoundfile_update
-    
-    
 
 end module simple_progress
