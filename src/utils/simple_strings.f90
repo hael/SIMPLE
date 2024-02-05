@@ -56,6 +56,11 @@ contains
             allocate(format, source='dir')
             return
         endif
+        i = index(str,',')
+        if( i /= 0 )then
+            allocate(format,source='char')
+            return
+        endif
         ! real
         read(str,*,iostat=iostat) rvar
         if( iostat == 0 )then

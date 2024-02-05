@@ -3095,7 +3095,7 @@ contains
         call pick%set_gui_params('parm_ios', 6, submenu="picking")
         call pick%set_input_1('parm_ios', 7, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
         call pick%set_gui_params('parm_ios', 7, submenu="picking")
-        call pick%set_input('parm_ios', 8, 'multi_moldiams', 'char', 'Underscore-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100_150', .false., '')
+        call pick%set_input('parm_ios', 8, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
         call pick%set_gui_params('parm_ios', 8, submenu="picking")
         pick%parm_ios(5)%required = .false.
         ! alternative inputs
