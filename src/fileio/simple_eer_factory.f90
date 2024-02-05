@@ -307,11 +307,11 @@ contains
         if( ldim_gain(1)==self%onx .and. ldim_gain(2)==self%ony )then
             ! gain dimensions = desired frames dimensions
             call gain%read(fname)
-            if( dotgain ) call flipY(gain)
+            if( dotgain ) call gain%flipY
         else
             call tmp%new(ldim_gain, 1.)
             call tmp%read(fname)
-            if( dotgain ) call flipY(tmp)
+            if( dotgain ) call tmp%flipY
             call gain%zero
             if( ldim_gain(1)==EER_IMAGE_WIDTH .and. self%upsampling==2 )then
                 ! gain 4K, images 8K
@@ -354,23 +354,6 @@ contains
             end where
             !$omp end workshare
         endif
-
-        contains
-
-            subroutine flipY( img )
-                class(image), intent(inout) :: img
-                call img%get_rmat_ptr(prmat)
-                do j = 1,ldim_gain(2)/2
-                    jj = ldim_gain(2) - j - 1
-                    do i = 1,ldim_gain(1)
-                        val           = prmat(i,j,1)
-                        prmat(i,j,1)  = prmat(i,jj,1)
-                        prmat(i,jj,1) = val
-                    enddo
-                enddo
-                nullify(prmat)
-            end subroutine flipY
-
     end subroutine prep_gainref
 
     integer function get_nframes( self )

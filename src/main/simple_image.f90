@@ -317,6 +317,7 @@ contains
     procedure          :: cure_outliers
     procedure          :: zero_below
     procedure          :: ellipse
+    procedure          :: flipY
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -7574,6 +7575,22 @@ contains
             endif
           endif
     end subroutine ellipse
+
+    subroutine flipY( self )
+        class(image), intent(inout) :: self
+        integer :: i,j,jj
+        real    :: val
+        !$omp parallel do private(i,j,jj,val) proc_bind(close) default(shared) schedule(static)
+        do j = 1,self%ldim(2)/2
+            jj = self%ldim(2) - j - 1
+            do i = 1,self%ldim(1)
+                val               = self%rmat(i,j,1)
+                self%rmat(i,j,1)  = self%rmat(i,jj,1)
+                self%rmat(i,jj,1) = val
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine flipY
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

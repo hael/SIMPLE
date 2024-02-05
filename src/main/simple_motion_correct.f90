@@ -833,12 +833,12 @@ contains
             if( fname2format(gainref_fname)=='L' )then
                 THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
             endif
-            ldim_here = frames_here(1)%get_ldim()
+            ldim_here = frames_here(from)%get_ldim()
             call find_ldim_nptcls(gainref_fname,ldim_gain,ifoo)
             if( ldim_gain(1).ne.ldim_here(1) .or. ldim_gain(2).ne.ldim_here(2) )then
                 THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
             endif
-            call gainimg%new(ldim_gain, frames_here(1)%get_smpd())
+            call gainimg%new(ldim_gain, frames_here(from)%get_smpd())
             call gainimg%read(gainref_fname)
         endif
         !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
