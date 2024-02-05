@@ -895,7 +895,7 @@ contains
                         if( pops(cl) == 0 ) cycle
                         do i = 1,nx
                             do j = 1,ny
-                                c = (i-1)*nx+j
+                                c = (i-1)*ny+j
                                 if( labels(c) /= cl )cycle
                                 call khists(cl)%add(hists(i,j))
                             enddo
@@ -905,7 +905,7 @@ contains
                     !$omp do collapse(2) reduction(+:scores)
                     do i = 1,nx
                         do j = 1,ny
-                            c = (i-1)*nx+j
+                            c = (i-1)*ny+j
                             do cl = 1,K
                                 if( pops(cl) > 0 )then
                                     kscores(cl) = real(khists(cl)%tvd(hists(i,j)),dp)
