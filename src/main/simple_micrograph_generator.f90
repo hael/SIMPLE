@@ -151,7 +151,7 @@ contains
                 call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
             enddo
             !$omp end parallel do
-            do iframe = 1,self%fromtof(1),self%fromtof(2)
+            do iframe = self%fromtof(1),self%fromtof(2)
                 call self%frames(iframe)%read(self%moviename, iframe)
             end do
         endif
