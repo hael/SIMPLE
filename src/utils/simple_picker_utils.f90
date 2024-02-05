@@ -19,7 +19,7 @@ logical, parameter :: L_DEBUG      = .false.
 contains
 
     subroutine exec_gaupick( micname, boxfile_out, smpd, nptcls, pickrefs, mic_stats, dir_out )
-        use simple_strings, only: str2real
+        use simple_strings, only: str2real, parsestr
         character(len=*),           intent(in)    :: micname
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
         real,                       intent(in)    :: smpd    !< sampling distance in A
@@ -32,8 +32,9 @@ contains
         integer,      allocatable :: pos(:,:)
         character(len=LONGSTRLEN) :: boxfile
         character(len=STDLEN)   :: multi_moldiams
+        character(len=4), allocatable :: moldiams_str(:)
         real    :: maxdiam, stepsz, moldiam_cur, pick_stats(5), moldiam_entry
-        integer :: box, idiam, istr, beginning, num_entries
+        integer :: box, idiam, istr, num_entries, num_moldiams
         logical :: l_roi, l_backgr_subtr
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
@@ -41,6 +42,7 @@ contains
         l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
         call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
         if (params_glob%nmoldiams > 1) then
+            ! multiple moldiam pick to assess best molecular diameters, does not generate .box files
             allocate(moldiams(params_glob%nmoldiams))
             ! create moldiams array
             stepsz = (params_glob%moldiam_max - params_glob%moldiam) / (params_glob%nmoldiams - 1)
@@ -52,7 +54,7 @@ contains
             call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, mic_stats=mic_stats)
             deallocate(moldiams)
         else if(.not. (params_glob%multi_moldiams  .eq. '')) then
-            ! parse moldiams from underscore-separated string of numbers into real-valued array
+            ! multiple moldiam pick that uses multiple gaussians, generates .box file outputs
             istr=1
             num_entries=0
             ! find number of molecular diameters
@@ -62,33 +64,19 @@ contains
                     exit
                 end if
                 if(istr > len(params_glob%multi_moldiams)) exit
-                if(params_glob%multi_moldiams(istr:istr) .eq. '_') then
+                if(params_glob%multi_moldiams(istr:istr) .eq. ',') then
                     num_entries = num_entries + 1
                 end if
                 istr = istr + 1
             end do
-
-            allocate(moldiams(num_entries))
-            ! save in moldiams aray
-            istr=1
-            beginning=1
-            num_entries=0
-            do 
-                if(params_glob%multi_moldiams(istr:istr) .eq. ' ') then
-                    moldiam_entry = str2real(params_glob%multi_moldiams(beginning:istr-1)) 
-                    num_entries = num_entries + 1
-                    moldiams(num_entries) = moldiam_entry
-                    exit
-                end if
-                if(istr > len(params_glob%multi_moldiams)) exit
-                if(params_glob%multi_moldiams(istr:istr) .eq. '_') then
-                    moldiam_entry = str2real(params_glob%multi_moldiams(beginning:istr-1)) 
-                    beginning = istr + 1
-                    num_entries = num_entries + 1
-                    moldiams(num_entries) = moldiam_entry
-                end if
-                istr = istr + 1
+            ! parse moldiams from comma-separated string of numbers into real-valued array
+            allocate(moldiams_str(num_entries))
+            call parsestr(params_glob%multi_moldiams,',',moldiams_str,num_moldiams)
+            allocate(moldiams(num_moldiams))
+            do idiam = 1, num_moldiams
+                moldiams(idiam) = str2real(moldiams_str(idiam))
             end do
+            deallocate(moldiams_str)
             ! execute multiple gaussian pick
             call gaup%new_gaupicker_multi(       params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, roi=l_roi)
             call gaup_refine%new_gaupicker_multi(params_glob%pcontrast, SMPD_SHRINK2, moldiams, offset=1)
@@ -110,8 +98,9 @@ contains
             endif
             call gaup%kill
             call gaup_refine%kill
-
+            deallocate(moldiams)
         else
+            ! single moldiam pick
             if( present(pickrefs) )then
                 call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET, roi=l_roi)
                 call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%mskdiam, pickrefs, offset=1)
