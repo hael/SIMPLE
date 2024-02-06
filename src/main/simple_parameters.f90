@@ -75,6 +75,7 @@ type :: parameters
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
     character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
     character(len=3)          :: reg_smpl='no'        !< reg sampling (yes|no){no}
+    character(len=3)          :: reg_uni='no'         !< reg uniform sampling (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -435,6 +436,7 @@ type :: parameters
     logical :: l_reg_norm     = .false.
     logical :: l_reg_opt_ang  = .false.
     logical :: l_reg_smpl     = .false.
+    logical :: l_reg_uni      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -1466,6 +1468,7 @@ contains
         self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
         self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
         self%l_reg_smpl    = trim(self%reg_smpl    ).eq.'yes'
+        self%l_reg_uni     = trim(self%reg_uni     ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
