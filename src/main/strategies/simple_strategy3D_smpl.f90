@@ -58,11 +58,11 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    locs(iref)      = reverse_multinomal(inpl_corrs, sorted_corrs, inds, inpl_ns)
+                    locs(iref)      = reverse_multinomal(inpl_corrs, sorted_corrs, inds, inpl_ns, params_glob%l_reg_uni)
                     ref_corrs(iref) = inpl_corrs(locs(iref))
                 endif
             enddo
-            iref = reverse_multinomal(ref_corrs, ref_ns)
+            iref = reverse_multinomal(ref_corrs, ref_ns, params_glob%l_reg_uni)
             call assign_ori(self%s, iref, locs(iref), ref_corrs(iref))
             self%s%nrefs_eval = self%s%nrefs
         else

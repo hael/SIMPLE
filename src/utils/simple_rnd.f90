@@ -152,24 +152,26 @@ contains
         deallocate(pvec_sorted,inds)
     end function multinomal
 
-    function reverse_multinomal_1( pvec, thres ) result( which )
+    function reverse_multinomal_1( pvec, thres, l_uni ) result( which )
         use simple_math, only: hpsort
         real,     intent(in) :: pvec(:) !< probabilities
         integer,  intent(in) :: thres
+        logical,  intent(in) :: l_uni
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),inds(n))
-        which = reverse_multinomal_2(pvec, pvec_sorted, inds, thres)
+        which = reverse_multinomal_2(pvec, pvec_sorted, inds, thres, l_uni)
     end function reverse_multinomal_1
 
-    function reverse_multinomal_2( pvec, pvec_sorted, inds, thres ) result( which )
+    function reverse_multinomal_2( pvec, pvec_sorted, inds, thres, l_uni ) result( which )
         use simple_math, only: hpsort
-        real,              intent(in)    :: pvec(:)        !< probabilities
-        real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer,           intent(inout) :: inds(:)
-        integer,           intent(in)    :: thres
+        real,    intent(in)    :: pvec(:)        !< probabilities
+        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        integer, intent(inout) :: inds(:)
+        integer, intent(in)    :: thres
+        logical, intent(in)    :: l_uni
         integer :: which, i
         real    :: bound, sum_pvec, rnd
         pvec_sorted = pvec
@@ -177,7 +179,7 @@ contains
         inds        = (/(i,i=1,size(pvec))/)
         call hpsort(pvec_sorted, inds)
         sum_pvec = sum(pvec_sorted(1:thres))
-        if( sum_pvec < TINY )then
+        if( sum_pvec < TINY .or. l_uni )then
             ! uniform sampling
             which = 1 + floor(real(thres) * rnd)
         else

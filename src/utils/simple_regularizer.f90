@@ -42,7 +42,6 @@ type :: regularizer
     procedure          :: shift_search
     procedure          :: shift_smpl
     procedure, private :: ref_multinomal, inpl_multinomal, sh_multinomal, sh_opt_multinomal
-    procedure, private :: ref_multinomal2, ref_multinomal3
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -300,7 +299,7 @@ contains
         self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
         call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
         sum_refs_corr = sum(self%refs_corr(1:self%refs_ns,ithr))
-        if( sum_refs_corr < TINY )then
+        if( sum_refs_corr < TINY .or. params_glob%l_reg_uni )then
             ! uniform sampling
             which = 1 + floor(real(self%refs_ns) * rnd)
         else
@@ -316,86 +315,32 @@ contains
         which = self%refs_inds(which, ithr)
     end function ref_multinomal
 
-    !>  \brief  generates a multinomal 1-of-K random number according to the
-    !!          distribution in pvec
-    function ref_multinomal2( self, pvec ) result( which )
-        class(regularizer), intent(inout) :: self
-        real,               intent(in)    :: pvec(:) !< probabilities
-        integer :: i, which, ithr
-        real    :: rnd, bound, sum_refs_corr
-        ithr = omp_get_thread_num() + 1
-        self%refs_corr(:,ithr) = pvec
-        self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
-        call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
-        rnd = ran3()
-        sum_refs_corr = sum(self%refs_corr(1:self%refs_ns,ithr))
-        if( sum_refs_corr < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(self%refs_ns) * rnd)
-        else
-            rnd   = rnd * sum_refs_corr
-            bound = 0.
-            do which=1,self%refs_ns
-                bound = bound + self%refs_corr(which, ithr)
-                if( rnd >= bound )exit
-            enddo
-            which = self%refs_inds(min(which,self%refs_ns),ithr)
-        endif
-    end function ref_multinomal2
-
-    function ref_multinomal3( self, pvec ) result( which )
-        class(regularizer), intent(inout) :: self
-        real,               intent(in)    :: pvec(:) !< probabilities
-        integer :: i, which, ithr
-        real    :: rnd, bound
-        ithr = omp_get_thread_num() + 1
-        rnd = ran3()
-        self%refs_corr(:,ithr) = pvec
-        if( sum(self%refs_corr(1:self%refs_ns,ithr)) < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(self%refs_ns) * rnd)
-        else
-            which = minloc(self%refs_corr(1:self%refs_ns,ithr),dim=1)
-            bound = self%refs_corr(which,ithr)
-            if( rnd >= bound )then
-                ! the minimum is the solution
-            else
-                self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
-                call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr))
-                ! normalizing within the hard-limit
-                self%refs_corr(1:self%refs_ns,ithr) = self%refs_corr(1:self%refs_ns,ithr) / sum(self%refs_corr(1:self%refs_ns,ithr))
-                do which=1,self%refs_ns
-                    bound = sum(self%refs_corr(1:which, ithr))
-                    if( rnd >= bound )exit
-                enddo
-                which = self%refs_inds(min(which,self%refs_ns),ithr)
-            endif
-        endif
-    end function ref_multinomal3
-
     ! inpl multinomal based on unnormalized pvec
     function inpl_multinomal( self, pvec ) result( which )
         class(regularizer), intent(inout) :: self
         real,               intent(in)    :: pvec(:) !< probabilities
         integer :: i, which, ithr
-        real    :: rnd, bound
+        real    :: rnd, bound, sum_corr
         ithr = omp_get_thread_num() + 1
         self%inpl_corr(:,ithr) = pvec
         self%inpl_inds(:,ithr) = (/(i,i=1,self%nrots)/)
         call hpsort(self%inpl_corr(:,ithr), self%inpl_inds(:,ithr) )
-        rnd = ran3()
-        if( sum(self%inpl_corr(1:self%inpl_ns,ithr)) < TINY )then
+        rnd      = ran3()
+        sum_corr = sum(self%inpl_corr(1:self%inpl_ns,ithr))
+        if( sum_corr < TINY .or. params_glob%l_reg_uni )then
             ! uniform sampling
             which = 1 + floor(real(self%inpl_ns) * rnd)
         else
             ! normalizing within the hard-limit
-            self%inpl_corr(1:self%inpl_ns,ithr) = self%inpl_corr(1:self%inpl_ns,ithr) / sum(self%inpl_corr(1:self%inpl_ns,ithr))
+            self%inpl_corr(1:self%inpl_ns,ithr) = self%inpl_corr(1:self%inpl_ns,ithr) / sum_corr
+            bound = 0.
             do which=1,self%inpl_ns
-                bound = sum(self%inpl_corr(1:which, ithr))
+                bound = bound + self%inpl_corr(which, ithr)
                 if( rnd >= bound )exit
             enddo
-            which = self%inpl_inds(min(which,self%inpl_ns),ithr)
+            which = min(which,self%inpl_ns)
         endif
+        which = self%refs_inds(which, ithr)
     end function inpl_multinomal
 
     function sh_multinomal( self, pvec ) result( which )
