@@ -232,7 +232,7 @@ contains
         real    :: min_ir(self%nrefs), sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
-        if( params_glob%l_reg_smpl )then
+        if( params_glob%l_reg_smpl .and. mod(params_glob%which_iter, 2) == 1 )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
             do iptcl = params_glob%fromp, params_glob%top
                 self%ptcl_ref_map(iptcl) = self%ref_multinomal(self%ref_ptcl_cor(:,iptcl))
@@ -340,7 +340,7 @@ contains
             enddo
             which = min(which,self%inpl_ns)
         endif
-        which = self%refs_inds(which, ithr)
+        which = self%inpl_inds(which, ithr)
     end function inpl_multinomal
 
     function sh_multinomal( self, pvec ) result( which )
