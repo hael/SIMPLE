@@ -131,6 +131,7 @@ type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pick
 type(simple_program), target :: postprocess
+type(simple_program), target :: ppca_denoise
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
 type(simple_program), target :: preprocess_stream_dev
@@ -407,6 +408,7 @@ contains
         call new_oristats
         call new_pick
         call new_postprocess
+        call new_ppca_denoise
         call new_preprocess
         call new_preprocess_stream
         call new_preprocess_stream_dev
@@ -519,6 +521,7 @@ contains
         call push2prg_ptr_array(oristats)
         call push2prg_ptr_array(pick)
         call push2prg_ptr_array(postprocess)
+        call push2prg_ptr_array(ppca_denoise)
         call push2prg_ptr_array(preprocess)
         call push2prg_ptr_array(preprocess_stream)
         call push2prg_ptr_array(preprocess_stream_dev)
@@ -698,6 +701,8 @@ contains
                 ptr2prg => pick
             case('postprocess')
                 ptr2prg => postprocess
+            case('ppca_denoise')
+                ptr2prg => ppca_denoise
             case('preprocess')
                 ptr2prg => preprocess
             case('preprocess_stream')
@@ -858,6 +863,7 @@ contains
         write(logfhandle,'(A)') oristats%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') postprocess%name
+        write(logfhandle,'(A)') ppca_denoise%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') preprocess_stream%name
         write(logfhandle,'(A)') print_dose_weights%name
@@ -3164,6 +3170,32 @@ contains
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
 
+    subroutine new_ppca_denoise
+        ! PROGRAM SPECIFICATION
+        call ppca_denoise%new(&
+        &'ppca_denoise',&                             ! name
+        &'Filter stack/volume',&                      ! descr_short
+        &'is a program for ppca-based denoising of an image stack',&  ! descr_long
+        &'simple_exec',&                              ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ppca_denoise%set_input('img_ios', 1, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
+        call ppca_denoise%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call ppca_denoise%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call ppca_denoise%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call ppca_denoise%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_ppca_denoise
+
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
@@ -3172,7 +3204,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &2, 14, 0, 16, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 14, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)

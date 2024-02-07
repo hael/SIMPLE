@@ -58,7 +58,7 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, N, D, Q, Dmat, doprint )
         class(ppca_serial), intent(inout)         :: self
-        real, intent(in), dimension(:,:), target :: Dmat
+        real, intent(in), dimension(:,:), target, optional :: Dmat
         integer, intent(in)                :: N, D, Q
         logical, intent(in), optional      :: doprint
         call self%kill

@@ -1698,19 +1698,21 @@ contains
         end do
     end function serialize_2
 
-    subroutine unserialize( self, l_msk, pcavec )
+    subroutine unserialize( self, pcavec, l_msk )
         class(image),      intent(inout) :: self
-        logical,           intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable, intent(in)    :: pcavec(:)
+        logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         integer :: sz, sz_msk, i, j, k, cnt
         if( allocated(pcavec) )then
-            sz     = size(pcavec)
-            sz_msk = count(l_msk)
-            if( sz /= sz_msk )then
-                write(logfhandle,*) 'ERROR! Nonconforming sizes'
-                write(logfhandle,*) 'sizeof(pcavec): ', sz
-                write(logfhandle,*) 'sizeof(l_msk) : ', sz_msk
-                THROW_HARD('unserialize')
+            if( present(l_msk) )then
+                sz     = size(pcavec)
+                sz_msk = count(l_msk)
+                if( sz /= sz_msk )then
+                    write(logfhandle,*) 'ERROR! Nonconforming sizes'
+                    write(logfhandle,*) 'sizeof(pcavec): ', sz
+                    write(logfhandle,*) 'sizeof(l_msk) : ', sz_msk
+                    THROW_HARD('unserialize')
+                endif
             endif
         else
             THROW_HARD('pcavec unallocated; unserialize')
@@ -1718,16 +1720,27 @@ contains
         if( self%ft ) self%ft = .false.
         self%rmat = 0.
         cnt = 0
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                  if( l_msk(i,j,k) )then
-                      cnt = cnt + 1
-                      self%rmat(i,j,k) =  pcavec(cnt)
-                  endif
+        if( present(l_msk) )then
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    do k=1,self%ldim(3)
+                        if( l_msk(i,j,k) )then
+                            cnt = cnt + 1
+                            self%rmat(i,j,k) =  pcavec(cnt)
+                        endif
+                    end do
                 end do
             end do
-        end do
+        else
+            do i=1,self%ldim(1)
+                do j=1,self%ldim(2)
+                    do k=1,self%ldim(3)
+                        cnt = cnt + 1
+                        self%rmat(i,j,k) =  pcavec(cnt)
+                    end do
+                end do
+            end do
+        endif
     end subroutine unserialize
 
     !>  \brief winserialize is for packing/unpacking a serialized image vector for convolutional pca analysis

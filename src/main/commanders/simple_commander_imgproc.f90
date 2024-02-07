@@ -15,6 +15,7 @@ public :: edge_detect_commander
 public :: convert_commander
 public :: ctfops_commander
 public :: filter_commander
+public :: ppca_denoise_commander
 public :: normalize_commander
 public :: scale_commander
 public :: stack_commander
@@ -48,6 +49,11 @@ type, extends(commander_base) :: filter_commander
   contains
     procedure :: execute      => exec_filter
 end type filter_commander
+
+type, extends(commander_base) :: ppca_denoise_commander
+  contains
+    procedure :: execute      => exec_ppca_denoise
+end type ppca_denoise_commander
 
 type, extends(commander_base) :: normalize_commander
   contains
@@ -466,6 +472,40 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
+
+    subroutine exec_ppca_denoise( self, cline )
+        use simple_stackops,    only: make_pcavec_stack
+        use simple_ppca,        only: ppca
+        use simple_image,       only: image
+        class(ppca_denoise_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        character(len=*), parameter :: fnamePCAvecs  = 'pcavecstk.mrcs'
+        character(len=*), parameter :: fnameFEATvecs = 'featvecstk.mrcs'
+        integer,          parameter :: MAXPCAITS     = 15
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ppca)       :: prob_pca
+        type(image)      :: img
+        integer          :: recsz, npix, iptcl
+        real, allocatable :: avg(:), gen(:)
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//trim(STK_EXT))
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
+        call make_pcavec_stack(params%stk, fnamePCAvecs, npix, recsz, avg)
+        call prob_pca%new(params%nptcls, npix, params%neigs)
+        call prob_pca%master(fnamePCAvecs, recsz, fnameFEATvecs, MAXPCAITS)
+        call img%new([params%box,params%box,1], params%smpd)
+        do iptcl = 1, params%nptcls
+            gen = prob_pca%generate(iptcl, avg)
+            call img%unserialize(gen)
+            call img%write(params%outstk, iptcl)
+        end do
+        ! cleanup
+        call build%kill_general_tbox
+        ! end gracefully
+        call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
+    end subroutine exec_ppca_denoise
 
     !> normalize is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalize your images inputted with stk, set norm=yes.

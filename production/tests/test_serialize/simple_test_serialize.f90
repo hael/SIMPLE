@@ -16,6 +16,6 @@ call img_msk%disc([box,box,1], 1.0, 80., l_mask)
 call img_msk%vis
 call img%vis
 pcavec = img%serialize(l_mask)
-call img_rev%unserialize(l_mask, pcavec)
+call img_rev%unserialize(pcavec, l_mask)
 call img_rev%vis
 end program simple_test_serialize
