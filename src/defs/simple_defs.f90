@@ -237,7 +237,7 @@ integer, parameter :: QSYS_SUBMISSION_RETRY_MULTI = 3
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100     ! seconds
-integer, parameter :: WALLTIME_DEFAULT            = 86340   ! seconds, 23h59mins
+integer, parameter :: WALLTIME_DEFAULT            = 172740  ! seconds, 47h59mins
 
 ! precision constants
 integer, parameter :: fp_kind  = DP
