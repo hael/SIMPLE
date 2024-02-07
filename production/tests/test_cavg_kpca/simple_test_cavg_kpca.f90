@@ -25,9 +25,8 @@ real    :: shift(2), mat(2,2), dist(2), loc(2), e3, kw, tval
 integer :: logi_lims(3,2), cyc_lims(3,2), cyc_limsR(2,2), win_corner(2), phys(2), classes(MAX_CLS), cur_class, n_cls
 integer :: i,pop,h,k,l,ll,m,mm, iptcl, eo, filtsz, neven, nodd, idir
 logical :: l_ctf, l_phaseplate
-! call cline%set('prg','cluster2D')
-if( command_argument_count() < 4 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_cavg_kpca smpd=xx nthr=yy stk=stk.mrc'
+if( command_argument_count() < 3 )then
+    write(logfhandle,'(a)') 'Usage: simple_test_cavg_kpca mskdiam=xxx nthr=yy projfile=zzz.simple (stk=stk.mrc)'
     stop
 else
     call cline%parse_oldschool
@@ -47,7 +46,6 @@ call simple_mkdir( filepath(PATH_HERE, trim(cline%get_carg('exec_dir'))))
 call simple_chdir( filepath(PATH_HERE, trim(cline%get_carg('exec_dir'))))
 !!!!!!!
 call build%init_params_and_build_general_tbox(cline, p, do3d=.false.)
-classes = 0
 classes = int(build%spproj_field%get_all('class'))
 n_cls   = maxval(classes)
 do cur_class = 1, n_cls
@@ -55,6 +53,7 @@ do cur_class = 1, n_cls
     if( .not.(allocated(pinds)) ) cycle
     pop = size(pinds)
     if( pop == 0 ) cycle
+    write(logfhandle,'(A,I3)')'>>> PROCESSING CLASS',cur_class
     l_ctf        = build%spproj%get_ctfflag(p%oritype,iptcl=pinds(1)).ne.'no'
     l_phaseplate = .false.
     if( l_ctf ) l_phaseplate = build%spproj%has_phaseplate(p%oritype)
@@ -236,9 +235,11 @@ do cur_class = 1, n_cls
             call rotimg%clip(build%imgbatch(i))
             call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ptcls_stk.mrc',i)
             ! write ctf
-            call rotctfimg%ifft
-            call rotctfimg%clip(build%imgbatch(i))
-            call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ctfs_stk.mrc',i)
+            if( l_ctf )then
+                call rotctfimg%ifft
+                call rotctfimg%clip(build%imgbatch(i))
+                call build%imgbatch(i)%write(int2str(cur_class) // '_aligned_ctfs_stk.mrc',i)
+            endif
         enddo
     endif
     ! deconvolutions
@@ -270,7 +271,7 @@ do cur_class = 1, n_cls
         call even_cavg%fft()
         call odd_cavg%fft()
         call even_cavg%fsc(odd_cavg, frc)
-        call plot_fsc(filtsz, frc, res, p%smpd, 'frc')
+        call plot_fsc(filtsz, frc, res, p%smpd, int2str(cur_class)//'_frc')
     endif
 enddo
 end program simple_test_cavg_kpca
