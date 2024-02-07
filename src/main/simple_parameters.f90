@@ -251,6 +251,7 @@ type :: parameters
     integer :: ncls=500            !< # clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
+    integer :: neigs=0             !< # of eigenvectors 
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -683,6 +684,7 @@ contains
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
+        call check_iarg('neigs',          self%neigs)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)

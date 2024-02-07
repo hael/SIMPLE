@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: make_pattern_stack, prep_imgfile4movie
+public :: make_pcavec_stack, prep_imgfile4movie
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 private
 
@@ -27,28 +27,35 @@ contains
     end subroutine raise_exception
 
     !>  \brief  is for making a stack of vectors for PCA analysis
-    !! \param fnameStack,fnamePatterns filenames for stack and pattern
-    subroutine make_pattern_stack( fnameStack, fnamePatterns, l_mask, D, recsz, avg )
-        character(len=*),  intent(in)  :: fnameStack, fnamePatterns
-        logical,           intent(in)  :: l_mask(:,:,:) !< true for pixels to extract
+    !! \param fnameStack,fnamePCAvecs filenames for stack and pattern
+    subroutine make_pcavec_stack( fnameStack, fnamePCAvecs, D, recsz, avg, l_mask )
+        character(len=*),  intent(in)  :: fnameStack, fnamePCAvecs
         integer,           intent(out) :: D, recsz      !< record size
         real, allocatable, intent(out) :: avg(:)        !< frame stack average
-        type(image)        :: img
-        real, allocatable  :: pcavec(:)
-        integer            :: n, fnum, ier, i, ldim(3), ldim_mask(3)
+        logical, optional, intent(in)  :: l_mask(:,:,:) !< true for pixels to extract
+        type(image)          :: img
+        real,    allocatable :: pcavec(:)
+        logical, allocatable :: ll_mask(:,:,:)
+        integer              :: n, fnum, ier, i, ldim(3), ldim_mask(3)
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'make_pattern_stack' )
-        ldim_mask = [size(l_mask, dim=1),size(l_mask, dim=2),size(l_mask, dim=3)]
-        if( .not. all(ldim_mask .eq. ldim) )then
-            write(logfhandle,*) 'ERROR! nonconforming matrix sizes'
-            write(logfhandle,*) 'ldim of image: ', ldim
-            write(logfhandle,*) 'ldim of mask : ', ldim_mask
-            THROW_HARD('make_pattern_stack')
+        call raise_exception( n, ldim, 'make_pcavec_stack' )
+        if( present(l_mask) )then
+            ldim_mask = [size(l_mask, dim=1),size(l_mask, dim=2),size(l_mask, dim=3)]
+            if( .not. all(ldim_mask .eq. ldim) )then
+                write(logfhandle,*) 'ERROR! nonconforming matrix sizes'
+                write(logfhandle,*) 'ldim of image: ', ldim
+                write(logfhandle,*) 'ldim of mask : ', ldim_mask
+                THROW_HARD('make_pcavec_stack')
+            endif
+            allocate(ll_mask(ldim_mask(1),ldim_mask(2),ldim_mask(3)), source=l_mask)
+        else
+            ldim_mask = ldim
+            allocate(ll_mask(ldim_mask(1),ldim_mask(2),ldim_mask(3)), source=.true.)
         endif
         ! build and initialise objects
         call img%new(ldim,1.)
-        D = count(l_mask)
+        D = count(ll_mask)
         allocate(pcavec(D))
         pcavec = 0.
         inquire(iolength=recsz) pcavec
@@ -57,14 +64,14 @@ contains
         allocate(avg(D))
         avg = 0.
         ! extract patterns and write to file
-        call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
+        call fopen(fnum, status='replace', action='readwrite', file=fnamePCAvecs,&
              access='direct', form='unformatted', recl=recsz, iostat=ier)
-        call fileiochk('make_pattern_stack; simple_procimgstk', ier)
-        write(logfhandle,'(a)') '>>> MAKING PATTERN STACK'
+        ! call fileiochk('make_pcavec_stack; simple_procimgstk', ier)
+        write(logfhandle,'(a)') '>>> MAKING PCAVEC STACK'
         do i=1,n
             call progress(i,n)
             call img%read(fnameStack, i)
-            pcavec = img%serialize(l_mask)
+            pcavec = img%serialize(ll_mask)
             avg = avg + pcavec
             write(fnum,rec=i) pcavec
             deallocate(pcavec)
@@ -73,13 +80,13 @@ contains
         allocate(pcavec(D))
         do i=1,n
             read(fnum,rec=i) pcavec
-            pcavec = pcavec-avg
+            pcavec = pcavec - avg
             write(fnum,rec=i) pcavec
         end do
         deallocate(pcavec)
         call fclose(fnum)
         call img%kill
-    end subroutine make_pattern_stack
+    end subroutine make_pcavec_stack
 
     !>   make_avg_imgfile is for making an average of the entire stack
     !! \param fname stack filename
