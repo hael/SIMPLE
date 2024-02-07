@@ -36,7 +36,8 @@ contains
     subroutine srch_smpl( self, ithr )
         class(strategy3D_smpl), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        real, allocatable :: dist(:), dist_inpl(:)
+        real,    allocatable :: dist(:), dist_inpl(:)
+        logical, allocatable :: states(:)
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), inpl_ns, ref_ns
         real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), athres, dist_thres
         ! execute search
@@ -44,16 +45,17 @@ contains
             ! init threaded search arrays
             self%s%ithr = ithr
             call prep_strategy3D_thread(ithr)
+            states     = nint(build_glob%spproj_field%get_all('state')) == 1
             dist       = build_glob%spproj_field%get_all('dist')
-            dist_thres = sum(dist) / real(size(dist))
+            dist_thres = sum(dist,mask=states) / real(count(states))
             athres     = params_glob%reg_athres
             if( dist_thres > TINY ) athres = min(athres, dist_thres)
-            inpl_ns = 1 + int(athres * self%s%nrots / 180.)
+            inpl_ns    = min(self%s%nrots,max(1,int(athres * real(self%s%nrots) / 180.)))
             dist_inpl  = build_glob%spproj_field%get_all('dist_inpl')
-            dist_thres = sum(dist_inpl) / real(size(dist_inpl))
+            dist_thres = sum(dist_inpl,mask=states) / real(count(states))
             athres     = params_glob%reg_athres
             if( dist_thres > TINY ) athres = min(athres, dist_thres)
-            ref_ns = 1 + int(athres * self%s%nrefs / 180.)
+            ref_ns     = min(self%s%nrefs,max(1,int(athres * real(self%s%nrefs) / 180.)))
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
