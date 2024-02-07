@@ -55,7 +55,8 @@ contains
         use simple_builder, only: build_glob
         class(regularizer),      target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
-        real, allocatable :: dist(:), dist_inpl(:)
+        real,    allocatable :: dist(:), dist_inpl(:)
+        logical, allocatable :: states(:)
         integer :: iptcl, iref
         real    :: dist_thres, athres
         self%nrots = pftcc%nrots
@@ -70,6 +71,17 @@ contains
         athres       = params_glob%reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         self%refs_ns = 1 + int(athres * real(self%nrefs) / 180.)
+        ! states     = nint(build_glob%spproj_field%get_all('state')) == 1
+        ! dist       = build_glob%spproj_field%get_all('dist')
+        ! dist_thres = sum(dist,mask=states) / real(count(states))
+        ! athres     = params_glob%reg_athres
+        ! if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        ! self%inpl_ns = min(self%nrefs,max(1,int(athres * real(self%nrots) / 180.)))
+        ! dist_inpl    = build_glob%spproj_field%get_all('dist_inpl')
+        ! dist_thres   = sum(dist_inpl,mask=states) / real(count(states))
+        ! athres       = params_glob%reg_athres
+        ! if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        ! self%refs_ns = min(self%nrefs,max(1,int(athres * real(self%nrefs) / 180.)))
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&
