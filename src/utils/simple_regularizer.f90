@@ -61,27 +61,17 @@ contains
         real    :: dist_thres, athres
         self%nrots = pftcc%nrots
         self%nrefs = pftcc%nrefs
+        states     = nint(build_glob%spproj_field%get_all('state')) == 1
         dist       = build_glob%spproj_field%get_all('dist')
-        dist_thres = sum(dist) / real(size(dist))
+        dist_thres = sum(dist,mask=states) / real(count(states))
         athres     = params_glob%reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        self%inpl_ns = 1 + int(athres * real(self%nrots) / 180.)
+        self%inpl_ns = min(self%nrots,max(1,int(athres * real(self%nrots) / 180.)))
         dist_inpl    = build_glob%spproj_field%get_all('dist_inpl')
-        dist_thres   = sum(dist_inpl) / real(size(dist_inpl))
+        dist_thres   = sum(dist_inpl,mask=states) / real(count(states))
         athres       = params_glob%reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        self%refs_ns = 1 + int(athres * real(self%nrefs) / 180.)
-        ! states     = nint(build_glob%spproj_field%get_all('state')) == 1
-        ! dist       = build_glob%spproj_field%get_all('dist')
-        ! dist_thres = sum(dist,mask=states) / real(count(states))
-        ! athres     = params_glob%reg_athres
-        ! if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        ! self%inpl_ns = min(self%nrefs,max(1,int(athres * real(self%nrots) / 180.)))
-        ! dist_inpl    = build_glob%spproj_field%get_all('dist_inpl')
-        ! dist_thres   = sum(dist_inpl,mask=states) / real(count(states))
-        ! athres       = params_glob%reg_athres
-        ! if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        ! self%refs_ns = min(self%nrefs,max(1,int(athres * real(self%nrefs) / 180.)))
+        self%refs_ns = min(self%nrefs,max(1,int(athres * real(self%nrefs) / 180.)))
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&
