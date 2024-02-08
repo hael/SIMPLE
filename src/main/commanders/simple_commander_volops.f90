@@ -546,6 +546,16 @@ contains
         call symaxis4write%set_ori(1, symaxis)
         call symaxis4write%write(SYMAXISTAB, [1,1])
         if( cline%defined('projfile') )then
+            if( trim(params%mkdir).eq.'yes' )then
+                ! updates paths manually as project is not required in this application
+                ! this is usually performed in the parameters type
+                call simple_copy_file(trim(params%projfile), filepath(PATH_HERE, basename(params%projfile)))
+                params%projfile = trim(simple_abspath(filepath(PATH_HERE, basename(params%projfile))))
+                params%projname = get_fbody(params%projfile, 'simple')
+                call cline%set('projname', params%projname)
+                call build%spproj%update_projinfo(cline)
+                call build%spproj%write_non_data_segments(params%projfile)
+            endif
             call build%spproj%read(params%projfile)
             if( .not. build%spproj%is_virgin_field(params%oritype) )then
                 ! transfer shift and symmetry to orientations
