@@ -362,8 +362,8 @@ contains
     function center_mass_cc(self,n_cc) result (px)
         class(segpicker),  intent(inout) :: self
         integer,           intent(in)    :: n_cc
-        real        :: px(3)               !index of the central px of the cc
-        integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
+        real        :: px(3)               ! index of the central px of the cc
+        integer, allocatable :: pos(:,:)   ! position of the pixels of a fixed cc
         integer, allocatable :: imat_cc(:,:,:)
         imat_cc = int(self%img_cc%get_rmat())
         where(imat_cc .ne. n_cc) imat_cc = 0
