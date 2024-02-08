@@ -36,8 +36,7 @@ params_glob => params
 params_glob%pcontrast = 'black'
 params_glob%lp        = 10.
 params_glob%nsig      = 1.5
-call read_mic_raw( mic )
-call picker%pick
+call picker%pick( mic )
 
 ! call find_ldim_nptcls(mic, ldim, nframes, smpd)
 ! print *, 'ldim(1)    ', ldim(1)

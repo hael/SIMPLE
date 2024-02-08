@@ -60,6 +60,11 @@ contains
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
+            case('seg')
+                if( .not. cline%defined('lp') )then
+                    THROW_HARD('Segmentation-based picker requires lp (low-pass limit) for filtering')
+                endif
+                call exec_segpick(moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
         end select
     end subroutine iterate
 
