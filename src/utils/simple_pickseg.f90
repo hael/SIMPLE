@@ -9,17 +9,15 @@ use simple_segmentation, only: otsu_robust_fast, otsu_img
 use simple_binimage,     only: binimage
 implicit none
 
-public :: read_mic_raw, pickseg
+public :: pickseg
 private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,             parameter :: SHRINK    = 4.
-! real,             parameter :: lp        = 10. params_glob%lp
-real,             parameter :: LAMBDA    = 3.
-! real,             parameter :: nsig      = 1.5 params_glob%nsig
+real,    parameter :: SHRINK   = 4.
+real,    parameter :: LAMBDA   = 3.
 logical, parameter :: L_WRITE  = .true.
-logical, parameter :: L_DEBUG  = .false.
+logical, parameter :: L_DEBUG  = .true.
 
 ! class variables
 integer                       :: ldim_raw(3)
@@ -30,21 +28,32 @@ character(len=:), allocatable :: fbody
 ! instance
 type pickseg
     private
-    real                 :: smpd_shrink = 0.
-    integer              :: ldim(3), ldim_box(3), nboxes = 0, box_raw = 0
-    type(binimage)       :: mic_shrink, img_cc
-    type(stats_struct)   :: sz_stats, diam_stats
-    logical              :: exists = .false.
+    real               :: smpd_shrink = 0.
+    integer            :: ldim(3), ldim_box(3), nboxes = 0, box_raw = 0
+    real, allocatable  :: masscens(:,:)
+    type(binimage)     :: mic_shrink, img_cc
+    type(stats_struct) :: sz_stats, diam_stats
+    logical            :: exists = .false.
 contains
     procedure :: pick
+    procedure :: get_positions
+    procedure :: get_nboxes
+    procedure :: report_boxfile
 end type pickseg
 
 contains
 
-    subroutine read_mic_raw( micname )
+    subroutine pick( self, micname )
+        class(pickseg), intent(inout) :: self
         character(len=*), intent(in) :: micname !< micrograph file name
+        real,             allocatable :: diams(:)
+        integer,          allocatable :: sz(:)
         character(len=:), allocatable :: ext
-        integer :: nframes
+        type(tvfilter) :: tvf
+        type(image)    :: img_win
+        real    :: px(3), otsu_t
+        integer :: i, boxcoord(2), sz_max, sz_min, nframes
+        logical :: outside
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes, smpd_raw)
         if( ldim_raw(3) /= 1 .or. nframes /= 1 ) THROW_HARD('Only for 2D images')
@@ -54,17 +63,6 @@ contains
         ! set fbody
         ext   = fname2ext(trim(micname))
         fbody = trim(get_fbody(basename(trim(micname)), ext))
-    end subroutine read_mic_raw
-
-    subroutine pick( self )
-        class(pickseg), intent(inout) :: self
-        type(tvfilter)       :: tvf
-        type(image)          :: img_win
-        real,    allocatable :: diams(:)
-        integer, allocatable :: sz(:)
-        real    :: px(3), otsu_t
-        integer :: i, boxcoord(2), sz_max, sz_min
-        logical :: outside
         ! shrink micrograph
         self%ldim(1)     = round2even(real(ldim_raw(1))/SHRINK)
         self%ldim(2)     = round2even(real(ldim_raw(2))/SHRINK)
@@ -115,11 +113,10 @@ contains
             print *, 'min size: ', self%sz_stats%minv
             print *, 'max size: ', self%sz_stats%maxv
         endif
-        sz_min = nint(self%sz_stats%avg - params_glob%nsig * self%sz_stats%sdev)
-        sz_max = nint(self%sz_stats%avg + params_glob%nsig * self%sz_stats%sdev)
+        sz_min = nint(self%sz_stats%avg - params_glob%ndev * self%sz_stats%sdev)
+        sz_max = nint(self%sz_stats%avg + params_glob%ndev * self%sz_stats%sdev)
         call self%img_cc%elim_ccs([sz_min,sz_max])
         call self%img_cc%get_nccs(self%nboxes)
-        
         sz = self%img_cc%size_ccs()
         call calc_stats(real(sz), self%sz_stats)
         if( L_DEBUG )then
@@ -143,11 +140,16 @@ contains
         print *, 'max diam: ', self%diam_stats%maxv
         self%box_raw = find_magic_box(2 * nint(self%diam_stats%med/smpd_raw))
         call img_win%new([self%box_raw,self%box_raw,1], smpd_raw)
+        if( allocated(self%masscens) ) deallocate(self%masscens)
+        allocate(self%masscens(self%nboxes,2), source=0.)
         do i = 1, self%nboxes
-            px       = center_mass_cc(i)
-            boxcoord = nint((real(SHRINK)*px(1:2))-real(self%box_raw)/2.)
-            call mic_raw%window_slim(boxcoord, self%box_raw, img_win, outside)
-            call img_win%write('extracted.mrc', i)
+            px = center_mass_cc(i)
+            self%masscens(i,:2) = px(:2)
+            if( L_DEBUG )then
+                boxcoord = nint((real(SHRINK)*self%masscens(i,:2))-real(self%box_raw)/2.)
+                call mic_raw%window_slim(boxcoord, self%box_raw, img_win, outside)
+                call img_win%write('extracted.mrc', i)
+            endif
         end do
 
         contains
@@ -167,5 +169,48 @@ contains
             end function center_mass_cc
 
     end subroutine pick
+
+    subroutine get_positions( self, pos, box )
+        class(pickseg),       intent(in)    :: self
+        integer, allocatable, intent(inout) :: pos(:,:)
+        integer, optional,    intent(in)    :: box
+        integer :: ibox
+        if( allocated(pos) ) deallocate(pos)
+        allocate( pos(self%nboxes,2), source=0 )
+        if( present(box) )then
+            do ibox = 1,self%nboxes
+                pos(ibox,:) = nint((real(SHRINK)*self%masscens(ibox,:2))-real(box)/2.)
+            end do
+        else
+            do ibox = 1,self%nboxes
+                pos(ibox,:) = nint((real(SHRINK)*self%masscens(ibox,:2))-real(self%box_raw)/2.)
+            end do
+        endif
+    end subroutine get_positions
+
+    pure function get_nboxes( self ) result( nboxes )
+        class(pickseg), intent(in) :: self
+        integer :: nboxes
+        nboxes = self%nboxes
+    end function get_nboxes
+
+    ! for writing boxes with arbitrary box size
+    subroutine report_boxfile( self, fname, nptcls, box )
+        class(pickseg),    intent(in) :: self
+        character(len=*),  intent(in) :: fname
+        integer,           intent(out):: nptcls
+        integer, optional, intent(in) :: box
+        integer, allocatable :: pos(:,:)
+        integer :: funit, ibox, iostat
+        nptcls  = self%nboxes
+        if( nptcls == 0 ) return
+        call self%get_positions(pos, box)
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fileiochk('simple_pickgau; write_boxfile ', iostat)
+        do ibox = 1,size(pos,dim=1)
+            write(funit,'(I7,I7,I7,I7,I7)') pos(ibox,1), pos(ibox,2), self%box_raw, self%box_raw, -3
+        end do
+        call fclose(funit)
+    end subroutine report_boxfile
 
 end module simple_pickseg

@@ -4,10 +4,11 @@ module simple_picker_utils
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
 use simple_image,      only: image
+use simple_pickseg,    only: pickseg
 use simple_pickgau
 implicit none
 
-public :: exec_gaupick, calc_multipick_avgs
+public :: exec_gaupick, calc_multipick_avgs, exec_segpick
 private
 #include "simple_local_flags.inc"
 
@@ -217,5 +218,24 @@ contains
         end do
 
     end subroutine calc_multipick_avgs
+
+    subroutine exec_segpick( micname, boxfile_out, nptcls, dir_out )
+        character(len=*),           intent(in)    :: micname
+        character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
+        integer,                    intent(out)   :: nptcls
+        character(len=*), optional, intent(in)    :: dir_out
+        integer,      allocatable :: pos(:,:)
+        character(len=LONGSTRLEN) :: boxfile
+        type(pickseg) :: picker
+        boxfile = basename(fname_new_ext(trim(micname),'box'))
+        if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
+        call picker%pick(micname)
+        call picker%report_boxfile(boxfile, nptcls)
+        if( nptcls == 0 )then
+                boxfile_out = ''
+        else
+            call make_relativepath(CWD_GLOB, boxfile, boxfile_out)
+        endif
+    end subroutine exec_segpick
 
 end module simple_picker_utils

@@ -1452,17 +1452,23 @@ contains
         type(cmdline)    :: cline_make_pickrefs
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        character(len=:), allocatable :: which_picker
         integer :: nmics
         logical :: templates_provided
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')     ) call cline%set('oritype',     'mic')
-        if( .not. cline%defined('ndev')        ) call cline%set('ndev',           2.)
         if( .not. cline%defined('thres')       ) call cline%set('thres',         24.)
         if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
-        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no')
-        if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
+        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no') 
         if( .not. cline%defined('picker')      ) call cline%set('picker',      'old')
+        which_picker = cline%get_carg('picker')
+        if( which_picker .eq. 'seg' )then
+            if( .not. cline%defined('ndev')        ) call cline%set('ndev',         1.5)
+        else
+            if( .not. cline%defined('lp')          ) call cline%set('lp',PICK_LP_DEFAULT)
+            if( .not. cline%defined('ndev')        ) call cline%set('ndev',           2.)
+        endif
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)

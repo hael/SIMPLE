@@ -1127,7 +1127,7 @@ contains
         call set_param(sigma_est,      'sigma_est',    'multi',  'Sigma estimation method', 'Sigma estimation method(group|global){group}', '(group|global){group}', .false., 'group')
         call set_param(combine_eo,     'combine_eo',   'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', 'whether e/o references are combined for final alignment(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(maxnchunks,     'maxnchunks',   'num',    'Number of subsets after which 2D classification ends', 'After this number of subsets has been classified all processing will stop(0=no end){0}','{0}',.false., 0.0)
-        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new){old}', '(old|new){old}', .false., 'old')
+        call set_param(picker,         'picker',       'multi',  'Which picker to use', 'Which picker to use(old|new|seg){old}', '(old|new|seg){old}', .false., 'old')
         call set_param(pick_roi,       'pick_roi',     'binary', 'Artefactual regions exclusion(new picker only)', 'Whether to exclude regions of disinterest(carbon, thick ice, new picker only){yes|no}', '{yes|no}', .false., 'no')
         call set_param(remove_chunks,  'remove_chunks','binary', 'Whether to remove subsets', 'Whether to remove subsets after completion(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(rnd_cls_init,   'rnd_cls_init', 'binary', 'Initiate 2D classification from random classes', 'Initiate 2D classification from random classes vs. raw images(yes|no){no}', '(yes|no){no}', .false., 'no')

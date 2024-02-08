@@ -186,7 +186,6 @@ contains
         fbody = trim(get_fbody(basename(trim(micname)), ext))
     end subroutine read_mic_raw
 
-
     subroutine new_gaupicker( self, pcontrast, smpd_shrink, moldiam, moldiam_max, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
@@ -197,7 +196,6 @@ contains
         logical, optional, intent(in)    :: roi
         call self%new( pcontrast, smpd_shrink, moldiam, moldiam_max, offset=offset, ndev=ndev, roi=roi )
     end subroutine new_gaupicker
-
 
     subroutine new_gaupicker_multi( self, pcontrast, smpd_shrink, moldiams, offset, ndev, roi)
         class(pickgau),    intent(inout) :: self
