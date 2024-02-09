@@ -11,6 +11,8 @@ private
 
 type strategy3D_alloc
     ! global parameters
+    integer                      :: smpl_refs_ns            !< refine=smpl; # of projections directions
+    integer                      :: smpl_inpl_ns            !< refine=smpl; # of in-plane rotations
     ! integer,        allocatable :: proj_space_nnmat(:,:)    !< 3 nearest neighbours per reference + self
     ! per-ptcl/ref allocation
     integer,        allocatable :: proj_space_state(:)      !< states
@@ -38,6 +40,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( ptcl_mask )
+        use simple_regularizer, only: calc_nrefs2sample
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
@@ -96,6 +99,10 @@ contains
         end select
         ! precalculate nearest neighbour matrix
         ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
+        if( str_has_substr(params_glob%refine,'smpl') )then
+            call calc_nrefs2sample(nrefs, pftcc_glob%get_nrots(), params_glob%reg_athres,&
+            &s3D%smpl_refs_ns, s3D%smpl_inpl_ns)
+        endif
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays
