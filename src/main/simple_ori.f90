@@ -57,7 +57,8 @@ type :: ori
     procedure, private :: rnd_euler_2
     procedure, private :: rnd_euler_3
     procedure, private :: rnd_euler_4
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4
+    procedure, private :: rnd_euler_5
+    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
@@ -597,6 +598,26 @@ contains
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
     end subroutine rnd_euler_4
+
+    subroutine rnd_euler_5( self, uni_thres, eullims )
+        class(ori), intent(inout) :: self         !< instance
+        real,       intent(in)    :: uni_thres    
+        real,       intent(inout) :: eullims(3,2) !< Euler angle limits
+        real :: euls(3)
+        euls(1) = self%e1get()
+        euls(2) = self%e2get()
+        euls(3) = self%e3get()
+        euls(1) = euls(1) + uni_thres
+        euls(2) = euls(2) + uni_thres
+        euls(3) = euls(3) + uni_thres
+        euls(1) = max(eullims(1,1), euls(1))
+        euls(2) = max(eullims(2,1), euls(2))
+        euls(3) = max(eullims(3,1), euls(3))
+        euls(1) = min(eullims(1,2), euls(1))
+        euls(2) = min(eullims(2,2), euls(2))
+        euls(3) = min(eullims(3,2), euls(3))
+        call self%set_euler(euls)
+    end subroutine rnd_euler_5
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
