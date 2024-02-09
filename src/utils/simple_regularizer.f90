@@ -8,7 +8,7 @@ use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_image
 implicit none
 
-public :: regularizer
+public :: regularizer, calc_nrefs2sample
 private
 #include "simple_local_flags.inc"
 
@@ -49,6 +49,7 @@ end type regularizer
 integer, parameter :: SH_STEPS = 5
 
 contains
+
     ! CONSTRUCTORS
 
     subroutine new( self, pftcc )
@@ -61,17 +62,7 @@ contains
         real    :: dist_thres, athres
         self%nrots = pftcc%nrots
         self%nrefs = pftcc%nrefs
-        states     = nint(build_glob%spproj_field%get_all('state')) == 1
-        dist       = build_glob%spproj_field%get_all('dist')
-        dist_thres = sum(dist,mask=states) / real(count(states))
-        athres     = params_glob%reg_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        self%inpl_ns = min(self%nrots,max(1,int(athres * real(self%nrots) / 180.)))
-        dist_inpl    = build_glob%spproj_field%get_all('dist_inpl')
-        dist_thres   = sum(dist_inpl,mask=states) / real(count(states))
-        athres       = params_glob%reg_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        self%refs_ns = min(self%nrefs,max(1,int(athres * real(self%nrefs) / 180.)))
+        call calc_nrefs2sample(self%nrefs, self%nrots, params_glob%reg_athres, self%refs_ns, self%inpl_ns)
         self%pftcc => pftcc
         allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr),&
@@ -400,4 +391,32 @@ contains
         class(regularizer), intent(inout) :: self
         deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%sh_corr,self%inpl_inds,self%refs_inds,self%sh_inds)
     end subroutine kill
+
+    ! PUBLIC UTILITITES
+
+    subroutine calc_nrefs2sample( nrefs, nrots, reg_athres, refs_ns, inpl_ns)
+        use simple_builder, only: build_glob
+        integer, intent(in)  :: nrefs, nrots
+        real,    intent(in)  :: reg_athres
+        integer, intent(out) :: refs_ns, inpl_ns
+        real,    allocatable :: vals(:)
+        logical, allocatable :: ptcl_mask(:)
+        real    :: athres, dist_thres
+        integer :: n
+        ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
+        n          = count(ptcl_mask)
+        ! projection directions
+        vals       = build_glob%spproj_field%get_all('dist')
+        dist_thres = sum(vals, mask=ptcl_mask) / real(n)
+        athres     = reg_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        inpl_ns    = min(nrots,max(1,int(athres * real(nrots) / 180.)))
+        ! in-planes
+        vals       = build_glob%spproj_field%get_all('dist_inpl')
+        dist_thres = sum(vals,mask=ptcl_mask) / real(n)
+        athres     = reg_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        refs_ns    = min(nrefs,max(1,int(athres * real(nrefs) / 180.)))
+    end subroutine
+
 end module simple_regularizer
