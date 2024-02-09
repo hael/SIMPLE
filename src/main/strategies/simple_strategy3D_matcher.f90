@@ -440,7 +440,7 @@ contains
         integer,        intent(in)    :: batchsz_max
         character(len=:), allocatable :: fname
         type(ori) :: o_tmp
-        real      :: xyz(3), eullims(3,2), euls(3), uni_thres
+        real      :: xyz(3), eullims(3,2), euls(3), uni_thres(3)
         integer   :: cnt, s, iref, nrefs
         logical   :: do_center
         ! first the polar
@@ -459,7 +459,7 @@ contains
             eullims(:,1) = 0.
             eullims(:,2) = 360.
             eullims(2,2) = 180.
-            uni_thres    = (ran3() - 0.5) * 2.
+            uni_thres    = [(ran3() - 0.5) * 2., (ran3() - 0.5) * 2., (ran3() - 0.5) * 2.]
             ! perturb references to random [-1,1] degree
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
