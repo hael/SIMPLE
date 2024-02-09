@@ -601,15 +601,15 @@ contains
 
     subroutine rnd_euler_5( self, uni_thres, eullims )
         class(ori), intent(inout) :: self         !< instance
-        real,       intent(in)    :: uni_thres    
+        real,       intent(in)    :: uni_thres(3)
         real,       intent(inout) :: eullims(3,2) !< Euler angle limits
         real :: euls(3)
         euls(1) = self%e1get()
         euls(2) = self%e2get()
         euls(3) = self%e3get()
-        euls(1) = euls(1) + uni_thres
-        euls(2) = euls(2) + uni_thres
-        euls(3) = euls(3) + uni_thres
+        euls(1) = euls(1) + uni_thres(1)
+        euls(2) = euls(2) + uni_thres(2)
+        euls(3) = euls(3) + uni_thres(3)
         euls(1) = max(eullims(1,1), euls(1))
         euls(2) = max(eullims(2,1), euls(2))
         euls(3) = max(eullims(3,1), euls(3))
