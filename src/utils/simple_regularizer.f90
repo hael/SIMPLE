@@ -252,7 +252,7 @@ contains
                 self%ptcl_ref_map(assigned_ptcl) = assigned_iref
                 ! update the ref_dist and ref_dist_inds
                 do iref = 1, self%nrefs
-                    do while( ref_dist_inds(iref) <= params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+                    do while( ref_dist_inds(iref) < params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
                         ref_dist_inds(iref) = ref_dist_inds(iref) + 1
                         ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
                     enddo
@@ -405,14 +405,14 @@ contains
         integer :: n
         ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
         n          = count(ptcl_mask)
-        ! projection directions
-        vals       = build_glob%spproj_field%get_all('dist')
+        ! in-planes
+        vals       = build_glob%spproj_field%get_all('dist_inpl')
         dist_thres = sum(vals, mask=ptcl_mask) / real(n)
         athres     = reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         inpl_ns    = min(nrots,max(1,int(athres * real(nrots) / 180.)))
-        ! in-planes
-        vals       = build_glob%spproj_field%get_all('dist_inpl')
+        ! projection directions
+        vals       = build_glob%spproj_field%get_all('dist')
         dist_thres = sum(vals,mask=ptcl_mask) / real(n)
         athres     = reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
