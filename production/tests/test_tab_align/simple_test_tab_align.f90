@@ -65,7 +65,7 @@ do while( any(ptcl_avail) )
     ! update the ref_dist and ref_dist_inds
     !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
     do iref = 1, N_R
-        do while( ref_dist_inds(iref) <= N_P .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+        do while( ref_dist_inds(iref) < N_P .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
             ref_dist_inds(iref) = ref_dist_inds(iref) + 1
             ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
         enddo
@@ -99,7 +99,7 @@ do while( any(ptcl_avail) )
     ! update the ref_dist and ref_dist_inds
     !!$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref)
     do iref = 1, N_R
-        do while( ref_dist_inds(iref) <= N_P .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+        do while( ref_dist_inds(iref) < N_P .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
             ref_dist_inds(iref) = ref_dist_inds(iref) + 1
             ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
         enddo
