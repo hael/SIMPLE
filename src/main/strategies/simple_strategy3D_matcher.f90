@@ -440,7 +440,7 @@ contains
         integer,        intent(in)    :: batchsz_max
         character(len=:), allocatable :: fname
         type(ori) :: o_tmp
-        real      :: xyz(3)
+        real      :: xyz(3), eullims(3,2), euls(3), uni_thres
         integer   :: cnt, s, iref, nrefs
         logical   :: do_center
         ! first the polar
@@ -455,6 +455,20 @@ contains
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
         ! PREPARATION OF REFERENCES IN PFTCC
+        if( params_glob%l_reg_per )then
+            eullims(:,1) = 0.
+            eullims(:,2) = 360.
+            eullims(2,2) = 180.
+            uni_thres    = (ran3() - 0.5) * 2.
+            ! perturb references to random [-1,1] degree
+            do iref=1,params_glob%nspace
+                call build_glob%eulspace%get_ori(iref, o_tmp)
+                call o_tmp%rnd_euler(uni_thres, eullims)
+                euls    = o_tmp%get_euler()
+                euls(3) = 0.
+                call build_glob%eulspace%set_euler(iref, euls)
+            enddo
+        endif
         ! read reference volumes and create polar projections
         cnt = 0
         do s=1,params_glob%nstates
