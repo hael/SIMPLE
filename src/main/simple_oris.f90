@@ -1345,12 +1345,16 @@ contains
         call self%o(i)%append_ori(ori_in)
     end subroutine append
 
-    subroutine copy( self_out, self_in, is_ptcl )
-        class(oris), intent(inout) :: self_out
-        class(oris), intent(in)    :: self_in
-        logical,     intent(in)    :: is_ptcl
-        integer   :: i
-        call self_out%new(self_in%n, is_ptcl)
+    subroutine copy( self_out, self_in, is_ptcl, no_new )
+        class(oris),       intent(inout) :: self_out
+        class(oris),       intent(in)    :: self_in
+        logical,           intent(in)    :: is_ptcl
+        logical, optional, intent(in)    :: no_new
+        integer :: i
+        logical :: l_new
+        l_new = .true.
+        if( present(no_new) .and. no_new ) l_new = .false.
+        if( l_new) call self_out%new(self_in%n, is_ptcl)
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
