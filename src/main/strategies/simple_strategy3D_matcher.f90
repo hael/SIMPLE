@@ -74,6 +74,7 @@ contains
         integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
+        type(oris)        :: cache_oris
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
@@ -162,6 +163,8 @@ contains
             t_prep_pftcc = tic()
         endif
 
+        ! cache ref oris
+        if( params_glob%l_reg_per ) call cache_oris%copy(build_glob%eulspace, is_ptcl=.false.)
         call prep_ccobjs4align(cline, batchsz_max)
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
@@ -348,6 +351,10 @@ contains
         end select
 
         ! CLEAN
+        if( params_glob%l_reg_per )then
+            call build_glob%eulspace%copy(cache_oris, is_ptcl=.false., no_new=.true.)
+            call cache_oris%kill
+        endif
         call clean_strategy3D ! deallocate s3D singleton
         if( params_glob%l_cartesian )then
             call cftcc%kill
