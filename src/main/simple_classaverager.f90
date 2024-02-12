@@ -15,6 +15,8 @@ public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assembl
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged,&
 cavger_read_euclid_sigma2
+! public utilities
+public transform_ptcls
 private
 #include "simple_local_flags.inc"
 
@@ -1524,5 +1526,117 @@ contains
             exists = .false.
         endif
     end subroutine cavger_kill
+
+    ! PUBLIC UTILITIES
+
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, cavg )
+        use simple_sp_project,          only: sp_project
+        use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
+        class(sp_project),        intent(inout) :: spproj
+        character(len=*),         intent(in)    :: oritype
+        integer,                  intent(in)    :: icls
+        type(image), allocatable, intent(inout) :: timgs(:)
+        type(image), optional,    intent(inout) :: cavg
+        class(oris),  pointer :: pos
+        type(image)           :: img, timg
+        character(len=STDLEN) :: string
+        integer,  allocatable :: pinds(:)
+        complex :: fcompl, fcompll
+        real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
+        integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
+        integer :: i,iptcl, l,ll,m,mm, pop, h,k
+        if(allocated(timgs))then
+            do i = 1,size(timgs)
+                call timgs(i)%kill
+            enddo
+            deallocate(timgs)
+        endif
+        if(present(cavg)) call cavg%kill
+        select case(trim(oritype))
+        case('ptcl2D')
+            string = 'class'
+        case('pctl3D')
+            string = 'proj'
+        case DEFAULT
+            THROW_HARD('ORITYPE not supported!')
+        end select
+        call spproj%ptr2oritype( oritype, pos )
+        call pos%get_pinds(icls, string, pinds)
+        if( .not.(allocated(pinds)) ) return
+        pop = size(pinds)
+        if( pop == 0 ) return
+        allocate(timgs(pop))
+        do i = 1,size(timgs)
+            call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+        enddo
+        ! temporary objects
+        call prepimgbatch(pop)
+        call img%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
+        call timg%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
+        logi_lims      = img%loop_lims(2)
+        cyc_lims       = img%loop_lims(3)
+        cyc_limsR(:,1) = cyc_lims(1,:)
+        cyc_limsR(:,2) = cyc_lims(2,:)
+        call discrete_read_imgbatch(pop, pinds(:), [1,pop])
+        do i = 1,pop
+            iptcl = pinds(i)
+            shift = pos%get_2Dshift(iptcl)
+            e3    = pos%e3get(iptcl)
+            call img%zero_and_flag_ft
+            call timg%zero_and_flag_ft
+            ! normalisation
+            call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img)
+            ! shift
+            call img%shift2Dserial(-shift)
+            ! particle & ctf rotations
+            call rotmat2d(-e3, mat)
+            do h = logi_lims(1,1),logi_lims(1,2)
+                do k = logi_lims(2,1),logi_lims(2,2)
+                    ! Rotation
+                    loc        = matmul(real([h,k]),mat)
+                    win_corner = floor(loc) ! bottom left corner
+                    dist       = loc - real(win_corner)
+                    ! Bi-linear interpolation
+                    l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
+                    ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+                    m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
+                    mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                    ! l, bottom left corner
+                    phys   = img%comp_addr_phys(l,m)
+                    kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
+                    fcompl = kw * img%get_cmat_at(phys(1), phys(2),1)
+                    ! l, bottom right corner
+                    phys   = img%comp_addr_phys(l,mm)
+                    kw     = (1.-dist(1))*dist(2)
+                    fcompl = fcompl + kw * img%get_cmat_at(phys(1), phys(2),1)
+                    if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required!
+                    ! ll, upper left corner
+                    phys    = img%comp_addr_phys(ll,m)
+                    kw      = dist(1)*(1.-dist(2))
+                    fcompll = kw * img%get_cmat_at(phys(1), phys(2),1)
+                    ! ll, upper right corner
+                    phys    = img%comp_addr_phys(ll,mm)
+                    kw      = dist(1)*dist(2)
+                    fcompll = fcompll + kw * img%get_cmat_at(phys(1), phys(2),1)
+                    if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required!
+                    ! update with interpolated values
+                    phys = img%comp_addr_phys(h,k)
+                    call timg%set_cmat_at(phys(1),phys(2),1, fcompl + fcompll)
+                end do
+            end do
+            call timg%ifft
+            call timg%clip(timgs(i))
+        enddo
+        if( present(cavg) )then
+            call cavg%copy(timgs(1))
+            do i =2,pop,1
+                call cavg%add(timgs(i))
+            enddo
+            call cavg%div(real(pop))
+        endif
+        call img%kill
+        call timg%kill
+        nullify(pos)
+    end subroutine transform_ptcls
 
 end module simple_classaverager
