@@ -30,6 +30,7 @@ type :: regularizer
     integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
     real,    allocatable :: inpl_corr(:,:), refs_corr(:,:)
     integer, allocatable :: inpl_inds(:,:), refs_inds(:,:)
+    logical, allocatable :: ptcl_avail(:)
     class(polarft_corrcalc), pointer     :: pftcc => null()
     type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -66,15 +67,19 @@ contains
         allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
+        allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
+        self%ptcl_avail = nint(build_glob%spproj_field%get_all('state')) == 1
         do iptcl = params_glob%fromp,params_glob%top
-            do iref = 1,self%nrefs
-                self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
-                self%ref_ptcl_tab(iref,iptcl)%iref  = iref
-                self%ref_ptcl_tab(iref,iptcl)%loc   = 0
-                self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
-                self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
-                self%ref_ptcl_tab(iref,iptcl)%w     = 1.
-            enddo
+            if( self%ptcl_avail(iptcl) )then
+                do iref = 1,self%nrefs
+                    self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
+                    self%ref_ptcl_tab(iref,iptcl)%iref  = iref
+                    self%ref_ptcl_tab(iref,iptcl)%loc   = 0
+                    self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
+                    self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
+                    self%ref_ptcl_tab(iref,iptcl)%w     = 1.
+                enddo
+            endif
         enddo
     end subroutine new
 
@@ -88,12 +93,14 @@ contains
         do iref = 1, self%nrefs
             do i = 1, self%pftcc%nptcls
                 iptcl = glob_pinds(i)
-                ! sampling the inpl rotation
-                call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                irnd = self%inpl_multinomal(inpl_corrs)
-                self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                self%ref_ptcl_tab(iref,iptcl)%loc = irnd
-                self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                if( self%ptcl_avail(iptcl) )then
+                    ! sampling the inpl rotation
+                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
+                    irnd = self%inpl_multinomal(inpl_corrs)
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
+                    self%ref_ptcl_tab(iref,iptcl)%loc = irnd
+                    self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                endif
             enddo
         enddo
         !$omp end parallel do
@@ -107,27 +114,41 @@ contains
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
             do iptcl = params_glob%fromp, params_glob%top
-                sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
-                if( sum_corr_all < TINY )then
-                    self%ref_ptcl_cor(:,iptcl) = 0.
-                else
-                    self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                if( self%ptcl_avail(iptcl) )then
+                    sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
+                    if( sum_corr_all < TINY )then
+                        self%ref_ptcl_cor(:,iptcl) = 0.
+                    else
+                        self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                    endif
                 endif
             enddo
             !$omp end parallel do
         endif
-        max_corr = maxval(self%ref_ptcl_cor)
-        min_corr = minval(self%ref_ptcl_cor)
+        max_corr = 0.
+        min_corr = huge(min_corr)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+        do iptcl = params_glob%fromp,params_glob%top
+            if( self%ptcl_avail(iptcl) )then
+                max_corr = max(max_corr, maxval(self%ref_ptcl_cor(:,iptcl), dim=1))
+                min_corr = min(min_corr, minval(self%ref_ptcl_cor(:,iptcl), dim=1))
+            endif
+        enddo
+        !$omp end parallel do
         if( (max_corr - min_corr) < TINY )then
             self%ref_ptcl_cor = 0.
         else
             self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
         endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) collapse(2) private(iref,iptcl)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
         do iptcl = params_glob%fromp,params_glob%top
-            do iref = 1, self%nrefs
-                self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
-            enddo
+            if( self%ptcl_avail(iptcl) )then
+                do iref = 1, self%nrefs
+                    self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+                enddo
+            else
+                self%ref_ptcl_cor(:,iptcl) = 1.     ! unselected particles are down on the sorted corrs
+            endif
         enddo
         !$omp end parallel do
     end subroutine tab_normalize
@@ -149,14 +170,16 @@ contains
         !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
         do i = 1, self%pftcc%nptcls
             iptcl = glob_pinds(i)
-            iref  = self%ptcl_ref_map(iptcl)
-            ithr  = omp_get_thread_num() + 1
-            call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-            irot = self%ref_ptcl_tab(iref,iptcl)%loc
-            cxy  = grad_shsrch_obj(ithr)%minimize(irot)
-            if( irot > 0 )then
-                self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
-                self%ref_ptcl_tab(iref,iptcl)%loc = irot
+            if( self%ptcl_avail(iptcl) )then
+                iref  = self%ptcl_ref_map(iptcl)
+                ithr  = omp_get_thread_num() + 1
+                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                irot = self%ref_ptcl_tab(iref,iptcl)%loc
+                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
+                if( irot > 0 )then
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
+                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
+                endif
             endif
         enddo
         !$omp end parallel do
@@ -166,7 +189,7 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, &
                   &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
-        real    :: min_ir(self%nrefs), sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
+        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1   
         ! sorting each columns
@@ -180,7 +203,7 @@ contains
         ! first row is the current best ref distribution
         ref_dist_inds = params_glob%fromp
         ref_dist      = sorted_tab(params_glob%fromp,:)
-        ptcl_avail    = nint(build_glob%spproj_field%get_all('state')) == 1
+        ptcl_avail    = self%ptcl_avail
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
             assigned_iref = self%ref_multinomal(ref_dist)
@@ -276,7 +299,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%inpl_inds,self%refs_inds)
+        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%inpl_inds,self%refs_inds,self%ptcl_avail)
     end subroutine kill
 
     ! PUBLIC UTILITITES

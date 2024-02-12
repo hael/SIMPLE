@@ -463,8 +463,8 @@ contains
         end if
         ! PREPARATION OF REFERENCES IN PFTCC
         if( params_glob%l_reg_per )then
-            eullims = build_glob%pgrpsyms%get_eullims()
-            uni_thres    = [(ran3() - 0.5) * 2., (ran3() - 0.5) * 2., (ran3() - 0.5) * 2.]
+            eullims   = build_glob%pgrpsyms%get_eullims()
+            uni_thres = [(ran3() - 0.5) * 2., (ran3() - 0.5) * 2., (ran3() - 0.5) * 2.]
             ! perturb references to random [-1,1] degree
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
