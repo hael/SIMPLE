@@ -77,6 +77,9 @@ contains
       !  self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnMicrographPixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImagePixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImageSize", splflag="box", int=.true.)]
+        self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="splCentroidX", splflag="opcx")]
+        self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="splCentroidY", splflag="opcy")]
+        self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="splPopulation", splflag="pop", int=.true.)]
 
         ! assign micrographs flags
         if (.not. allocated(self%starfile%micrographs%flags)) allocate(self%starfile%micrographs%flags(0))
@@ -98,6 +101,7 @@ contains
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splNumberParticles", splflag="nptcls", int=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splNMics", splflag="nmics", int=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splMicId", splflag="micid", int=.true.)]
+        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splAstigmatism", splflag="astig")]
 
         ! assign stk flags
         if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
@@ -1072,6 +1076,8 @@ contains
             call h_clust(tilts, threshold, labels, centroids, populations)
             do j = 1, size(tiltinfopos)
                 self%tiltinfo(tiltinfopos(j))%finaltiltgroupid = groupcount + labels(j)
+                self%tiltinfo(tiltinfopos(j))%centroidx = centroids(labels(j), 1)
+                self%tiltinfo(tiltinfopos(j))%centroidy = centroids(labels(j), 2)
             end do
             groupcount = groupcount + size(populations)
             deallocate(tilts, labels, tiltinfopos)
@@ -1144,7 +1150,6 @@ contains
         if(cline%get_rarg("optics_offset") > 0) then
             call self%apply_optics_offset(int(cline%get_rarg("optics_offset")))
         end if
-        call self%export_opticsgroups("optics_groups.star")
         if(spproj%os_mic%get_noris() > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
@@ -1221,9 +1226,13 @@ contains
                     call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "fraca", self%tiltinfo(element)%fraca)
                     call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "box", self%tiltinfo(element)%box)
                     call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "state", 1.0)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcx", self%tiltinfo(element)%centroidx)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "opcy", self%tiltinfo(element)%centroidy)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "pop", real(count(self%tiltinfo%finaltiltgroupid == i)))
                 end if
             end do
         end if
+        call self%export_opticsgroups(spproj, "optics_groups.star")
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_optics
 
@@ -1275,17 +1284,22 @@ contains
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_eps
     end subroutine plot_opticsgroups
 
-   subroutine export_opticsgroups(self, fname_star)
+   subroutine export_opticsgroups(self, spproj, fname_star)
         class(starproject), intent(inout) :: self
+        class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: fname_star
+        character(len=LONGSTRLEN)         :: filename_backup
         integer :: i, j, fhandle, ok
         logical :: ex, pres
         inquire(file=trim(adjustl(fname_star)), exist=ex)
-        if (ex) then
-            call del_file(trim(adjustl(fname_star)))
-        endif
-        call fopen(fhandle,file=trim(adjustl(fname_star)), status='new', iostat=ok)
-        
+        if (ex) call del_file(trim(adjustl(fname_star)))
+        if(.not. self%starfile%initialised) call self%initialise
+        filename_backup = self%starfile%filename
+        self%starfile%filename = fname_star
+        call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
+        call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics", exclude="rlnImageSize")
+        self%starfile%filename = filename_backup
+        call fopen(fhandle,file=trim(adjustl(fname_star)), position='append', iostat=ok)
         do i=1, maxval(self%tiltinfo%finaltiltgroupid)
             pres = .false.
             do j=1, size(self%tiltinfo)

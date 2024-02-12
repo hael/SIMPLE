@@ -70,6 +70,9 @@ type tilt_info
     real                      :: fraca = 0.0
     real                      :: cs    = 0.0
     real                      :: box   = 0.0
+    real                      :: centroidx = 0.0
+    real                      :: centroidy = 0.0
+
 end type tilt_info
 
 contains
