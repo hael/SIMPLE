@@ -36,23 +36,34 @@ contains
     subroutine srch_smpl( self, ithr )
         class(strategy3D_smpl), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, locs(self%s%nrefs), inds(self%s%nrots)
-        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots)
+        integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), irot
+        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), corr
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! init threaded search arrays
             self%s%ithr = ithr
-            call prep_strategy3D_thread(ithr)
+            call self%s%prep4srch
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    locs(iref)      = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s3D%smpl_inpl_ns, params_glob%l_reg_uni)
-                    ref_corrs(iref) = inpl_corrs(locs(iref))
+                    irot = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s3D%smpl_inpl_ns, params_glob%l_reg_uni)
+                    locs(iref)      = irot
+                    ref_corrs(iref) = inpl_corrs(irot)
                 endif
             enddo
             iref = reverse_multinomal(ref_corrs, s3D%smpl_refs_ns, params_glob%l_reg_uni)
-            call assign_ori(self%s, iref, locs(iref), ref_corrs(iref))
+            irot = locs(iref)
+            corr = ref_corrs(iref)
+            call self%s%store_solution(iref, irot, corr)
+            if( self%s%doshift )then
+                call self%s%inpl_srch
+                irot = s3D%proj_space_inplinds(self%s%ithr, iref)
+                corr = s3D%proj_space_corrs(self%s%ithr, iref)
+                call assign_ori(self%s, iref, irot, corr, sh_in=s3D%proj_space_shift(:,iref,self%s%ithr))
+            else
+                call assign_ori(self%s, iref, irot, corr)
+            endif
             self%s%nrefs_eval = self%s%nrefs
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
