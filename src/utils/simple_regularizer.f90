@@ -227,14 +227,18 @@ contains
         min_w = huge(min_w)
         max_w = 0.
         do iptcl = params_glob%fromp, params_glob%top
-            iref = self%ptcl_ref_map(iptcl)
-            self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
-            if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
-            if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
+            if( self%ptcl_avail(iptcl) )then
+                iref = self%ptcl_ref_map(iptcl)
+                self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
+                if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
+                if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
+            endif
         enddo
         do iptcl = params_glob%fromp, params_glob%top
-            iref = self%ptcl_ref_map(iptcl)
-            self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
+            if( self%ptcl_avail(iptcl) )then
+                iref = self%ptcl_ref_map(iptcl)
+                self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
+            endif
         enddo
     end subroutine normalize_weight
 
