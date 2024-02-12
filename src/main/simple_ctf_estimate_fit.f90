@@ -76,6 +76,7 @@ contains
     procedure          :: get_ctfres
     procedure          :: get_icefrac
     procedure          :: get_parms
+    procedure          :: get_astig
     ! CTF fitting
     procedure, private :: gen_resmsk
     procedure, private :: gen_tiles
@@ -373,6 +374,15 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         get_icefrac = self%icefrac
     end function get_icefrac
+
+    real function get_astig(self)
+        class(ctf_estimate_fit), intent(inout) :: self
+        if(self%parms%dfx .ne. 0.0 .and. self%parms%dfy .ne. 0.0 ) then
+            get_astig = abs(self%parms%dfx - self%parms%dfy) / abs((self%parms%dfx + self%parms%dfy) / 2)
+        else
+            get_astig = 0.0
+        end if
+    end function get_astig
     
     ! for visualization
     subroutine get_pspec(self, pspec_out)
