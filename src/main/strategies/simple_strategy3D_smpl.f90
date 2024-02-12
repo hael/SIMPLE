@@ -47,13 +47,13 @@ contains
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s3D%smpl_inpl_ns, params_glob%l_reg_uni)
+                    irot = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s3D%smpl_inpl_ns)
                     locs(iref)      = irot
                     ref_corrs(iref) = inpl_corrs(irot)
                 endif
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            iref = reverse_multinomal(ref_corrs, s3D%smpl_refs_ns, params_glob%l_reg_uni)
+            iref = reverse_multinomal(ref_corrs, s3D%smpl_refs_ns)
             irot = locs(iref)
             corr = ref_corrs(iref)
             call self%s%store_solution(iref, irot, corr)
