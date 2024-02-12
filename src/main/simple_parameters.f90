@@ -73,9 +73,6 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
     character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
-    character(len=3)          :: reg_opt_ang='no'     !< reg shift optimal angle (yes|no){no}
-    character(len=3)          :: reg_smpl='no'        !< reg sampling (yes|no){no}
-    character(len=3)          :: reg_uni='no'         !< reg uniform sampling (yes|no){no}
     character(len=3)          :: reg_per='no'         !< reg perturbation of reference orientation (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -436,9 +433,6 @@ type :: parameters
     logical :: l_phaseplate   = .false.
     logical :: l_reg_init     = .false.
     logical :: l_reg_norm     = .false.
-    logical :: l_reg_opt_ang  = .false.
-    logical :: l_reg_smpl     = .false.
-    logical :: l_reg_uni      = .false.
     logical :: l_reg_per      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
@@ -578,9 +572,6 @@ contains
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_init',       self%reg_init)
         call check_carg('reg_norm',       self%reg_norm)
-        call check_carg('reg_opt_ang',    self%reg_opt_ang)
-        call check_carg('reg_smpl',       self%reg_smpl)
-        call check_carg('reg_uni',        self%reg_uni)
         call check_carg('reg_per',        self%reg_per)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -1470,12 +1461,9 @@ contains
             THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg options
-        self%l_reg_init    = trim(self%reg_init    ).eq.'yes'
-        self%l_reg_norm    = trim(self%reg_norm    ).eq.'yes'
-        self%l_reg_opt_ang = trim(self%reg_opt_ang ).eq.'yes'
-        self%l_reg_smpl    = trim(self%reg_smpl    ).eq.'yes'
-        self%l_reg_uni     = trim(self%reg_uni     ).eq.'yes'
-        self%l_reg_per     = trim(self%reg_per     ).eq.'yes'
+        self%l_reg_init    = trim(self%reg_init ).eq.'yes'
+        self%l_reg_norm    = trim(self%reg_norm ).eq.'yes'
+        self%l_reg_per     = trim(self%reg_per  ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
