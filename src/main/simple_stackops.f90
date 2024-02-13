@@ -7,7 +7,6 @@ implicit none
 public :: make_pcavec_stack, prep_imgfile4movie
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 private
-
 #include "simple_local_flags.inc"
 
 contains
@@ -56,17 +55,15 @@ contains
         ! build and initialise objects
         call img%new(ldim,1.)
         D = count(ll_mask)
-        allocate(pcavec(D))
-        pcavec = 0.
+        allocate(pcavec(D), source=0.)
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( allocated(avg) ) deallocate(avg)
-        allocate(avg(D))
-        avg = 0.
+        allocate(avg(D), source=0.)
         ! extract patterns and write to file
         call fopen(fnum, status='replace', action='readwrite', file=fnamePCAvecs,&
              access='direct', form='unformatted', recl=recsz, iostat=ier)
-        ! call fileiochk('make_pcavec_stack; simple_procimgstk', ier)
+        call fileiochk('make_pcavec_stack; simple_procimgstk', ier)
         write(logfhandle,'(a)') '>>> MAKING PCAVEC STACK'
         do i=1,n
             call progress(i,n)
