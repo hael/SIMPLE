@@ -6,6 +6,7 @@ include 'simple_lib.f08'
 use simple_parameters,        only: params_glob
 use simple_builder,           only: build_glob
 use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_corr_binfile,      only: corr_binfile
 use simple_image
 implicit none
 
@@ -42,6 +43,7 @@ type :: regularizer
     procedure          :: tab_align
     procedure          :: normalize_weight
     procedure          :: shift_search
+    procedure          :: write_tab, read_tab
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
@@ -105,6 +107,32 @@ contains
         enddo
         !$omp end parallel do
     end subroutine fill_tab_inpl_smpl
+
+    subroutine write_tab( self, binfname )
+        class(regularizer), intent(in) :: self
+        character(len=*),   intent(in) :: binfname
+        type(corr_binfile) :: binfile
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+        endif
+        call binfile%write(self%ref_ptcl_cor)
+        call binfile%kill
+    end subroutine write_tab
+
+    subroutine read_tab( self, binfname )
+        class(regularizer), intent(inout) :: self
+        character(len=*),   intent(in) :: binfname
+        type(corr_binfile) :: binfile
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+        endif
+        call binfile%read(self%ref_ptcl_cor)
+        call binfile%kill
+    end subroutine read_tab
 
     subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self

@@ -75,6 +75,8 @@ character(len=*), parameter :: DIR_MOTION_CORRECT   = 'motion_correct/'
 character(len=*), parameter :: DIR_EXTRACT          = 'extract/'
 character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
+! REG CORR
+character(len=*), parameter :: CORR_FBODY           = 'corr_part'
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'
 character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
