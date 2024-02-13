@@ -127,7 +127,8 @@ contains
         endif
         max_corr = 0.
         min_corr = huge(min_corr)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)&
+        !$omp reduction(min:min_corr) reduction(max:max_corr)
         do iptcl = params_glob%fromp,params_glob%top
             if( self%ptcl_avail(iptcl) )then
                 max_corr = max(max_corr, maxval(self%ref_ptcl_cor(:,iptcl), dim=1))
