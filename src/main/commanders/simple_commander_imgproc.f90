@@ -474,33 +474,37 @@ contains
     end subroutine exec_filter
 
     subroutine exec_ppca_denoise( self, cline )
-        use simple_stackops,    only: make_pcavec_stack
-        use simple_ppca,        only: ppca
-        use simple_image,       only: image
+        use simple_imgproc,    only: make_pcavecs
+        use simple_ppca_inmem, only: ppca_inmem
+        use simple_image,      only: image
         class(ppca_denoise_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        character(len=*), parameter :: fnamePCAvecs  = 'pcavecstk.mrcs'
-        character(len=*), parameter :: fnameFEATvecs = 'featvecstk.mrcs'
-        integer,          parameter :: MAXPCAITS     = 15
-        type(parameters) :: params
-        type(builder)    :: build
-        type(ppca)       :: prob_pca
-        type(image)      :: img
-        integer          :: recsz, npix, iptcl
-        real, allocatable :: avg(:), gen(:)
+        integer,     parameter   :: MAXPCAITS = 15
+        type(image), allocatable :: imgs(:)
+        real,        allocatable :: avg(:), gen(:), pcavecs(:,:)
+        type(parameters)  :: params
+        type(builder)     :: build
+        type(ppca_inmem)  :: prob_pca
+        integer           :: npix, iptcl
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ppca_denoised'//trim(STK_EXT))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
-        call make_pcavec_stack(params%stk, fnamePCAvecs, npix, recsz, avg)
+        allocate(imgs(params%nptcls))
+        do iptcl = 1, params%nptcls
+            call imgs(iptcl)%new([params%box,params%box,1], params%smpd)
+            call imgs(iptcl)%read(params%stk, iptcl)
+        end do
+        call make_pcavecs(imgs, npix, avg, pcavecs)
         call prob_pca%new(params%nptcls, npix, params%neigs)
-        call prob_pca%master(fnamePCAvecs, recsz, fnameFEATvecs, MAXPCAITS)
-        call img%new([params%box,params%box,1], params%smpd)
+        call prob_pca%master(pcavecs, MAXPCAITS)
         do iptcl = 1, params%nptcls
             gen = prob_pca%generate(iptcl, avg)
-            call img%unserialize(gen)
-            call img%write(params%outstk, iptcl)
+            call imgs(iptcl)%unserialize(gen)
+            call imgs(iptcl)%write(params%outstk, iptcl)
+            call imgs(iptcl)%kill
         end do
+        deallocate(imgs)
         ! cleanup
         call build%kill_general_tbox
         ! end gracefully
