@@ -2004,12 +2004,13 @@ contains
         use simple_classaverager, only: transform_ptcls
         class(ppca_denoise_classes_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        integer,          parameter   :: MAXPCAITS = 15
+        integer,          parameter   :: MAXPCAITS  = 15
+        logical,          parameter   :: TRANSP_PCA = .true. ! pixel-wise learning
         type(image),      allocatable :: imgs(:)
         type(image)                   :: cavg
         type(oris),       pointer     :: spproj_field => null()
         type(sp_project), target      :: spproj
-        character(len=:), allocatable :: fname_icls, label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
+        character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
         integer,          allocatable :: cls_inds(:), pinds(:)
         real,             allocatable :: avg(:), gen(:), pcavecs(:,:)
         type(parameters) :: params
@@ -2040,22 +2041,30 @@ contains
         do i = 1, ncls
             ! call progress(i,ncls)
             call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, cavg=cavg)
-            ! fname_icls = 'cavg'//int2str_pad(cls_inds(i),3)//'.mrcs'
             nptcls     = size(imgs)
             do j = 1, nptcls
-                ! call imgs(j)%write(fname_icls, j)
                 call imgs(j)%write(fname, pinds(j))
             end do
             call cavg%write(fname_cavgs, i)
-            call make_pcavecs(imgs, npix, avg, pcavecs)
-            call prob_pca%new(nptcls, npix, params%neigs)
-            call prob_pca%master(pcavecs, MAXPCAITS)
-            ! fname_icls = 'class_denoised'//int2str_pad(cls_inds(i),3)//'.mrcs'
+            if( TRANSP_PCA )then
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=.true.)
+                call prob_pca%new(npix, nptcls, params%neigs)
+                call prob_pca%master(pcavecs, MAXPCAITS)
+                do j = 1, npix
+                    pcavecs(j,:) = prob_pca%generate(j, avg)
+                end do
+                pcavecs = transpose(pcavecs)
+            else
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=.false.)
+                call prob_pca%new(nptcls, npix, params%neigs)
+                call prob_pca%master(pcavecs, MAXPCAITS)
+                do j = 1, nptcls
+                    pcavecs(j,:) = prob_pca%generate(j, avg)
+                end do
+            endif
             call cavg%zero_and_unflag_ft
             do j = 1, nptcls
-                gen = prob_pca%generate(j, avg)
-                call imgs(j)%unserialize(gen)
-                ! call imgs(j)%write(fname_icls, j)
+                call imgs(j)%unserialize(pcavecs(j,:))
                 call cavg%add(imgs(j))
                 call imgs(j)%write(fname_denoised, pinds(j))
                 call imgs(j)%kill
