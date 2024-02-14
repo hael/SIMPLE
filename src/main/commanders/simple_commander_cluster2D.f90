@@ -2039,7 +2039,7 @@ contains
         fname_cavgs_denoised = 'cavgs_denoised.mrcs'
         do i = 1, ncls
             ! call progress(i,ncls)
-            call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, cavg)
+            call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, cavg=cavg)
             ! fname_icls = 'cavg'//int2str_pad(cls_inds(i),3)//'.mrcs'
             nptcls     = size(imgs)
             do j = 1, nptcls

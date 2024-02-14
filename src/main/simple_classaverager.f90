@@ -1529,7 +1529,7 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, cavg )
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, phflip, cavg )
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         class(sp_project),        intent(inout) :: spproj
@@ -1537,14 +1537,18 @@ contains
         integer,                  intent(in)    :: icls
         type(image), allocatable, intent(inout) :: timgs(:)
         integer,     allocatable, intent(inout) :: pinds(:)
+        logical,     optional,    intent(in)    :: phflip
         type(image), optional,    intent(inout) :: cavg
         class(oris),  pointer :: pos
         type(image)           :: img, timg
+        type(ctfparams)       :: ctfparms
+        type(ctf)             :: tfun
         character(len=STDLEN) :: string
         complex :: fcompl, fcompll
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k
+        logical :: l_phflip
         if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
@@ -1566,6 +1570,21 @@ contains
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)
         if( pop == 0 ) return
+        l_phflip = .false.
+        if( present(phflip) ) l_phflip = phflip
+        if( l_phflip )then
+            select case( spproj%get_ctfflag_type(oritype, pinds(1)) )
+            case(CTFFLAG_NO)
+                THROW_HARD('NO CTF INFORMATION COULD BE FOUND')
+            case(CTFFLAG_FLIP)
+                THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
+                l_phflip = .false.
+            case(CTFFLAG_YES)
+                ! all good
+            case DEFAULT
+                THROW_HARD('UNSUPPORTED CTF FLAG')
+            end select
+        endif
         allocate(timgs(pop))
         do i = 1,size(timgs)
             call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd)
@@ -1587,9 +1606,15 @@ contains
             call timg%zero_and_flag_ft
             ! normalisation
             call build_glob%imgbatch(i)%norm_noise_pad_fft(build_glob%lmsk,img)
+            ! optional phase-flipping
+            if( l_phflip )then
+                ctfparms = spproj%get_ctfparams(oritype, iptcl)
+                tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                call tfun%apply_serial(img, 'flip', ctfparms)
+            endif
             ! shift
             call img%shift2Dserial(-shift)
-            ! particle & ctf rotations
+            ! particle rotation
             call rotmat2d(-e3, mat)
             do h = logi_lims(1,1),logi_lims(1,2)
                 do k = logi_lims(2,1),logi_lims(2,2)
