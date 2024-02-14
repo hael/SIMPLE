@@ -361,9 +361,9 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        niters       = 0
-        iter         = params%startit - 1
-        corr         = -1.
+        niters = 0
+        iter   = params%startit - 1
+        corr   = -1.
         do
             if( L_BENCH_GLOB )then
                 t_init = tic()
