@@ -220,7 +220,7 @@ contains
                   &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
         real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
-        self%ptcl_ref_map = 1   
+        self%ptcl_ref_map = 1
         ! sorting each columns
         sorted_tab = transpose(self%ref_ptcl_cor)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
