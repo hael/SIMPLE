@@ -9,7 +9,7 @@ cd build_gcc11.2.0
 cmake ..
 make -j install
 cd ..
-chmod a+rx,o+rx -R build_gcc11.2.0
+chmod -R 777 build_gcc11.2.0
 module unload gcc/11.2.0
 exit
 
