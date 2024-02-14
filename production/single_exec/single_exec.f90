@@ -37,6 +37,7 @@ type(analysis2D_nano_commander)               :: xanalysis2D_nano
 type(center2D_nano_commander)                 :: xcenter2D
 type(cluster2D_nano_commander)                :: xcluster2D
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
+type(ppca_denoise_classes_commander)          :: xppca_denoise_classes
 type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
@@ -122,6 +123,8 @@ select case(prg)
         call xcluster2D%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
+    case( 'ppca_denoise_classes' )
+        call xppca_denoise_classes%execute(cline)
     case( 'estimate_diam')
         call cline%set('mkdir', 'no')
         call xestimate_diam%execute(cline)
@@ -164,7 +167,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('457503a5')
+call simple_print_git_version('afe5f31d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

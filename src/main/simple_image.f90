@@ -1700,22 +1700,18 @@ contains
 
     subroutine unserialize( self, pcavec, l_msk )
         class(image),      intent(inout) :: self
-        real, allocatable, intent(in)    :: pcavec(:)
+        real,              intent(in)    :: pcavec(:)
         logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         integer :: sz, sz_msk, i, j, k, cnt
-        if( allocated(pcavec) )then
-            if( present(l_msk) )then
-                sz     = size(pcavec)
-                sz_msk = count(l_msk)
-                if( sz /= sz_msk )then
-                    write(logfhandle,*) 'ERROR! Nonconforming sizes'
-                    write(logfhandle,*) 'sizeof(pcavec): ', sz
-                    write(logfhandle,*) 'sizeof(l_msk) : ', sz_msk
-                    THROW_HARD('unserialize')
-                endif
+        if( present(l_msk) )then
+            sz     = size(pcavec)
+            sz_msk = count(l_msk)
+            if( sz /= sz_msk )then
+                write(logfhandle,*) 'ERROR! Nonconforming sizes'
+                write(logfhandle,*) 'sizeof(pcavec): ', sz
+                write(logfhandle,*) 'sizeof(l_msk) : ', sz_msk
+                THROW_HARD('unserialize')
             endif
-        else
-            THROW_HARD('pcavec unallocated; unserialize')
         endif
         if( self%ft ) self%ft = .false.
         self%rmat = 0.
