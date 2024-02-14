@@ -52,6 +52,7 @@ type :: oris
     procedure          :: get_dfx, get_dfy
     procedure          :: get_state
     procedure          :: get_class
+    procedure          :: get_label_inds
     procedure          :: get_eo
     procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
@@ -433,6 +434,23 @@ contains
         integer,     intent(in) :: i
         get_class = self%o(i)%get_class()
     end function get_class
+
+    function get_label_inds( self, label ) result( inds )
+        class(oris),      intent(in) :: self
+        character(len=*), intent(in) :: label
+        integer :: ninds
+        integer :: i, icls, icls_max
+        integer, allocatable :: inds(:), inds_all(:)
+        logical, allocatable :: isthere(:)
+        icls_max = self%get_n(label)
+        inds_all = (/(i,i=1,icls_max)/)
+        allocate(isthere(icls_max), source=.false.)
+        do i = 1, self%n
+            icls = self%get_class(i)
+            isthere(icls) = .true.
+        end do
+        inds = pack(inds_all, mask=isthere)
+    end function get_label_inds
 
     pure integer function get_eo( self, i )
         class(oris), intent(in) :: self

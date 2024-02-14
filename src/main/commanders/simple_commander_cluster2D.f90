@@ -29,6 +29,7 @@ public :: cavgassemble_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 public :: write_classes_commander
+public :: ppca_denoise_classes_commander
 public :: check_2dconv
 private
 #include "simple_local_flags.inc"
@@ -82,6 +83,11 @@ type, extends(commander_base) :: write_classes_commander
   contains
     procedure :: execute      => exec_write_classes
 end type write_classes_commander
+
+type, extends(commander_base) :: ppca_denoise_classes_commander
+  contains
+    procedure :: execute      => exec_ppca_denoise_classes
+end type ppca_denoise_classes_commander
 
 contains
 
@@ -1990,6 +1996,79 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_WRITE_CLASSES NORMAL STOP ****')
     end subroutine exec_write_classes
+
+    subroutine exec_ppca_denoise_classes( self, cline )
+        use simple_imgproc,       only: make_pcavecs
+        use simple_ppca_inmem,    only: ppca_inmem
+        use simple_image,         only: image
+        use simple_classaverager, only: transform_ptcls
+        class(ppca_denoise_classes_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        integer,          parameter   :: MAXPCAITS = 15
+        type(image),      allocatable :: imgs(:)
+        type(image)                   :: cavg
+        type(oris),       pointer     :: spproj_field => null()
+        type(sp_project), target      :: spproj
+        character(len=:), allocatable :: fname_icls, label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised
+        integer,          allocatable :: cls_inds(:), pinds(:)
+        real,             allocatable :: avg(:), gen(:), pcavecs(:,:)
+        type(parameters) :: params
+        type(builder)    :: build
+        type(ppca_inmem) :: prob_pca
+        integer          :: npix, i, j, ncls, nptcls
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'ppca_denoised'//trim(STK_EXT))
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call spproj%read(params%projfile)
+        select case(trim(params%oritype))
+            case('ptcl2D')
+                spproj_field => spproj%os_ptcl2D
+                label        =  'class'
+            case('pctl3D')
+                spproj_field => spproj%os_ptcl3D
+                label        =  'proj'
+            case DEFAULT
+                THROW_HARD('ORITYPE not supported!')
+        end select
+        cls_inds             = spproj_field%get_label_inds(label)
+        ncls                 = size(cls_inds)
+        fname                = 'ptcls.mrcs'
+        fname_denoised       = 'ptcls_denoised.mrcs'
+        fname_cavgs          = 'cavgs.mrcs'
+        fname_cavgs_denoised = 'cavgs_denoised.mrcs'
+        do i = 1, ncls
+            ! call progress(i,ncls)
+            call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, cavg)
+            ! fname_icls = 'cavg'//int2str_pad(cls_inds(i),3)//'.mrcs'
+            nptcls     = size(imgs)
+            do j = 1, nptcls
+                ! call imgs(j)%write(fname_icls, j)
+                call imgs(j)%write(fname, pinds(j))
+            end do
+            call cavg%write(fname_cavgs, i)
+            call make_pcavecs(imgs, npix, avg, pcavecs)
+            call prob_pca%new(nptcls, npix, params%neigs)
+            call prob_pca%master(pcavecs, MAXPCAITS)
+            ! fname_icls = 'class_denoised'//int2str_pad(cls_inds(i),3)//'.mrcs'
+            call cavg%zero_and_unflag_ft
+            do j = 1, nptcls
+                gen = prob_pca%generate(j, avg)
+                call imgs(j)%unserialize(gen)
+                ! call imgs(j)%write(fname_icls, j)
+                call cavg%add(imgs(j))
+                call imgs(j)%write(fname_denoised, pinds(j))
+                call imgs(j)%kill
+            end do
+            call cavg%div(real(nptcls))
+            call cavg%write(fname_cavgs_denoised, i)
+        end do
+        ! cleanup
+        deallocate(imgs)
+        call build%kill_general_tbox
+        ! end gracefully
+        call simple_end('**** SIMPLE_PPCA_DENOISE_CLASSES NORMAL STOP ****')
+    end subroutine exec_ppca_denoise_classes
 
     ! UTILITIES
 
