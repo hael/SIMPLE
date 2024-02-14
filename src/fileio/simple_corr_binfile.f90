@@ -47,7 +47,7 @@ contains
         self%file_header(2) = top
         self%file_header(3) = nrefs
         self%headsz         = sizeof(self%file_header)
-        self%datasz         = sizeof(r) * (self%top-self%fromp+1) * self%nrefs
+        self%datasz         = sizeof(r) * self%nrefs
         self%exists         = .true.
     end subroutine new
 
@@ -65,7 +65,7 @@ contains
         self%file_header(2) = self%top
         self%file_header(3) = self%nrefs
         self%headsz         = sizeof(self%file_header)
-        self%datasz         = sizeof(r) * (self%top-self%fromp+1) * self%nrefs
+        self%datasz         = sizeof(r) * self%nrefs
         self%exists         = .true.
     end subroutine new_from_file
 
@@ -77,14 +77,12 @@ contains
         integer :: funit
         logical :: success
         integer :: iptcl, addr
-        real    :: corrs_n(self%nrefs)
         allocate(corrs(self%nrefs,self%fromp:self%top),source=0.0)
         success = self%open_and_check_header( funit, .true. )
         if( .not. success ) return
         do iptcl = self%fromp, self%top
             addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
-            read(unit=funit,pos=addr) corrs_n
-            corrs(:,iptcl) = corrs_n
+            read(unit=funit,pos=addr) corrs(:,iptcl)
         end do
         call fclose(funit)
     end subroutine read
