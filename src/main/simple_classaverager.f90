@@ -1529,23 +1529,23 @@ contains
 
     ! PUBLIC UTILITIES
 
-    subroutine transform_ptcls( spproj, oritype, icls, timgs, cavg )
+    subroutine transform_ptcls( spproj, oritype, icls, timgs, pinds, cavg )
         use simple_sp_project,          only: sp_project
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimgbatch
         class(sp_project),        intent(inout) :: spproj
         character(len=*),         intent(in)    :: oritype
         integer,                  intent(in)    :: icls
         type(image), allocatable, intent(inout) :: timgs(:)
+        integer,     allocatable, intent(inout) :: pinds(:)
         type(image), optional,    intent(inout) :: cavg
         class(oris),  pointer :: pos
         type(image)           :: img, timg
         character(len=STDLEN) :: string
-        integer,  allocatable :: pinds(:)
         complex :: fcompl, fcompll
         real    :: mat(2,2), shift(2), loc(2), dist(2), e3, kw
         integer :: logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),phys(2),win_corner(2)
         integer :: i,iptcl, l,ll,m,mm, pop, h,k
-        if(allocated(timgs))then
+        if( allocated(timgs) )then
             do i = 1,size(timgs)
                 call timgs(i)%kill
             enddo
@@ -1553,14 +1553,15 @@ contains
         endif
         if(present(cavg)) call cavg%kill
         select case(trim(oritype))
-        case('ptcl2D')
-            string = 'class'
-        case('pctl3D')
-            string = 'proj'
-        case DEFAULT
-            THROW_HARD('ORITYPE not supported!')
+            case('ptcl2D')
+                string = 'class'
+            case('pctl3D')
+                string = 'proj'
+            case DEFAULT
+                THROW_HARD('ORITYPE not supported!')
         end select
         call spproj%ptr2oritype( oritype, pos )
+        if( allocated(pinds) ) deallocate(pinds)
         call pos%get_pinds(icls, string, pinds)
         if( .not.(allocated(pinds)) ) return
         pop = size(pinds)

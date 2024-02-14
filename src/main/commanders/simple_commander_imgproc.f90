@@ -504,8 +504,8 @@ contains
             call imgs(iptcl)%write(params%outstk, iptcl)
             call imgs(iptcl)%kill
         end do
-        deallocate(imgs)
         ! cleanup
+        deallocate(imgs)
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
