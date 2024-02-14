@@ -70,8 +70,8 @@ contains
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
-        self%ptcl_avail = nint(build_glob%spproj_field%get_all('state')) == 1
         do iptcl = params_glob%fromp,params_glob%top
+            self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0)
             if( self%ptcl_avail(iptcl) )then
                 do iref = 1,self%nrefs
                     self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
@@ -123,7 +123,7 @@ contains
 
     subroutine read_tab( self, binfname )
         class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in) :: binfname
+        character(len=*),   intent(in)    :: binfname
         type(corr_binfile) :: binfile
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
