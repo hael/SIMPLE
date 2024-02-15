@@ -41,6 +41,7 @@ type(ppca_denoise_classes_commander)          :: xppca_denoise_classes
 type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
+type(autoclean_nano_commander)                :: xautoclean_nano
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D
 type(tseries_swap_stack_commander)            :: xtseries_swap_stack
@@ -133,6 +134,8 @@ select case(prg)
         call xsimulate_atoms%execute(cline)
     case( 'refine3D_nano')
         call xrefine3D_nano%execute(cline)
+    case( 'autoclean_nano')
+        call xautoclean_nano%execute(cline)
     case( 'autorefine3D_nano')
         call xautorefine3D_nano%execute(cline)
     case( 'tseries_reconstruct3D')
@@ -167,7 +170,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('afe5f31d')
+call simple_print_git_version('ecb6c03b')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
