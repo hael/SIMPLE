@@ -78,6 +78,7 @@ type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: automask
 type(simple_program), target :: automask2D
+type(simple_program), target :: autoclean_nano
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
@@ -355,6 +356,7 @@ contains
         call new_assign_optics_groups
         call new_automask
         call new_automask2D
+        call new_autoclean_nano
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
@@ -471,6 +473,7 @@ contains
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(automask2D)
+        call push2prg_ptr_array(autoclean_nano)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
@@ -598,6 +601,8 @@ contains
                 ptr2prg => automask
             case('automask2D')
                 ptr2prg => automask2D
+            case('autoclean_nano')
+                ptr2prg => autoclean_nano
             case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
             case('binarize')
@@ -937,6 +942,7 @@ contains
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') autoclean_nano%name
         write(logfhandle,'(A)') autorefine3D_nano%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') tseries_swap_stack%name
@@ -1290,6 +1296,34 @@ contains
         ! computer controls
         call automask2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask2D
+
+    subroutine new_autoclean_nano
+        ! PROGRAM SPECIFICATION
+        call autoclean_nano%new(&
+        &'autoclean_nano',&                                                                             ! name
+        &'automatic cleanup of time-series of metallic nanoparticles',&                                 ! descr_short
+        &'is a shared-memory workflow for automatic cleanup of time-series of metallic nanoparticles',& ! descr_long
+        &'single_exec',&                                                                                ! executable
+        &1, 0, 0, 0, 0, 1, 2, .true.)                                                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call autoclean_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call autoclean_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call autoclean_nano%set_input('comp_ctrls', 1, nparts)
+        autoclean_nano%comp_ctrls(1)%required = .false.
+        call autoclean_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_autoclean_nano
 
     subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
