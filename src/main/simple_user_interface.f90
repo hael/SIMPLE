@@ -3243,11 +3243,11 @@ contains
         &'ppca_denoise_classes',&                     ! name
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of image classes',&  ! descr_long
-        &'simple_exec',&                              ! executable
-        &1, 0, 0, 0, 1, 0, 1, .true.)                 ! # entries in each group, requires sp_project
+        &'all',&                                      ! executable
+        &0, 0, 0, 0, 1, 0, 1, .true.)                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ppca_denoise_classes%set_input('img_ios', 1, outstk)
+        ! <empty>
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -3255,7 +3255,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise_classes%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
+        call ppca_denoise_classes%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .false., 0.0)
         ! mask controls
         ! <empty>
         ! computer controls

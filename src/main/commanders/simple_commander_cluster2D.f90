@@ -2019,7 +2019,7 @@ contains
         integer          :: npix, i, j, ncls, nptcls
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'ppca_denoised'//trim(STK_EXT))
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    2.0)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
@@ -2039,7 +2039,7 @@ contains
         fname_cavgs          = 'cavgs.mrcs'
         fname_cavgs_denoised = 'cavgs_denoised.mrcs'
         do i = 1, ncls
-            ! call progress(i,ncls)
+            call progress_gfortran(i,ncls)
             call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, cavg=cavg)
             nptcls     = size(imgs)
             do j = 1, nptcls
@@ -2065,6 +2065,7 @@ contains
             call cavg%zero_and_unflag_ft
             do j = 1, nptcls
                 call imgs(j)%unserialize(pcavecs(j,:))
+                call imgs(j)%norm
                 call cavg%add(imgs(j))
                 call imgs(j)%write(fname_denoised, pinds(j))
                 call imgs(j)%kill
