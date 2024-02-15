@@ -643,7 +643,7 @@ contains
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt',  'no')
         if( .not. cline%defined('hp')             ) call cline%set('hp',               3.)
         if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
-        if( .not. cline%defined('ncls')           ) call cline%set('ncls',            20.)
+        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 500.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
