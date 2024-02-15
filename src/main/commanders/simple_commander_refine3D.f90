@@ -19,6 +19,8 @@ public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
 public :: check_align_commander
+public :: prob_tab_commander_dist
+public :: prob_tab_commander
 private
 #include "simple_local_flags.inc"
 
@@ -46,6 +48,16 @@ type, extends(commander_base) :: check_align_commander
   contains
     procedure :: execute      => exec_check_align
 end type check_align_commander
+
+type, extends(commander_base) :: prob_tab_commander
+  contains
+    procedure :: execute      => exec_prob_tab
+end type prob_tab_commander
+
+type, extends(commander_base) :: prob_tab_commander_dist
+  contains
+    procedure :: execute      => exec_prob_tab_dist
+end type prob_tab_commander_dist
 
 contains
 
@@ -78,6 +90,7 @@ contains
         type(postprocess_commander)           :: xpostprocess
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
+        type(prob_tab_commander_dist)         :: xprob_tab_dist
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
@@ -85,6 +98,7 @@ contains
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
+        type(cmdline)    :: cline_prob_tab_dist
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -358,6 +372,10 @@ contains
             if( l_projmatch .and. l_switch2eo ) iter_switch2euclid = params%lp_iters
             call cline%set('needs_sigma','yes')
         endif
+        if( params%refine .eq. 'prob' )then
+            cline_prob_tab_dist = cline
+            call cline_prob_tab_dist%set( 'prg', 'prob_tab_dist' )          ! required for distributed call
+        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
@@ -392,6 +410,10 @@ contains
                     call job_descr%set('szsn', int2str(params%szsn))
                     call cline%set('szsn', real(params%szsn))
                 endif
+            endif
+            if( params%refine .eq. 'prob' )then
+                call cline_prob_tab_dist%set('which_iter', real(params%which_iter))
+                call xprob_tab_dist%execute( cline_prob_tab_dist )
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -1065,5 +1087,147 @@ contains
         enddo
         call simple_end('**** SIMPLE_CHECK_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_align
+
+    subroutine exec_prob_tab( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
+                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
+        use simple_polarft_corrcalc,    only: polarft_corrcalc
+        use simple_parameters,          only: params_glob
+        use simple_regularizer,         only: regularizer
+        use simple_euclid_sigma2,       only: euclid_sigma2
+        use simple_image
+        class(prob_tab_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        integer,          allocatable :: pinds(:)
+        logical,          allocatable :: ptcl_mask(:)
+        type(image),      allocatable :: tmp_imgs(:)
+        character(len=:), allocatable :: fname
+        type(polarft_corrcalc)        :: pftcc
+        type(builder)                 :: build
+        type(parameters)              :: params
+        type(ori)                     :: o_tmp
+        type(regularizer)             :: reg_obj
+        type(euclid_sigma2)           :: eucl_sigma
+        integer  :: nptcls, iptcl, s, ithr, iref, i, nptcls_here
+        logical  :: l_ctf, do_center
+        real     :: xyz(3)
+        call cline%set('mkdir', 'no')
+        call cline%set('stream','no')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params%fromp:params%top))
+        call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
+            &1.0, nptcls, pinds, ptcl_mask)
+        ! e/o partioning
+        if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
+            call build%spproj%os_ptcl3D%partition_eo
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
+        endif
+        ! more prep
+        nptcls_here = params_glob%top - params_glob%fromp + 1
+        call pftcc%new(params%nspace, [1,nptcls_here], params%kfromto)
+        call reg_obj%new(pftcc)
+        call prepimgbatch(nptcls_here)
+        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
+        call pftcc%reallocate_ptcls(nptcls_here, pinds)
+        call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
+        allocate(tmp_imgs(nthr_glob))
+        !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
+        do ithr = 1,nthr_glob
+            call tmp_imgs(ithr)%new([params%box_crop,params%box_crop,1], params%smpd_crop, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        ! PREPARATION OF REFERENCES IN PFTCC
+        if( params%l_needs_sigma )then
+            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            call eucl_sigma%new(fname, params%box)
+            call eucl_sigma%read_part(  build%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
+        end if
+        ! read reference volumes and create polar projections
+        do s=1,params%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
+            call read_and_filter_refvols( cline, params%vols(s), params%vols(s))
+            ! PREPARE E/O VOLUMES
+            call preprefvol(cline, s, do_center, xyz, .false.)
+            call preprefvol(cline, s, do_center, xyz, .true.)
+            ! PREPARE REFERENCES
+            !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            do iref=1, params%nspace
+                call build%eulspace%get_ori(iref, o_tmp)
+                call build%vol_odd%fproject_polar((s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.false., mask=build%l_resmsk)
+                call build%vol%fproject_polar(    (s - 1) * params%nspace + iref,&
+                    &o_tmp, pftcc, iseven=.true.,  mask=build%l_resmsk)
+                call o_tmp%kill
+            end do
+            !$omp end parallel do
+        end do
+        call pftcc%memoize_refs
+        ! PREPARATION OF PARTICLES
+        !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
+        do i = 1,nptcls_here
+            ithr  = omp_get_thread_num()+1
+            iptcl = pinds(i)
+            if( .not.ptcl_mask(iptcl) ) cycle
+            ! prep
+            call prepimg4align(iptcl, build%imgbatch(i), tmp_imgs(ithr))
+            ! transfer to polar coordinates
+            call build%img_crop_polarizer%polarize(pftcc, tmp_imgs(ithr), iptcl, .true., .true., mask=build%l_resmsk)
+            ! e/o flags
+            call pftcc%set_eo(iptcl, mod(iptcl, 2)==0)
+        enddo
+        !$omp end parallel do
+        ! getting the ctfs
+        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
+        ! make CTFs
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+        call pftcc%memoize_ptcls
+        call reg_obj%fill_tab_inpl_smpl(pinds)
+        fname = CORR_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+        call reg_obj%write_tab(fname)
+        call reg_obj%kill
+        call killimgbatch
+        call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab
+
+    subroutine exec_prob_tab_dist( self, cline )
+        use simple_sp_project, only: sp_project
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(prob_tab_commander_dist), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(cmdline)    :: cline_prob_tab
+        type(parameters) :: params
+        type(qsys_env)   :: qenv
+        type(sp_project) :: spproj
+        type(chash)      :: job_descr
+        call cline%set('stream','no')
+        if( .not. cline%defined('projfile') )then
+            THROW_HARD('Missing project file entry; exec_prob_tab_dist')
+        endif
+        ! init
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        call cline%set('mkdir', 'no')
+        cline_prob_tab = cline
+        call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        call cline_prob_tab%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        call cline_prob_tab%kill
+        call spproj%kill
+        call qenv%kill
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_PROB_TAB_DIST NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab_dist
 
 end module simple_commander_refine3D
