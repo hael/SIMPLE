@@ -951,7 +951,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(image)                   :: img 
+        type(image)                   :: img
         real,             allocatable :: rstates(:), corrs(:), tmp(:)
         character(len=:), allocatable :: fname, cavgstk
         real    :: corr_t, smpd

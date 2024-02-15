@@ -43,6 +43,8 @@ type ppca_inmem
     procedure          :: kill
 end type
 
+logical :: L_PRINT = .false.
+
 contains
 
     ! CONSTRUCTORS
@@ -137,7 +139,7 @@ contains
                 cycle
             endif
             if( k == 1 .or. mod(k,5) == 0 )then
-                write(logfhandle,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Squared error:', p
+                if( L_PRINT ) write(logfhandle,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Squared error:', p
             endif
             if( (abs(p-p_prev) < 0.1) .or. k == maxpcaits ) exit
         end do
