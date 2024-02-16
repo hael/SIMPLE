@@ -73,44 +73,47 @@ contains
 
     subroutine read( self, corrs )! read in all corrs value from file
         class(corr_binfile), intent(inout) :: self
-        real, allocatable,   intent(out)   :: corrs(:,:)
+        real, allocatable,   intent(out)   :: corrs(:,:,:)
         integer :: funit
         logical :: success
         integer :: iptcl, addr
-        allocate(corrs(self%nrefs,self%fromp:self%top),source=0.0)
+        allocate(corrs(self%nrefs,self%fromp:self%top,2),source=0.0)
         success = self%open_and_check_header( funit, .true. )
         if( .not. success ) return
+        ! read corr
         do iptcl = self%fromp, self%top
             addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
-            read(unit=funit,pos=addr) corrs(:,iptcl)
+            read(unit=funit,pos=addr) corrs(:,iptcl,1)
+        end do
+        ! read loc
+        do iptcl = self%fromp, self%top
+            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
+            read(unit=funit,pos=addr) corrs(:,iptcl,2)
         end do
         call fclose(funit)
     end subroutine read
 
     subroutine write( self, corrs )
         class(corr_binfile), intent(inout) :: self
-        real, allocatable,   intent(in)    :: corrs(:,:)
+        real,                intent(in)    :: corrs(self%fromp:self%top,self%nrefs,2)
         integer :: funit
         logical :: success
         integer :: addr, iptcl
-        ! make sure the dimensions of inout matrix agree
-        if( (lbound(corrs,2).ne.self%fromp).or.(ubound(corrs,2).ne.self%top).or.&
-            (lbound(corrs,1).ne.1)         .or.(ubound(corrs,1).ne.self%nrefs)) then
-            THROW_WARN('corr_binfile: write; dimensions of corrs dont agree')
-            write (*,*) 'self%fromp: ',   self%fromp,   ' ; lbound(corrs,2): ', lbound(corrs,2)
-            write (*,*) 'self%top: ',     self%top,     ' ; ubound(corrs,2): ', ubound(corrs,2)
-            write (*,*) 'self%nrefs: ',   self%nrefs,   ' ;   size(corrs,1): ',   size(corrs,1)
-            THROW_HARD( 'exiting')
-        end if
         if( .not. file_exists(self%fname) )then
             call self%create_empty( funit )
         else
             success = self%open_and_check_header( funit, .false. )
             if( .not. success ) return
         end if
+        ! write corr
         do iptcl = self%fromp,self%top
             addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
-            write(funit,pos=addr) corrs(:,iptcl)
+            write(funit,pos=addr) corrs(:,iptcl,1)
+        end do
+        ! write loc
+        do iptcl = self%fromp,self%top
+            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
+            write(funit,pos=addr) corrs(:,iptcl,2)
         end do
         call fclose(funit)
     end subroutine write
@@ -183,7 +186,7 @@ contains
         class(corr_binfile), intent(in)  :: self
         integer,             intent(out) :: funit
         integer  :: io_stat
-        real(sp) :: corr_empty(self%nrefs, self%fromp:self%top)
+        real(sp) :: corr_empty(self%nrefs, self%fromp:self%top,2)
         corr_empty = 0.
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
