@@ -1156,11 +1156,11 @@ contains
         ! call cline_detect_atms%delete('corr_thres')
         ! call cline_detect_atms%delete('cs_thres')
         ! call cline_detect_atms%delete('use_thres') ! yes is default
-        ! params_ptr  => params_glob
-        ! params_glob => null()
-        ! call xdetect_atms%execute(cline_detect_atms)
-        ! params_glob => params_ptr
-        ! params_ptr  => null()
+        params_ptr  => params_glob
+        params_glob => null()
+        call xdetect_atms%execute(cline_detect_atms)
+        params_glob => params_ptr
+        params_ptr  => null()
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
