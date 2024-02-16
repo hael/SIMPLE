@@ -96,7 +96,7 @@ contains
 
     subroutine write( self, corrs )
         class(corr_binfile), intent(inout) :: self
-        real,                intent(in)    :: corrs(self%fromp:self%top,self%nrefs,2)
+        real,                intent(in)    :: corrs(self%nrefs,self%fromp:self%top,2)
         integer :: funit
         logical :: success
         integer :: addr, iptcl
