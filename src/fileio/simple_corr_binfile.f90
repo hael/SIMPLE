@@ -81,14 +81,15 @@ contains
         success = self%open_and_check_header( funit, .true. )
         if( .not. success ) return
         ! read corr
+        addr = self%headsz + 1
         do iptcl = self%fromp, self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
             read(unit=funit,pos=addr) corrs(:,iptcl,1)
+            addr = addr + self%datasz
         end do
         ! read loc
         do iptcl = self%fromp, self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
             read(unit=funit,pos=addr) corrs(:,iptcl,2)
+            addr = addr + self%datasz
         end do
         call fclose(funit)
     end subroutine read
@@ -106,14 +107,15 @@ contains
             if( .not. success ) return
         end if
         ! write corr
+        addr = self%headsz + 1
         do iptcl = self%fromp,self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
             write(funit,pos=addr) corrs(:,iptcl,1)
+            addr = addr + self%datasz
         end do
         ! write loc
         do iptcl = self%fromp,self%top
-            addr = self%headsz + (iptcl - self%fromp) * self%datasz + 1
             write(funit,pos=addr) corrs(:,iptcl,2)
+            addr = addr + self%datasz
         end do
         call fclose(funit)
     end subroutine write
