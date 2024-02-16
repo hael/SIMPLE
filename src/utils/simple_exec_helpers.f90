@@ -6,16 +6,40 @@ use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 implicit none
 
-public :: script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
+public :: restarted_exec, script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
 private
 #include "simple_local_flags.inc"
 
 contains
 
+    subroutine restarted_exec( cline, prg, executable )
+        class(cmdline),   intent(inout) :: cline
+        character(len=*), intent(in)    :: prg, executable
+        character(len=:), allocatable :: cmd
+        type(chash) :: job_descr
+        integer     :: nrestarts, i
+        if( .not. cline%defined('nrestarts') )then
+            THROW_HARD('nrestarts needs to be defined on command line for restarted_exec')
+        else
+            nrestarts = cline%get_rarg('nrestarts')
+            call cline%delete('nrestarts')
+        endif
+        if( .not. cline%defined('projfile') )then
+            THROW_HARD('projfile needs to be defined on command line for restarted_exec ')
+        endif
+        call cline%set('prg', trim(prg))
+        call cline%gen_job_descr(job_descr)
+        do i = 1, nrestarts
+            ! compose the command line
+            cmd = trim(executable)//' '//trim(job_descr%chash2str())//' > '//uppercase(trim(prg))//'_OUTPUT_RESTART'//int2str(i)
+            ! execute
+            call exec_cmdline(cmd)
+        end do
+    end subroutine restarted_exec
+
     subroutine script_exec( cline, prg, executable )
         class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: prg
-        character(len=*), intent(in)    :: executable
+        character(len=*), intent(in)    :: prg, executable 
         character(len=:), allocatable   :: projfile
         type(qsys_env)   :: qenv
         type(parameters) :: params

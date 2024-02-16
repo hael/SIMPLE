@@ -137,7 +137,11 @@ select case(prg)
     case( 'autoclean_nano')
         call xautoclean_nano%execute(cline)
     case( 'autorefine3D_nano')
-        call xautorefine3D_nano%execute(cline)
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'autorefine3D_nano', 'single_exec')
+        else
+            call xautorefine3D_nano%execute(cline)
+        endif
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D%execute(cline)
     case( 'tseries_swap_stack')
@@ -170,7 +174,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('5a99e74a')
+call simple_print_git_version('a1f08861')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
