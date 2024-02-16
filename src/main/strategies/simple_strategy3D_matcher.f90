@@ -205,7 +205,7 @@ contains
             ! enddo
             fname = trim(CORR_FBODY)//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             ! call reg_obj%write_tab(fname)
-            call reg_obj%read_tab( fname)
+            call reg_obj%read_tab(fname)
             call reg_obj%tab_normalize
             call reg_obj%tab_align
             if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%normalize_weight

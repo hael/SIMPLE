@@ -27,8 +27,8 @@ type :: regularizer
     integer              :: nrots
     integer              :: nrefs
     integer              :: inpl_ns, refs_ns
-    real,    allocatable :: ref_ptcl_cor(:,:)           !< 2D corr table
-    integer, allocatable :: ptcl_ref_map(:)             !< hard-alignment tab
+    real,    allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
+    integer, allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
     real,    allocatable :: inpl_corr(:,:), refs_corr(:,:)
     integer, allocatable :: inpl_inds(:,:), refs_inds(:,:)
     logical, allocatable :: ptcl_avail(:)
@@ -64,7 +64,7 @@ contains
         self%nrefs = pftcc%nrefs
         call calc_nrefs2sample(self%nrefs, self%nrots, params_glob%reg_athres, self%refs_ns, self%inpl_ns)
         self%pftcc => pftcc
-        allocate(self%ref_ptcl_cor(self%nrefs,params_glob%fromp:params_glob%top),&
+        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2),&
                 &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr), source=0.)
         allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
@@ -99,40 +99,13 @@ contains
                     ! sampling the inpl rotation
                     call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
                     irnd = self%inpl_multinomal(inpl_corrs)
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%loc = irnd
-                    self%ref_ptcl_cor(iref,iptcl)     = inpl_corrs(irnd)
+                    self%corr_loc_tab(iref,iptcl,1) = inpl_corrs(irnd)
+                    self%corr_loc_tab(iref,iptcl,2) = real(irnd)
                 endif
             enddo
         enddo
         !$omp end parallel do
     end subroutine fill_tab_inpl_smpl
-
-    subroutine write_tab( self, binfname )
-        class(regularizer), intent(in) :: self
-        character(len=*),   intent(in) :: binfname
-        type(corr_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
-        endif
-        call binfile%write(self%ref_ptcl_cor)
-        call binfile%kill
-    end subroutine write_tab
-
-    subroutine read_tab( self, binfname )
-        class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in)    :: binfname
-        type(corr_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
-        endif
-        call binfile%read(self%ref_ptcl_cor)
-        call binfile%kill
-    end subroutine read_tab
 
     subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self
@@ -143,11 +116,11 @@ contains
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
             do iptcl = params_glob%fromp, params_glob%top
                 if( self%ptcl_avail(iptcl) )then
-                    sum_corr_all = sum(self%ref_ptcl_cor(:,iptcl))
+                    sum_corr_all = sum(self%corr_loc_tab(:,iptcl,1))
                     if( sum_corr_all < TINY )then
-                        self%ref_ptcl_cor(:,iptcl) = 0.
+                        self%corr_loc_tab(:,iptcl,1) = 0.
                     else
-                        self%ref_ptcl_cor(:,iptcl) = self%ref_ptcl_cor(:,iptcl) / sum_corr_all
+                        self%corr_loc_tab(:,iptcl,1) = self%corr_loc_tab(:,iptcl,1) / sum_corr_all
                     endif
                 endif
             enddo
@@ -159,24 +132,25 @@ contains
         !$omp reduction(min:min_corr) reduction(max:max_corr)
         do iptcl = params_glob%fromp,params_glob%top
             if( self%ptcl_avail(iptcl) )then
-                max_corr = max(max_corr, maxval(self%ref_ptcl_cor(:,iptcl), dim=1))
-                min_corr = min(min_corr, minval(self%ref_ptcl_cor(:,iptcl), dim=1))
+                max_corr = max(max_corr, maxval(self%corr_loc_tab(:,iptcl,1), dim=1))
+                min_corr = min(min_corr, minval(self%corr_loc_tab(:,iptcl,1), dim=1))
             endif
         enddo
         !$omp end parallel do
         if( (max_corr - min_corr) < TINY )then
-            self%ref_ptcl_cor = 0.
+            self%corr_loc_tab(:,:,1) = 0.
         else
-            self%ref_ptcl_cor = (self%ref_ptcl_cor - min_corr) / (max_corr - min_corr)
+            self%corr_loc_tab(:,:,1) = (self%corr_loc_tab(:,:,1) - min_corr) / (max_corr - min_corr)
         endif
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
         do iptcl = params_glob%fromp,params_glob%top
             if( self%ptcl_avail(iptcl) )then
                 do iref = 1, self%nrefs
-                    self%ref_ptcl_tab(iref,iptcl)%prob = self%ref_ptcl_cor(iref,iptcl)
+                    self%ref_ptcl_tab(iref,iptcl)%prob = self%corr_loc_tab(iref,iptcl,1)
+                    self%ref_ptcl_tab(iref,iptcl)%loc  = self%corr_loc_tab(iref,iptcl,2)
                 enddo
             else
-                self%ref_ptcl_cor(:,iptcl) = 1.     ! unselected particles are down on the sorted corrs
+                self%corr_loc_tab(:,iptcl,1) = 1.     ! unselected particles are down on the sorted corrs
             endif
         enddo
         !$omp end parallel do
@@ -222,7 +196,7 @@ contains
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1
         ! sorting each columns
-        sorted_tab = transpose(self%ref_ptcl_cor)
+        sorted_tab = transpose(self%corr_loc_tab(:,:,1))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
         do iref = 1, self%nrefs
             stab_inds(:,iref) = (/(iptcl,iptcl=params_glob%fromp,params_glob%top)/)
@@ -328,11 +302,39 @@ contains
         which = self%inpl_inds(which, ithr)
     end function inpl_multinomal
 
+    ! FILE IO
+    subroutine write_tab( self, binfname )
+        class(regularizer), intent(in) :: self
+        character(len=*),   intent(in) :: binfname
+        type(corr_binfile) :: binfile
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+        endif
+        call binfile%write(self%corr_loc_tab)
+        call binfile%kill
+    end subroutine write_tab
+
+    subroutine read_tab( self, binfname )
+        class(regularizer), intent(inout) :: self
+        character(len=*),   intent(in)    :: binfname
+        type(corr_binfile) :: binfile
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+        endif
+        call binfile%read(self%corr_loc_tab)
+        call binfile%kill
+    end subroutine read_tab
+
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%ref_ptcl_cor,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,self%inpl_inds,self%refs_inds,self%ptcl_avail)
+        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,&
+                  &self%inpl_inds,self%refs_inds,self%ptcl_avail)
     end subroutine kill
 
     ! PUBLIC UTILITITES
