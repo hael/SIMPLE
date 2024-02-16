@@ -50,7 +50,7 @@ type(calc_pspec_commander)              :: xcalc_pspec
 type(calc_pspec_assemble_commander)     :: xcalc_pspec_assemble
 type(check_3Dconv_commander)            :: xcheck_3Dconv
 type(calc_group_sigmas_commander)       :: xcalc_group_sigmas
-type(prob_tab_commander_dist)           :: xprob_tab_dist
+type(prob_tab_commander_distr)          :: xprob_tab_distr
 type(prob_tab_commander)                :: xprob_tab
 
 ! RECONSTRUCTION PROGRAMS
@@ -173,8 +173,8 @@ select case(prg)
         call xcheck_3Dconv%execute(cline)
     case( 'calc_group_sigmas' )
         call xcalc_group_sigmas%execute(cline)
-    case( 'prob_tab_dist' )
-        call xprob_tab_dist%execute(cline)
+    case( 'prob_tab_distr' )
+        call xprob_tab_distr%execute(cline)
     case( 'prob_tab' )
         call xprob_tab%execute(cline)
 

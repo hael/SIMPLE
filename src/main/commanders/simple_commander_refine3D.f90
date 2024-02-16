@@ -19,7 +19,7 @@ public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
 public :: check_align_commander
-public :: prob_tab_commander_dist
+public :: prob_tab_commander_distr
 public :: prob_tab_commander
 private
 #include "simple_local_flags.inc"
@@ -54,10 +54,10 @@ type, extends(commander_base) :: prob_tab_commander
     procedure :: execute      => exec_prob_tab
 end type prob_tab_commander
 
-type, extends(commander_base) :: prob_tab_commander_dist
+type, extends(commander_base) :: prob_tab_commander_distr
   contains
-    procedure :: execute      => exec_prob_tab_dist
-end type prob_tab_commander_dist
+    procedure :: execute      => exec_prob_tab_distr
+end type prob_tab_commander_distr
 
 contains
 
@@ -90,7 +90,7 @@ contains
         type(postprocess_commander)           :: xpostprocess
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
-        type(prob_tab_commander_dist)         :: xprob_tab_dist
+        type(prob_tab_commander_distr)        :: xprob_tab_distr
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
@@ -98,7 +98,7 @@ contains
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
-        type(cmdline)    :: cline_prob_tab_dist
+        type(cmdline)    :: cline_prob_tab_distr
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -195,9 +195,11 @@ contains
         cline_volassemble         = cline
         cline_postprocess         = cline
         cline_calc_sigma          = cline
+        cline_prob_tab_distr      = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
+        call cline_prob_tab_distr%set(      'prg', 'prob_tab_distr' )    ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
@@ -372,10 +374,6 @@ contains
             if( l_projmatch .and. l_switch2eo ) iter_switch2euclid = params%lp_iters
             call cline%set('needs_sigma','yes')
         endif
-        if( params%refine .eq. 'prob' )then
-            cline_prob_tab_dist = cline
-            call cline_prob_tab_dist%set( 'prg', 'prob_tab_dist' )          ! required for distributed call
-        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
@@ -412,8 +410,10 @@ contains
                 endif
             endif
             if( params%refine .eq. 'prob' )then
-                call cline_prob_tab_dist%set('which_iter', real(params%which_iter))
-                call xprob_tab_dist%execute( cline_prob_tab_dist )
+                call cline_prob_tab_distr%set('which_iter', int2str(params%which_iter))
+                call cline_prob_tab_distr%set('vol1', cline%get_carg('vol1')) ! multi-states not supported
+                if( cline%defined('lp') ) call cline_prob_tab_distr%set('lp',params%lp)
+                call xprob_tab_distr%execute( cline_prob_tab_distr )
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -627,7 +627,7 @@ contains
             ! objfun=euclid, part 3: actual switch
             if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
                 write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+                write(logfhandle,'(A,A)')'>>> SWITCHING TO OBJFUN=',trim(orig_objfun)
                 call cline%set('objfun', orig_objfun)
                 if(.not.l_griddingset .and. .not.params%l_cartesian )then
                     call cline%set('gridding',     'yes')
@@ -645,7 +645,7 @@ contains
                 !     call cline%set('ptclw',    'yes')
                 !     call job_descr%set('ptclw','yes')
                 ! endif
-                params%objfun = orig_objfun
+                params%objfun = trim(orig_objfun)
                 select case(trim(params%objfun))
                     case('euclid')
                         params%cc_objfun = OBJFUN_EUCLID
@@ -1094,7 +1094,6 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_parameters,          only: params_glob
         use simple_regularizer,         only: regularizer
         use simple_euclid_sigma2,       only: euclid_sigma2
         use simple_image
@@ -1110,30 +1109,23 @@ contains
         type(ori)                     :: o_tmp
         type(regularizer)             :: reg_obj
         type(euclid_sigma2)           :: eucl_sigma
-        integer  :: nptcls, iptcl, s, ithr, iref, i, nptcls_here
+        integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
         real     :: xyz(3)
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params%fromp:params%top))
         call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
             &1.0, nptcls, pinds, ptcl_mask)
-        ! e/o partioning
-        if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
-            call build%spproj%os_ptcl3D%partition_eo
-            call build%spproj%write_segment_inside(params%oritype,params%projfile)
-        endif
         ! more prep
-        nptcls_here = params_glob%top - params_glob%fromp + 1
-        call pftcc%new(params%nspace, [1,nptcls_here], params%kfromto)
+        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call reg_obj%new(pftcc)
-        call prepimgbatch(nptcls_here)
-        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
-        call pftcc%reallocate_ptcls(nptcls_here, pinds)
+        call prepimgbatch(nptcls)
+        call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
+        call pftcc%reallocate_ptcls(nptcls, pinds)
         call build%img_crop_polarizer%init_polarizer(pftcc, params%alpha)
         allocate(tmp_imgs(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
@@ -1170,7 +1162,7 @@ contains
         call pftcc%memoize_refs
         ! PREPARATION OF PARTICLES
         !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
-        do i = 1,nptcls_here
+        do i = 1,nptcls
             ithr  = omp_get_thread_num()+1
             iptcl = pinds(i)
             if( .not.ptcl_mask(iptcl) ) cycle
@@ -1183,51 +1175,52 @@ contains
         enddo
         !$omp end parallel do
         ! getting the ctfs
-        l_ctf = build%spproj%get_ctfflag('ptcl2D',iptcl=pinds(1)).ne.'no'
+        l_ctf = build%spproj%get_ctfflag(params%oritype,iptcl=pinds(1)).ne.'no'
         ! make CTFs
-        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, 'ptcl2D')
+        if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
         call reg_obj%fill_tab_inpl_smpl(pinds)
-        fname = CORR_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+        fname = trim(CORR_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call reg_obj%write_tab(fname)
         call reg_obj%kill
         call killimgbatch
+        call qsys_job_finished('simple_commander_refine3D :: exec_prob_tab')
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
-    subroutine exec_prob_tab_dist( self, cline )
-        use simple_sp_project, only: sp_project
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(prob_tab_commander_dist), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+    subroutine exec_prob_tab_distr( self, cline )
+        ! use simple_sp_project, only: sp_project
+        class(prob_tab_commander_distr), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
         type(cmdline)    :: cline_prob_tab
         type(parameters) :: params
         type(qsys_env)   :: qenv
-        type(sp_project) :: spproj
+        ! type(sp_project) :: spproj
         type(chash)      :: job_descr
         call cline%set('stream','no')
         if( .not. cline%defined('projfile') )then
-            THROW_HARD('Missing project file entry; exec_prob_tab_dist')
+            THROW_HARD('Missing project file entry; exec_prob_tab_distr')
         endif
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
         call params%new(cline)
-        call spproj%read(params%projfile)
-        call spproj%update_projinfo(cline)
-        call spproj%write_segment_inside('projinfo')
+        ! call spproj%read(params%projfile)
+        ! call spproj%update_projinfo(cline)
+        ! call spproj%write_segment_inside('projinfo')
         call cline%set('mkdir', 'no')
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
         ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
+        call qenv%new(params%nparts, nptcls=params%nptcls)
         call cline_prob_tab%gen_job_descr(job_descr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         call cline_prob_tab%kill
-        call spproj%kill
+        ! call spproj%kill
         call qenv%kill
+        call job_descr%kill
         call qsys_cleanup
-        call simple_end('**** SIMPLE_PROB_TAB_DIST NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_tab_dist
+        call simple_end('**** SIMPLE_PROB_TAB_DISTR NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_prob_tab_distr
 
 end module simple_commander_refine3D
