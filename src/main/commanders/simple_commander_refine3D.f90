@@ -412,6 +412,8 @@ contains
             if( params%refine .eq. 'prob' )then
                 call cline_prob_tab_distr%set('which_iter', int2str(params%which_iter))
                 call cline_prob_tab_distr%set('vol1', cline%get_carg('vol1')) ! multi-states not supported
+                call cline_prob_tab_distr%set('needs_sigma','yes')
+                call cline_prob_tab_distr%set('objfun','prob')
                 if( cline%defined('lp') ) call cline_prob_tab_distr%set('lp',params%lp)
                 call xprob_tab_distr%execute( cline_prob_tab_distr )
             endif
