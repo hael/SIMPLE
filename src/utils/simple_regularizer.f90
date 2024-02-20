@@ -56,10 +56,7 @@ contains
     subroutine new( self, pftcc )
         class(regularizer),      target, intent(inout) :: self
         class(polarft_corrcalc), target, intent(inout) :: pftcc
-        real,    allocatable :: dist(:), dist_inpl(:)
-        logical, allocatable :: states(:)
         integer :: iptcl, iref
-        real    :: dist_thres, athres
         self%nrots = pftcc%nrots
         self%nrefs = pftcc%nrefs
         call calc_nrefs2sample(self%nrefs, self%nrots, params_glob%reg_athres, self%refs_ns, self%inpl_ns)
