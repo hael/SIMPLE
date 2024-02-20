@@ -429,8 +429,6 @@ contains
                 call xprob_tab_distr%execute( cline_prob_tab_distr )
                 ! reading corrs from all parts into one table
                 cline_prob_align = cline_prob_tab_distr
-                call cline_prob_align%delete('nparts')
-                call cline_prob_align%delete('part')
                 call xprob_align%execute( cline_prob_align )
             endif
             ! exponential cooling of the randomization rate
@@ -1213,7 +1211,6 @@ contains
         type(cmdline)    :: cline_prob_tab
         type(parameters) :: params
         type(qsys_env)   :: qenv
-        ! type(sp_project) :: spproj
         type(chash)      :: job_descr
         call cline%set('stream','no')
         if( .not. cline%defined('projfile') )then
@@ -1222,9 +1219,6 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init
         call params%new(cline)
-        ! call spproj%read(params%projfile)
-        ! call spproj%update_projinfo(cline)
-        ! call spproj%write_segment_inside('projinfo')
         call cline%set('mkdir', 'no')
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
@@ -1234,7 +1228,6 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         call cline_prob_tab%kill
-        ! call spproj%kill
         call qenv%kill
         call job_descr%kill
         call qsys_cleanup
@@ -1335,11 +1328,11 @@ contains
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(CORR_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call reg_obj%read_tab(fname)
+            call reg_obj%read_tab_to_glob(fname, params%fromp, params%top)
         enddo
         call reg_obj%tab_normalize
         call reg_obj%tab_align
-        ! write the global coor/loc table
+        ! write the global corr/loc table
         fname = trim(CORR_FBODY)//'.dat'
         call reg_obj%write_tab(fname)
         if( trim(params%ptclw).eq.'yes' ) call reg_obj%normalize_weight

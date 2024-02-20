@@ -203,9 +203,9 @@ contains
             !     call build_batch_particles(batchsz, pinds(batch_start:batch_end))
             !     call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
             ! enddo
-            fname = trim(CORR_FBODY)//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            fname = trim(CORR_FBODY)//'.dat'
             ! call reg_obj%write_tab(fname)
-            call reg_obj%read_tab(fname)
+            call reg_obj%read_tab_from_glob(fname, params_glob%fromp, params_glob%top)
             call reg_obj%tab_normalize
             call reg_obj%tab_align
             if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%normalize_weight
