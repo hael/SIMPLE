@@ -97,6 +97,7 @@ contains
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(prob_tab_commander_distr)        :: xprob_tab_distr
+        type(prob_align_commander)            :: xprob_align
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
@@ -105,6 +106,7 @@ contains
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
         type(cmdline)    :: cline_prob_tab_distr
+        type(cmdline)    :: cline_prob_align
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -202,10 +204,12 @@ contains
         cline_postprocess         = cline
         cline_calc_sigma          = cline
         cline_prob_tab_distr      = cline
+        cline_prob_align          = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
         call cline_prob_tab_distr%set(      'prg', 'prob_tab_distr' )    ! required for distributed call
+        call cline_prob_align%set(          'prg', 'prob_align' )        ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
@@ -424,7 +428,10 @@ contains
                 if( cline%defined('lp') ) call cline_prob_tab_distr%set('lp',params%lp)
                 call xprob_tab_distr%execute( cline_prob_tab_distr )
                 ! reading corrs from all parts into one table
-
+                cline_prob_align = cline_prob_tab_distr
+                call cline_prob_align%delete('nparts')
+                call cline_prob_align%delete('part')
+                call xprob_align%execute( cline_prob_align )
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1

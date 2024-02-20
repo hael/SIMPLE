@@ -176,6 +176,7 @@ contains
         logical,             intent(in)    :: readonly
         logical :: success
         integer :: io_stat
+        success = .true.
         if( .not. file_exists(trim(self%fname)) )then
             success = .false.
             return
