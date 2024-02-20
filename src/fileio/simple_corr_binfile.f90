@@ -21,12 +21,14 @@ contains
     procedure          :: new
     procedure          :: new_from_file
     ! I/O
-    procedure          :: read
     procedure          :: write
     procedure          :: write_info
     procedure, private :: create_empty
     procedure, private :: open_and_check_header
+    procedure, private :: open_only
     procedure, private :: read_header
+    generic            :: read => read_1, read_2
+    procedure, private :: read_1, read_2
     ! destructor
     procedure          :: kill
 end type corr_binfile
@@ -71,14 +73,20 @@ contains
 
     ! I/O
 
-    subroutine read( self, corrs )! read in all corrs value from file
+    subroutine read_1( self, corrs )! read in all corrs value from file
         class(corr_binfile), intent(inout) :: self
-        real, allocatable,   intent(out)   :: corrs(:,:,:)
+        real,                intent(inout) :: corrs(self%nrefs,self%fromp:self%top,2)
+        call self%read_2(self%fromp, self%top, corrs)
+    end subroutine read_1
+
+    subroutine read_2( self, fromp, top, corrs )! read in all corrs value from file
+        class(corr_binfile), intent(inout) :: self
+        integer,             intent(in)    :: fromp, top
+        real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
         integer :: funit
         logical :: success
         integer :: iptcl, addr
-        allocate(corrs(self%nrefs,self%fromp:self%top,2),source=0.0)
-        success = self%open_and_check_header( funit, .true. )
+        success = self%open_only( funit, .true. )
         if( .not. success ) return
         ! read corr
         addr = self%headsz + 1
@@ -92,7 +100,7 @@ contains
             addr = addr + self%datasz
         end do
         call fclose(funit)
-    end subroutine read
+    end subroutine read_2
 
     subroutine write( self, corrs )
         class(corr_binfile), intent(inout) :: self
@@ -161,6 +169,24 @@ contains
             success = .true.
         end if
     end function open_and_check_header
+
+    function open_only( self, funit, readonly ) result ( success )
+        class(corr_binfile), intent(inout) :: self
+        integer,             intent(out)   :: funit
+        logical,             intent(in)    :: readonly
+        logical :: success
+        integer :: io_stat
+        if( .not. file_exists(trim(self%fname)) )then
+            success = .false.
+            return
+        end if
+        if( readonly )then
+            call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+        else
+            call fopen(funit,trim(self%fname),access='STREAM',status='OLD', iostat=io_stat)
+        end if
+        call fileiochk('corr_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
+    end function open_only
 
     subroutine read_header( self )
         class(corr_binfile), intent(inout) :: self
