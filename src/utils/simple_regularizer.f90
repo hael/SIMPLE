@@ -43,7 +43,10 @@ type :: regularizer
     procedure          :: tab_align
     procedure          :: normalize_weight
     procedure          :: shift_search
-    procedure          :: write_tab, read_tab
+    procedure          :: write_tab
+    procedure          :: read_tab
+    procedure          :: read_tab_from_glob
+    procedure          :: read_tab_to_glob
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
@@ -143,8 +146,8 @@ contains
         do iptcl = params_glob%fromp,params_glob%top
             if( self%ptcl_avail(iptcl) )then
                 do iref = 1, self%nrefs
-                    self%ref_ptcl_tab(iref,iptcl)%prob = self%corr_loc_tab(iref,iptcl,1)
-                    self%ref_ptcl_tab(iref,iptcl)%loc  = self%corr_loc_tab(iref,iptcl,2)
+                    self%ref_ptcl_tab(iref,iptcl)%prob =     self%corr_loc_tab(iref,iptcl,1)
+                    self%ref_ptcl_tab(iref,iptcl)%loc  = int(self%corr_loc_tab(iref,iptcl,2))
                 enddo
             else
                 self%corr_loc_tab(:,iptcl,1) = 1.     ! unselected particles are down on the sorted corrs
@@ -325,6 +328,46 @@ contains
         call binfile%read(self%corr_loc_tab)
         call binfile%kill
     end subroutine read_tab
+
+    subroutine read_tab_from_glob( self, binfname, fromp, top )
+        class(regularizer), intent(inout) :: self
+        character(len=*),   intent(in)    :: binfname
+        integer,            intent(in)    :: fromp, top
+        type(corr_binfile) :: binfile
+        integer            :: iptcl, iref
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+        endif
+        call binfile%read_from_glob(fromp, top, self%corr_loc_tab)
+        call binfile%kill
+        ! transfer corr_loc_tab into ref_ptcl_tab
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+        do iptcl = params_glob%fromp,params_glob%top
+            if( self%ptcl_avail(iptcl) )then
+                do iref = 1, self%nrefs
+                    self%ref_ptcl_tab(iref,iptcl)%prob =     self%corr_loc_tab(iref,iptcl,1)
+                    self%ref_ptcl_tab(iref,iptcl)%loc  = int(self%corr_loc_tab(iref,iptcl,2))
+                enddo
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine read_tab_from_glob
+
+    subroutine read_tab_to_glob( self, binfname, fromp, top )
+        class(regularizer), intent(inout) :: self
+        character(len=*),   intent(in)    :: binfname
+        integer,            intent(in)    :: fromp, top
+        type(corr_binfile) :: binfile
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            THROW_HARD( 'corr/rot files of partitions should be ready! ' )
+        endif
+        call binfile%read_to_glob(fromp, top, self%corr_loc_tab)
+        call binfile%kill
+    end subroutine read_tab_to_glob
 
     ! DESTRUCTOR
 

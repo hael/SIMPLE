@@ -21,14 +21,15 @@ contains
     procedure          :: new
     procedure          :: new_from_file
     ! I/O
+    procedure          :: read
+    procedure          :: read_to_glob
+    procedure          :: read_from_glob
     procedure          :: write
     procedure          :: write_info
     procedure, private :: create_empty
     procedure, private :: open_and_check_header
     procedure, private :: open_only
     procedure, private :: read_header
-    generic            :: read => read_1, read_2
-    procedure, private :: read_1, read_2
     ! destructor
     procedure          :: kill
 end type corr_binfile
@@ -73,13 +74,40 @@ contains
 
     ! I/O
 
-    subroutine read_1( self, corrs )! read in all corrs value from file
+    ! read in all corrs value from file, corrs shape matches self%fromp, self%to
+    subroutine read( self, corrs )
         class(corr_binfile), intent(inout) :: self
         real,                intent(inout) :: corrs(self%nrefs,self%fromp:self%top,2)
-        call self%read_2(self%fromp, self%top, corrs)
-    end subroutine read_1
+        call self%read_to_glob(self%fromp, self%top, corrs)
+    end subroutine read
 
-    subroutine read_2( self, fromp, top, corrs )! read in all corrs value from file
+    ! read in all corrs value from file, corrs shape is smaller than self%fromp, self%to
+    subroutine read_from_glob( self, fromp, top, corrs )
+        class(corr_binfile), intent(inout) :: self
+        integer,             intent(in)    :: fromp, top
+        real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
+        integer :: funit
+        logical :: success
+        integer :: iptcl, addr
+        success = self%open_only( funit, .true. )
+        if( .not. success ) return
+        ! read corr
+        addr = self%headsz + 1 + (fromp - self%fromp) * self%datasz
+        do iptcl = fromp, top
+            read(unit=funit,pos=addr) corrs(:,iptcl,1)
+            addr = addr + self%datasz
+        end do
+        addr = self%headsz + 1 + (fromp - self%fromp) * self%datasz + (self%top - self%fromp + 1) * self%datasz
+        ! read loc
+        do iptcl = fromp, top
+            read(unit=funit,pos=addr) corrs(:,iptcl,2)
+            addr = addr + self%datasz
+        end do
+        call fclose(funit)
+    end subroutine read_from_glob
+
+    ! read in all corrs value from file, corrs shape is larger than self%fromp, self%to
+    subroutine read_to_glob( self, fromp, top, corrs )
         class(corr_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
         real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
@@ -100,7 +128,7 @@ contains
             addr = addr + self%datasz
         end do
         call fclose(funit)
-    end subroutine read_2
+    end subroutine read_to_glob
 
     subroutine write( self, corrs )
         class(corr_binfile), intent(inout) :: self
