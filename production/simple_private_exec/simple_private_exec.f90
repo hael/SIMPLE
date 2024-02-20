@@ -52,6 +52,7 @@ type(check_3Dconv_commander)            :: xcheck_3Dconv
 type(calc_group_sigmas_commander)       :: xcalc_group_sigmas
 type(prob_tab_commander_distr)          :: xprob_tab_distr
 type(prob_tab_commander)                :: xprob_tab
+type(prob_align_commander)              :: xprob_align
 
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_commander)             :: xvolassemble
@@ -177,6 +178,8 @@ select case(prg)
         call xprob_tab_distr%execute(cline)
     case( 'prob_tab' )
         call xprob_tab%execute(cline)
+    case( 'prob_align' )
+        call xprob_align%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )
