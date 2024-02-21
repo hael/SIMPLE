@@ -7601,6 +7601,60 @@ contains
         !$omp end parallel do
     end subroutine flipY
 
+    !> \brief rad_cc calculates the radial correlation function between two images/volumes
+    subroutine rad_cc( self1, self2, corr, rad_dist )
+        class(image),      intent(inout) :: self1, self2
+        real, allocatable, intent(out)   :: corr(:), rad_dist(:)
+        real, allocatable :: mean(:)
+        type(image) :: dists_img
+        integer :: n_shell_pix
+        real(kind=c_float), pointer :: rmat_dists_img(:,:,:)=>null()
+        real,    allocatable        :: rvec1(:), rvec2(:)
+        logical, allocatable        :: mask(:,:,:), shell_mask(:,:,:)
+        real :: smpd
+        real, parameter :: shell_size_pix = 1
+        integer :: n, n_shells, ldim1(3), ldim2(3), ldim_refs(3)
+        real    :: radius_pix, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
+        logical :: err
+        smpd  = self1%get_smpd()
+        ldim1 = self1%get_ldim()
+        ldim2 = self2%get_ldim()
+        if( ldim1(1) /= ldim2(1) .or. ldim1(2) /= ldim2(2) .or. ldim1(3) /= ldim2(3) )  &
+        THROW_HARD(' Nonconforming dimensions in image; rad_ccf ')
+        ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
+        radius_pix  = ldim_refs(1) / 2.   
+        n_shells    = int(radius_pix)
+        allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
+        &shell_mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.true.)
+        allocate(corr(n_shells),mean(n_shells),rad_dist(n_shells))
+        call dists_img%new(ldim_refs, smpd)
+        call dists_img%cendist
+        call dists_img%get_rmat_ptr( rmat_dists_img )
+        do n = 1, n_shells 
+            dist_lbound = real(n) * shell_size_pix
+            dist_ubound = dist_lbound + shell_size_pix
+            where( (rmat_dists_img(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) > dist_lbound) .and. &
+                  &(rmat_dists_img(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < dist_ubound) .and. mask)
+                shell_mask = .true.
+            else where
+                shell_mask = .false.
+            end where
+            if( count(shell_mask) < 3 )then
+                corr(n) = 0.
+                mean(n) = 0.
+            else
+                rvec1 = self1%serialize(shell_mask)
+                rvec2 = self2%serialize(shell_mask)
+                call moment(rvec1, mean1, sdev1, var1, err)
+                call moment(rvec2, mean2, sdev2, var2, err)
+                mean(n) = mean1 - mean2
+                corr(n) = pearsn_serial(rvec1, rvec2)
+            endif
+            rad_dist(n) = ( dist_lbound * smpd + dist_ubound * smpd / 2. )
+        enddo
+        call dists_img%kill()
+    end subroutine rad_cc
+
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
         logical, intent(in)  :: doplot
