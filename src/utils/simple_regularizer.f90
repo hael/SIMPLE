@@ -47,6 +47,8 @@ type :: regularizer
     procedure          :: read_tab
     procedure          :: read_tab_from_glob
     procedure          :: read_tab_to_glob
+    procedure          :: write_assignment
+    procedure          :: read_assignment
     procedure, private :: ref_multinomal, inpl_multinomal
     ! DESTRUCTOR
     procedure          :: kill
@@ -316,6 +318,26 @@ contains
         call binfile%kill
     end subroutine write_tab
 
+    subroutine write_assignment( self, binfname )
+        class(regularizer), intent(in) :: self
+        character(len=*),   intent(in) :: binfname
+        integer  :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
+        datasz  = sizeof(iptcl)
+        pfromto = [params_glob%fromp, params_glob%top]
+        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        ! write header
+        write(unit=funit,pos=1) pfromto
+        ! write assignment
+        addr = sizeof(pfromto) + 1
+        do iptcl = params_glob%fromp, params_glob%top
+            write(funit, pos=addr) iptcl
+            addr = addr + datasz
+            write(funit, pos=addr) self%ptcl_ref_map(iptcl)
+            addr = addr + datasz
+        end do
+        call fclose(funit)
+    end subroutine write_assignment
+
     subroutine read_tab( self, binfname )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
@@ -368,6 +390,31 @@ contains
         call binfile%read_to_glob(fromp, top, self%corr_loc_tab)
         call binfile%kill
     end subroutine read_tab_to_glob
+
+    subroutine read_assignment( self, binfname )
+        class(regularizer), intent(inout) :: self
+        character(len=*),   intent(in)    :: binfname
+        integer  :: funit, io_stat, addr, iptcl, datasz, file_header(2), fromp, top, iglob
+        datasz = sizeof(iptcl)
+        if( .not. file_exists(trim(binfname)) )then
+            THROW_HARD('file '//trim(binfname)//' does not exists!')
+        else
+            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+        end if
+        call fileiochk('corr_binfile; read_header; file: '//trim(binfname), io_stat)
+        read(unit=funit,pos=1) file_header
+        fromp = file_header(1)
+        top   = file_header(2)
+        ! write assignment
+        addr = sizeof(file_header) + 1
+        do iglob = fromp, top
+            read(unit=funit,pos=addr) iptcl
+            addr = addr + datasz
+            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl)
+            addr = addr + datasz
+        end do
+        call fclose(funit)
+    end subroutine read_assignment
 
     ! DESTRUCTOR
 
