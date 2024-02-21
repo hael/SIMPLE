@@ -145,7 +145,6 @@ type(simple_program), target :: print_project_info
 type(simple_program), target :: projops
 type(simple_program), target :: prune_project
 type(simple_program), target :: prune_cavgs
-type(simple_program), target :: prune_bin_ptcls
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
@@ -424,7 +423,6 @@ contains
         call new_projops
         call new_prune_project
         call new_prune_cavgs
-        call new_prune_bin_ptcls
         call new_atoms_stats
         call new_reproject
         call new_reconstruct3D
@@ -539,7 +537,6 @@ contains
         call push2prg_ptr_array(projops)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(prune_cavgs)
-        call push2prg_ptr_array(prune_bin_ptcls)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(reconstruct3D)
@@ -735,8 +732,6 @@ contains
                 ptr2prg => prune_project
             case('prune_cavgs')
                 ptr2prg => prune_cavgs
-            case('prune_bin_ptcls')
-                ptr2prg => prune_bin_ptcls
             case('atoms_stats')
                 ptr2prg => atoms_stats
             case('reproject')
@@ -885,7 +880,6 @@ contains
         write(logfhandle,'(A)') projops%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') prune_cavgs%name
-        write(logfhandle,'(A)') prune_bin_ptcls%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -4001,31 +3995,6 @@ contains
         ! computer controls
         call prune_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_prune_cavgs
-
-    subroutine new_prune_bin_ptcls
-        ! PROGRAM SPECIFICATION
-        call prune_bin_ptcls%new(&
-        &'prune_bin_ptcls',&                              ! name
-        &'prune poor particles bins from class averages',& ! descr_short
-        &'is a program for discarding bad particles from class averages',& ! descr_long
-        &'all',&                                      ! executable
-        &0, 1, 0, 0, 1, 1, 1, .true.)                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call prune_bin_ptcls%set_input('parm_ios', 1, 'infile', 'file', 'Ground truth(0/1)', 'Plain text file (.txt)','xxx.txt', .false., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call prune_bin_ptcls%set_input('filt_ctrls', 1, lp)
-        ! mask controls
-        call prune_bin_ptcls%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call prune_bin_ptcls%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_prune_bin_ptcls
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
