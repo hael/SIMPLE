@@ -72,7 +72,6 @@ contains
         type(strategy3D_spec), allocatable :: strategy3Dspecs(:)
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
-        character(len=:),      allocatable :: fname
         type(convergence) :: conv
         type(ori)         :: orientation
         type(oris)        :: cache_oris
@@ -195,20 +194,8 @@ contains
 
         ! ref regularization
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            ! Batch loop
-            ! do ibatch=1,nbatches
-            !     batch_start = batches(ibatch,1)
-            !     batch_end   = batches(ibatch,2)
-            !     batchsz     = batch_end - batch_start + 1
-            !     call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-            !     call reg_obj%fill_tab_inpl_smpl(pinds(batch_start:batch_end))
-            ! enddo
-            fname = trim(CORR_FBODY)//'.dat'
-            ! call reg_obj%write_tab(fname)
-            call reg_obj%read_tab_from_glob(fname, params_glob%fromp, params_glob%top)
-            call reg_obj%tab_normalize
-            call reg_obj%tab_align
-            if( trim(params_glob%ptclw).eq.'yes' ) call reg_obj%normalize_weight
+            call reg_obj%read_tab_from_glob(trim(CORR_FBODY)//'.dat', params_glob%fromp, params_glob%top)
+            call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
             if( params_glob%l_doshift )then
                 do ibatch=1,nbatches
                     batch_start = batches(ibatch,1)

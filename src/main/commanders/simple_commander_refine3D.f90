@@ -1335,6 +1335,9 @@ contains
         ! write the global corr/loc table
         fname = trim(CORR_FBODY)//'.dat'
         call reg_obj%write_tab(fname)
+        ! write the iptcl->iref assignment
+        fname = trim(ASSIGNMENT_FBODY)//'.dat'
+        call reg_obj%write_assignment(fname)
         if( trim(params%ptclw).eq.'yes' ) call reg_obj%normalize_weight
         call reg_obj%kill
         call killimgbatch
