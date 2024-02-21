@@ -19,7 +19,6 @@ public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
 public :: check_align_commander
-public :: prob_tab_commander_distr
 public :: prob_tab_commander
 public :: prob_align_commander
 private
@@ -54,11 +53,6 @@ type, extends(commander_base) :: prob_tab_commander
   contains
     procedure :: execute      => exec_prob_tab
 end type prob_tab_commander
-
-type, extends(commander_base) :: prob_tab_commander_distr
-  contains
-    procedure :: execute      => exec_prob_tab_distr
-end type prob_tab_commander_distr
 
 type, extends(commander_base) :: prob_align_commander
   contains
@@ -96,7 +90,6 @@ contains
         type(postprocess_commander)           :: xpostprocess
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
-        type(prob_tab_commander_distr)        :: xprob_tab_distr
         type(prob_align_commander)            :: xprob_align
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
@@ -105,7 +98,6 @@ contains
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
-        type(cmdline)    :: cline_prob_tab_distr
         type(cmdline)    :: cline_prob_align
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
@@ -203,12 +195,10 @@ contains
         cline_volassemble         = cline
         cline_postprocess         = cline
         cline_calc_sigma          = cline
-        cline_prob_tab_distr      = cline
         cline_prob_align          = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )     ! required for distributed call
         call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )        ! required for distributed call
-        call cline_prob_tab_distr%set(      'prg', 'prob_tab_distr' )    ! required for distributed call
         call cline_prob_align%set(          'prg', 'prob_align' )        ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
@@ -421,14 +411,12 @@ contains
             endif
             if( params%refine .eq. 'prob' )then
                 ! generate all corrs
-                call cline_prob_tab_distr%set('which_iter', int2str(params%which_iter))
-                call cline_prob_tab_distr%set('vol1', cline%get_carg('vol1')) ! multi-states not supported
-                call cline_prob_tab_distr%set('needs_sigma','yes')
-                call cline_prob_tab_distr%set('objfun','prob')
-                if( cline%defined('lp') ) call cline_prob_tab_distr%set('lp',params%lp)
-                call xprob_tab_distr%execute( cline_prob_tab_distr )
+                call cline_prob_align%set('which_iter', int2str(params%which_iter))
+                call cline_prob_align%set('vol1', cline%get_carg('vol1')) ! multi-states not supported
+                call cline_prob_align%set('needs_sigma','yes')
+                call cline_prob_align%set('objfun','prob')
+                if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
-                cline_prob_align = cline_prob_tab_distr
                 call xprob_align%execute( cline_prob_align )
             endif
             ! exponential cooling of the randomization rate
@@ -1204,36 +1192,6 @@ contains
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
-    subroutine exec_prob_tab_distr( self, cline )
-        ! use simple_sp_project, only: sp_project
-        class(prob_tab_commander_distr), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(cmdline)    :: cline_prob_tab
-        type(parameters) :: params
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        call cline%set('stream','no')
-        if( .not. cline%defined('projfile') )then
-            THROW_HARD('Missing project file entry; exec_prob_tab_distr')
-        endif
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! init
-        call params%new(cline)
-        call cline%set('mkdir', 'no')
-        cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts, nptcls=params%nptcls)
-        call cline_prob_tab%gen_job_descr(job_descr)
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
-        call qsys_cleanup
-        call simple_end('**** SIMPLE_PROB_TAB_DISTR NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_tab_distr
-
     subroutine exec_prob_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -1255,6 +1213,9 @@ contains
         type(ori)                     :: o_tmp
         type(regularizer)             :: reg_obj
         type(euclid_sigma2)           :: eucl_sigma
+        type(cmdline)                 :: cline_prob_tab
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
         integer  :: nptcls, iptcl, s, ithr, iref, i, ipart
         logical  :: l_ctf, do_center
         real     :: xyz(3)
@@ -1325,6 +1286,17 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
+        ! generating all corrs on all parts
+        cline_prob_tab = cline
+        call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts, nptcls=params%nptcls)
+        call cline_prob_tab%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        call cline_prob_tab%kill
+        call qenv%kill
+        call job_descr%kill
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(CORR_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
