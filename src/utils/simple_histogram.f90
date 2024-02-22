@@ -33,6 +33,7 @@ type :: histogram
     procedure, private :: moments
     procedure          :: mean
     procedure          :: variance
+    procedure          :: skew
     procedure          :: hmode
     procedure          :: entropy
     ! Operations
@@ -318,7 +319,7 @@ contains
         integer,          intent(in) :: order
         real,             intent(in) :: mean
         real :: v
-        if( order<1 .or. order>2 )then
+        if( order<1 .or. order>3 )then
             THROW_HARD('Unsupported moment order!')
         endif
         v = self%dx/2. - mean
@@ -341,6 +342,16 @@ contains
         endif
         variance = self%moments(2,m)
     end function variance
+
+    ! adjusted Fisher-Pearson coefficient of skewness
+    real function skew( self )
+        class(histogram), intent(in) :: self
+        real :: m, var
+        m    = self%mean()
+        var  = self%variance(m)
+        skew = self%moments(3,m) / var**1.5
+        skew = skew * sqrt(self%ntot*(self%ntot-1.)) / (self%ntot-2.)
+    end function skew
 
     pure real function hmode( self )
         class(histogram), intent(in) :: self
