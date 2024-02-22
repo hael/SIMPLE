@@ -542,24 +542,28 @@ contains
     subroutine exec_score_cavgs( self, cline )
         use simple_histogram, only:histogram
         use simple_oris
+        use simple_polarft_corrcalc, only: polarft_corrcalc
         class(score_cavgs_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        integer,       parameter :: NHISTBINS = 128
-        type(image),     allocatable :: cavgs(:)
+        integer,       parameter :: NHISTBINS = 256
+        type(image),     allocatable :: cavgs(:), match_imgs(:)
         type(histogram), allocatable :: hists(:)
-        type(parameters)     :: p
-        type(builder)        :: b
-        type(oris)           :: os
-        type(image)          :: tmpimg
-        type(histogram)      :: hist_avg
-        logical, allocatable :: lmsk(:,:,:), cls_mask(:)
-        real    :: minmax(2),mean,skew,tvd,overall_min,overall_max,mskrad,std
-        integer :: icls,n,ncls
+        type(parameters)       :: p
+        type(builder)          :: b
+        type(oris)             :: os
+        type(image)            :: tmpimg
+        type(polarft_corrcalc) :: pftcc
+        type(histogram)        :: hist_avg
+        real,    allocatable :: corrmat(:,:), inpl_corrs(:), corrs(:), scores(:)
+        logical, allocatable :: lmsk(:,:,:), cls_mask(:),mask_otsu(:)
+        real    :: minmax(2),xyz(3),mean,skew,tvd,overall_min,overall_max,mskrad,std,sdev_noise, ccmax
+        integer :: icls,n,ncls,ithr,i,j,jcls,pop1,pop2
         call cline%set('oritype','cls2D')
+        call cline%set('ctf',    'no')
+        call cline%set('objfun', 'cc')
         call b%init_params_and_build_general_tbox(cline, p, do3d=.false.)
-        ! call build%sproj_field%read(p%oritype,p%projfile)
         call find_ldim_nptcls(p%stk, p%ldim, ncls, smpd=p%smpd)
-        allocate(cavgs(ncls),hists(ncls),cls_mask(ncls))
+        allocate(cavgs(ncls),hists(ncls),cls_mask(ncls),corrmat(ncls,ncls))
         do icls = 1,ncls
             call cavgs(icls)%new([p%box,p%box,1],p%smpd)
             call cavgs(icls)%read(p%stk,icls)
@@ -570,13 +574,17 @@ contains
             call os%new(ncls,is_ptcl=.false.)
         endif
         cls_mask = .true.
-        mskrad   = real(params_glob%msk)
+        mskrad   = real(p%msk)
         call tmpimg%disc(p%ldim, p%smpd, mskrad, lmsk)
         overall_min =  huge(0.)
         overall_max = -999999.
         !$omp parallel private(icls,minmax,mean,std,skew,tvd) proc_bind(close) default(shared)
         !$omp do reduction(min:overall_min) reduction(max:overall_max)
         do icls = 1,ncls
+            ! call cavgs(icls)%zero_below(0.)
+            call cavgs(icls)%fft
+            call cavgs(icls)%bp(0.,p%lp)
+            call cavgs(icls)%ifft
             call cavgs(icls)%stats(mean, std, minmax(2), minmax(1), tmpimg )
             call os%set(icls, 'mean', mean)
             call os%set(icls, 'var',  std*std)
@@ -584,9 +592,6 @@ contains
                 cls_mask(icls) = .false.
             else
                 cls_mask(icls) = .true.
-                call cavgs(icls)%fft
-                call cavgs(icls)%bp(0.,p%lp)
-                call cavgs(icls)%ifft
                 overall_min = min(minmax(1),overall_min)
                 overall_max = max(minmax(2),overall_max)
                 skew = cavgs(icls)%skew(lmsk(:p%box,:p%box,1))
@@ -619,16 +624,163 @@ contains
             if( cls_mask(icls) )then
                 tvd = hist_avg%tvd(hists(icls))
                 call os%set(icls, 'tvd', tvd)
-                call hists(icls)%kill
+                ! call hists(icls)%kill
             endif
         enddo
         !$omp end do
         !$omp end parallel
-        call hist_avg%kill
         call tmpimg%kill
+        ! TVD matrix
         do icls = 1,ncls
-            call os%print_(icls)
+            corrmat(icls,icls) = 0.
+            do jcls= icls+1,ncls,1
+                corrmat(icls,jcls) = hists(icls)%tvd(hists(jcls))
+                corrmat(jcls,icls) = corrmat(icls,jcls)
+            enddo
         enddo
+        corrmat = 1.-corrmat
+        allocate(scores(ncls),source=0.)
+        do icls = 1,ncls
+            corrs = corrmat(icls,:)
+            call hpsort(corrs)
+            scores(icls) = sum(corrs(floor(0.9*real(ncls)):ncls-1))
+        enddo
+        allocate(mask_otsu(ncls))
+        call otsu(ncls, scores, mask_otsu)
+        pop1 = count(      mask_otsu)
+        pop2 = count(.not. mask_otsu)
+        write(logfhandle,*) 'average corr cluster 1: ', sum(scores, mask=      mask_otsu) / real(pop1), ' pop ', pop1
+        write(logfhandle,*) 'average corr cluster 2: ', sum(scores, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
+        pop1 = 0
+        pop2 = 0
+        do i = 1, ncls
+            if( mask_otsu(i) )then
+                pop1 = pop1 + 1
+                call cavgs(i)%write('good.mrc', pop1)
+            else
+                pop2 = pop2 + 1
+                call cavgs(i)%write('bad.mrc',  pop2)
+            endif
+        end do
+        call cluster
+        stop
+        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%box, p%smpd))
+        p%kfromto(2) =        calc_fourier_index(p%lp, p%box, p%smpd)
+        call pftcc%new(2*ncls, [1,ncls], p%kfromto)
+        call b%img_crop_polarizer%init_polarizer(pftcc, p%alpha)
+        allocate(match_imgs(params_glob%nthr),inpl_corrs(pftcc%get_nrots()))
+        do ithr = 1,params_glob%nthr
+            call match_imgs(ithr)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
+        enddo
+        call cavgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        !$omp parallel do default(shared) private(icls,ithr,xyz) schedule(static) proc_bind(close)
+        do icls = 1,ncls
+            ! xyz = cavgs(icls)%calc_shiftcen_serial(p%cenlp, p%msk)
+            ! apply shift and update the corresponding class parameters
+            call cavgs(icls)%fft()
+            call cavgs(icls)%shift2Dserial(xyz(1:2))
+            call cavgs(icls)%ifft()
+            ! call cavgs(icls)%norm_noise(lmsk, sdev_noise)
+            call cavgs(icls)%mask(p%msk, 'soft', backgr=0.)
+            ithr = omp_get_thread_num()+1
+            call match_imgs(ithr)%copy_fast(cavgs(icls))
+            call match_imgs(ithr)%fft
+            call b%img_crop_polarizer%polarize(pftcc, match_imgs(ithr), icls, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+            call pftcc%cp_even_ref2ptcl(icls,icls)
+            call match_imgs(ithr)%copy_fast(cavgs(icls))
+            call match_imgs(ithr)%mirror('y')
+            call match_imgs(ithr)%fft
+            call b%img_crop_polarizer%polarize(pftcc, match_imgs(ithr), ncls+icls, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+        end do
+        !$omp end parallel do
+        call pftcc%memoize_refs
+        call pftcc%memoize_ptcls
+        do icls = 1,ncls
+            call cavgs(icls)%write('prepped.mrc',icls)
+        enddo
+        !$omp parallel do default(shared) private(icls,jcls,ccmax,inpl_corrs,i,j) proc_bind(close)
+        do icls = 1,ncls
+            corrmat(icls,icls) = 1.
+            do jcls= icls+1,ncls,1
+                ccmax = -1.
+                do i = -10,10,1
+                    do j = -10,10,1
+                        call pftcc%gencorrs(     icls, jcls, real([i,j]), inpl_corrs, kweight=.true.)
+                        ccmax = max(ccmax,maxval(inpl_corrs))
+                        call pftcc%gencorrs(ncls+icls, jcls, real([i,j]), inpl_corrs, kweight=.true.)
+                        ccmax = max(ccmax,maxval(inpl_corrs))
+                        corrmat(icls,jcls) = ccmax
+                        corrmat(jcls,icls) = ccmax
+                    enddo
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        allocate(scores(ncls),source=0.)
+        do icls = 1,ncls
+            corrs = corrmat(icls,:)
+            call hpsort(corrs)
+            scores(icls) = sum(corrs(floor(0.9*real(ncls)):ncls-1))
+        enddo
+        allocate(mask_otsu(ncls))
+        call otsu(ncls, scores, mask_otsu)
+        pop1 = count(      mask_otsu)
+        pop2 = count(.not. mask_otsu)
+        write(logfhandle,*) 'average corr cluster 1: ', sum(scores, mask=      mask_otsu) / real(pop1), ' pop ', pop1
+        write(logfhandle,*) 'average corr cluster 2: ', sum(scores, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
+        pop1 = 0
+        pop2 = 0
+        do i = 1, ncls
+            if( mask_otsu(i) )then
+                pop1 = pop1 + 1
+                call cavgs(i)%write('good.mrc', pop1)
+            else
+                pop2 = pop2 + 1
+                call cavgs(i)%write('bad.mrc',  pop2)
+            endif
+        end do
+        contains
+
+            subroutine cluster( )
+                use simple_aff_prop
+                type(aff_prop) :: aprop
+                integer,  allocatable :: centers(:), labels(:), cntarr(:)
+                character(len=STDLEN) :: fname
+                real    :: pref, minv, simsum
+                integer :: ncls_aff_prop,i, n
+                minv = minval(corrmat)
+                pref = minv - (maxval(corrmat) - minv)
+                call aprop%new(ncls, corrmat, pref=pref)
+                call aprop%propagate(centers, labels, simsum)
+                ncls_aff_prop = size(centers)
+                write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
+                ! write the classes
+                do icls = 1, ncls_aff_prop
+                    n = 0
+                    do i=1,ncls
+                        if( labels(i) == icls )then
+                            n = n+1
+                            fname = 'class'//int2str_pad(icls,3)//trim(STK_EXT)
+                            call cavgs(i)%write(fname, n)
+                        endif
+                    end do
+                end do
+                do icls = 1, ncls_aff_prop
+                    n = 0
+                    call hist_avg%zero
+                    do i=1,ncls
+                        if( labels(i) == icls )then
+                            call hist_avg%add(hists(i))
+                            n = n+1
+                        endif
+                    end do
+                    fname = 'affprop_'//int2str_pad(icls,3)
+                    call hist_avg%div(real(n))
+                    call hist_avg%plot(fname)
+                    print *, icls, hist_avg%variance(), hist_avg%skew()
+                end do
+            end subroutine cluster
+
     end subroutine exec_score_cavgs
 
     subroutine exec_prune_cavgs( self, cline )
