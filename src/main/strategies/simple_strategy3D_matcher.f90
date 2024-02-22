@@ -445,7 +445,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%new(pftcc)
+        if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%new
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)

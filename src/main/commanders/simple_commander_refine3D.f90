@@ -947,7 +947,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
-        call reg_obj%new(pftcc)
+        call reg_obj%new
         ! e/o partioning
         if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
             call build%spproj%os_ptcl3D%partition_eo
@@ -1011,7 +1011,7 @@ contains
             print *, 'Aligning the particles ...'
             ! Memoize particles FFT parameters
             call pftcc%memoize_ptcls
-            call reg_obj%fill_tab_inpl_smpl(pinds)
+            call reg_obj%fill_tab(pftcc, pinds)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
             call reg_obj%tab_normalize
             call reg_obj%tab_align
@@ -1126,7 +1126,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call reg_obj%new(pftcc)
+        call reg_obj%new
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -1183,7 +1183,7 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call reg_obj%fill_tab_inpl_smpl(pinds)
+        call reg_obj%fill_tab(pftcc, pinds)
         fname = trim(CORR_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call reg_obj%write_tab(fname)
         call reg_obj%kill
@@ -1195,15 +1195,13 @@ contains
     subroutine exec_prob_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_regularizer,         only: regularizer
+        use simple_regularizer, only: regularizer
         use simple_image
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         character(len=:), allocatable :: fname
-        type(polarft_corrcalc)        :: pftcc
         type(builder)                 :: build
         type(parameters)              :: params
         type(regularizer)             :: reg_obj
@@ -1220,8 +1218,7 @@ contains
         call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
-        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call reg_obj%new(pftcc)
+        call reg_obj%new
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
@@ -1243,12 +1240,13 @@ contains
         ! write the global corr/loc table
         fname = trim(CORR_FBODY)//'.dat'
         call reg_obj%write_tab(fname)
+        ! if( trim(params%ptclw).eq.'yes' ) call reg_obj%normalize_weight   ! weighting needs weights read/write
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call reg_obj%write_assignment(fname)
-        if( trim(params%ptclw).eq.'yes' ) call reg_obj%normalize_weight
         call reg_obj%kill
         call qsys_job_finished('simple_commander_refine3D :: exec_prob_align')
+        call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align
 
