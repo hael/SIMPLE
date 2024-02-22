@@ -40,7 +40,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( ptcl_mask )
-        use simple_regularizer, only: calc_nrefs2sample
+        use simple_regularizer, only: calc_num2sample
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
@@ -100,8 +100,8 @@ contains
         ! precalculate nearest neighbour matrix
         ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
         if( str_has_substr(params_glob%refine,'smpl') )then
-            call calc_nrefs2sample(nrefs, pftcc_glob%get_nrots(), params_glob%reg_athres,&
-            &s3D%smpl_refs_ns, s3D%smpl_inpl_ns)
+            call calc_num2sample(nrefs,                  'dist',      s3D%smpl_refs_ns)
+            call calc_num2sample(pftcc_glob%get_nrots(), 'dist_inpl', s3D%smpl_inpl_ns)
         endif
     end subroutine prep_strategy3D
 

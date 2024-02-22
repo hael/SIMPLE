@@ -3,14 +3,12 @@ module simple_regularizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_parameters,        only: params_glob
-use simple_builder,           only: build_glob
-use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_corr_binfile,      only: corr_binfile
+use simple_parameters,   only: params_glob
+use simple_corr_binfile, only: corr_binfile
 use simple_image
 implicit none
 
-public :: regularizer, calc_nrefs2sample
+public :: regularizer, calc_num2sample
 private
 #include "simple_local_flags.inc"
 
@@ -24,21 +22,19 @@ type reg_params
 end type reg_params
 
 type :: regularizer
-    integer              :: nrots
-    integer              :: nrefs
-    integer              :: inpl_ns, refs_ns
-    real,    allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
-    integer, allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
-    real,    allocatable :: inpl_corr(:,:), refs_corr(:,:)
-    integer, allocatable :: inpl_inds(:,:), refs_inds(:,:)
-    logical, allocatable :: ptcl_avail(:)
-    class(polarft_corrcalc), pointer     :: pftcc => null()
-    type(reg_params),        allocatable :: ref_ptcl_tab(:,:)
+    integer                       :: nrefs
+    integer                       :: refs_ns
+    real,             allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
+    integer,          allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
+    real,             allocatable :: refs_corr(:,:)
+    integer,          allocatable :: refs_inds(:,:)
+    logical,          allocatable :: ptcl_avail(:)
+    type(reg_params), allocatable :: ref_ptcl_tab(:,:)
     contains
     ! CONSTRUCTOR
     procedure          :: new
     ! PROCEDURES
-    procedure          :: fill_tab_inpl_smpl
+    procedure          :: fill_tab
     procedure          :: tab_normalize
     procedure          :: tab_align
     procedure          :: normalize_weight
@@ -49,7 +45,7 @@ type :: regularizer
     procedure          :: read_tab_to_glob
     procedure          :: write_assignment
     procedure          :: read_assignment
-    procedure, private :: ref_multinomal, inpl_multinomal
+    procedure, private :: ref_multinomal
     ! DESTRUCTOR
     procedure          :: kill
 end type regularizer
@@ -58,17 +54,14 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, pftcc )
-        class(regularizer),      target, intent(inout) :: self
-        class(polarft_corrcalc), target, intent(inout) :: pftcc
+    subroutine new( self )
+        use simple_builder, only: build_glob
+        class(regularizer), target, intent(inout) :: self
         integer :: iptcl, iref
-        self%nrots = pftcc%nrots
-        self%nrefs = pftcc%nrefs
-        call calc_nrefs2sample(self%nrefs, self%nrots, params_glob%reg_athres, self%refs_ns, self%inpl_ns)
-        self%pftcc => pftcc
-        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2),&
-                &self%refs_corr(self%nrefs,params_glob%nthr), self%inpl_corr(self%nrots,params_glob%nthr), source=0.)
-        allocate(self%inpl_inds(self%nrots,params_glob%nthr), self%refs_inds(self%nrefs,params_glob%nthr), source=0)
+        self%nrefs = params_glob%nspace
+        call calc_num2sample(self%nrefs, 'dist', self%refs_ns)
+        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2), self%refs_corr(self%nrefs,params_glob%nthr), source=0.)
+        allocate(self%refs_inds(self%nrefs,params_glob%nthr), source=0)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
@@ -87,32 +80,30 @@ contains
         enddo
     end subroutine new
 
-    subroutine fill_tab_inpl_smpl( self, glob_pinds )
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
-        integer :: i, iref, iptcl, irnd
-        real    :: inpl_corrs(self%nrots)
+    subroutine fill_tab( self, pftcc, glob_pinds )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(regularizer),      intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
+        integer :: i, iref, iptcl, inpl_ns
         call seed_rnd
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,inpl_corrs,irnd) proc_bind(close) schedule(static)
+        call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
-            do i = 1, self%pftcc%nptcls
+            do i = 1, pftcc%nptcls
                 iptcl = glob_pinds(i)
                 if( self%ptcl_avail(iptcl) )then
-                    ! sampling the inpl rotation
-                    call self%pftcc%gencorrs( iref, iptcl, inpl_corrs )
-                    irnd = self%inpl_multinomal(inpl_corrs)
-                    self%corr_loc_tab(iref,iptcl,1) = inpl_corrs(irnd)
-                    self%corr_loc_tab(iref,iptcl,2) = real(irnd)
+                    call pftcc%gencorr_smpl( iptcl, iref, inpl_ns, self%corr_loc_tab(iref,iptcl,:) )
                 endif
             enddo
         enddo
         !$omp end parallel do
-    end subroutine fill_tab_inpl_smpl
+    end subroutine fill_tab
 
     subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self
-        integer   :: iref, iptcl
-        real      :: sum_corr_all, min_corr, max_corr
+        integer :: iref, iptcl
+        real    :: sum_corr_all, min_corr, max_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
@@ -161,10 +152,11 @@ contains
     subroutine shift_search( self, glob_pinds )
         use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
         class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(self%pftcc%nptcls)
+        integer,            intent(in)    :: glob_pinds(:)
         type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: iref, iptcl, ithr, irot, i
+        integer :: iref, iptcl, ithr, irot, i, nptcls
         real    :: lims(2,2), cxy(3)
+        nptcls    = size(glob_pinds)
         lims(1,1) = -params_glob%trs
         lims(1,2) =  params_glob%trs
         lims(2,1) = -params_glob%trs
@@ -173,7 +165,7 @@ contains
             call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
         enddo
         !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
-        do i = 1, self%pftcc%nptcls
+        do i = 1, nptcls
             iptcl = glob_pinds(i)
             if( self%ptcl_avail(iptcl) )then
                 iref  = self%ptcl_ref_map(iptcl)
@@ -276,34 +268,6 @@ contains
         which = self%refs_inds(which, ithr)
     end function ref_multinomal
 
-    ! inpl multinomal based on unnormalized pvec
-    function inpl_multinomal( self, pvec ) result( which )
-        class(regularizer), intent(inout) :: self
-        real,               intent(in)    :: pvec(:) !< probabilities
-        integer :: i, which, ithr
-        real    :: rnd, bound, sum_corr
-        ithr = omp_get_thread_num() + 1
-        self%inpl_corr(:,ithr) = pvec
-        self%inpl_inds(:,ithr) = (/(i,i=1,self%nrots)/)
-        call hpsort(self%inpl_corr(:,ithr), self%inpl_inds(:,ithr) )
-        rnd      = ran3()
-        sum_corr = sum(self%inpl_corr(1:self%inpl_ns,ithr))
-        if( sum_corr < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(self%inpl_ns) * rnd)
-        else
-            ! normalizing within the hard-limit
-            self%inpl_corr(1:self%inpl_ns,ithr) = self%inpl_corr(1:self%inpl_ns,ithr) / sum_corr
-            bound = 0.
-            do which=1,self%inpl_ns
-                bound = bound + self%inpl_corr(which, ithr)
-                if( rnd >= bound )exit
-            enddo
-            which = min(which,self%inpl_ns)
-        endif
-        which = self%inpl_inds(which, ithr)
-    end function inpl_multinomal
-
     ! FILE IO
     subroutine write_tab( self, binfname )
         class(regularizer), intent(in) :: self
@@ -321,7 +285,7 @@ contains
     subroutine write_assignment( self, binfname )
         class(regularizer), intent(in) :: self
         character(len=*),   intent(in) :: binfname
-        integer  :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
+        integer :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
         datasz  = sizeof(iptcl)
         pfromto = [params_glob%fromp, params_glob%top]
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
@@ -394,7 +358,7 @@ contains
     subroutine read_assignment( self, binfname )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
-        integer  :: funit, io_stat, addr, iptcl, datasz, file_header(2), fromp, top, iglob
+        integer :: funit, io_stat, addr, iptcl, datasz, file_header(2), fromp, top, iglob
         datasz = sizeof(iptcl)
         if( .not. file_exists(trim(binfname)) )then
             THROW_HARD('file '//trim(binfname)//' does not exists!')
@@ -420,34 +384,27 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%inpl_corr,self%refs_corr,&
-                  &self%inpl_inds,self%refs_inds,self%ptcl_avail)
+        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%refs_corr,self%refs_inds,self%ptcl_avail)
     end subroutine kill
 
     ! PUBLIC UTILITITES
 
-    subroutine calc_nrefs2sample( nrefs, nrots, reg_athres, refs_ns, inpl_ns)
-        integer, intent(in)  :: nrefs, nrots
-        real,    intent(in)  :: reg_athres
-        integer, intent(out) :: refs_ns, inpl_ns
+    subroutine calc_num2sample( num_all, field_str, num_smpl)
+        use simple_builder, only: build_glob
+        integer,          intent(in)  :: num_all
+        character(len=*), intent(in)  :: field_str
+        integer,          intent(out) :: num_smpl
         real,    allocatable :: vals(:)
         logical, allocatable :: ptcl_mask(:)
         real    :: athres, dist_thres
         integer :: n
         ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
         n          = count(ptcl_mask)
-        ! in-planes
-        vals       = build_glob%spproj_field%get_all('dist_inpl')
+        vals       = build_glob%spproj_field%get_all(trim(field_str))
         dist_thres = sum(vals, mask=ptcl_mask) / real(n)
-        athres     = reg_athres
+        athres     = params_glob%reg_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        inpl_ns    = min(nrots,max(1,int(athres * real(nrots) / 180.)))
-        ! projection directions
-        vals       = build_glob%spproj_field%get_all('dist')
-        dist_thres = sum(vals,mask=ptcl_mask) / real(n)
-        athres     = reg_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        refs_ns    = min(nrefs,max(1,int(athres * real(nrefs) / 180.)))
-    end subroutine
+        num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
+    end subroutine calc_num2sample
 
 end module simple_regularizer
