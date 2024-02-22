@@ -1202,26 +1202,34 @@ contains
         end do
     end subroutine calc_frc
 
-    function genmaxcorr_comlin( self, ieven, jeven ) result( cc_max )
+    real function genmaxcorr_comlin( self, ieven, jeven )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: ieven, jeven
         complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
-        real     :: sqsum_i, sqsum_j, cc, cc_max
         integer  :: ithr, i, j
         ithr      =       omp_get_thread_num() + 1
         pft_ref_i =>      self%heap_vars(ithr)%pft_ref
         pft_ref_j =>      self%heap_vars(ithr)%pft_ref_tmp
         pft_ref_i =       self%pfts_refs_even(:,:,ieven)
-        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven))
+        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven)) ! pre-conjugate for correlation
         ! no CTF to worry about since this is intended for class avgs
-        cc_max = -1.
+        ! normalization
         do i = 1, self%pftsz
-            sqsum_i = sum(csq_fast(pft_ref_i(i,self%kfromto(1):self%kfromto(2))))
+            pft_ref_i(i,:) = pft_ref_i(i,:) / sqrt(sum(csq_fast(pft_ref_i(i,:))))
+            pft_ref_j(i,:) = pft_ref_j(i,:) / sqrt(sum(csq_fast(pft_ref_j(i,:))))
+        enddo
+        ! correlations i in [0,pi[ / j in [0,pi[
+        genmaxcorr_comlin = -1.
+        do i = 1, self%pftsz
             do j = 1, self%pftsz
-                sqsum_j = sum(csq_fast(pft_ref_j(j,self%kfromto(1):self%kfromto(2))))
-                cc      = sum(    real(pft_ref_i(i,self%kfromto(1):self%kfromto(2)) *&
-                                       pft_ref_j(j,self%kfromto(1):self%kfromto(2))) ) / sqrt(sqsum_i * sqsum_j)
-                if( cc > cc_max ) cc_max = cc
+                genmaxcorr_comlin = max(genmaxcorr_comlin, sum(real(pft_ref_i(i,:)*pft_ref_j(j,:))))
+            end do
+        end do
+        ! correlations i in [0,pi[ / j in [pi,2pi[
+        pft_ref_j = conjg(pft_ref_j ) ! rotation by pi
+        do i = 1, self%pftsz
+            do j = 1, self%pftsz
+                genmaxcorr_comlin = max(genmaxcorr_comlin, sum(real(pft_ref_i(i,:)*pft_ref_j(j,:))))
             end do
         end do
     end function genmaxcorr_comlin
