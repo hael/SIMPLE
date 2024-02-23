@@ -116,6 +116,7 @@ type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: abinitio_3Dmodel
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: map_cavgs_selection
@@ -351,6 +352,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        call new_abinitio_3Dmodel
         call new_analysis2D_nano
         call new_assign_optics_groups
         call new_automask
@@ -467,6 +469,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
+        call push2prg_ptr_array(abinitio_3Dmodel)
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
@@ -590,6 +593,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+            case('abinitio_3Dmodel')
+                ptr2prg => abinitio_3Dmodel
             case('analysis2D_nano')
                 ptr2prg => analysis2D_nano
             case('assign_optics_groups')
@@ -818,6 +823,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
+        write(logfhandle,'(A)') abinitio_3Dmodel%name
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') automask2D%name
@@ -2525,6 +2531,57 @@ contains
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
         call initial_3Dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_initial_3Dmodel
+
+    subroutine new_abinitio_3dmodel
+        ! PROGRAM SPECIFICATION
+        call abinitio_3dmodel%new(&
+        &'abinitio_3dmodel',&                                                         ! name
+        &'3D ab initio model generation from particles',&                             ! descr_short
+        &'is a distributed workflow for generating an initial 3D model&
+        & from particles',&                                                           ! descr_long
+        &'simple_exec',&                                                              ! executable
+        &0, 0, 0, 3, 4, 1, 2, .true.)
+        abinitio_3dmodel%gui_submenu_list = "model,filter,mask,compute"
+        abinitio_3dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call abinitio_3dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call abinitio_3dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
+        call abinitio_3dmodel%set_input('srch_ctrls', 2, pgrp)
+        call abinitio_3dmodel%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
+        call abinitio_3dmodel%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
+        call abinitio_3dmodel%set_gui_params('srch_ctrls', 3, submenu="model")
+        ! filter controls
+        call abinitio_3dmodel%set_input('filt_ctrls', 1, hp)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
+        call abinitio_3dmodel%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 2, submenu="filter")
+        call abinitio_3dmodel%set_input('filt_ctrls', 3, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+            &'low-pass limit in Angstroms', .false., 30.)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 3, submenu="filter")
+        call abinitio_3dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6.)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 4, submenu="filter")
+        ! mask controls
+        call abinitio_3dmodel%set_input('mask_ctrls', 1, mskdiam)
+        call abinitio_3dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
+        ! computer controls
+        call abinitio_3dmodel%set_input('comp_ctrls', 1, nparts)
+        call abinitio_3dmodel%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        abinitio_3dmodel%comp_ctrls(1)%required = .false.
+        call abinitio_3dmodel%set_input('comp_ctrls', 2, nthr)
+        call abinitio_3dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+    end subroutine new_abinitio_3dmodel
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION
