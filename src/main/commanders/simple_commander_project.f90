@@ -462,8 +462,8 @@ contains
         type(oris)       :: os
         type(nrtxtfile)  :: paramfile
         type(ctfparams)  :: ctfvars
-        integer          :: lfoo(3), i, ndatlines, nrecs, n_ori_inputs, nstks
-        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
+        integer          :: ldim1(3), ldim2(3), nptcls1, nptcls2, i, ndatlines, nrecs, n_ori_inputs, nstks
+        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab, inputted_stk_den
         logical          :: l_stktab_per_stk_parms, is_ptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
@@ -474,6 +474,7 @@ contains
         inputted_oritab       = cline%defined('oritab')
         inputted_deftab       = cline%defined('deftab')
         inputted_plaintexttab = cline%defined('plaintexttab')
+        inputted_stk_den      = cline%defined('stk2')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
         if( n_ori_inputs > 1 )then
@@ -673,13 +674,20 @@ contains
         if( cline%defined('stk') )then
             if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
                 ! get number of particles from stack
-                call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
+                call find_ldim_nptcls(params%stk, ldim1, params%nptcls)
                 call os%new(params%nptcls, is_ptcl=is_ptcl )
             endif
             ! state = 1 by default
             call os%set_all2single('state', 1.0)
             call os%set_all2single('w',     1.0)
             call spproj%add_single_stk(params%stk, ctfvars, os)
+            if( cline%defined('stk2') )then
+                call find_ldim_nptcls(params%stk, ldim1, nptcls1)
+                call find_ldim_nptcls(params%stk2, ldim2, nptcls2)
+                if( any(ldim1(1:2) /= ldim2(1:2)) ) THROW_HARD('Logical image dimensions do not match between stk & stk2')
+                if( nptcls1        /= nptcls2     ) THROW_HARD('Number of particles do not match between stk & stk2')
+                call spproj%add_single_stk_denoised(params%stk2)
+            endif
         endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') )then

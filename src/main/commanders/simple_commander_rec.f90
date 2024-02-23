@@ -159,6 +159,9 @@ contains
         call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
         &1.0, nptcls2update, pinds, ptcl_mask)
         if( params%l_needs_sigma )then
+
+            print *, 'trying to read sigma'
+
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)
             call eucl_sigma%read_groups(build%spproj_field, ptcl_mask)
