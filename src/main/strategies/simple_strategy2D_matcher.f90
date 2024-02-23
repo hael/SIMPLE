@@ -208,7 +208,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
+            call build_batch_particles(batchsz, pinds(batch_start:batch_end))
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! batch strategy2D objects
             if( L_BENCH_GLOB ) t_init = tic()
@@ -369,12 +369,12 @@ contains
     end subroutine cluster2D_exec
 
     !>  \brief  prepares batch particle images for alignment
-    subroutine build_pftcc_batch_particles( nptcls_here, pinds )
+    subroutine build_batch_particles( nptcls_here, pinds )
         use simple_strategy2D3D_common, only: discrete_read_imgbatch, prepimg4align
         integer, intent(in) :: nptcls_here
         integer, intent(in) :: pinds(nptcls_here)
         integer :: iptcl_batch, iptcl, ithr
-        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here] )
+        call discrete_read_imgbatch( nptcls_here, pinds, [1,nptcls_here], params_glob%l_use_denoised  )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr)&
@@ -392,7 +392,7 @@ contains
         ! Memoize particles FFT parameters
         if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
         call pftcc%memoize_ptcls
-    end subroutine build_pftcc_batch_particles
+    end subroutine build_batch_particles
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftcc4align( which_iter )
