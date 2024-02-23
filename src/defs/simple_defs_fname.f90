@@ -28,6 +28,7 @@ character(len=*), parameter :: MIRR_SUFFIX          = '_mirr'
 ! STACK PART RELATED AND FILE FORMAT CONSTANTS
 character(len=*), parameter :: STKPARTSDIR          = 'stack_parts'
 character(len=*), parameter :: STKPARTFBODY         = trim(STKPARTSDIR)//'/stack_part'
+character(len=*), parameter :: STKDENPARTFBODY      = trim(STKPARTSDIR)//'/stack_den_part'
 character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'

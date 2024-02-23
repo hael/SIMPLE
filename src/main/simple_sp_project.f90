@@ -53,6 +53,7 @@ contains
     procedure, private :: add_stktab_2
     generic            :: add_stktab => add_stktab_1, add_stktab_2
     procedure          :: add_single_stk
+    procedure          :: add_single_stk_denoised
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
     procedure, private :: add_scale_tag
@@ -1011,6 +1012,36 @@ contains
         end select
     end subroutine add_single_stk
 
+    subroutine add_single_stk_denoised( self, stk_den )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: stk_den
+        character(len=:), allocatable :: stk_den_abspath, projname, fbody
+        character(len=LONGSTRLEN)     :: stk_den_relpath
+        integer                       :: ldim(3), nptcls
+        call self%projinfo%getter(1, 'projname', projname)
+        if( str_has_substr(stk_den, 'mrc') )then
+            fbody = get_fbody(basename(stk_den), 'mrc')
+        else if( str_has_substr(stk_den, 'mrcs') )then
+            fbody = get_fbody(basename(stk_den), 'mrcs')
+        else
+            THROW_HARD('Unsupported stack format; use *.mrc or *.mrcs for import')
+        endif
+        if( str_has_substr(trim(projname), fbody) ) THROW_HARD('stack for import('//trim(stk_den)//') not allowed to have same name as project')
+        ! full path and existence check
+        stk_den_abspath = simple_abspath(stk_den,'sp_project :: add_single_stk_denoised')
+        ! find dimension of inputted stack
+        call find_ldim_nptcls(trim(stk_den_abspath), ldim, nptcls)
+        if( ldim(1) /= ldim(2) )then
+            write(logfhandle,*) 'xdim: ', ldim(1)
+            write(logfhandle,*) 'ydim: ', ldim(2)
+            THROW_HARD('nonsquare particle images not supported; add_single_stk_denoised')
+        endif
+        ! path
+        call make_relativepath(CWD_GLOB, stk_den_abspath, stk_den_relpath)
+        ! update record
+        call self%os_stk%set(1, 'stk_den', trim(stk_den_relpath))
+    end subroutine add_single_stk_denoised
+
     ! adds stktab given per-stk parameters
     subroutine add_stktab_1( self, stkfnames, os )
         class(sp_project),     intent(inout) :: self
@@ -1276,11 +1307,12 @@ contains
         type(stack_io)                :: stkio_w
         type(dstack_io)               :: dstkio_r
         character(len=:), allocatable :: stk, tmp_dir, stkpart
-        character(len=:), allocatable :: dest_stkpart
+        character(len=:), allocatable :: dest_stkpart, stk_den_name
         character(len=LONGSTRLEN) :: stk_relpath, cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen
         real    :: smpd
+        logical :: l_has_stk_den
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -1325,7 +1357,29 @@ contains
             call stkio_w%close
         enddo
         call dstkio_r%kill
-        call img%kill
+        ! deal with denoised stack if present
+        l_has_stk_den = orig_stk%isthere('stk_den')
+        if( l_has_stk_den )then
+            write(logfhandle,'(a)') '>>> SPLITTING DENOISED STACK INTO PARTS'
+            stk_den_name = trim(self%os_stk%get_static(1, 'stk_den'))
+            call dstkio_r%new(smpd, box)
+            do istk = 1,nparts
+                call progress(istk,nparts)
+                stkpart = filepath(trim(tmp_dir),'stack_den_part'//int2str_pad(istk,numlen)//EXT)
+                call stkio_w%open(stkpart, smpd, 'write', box=box, is_ft=.false.)
+                cnt = 0
+                do iptcl = parts(istk,1), parts(istk,2)
+                    cnt = cnt + 1
+                    call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
+                    call dstkio_r%read(stk_den_name, ind_in_stk, img)
+                    call stkio_w%write(cnt, img)
+                enddo
+                deallocate(stkpart)
+                call stkio_w%close
+            enddo
+            call dstkio_r%kill
+        endif
+         call img%kill
         call self%os_stk%new(nparts, is_ptcl=.false.)
         if( present(dir) )then
            call simple_mkdir(filepath(trim(dir),trim(STKPARTSDIR)),errmsg="sp_project::split_stk")
@@ -1355,6 +1409,17 @@ contains
                 call self%os_ptcl2D%set(iptcl,'stkind',real(istk))
                 call self%os_ptcl3D%set(iptcl,'stkind',real(istk))
             enddo
+            if( l_has_stk_den )then
+                stkpart = filepath(trim(tmp_dir),'stack_den_part'//int2str_pad(istk,numlen)//EXT)
+                if( present(dir) )then
+                    dest_stkpart = filepath(trim(dir),trim(STKDENPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                else
+                    allocate(dest_stkpart, source=trim(STKDENPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                endif
+                call simple_rename(trim(stkpart), trim(dest_stkpart))
+                call make_relativepath(cwd, dest_stkpart, stk_relpath)
+                call self%os_stk%set(istk, 'stk_den', trim(stk_relpath))
+            endif
             deallocate(stkpart, dest_stkpart)
         enddo
         call self%write

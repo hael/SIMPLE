@@ -2669,7 +2669,7 @@ contains
         &'Import particles to SIMPLE project',&                     ! descr_short
         &'is a program for importing extracted particle images to the project',&
         &'all',&                                                   ! executable
-        &0, 12, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
+        &0, 13, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2690,6 +2690,8 @@ contains
         call import_particles%set_input('parm_ios', 10, 'dfunit', 'multi', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
         call import_particles%set_input('parm_ios', 11, 'angastunit', 'multi', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
         call import_particles%set_input('parm_ios', 12, 'phshiftunit', 'multi', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
+        call import_particles%set_input('parm_ios', 13, 'stk2', 'file', 'Stack of denoised particles',&
+        &'Stack of denoised particle images to import', 'e.g. stk_den.mrcs', .false., '')
         ! alternative inputs
         call import_particles%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
         &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')

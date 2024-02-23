@@ -86,6 +86,7 @@ type :: parameters
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
+    character(len=3)          :: use_denoised='no'    !< use denoised particle representations for alignment (not 3D rec)
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
@@ -436,6 +437,7 @@ type :: parameters
     logical :: l_reg_per      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
+    logical :: l_use_denoised = .false.
     logical :: l_wiener_part  = .false.
     logical :: sp_required    = .false.
   contains
@@ -589,6 +591,7 @@ contains
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
+        call check_carg('use_denoised',   self%use_denoised)
         call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
@@ -1449,21 +1452,22 @@ contains
                 self%l_kweight_shift = .true.
         end select
         select case(trim(self%kweight_chunk))
-        case('all','inpl','none','default')
-            ! all valid
-        case DEFAULT
-            THROW_HARD('INVALID KWEIGHT_CHUNK ARGUMENT')
+            case('all','inpl','none','default')
+                ! all valid
+            case DEFAULT
+                THROW_HARD('INVALID KWEIGHT_CHUNK ARGUMENT')
         end select
         select case(trim(self%kweight_pool))
-        case('all','inpl','none','default')
-            ! all valid
-        case DEFAULT
-            THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
+            case('all','inpl','none','default')
+                ! all valid
+            case DEFAULT
+                THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg options
-        self%l_reg_init    = trim(self%reg_init ).eq.'yes'
-        self%l_reg_norm    = trim(self%reg_norm ).eq.'yes'
-        self%l_reg_per     = trim(self%reg_per  ).eq.'yes'
+        self%l_reg_init     = trim(self%reg_init    ).eq.'yes'
+        self%l_reg_norm     = trim(self%reg_norm    ).eq.'yes'
+        self%l_reg_per      = trim(self%reg_per     ).eq.'yes'
+        self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
