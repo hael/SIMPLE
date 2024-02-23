@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_builder,          only: builder, build_glob
 use simple_cmdline,          only: cmdline
 use simple_commander_base,   only: commander_base
-use simple_parameters,       only: parameters
+use simple_parameters,       only: parameters, params_glob
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
@@ -103,6 +103,7 @@ contains
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
         ! other variables
+        class(parameters), pointer :: params_ptr => null()
         type(parameters)    :: params
         type(builder)       :: build
         type(qsys_env)      :: qenv
@@ -113,7 +114,7 @@ contains
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
-        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, fsc_templ, orig_objfun
+        character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ, orig_objfun
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
@@ -321,6 +322,7 @@ contains
                 vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
                 str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
                 call      simple_rename( trim(vol), trim(str) )
+                params%vols(state) = trim(str)
                 vol       = 'vol'//trim(int2str(state))
                 call      cline%set( trim(vol), trim(str) )
                 vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
@@ -417,7 +419,11 @@ contains
                 call cline_prob_align%set('objfun','prob')
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
+                params_ptr  => params_glob
+                params_glob => null()
                 call xprob_align%execute( cline_prob_align )
+                params_glob => params_ptr
+                params_ptr  => null()
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
@@ -834,6 +840,52 @@ contains
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
 
+    subroutine calc_iterative_fsc( prev_fname, curr_fname, iter, state )
+        use simple_image, only: image
+        use simple_fsc,   only: plot_fsc
+        character(len=*),  intent(in) :: prev_fname, curr_fname
+        integer,           intent(in) :: iter, state
+        type(image)                   :: prev_vol, curr_vol
+        character(len=:), allocatable :: ftmpl
+        real,             allocatable :: fsc(:), res(:)
+        real    :: prev_smpd, curr_smpd, smpd, msk
+        integer :: prev_ldim(3), curr_ldim(3), n
+        print *,trim(prev_fname), trim(curr_fname)
+        call find_ldim_nptcls(prev_fname, prev_ldim, n, smpd=prev_smpd)
+        call find_ldim_nptcls(curr_fname, curr_ldim, n, smpd=curr_smpd)
+        call prev_vol%new(prev_ldim,prev_smpd)
+        call curr_vol%new(curr_ldim,curr_smpd)
+        call prev_vol%read(prev_fname)
+        call curr_vol%read(curr_fname)
+        if( prev_ldim(1) > curr_ldim(1) )then
+            call curr_vol%fft
+            call curr_vol%pad_inplace(prev_ldim)
+            call curr_vol%ifft
+            smpd = prev_smpd
+        else if( prev_ldim(1) < curr_ldim(1) )then
+            call prev_vol%fft
+            call prev_vol%pad_inplace(curr_ldim)
+            call prev_vol%ifft
+            smpd = curr_smpd
+        else
+            smpd = curr_smpd
+        endif
+        msk = (real(curr_ldim(1))-2.*COSMSKHALFWIDTH)/2 - 1.
+        call prev_vol%mask(msk, 'soft')
+        call curr_vol%mask(msk, 'soft')
+        call curr_vol%fft
+        call prev_vol%fft
+        n = fdim(curr_ldim(1))-1
+        allocate(fsc(n),source=0.)
+        call curr_vol%fsc(prev_vol, fsc)
+        res = get_resarr(curr_ldim(1), smpd)
+        ftmpl = 'fsc_state'//int2str_pad(state,2)//'_iter2iter'//int2str_pad(iter,3)
+        call plot_fsc(n, fsc, res, smpd, ftmpl)
+        call arr2file(fsc, trim(ftmpl)//trim(BIN_EXT))
+        call prev_vol%kill
+        call curr_vol%kill
+    end subroutine calc_iterative_fsc
+
     subroutine exec_check_3Dconv( self, cline )
         use simple_convergence, only: convergence
         use simple_parameters,  only: params_glob
@@ -1214,8 +1266,8 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
+        allocate(ptcl_mask(1:params%nptcls))
+        call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
         call reg_obj%new
@@ -1233,7 +1285,7 @@ contains
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(CORR_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call reg_obj%read_tab_to_glob(fname, params%fromp, params%top)
+            call reg_obj%read_tab_to_glob(fname, 1, params%nptcls)
         enddo
         call reg_obj%tab_normalize
         call reg_obj%tab_align
