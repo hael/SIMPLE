@@ -137,16 +137,25 @@ contains
         call stkio_r%close
     end subroutine read_imgbatch_3
 
-    subroutine discrete_read_imgbatch( n, pinds, batchlims )
+    subroutine discrete_read_imgbatch( n, pinds, batchlims, use_denoised )
         integer,          intent(in)  :: n, pinds(n), batchlims(2)
         type(dstack_io)               :: dstkio_r
-        character(len=:), allocatable :: stkname
+        character(len=:), allocatable :: stkname, stkname_den
+        logical,          optional    :: use_denoised
         integer :: ind_in_stk, i, ii
+        logical :: uuse_denoised
+        uuse_denoised = .false.
+        if( present(use_denoised) ) uuse_denoised = use_denoised
         call dstkio_r%new(params_glob%smpd, params_glob%box)
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
-            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
-            call dstkio_r%read(stkname, ind_in_stk, build_glob%imgbatch(ii))
+            if( uuse_denoised )then
+                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk, stkname_den)
+                call dstkio_r%read(stkname_den, ind_in_stk, build_glob%imgbatch(ii))
+            else
+                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
+                call dstkio_r%read(stkname, ind_in_stk, build_glob%imgbatch(ii))
+            endif
         end do
         call dstkio_r%kill
     end subroutine discrete_read_imgbatch

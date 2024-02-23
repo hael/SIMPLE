@@ -1441,12 +1441,13 @@ contains
         stkname = trim(self%os_stk%get_static(imic, 'stk'))
     end function get_stkname
 
-    subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
-        class(sp_project), target,     intent(inout) :: self
-        character(len=*),              intent(in)    :: oritype
-        integer,                       intent(in)    :: iptcl
-        character(len=:), allocatable, intent(out)   :: stkname
-        integer,                       intent(out)   :: ind_in_stk
+    subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk, stkname_den )
+        class(sp_project), target,               intent(inout) :: self
+        character(len=*),                        intent(in)    :: oritype
+        integer,                                 intent(in)    :: iptcl
+        character(len=:), allocatable,           intent(out)   :: stkname
+        integer,                                 intent(out)   :: ind_in_stk
+        character(len=:), allocatable, optional, intent(out)   :: stkname_den
         real    :: smpd
         integer :: stkind, ncls
         ! do the index mapping
@@ -1457,6 +1458,9 @@ contains
             call self%get_cavgs_stk(stkname, ncls, smpd)
         else
             stkname = trim(self%os_stk%get_static(stkind, 'stk'))
+            if( present(stkname_den) )then
+                stkname_den = trim(self%os_stk%get_static(stkind, 'stk_den'))
+            endif
         endif
     end subroutine get_stkname_and_ind
 
