@@ -25,8 +25,6 @@ type :: regularizer
     integer                       :: nrefs
     real,             allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
     integer,          allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
-    real,             allocatable :: refs_corr(:,:)
-    integer,          allocatable :: refs_inds(:,:)
     logical,          allocatable :: ptcl_avail(:)
     type(reg_params), allocatable :: ref_ptcl_tab(:,:)
     contains
@@ -81,48 +79,49 @@ contains
         class(regularizer),      intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
-        integer :: i, iref, iptcl, inpl_ns
-        real    :: corrs(pftcc%nrots), inpl_corr(pftcc%nrots,params_glob%nthr)   !< inpl sampling corr
-        integer :: inpl_inds(pftcc%nrots,params_glob%nthr)                       !< inpl sampling indices
+        integer :: i, iref, iptcl, inpl_ns, ithr
+        real    :: corrs(pftcc%nrots,params_glob%nthr), inpl_corr(pftcc%nrots,params_glob%nthr)   !< inpl sampling corr
+        integer :: inpl_inds(pftcc%nrots,params_glob%nthr)                                        !< inpl sampling indices
         call seed_rnd
         call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,corrs) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,ithr) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, pftcc%nptcls
                 iptcl = glob_pinds(i)
                 if( self%ptcl_avail(iptcl) )then
-                    call pftcc%gencorrs_prob( iptcl, iref, corrs )
-                    self%corr_loc_tab(iref,iptcl,2) = inpl_smpl()
-                    self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)))
+                    ithr = omp_get_thread_num() + 1
+                    call pftcc%gencorrs_prob( iptcl, iref, corrs(:,ithr) )
+                    self%corr_loc_tab(iref,iptcl,2) = inpl_smpl(ithr)
+                    self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)),ithr)
                 endif
             enddo
         enddo
         !$omp end parallel do
     contains
         ! inpl greedy sampling based on unnormalized pvec
-        function inpl_smpl( ) result( which )
-            integer :: j, which, ithr
+        function inpl_smpl( thread ) result( which )
+            integer, intent(in) :: thread
+            integer :: j, which
             real    :: rnd, bound, sum_corr
-            ithr = omp_get_thread_num() + 1
-            inpl_corr(:,ithr) = corrs
-            inpl_inds(:,ithr) = (/(j,j=1,pftcc%nrots)/)
-            call hpsort(inpl_corr(:,ithr), inpl_inds(:,ithr) )
+            inpl_corr(:,thread) = corrs(:,thread)
+            inpl_inds(:,thread) = (/(j,j=1,pftcc%nrots)/)
+            call hpsort(inpl_corr(:,thread), inpl_inds(:,thread) )
             rnd      = ran3()
-            sum_corr = sum(inpl_corr(1:inpl_ns,ithr))
+            sum_corr = sum(inpl_corr(1:inpl_ns,thread))
             if( sum_corr < TINY )then
                 ! uniform sampling
                 which = 1 + floor(real(inpl_ns) * rnd)
             else
                 ! normalizing within the hard-limit
-                inpl_corr(1:inpl_ns,ithr) = inpl_corr(1:inpl_ns,ithr) / sum_corr
+                inpl_corr(1:inpl_ns,thread) = inpl_corr(1:inpl_ns,thread) / sum_corr
                 bound = 0.
                 do which=1,inpl_ns
-                    bound = bound + inpl_corr(which, ithr)
+                    bound = bound + inpl_corr(which, thread)
                     if( rnd >= bound )exit
                 enddo
                 which = min(which,inpl_ns)
             endif
-            which = inpl_inds(which, ithr)
+            which = inpl_inds(which, thread)
         end function inpl_smpl
     end subroutine fill_tab
 
@@ -212,10 +211,9 @@ contains
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns,&
                   &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
-        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs),&
-                  &refs_corr(self%nrefs,params_glob%nthr)
+        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs), refs_corr(self%nrefs)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
-        integer :: refs_inds(self%nrefs,params_glob%nthr)
+        integer :: refs_inds(self%nrefs)
         self%ptcl_ref_map = 1
         ! sorting each columns
         call calc_num2sample(self%nrefs, 'dist', refs_ns)
@@ -246,28 +244,27 @@ contains
         enddo
     contains
         function ref_smpl( ) result( which )
-            integer :: i, which, ithr
+            integer :: i, which
             real    :: rnd, bound, sum_refs_corr
-            ithr = omp_get_thread_num() + 1
-            rnd  = ran3()
-            refs_corr(:,ithr) = ref_dist
-            refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
-            call hpsort(refs_corr(:,ithr), refs_inds(:,ithr) )
-            sum_refs_corr = sum(refs_corr(1:refs_ns,ithr))
+            rnd       = ran3()
+            refs_corr = ref_dist
+            refs_inds = (/(i,i=1,self%nrefs)/)
+            call hpsort(refs_corr, refs_inds )
+            sum_refs_corr = sum(refs_corr(1:refs_ns))
             if( sum_refs_corr < TINY )then
                 ! uniform sampling
                 which = 1 + floor(real(refs_ns) * rnd)
             else
                 ! normalizing within the hard-limit
-                refs_corr(1:refs_ns,ithr) = refs_corr(1:refs_ns,ithr) / sum_refs_corr
+                refs_corr(1:refs_ns) = refs_corr(1:refs_ns) / sum_refs_corr
                 bound = 0.
                 do which=1,refs_ns
-                    bound = bound + refs_corr(which, ithr)
+                    bound = bound + refs_corr(which)
                     if( rnd >= bound )exit
                 enddo
                 which = min(which, refs_ns)
             endif
-            which = refs_inds(which, ithr)
+            which = refs_inds(which)
         end function ref_smpl
     end subroutine tab_align
 
