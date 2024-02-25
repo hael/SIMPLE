@@ -23,7 +23,6 @@ end type reg_params
 
 type :: regularizer
     integer                       :: nrefs
-    integer                       :: refs_ns
     real,             allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
     integer,          allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
     real,             allocatable :: refs_corr(:,:)
@@ -32,22 +31,21 @@ type :: regularizer
     type(reg_params), allocatable :: ref_ptcl_tab(:,:)
     contains
     ! CONSTRUCTOR
-    procedure          :: new
+    procedure :: new
     ! PROCEDURES
-    procedure          :: fill_tab
-    procedure          :: tab_normalize
-    procedure          :: tab_align
-    procedure          :: normalize_weight
-    procedure          :: shift_search
-    procedure          :: write_tab
-    procedure          :: read_tab
-    procedure          :: read_tab_from_glob
-    procedure          :: read_tab_to_glob
-    procedure          :: write_assignment
-    procedure          :: read_assignment
-    procedure, private :: ref_multinomal
+    procedure :: fill_tab
+    procedure :: tab_normalize
+    procedure :: tab_align
+    procedure :: normalize_weight
+    procedure :: shift_search
+    procedure :: write_tab
+    procedure :: read_tab
+    procedure :: read_tab_from_glob
+    procedure :: read_tab_to_glob
+    procedure :: write_assignment
+    procedure :: read_assignment
     ! DESTRUCTOR
-    procedure          :: kill
+    procedure :: kill
 end type regularizer
 
 contains
@@ -59,9 +57,7 @@ contains
         class(regularizer), target, intent(inout) :: self
         integer :: iptcl, iref
         self%nrefs = params_glob%nspace
-        call calc_num2sample(self%nrefs, 'dist', self%refs_ns)
-        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2), self%refs_corr(self%nrefs,params_glob%nthr), source=0.)
-        allocate(self%refs_inds(self%nrefs,params_glob%nthr), source=0)
+        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2), source=0.)
         allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
@@ -90,7 +86,7 @@ contains
         integer :: inpl_inds(pftcc%nrots,params_glob%nthr)                       !< inpl sampling indices
         call seed_rnd
         call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
-        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,corrs) proc_bind(close) schedule(static)
         do iref = 1, self%nrefs
             do i = 1, pftcc%nptcls
                 iptcl = glob_pinds(i)
@@ -214,12 +210,15 @@ contains
 
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl, assigned_iref, assigned_ptcl, &
+        integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns,&
                   &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
-        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs)
+        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs),&
+                  &refs_corr(self%nrefs,params_glob%nthr)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
+        integer :: refs_inds(self%nrefs,params_glob%nthr)
         self%ptcl_ref_map = 1
         ! sorting each columns
+        call calc_num2sample(self%nrefs, 'dist', refs_ns)
         sorted_tab = transpose(self%corr_loc_tab(:,:,1))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
         do iref = 1, self%nrefs
@@ -233,7 +232,7 @@ contains
         ptcl_avail    = self%ptcl_avail
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
-            assigned_iref = self%ref_multinomal(ref_dist)
+            assigned_iref = ref_smpl()
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)        = .false.
             self%ptcl_ref_map(assigned_ptcl) = assigned_iref
@@ -245,6 +244,31 @@ contains
                 enddo
             enddo
         enddo
+    contains
+        function ref_smpl( ) result( which )
+            integer :: i, which, ithr
+            real    :: rnd, bound, sum_refs_corr
+            ithr = omp_get_thread_num() + 1
+            rnd  = ran3()
+            refs_corr(:,ithr) = ref_dist
+            refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
+            call hpsort(refs_corr(:,ithr), refs_inds(:,ithr) )
+            sum_refs_corr = sum(refs_corr(1:refs_ns,ithr))
+            if( sum_refs_corr < TINY )then
+                ! uniform sampling
+                which = 1 + floor(real(refs_ns) * rnd)
+            else
+                ! normalizing within the hard-limit
+                refs_corr(1:refs_ns,ithr) = refs_corr(1:refs_ns,ithr) / sum_refs_corr
+                bound = 0.
+                do which=1,refs_ns
+                    bound = bound + refs_corr(which, ithr)
+                    if( rnd >= bound )exit
+                enddo
+                which = min(which, refs_ns)
+            endif
+            which = refs_inds(which, ithr)
+        end function ref_smpl
     end subroutine tab_align
 
     subroutine normalize_weight( self )
@@ -268,35 +292,6 @@ contains
             endif
         enddo
     end subroutine normalize_weight
-
-    !>  \brief  generates a multinomal 1-of-K random number according to the
-    !!          distribution in pvec
-    function ref_multinomal( self, pvec ) result( which )
-        class(regularizer), intent(inout) :: self
-        real,               intent(in)    :: pvec(:) !< probabilities
-        integer :: i, which, ithr
-        real    :: rnd, bound, sum_refs_corr
-        ithr = omp_get_thread_num() + 1
-        rnd  = ran3()
-        self%refs_corr(:,ithr) = pvec
-        self%refs_inds(:,ithr) = (/(i,i=1,self%nrefs)/)
-        call hpsort(self%refs_corr(:,ithr), self%refs_inds(:,ithr) )
-        sum_refs_corr = sum(self%refs_corr(1:self%refs_ns,ithr))
-        if( sum_refs_corr < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(self%refs_ns) * rnd)
-        else
-            ! normalizing within the hard-limit
-            self%refs_corr(1:self%refs_ns,ithr) = self%refs_corr(1:self%refs_ns,ithr) / sum_refs_corr
-            bound = 0.
-            do which=1,self%refs_ns
-                bound = bound + self%refs_corr(which, ithr)
-                if( rnd >= bound )exit
-            enddo
-            which = min(which, self%refs_ns)
-        endif
-        which = self%refs_inds(which, ithr)
-    end function ref_multinomal
 
     ! FILE IO
     subroutine write_tab( self, binfname )
@@ -414,7 +409,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%refs_corr,self%refs_inds,self%ptcl_avail)
+        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%ptcl_avail)
     end subroutine kill
 
     ! PUBLIC UTILITITES
