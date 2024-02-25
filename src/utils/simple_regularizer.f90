@@ -86,6 +86,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer :: i, iref, iptcl, inpl_ns
+        real    :: corrs(pftcc%nrots), inpl_corr(pftcc%nrots,params_glob%nthr)   !< inpl sampling corr
+        integer :: inpl_inds(pftcc%nrots,params_glob%nthr)                       !< inpl sampling indices
         call seed_rnd
         call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl) proc_bind(close) schedule(static)
@@ -93,11 +95,39 @@ contains
             do i = 1, pftcc%nptcls
                 iptcl = glob_pinds(i)
                 if( self%ptcl_avail(iptcl) )then
-                    call pftcc%gencorr_smpl( iptcl, iref, inpl_ns, self%corr_loc_tab(iref,iptcl,:) )
+                    call pftcc%gencorrs_prob( iptcl, iref, corrs )
+                    self%corr_loc_tab(iref,iptcl,2) = inpl_smpl()
+                    self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)))
                 endif
             enddo
         enddo
         !$omp end parallel do
+    contains
+        ! inpl greedy sampling based on unnormalized pvec
+        function inpl_smpl( ) result( which )
+            integer :: j, which, ithr
+            real    :: rnd, bound, sum_corr
+            ithr = omp_get_thread_num() + 1
+            inpl_corr(:,ithr) = corrs
+            inpl_inds(:,ithr) = (/(j,j=1,pftcc%nrots)/)
+            call hpsort(inpl_corr(:,ithr), inpl_inds(:,ithr) )
+            rnd      = ran3()
+            sum_corr = sum(inpl_corr(1:inpl_ns,ithr))
+            if( sum_corr < TINY )then
+                ! uniform sampling
+                which = 1 + floor(real(inpl_ns) * rnd)
+            else
+                ! normalizing within the hard-limit
+                inpl_corr(1:inpl_ns,ithr) = inpl_corr(1:inpl_ns,ithr) / sum_corr
+                bound = 0.
+                do which=1,inpl_ns
+                    bound = bound + inpl_corr(which, ithr)
+                    if( rnd >= bound )exit
+                enddo
+                which = min(which,inpl_ns)
+            endif
+            which = inpl_inds(which, ithr)
+        end function inpl_smpl
     end subroutine fill_tab
 
     subroutine tab_normalize( self )
