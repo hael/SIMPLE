@@ -51,8 +51,6 @@ type :: polarft_corrcalc
     integer                          :: kfromto(2)                  !< band-pass Fourier index limits
     integer                          :: nk                          !< number of shells used durring alignement
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
-    integer,             allocatable :: inpl_inds(:,:)              !< inpl sampling indices
-    real,                allocatable :: inpl_corr(:,:)              !< inpl sampling corr
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(dp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),            allocatable :: ksqsums_ptcls(:)            !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
@@ -150,7 +148,6 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorr_smpl
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -171,7 +168,6 @@ type :: polarft_corrcalc
     procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
-    procedure          :: inpl_smpl
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -296,7 +292,7 @@ contains
                     &self%pfts_drefs_odd (self%pftsz,self%kfromto(1):self%kfromto(2),3,params_glob%nthr),&
                     &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
-                    &self%heap_vars(params_glob%nthr),self%inpl_corr(self%nrots,params_glob%nthr),self%inpl_inds(self%nrots,params_glob%nthr))
+                    &self%heap_vars(params_glob%nthr))
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -1555,16 +1551,6 @@ contains
         prob = real( self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/))) )
     end subroutine gencorrs_prob
 
-    subroutine gencorr_smpl( self, iptcl, iref, inpl_ns, corr_rot )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl, iref, inpl_ns
-        real,                    intent(out)   :: corr_rot(2)
-        real :: inpl_corrs(self%nrots)
-        call self%gencorrs_prob( iptcl, iref, inpl_corrs )
-        corr_rot(2) = self%inpl_smpl(inpl_corrs, inpl_ns)
-        corr_rot(1) = inpl_corrs(int(corr_rot(2)))
-    end subroutine gencorr_smpl
-
     subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, prob)
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -2230,35 +2216,6 @@ contains
         ! specscore_2 = max(0.,median_nocopy(frc))
     end function specscore_2
 
-    ! inpl greedy sampling based on unnormalized pvec
-    function inpl_smpl( self, pvec, inpl_ns ) result( which )
-        class(polarft_corrcalc), intent(inout) :: self
-        real,                    intent(in)    :: pvec(:) !< probabilities
-        integer,                 intent(in)    :: inpl_ns
-        integer :: i, which, ithr
-        real    :: rnd, bound, sum_corr
-        ithr = omp_get_thread_num() + 1
-        self%inpl_corr(:,ithr) = pvec
-        self%inpl_inds(:,ithr) = (/(i,i=1,self%nrots)/)
-        call hpsort(self%inpl_corr(:,ithr), self%inpl_inds(:,ithr) )
-        rnd      = ran3()
-        sum_corr = sum(self%inpl_corr(1:inpl_ns,ithr))
-        if( sum_corr < TINY )then
-            ! uniform sampling
-            which = 1 + floor(real(inpl_ns) * rnd)
-        else
-            ! normalizing within the hard-limit
-            self%inpl_corr(1:inpl_ns,ithr) = self%inpl_corr(1:inpl_ns,ithr) / sum_corr
-            bound = 0.
-            do which=1,inpl_ns
-                bound = bound + self%inpl_corr(which, ithr)
-                if( rnd >= bound )exit
-            enddo
-            which = min(which,inpl_ns)
-        endif
-        which = self%inpl_inds(which, ithr)
-    end function inpl_smpl
-
     ! DESTRUCTOR
 
     subroutine kill( self )
@@ -2277,8 +2234,7 @@ contains
             if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab, self%argtransf,self%pfts_ptcls,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
-                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd,&
-                &self%inpl_corr,self%inpl_inds)
+                &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone, self%norm_refs_even, self%norm_refs_odd)
             call self%kill_memoized_ptcls
             call self%kill_memoized_refs
             nullify(self%sigma2_noise, pftcc_glob)
