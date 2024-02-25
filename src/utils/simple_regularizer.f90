@@ -5,7 +5,6 @@ module simple_regularizer
 include 'simple_lib.f08'
 use simple_parameters,   only: params_glob
 use simple_corr_binfile, only: corr_binfile
-use simple_image
 implicit none
 
 public :: regularizer, calc_num2sample
@@ -74,6 +73,8 @@ contains
         enddo
     end subroutine new
 
+    ! establish the 2D ref/ptcl table of cost values from gencorrs
+    ! (partition-wise table if nparts > 1)
     subroutine fill_tab( self, pftcc, glob_pinds )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(regularizer),      intent(inout) :: self
@@ -98,7 +99,7 @@ contains
         enddo
         !$omp end parallel do
     contains
-        ! inpl greedy sampling based on unnormalized pvec
+        ! inpl greedy sampling based on unnormalized corr values of all inpl rotations
         function inpl_smpl( thread ) result( which )
             integer, intent(in) :: thread
             integer :: j, which
@@ -125,6 +126,8 @@ contains
         end function inpl_smpl
     end subroutine fill_tab
 
+    ! reference normalization (same energy) of the global cost value table
+    ! [0,1] normalization of the whole table
     subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl
@@ -174,39 +177,7 @@ contains
         !$omp end parallel do
     end subroutine tab_normalize
 
-    subroutine shift_search( self, glob_pinds )
-        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(:)
-        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: iref, iptcl, ithr, irot, i, nptcls
-        real    :: lims(2,2), cxy(3)
-        nptcls    = size(glob_pinds)
-        lims(1,1) = -params_glob%trs
-        lims(1,2) =  params_glob%trs
-        lims(2,1) = -params_glob%trs
-        lims(2,2) =  params_glob%trs
-        do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
-        enddo
-        !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
-        do i = 1, nptcls
-            iptcl = glob_pinds(i)
-            if( self%ptcl_avail(iptcl) )then
-                iref  = self%ptcl_ref_map(iptcl)
-                ithr  = omp_get_thread_num() + 1
-                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                irot = self%ref_ptcl_tab(iref,iptcl)%loc
-                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
-                if( irot > 0 )then
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
-                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
-                endif
-            endif
-        enddo
-        !$omp end parallel do
-    end subroutine shift_search
-
+    ! ptcl -> ref assignment using the global normalized cost value table
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns,&
@@ -243,6 +214,7 @@ contains
             enddo
         enddo
     contains
+        ! ref greedy sampling based on the current reference distribution
         function ref_smpl( ) result( which )
             integer :: i, which
             real    :: rnd, bound, sum_refs_corr
@@ -268,6 +240,41 @@ contains
         end function ref_smpl
     end subroutine tab_align
 
+    ! shift searching of each iptcl -> iref assignment (partition-wise if nparts > 1)
+    subroutine shift_search( self, glob_pinds )
+        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
+        class(regularizer), intent(inout) :: self
+        integer,            intent(in)    :: glob_pinds(:)
+        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
+        integer :: iref, iptcl, ithr, irot, i, nptcls
+        real    :: lims(2,2), cxy(3)
+        nptcls    = size(glob_pinds)
+        lims(1,1) = -params_glob%trs
+        lims(1,2) =  params_glob%trs
+        lims(2,1) = -params_glob%trs
+        lims(2,2) =  params_glob%trs
+        do ithr = 1, params_glob%nthr
+            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
+        enddo
+        !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
+        do i = 1, nptcls
+            iptcl = glob_pinds(i)
+            if( self%ptcl_avail(iptcl) )then
+                iref  = self%ptcl_ref_map(iptcl)
+                ithr  = omp_get_thread_num() + 1
+                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                irot = self%ref_ptcl_tab(iref,iptcl)%loc
+                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
+                if( irot > 0 )then
+                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
+                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
+                endif
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine shift_search
+
+    ! global particle weight normalization (still needs investigation)
     subroutine normalize_weight( self )
         class(regularizer), intent(inout) :: self
         integer :: iptcl, iref
@@ -291,6 +298,8 @@ contains
     end subroutine normalize_weight
 
     ! FILE IO
+
+    ! write the partition-wise (or global) cost value table to a binary file
     subroutine write_tab( self, binfname )
         class(regularizer), intent(in) :: self
         character(len=*),   intent(in) :: binfname
@@ -304,26 +313,7 @@ contains
         call binfile%kill
     end subroutine write_tab
 
-    subroutine write_assignment( self, binfname )
-        class(regularizer), intent(in) :: self
-        character(len=*),   intent(in) :: binfname
-        integer :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
-        datasz  = sizeof(iptcl)
-        pfromto = [params_glob%fromp, params_glob%top]
-        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        ! write header
-        write(unit=funit,pos=1) pfromto
-        ! write assignment
-        addr = sizeof(pfromto) + 1
-        do iptcl = params_glob%fromp, params_glob%top
-            write(funit, pos=addr) iptcl
-            addr = addr + datasz
-            write(funit, pos=addr) self%ptcl_ref_map(iptcl)
-            addr = addr + datasz
-        end do
-        call fclose(funit)
-    end subroutine write_assignment
-
+    ! read the partition-wise (or global) cost value binary file to partition-wise (or global) reg object's cost value table
     subroutine read_tab( self, binfname )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
@@ -337,6 +327,8 @@ contains
         call binfile%kill
     end subroutine read_tab
 
+    ! read the global cost value binary file to partition-wise reg object's cost value table
+    ! [fromp, top]: partition particle index range
     subroutine read_tab_from_glob( self, binfname, fromp, top )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
@@ -363,6 +355,8 @@ contains
         !$omp end parallel do
     end subroutine read_tab_from_glob
 
+    ! read the partition-wise cost value binary file to global reg object's cost value table
+    ! [fromp, top]: global partition particle index range
     subroutine read_tab_to_glob( self, binfname, fromp, top )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
@@ -377,6 +371,28 @@ contains
         call binfile%kill
     end subroutine read_tab_to_glob
 
+    ! write a global assignment map to binary file
+    subroutine write_assignment( self, binfname )
+        class(regularizer), intent(in) :: self
+        character(len=*),   intent(in) :: binfname
+        integer :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
+        datasz  = sizeof(iptcl)
+        pfromto = [params_glob%fromp, params_glob%top]
+        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        ! write header
+        write(unit=funit,pos=1) pfromto
+        ! write assignment
+        addr = sizeof(pfromto) + 1
+        do iptcl = params_glob%fromp, params_glob%top
+            write(funit, pos=addr) iptcl
+            addr = addr + datasz
+            write(funit, pos=addr) self%ptcl_ref_map(iptcl)
+            addr = addr + datasz
+        end do
+        call fclose(funit)
+    end subroutine write_assignment
+
+    ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
