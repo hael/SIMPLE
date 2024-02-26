@@ -55,6 +55,7 @@ character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 character(len=*), parameter :: ARRAY_SCRIPT         = 'simple_script_array'
 ! STATS
 character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
+character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(TXT_EXT)
 ! LOCAL RESOLUTION
 character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 ! PREPROCESSING

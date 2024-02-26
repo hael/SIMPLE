@@ -28,19 +28,45 @@ type convergence
     type(stats_struct) :: cc_peak    !< cc peak statistics
     type(stats_struct) :: cc_nonpeak !< cc non-peak statistics
     type(oris)         :: ostats     !< centralize stats for writing
-    real :: mi_class = 0.            !< class parameter distribution overlap
-    real :: mi_proj  = 0.            !< projection parameter distribution overlap
-    real :: mi_state = 0.            !< state parameter distribution overlap
-    real :: progress = 0.            !< progress estimation
+    integer :: iteration = 0         !< current interation
+    real    :: mi_class = 0.         !< class parameter distribution overlap
+    real    :: mi_proj  = 0.         !< projection parameter distribution overlap
+    real    :: mi_state = 0.         !< state parameter distribution overlap
+    real    :: progress = 0.         !< progress estimation
   contains
+    procedure :: read
     procedure :: check_conv2D
     procedure :: check_conv3D
     procedure :: check_conv3Dc
     procedure :: check_conv_cluster
+    procedure :: append_stats
     procedure :: get
 end type convergence
 
 contains
+
+    subroutine read( self, l_err )
+        class(convergence), intent(inout) :: self
+        logical,            intent(out)   :: l_err
+        type(oris) :: ostats
+        l_err = .false.
+        call ostats%new(1, is_ptcl=.false.)
+        if( file_exists(STATS_FILE) )then
+            call ostats%read(STATS_FILE)
+            self%iteration     = nint(ostats%get(1,'ITERATION'))
+            self%score%avg     = ostats%get(1,'SCORE')
+            self%frac_srch%avg = ostats%get(1,'SEARCH_SPACE_SCANNED')
+            self%mi_proj       = ostats%get(1,'ORIENTATION_OVERLAP')
+            self%mi_state      = nint(ostats%get(1,'STATE_OVERLAP'))
+            self%dist%avg      = ostats%get(1,'DIST_BTW_BEST_ORIS')
+            self%pw%avg        = ostats%get(1,'PARTICLE_WEIGHT')
+            self%dist_inpl%avg = ostats%get(1,'IN-PLANE_DIST')
+            self%shincarg%avg  = ostats%get(1,'SHIFT_INCR_ARG')
+        else
+            l_err = .true.
+        endif
+        call ostats%kill
+    end subroutine read
 
     function check_conv2D( self, cline, os, ncls, msk ) result( converged )
         class(convergence), intent(inout) :: self
@@ -290,6 +316,7 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
+        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
         call self%ostats%set(1,'ORIENTATION_OVERLAP',self%mi_proj)
         if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
@@ -300,6 +327,7 @@ contains
         call self%ostats%set(1,'SCORE',self%score%avg)
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
+        call self%append_stats
         ! destruct
         deallocate(mask, updatecnts, pws, states, scores)
         call self%ostats%kill
@@ -380,6 +408,7 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
+        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
         call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
@@ -438,11 +467,52 @@ contains
         ! deallocate( statepops )
     end function check_conv_cluster
 
+    subroutine append_stats( self )
+        use CPlot2D_wrapper_module, only: plot2D
+        class(convergence), intent(in) :: self
+        type(oris) :: os_prev, os
+        real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
+        real, allocatable :: score(:), proj_overlap(:)
+        integer    :: i,nl
+        if( trim(params_glob%iterstats).ne.'yes' ) return
+        if( file_exists(ITERSTATS_FILE) )then
+            nl = nlines(ITERSTATS_FILE)
+            call os_prev%new(nl,is_ptcl=.false.)
+            call os_prev%read(ITERSTATS_FILE)
+            call os%new(nl+1,is_ptcl=.false.)
+            do i =1,nl
+                call os%transfer_ori(i,os_prev,i)
+            enddo
+            nl = nl+1
+            call os_prev%kill
+        else
+            call os%new(1,is_ptcl=.false.)
+            nl = 1
+        endif
+        call os%transfer_ori(nl,self%ostats,1)
+        call os%write(ITERSTATS_FILE)
+        if( nl > 1 )then
+            iter         = os%get_all('ITERATION')
+            inpl_dist    = os%get_all('IN-PLANE_DIST')
+            proj_dist    = os%get_all('DIST_BTW_BEST_ORIS')
+            proj_overlap = os%get_all('ORIENTATION_OVERLAP')
+            score        = os%get_all('SCORE')
+            call plot2D(nl,iter,inpl_dist,   'iter_inpl_dist',   line=.true.,xtitle='Iterations',ytitle='Average in-plane distance (॰)')
+            call plot2D(nl,iter,proj_dist,   'iter_proj_dist',   line=.true.,xtitle='Iterations',ytitle='Average orientation distance (॰)')
+            call plot2D(nl,iter,proj_overlap,'iter_proj_overlap',line=.true.,xtitle='Iterations',ytitle='Average orientation overlap')
+            call plot2D(nl,iter,score,       'iter_score',       line=.true.,xtitle='Iterations',ytitle='Average score')
+            deallocate(iter,inpl_dist,proj_dist,proj_overlap,score)
+        endif
+        call os%kill
+    end subroutine append_stats
+
     real function get( self, which )
         class(convergence), intent(in) :: self
         character(len=*),   intent(in) :: which
         get = 0.
         select case(which)
+            case('iter')
+                get = real(self%iteration)
             case('score','corr')
                 get = self%score%avg
             case('dist')

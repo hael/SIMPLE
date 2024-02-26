@@ -425,18 +425,18 @@ contains
         class(histogram), intent(in) :: self
         character(len=*), intent(in) :: fname
         type(str4arr)                :: title
-        type(CPlot2D_type)           :: plot2D
+        type(CPlot2D_type)           :: fig
         type(CDataSet_type)          :: dataSet
         character(len=LONGSTRLEN)    :: ps2pdf_cmd, fname_pdf, fname_eps
         integer                      :: i,iostat
         if( .not.self%exists ) THROW_HARD('Object not instantiated')
         fname_eps  = trim(fname)//'.eps'
         fname_pdf  = trim(fname)//'.pdf'
-        call CPlot2D__new(plot2D, trim(fname)//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CPlot2D__new(fig, trim(fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(fig, 400.d0)
+        call CPlot2D__SetYAxisSize(fig, 400.d0)
+        call CPlot2D__SetDrawLegend(fig, C_FALSE)
+        call CPlot2D__SetFlipY(fig, C_FALSE)
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet, C_FALSE)
         call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
@@ -445,14 +445,14 @@ contains
             call CDataSet_addpoint(dataSet, self%x(i)+self%dx/2., self%counts(i))
         end do
         call CDataSet_addpoint(dataSet, self%x(self%nbins)+self%dx/2., 0.)
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(fig, dataset)
         call CDataSet__delete(dataset)
         title%str = 'X'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        call CPlot2D__SetXAxisTitle(fig, title%str)
         title%str = 'Counts'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
-        call CPlot2D__delete(plot2D)
+        call CPlot2D__SetYAxisTitle(fig, title%str)
+        call CPlot2D__OutputPostScriptPlot(fig, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(fig)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)

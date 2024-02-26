@@ -694,88 +694,85 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_abinitio_3Dmodel( self, cline )
+        use simple_convergence, only: convergence
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        ! constants
-        real,                  parameter :: SCALEFAC = 0.667
-        real,                  parameter :: CENLP_DEFAULT = 30.
-        real,                  parameter :: LP_DEFAULT=6.
-        real,                  parameter :: LPSTART_DEFAULT=30.,LPSTOP_DEFAULT=LP_DEFAULT
-        integer,               parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT=10
-        integer,               parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2500
-        integer,               parameter :: MINBOX  = 100
-        integer,               parameter :: NSTAGES = 5
+        real,    parameter :: SCALEFAC      = 0.667
+        real,    parameter :: CENLP_DEFAULT = 30.
+        real,    parameter :: LP_DEFAULT    = 6.
+        real,    parameter :: LPSTART_DEFAULT=30.,LPSTOP_DEFAULT=LP_DEFAULT
+        integer, parameter :: MINBOX  = 48
+        integer, parameter :: NSTAGES = 5
+        integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
+        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! command lines
-        type(cmdline) :: cline_refine3D, cline_reconstruct3D
+        type(cmdline)              :: cline_refine3D, cline_reconstruct3D
         ! other
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
-        real,             allocatable :: res(:), tmp_rarr(:), diams(:)
-        integer,          allocatable :: states(:), tmp_iarr(:)
-        class(parameters), pointer    :: params_ptr => null()
-        character(len=2)      :: str_state
-        type(parameters)      :: params
-        type(sp_project)      :: spproj
-        real                  :: smpd_target, lp_target
-        real                  :: scale
-        integer               :: iter, it, find, find_start, find_stop, find_range
-        logical               :: srch4symaxis, l_autoscale, l_lpset, l_shmem
+        class(parameters), pointer :: params_ptr => null()
+        type(parameters)           :: params
+        type(sp_project)           :: spproj
+        type(convergence)          :: conv
+        real    :: smpd_target, lp_target, scale
+        integer :: iter, it, prev_box_crop, maxits
+        logical :: l_autoscale, l_lpset, l_err
         call cline%set('oritype', 'ptcl3D')
         call cline%set('objfun',  'prob')
         call cline%set('refine',  'prob')
-        call cline%set('pgrp',     'c1')
+        call cline%set('pgrp',    'c1')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale','yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',    'no')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',   'no')
         if( .not. cline%defined('reg_init')  ) call cline%set('reg_init', 'no')
+        if( .not. cline%defined('reg_norm')  ) call cline%set('reg_norm', 'yes')
         if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',10.)
         if( .not. cline%defined('center')    ) call cline%set('center',   'no') ! why?
         ! resolution limit strategy
+        l_lpset = .false.
         if( cline%defined('lp') )then
             if( cline%defined('lpstart') .or. cline%defined('lpstop') )then
                 THROW_HARD('One of LP or LPSTART & LPSTOP must be defined!')
             endif
             l_lpset = .true.
         else
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                l_lpset = .false.
-            else
-                THROW_HARD('One of LP or LPSTART & LPSTOP must be defined!')
-            endif
+            if( .not.cline%defined('lpstart') ) call cline%set('lpstart',LPSTART_DEFAULT)
+            if( .not.cline%defined('lpstop')  ) call cline%set('lpstop', LPSTOP_DEFAULT)
         endif
         ! make master parameters
         call params%new(cline)
+        call cline%set('mkdir', 'no')
         call cline%delete('autoscale')
         call cline%delete('lpstart')
         call cline%delete('lpstop')
         call cline%delete('lp')
-        call cline%set('mkdir', 'no')
         ! read project & update sampling distance
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside(params%oritype, params%projfile)
-        ! split stack
-        call spproj%split_stk(params%nparts)
         ! dimensions defaults
         params%box       = spproj%get_box()
         params%smpd_crop = params%smpd
         params%box_crop  = params%box
+        l_autoscale      = .false.
         ! command-lines
         cline_refine3D      = cline
         cline_reconstruct3D = cline
         call cline_refine3D%set('prg',      'refine3D')
         call cline_refine3D%set('projfile', params%projfile)
-        call cline_reconstruct3D%set('prg',     'reconstruct3D')
-        call cline_reconstruct3D%set('box',      real(params%box))
-        call cline_reconstruct3D%set('projfile', params%projfile)
-        call cline_reconstruct3D%set('smpd',     params%smpd)
-        call cline_reconstruct3D%set('ml_reg',   'no')
+        call cline_reconstruct3D%set('prg',        'reconstruct3D')
+        call cline_reconstruct3D%set('box',        real(params%box))
+        call cline_reconstruct3D%set('projfile',   params%projfile)
+        call cline_reconstruct3D%set('ml_reg',     'no')
+        call cline_reconstruct3D%set('needs_sigma','no')
+        call cline_reconstruct3D%set('objfun',     'cc')
         ! executions & updates
         if( l_lpset )then
             ! Single resolution limit
+            params%lpstop  = params%lp
+            params%lpstart = params%lp
             if( params%l_autoscale )then
                 l_autoscale = .false.
                 lp_target   = params%lp * SCALEFAC
@@ -792,30 +789,35 @@ contains
             call cline_refine3D%set('maxits',    MAXITS1)
             call cline_refine3D%set('lp_iters',  MAXITS1)
             call cline_refine3D%set('nspace',    NSPACE1)
-            call xrefine3D_distr%execute(cline_refine3D)
-            iter = nint(cline_refine3D%get_rarg('endit'))
-            call cline_refine3D%delete('endit')
-            call cline_refine3D%set('startit',   iter+1)
-            call cline_refine3D%set('maxits',    MAXITS2)
-            call cline_refine3D%set('lp_iters',  MAXITS2)
-            call cline_refine3D%set('nspace',    NSPACE2)
+            call exec_refine3D(iter)
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A)')'>>> SECOND STAGE'
+            call cline_refine3D%set('reg_init', 'no')
+            call cline_refine3D%set('trs',      MINSHIFT)
+            call cline_refine3D%set('maxits',   MAXITS2)
+            call cline_refine3D%set('lp_iters', MAXITS2)
+            call cline_refine3D%set('nspace',   NSPACE2)
+            call cline_refine3D%set('startit',  iter+1)
             call cline_refine3D%set('continue',  'yes')
-            call xrefine3D_distr%execute(cline_refine3D)
-            iter = nint(cline_refine3D%get_rarg('endit'))
-            call cline_refine3D%delete('endit')
+            call exec_refine3D(iter)
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A)')'>>> FINAL STAGE'
+            prev_box_crop = params%box_crop
         else
             ! Frequency marching
-            find_start = calc_fourier_index(params%lpstart, params%box, params%smpd)
-            find_stop  = calc_fourier_index(params%lpstop,  params%box, params%smpd)
-            find_range = find_stop - find_start + 1
-            iter       = 0
+            iter = 0
             do it = 1,NSTAGES
                 write(logfhandle,'(A)')'>>>'
+                prev_box_crop = params%box_crop
+                ! resolution limit
+                if( it == 1 )then
+                    params%lp = params%lpstart
+                else
+                    params%lp = max(params%lpstop, params%lpstop+(params%lp-params%lpstop)/2.)
+                endif
+                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ',it,' WITH LP =',params%lp
                 ! dimensions
-                find      = find_start + nint(real((it-1)*find_range)/real(NSTAGES))
-                params%lp = calc_lowpass_lim(find, params%box, params%smpd)
-                if( it == 1       ) params%lp = params%lpstart
-                if( it == NSTAGES ) params%lp = params%lpstop
+                prev_box_crop = params%box_crop
                 if( params%l_autoscale )then
                     l_autoscale = .false.
                     lp_target   = params%lp * SCALEFAC
@@ -823,50 +825,95 @@ contains
                     call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
                     l_autoscale = params%box_crop < params%box
                 endif
-                write(logfhandle,'(A,I3,A9,F6.2)')'>>> STAGE ',it,' WITH LP=',params%lp
                 if( l_autoscale )then
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
                 endif
-                write(logfhandle,'(A)')'>>>'
+                if( it > 1 )then
+                    call cline_refine3D%set('reg_init', 'no')
+                    if( prev_box_crop == params%box_crop )then
+                        call cline_refine3D%set('continue',  'yes')
+                    else
+                        call cline_refine3D%delete('continue')
+                        call cline_refine3D%delete('vol1')
+                    endif
+                endif
                 ! stage updates
                 call cline_refine3D%set('box_crop', params%box_crop)
                 call cline_refine3D%set('lp',       params%lp)
-                call cline_refine3D%set('trs',      0.)
                 call cline_refine3D%set('startit',  iter+1)
                 ! # of iterations
-                if( it < NSTAGES-1 )then
-                    call cline_refine3D%set('maxits',   MAXITS_SHORT)
-                    call cline_refine3D%set('lp_iters', MAXITS_SHORT)
-                else
-                    call cline_refine3D%set('maxits',   2*MAXITS_SHORT)
-                    call cline_refine3D%set('lp_iters', 2*MAXITS_SHORT)
-                end if
-                ! size of projection directions space
+                maxits = MAXITS_SHORT1
+                if( it >= NSTAGES-1 ) maxits = MAXITS_SHORT2
+                call cline_refine3D%set('maxits',   maxits)
+                call cline_refine3D%set('lp_iters', maxits)
+                ! projection directions & shift
                 if( it < NSTAGES )then
                     call cline_refine3D%set('nspace', NSPACE1)
+                    call cline_refine3D%set('trs',      0.)
                 else
-                    call cline_refine3D%set('nspace',  NSPACE2)
+                    call cline_refine3D%set('nspace', NSPACE2)
+                    call cline_refine3D%set('trs',    MINSHIFT)
                 end if
-                call xrefine3D_distr%execute(cline_refine3D)
-                iter = nint(cline_refine3D%get_rarg('endit'))
-                call cline_refine3D%delete('endit')
-                call cline_refine3D%set('continue',  'yes')
+                call exec_refine3D(iter)
             enddo
+            ! Final stage
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A,F6.2)')'>>> FINAL STAGE WITH LP=',params%lpstop
+            prev_box_crop = params%box_crop
+            if( params%l_autoscale )then
+                l_autoscale = .false.
+                lp_target   = params%lpstop * SCALEFAC
+                smpd_target = max(params%smpd, lp_target/2.)
+                call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
+                l_autoscale = params%box_crop < params%box
+            endif
+            if( l_autoscale )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+            endif
         endif
-        ! Final stage
-        write(logfhandle,'(A)')'>>>'
-        write(logfhandle,'(A,F6.2)')'>>> FINAL STAGE WITH LP=',params%lpstop
-        write(logfhandle,'(A)')'>>>'
-        call cline_refine3D%set('trs',       0.05*real(params%box_crop))
-        call cline_refine3D%set('maxits',    MAXITS2)
-        call cline_refine3D%set('lp_iters',  MAXITS2)
-        call cline_refine3D%set('nspace',    NSPACE3)
-        call cline_refine3D%set('lp',        params%lpstop)
-        call cline_refine3D%set('startit',   iter+1)
-        call xrefine3D_distr%execute(cline_refine3D)
+        if( prev_box_crop == params%box_crop )then
+            call cline_refine3D%set('continue',  'yes')
+        else
+            call cline_refine3D%delete('continue')
+            call cline_refine3D%delete('vol1')
+        endif
+        call cline_refine3D%set('reg_init', 'no')
+        call cline_refine3D%set('box_crop', params%box_crop)
+        call cline_refine3D%set('lp',       params%lpstop)
+        call cline_refine3D%set('trs',      MINSHIFT)
+        call cline_refine3D%set('startit',  iter+1)
+        call cline_refine3D%set('maxits',   MAXITS2)
+        call cline_refine3D%set('lp_iters', MAXITS2)
+        call cline_refine3D%set('nspace',   NSPACE3)
+        call exec_refine3D(iter)
         ! optional final reconstruction at original scale
         if( l_autoscale ) call xreconstruct3D_distr%execute(cline_reconstruct3D)
+        ! cleanup
+        call del_files(CORR_FBODY,      params_glob%nparts,ext='.dat')
+        call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+        call del_file(trim(CORR_FBODY)      //'.dat')
+        call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+        call qsys_cleanup
+        call spproj%kill
         call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
+        contains
+
+            subroutine exec_refine3D( iter )
+                integer, intent(out) :: iter
+                call cline_refine3D%delete('endit')
+                call del_files(CORR_FBODY,      params_glob%nparts,ext='.dat')
+                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+                call del_file(trim(CORR_FBODY)      //'.dat')
+                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+                params_ptr  => params_glob
+                params_glob => null()
+                call xrefine3D_distr%execute(cline_refine3D)
+                params_glob => params_ptr
+                params_ptr  => null()
+                call conv%read(l_err)
+                iter = nint(conv%get('iter'))
+            end subroutine exec_refine3D
+
     end subroutine exec_abinitio_3Dmodel
 
 end module simple_commander_abinitio

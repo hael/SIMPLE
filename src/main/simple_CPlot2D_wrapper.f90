@@ -233,52 +233,59 @@ contains
         call CDataPoint__delete(point)
     end subroutine CDataSet_addpoint
 
-    subroutine scatter_plot( n, x, y, tmpl_fname )
+    subroutine plot2D( n, x, y, tmpl_fname, line, xtitle, ytitle )
         include 'simple_lib.f08'
-        integer,           intent(in) :: n
-        real,              intent(in) :: x(n), y(n)
-        character(len=*),  intent(in) :: tmpl_fname
+        integer,                     intent(in) :: n
+        real,                        intent(in) :: x(n), y(n)
+        character(len=*),            intent(in) :: tmpl_fname
+        logical,           optional, intent(in) :: line
+        character(len=*),  optional, intent(in) :: xtitle, ytitle
         type(str4arr)             :: title
-        type(CPlot2D_type)        :: plot2D
+        type(CPlot2D_type)        :: plot
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
         integer  :: k,iostat
-        if( n == 0 ) THROW_HARD('Empty vectors; scatter_plot')
+        if( n == 0 ) THROW_HARD('Empty vectors; plot')
         fname_eps  = trim(tmpl_fname)//'.eps'
         fname_pdf  = trim(tmpl_fname)//'.pdf'
-        call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CPlot2D__new(plot, trim(tmpl_fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot, 400.d0)
+        call CPlot2D__SetYAxisSize(plot, 400.d0)
+        call CPlot2D__SetDrawLegend(plot, C_FALSE)
+        call CPlot2D__SetFlipY(plot, C_FALSE)
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet, C_TRUE)
         call CDataSet__SetMarkerSize(dataSet, real(2.0, c_double))
         call CDataSet__SetDrawLine(dataSet, C_FALSE)
+        if( present(line) )then
+            if( line ) call CDataSet__SetDrawLine(dataSet, C_TRUE)
+        endif
         call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
         do k = 1,n
             call CDataSet_addpoint(dataSet, x(k), y(k))
         end do
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
         title%str = 'X'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        if( present(xtitle) ) title%str = trim(xtitle)//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot, title%str)
         title%str = 'Y'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
-        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
-        call CPlot2D__delete(plot2D)
+        if( present(ytitle) ) title%str = trim(ytitle)//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot, title%str)
+        call CPlot2D__OutputPostScriptPlot(plot, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
             &//trim(fname_pdf)//' '//trim(fname_eps)
         call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
-    end subroutine scatter_plot
+    end subroutine plot2D
 
     subroutine test_CPlot2D
         include 'simple_lib.f08'
         ! use CPlot2D_wrapper_module
         type(str4arr)             :: title
-        type(CPlot2D_type)        :: plot2D
+        type(CPlot2D_type)        :: plot
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg, fname_eps
         real    :: vals1(50,2), vals2(50,2), left, right, up, down, xdim,ydim
@@ -288,13 +295,13 @@ contains
             vals1(i,:) = [ran3(), ran3()]
             vals2(i,:) = [ran3(), ran3()]
         enddo
-        call CPlot2D__new(plot2D, 'some name'//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, 400.0_c_double)
-        call CPlot2D__SetYAxisSize(plot2D, 400.0_c_double)
-        call CPlot2D__SetDrawXAxisGridLines(plot2D, C_TRUE)
-        call CPlot2D__SetDrawYAxisGridLines(plot2D, C_TRUE)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_TRUE)
+        call CPlot2D__new(plot, 'some name'//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot, 400.0_c_double)
+        call CPlot2D__SetYAxisSize(plot, 400.0_c_double)
+        call CPlot2D__SetDrawXAxisGridLines(plot, C_TRUE)
+        call CPlot2D__SetDrawYAxisGridLines(plot, C_TRUE)
+        call CPlot2D__SetDrawLegend(plot, C_FALSE)
+        call CPlot2D__SetFlipY(plot, C_TRUE)
         ! #0 dummy points for padding, arbitrary
         left  = min(minval(vals1(:,1)),minval(vals2(:,1)))
         right = max(maxval(vals1(:,1)),maxval(vals2(:,1)))
@@ -311,7 +318,7 @@ contains
         call CDataSet_addpoint(dataSet, right,down)
         call CDataSet_addpoint(dataSet, right,up)
         call CDataSet_addpoint(dataSet, left, up)
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
         ! #1, line, no marker, one dataset
         call CDataSet__new(dataSet)
@@ -320,7 +327,7 @@ contains
         do i = 1,50
             call CDataSet_addpoint(dataSet, vals1(i,1), vals1(i,2))
         enddo
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
         ! #2, markers, no line, each point is a dataset
         do i = 1,50
@@ -329,18 +336,18 @@ contains
             call CDataSet__SetMarkerSize(dataSet, real(max(5.,real(i)/2.),c_double))
             call CDataSet__SetDatasetColor(dataSet, 1.0_c_double, real(real(i)/100.+0.5,c_double), 0.0_c_double)
             call CDataSet_addpoint(dataSet, vals2(i,1), vals2(i,2))
-            call CPlot2D__AddDataSet(plot2D, dataset)
+            call CPlot2D__AddDataSet(plot, dataset)
             call CDataSet__delete(dataset)
         enddo
         ! legend
         title%str = 'X axis legend'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        call CPlot2D__SetXAxisTitle(plot, title%str)
         title%str = 'Y axis legend'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        call CPlot2D__SetYAxisTitle(plot, title%str)
         ! output
         fname_eps = 'test.eps'//C_NULL_CHAR
-        call CPlot2D__OutputPostScriptPlot(plot2D, fname_eps)
-        call CPlot2D__delete(plot2D)
+        call CPlot2D__OutputPostScriptPlot(plot, fname_eps)
+        call CPlot2D__delete(plot)
         l = len_trim(fname_eps)
         fname_eps = fname_eps(:l-1) ! removing trailing C NULL character
         ! conversion to JPEG
