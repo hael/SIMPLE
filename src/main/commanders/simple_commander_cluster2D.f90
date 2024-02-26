@@ -2004,8 +2004,7 @@ contains
         use simple_classaverager, only: transform_ptcls
         class(ppca_denoise_classes_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        integer,          parameter   :: MAXPCAITS  = 15
-        logical,          parameter   :: TRANSP_PCA = .false. ! pixel-wise learning
+        integer,          parameter   :: MAXPCAITS = 15
         type(image),      allocatable :: imgs(:)
         type(image)                   :: cavg
         type(oris),       pointer     :: spproj_field => null()
@@ -2019,7 +2018,7 @@ contains
         type(builder)    :: build
         type(ppca_inmem) :: prob_pca
         integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2
-        logical          :: l_phflip
+        logical          :: l_phflip, l_transp_pca   ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    2.0)
@@ -2036,7 +2035,8 @@ contains
             case DEFAULT
                 THROW_HARD('ORITYPE not supported!')
         end select
-        l_phflip = .false.
+        l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        l_phflip     = .false.
         select case( spproj%get_ctfflag_type(params%oritype) )
             case(CTFFLAG_NO)
                 THROW_HARD('NO CTF INFORMATION COULD BE FOUND')
@@ -2049,8 +2049,11 @@ contains
         end select
         cls_inds = spproj_field%get_label_inds(label)
         ncls     = size(cls_inds)
-        if( cline%defined('ncls') ) ncls = params%ncls
         allocate(cls_pops(ncls), source=0)
+        if( cline%defined('ncls') )then
+            ncls     = params%ncls
+            cls_inds = cls_inds(1:ncls)
+        endif
         do i = 1, ncls
             call spproj_field%get_pinds(cls_inds(i), label, pinds)
             if( allocated(pinds) )then
@@ -2061,6 +2064,7 @@ contains
         end do
         cls_inds = pack(cls_inds, mask=cls_pops > 2)
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
+        ncls     = size(cls_inds)
         call os%new(nptcls, is_ptcl=.true.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
@@ -2079,7 +2083,7 @@ contains
                 call imgs(j)%write(fname, cnt1)
             end do
             call cavg%write(fname_cavgs, i)
-            if( TRANSP_PCA )then
+            if( l_transp_pca )then
                 call make_pcavecs(imgs, npix, avg, pcavecs, transp=.true.)
                 call prob_pca%new(npix, nptcls, params%neigs)
                 call prob_pca%master(pcavecs, MAXPCAITS)
@@ -2099,7 +2103,7 @@ contains
             do j = 1, nptcls
                 cnt2 = cnt2 + 1
                 call imgs(j)%unserialize(pcavecs(j,:))
-                if( TRANSP_PCA ) call imgs(j)%norm
+                if( l_transp_pca ) call imgs(j)%norm
                 call cavg%add(imgs(j))
                 call spproj_field%get_ori(pinds(j), o)
                 call os%set_ori(cnt2, o)
