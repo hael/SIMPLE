@@ -2023,7 +2023,7 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',    2.0)
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
             case('ptcl2D')
@@ -2032,6 +2032,7 @@ contains
             case('ptcl3D')
                 spproj_field => spproj%os_ptcl3D
                 label        =  'proj'
+                call spproj_field%proj2class
             case DEFAULT
                 THROW_HARD('ORITYPE not supported!')
         end select
@@ -2048,6 +2049,7 @@ contains
         end select
         cls_inds = spproj_field%get_label_inds(label)
         ncls     = size(cls_inds)
+        if( cline%defined('ncls') ) ncls = params%ncls
         allocate(cls_pops(ncls), source=0)
         do i = 1, ncls
             call spproj_field%get_pinds(cls_inds(i), label, pinds)
@@ -2059,7 +2061,6 @@ contains
         end do
         cls_inds = pack(cls_inds, mask=cls_pops > 2)
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
-        ncls     = size(cls_inds)
         call os%new(nptcls, is_ptcl=.true.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
