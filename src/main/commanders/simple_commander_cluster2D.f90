@@ -2049,11 +2049,11 @@ contains
         end select
         cls_inds = spproj_field%get_label_inds(label)
         ncls     = size(cls_inds)
-        allocate(cls_pops(ncls), source=0)
         if( cline%defined('ncls') )then
             ncls     = params%ncls
             cls_inds = cls_inds(1:ncls)
         endif
+        allocate(cls_pops(ncls), source=0)
         do i = 1, ncls
             call spproj_field%get_pinds(cls_inds(i), label, pinds)
             if( allocated(pinds) )then
