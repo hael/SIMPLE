@@ -494,14 +494,15 @@ contains
         if( nl > 1 )then
             iter         = os%get_all('ITERATION')
             inpl_dist    = os%get_all('IN-PLANE_DIST')
-            proj_dist    = os%get_all('DIST_BTW_BEST_ORIS')
-            proj_overlap = os%get_all('ORIENTATION_OVERLAP')
             score        = os%get_all('SCORE')
-            call plot2D(nl,iter,inpl_dist,   'iter_inpl_dist',   line=.true.,xtitle='Iterations',ytitle='Average in-plane distance (॰)')
-            call plot2D(nl,iter,proj_dist,   'iter_proj_dist',   line=.true.,xtitle='Iterations',ytitle='Average orientation distance (॰)')
-            call plot2D(nl,iter,proj_overlap,'iter_proj_overlap',line=.true.,xtitle='Iterations',ytitle='Average orientation overlap')
+            call plot2D(nl,iter,inpl_dist,   'iter_inpl_dist',   line=.true.,xtitle='Iterations',ytitle='Average in-plane distance (degs)')
             call plot2D(nl,iter,score,       'iter_score',       line=.true.,xtitle='Iterations',ytitle='Average score')
-            deallocate(iter,inpl_dist,proj_dist,proj_overlap,score)
+            if( os%isthere('ORIENTATION_OVERLAP') )then
+                proj_overlap = os%get_all('ORIENTATION_OVERLAP')
+                proj_dist    = os%get_all('DIST_BTW_BEST_ORIS')
+                call plot2D(nl,iter,proj_dist,   'iter_proj_dist',   line=.true.,xtitle='Iterations',ytitle='Average orientation distance (degs)')
+                call plot2D(nl,iter,proj_overlap,'iter_proj_overlap',line=.true.,xtitle='Iterations',ytitle='Average orientation overlap')
+            endif
         endif
         call os%kill
     end subroutine append_stats

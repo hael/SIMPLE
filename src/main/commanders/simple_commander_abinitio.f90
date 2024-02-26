@@ -701,7 +701,7 @@ contains
         real,    parameter :: CENLP_DEFAULT = 30.
         real,    parameter :: LP_DEFAULT    = 6.
         real,    parameter :: LPSTART_DEFAULT=30.,LPSTOP_DEFAULT=LP_DEFAULT
-        integer, parameter :: MINBOX  = 48
+        integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
@@ -729,7 +729,7 @@ contains
         if( .not. cline%defined('reg_init')  ) call cline%set('reg_init', 'no')
         if( .not. cline%defined('reg_norm')  ) call cline%set('reg_norm', 'yes')
         if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',10.)
-        if( .not. cline%defined('center')    ) call cline%set('center',   'no') ! why?
+        if( .not. cline%defined('center')    ) call cline%set('center',   'no')
         ! resolution limit strategy
         l_lpset = .false.
         if( cline%defined('lp') )then
@@ -762,6 +762,7 @@ contains
         cline_reconstruct3D = cline
         call cline_refine3D%set('prg',      'refine3D')
         call cline_refine3D%set('projfile', params%projfile)
+        call cline_refine3D%set('center',   'no')
         call cline_reconstruct3D%set('prg',        'reconstruct3D')
         call cline_reconstruct3D%set('box',        real(params%box))
         call cline_reconstruct3D%set('projfile',   params%projfile)
@@ -798,7 +799,8 @@ contains
             call cline_refine3D%set('lp_iters', MAXITS2)
             call cline_refine3D%set('nspace',   NSPACE2)
             call cline_refine3D%set('startit',  iter+1)
-            call cline_refine3D%set('continue',  'yes')
+            call cline_refine3D%set('continue', 'yes')
+            call cline_refine3D%set('center',   params%center)
             call exec_refine3D(iter)
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> FINAL STAGE'
@@ -829,6 +831,7 @@ contains
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
                 endif
                 if( it > 1 )then
+                    call cline_refine3D%set('center',   params%center)
                     call cline_refine3D%set('reg_init', 'no')
                     if( prev_box_crop == params%box_crop )then
                         call cline_refine3D%set('continue',  'yes')
