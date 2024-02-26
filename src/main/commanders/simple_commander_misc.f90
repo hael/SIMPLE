@@ -526,7 +526,7 @@ contains
         character(len=LONGSTRLEN),    allocatable :: projects_fnames(:), moviedocs(:)
         integer,                      allocatable :: indextab(:,:), order(:), nxpatch(:), nypatch(:)
         logical,                      allocatable :: mask(:)
-        type(CPlot2D_type)    :: plot2D
+        type(CPlot2D_type)    :: plot
         type(CDataSet_type)   :: dataSet
         type(CDataPoint_type) :: point
         type(parameters)      :: params
@@ -609,12 +609,12 @@ contains
         enddo
         call fclose(funit)
         ! eps output
-        call CPlot2D__new(plot2D, 'Goodness of  fit'//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, real(50*nprojects,dp))
-        call CPlot2D__SetYAxisSize(plot2D, real(50*maxval(avg+2.0*std),dp))
-        call CPlot2D__SetXAxisTitle(plot2D, 'n = sqrt(nx * ny)'//c_null_char)
-        call CPlot2D__SetYAxisTitle(plot2D, 'shifts RMS patch vs poly (pixels) '//c_null_char)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__new(plot, 'Goodness of  fit'//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot, real(50*nprojects,dp))
+        call CPlot2D__SetYAxisSize(plot, real(50*maxval(avg+2.0*std),dp))
+        call CPlot2D__SetXAxisTitle(plot, 'n = sqrt(nx * ny)'//c_null_char)
+        call CPlot2D__SetYAxisTitle(plot, 'shifts RMS patch vs poly (pixels) '//c_null_char)
+        call CPlot2D__SetDrawLegend(plot, C_FALSE)
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet,C_TRUE)
         call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 0.0_c_double)
@@ -623,7 +623,7 @@ contains
             call CDataSet__AddDataPoint(dataSet, point)
             call CDataPoint__delete(point)
         enddo
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet,C_FALSE)
@@ -633,7 +633,7 @@ contains
             call CDataSet__AddDataPoint(dataSet, point)
             call CDataPoint__delete(point)
         enddo
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet,C_FALSE)
@@ -643,10 +643,10 @@ contains
             call CDataSet__AddDataPoint(dataSet, point)
             call CDataPoint__delete(point)
         enddo
-        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CPlot2D__AddDataSet(plot, dataset)
         call CDataSet__delete(dataset)
-        call CPlot2D__OutputPostScriptPlot(plot2D, 'goodnessoffit.eps'//C_NULL_CHAR)
-        call CPlot2D__delete(plot2D)
+        call CPlot2D__OutputPostScriptPlot(plot, 'goodnessoffit.eps'//C_NULL_CHAR)
+        call CPlot2D__delete(plot)
         ! generate dense 2.5D grid
         call parse_movie_star(moviedocs(1), poly1, ldim1, binning, smpd)
         nframes = ldim1(3)
@@ -749,12 +749,12 @@ contains
                 integer,          intent(in) :: n
                 real,             intent(in) :: x(n), y(n), ystd(n)
                 integer :: i
-                call CPlot2D__new(plot2D, trim(title)//C_NULL_CHAR)
-                call CPlot2D__SetXAxisSize(plot2D, real(50*n,dp))
-                call CPlot2D__SetYAxisSize(plot2D, real(250*maxval(y+2.0*ystd),dp))
-                call CPlot2D__SetXAxisTitle(plot2D, abscissa//c_null_char)
-                call CPlot2D__SetYAxisTitle(plot2D, ordinate//c_null_char)
-                call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+                call CPlot2D__new(plot, trim(title)//C_NULL_CHAR)
+                call CPlot2D__SetXAxisSize(plot, real(50*n,dp))
+                call CPlot2D__SetYAxisSize(plot, real(250*maxval(y+2.0*ystd),dp))
+                call CPlot2D__SetXAxisTitle(plot, abscissa//c_null_char)
+                call CPlot2D__SetYAxisTitle(plot, ordinate//c_null_char)
+                call CPlot2D__SetDrawLegend(plot, C_FALSE)
                 call CDataSet__new(dataSet)
                 call CDataSet__SetDrawMarker(dataSet,C_TRUE)
                 call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 0.0_c_double)
@@ -766,7 +766,7 @@ contains
                     call CDataSet__AddDataPoint(dataSet, point)
                     call CDataPoint__delete(point)
                 enddo
-                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CPlot2D__AddDataSet(plot, dataset)
                 call CDataSet__delete(dataset)
                 call CDataSet__new(dataSet)
                 call CDataSet__SetDrawMarker(dataSet,C_FALSE)
@@ -776,7 +776,7 @@ contains
                     call CDataSet__AddDataPoint(dataSet, point)
                     call CDataPoint__delete(point)
                 enddo
-                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CPlot2D__AddDataSet(plot, dataset)
                 call CDataSet__delete(dataset)
                 call CDataSet__new(dataSet)
                 call CDataSet__SetDrawMarker(dataSet,C_FALSE)
@@ -786,10 +786,10 @@ contains
                     call CDataSet__AddDataPoint(dataSet, point)
                     call CDataPoint__delete(point)
                 enddo
-                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CPlot2D__AddDataSet(plot, dataset)
                 call CDataSet__delete(dataset)
-                call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname)//C_NULL_CHAR)
-                call CPlot2D__delete(plot2D)
+                call CPlot2D__OutputPostScriptPlot(plot, trim(fname)//C_NULL_CHAR)
+                call CPlot2D__delete(plot)
             end subroutine write_plot
 
             subroutine polynomial2shifts(cs, xs, ys, times, offsets)

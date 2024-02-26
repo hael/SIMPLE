@@ -242,7 +242,7 @@ contains
         if( params%continue .eq. 'yes' )then
             ! we are continuing from a previous refinement round,
             ! i.e. projfile is fetched from a X_refine3D dir
-            ! set starting volume(s), iteration number & previous refinement path
+            ! set starting volume(s), iteration number & previous refinement path...
             do state=1,params%nstates
                 ! volume(s)
                 vol = 'vol' // int2str(state)
@@ -255,43 +255,69 @@ contains
                 params%vols(state) = vol_fname
             end do
             prev_refine_path = get_fpath(vol_fname)
-            ! carry over FSCs
-            ! one FSC file per state
-            do state=1,params%nstates
-                str_state = int2str_pad(state,2)
-                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
-            end do
-            ! one FRC file for all states
-            if( file_exists(trim(prev_refine_path)//trim(FRCS_FILE)) )then
-                call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
-            endif
-            ! if we are doing fractional volume update, partial reconstructions need to be carried over
-            if( params%l_frac_update )then
-                call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
-                nfiles = size(list)
-                err = params%nparts * 4 /= nfiles
-                if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
-                do i=1,nfiles
-                    target_name = PATH_HERE//basename(trim(list(i)))
-                    call simple_copy_file(trim(list(i)), target_name)
+            if( trim(simple_abspath(prev_refine_path,check_exists=.false.)) .eq. trim(cwd_glob) )then
+                ! ...unless we operate in the same folder
+                do state=1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                    if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//trim(fsc_file))
                 end do
-                deallocate(list)
-            endif
-            ! if we are doing objfun=euclid the sigm estimates need to be carried over
-            if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
-                call cline%set('needs_sigma','yes')
-                call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                call cline_volassemble%set('needs_sigma','yes')
-                if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
-                call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
-                nfiles = size(list)
-                if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
-                do i=1,nfiles
-                    target_name = PATH_HERE//basename(trim(list(i)))
-                    call simple_copy_file(trim(list(i)), target_name)
+                if( params%l_frac_update )then
+                    call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
+                    nfiles = size(list)
+                    err = params%nparts * 4 /= nfiles
+                    if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
+                    deallocate(list)
+                endif
+                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+                    call cline%set('needs_sigma','yes')
+                    call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                    call cline_volassemble%set('needs_sigma','yes')
+                    if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
+                    call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
+                    nfiles = size(list)
+                    if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
+                    deallocate(list)
+                endif
+            else
+                ! carry over FSCs
+                ! one FSC file per state
+                do state=1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                    call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
-                deallocate(list)
+                ! one FRC file for all states
+                if( file_exists(trim(prev_refine_path)//trim(FRCS_FILE)) )then
+                    call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
+                endif
+                ! if we are doing fractional volume update, partial reconstructions need to be carried over
+                if( params%l_frac_update )then
+                    call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
+                    nfiles = size(list)
+                    err = params%nparts * 4 /= nfiles
+                    if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
+                    do i=1,nfiles
+                        target_name = PATH_HERE//basename(trim(list(i)))
+                        call simple_copy_file(trim(list(i)), target_name)
+                    end do
+                    deallocate(list)
+                endif
+                ! if we are doing objfun=euclid the sigm estimates need to be carried over
+                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+                    call cline%set('needs_sigma','yes')
+                    call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                    call cline_volassemble%set('needs_sigma','yes')
+                    if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
+                    call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
+                    nfiles = size(list)
+                    if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
+                    do i=1,nfiles
+                        target_name = PATH_HERE//basename(trim(list(i)))
+                        call simple_copy_file(trim(list(i)), target_name)
+                    end do
+                    deallocate(list)
+                endif
             endif
         endif
         vol_defined = .false.
@@ -419,11 +445,7 @@ contains
                 call cline_prob_align%set('objfun','prob')
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
-                params_ptr  => params_glob
-                params_glob => null()
                 call xprob_align%execute( cline_prob_align )
-                params_glob => params_ptr
-                params_ptr  => null()
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
