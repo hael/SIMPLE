@@ -194,6 +194,7 @@ contains
 
         ! ref regularization
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
+            call reg_obj%new
             call reg_obj%read_tab_from_glob(trim(CORR_FBODY)//'.dat', params_glob%fromp, params_glob%top)
             call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
@@ -386,7 +387,7 @@ contains
         end select
 
         ! REPORT CONVERGENCE
-        call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
+        call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')
         if( .not. params_glob%l_distr_exec )then
             if( params_glob%l_cartesian )then
                 converged = conv%check_conv3Dc(cline, params_glob%msk)
@@ -436,7 +437,6 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%kfromto)
-        if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%new
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname, params_glob%box)
