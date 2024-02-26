@@ -78,6 +78,7 @@ type :: parameters
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
+    character(len=3)          :: transp_pca='no'
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
@@ -591,6 +592,7 @@ contains
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('tophat',         self%tophat)
+        call check_carg('transp_pca',     self%transp_pca)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
         call check_carg('use_denoised',   self%use_denoised)
