@@ -2040,7 +2040,7 @@ contains
         l_phflip     = .false.
         select case( spproj%get_ctfflag_type(params%oritype) )
             case(CTFFLAG_NO)
-                THROW_HARD('NO CTF INFORMATION COULD BE FOUND')
+                THROW_WARN('No CTF information could be found, phase flipping is deactivated')
             case(CTFFLAG_FLIP)
                 THROW_WARN('Images have already been phase-flipped, phase flipping is deactivated')
             case(CTFFLAG_YES)
@@ -2109,7 +2109,6 @@ contains
             do j = 1, nptcls
                 cnt2 = cnt2 + 1
                 call imgs(j)%unserialize(pcavecs(j,:))
-                if( l_transp_pca ) call imgs(j)%norm
                 call cavg%add(imgs(j))
                 call spproj_field%get_ori(pinds(j), o)
                 call os%set_ori(cnt2, o)
