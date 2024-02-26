@@ -2018,10 +2018,10 @@ contains
         type(builder)    :: build
         type(ppca_inmem) :: prob_pca
         integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2
-        logical          :: l_phflip, l_transp_pca   ! pixel-wise learning
+        logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    2.0)
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',    4.0)
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
@@ -2036,6 +2036,7 @@ contains
                 THROW_HARD('ORITYPE not supported!')
         end select
         l_transp_pca = (trim(params%transp_pca) .eq. 'yes')
+        l_pre_norm   = (trim(params%pre_norm)   .eq. 'yes')
         l_phflip     = .false.
         select case( spproj%get_ctfflag_type(params%oritype) )
             case(CTFFLAG_NO)
@@ -2077,6 +2078,11 @@ contains
             call progress_gfortran(i,ncls)
             call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
             nptcls = size(imgs)
+            if( l_pre_norm )then
+                do j = 1, nptcls
+                    call imgs(j)%norm
+                end do
+            endif
             do j = 1, nptcls
                 cnt1 = cnt1 + 1
                 ! call imgs(j)%write(fname, pinds(j))
