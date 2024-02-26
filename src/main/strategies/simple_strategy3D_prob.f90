@@ -37,21 +37,27 @@ contains
     subroutine srch_prob( self, ithr )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, iptcl
+        integer :: iref, iptcl, irot
+        real    :: corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
+            self%s%nrefs_eval = self%s%nrefs
             iptcl = self%s%iptcl
             iref  = self%spec%reg_obj%ptcl_ref_map(iptcl)
-            ! in greedy mode, we evaluate all refs
-            self%s%nrefs_eval = self%s%nrefs
-            ! prepare orientation
-            call assign_ori(self%s, iref, self%spec%reg_obj%ref_ptcl_tab(iref, iptcl)%loc,&
-                                         &self%spec%reg_obj%ref_ptcl_tab(iref, iptcl)%prob,&
-                                         &self%spec%reg_obj%ref_ptcl_tab(iref, iptcl)%sh,&
-                                         &self%spec%reg_obj%ref_ptcl_tab(iref, iptcl)%w)
+            corr  =     self%spec%reg_obj%corr_loc_tab(iref, iptcl, 1)
+            irot  = int(self%spec%reg_obj%corr_loc_tab(iref, iptcl, 2))
+            call self%s%store_solution(iref, irot, corr)
+            if( self%s%doshift )then
+                call self%s%inpl_srch
+                irot = s3D%proj_space_inplinds(self%s%ithr, iref)
+                corr = s3D%proj_space_corrs(self%s%ithr, iref)
+                call assign_ori(self%s, iref, irot, corr, sh_in=s3D%proj_space_shift(:,iref,self%s%ithr))
+            else
+                call assign_ori(self%s, iref, irot, corr)
+            endif
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

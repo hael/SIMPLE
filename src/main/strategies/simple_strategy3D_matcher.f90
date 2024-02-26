@@ -196,15 +196,6 @@ contains
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call reg_obj%read_tab_from_glob(trim(CORR_FBODY)//'.dat', params_glob%fromp, params_glob%top)
             call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
-            if( params_glob%l_doshift )then
-                do ibatch=1,nbatches
-                    batch_start = batches(ibatch,1)
-                    batch_end   = batches(ibatch,2)
-                    batchsz     = batch_end - batch_start + 1
-                    call build_batch_particles(batchsz, pinds(batch_start:batch_end))
-                    call reg_obj%shift_search(pinds(batch_start:batch_end))
-                enddo
-            endif
         endif
 
         ! Batch loop

@@ -1,4 +1,4 @@
-! regularizer of the cluster2D and refine3D
+! orientation regularizer, used in refine3D
 module simple_regularizer
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -11,21 +11,10 @@ public :: regularizer, calc_num2sample
 private
 #include "simple_local_flags.inc"
 
-type reg_params
-    integer :: iptcl        !< iptcl index
-    integer :: iref         !< iref index
-    integer :: loc          !< inpl index
-    real    :: prob         !< probability/corr
-    real    :: sh(2)        !< shift
-    real    :: w            !< weight
-end type reg_params
-
 type :: regularizer
-    integer                       :: nrefs
-    real,             allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
-    integer,          allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
-    logical,          allocatable :: ptcl_avail(:)
-    type(reg_params), allocatable :: ref_ptcl_tab(:,:)
+    real,    allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
+    integer, allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
+    logical, allocatable :: ptcl_avail(:)
     contains
     ! CONSTRUCTOR
     procedure :: new
@@ -33,8 +22,6 @@ type :: regularizer
     procedure :: fill_tab
     procedure :: tab_normalize
     procedure :: tab_align
-    procedure :: normalize_weight
-    procedure :: shift_search
     procedure :: write_tab
     procedure :: read_tab
     procedure :: read_tab_from_glob
@@ -52,24 +39,12 @@ contains
     subroutine new( self )
         use simple_builder, only: build_glob
         class(regularizer), target, intent(inout) :: self
-        integer :: iptcl, iref
-        self%nrefs = params_glob%nspace
-        allocate(self%corr_loc_tab(self%nrefs,params_glob%fromp:params_glob%top,2), source=0.)
-        allocate(self%ref_ptcl_tab(self%nrefs,params_glob%fromp:params_glob%top))
+        integer :: iptcl
+        allocate(self%corr_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
         do iptcl = params_glob%fromp,params_glob%top
             self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0)
-            if( self%ptcl_avail(iptcl) )then
-                do iref = 1,self%nrefs
-                    self%ref_ptcl_tab(iref,iptcl)%iptcl = iptcl
-                    self%ref_ptcl_tab(iref,iptcl)%iref  = iref
-                    self%ref_ptcl_tab(iref,iptcl)%loc   = 0
-                    self%ref_ptcl_tab(iref,iptcl)%prob  = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%sh    = 0.
-                    self%ref_ptcl_tab(iref,iptcl)%w     = 1.
-                enddo
-            endif
         enddo
     end subroutine new
 
@@ -86,7 +61,7 @@ contains
         call seed_rnd
         call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,ithr) proc_bind(close) schedule(static)
-        do iref = 1, self%nrefs
+        do iref = 1, params_glob%nspace
             do i = 1, pftcc%nptcls
                 iptcl = glob_pinds(i)
                 if( self%ptcl_avail(iptcl) )then
@@ -130,7 +105,7 @@ contains
     ! [0,1] normalization of the whole table
     subroutine tab_normalize( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl
+        integer :: iptcl
         real    :: sum_corr_all, min_corr, max_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
         if( params_glob%l_reg_norm )then
@@ -163,14 +138,9 @@ contains
         else
             self%corr_loc_tab(:,:,1) = (self%corr_loc_tab(:,:,1) - min_corr) / (max_corr - min_corr)
         endif
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
         do iptcl = params_glob%fromp,params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                do iref = 1, self%nrefs
-                    self%ref_ptcl_tab(iref,iptcl)%prob =     self%corr_loc_tab(iref,iptcl,1)
-                    self%ref_ptcl_tab(iref,iptcl)%loc  = int(self%corr_loc_tab(iref,iptcl,2))
-                enddo
-            else
+            if( .not. self%ptcl_avail(iptcl) )then
                 self%corr_loc_tab(:,iptcl,1) = 1.     ! unselected particles are down on the sorted corrs
             endif
         enddo
@@ -180,17 +150,17 @@ contains
     ! ptcl -> ref assignment using the global normalized cost value table
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
-        integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns,&
-                  &ref_dist_inds(self%nrefs), stab_inds(params_glob%fromp:params_glob%top, self%nrefs)
-        real    :: sorted_tab(params_glob%fromp:params_glob%top, self%nrefs), ref_dist(self%nrefs), refs_corr(self%nrefs)
+        integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
+                   &stab_inds(params_glob%fromp:params_glob%top, params_glob%nspace), refs_inds(params_glob%nspace)
+        real    :: sorted_tab(params_glob%fromp:params_glob%top, params_glob%nspace),&
+                   &ref_dist(params_glob%nspace), refs_corr(params_glob%nspace)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
-        integer :: refs_inds(self%nrefs)
         self%ptcl_ref_map = 1
         ! sorting each columns
-        call calc_num2sample(self%nrefs, 'dist', refs_ns)
+        call calc_num2sample(params_glob%nspace, 'dist', refs_ns)
         sorted_tab = transpose(self%corr_loc_tab(:,:,1))
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
-        do iref = 1, self%nrefs
+        do iref = 1, params_glob%nspace
             stab_inds(:,iref) = (/(iptcl,iptcl=params_glob%fromp,params_glob%top)/)
             call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
         enddo
@@ -206,7 +176,7 @@ contains
             ptcl_avail(assigned_ptcl)        = .false.
             self%ptcl_ref_map(assigned_ptcl) = assigned_iref
             ! update the ref_dist and ref_dist_inds
-            do iref = 1, self%nrefs
+            do iref = 1, params_glob%nspace
                 do while( ref_dist_inds(iref) < params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
                     ref_dist_inds(iref) = ref_dist_inds(iref) + 1
                     ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
@@ -220,7 +190,7 @@ contains
             real    :: rnd, bound, sum_refs_corr
             rnd       = ran3()
             refs_corr = ref_dist
-            refs_inds = (/(i,i=1,self%nrefs)/)
+            refs_inds = (/(i,i=1,params_glob%nspace)/)
             call hpsort(refs_corr, refs_inds )
             sum_refs_corr = sum(refs_corr(1:refs_ns))
             if( sum_refs_corr < TINY )then
@@ -240,63 +210,6 @@ contains
         end function ref_smpl
     end subroutine tab_align
 
-    ! shift searching of each iptcl -> iref assignment (partition-wise if nparts > 1)
-    subroutine shift_search( self, glob_pinds )
-        use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg
-        class(regularizer), intent(inout) :: self
-        integer,            intent(in)    :: glob_pinds(:)
-        type(pftcc_shsrch_reg) :: grad_shsrch_obj(params_glob%nthr)
-        integer :: iref, iptcl, ithr, irot, i, nptcls
-        real    :: lims(2,2), cxy(3)
-        nptcls    = size(glob_pinds)
-        lims(1,1) = -params_glob%trs
-        lims(1,2) =  params_glob%trs
-        lims(2,1) = -params_glob%trs
-        lims(2,2) =  params_glob%trs
-        do ithr = 1, params_glob%nthr
-            call grad_shsrch_obj(ithr)%new(lims, opt_angle=.true.)
-        enddo
-        !$omp parallel do default(shared) private(i,iref,iptcl,irot,ithr,cxy) proc_bind(close) schedule(static)
-        do i = 1, nptcls
-            iptcl = glob_pinds(i)
-            if( self%ptcl_avail(iptcl) )then
-                iref  = self%ptcl_ref_map(iptcl)
-                ithr  = omp_get_thread_num() + 1
-                call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                irot = self%ref_ptcl_tab(iref,iptcl)%loc
-                cxy  = grad_shsrch_obj(ithr)%minimize(irot)
-                if( irot > 0 )then
-                    self%ref_ptcl_tab(iref,iptcl)%sh  = cxy(2:3)
-                    self%ref_ptcl_tab(iref,iptcl)%loc = irot
-                endif
-            endif
-        enddo
-        !$omp end parallel do
-    end subroutine shift_search
-
-    ! global particle weight normalization (still needs investigation)
-    subroutine normalize_weight( self )
-        class(regularizer), intent(inout) :: self
-        integer :: iptcl, iref
-        real    :: min_w, max_w
-        min_w = huge(min_w)
-        max_w = 0.
-        do iptcl = params_glob%fromp, params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                iref = self%ptcl_ref_map(iptcl)
-                self%ref_ptcl_tab(iref,iptcl)%w = 1. - self%ref_ptcl_tab(iref,iptcl)%prob
-                if( self%ref_ptcl_tab(iref,iptcl)%w < min_w ) min_w = self%ref_ptcl_tab(iref,iptcl)%w
-                if( self%ref_ptcl_tab(iref,iptcl)%w > max_w ) max_w = self%ref_ptcl_tab(iref,iptcl)%w
-            endif
-        enddo
-        do iptcl = params_glob%fromp, params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                iref = self%ptcl_ref_map(iptcl)
-                self%ref_ptcl_tab(iref,iptcl)%w = (self%ref_ptcl_tab(iref,iptcl)%w - min_w) / (max_w - min_w)
-            endif
-        enddo
-    end subroutine normalize_weight
-
     ! FILE IO
 
     ! write the partition-wise (or global) cost value table to a binary file
@@ -307,7 +220,7 @@ contains
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
         else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         endif
         call binfile%write(self%corr_loc_tab)
         call binfile%kill
@@ -321,7 +234,7 @@ contains
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
         else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         endif
         call binfile%read(self%corr_loc_tab)
         call binfile%kill
@@ -338,21 +251,10 @@ contains
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
         else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, self%nrefs)
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         endif
         call binfile%read_from_glob(fromp, top, self%corr_loc_tab)
         call binfile%kill
-        ! transfer corr_loc_tab into ref_ptcl_tab
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
-        do iptcl = params_glob%fromp,params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                do iref = 1, self%nrefs
-                    self%ref_ptcl_tab(iref,iptcl)%prob =     self%corr_loc_tab(iref,iptcl,1)
-                    self%ref_ptcl_tab(iref,iptcl)%loc  = int(self%corr_loc_tab(iref,iptcl,2))
-                enddo
-            endif
-        enddo
-        !$omp end parallel do
     end subroutine read_tab_from_glob
 
     ! read the partition-wise cost value binary file to global reg object's cost value table
@@ -422,7 +324,7 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        deallocate(self%corr_loc_tab,self%ref_ptcl_tab,self%ptcl_ref_map,self%ptcl_avail)
+        deallocate(self%corr_loc_tab,self%ptcl_ref_map,self%ptcl_avail)
     end subroutine kill
 
     ! PUBLIC UTILITITES
