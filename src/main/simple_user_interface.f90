@@ -3298,18 +3298,19 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for ppca-based denoising of image classes',&  ! descr_long
         &'all',&                                      ! executable
-        &0, 0, 0, 0, 1, 0, 1, .true.)                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 2, 0, 1, .true.)                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call ppca_denoise_classes%set_input('parm_ios', 1, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
         call ppca_denoise_classes%set_input('filt_ctrls', 1, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .false., 0.0)
+        call ppca_denoise_classes%set_input('filt_ctrls', 2, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         ! <empty>
         ! computer controls
