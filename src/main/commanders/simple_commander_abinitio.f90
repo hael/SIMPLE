@@ -728,7 +728,6 @@ contains
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',    'no')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',   'no')
         if( .not. cline%defined('reg_init')  ) call cline%set('reg_init', 'no')
-        if( .not. cline%defined('reg_norm')  ) call cline%set('reg_norm', 'yes')
         if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',10.)
         if( .not. cline%defined('center')    ) call cline%set('center',   'no')
         ! resolution limit strategy

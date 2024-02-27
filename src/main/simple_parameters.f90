@@ -74,7 +74,6 @@ type :: parameters
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
-    character(len=3)          :: reg_norm='yes'       !< reg table normalization (yes|no){yes}
     character(len=3)          :: reg_per='no'         !< reg perturbation of reference orientation (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
@@ -436,7 +435,6 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_reg_init     = .false.
-    logical :: l_reg_norm     = .false.
     logical :: l_reg_per      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
@@ -578,7 +576,6 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
         call check_carg('reg_init',       self%reg_init)
-        call check_carg('reg_norm',       self%reg_norm)
         call check_carg('reg_per',        self%reg_per)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -1471,7 +1468,6 @@ contains
         end select
         ! reg options
         self%l_reg_init     = trim(self%reg_init    ).eq.'yes'
-        self%l_reg_norm     = trim(self%reg_norm    ).eq.'yes'
         self%l_reg_per      = trim(self%reg_per     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
