@@ -12,9 +12,9 @@ private
 #include "simple_local_flags.inc"
 
 type :: regularizer
-    real,    allocatable :: corr_loc_tab(:,:,:)         !< 2D corr/loc table
-    integer, allocatable :: ptcl_ref_map(:)             !< ptcl -> ref assignment map
-    logical, allocatable :: ptcl_avail(:)
+    real,    allocatable :: corr_loc_tab(:,:,:) !< nspace, iptcl, 2 (1->corr, 2->inpl_ind)
+    integer, allocatable :: ptcl_ref_map(:)     !< ptcl -> ref assignment map
+    logical, allocatable :: ptcl_avail(:)       !< for communicating restraints and state selections
     contains
     ! CONSTRUCTOR
     procedure :: new
@@ -44,7 +44,7 @@ contains
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
         do iptcl = params_glob%fromp,params_glob%top
-            self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0)
+            self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
         enddo
     end subroutine new
 
@@ -56,8 +56,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer :: i, iref, iptcl, inpl_ns, ithr
-        real    :: corrs(pftcc%nrots,params_glob%nthr), inpl_corr(pftcc%nrots,params_glob%nthr)   !< inpl sampling corr
-        integer :: inpl_inds(pftcc%nrots,params_glob%nthr)                                        !< inpl sampling indices
+        real    :: corrs(pftcc%nrots,params_glob%nthr), corrs_sorted(pftcc%nrots,params_glob%nthr) !< inpl sampling corr
+        integer :: inds_sorted(pftcc%nrots,params_glob%nthr)                                       !< inpl sampling indices
         call seed_rnd
         call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
         !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,ithr) proc_bind(close) schedule(static)
@@ -67,38 +67,41 @@ contains
                 if( self%ptcl_avail(iptcl) )then
                     ithr = omp_get_thread_num() + 1
                     call pftcc%gencorrs_prob( iptcl, iref, corrs(:,ithr) )
-                    self%corr_loc_tab(iref,iptcl,2) = inpl_smpl(ithr)
+                    self%corr_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
                     self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)),ithr)
                 endif
             enddo
         enddo
         !$omp end parallel do
+
     contains
+
         ! inpl greedy sampling based on unnormalized corr values of all inpl rotations
         function inpl_smpl( thread ) result( which )
             integer, intent(in) :: thread
             integer :: j, which
             real    :: rnd, bound, sum_corr
-            inpl_corr(:,thread) = corrs(:,thread)
-            inpl_inds(:,thread) = (/(j,j=1,pftcc%nrots)/)
-            call hpsort(inpl_corr(:,thread), inpl_inds(:,thread) )
+            corrs_sorted(:,thread) = corrs(:,thread)
+            inds_sorted(:,thread)  = (/(j,j=1,pftcc%nrots)/)
+            call hpsort(corrs_sorted(:,thread), inds_sorted(:,thread) )
             rnd      = ran3()
-            sum_corr = sum(inpl_corr(1:inpl_ns,thread))
+            sum_corr = sum(corrs_sorted(1:inpl_ns,thread))
             if( sum_corr < TINY )then
                 ! uniform sampling
                 which = 1 + floor(real(inpl_ns) * rnd)
             else
                 ! normalizing within the hard-limit
-                inpl_corr(1:inpl_ns,thread) = inpl_corr(1:inpl_ns,thread) / sum_corr
+                corrs_sorted(1:inpl_ns,thread) = corrs_sorted(1:inpl_ns,thread) / sum_corr
                 bound = 0.
-                do which=1,inpl_ns
-                    bound = bound + inpl_corr(which, thread)
+                do which = 1,inpl_ns
+                    bound = bound + corrs_sorted(which, thread)
                     if( rnd >= bound )exit
                 enddo
                 which = min(which,inpl_ns)
             endif
-            which = inpl_inds(which, thread)
+            which = inds_sorted(which, thread)
         end function inpl_smpl
+        
     end subroutine fill_tab
 
     ! reference normalization (same energy) of the global cost value table
@@ -108,20 +111,19 @@ contains
         integer :: iptcl
         real    :: sum_corr_all, min_corr, max_corr
         ! normalize so prob of each ptcl is between [0,1] for all refs
-        if( params_glob%l_reg_norm )then
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
-            do iptcl = params_glob%fromp, params_glob%top
-                if( self%ptcl_avail(iptcl) )then
-                    sum_corr_all = sum(self%corr_loc_tab(:,iptcl,1))
-                    if( sum_corr_all < TINY )then
-                        self%corr_loc_tab(:,iptcl,1) = 0.
-                    else
-                        self%corr_loc_tab(:,iptcl,1) = self%corr_loc_tab(:,iptcl,1) / sum_corr_all
-                    endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_corr_all)
+        do iptcl = params_glob%fromp, params_glob%top
+            if( self%ptcl_avail(iptcl) )then
+                sum_corr_all = sum(self%corr_loc_tab(:,iptcl,1))
+                if( sum_corr_all < TINY )then
+                    self%corr_loc_tab(:,iptcl,1) = 0.
+                else
+                    self%corr_loc_tab(:,iptcl,1) = self%corr_loc_tab(:,iptcl,1) / sum_corr_all
                 endif
-            enddo
-            !$omp end parallel do
-        endif
+            endif
+        enddo
+        !$omp end parallel do
+        ! min/max normalization to obtain values between 0 and 1
         max_corr = 0.
         min_corr = huge(min_corr)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)&
@@ -141,7 +143,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
         do iptcl = params_glob%fromp,params_glob%top
             if( .not. self%ptcl_avail(iptcl) )then
-                self%corr_loc_tab(:,iptcl,1) = 1.     ! unselected particles are down on the sorted corrs
+                self%corr_loc_tab(:,iptcl,1) = 1. ! to place unselected particles in the bottom (see below)
             endif
         enddo
         !$omp end parallel do
@@ -151,9 +153,9 @@ contains
     subroutine tab_align( self )
         class(regularizer), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
-                   &stab_inds(params_glob%fromp:params_glob%top, params_glob%nspace), refs_inds(params_glob%nspace)
+                   &stab_inds(params_glob%fromp:params_glob%top, params_glob%nspace), inds_sorted(params_glob%nspace)
         real    :: sorted_tab(params_glob%fromp:params_glob%top, params_glob%nspace),&
-                   &ref_dist(params_glob%nspace), refs_corr(params_glob%nspace)
+                   &ref_dist(params_glob%nspace), corrs_sorted(params_glob%nspace)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
         self%ptcl_ref_map = 1
         ! sorting each columns
@@ -171,7 +173,7 @@ contains
         ptcl_avail    = self%ptcl_avail
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
-            assigned_iref = ref_smpl()
+            assigned_iref = ref_smpl() ! contained function, below
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)        = .false.
             self%ptcl_ref_map(assigned_ptcl) = assigned_iref
@@ -183,31 +185,34 @@ contains
                 enddo
             enddo
         enddo
+
     contains
+
         ! ref greedy sampling based on the current reference distribution
         function ref_smpl( ) result( which )
             integer :: i, which
-            real    :: rnd, bound, sum_refs_corr
-            rnd       = ran3()
-            refs_corr = ref_dist
-            refs_inds = (/(i,i=1,params_glob%nspace)/)
-            call hpsort(refs_corr, refs_inds )
-            sum_refs_corr = sum(refs_corr(1:refs_ns))
-            if( sum_refs_corr < TINY )then
+            real    :: rnd, bound, sum_corrs_sorted
+            rnd          = ran3()
+            corrs_sorted = ref_dist
+            inds_sorted  = (/(i,i=1,params_glob%nspace)/)
+            call hpsort(corrs_sorted, inds_sorted)
+            sum_corrs_sorted = sum(corrs_sorted(1:refs_ns))
+            if( sum_corrs_sorted < TINY )then
                 ! uniform sampling
                 which = 1 + floor(real(refs_ns) * rnd)
             else
                 ! normalizing within the hard-limit
-                refs_corr(1:refs_ns) = refs_corr(1:refs_ns) / sum_refs_corr
+                corrs_sorted(1:refs_ns) = corrs_sorted(1:refs_ns) / sum_corrs_sorted
                 bound = 0.
-                do which=1,refs_ns
-                    bound = bound + refs_corr(which)
+                do which = 1,refs_ns
+                    bound = bound + corrs_sorted(which)
                     if( rnd >= bound )exit
                 enddo
                 which = min(which, refs_ns)
             endif
-            which = refs_inds(which)
+            which = inds_sorted(which)
         end function ref_smpl
+        
     end subroutine tab_align
 
     ! FILE IO
