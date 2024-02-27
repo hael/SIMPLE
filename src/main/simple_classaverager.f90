@@ -1587,13 +1587,13 @@ contains
         endif
         allocate(timgs(pop))
         do i = 1,size(timgs)
-            call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+            call timgs(i)%new([params_glob%box,params_glob%box,1],params_glob%smpd, wthreads=.false.)
         enddo
         ! temporary objects
         call prepimgbatch(pop)
         do ithr = 1, nthr_glob
-            call img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
-            call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
+            call img(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
+            call timg(ithr)%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd, wthreads=.false.)
         end do
         logi_lims      = img(1)%loop_lims(2)
         cyc_lims       = img(1)%loop_lims(3)

@@ -708,8 +708,9 @@ contains
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        type(postprocess_commander)         :: xpostprocess
         ! command lines
-        type(cmdline)              :: cline_refine3D, cline_reconstruct3D
+        type(cmdline)              :: cline_refine3D, cline_reconstruct3D, cline_postprocess
         ! other
         class(parameters), pointer :: params_ptr => null()
         type(parameters)           :: params
@@ -748,18 +749,23 @@ contains
         call cline%delete('lpstart')
         call cline%delete('lpstop')
         call cline%delete('lp')
-        ! read project & update sampling distance
+        ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo', params%projfile)
+        ! always randomize projection directions
+        call spproj%os_ptcl3D%rnd_oris
         call spproj%write_segment_inside(params%oritype, params%projfile)
         ! dimensions defaults
         params%box       = spproj%get_box()
         params%smpd_crop = params%smpd
         params%box_crop  = params%box
         l_autoscale      = .false.
+        call spproj%kill ! not needed anymore
         ! command-lines
         cline_refine3D      = cline
         cline_reconstruct3D = cline
+        cline_postprocess   = cline
         call cline_refine3D%set('prg',      'refine3D')
         call cline_refine3D%set('projfile', params%projfile)
         call cline_refine3D%set('center',   'no')
@@ -769,6 +775,9 @@ contains
         call cline_reconstruct3D%set('ml_reg',     'no')
         call cline_reconstruct3D%set('needs_sigma','no')
         call cline_reconstruct3D%set('objfun',     'cc')
+        call cline_postprocess%set('prg',      'postprocess')
+        call cline_postprocess%set('projfile', params%projfile)
+        call cline_postprocess%set('imgkind',  'vol')
         ! executions & updates
         if( l_lpset )then
             ! Single resolution limit
@@ -831,7 +840,7 @@ contains
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
                 endif
                 if( it > 1 )then
-                    call cline_refine3D%set('center',   params%center)
+                    call cline_refine3D%set('center', params%center)
                     call cline_refine3D%set('reg_init', 'no')
                     if( prev_box_crop == params%box_crop )then
                         call cline_refine3D%set('continue',  'yes')
@@ -889,15 +898,23 @@ contains
         call cline_refine3D%set('lp_iters', MAXITS2)
         call cline_refine3D%set('nspace',   NSPACE3)
         call exec_refine3D(iter)
-        ! optional final reconstruction at original scale
-        if( l_autoscale ) call xreconstruct3D_distr%execute(cline_reconstruct3D)
+        ! final reconstruction at original scale
+        if( l_autoscale )then
+            call xreconstruct3D_distr%execute(cline_reconstruct3D)
+            call spproj%read_segment('out',params%projfile)
+            call spproj%add_vol2os_out(trim(VOL_FBODY)//trim(int2str_pad(1,2))//params%ext, params%smpd, 1, 'vol')
+            call spproj%write_segment_inside('out',params%projfile)
+            call spproj%kill
+        endif
+        ! post-processing
+        call cline_postprocess%set('lp', params%lpstop)
+        call xpostprocess%execute(cline_postprocess)
         ! cleanup
         call del_files(CORR_FBODY,      params_glob%nparts,ext='.dat')
         call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
         call del_file(trim(CORR_FBODY)      //'.dat')
         call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
         call qsys_cleanup
-        call spproj%kill
         call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
         contains
 

@@ -2540,7 +2540,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 3, 4, 1, 2, .true.)
+        &0, 0, 0, 3, 6, 1, 2, .true.)
         abinitio_3dmodel%gui_submenu_list = "model,filter,mask,compute"
         abinitio_3dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2554,11 +2554,12 @@ contains
         call abinitio_3dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call abinitio_3dmodel%set_gui_params('srch_ctrls', 1, submenu="model")
-        call abinitio_3dmodel%set_input('srch_ctrls', 2, pgrp)
-        call abinitio_3dmodel%set_gui_params('srch_ctrls', 2, submenu="model", advanced=.false.)
-        call abinitio_3dmodel%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call abinitio_3dmodel%set_gui_params('srch_ctrls', 3, submenu="model")
+        call abinitio_3dmodel%set_input('srch_ctrls', 2, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes')
+        call abinitio_3dmodel%set_gui_params('srch_ctrls', 2, submenu="model")
+        call abinitio_3dmodel%set_input('srch_ctrls', 3, 'reg_init',  'binary', 'Zero shift offsets', 'Zero particles initial shift offsets(yes|no){no}',&
+            &'(yes|no){no}', .false., '{no}')
+        call abinitio_3dmodel%set_gui_params('srch_ctrls', 3, submenu="search")
         ! filter controls
         call abinitio_3dmodel%set_input('filt_ctrls', 1, hp)
         call abinitio_3dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
@@ -2572,13 +2573,18 @@ contains
         call abinitio_3dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6.)
         call abinitio_3dmodel%set_gui_params('filt_ctrls', 4, submenu="filter")
+        call abinitio_3dmodel%set_input('filt_ctrls', 5, lp)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 5, submenu="filter")
+        call abinitio_3dmodel%set_input('filt_ctrls', 6, ml_reg)
+        call abinitio_3dmodel%set_gui_params('filt_ctrls', 6, submenu="filter")
+        abinitio_3dmodel%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
+        abinitio_3dmodel%filt_ctrls(6)%cval_default      = 'no'
         ! mask controls
         call abinitio_3dmodel%set_input('mask_ctrls', 1, mskdiam)
         call abinitio_3dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         ! computer controls
         call abinitio_3dmodel%set_input('comp_ctrls', 1, nparts)
         call abinitio_3dmodel%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        abinitio_3dmodel%comp_ctrls(1)%required = .false.
         call abinitio_3dmodel%set_input('comp_ctrls', 2, nthr)
         call abinitio_3dmodel%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_abinitio_3dmodel
