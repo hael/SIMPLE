@@ -113,7 +113,8 @@ contains
         ! updates project file only if called from another workflow
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
-                fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                str_state = int2str_pad(state,2)
+                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                 call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box_crop)
                 if( trim(params%oritype).eq.'cls3D' )then
                     call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd_crop, state, 'vol_cavg')
