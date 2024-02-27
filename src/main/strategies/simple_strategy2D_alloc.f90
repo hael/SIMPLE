@@ -10,6 +10,9 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_alloc
+    ! global parameters
+    integer              :: smpl_refs_ns            !< refine=smpl; # of classes
+    integer              :: smpl_inpl_ns            !< refine=smpl; # of in-plane rotations
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
