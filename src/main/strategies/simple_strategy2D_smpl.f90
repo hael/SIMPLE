@@ -36,11 +36,7 @@ contains
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             ! search
-
-            ! ref_corrs HOW TO INIT???
-            ! s2D%smpl_inpl_ns HOW TO SET???
-            ! s2D%smpl_refs_ns HOW TO SET???
-
+            ref_corrs = TINY
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle      
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)

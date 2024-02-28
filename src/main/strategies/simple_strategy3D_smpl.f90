@@ -45,6 +45,7 @@ contains
             self%s%ithr = ithr
             call self%s%prep4srch
             ! search
+            ref_corrs = TINY
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
