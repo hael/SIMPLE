@@ -720,7 +720,6 @@ contains
         integer :: iter, it, prev_box_crop, maxits
         logical :: l_autoscale, l_lpset, l_err
         call cline%set('oritype', 'ptcl3D')
-        call cline%set('objfun',  'prob')
         call cline%set('refine',  'prob')
         call cline%set('pgrp',    'c1')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
@@ -730,6 +729,17 @@ contains
         if( .not. cline%defined('reg_init')  ) call cline%set('reg_init', 'no')
         if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',10.)
         if( .not. cline%defined('center')    ) call cline%set('center',   'no')
+        ! objective function
+        if( cline%defined('objfun') )then
+            select case(trim(cline%get_carg('objfun')))
+            case('euclid','prob')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported objective function! EUCLID|PROB only are allowed')
+            end select
+        else
+            call cline%set('objfun', 'prob')
+        endif
         ! resolution limit strategy
         l_lpset = .false.
         if( cline%defined('lp') )then
