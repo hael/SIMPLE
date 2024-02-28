@@ -692,7 +692,7 @@ contains
 
     end subroutine exec_initial_3Dmodel
 
-    !> for generation of an initial 3d model from class averages
+    !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel( self, cline )
         use simple_convergence, only: convergence
         class(abinitio_3Dmodel_commander), intent(inout) :: self
@@ -721,25 +721,15 @@ contains
         logical :: l_autoscale, l_lpset, l_err
         call cline%set('oritype', 'ptcl3D')
         call cline%set('refine',  'prob')
-        call cline%set('pgrp',    'c1')
+        call cline%set('pgrp',    'c1') ! no support for symmetry in the current implementation
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale','yes')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',    'no')
-        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',   'no')
-        if( .not. cline%defined('reg_init')  ) call cline%set('reg_init', 'no')
-        if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',10.)
-        if( .not. cline%defined('center')    ) call cline%set('center',   'no')
-        ! objective function
-        if( cline%defined('objfun') )then
-            select case(trim(cline%get_carg('objfun')))
-            case('euclid','prob')
-                ! supported
-            case DEFAULT
-                THROW_HARD('Unsupported objective function! EUCLID|PROB only are allowed')
-            end select
-        else
-            call cline%set('objfun', 'prob')
-        endif
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',     'no')
+        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',    'no')
+        if( .not. cline%defined('reg_init')  ) call cline%set('reg_init',  'no')
+        if( .not. cline%defined('reg_athres')) call cline%set('reg_athres', 10.)
+        if( .not. cline%defined('center')    ) call cline%set('center',    'no')
+        if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'prob')
         ! resolution limit strategy
         l_lpset = .false.
         if( cline%defined('lp') )then
@@ -775,18 +765,18 @@ contains
         cline_refine3D      = cline
         cline_reconstruct3D = cline
         cline_postprocess   = cline
-        call cline_refine3D%set('prg',      'refine3D')
-        call cline_refine3D%set('projfile', params%projfile)
-        call cline_refine3D%set('center',   'no')
-        call cline_reconstruct3D%set('prg',        'reconstruct3D')
-        call cline_reconstruct3D%set('box',        real(params%box))
-        call cline_reconstruct3D%set('projfile',   params%projfile)
-        call cline_reconstruct3D%set('ml_reg',     'no')
-        call cline_reconstruct3D%set('needs_sigma','no')
-        call cline_reconstruct3D%set('objfun',     'cc')
-        call cline_postprocess%set('prg',      'postprocess')
-        call cline_postprocess%set('projfile', params%projfile)
-        call cline_postprocess%set('imgkind',  'vol')
+        call cline_refine3D%set('prg',                'refine3D')
+        call cline_refine3D%set('projfile',      params%projfile)
+        call cline_refine3D%set('center',                   'no')
+        call cline_reconstruct3D%set('prg',      'reconstruct3D')
+        call cline_reconstruct3D%set('box',     real(params%box))
+        call cline_reconstruct3D%set('projfile', params%projfile)
+        call cline_reconstruct3D%set('ml_reg',              'no')
+        call cline_reconstruct3D%set('needs_sigma',         'no')
+        call cline_reconstruct3D%set('objfun',              'cc')
+        call cline_postprocess%set('prg',          'postprocess')
+        call cline_postprocess%set('projfile',   params%projfile)
+        call cline_postprocess%set('imgkind',              'vol')
         ! executions & updates
         if( l_lpset )then
             ! Single resolution limit
