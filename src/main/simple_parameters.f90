@@ -386,7 +386,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: reg_athres=7.       !< angle threshold for reg distribution samplings
+    real    :: reg_athres=10.      !< angle threshold for reg distribution samplings
     real    :: reg_sthres=1.       !< reg sampling threshold for references used for alignment
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}

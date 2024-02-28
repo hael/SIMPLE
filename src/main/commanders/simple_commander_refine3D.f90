@@ -152,12 +152,6 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)
         call build%spproj%write_segment_inside('projinfo')
-        ! randomized oris and zero shifts when reg_ref is on
-        if( params%l_reg_init )then
-            call build%spproj_field%rnd_oris
-            call build%spproj_field%zero_shifts
-            write(logfhandle,'(A)')   '>>> APPLYING RANDOMIZED ORIS AND ZERO SHIFTS'
-        endif
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -333,6 +327,7 @@ contains
         enddo
         have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
         do_abinitio = .not. have_oris .and. .not. vol_defined
+        if( params%l_reg_init ) do_abinitio = .true. ! overrides automatic decision
         if( do_abinitio )then
             call build%spproj_field%rnd_oris
             have_oris = .true.
