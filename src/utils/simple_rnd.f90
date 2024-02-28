@@ -7,7 +7,7 @@ use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-public :: seed_rnd, ran3, ran3arr, randn, multinomal, reverse_multinomal, gasdev, irnd_uni, irnd_uni_pair
+public :: seed_rnd, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa
 private
 #include "simple_local_flags.inc"
@@ -28,9 +28,9 @@ interface randn
     module procedure randn_2
 end interface
 
-interface reverse_multinomal
-    module procedure reverse_multinomal_1
-    module procedure reverse_multinomal_2
+interface greedy_sampling
+    module procedure greedy_sampling_1
+    module procedure greedy_sampling_2
 end interface
 
 integer(long), save :: idum
@@ -152,7 +152,8 @@ contains
         deallocate(pvec_sorted,inds)
     end function multinomal
 
-    function reverse_multinomal_1( pvec, thres ) result( which )
+    ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
+    function greedy_sampling_1( pvec, thres ) result( which )
         use simple_math, only: hpsort
         real,     intent(in) :: pvec(:) !< probabilities
         integer,  intent(in) :: thres
@@ -161,10 +162,10 @@ contains
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),inds(n))
-        which = reverse_multinomal_2(pvec, pvec_sorted, inds, thres)
-    end function reverse_multinomal_1
+        which = greedy_sampling_2(pvec, pvec_sorted, inds, thres)
+    end function greedy_sampling_1
 
-    function reverse_multinomal_2( pvec, pvec_sorted, inds, thres ) result( which )
+    function greedy_sampling_2( pvec, pvec_sorted, inds, thres ) result( which )
         use simple_math, only: hpsort
         real,    intent(in)    :: pvec(:)        !< probabilities
         real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
@@ -189,7 +190,7 @@ contains
             enddo
         endif
         which = inds(which)
-    end function reverse_multinomal_2
+    end function greedy_sampling_2
 
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
