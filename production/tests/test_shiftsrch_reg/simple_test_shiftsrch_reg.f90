@@ -98,6 +98,8 @@ irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
 do i=5,5
+    call pftcc%gencorrs(i, i, corrs)
+    print *, 'corr: ', maxval(corrs)
     corrmax = 0.
     do xsh=-2,2
         do ysh=-2,2
