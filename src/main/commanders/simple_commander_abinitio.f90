@@ -720,8 +720,8 @@ contains
         integer :: iter, it, prev_box_crop, maxits
         logical :: l_autoscale, l_lpset, l_err
         call cline%set('oritype', 'ptcl3D')
-        call cline%set('refine',  'prob')
         call cline%set('pgrp',    'c1') ! no support for symmetry in the current implementation
+        if( .not. cline%defined('refine')    ) call cline%set('refine',  'prob')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',    'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale','yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',     'no')
