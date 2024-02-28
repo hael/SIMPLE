@@ -1101,17 +1101,17 @@ contains
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
                 iref = reg_obj%ptcl_ref_map(iptcl)
-                if( reg_obj%corr_loc_tab(iref, iptcl, 1) < TINY ) cycle
+                if( reg_obj%dist_loc_tab(iref, iptcl, 1) < TINY ) cycle
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 euls = build_glob%eulspace%get_euler(iref)
                 ! getting the particle orientation
                 shvec = orientation%get_2Dshift()
                 call orientation%set_shift(shvec)
-                loc     = int(reg_obj%corr_loc_tab(iref, iptcl, 2))
+                loc     = int(reg_obj%dist_loc_tab(iref, iptcl, 2))
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', reg_obj%corr_loc_tab(iref, iptcl, 1))
+                call orientation%set('w', reg_obj%dist_loc_tab(iref, iptcl, 1))
                 ! update doc
                 call build_glob%spproj_field%set_euler(iptcl, euls)
                 ! insert

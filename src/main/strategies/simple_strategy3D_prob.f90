@@ -47,8 +47,8 @@ contains
             self%s%nrefs_eval = self%s%nrefs
             iptcl = self%s%iptcl
             iref  = self%spec%reg_obj%ptcl_ref_map(iptcl)
-            corr  =     self%spec%reg_obj%corr_loc_tab(iref, iptcl, 1)
-            irot  = int(self%spec%reg_obj%corr_loc_tab(iref, iptcl, 2))
+            corr  =     self%spec%reg_obj%dist_loc_tab(iref, iptcl, 1)
+            irot  = int(self%spec%reg_obj%dist_loc_tab(iref, iptcl, 2))
             call self%s%store_solution(iref, irot, corr)
             if( self%s%doshift )then
                 call self%s%inpl_srch

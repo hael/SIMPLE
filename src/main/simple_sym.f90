@@ -44,7 +44,9 @@ type sym
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
     procedure          :: find_closest_proj
-    procedure          :: nearest_proj_neighbors
+    procedure, private :: nearest_proj_neighbors_1
+    procedure, private :: nearest_proj_neighbors_2
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
     procedure          :: symrandomize
@@ -561,7 +563,7 @@ contains
     !! the policy here is based solely on angular distance and initialization of lnns is
     !! deferred to the calling unit, so that we can add additional neighborhoods on top of
     !! of each other to create more complex search spaces
-    subroutine nearest_proj_neighbors( self, os_asym_unit, o, euldist_thres, lnns )
+    subroutine nearest_proj_neighbors_1( self, os_asym_unit, o, euldist_thres, lnns )
         class(sym), intent(inout) :: self
         type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
         class(ori), intent(in)    :: o
@@ -590,7 +592,44 @@ contains
         endif
         call oasym%kill
         call osym%kill
-    end subroutine nearest_proj_neighbors
+    end subroutine nearest_proj_neighbors_1
+
+    !>  \brief  is for retrieving nearest neighbors in symmetric cases
+    !! initialization of lnns is
+    !! deferred to the calling unit, so that we can add additional neighborhoods on top of
+    !! of each other to create more complex search spaces
+    subroutine nearest_proj_neighbors_2( self, os_asym_unit, o, nnn, lnns )
+        class(sym), intent(inout) :: self
+        type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
+        class(ori), intent(in)    :: o
+        integer,    intent(in)    :: nnn          !< number of nearest neighbors 
+        logical,    intent(inout) :: lnns(os_asym_unit%get_noris())
+        real      :: dists(os_asym_unit%get_noris())
+        integer   :: i, isym, inds(os_asym_unit%get_noris())
+        type(ori) :: oasym, osym
+        if( trim(self%pgrp).eq.'c1' )then
+            call os_asym_unit%nearest_proj_neighbors(o, nnn, lnns)
+        else
+            do i=1,os_asym_unit%get_noris()
+                inds(i)  = i
+                call os_asym_unit%get_ori(i, oasym)
+                do isym = 1, self%n
+                    if(isym == 1)then
+                        call osym%copy(oasym)
+                    else
+                        call self%apply(oasym, isym, osym)
+                    endif
+                    dists(i) = min(dists(i), osym.euldist.o)
+                end do
+            end do
+            call hpsort(dists, inds)
+            do i=1,nnn
+                lnns(inds(i)) = .true.
+            end do
+        endif
+        call oasym%kill
+        call osym%kill
+    end subroutine nearest_proj_neighbors_2
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
     subroutine nearest_sym_neighbors( self, asym_os, nnmat )

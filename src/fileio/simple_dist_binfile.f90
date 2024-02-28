@@ -1,12 +1,12 @@
-module simple_corr_binfile
+module simple_dist_binfile
 include 'simple_lib.f08'
 implicit none
 
-public :: corr_binfile
+public :: dist_binfile
 private
 #include "simple_local_flags.inc"
 
-type corr_binfile
+type dist_binfile
     private
     character(len=:), allocatable :: fname
     integer :: file_header(3) = 0
@@ -32,12 +32,12 @@ contains
     procedure, private :: read_header
     ! destructor
     procedure          :: kill
-end type corr_binfile
+end type dist_binfile
 
 contains
 
     subroutine new( self, fname, fromp, top, nrefs )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         integer,             intent(in)    :: fromp, top, nrefs
         real(sp) :: r
@@ -55,12 +55,12 @@ contains
     end subroutine new
 
     subroutine new_from_file( self, fname )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         real(sp) :: r
         call self%kill
         if (.not. file_exists(fname)) then
-            THROW_HARD('corr_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
+            THROW_HARD('dist_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
         end if
         self%fname          = trim(fname)
         call self%read_header
@@ -76,14 +76,14 @@ contains
 
     ! read in all corrs value from file, corrs shape matches self%fromp, self%to
     subroutine read( self, corrs )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         real,                intent(inout) :: corrs(self%nrefs,self%fromp:self%top,2)
         call self%read_to_glob(self%fromp, self%top, corrs)
     end subroutine read
 
     ! read in all corrs value from file, corrs shape is smaller than self%fromp, self%to
     subroutine read_from_glob( self, fromp, top, corrs )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
         real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
         integer :: funit
@@ -108,7 +108,7 @@ contains
 
     ! read in all corrs value from file, corrs shape is larger than self%fromp, self%to
     subroutine read_to_glob( self, fromp, top, corrs )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
         real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
         integer :: funit
@@ -131,7 +131,7 @@ contains
     end subroutine read_to_glob
 
     subroutine write( self, corrs )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         real,                intent(in)    :: corrs(self%nrefs,self%fromp:self%top,2)
         integer :: funit
         logical :: success
@@ -157,7 +157,7 @@ contains
     end subroutine write
 
     subroutine write_info( self )
-        class(corr_binfile), intent(in) :: self
+        class(dist_binfile), intent(in) :: self
         write(logfhandle,*) 'fromp:  ',self%fromp
         write(logfhandle,*) 'top:    ',self%top
         write(logfhandle,*) 'nrefs:  ',self%nrefs
@@ -165,7 +165,7 @@ contains
     end subroutine write_info
 
     function open_and_check_header( self, funit, readonly ) result ( success )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         integer,             intent(out)   :: funit
         logical,             intent(in)    :: readonly
         logical :: success
@@ -180,7 +180,7 @@ contains
         else
             call fopen(funit,trim(self%fname),access='STREAM',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('corr_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
+        call fileiochk('dist_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
         read(unit=funit,pos=1) self%file_header
         fromp_here = self%file_header(1)
         top_here   = self%file_header(2)
@@ -199,7 +199,7 @@ contains
     end function open_and_check_header
 
     function open_only( self, funit, readonly ) result ( success )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         integer,             intent(out)   :: funit
         logical,             intent(in)    :: readonly
         logical :: success
@@ -214,22 +214,22 @@ contains
         else
             call fopen(funit,trim(self%fname),access='STREAM',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('corr_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
+        call fileiochk('dist_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
     end function open_only
 
     subroutine read_header( self )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         integer :: fromp_here, top_here, nrefs_here
         integer :: funit, io_stat
         integer :: file_header(3)
         call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('corr_binfile; read_header; file: '//trim(self%fname), io_stat)
+        call fileiochk('dist_binfile; read_header; file: '//trim(self%fname), io_stat)
         read(unit=funit,pos=1) file_header
         fromp_here = file_header(1)
         top_here   = file_header(2)
         nrefs_here = file_header(3)
         if( top_here < fromp_here )then
-            THROW_WARN('corr_binfile; read_header; header dimensions not making sense')
+            THROW_WARN('dist_binfile; read_header; header dimensions not making sense')
             write (*,*) 'fromp: ', fromp_here, ' ; top: ', top_here
             THROW_HARD( 'exiting')
         end if
@@ -240,7 +240,7 @@ contains
     end subroutine read_header
 
     subroutine create_empty( self, funit )
-        class(corr_binfile), intent(in)  :: self
+        class(dist_binfile), intent(in)  :: self
         integer,             intent(out) :: funit
         integer  :: io_stat
         real(sp) :: corr_empty(self%nrefs, self%fromp:self%top,2)
@@ -253,7 +253,7 @@ contains
     ! destructor
 
     subroutine kill( self )
-        class(corr_binfile), intent(inout) :: self
+        class(dist_binfile), intent(inout) :: self
         self%file_header  = 0
         self%headsz       = 0
         self%datasz       = 0
@@ -263,4 +263,4 @@ contains
         self%exists       = .false.
     end subroutine kill
 
-end module simple_corr_binfile
+end module simple_dist_binfile
