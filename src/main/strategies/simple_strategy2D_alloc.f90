@@ -1,8 +1,9 @@
 ! array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
 module simple_strategy2D_alloc
 include 'simple_lib.f08'
-use simple_builder,    only: build_glob
-use simple_parameters, only: params_glob
+use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
+use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
@@ -40,6 +41,7 @@ contains
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob
+        use simple_regularizer, only: calc_num2sample
         logical :: zero_oris, ncls_diff
         ! per-thread allocations
         allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
@@ -64,6 +66,10 @@ contains
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
+        endif
+        if( str_has_substr(params_glob%refine,'smpl') )then
+            call calc_num2sample(params_glob%nspace,     'dist',      s2D%smpl_refs_ns)
+            call calc_num2sample(pftcc_glob%get_nrots(), 'dist_inpl', s2D%smpl_inpl_ns)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
     end subroutine prep_strategy2D_glob
