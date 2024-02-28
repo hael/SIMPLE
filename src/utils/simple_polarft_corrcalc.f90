@@ -1447,25 +1447,18 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)*)
+            ! FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)*
             if( even )then
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_even(k,iref)%c - &
+                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
             else
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_odd(k,iref)%c - &
+                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
             endif
-            ! IFFT(FT(CTF2) x FT(REF2)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = real(self%rvec1(ithr)%r(1:self%nrots),dp) ! fftw unnormalized |CTF.REF|2
-            ! FT(X.CTF) x FT(REF)*
-            if( even )then
-                self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
-            else
-                self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
-            endif
-            ! X.CTF.REF = IFFT( FT(X.CTF) x FT(REF)* )
+            ! X.CTF.REF = IFFT( FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)* )
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*real(self%rvec1(ithr)%r(1:self%nrots),dp))
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
@@ -1487,25 +1480,22 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp)
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)*)
+            ! FT(CTF2) x FT(REF2)*
             if( even )then
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
             else
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
             endif
-            ! IFFT(FT(CTF2) x FT(REF2)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = real(self%rvec1(ithr)%r(1:self%nrots),dp) ! fftw unnormalized |CTF.REF|2
             ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            = pft_ref(:,k)
+            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
             self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
             call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! X.CTF.REF = IFFT( FT(X.CTF) x FT(REF)* )
+            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
+            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.d0 * self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+            ! IFFT( FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)* )
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*real(self%rvec1(ithr)%r(1:self%nrots),dp))
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
@@ -1526,25 +1516,18 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp) / (2.d0*real(self%pftsz,dp))
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)*)
+            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
             if( even )then
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_even(k,iref)%c - &
+                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
             else
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
+                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_odd(k,iref)%c  - &
+                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
             endif
-            ! IFFT(FT(CTF2) x FT(REF2)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = real(self%rvec1(ithr)%r(1:self%nrots),dp) ! fftw unnormalized |CTF.REF|2
-            ! FT(X.CTF) x FT(REF)*
-            if( even )then
-                self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
-            else
-                self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
-            endif
-            ! X.CTF.REF = IFFT( FT(X.CTF) x FT(REF)* )
+            ! IFFT(FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*)
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*real(self%rvec1(ithr)%r(1:self%nrots),dp))
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
@@ -1566,25 +1549,22 @@ contains
         do k = self%kfromto(1),self%kfromto(2)
             w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp) / (2.d0*real(self%pftsz,dp))
             sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)*)
+            ! FT(CTF2) x FT(REF2)*
             if( even )then
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
             else
                 self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
             endif
-            ! IFFT(FT(CTF2) x FT(REF2)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            self%drvec(ithr)%r = real(self%rvec1(ithr)%r(1:self%nrots),dp) ! fftw unnormalized |CTF.REF|2
             ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            = pft_ref(:,k)
+            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
             self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
             call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! X.CTF.REF = IFFT( FT(X.CTF) x FT(REF)* )
+            ! FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)*
+            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.d0 * self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
+            ! IFFT(FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*)
             call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
             ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * (self%drvec(ithr)%r - 2.d0*real(self%rvec1(ithr)%r(1:self%nrots),dp))
+            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
             ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
             self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
         end do
