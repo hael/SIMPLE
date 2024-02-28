@@ -199,7 +199,8 @@ type :: oris
     procedure          :: discretize
     procedure, private :: nearest_proj_neighbors_1
     procedure, private :: nearest_proj_neighbors_2
-    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
+    procedure, private :: nearest_proj_neighbors_3
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
     procedure          :: detect_peaks
     procedure          :: min_euldist
     procedure          :: find_angres
@@ -3045,14 +3046,38 @@ contains
         class(ori),  intent(in)    :: o
         real,        intent(in)    :: euldist_thres ! in degrees
         logical,     intent(inout) :: lnns(self%n)
-        real      :: dists(self%n), euldist_thres_rad
-        integer   :: j
+        real    :: dists(self%n), euldist_thres_rad
+        integer :: j
         euldist_thres_rad = deg2rad(euldist_thres)
         do j=1,self%n
             dists(j) = self%o(j).euldist.o
         end do
         where( dists <= euldist_thres_rad ) lnns = .true.
     end subroutine nearest_proj_neighbors_2
+
+    !>  \brief  to identify the indices of the k nearest projection neighbors (including self)
+    !! initialization of lnns is
+    !! deferred to the calling unit, so that we can add additional neighborhoods on top of
+    !! of each other to create more complex search spaces
+    subroutine nearest_proj_neighbors_3( self, o, k, lnns )
+        class(oris), intent(in)    :: self
+        class(ori),  intent(in)    :: o
+        integer,     intent(in)    :: k
+        logical,     intent(inout) :: lnns(self%n)
+        real    :: dists(self%n)
+        integer :: inds(self%n), i, j
+        if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
+        do i=1,self%n
+            do j=1,self%n
+                inds(j)  = j
+                dists(j) = self%o(j).euldist.o
+            end do
+            call hpsort(dists, inds)
+            do j=1,k
+                lnns(inds(j)) = .true.
+            end do
+        end do
+    end subroutine nearest_proj_neighbors_3
 
     subroutine detect_peaks( self, nnmat, corrs, peaks )
         class(oris), intent(in)    :: self
