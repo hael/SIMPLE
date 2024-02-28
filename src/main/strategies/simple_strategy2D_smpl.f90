@@ -44,12 +44,12 @@ contains
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle      
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                irot = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s2D%smpl_inpl_ns)
+                irot = greedy_sampling(inpl_corrs, sorted_corrs, inds, s2D%smpl_inpl_ns)
                 locs(iref)      = irot
                 ref_corrs(iref) = inpl_corrs(irot)
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            iref = reverse_multinomal(ref_corrs, s2D%smpl_refs_ns)
+            iref = greedy_sampling(ref_corrs, s2D%smpl_refs_ns)
             irot = locs(iref)
             corr = ref_corrs(iref)
             self%s%best_class = iref

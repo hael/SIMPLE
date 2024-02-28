@@ -8,6 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
+use simple_regularizer,      only: reg_dist_switch
 implicit none
 
 public :: strategy3D_smpl
@@ -47,13 +48,13 @@ contains
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = reverse_multinomal(inpl_corrs, sorted_corrs, inds, s3D%smpl_inpl_ns)
+                    irot = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
                     locs(iref)      = irot
                     ref_corrs(iref) = inpl_corrs(irot)
                 endif
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            iref = reverse_multinomal(ref_corrs, s3D%smpl_refs_ns)
+            iref = greedy_sampling(reg_dist_switch(ref_corrs), s3D%smpl_refs_ns)
             irot = locs(iref)
             corr = ref_corrs(iref)
             call self%s%store_solution(iref, irot, corr)

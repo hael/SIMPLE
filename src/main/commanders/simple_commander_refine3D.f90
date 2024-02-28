@@ -136,12 +136,12 @@ contains
         if( .not. cline%defined('lp_iters')) call cline%set('lp_iters',      1.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
-        l_switch2euclid  = .false.
+        l_switch2euclid = .false.
         if( cline%defined('objfun') )then
-            l_continue = .false.
+            l_continue  = .false.
+            orig_objfun = trim(cline%get_carg('objfun'))
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
             if( (trim(cline%get_carg('objfun')).eq.'euclid'.or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
-                orig_objfun     = trim(cline%get_carg('objfun'))
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
                 ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
@@ -440,9 +440,8 @@ contains
             if( params%refine .eq. 'prob' )then
                 ! generate all corrs
                 call cline_prob_align%set('which_iter', int2str(params%which_iter))
-                call cline_prob_align%set('vol1', cline%get_carg('vol1')) ! multi-states not supported
-                call cline_prob_align%set('needs_sigma','yes')
-                call cline_prob_align%set('objfun','prob')
+                call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
+                call cline_prob_align%set('objfun',     orig_objfun)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
                 call xprob_align%execute( cline_prob_align )
@@ -1282,7 +1281,7 @@ contains
         type(cmdline)                 :: cline_prob_tab
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        integer  :: nptcls, ipart
+        integer :: nptcls, ipart
         call cline%set('mkdir', 'no')
         call cline%set('stream','no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
@@ -1314,7 +1313,6 @@ contains
         ! write the global corr/loc table
         fname = trim(CORR_FBODY)//'.dat'
         call reg_obj%write_tab(fname)
-        ! if( trim(params%ptclw).eq.'yes' ) call reg_obj%normalize_weight   ! weighting needs weights read/write
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call reg_obj%write_assignment(fname)

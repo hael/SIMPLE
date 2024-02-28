@@ -7,7 +7,7 @@ use simple_parameters,   only: params_glob
 use simple_corr_binfile, only: corr_binfile
 implicit none
 
-public :: regularizer, calc_num2sample
+public :: regularizer, calc_num2sample, reg_dist_switch
 private
 #include "simple_local_flags.inc"
 
@@ -66,9 +66,10 @@ contains
                 iptcl = glob_pinds(i)
                 if( self%ptcl_avail(iptcl) )then
                     ithr = omp_get_thread_num() + 1
-                    call pftcc%gencorrs_prob( iptcl, iref, corrs(:,ithr) )
+                    call pftcc%gencorrs( iref, iptcl, corrs(:, ithr) )
+                    corrs(:, ithr) = reg_dist_switch(corrs(:, ithr))
                     self%corr_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
-                    self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)),ithr)
+                    self%corr_loc_tab(iref,iptcl,1) = corrs(int(self%corr_loc_tab(iref,iptcl,2)), ithr)
                 endif
             enddo
         enddo
@@ -351,5 +352,23 @@ contains
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
+
+    ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
+    function reg_dist_switch( corr ) result(dist)
+        real, intent(in) :: corr(:)
+        real :: dist(size(corr))
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                dist = corr
+                where(dist < 0.) dist = 0.
+                dist = 1. - dist
+            case(OBJFUN_PROB, OBJFUN_EUCLID)
+                where( corr < TINY )
+                    dist = huge(dist)
+                elsewhere
+                    dist = - log(corr)
+                endwhere
+        end select
+    end function reg_dist_switch
 
 end module simple_regularizer

@@ -1,19 +1,19 @@
 program simple_test_shiftsrch_reg
 include 'simple_lib.f08'
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_cmdline,          only: cmdline
-use simple_builder,          only: builder
-use simple_image,            only: image
-use simple_parameters,       only: parameters
-use simple_polarizer,        only: polarizer
-use simple_pftcc_shsrch_reg, only: pftcc_shsrch_reg  ! gradient-based in-plane angle and shift search
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_cmdline,           only: cmdline
+use simple_builder,           only: builder
+use simple_image,             only: image
+use simple_parameters,        only: parameters
+use simple_polarizer,         only: polarizer
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 implicit none
 type(cmdline)          :: cline
 type(builder)          :: b
 type(parameters)       :: p
 type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: img_copy
-type(pftcc_shsrch_reg) :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
@@ -98,15 +98,15 @@ irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
 do i=5,5
-    corrmax = huge(corrmax)
+    corrmax = 0.
     do xsh=-2,2
         do ysh=-2,2
             call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
-            corr  = minval(corrs)
+            corr  = maxval(corrs)
 
             print *, 'corr: ', corr, xsh, ysh
 
-            if( corr < corrmax )then
+            if( corr > corrmax )then
                 corrmax = corr
                 xbest   = xsh
                 ybest   = ysh
