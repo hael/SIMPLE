@@ -411,10 +411,10 @@ contains
 
     subroutine kill( self )
         class(regularizer), intent(inout) :: self
-        if( allocated(dist_loc_tab)  ) deallocate(dist_loc_tab)
-        if( allocated(ptcl_ref_map)  ) deallocate(ptcl_ref_map)
-        if( allocated(ptcl_avail)    ) deallocate(ptcl_avail)
-        if( allocated(subspace_inds) ) deallocate(subspace_inds)
+        if( allocated(self%dist_loc_tab)  ) deallocate(self%dist_loc_tab)
+        if( allocated(self%ptcl_ref_map)  ) deallocate(self%ptcl_ref_map)
+        if( allocated(self%ptcl_avail)    ) deallocate(self%ptcl_avail)
+        if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
     end subroutine kill
 
     ! PUBLIC UTILITITES
