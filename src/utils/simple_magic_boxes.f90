@@ -96,7 +96,7 @@ contains
             scale    = 1.0
             box_new  = box_in
             smpd_new = smpd_in
-            write(logfhandle,*) 'Inputted smpd < smpd_target, no scaling done; simple_magic_boxes :: autoscale_1'
+            write(logfhandle,*) 'Inputted smpd < smpd_target, no scaling done; simple_magic_boxes :: autoscale'
             return
         endif
         scale    = smpd_in/smpd_target
