@@ -194,7 +194,7 @@ contains
 
         ! ref regularization
         if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call reg_obj%new
+            call reg_obj%new(params_glob%l_neigh)
             call reg_obj%read_tab_from_glob(trim(CORR_FBODY)//'.dat', params_glob%fromp, params_glob%top)
             call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif

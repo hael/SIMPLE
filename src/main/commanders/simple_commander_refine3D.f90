@@ -1015,7 +1015,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
-        call reg_obj%new
+        call reg_obj%new(params%l_neigh)
         ! e/o partioning
         if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
             call build%spproj%os_ptcl3D%partition_eo
@@ -1194,7 +1194,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call reg_obj%new
+        call reg_obj%new(params%l_neigh)
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -1290,10 +1290,10 @@ contains
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
-        call reg_obj%new
+        call reg_obj%new(params%l_neigh)
         ! generating all corrs on all parts
         cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab' )                   ! required for distributed call
+        call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! setup the environment for distributed execution
         call qenv%new(params%nparts, nptcls=params%nptcls)
         call cline_prob_tab%gen_job_descr(job_descr)
