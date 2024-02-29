@@ -265,7 +265,7 @@ contains
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedyc')
                         allocate(strategy3D_greedyc              :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob')
+                    case('prob','prob_neigh')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
