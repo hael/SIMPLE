@@ -241,9 +241,17 @@ select case(trim(prg))
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )
-        call xinitial_3Dmodel%execute(cline)
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'initial_3Dmodel', 'simple_exec')
+        else
+            call xinitial_3Dmodel%execute(cline)
+        endif
     case( 'abinitio_3Dmodel' )
-        call xabinitio_3Dmodel%execute(cline)
+        if( cline%defined('nrestarts') )then
+            call restarted_exec(cline, 'abinitio_3Dmodel', 'simple_exec')
+        else
+            call xabinitio_3Dmodel%execute(cline)
+        endif
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
@@ -390,7 +398,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d518f94d')
+call simple_print_git_version('fc712ba9')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
