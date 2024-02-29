@@ -716,7 +716,7 @@ contains
         type(parameters)           :: params
         type(sp_project)           :: spproj
         type(convergence)          :: conv
-        real    :: smpd_target, lp_target, scale
+        real    :: smpd_target, lp_target, scale, trslim
         integer :: iter, it, prev_box_crop, maxits
         logical :: l_autoscale, l_lpset, l_err
         call cline%set('oritype', 'ptcl3D')
@@ -787,10 +787,13 @@ contains
                 lp_target   = params%lp * SCALEFAC
                 smpd_target = max(params%smpd, lp_target/2.)
                 call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
+                trslim      = max(2.0, AHELIX_WIDTH / params%smpd_crop / 2.0)
                 l_autoscale = params%box_crop < params%box
                 if( l_autoscale )then
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
                 endif
+            else
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
             call cline_refine3D%set('box_crop',  params%box_crop)
             call cline_refine3D%set('trs',       0.)
@@ -802,7 +805,7 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
             call cline_refine3D%set('reg_init', 'no')
-            call cline_refine3D%set('trs',      MINSHIFT)
+            call cline_refine3D%set('trs',      trslim)
             call cline_refine3D%set('maxits',   MAXITS2)
             call cline_refine3D%set('lp_iters', MAXITS2)
             call cline_refine3D%set('nspace',   NSPACE2)
@@ -833,7 +836,10 @@ contains
                     lp_target   = params%lp * SCALEFAC
                     smpd_target = max(params%smpd, lp_target/2.)
                     call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
+                    trslim      = max(2.0, AHELIX_WIDTH / params%smpd_crop / 2.0)
                     l_autoscale = params%box_crop < params%box
+                else
+                    trslim      = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
                 endif
                 if( l_autoscale )then
                     write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
@@ -863,7 +869,7 @@ contains
                     call cline_refine3D%set('trs',      0.)
                 else
                     call cline_refine3D%set('nspace', NSPACE2)
-                    call cline_refine3D%set('trs',    MINSHIFT)
+                    call cline_refine3D%set('trs',    trslim)
                 end if
                 call exec_refine3D(iter)
             enddo
@@ -876,7 +882,10 @@ contains
                 lp_target   = params%lpstop * SCALEFAC
                 smpd_target = max(params%smpd, lp_target/2.)
                 call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
+                trslim      = max(MINSHIFT, AHELIX_WIDTH / params%smpd_crop)
                 l_autoscale = params%box_crop < params%box
+            else
+                trslim      = max(MINSHIFT, AHELIX_WIDTH / params%smpd)
             endif
             if( l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
@@ -891,7 +900,7 @@ contains
         call cline_refine3D%set('reg_init', 'no')
         call cline_refine3D%set('box_crop', params%box_crop)
         call cline_refine3D%set('lp',       params%lpstop)
-        call cline_refine3D%set('trs',      MINSHIFT)
+        call cline_refine3D%set('trs',      trslim)
         call cline_refine3D%set('startit',  iter+1)
         call cline_refine3D%set('maxits',   MAXITS2)
         call cline_refine3D%set('lp_iters', MAXITS2)

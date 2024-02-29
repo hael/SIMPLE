@@ -16,4 +16,5 @@ real, parameter :: FRACSRCHSPACE_HET   = 99.0
 real, parameter :: MSK_FRAC            = 0.07
 real, parameter :: MINSHIFT            = 5.0
 real, parameter :: MAXSHIFT            = 6.0
+real, parameter :: AHELIX_WIDTH        = 12.0 ! alphha-helix width in A
 end module simple_defs_conv
