@@ -251,6 +251,7 @@ contains
     procedure, private :: oshift_1, oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
+    procedure          :: radial_cc
     ! MODIFIERS
     procedure          :: lp_background
     procedure          :: combine_fgbg_filt
@@ -7602,9 +7603,9 @@ contains
     end subroutine flipY
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes
-    subroutine rad_cc( self1, self2, corr, rad_dist )
+    subroutine radial_cc( self1, self2, rad_corrs , rad_dists)
         class(image),      intent(inout) :: self1, self2
-        real, allocatable, intent(out)   :: corr(:), rad_dist(:)
+        real, allocatable, intent(out)   :: rad_corrs(:), rad_dists(:)
         real, allocatable :: mean(:)
         type(image) :: dists_img
         integer :: n_shell_pix
@@ -7620,13 +7621,13 @@ contains
         ldim1 = self1%get_ldim()
         ldim2 = self2%get_ldim()
         if( ldim1(1) /= ldim2(1) .or. ldim1(2) /= ldim2(2) .or. ldim1(3) /= ldim2(3) )  &
-        THROW_HARD(' Nonconforming dimensions in image; rad_ccf ')
+        THROW_HARD(' Nonconforming dimensions in image; rad_cc ')
         ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
         radius_pix  = ldim_refs(1) / 2.   
         n_shells    = int(radius_pix)
         allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
         &shell_mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.true.)
-        allocate(corr(n_shells),mean(n_shells),rad_dist(n_shells))
+        allocate(rad_corrs(n_shells),rad_dists(n_shells),mean(n_shells))
         call dists_img%new(ldim_refs, smpd)
         call dists_img%cendist
         call dists_img%get_rmat_ptr( rmat_dists_img )
@@ -7640,7 +7641,7 @@ contains
                 shell_mask = .false.
             end where
             if( count(shell_mask) < 3 )then
-                corr(n) = 0.
+                rad_corrs(n) = 0.
                 mean(n) = 0.
             else
                 rvec1 = self1%serialize(shell_mask)
@@ -7648,12 +7649,12 @@ contains
                 call moment(rvec1, mean1, sdev1, var1, err)
                 call moment(rvec2, mean2, sdev2, var2, err)
                 mean(n) = mean1 - mean2
-                corr(n) = pearsn_serial(rvec1, rvec2)
+                rad_corrs(n) = pearsn_serial(rvec1, rvec2)
             endif
-            rad_dist(n) = ( dist_lbound * smpd + dist_ubound * smpd / 2. )
+            rad_dists(n) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
         enddo
         call dists_img%kill()
-    end subroutine rad_cc
+    end subroutine radial_cc
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
