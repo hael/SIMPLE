@@ -23,7 +23,6 @@ type :: regularizer
   contains
     ! CONSTRUCTOR
     procedure :: new
-    procedure :: new_neigh
     ! PROCEDURES
     procedure :: fill_tab
     procedure :: tab_normalize
@@ -42,9 +41,13 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self )
-        class(regularizer), target, intent(inout) :: self
-        integer :: iptcl
+    subroutine new( self, l_neigh )
+        use simple_oris, only: oris
+        class(regularizer), intent(inout) :: self
+        logical,            intent(in)    :: l_neigh
+        type(oris) :: eulspace_sub !< discrete projection direction search space, reduced
+        type(ori)  :: o
+        integer    :: i, iptcl
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
@@ -54,31 +57,23 @@ contains
         enddo
         allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.true.)
         self%do_neigh = .false.
+        if( l_neigh )then
+            ! construct projection direction subspace
+            call eulspace_sub%new(params_glob%nspace_sub, is_ptcl=.false.)
+            call build_glob%pgrpsyms%build_refspiral(eulspace_sub)
+            ! get indexing in original projection direction space
+            allocate(self%subspace_inds(params_glob%nspace_sub), source=0)
+            !$omp parallel do default(shared) proc_bind(close) private(i,o)
+            do i = 1, params_glob%nspace_sub
+                call eulspace_sub%get_ori(i, o)
+                self%subspace_inds(i) = build_glob%pgrpsyms%find_closest_proj(build_glob%eulspace, o)
+            end do
+            !$omp end parallel do
+            call eulspace_sub%kill
+            allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.false.)
+            self%do_neigh = .true.
+        endif
     end subroutine new
-
-    subroutine new_neigh( self )
-        use simple_oris,    only: oris
-        class(regularizer), target, intent(inout) :: self
-        type(oris) :: eulspace_sub !< discrete projection direction search space, reduced
-        type(ori)  :: o
-        integer    :: i
-        ! call original constructor
-        call self%new
-        ! construct projection direction subspace
-        call eulspace_sub%new(params_glob%nspace_sub, is_ptcl=.false.)
-        call build_glob%pgrpsyms%build_refspiral(eulspace_sub)
-        ! get indexing in original projection direction space
-        allocate(self%subspace_inds(params_glob%nspace_sub), source=0)
-        !$omp parallel do default(shared) proc_bind(close) private(i,o)
-        do i = 1, params_glob%nspace_sub
-            call eulspace_sub%get_ori(i, o)
-            self%subspace_inds(i) = build_glob%pgrpsyms%find_closest_proj(build_glob%eulspace, o)
-        end do
-        !$omp end parallel do
-        call eulspace_sub%kill
-        allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.false.)
-        self%do_neigh = .true.
-    end subroutine new_neigh
 
     subroutine fill_tab( self, pftcc, glob_pinds )
         use simple_polarft_corrcalc, only: polarft_corrcalc
