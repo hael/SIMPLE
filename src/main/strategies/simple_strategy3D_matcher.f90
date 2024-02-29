@@ -476,7 +476,7 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            if( params%l_lpset )then
+            if( params_glob%l_lpset )then
                 call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
             else
                 call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
