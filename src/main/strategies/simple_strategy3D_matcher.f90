@@ -193,9 +193,9 @@ contains
         endif
 
         ! ref regularization
-        if( trim(params_glob%refine) .eq. 'prob' .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
+        if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call reg_obj%new(params_glob%l_neigh)
-            call reg_obj%read_tab_from_glob(trim(CORR_FBODY)//'.dat', params_glob%fromp, params_glob%top)
+            call reg_obj%read_tab_from_glob(trim(DIST_FBODY)//'.dat', params_glob%fromp, params_glob%top)
             call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
 
@@ -279,7 +279,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( trim(params_glob%refine) == 'prob' ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
+                if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -343,7 +343,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( trim(params_glob%refine) .eq. 'prob' ) call reg_obj%kill
+            if( str_has_substr(params_glob%refine, 'prob') ) call reg_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
