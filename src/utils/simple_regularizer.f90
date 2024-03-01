@@ -9,7 +9,8 @@ use simple_ori,          only: ori
 use simple_builder,      only: build_glob
 implicit none
 
-public :: regularizer, calc_num2sample, reg_dist_switch
+public :: regularizer
+public :: calc_num2sample, calc_numinpl2sample2D, calc_numcls2sample2D, reg_dist_switch
 private
 #include "simple_local_flags.inc"
 
@@ -435,6 +436,37 @@ contains
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
+
+    subroutine calc_numcls2sample2D( neigh_frac, ncls, ncls2smpl )
+        real,    intent(in)  :: neigh_frac
+        integer, intent(in)  :: ncls
+        integer, intent(out) :: ncls2smpl
+        real    :: athres, dist_thres
+        dist_thres = neigh_frac * 180.
+        athres     = params_glob%reg_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        ncls2smpl     = min(ncls, max(1,nint(athres * real(ncls) / 180.)))
+    end subroutine calc_numcls2sample2D
+
+    subroutine calc_numinpl2sample2D( num_all, num_smpl )
+        use simple_builder, only: build_glob
+        integer, intent(in)  :: num_all
+        integer, intent(out) :: num_smpl
+        real,    allocatable :: vals(:)
+        logical, allocatable :: ptcl_mask(:)
+        real    :: athres, dist_thres
+        integer :: n
+        ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
+        ptcl_mask  = ptcl_mask .and. (nint(build_glob%spproj_field%get_all('mi_class')) == 1)
+        n          = count(ptcl_mask)
+        athres     = params_glob%reg_athres
+        if( n > 0 )then
+            vals       = build_glob%spproj_field%get_all(trim('dist_inpl'))
+            dist_thres = sum(vals, mask=ptcl_mask) / real(n)
+            if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        endif
+        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
+    end subroutine calc_numinpl2sample2D
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
     function reg_dist_switch( corr ) result(dist)

@@ -274,6 +274,26 @@ contains
                         lplim = params_glob%lplims2D(2)
                     endif
                 endif
+                ! proposed edits, requires cluster2D_autoscale L657 to be deleted
+                ! if( which_iter <= LPLIM3ITERBOUND )then
+                !     params_glob%l_lpset = .true.
+                !     if( which_iter < LPLIM1ITERBOUND )then
+                !         lplim = params_glob%lpstart
+                !     else
+                !         lplim = (params_glob%lpstart+params_glob%lpstop) / 2.
+                !     endif
+                ! else
+                !     params_glob%l_lpset = .false.
+                !     if( file_exists(params_glob%frcs) )then
+                !         lplim = build_glob%clsfrcs%estimate_lp_for_align()
+                !     else
+                !         if( frac_srch_space >= FRAC_SH_LIM )then
+                !             lplim = params_glob%lpstop
+                !         else
+                !             lplim = (params_glob%lpstart+params_glob%lpstop) / 2.
+                !         endif
+                !     endif
+                ! endif
             endif
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
             ! to avoid pathological cases, fall-back on lpstart

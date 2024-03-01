@@ -18,6 +18,7 @@ use simple_strategy2D_alloc!,    only: prep_strategy2d_batch, clean_strategy2d, 
 use simple_strategy2D_greedy,   only: strategy2D_greedy
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
+use simple_strategy2D_smpl,     only: strategy2D_smpl
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_euclid_sigma2,       only: euclid_sigma2
 use simple_masker,              only: automask2D
@@ -54,11 +55,11 @@ contains
         real,                      allocatable :: states(:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, snhc_sz
+        real    :: frac_srch_space, neigh_frac
         integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_frac_update, have_frcs
-        logical :: l_snhc, l_greedy, l_np_cls_defined
+        logical :: l_snhc, l_greedy, l_np_cls_defined, l_smpl
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -71,30 +72,27 @@ contains
         l_partial_sums     = .false.
         l_snhc             = .false.
         l_greedy           = .false.
+        l_smpl             = .false.
         l_frac_update      = .false.
         l_stream           = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
-            l_partial_sums = .false.
-            l_snhc         = .false.
-            l_greedy       = .true.
-            l_frac_update  = .false.
+            l_greedy = .true.
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
-            ! extremal opt without fractional update
-            l_partial_sums = .false.
-            l_frac_update  = .false.
-            l_greedy       = .false.
-            l_snhc         = .true.
-            if( (params_glob%refine.eq.'greedy') )then
-                l_greedy   = .true.
-                l_snhc     = .false.
-            endif
+            ! no fractional update
+            select case(trim(params_glob%refine))
+            case('snhc')
+                l_snhc   = .true.
+            case('smpl')
+                l_smpl   = .true.
+            case('greedy')
+                l_greedy = .true.
+            end select
         else
-            ! optional fractional update, no snhc opt
+            ! optional fractional update and shc optimization (=snhc with all classes)
             l_partial_sums = params_glob%l_frac_update
             l_frac_update  = params_glob%l_frac_update
-            l_snhc         = .false.
-            l_greedy       = (params_glob%refine.eq.'greedy') !.or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
+            l_greedy       = (params_glob%refine.eq.'greedy')
         endif
         if( l_stream )then
             l_frac_update             = .false.
@@ -125,21 +123,13 @@ contains
         endif
 
         ! SNHC LOGICS
-        if( l_snhc )then
+        neigh_frac = 0.
+        if( l_snhc .or. l_smpl )then
             ! factorial decay, -2 because first step is always greedy
-            snhc_sz = min(SNHC2D_INITFRAC,&
+            neigh_frac = min(SNHC2D_INITFRAC,&
                 &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-snhc_sz)
-        else
-            snhc_sz = 0. ! full neighbourhood
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-neigh_frac)
         endif
-
-        ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights
-        call prep_strategy2D_glob
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
-
-        ! SETUP WEIGHTS
-        call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! READ FOURIER RING CORRELATIONS
         have_frcs = .false.
@@ -185,6 +175,13 @@ contains
             t_prep_pftcc = tic()
         endif
         call preppftcc4align( which_iter )
+
+        ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights & after pftcc initialization
+        call prep_strategy2D_glob( neigh_frac )
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
+
+        ! SETUP WEIGHTS
+        call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         allocate(strategy2Dspecs(batchsz_max),strategy2Dsrch(batchsz_max))
@@ -248,6 +245,8 @@ contains
                         else
                             allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                         endif
+                    else if( l_smpl )then
+                        allocate(strategy2D_smpl            :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
                         allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
                     endif
@@ -255,7 +254,7 @@ contains
                 ! Search specification & object
                 strategy2Dspecs(iptcl_batch)%iptcl       = iptcl
                 strategy2Dspecs(iptcl_batch)%iptcl_map   = iptcl_batch
-                strategy2Dspecs(iptcl_batch)%stoch_bound = snhc_sz
+                strategy2Dspecs(iptcl_batch)%stoch_bound = neigh_frac
                 call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspecs(iptcl_batch))
                 call strategy2Dsrch(iptcl_batch)%ptr%srch
                 ! calculate sigma2 for ML-based refinement
