@@ -91,7 +91,7 @@ contains
         integer(kind=8) :: addr
         success = self%open_only( funit, .true. )
         if( .not. success ) return
-        ! read corr
+        ! read dist
         addr = self%headsz + 1 + (fromp - self%fromp) * self%datasz
         do iptcl = fromp, top
             read(unit=funit,pos=addr) dists(:,iptcl,1)
@@ -116,7 +116,7 @@ contains
         integer(kind=8) :: addr
         success = self%open_only( funit, .true. )
         if( .not. success ) return
-        ! read corr
+        ! read dist
         addr = self%headsz + 1
         do iptcl = self%fromp, self%top
             read(unit=funit,pos=addr) dists(:,iptcl,1)
@@ -142,7 +142,7 @@ contains
             success = self%open_and_check_header( funit, .false. )
             if( .not. success ) return
         end if
-        ! write corr
+        ! write dist
         addr = self%headsz + 1
         do iptcl = self%fromp,self%top
             write(funit,pos=addr) dists(:,iptcl,1)
@@ -186,10 +186,10 @@ contains
         top_here   = self%file_header(2)
         nrefs      = self%file_header(3)
         if ((fromp_here.ne.self%fromp) .or. (top_here.ne.self%top) .or. (nrefs.ne.self%nrefs)) then
-            THROW_WARN( 'dimensions in corr file do not match')
-            write (*,*) 'self%fromp: ', self%fromp, ' ; in corr file: ', fromp_here
-            write (*,*) 'self%top: ',   self%top,   ' ; in corr file: ', top_here
-            write (*,*) 'self%nrefs: ', self%nrefs, ' ; in corr file: ', nrefs
+            THROW_WARN( 'dimensions in dist file do not match')
+            write (*,*) 'self%fromp: ', self%fromp, ' ; in dist file: ', fromp_here
+            write (*,*) 'self%top: ',   self%top,   ' ; in dist file: ', top_here
+            write (*,*) 'self%nrefs: ', self%nrefs, ' ; in dist file: ', nrefs
             THROW_HARD( 'exiting')
             call fclose(funit)
             success = .false.
@@ -219,9 +219,8 @@ contains
 
     subroutine read_header( self )
         class(dist_binfile), intent(inout) :: self
-        integer(kind=8) :: fromp_here, top_here, nrefs_here
-        integer :: funit, io_stat
-        integer :: file_header(3)
+        integer(kind=8) :: fromp_here, top_here, nrefs_here, file_header(3)
+        integer         :: funit, io_stat
         call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
         call fileiochk('dist_binfile; read_header; file: '//trim(self%fname), io_stat)
         read(unit=funit,pos=1) file_header
@@ -243,11 +242,11 @@ contains
         class(dist_binfile), intent(in)  :: self
         integer,             intent(out) :: funit
         integer  :: io_stat
-        real(sp) :: corr_empty(self%nrefs, self%fromp:self%top,2)
-        corr_empty = 0.
+        real(sp) :: dist_empty(self%nrefs, self%fromp:self%top,2)
+        dist_empty = 0.
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
-        write(unit=funit,pos=self%headsz + 1) corr_empty
+        write(unit=funit,pos=self%headsz + 1) dist_empty
     end subroutine create_empty
 
     ! destructor
