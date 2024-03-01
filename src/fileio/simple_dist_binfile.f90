@@ -74,18 +74,18 @@ contains
 
     ! I/O
 
-    ! read in all corrs value from file, corrs shape matches self%fromp, self%to
-    subroutine read( self, corrs )
+    ! read in all dists value from file, dists shape matches self%fromp, self%to
+    subroutine read( self, dists )
         class(dist_binfile), intent(inout) :: self
-        real,                intent(inout) :: corrs(self%nrefs,self%fromp:self%top,2)
-        call self%read_to_glob(self%fromp, self%top, corrs)
+        real,                intent(inout) :: dists(self%nrefs,self%fromp:self%top,2)
+        call self%read_to_glob(self%fromp, self%top, dists)
     end subroutine read
 
-    ! read in all corrs value from file, corrs shape is smaller than self%fromp, self%to
-    subroutine read_from_glob( self, fromp, top, corrs )
+    ! read in all dists value from file, dists shape is smaller than self%fromp, self%to
+    subroutine read_from_glob( self, fromp, top, dists )
         class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
-        real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
+        real,                intent(inout) :: dists(self%nrefs,fromp:top,2)
         integer :: funit
         logical :: success
         integer :: iptcl, addr
@@ -94,23 +94,23 @@ contains
         ! read corr
         addr = self%headsz + 1 + (fromp - self%fromp) * self%datasz
         do iptcl = fromp, top
-            read(unit=funit,pos=addr) corrs(:,iptcl,1)
+            read(unit=funit,pos=addr) dists(:,iptcl,1)
             addr = addr + self%datasz
         end do
         addr = self%headsz + 1 + (fromp - self%fromp) * self%datasz + (self%top - self%fromp + 1) * self%datasz
         ! read loc
         do iptcl = fromp, top
-            read(unit=funit,pos=addr) corrs(:,iptcl,2)
+            read(unit=funit,pos=addr) dists(:,iptcl,2)
             addr = addr + self%datasz
         end do
         call fclose(funit)
     end subroutine read_from_glob
 
-    ! read in all corrs value from file, corrs shape is larger than self%fromp, self%to
-    subroutine read_to_glob( self, fromp, top, corrs )
+    ! read in all dists value from file, dists shape is larger than self%fromp, self%to
+    subroutine read_to_glob( self, fromp, top, dists )
         class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
-        real,                intent(inout) :: corrs(self%nrefs,fromp:top,2)
+        real,                intent(inout) :: dists(self%nrefs,fromp:top,2)
         integer :: funit
         logical :: success
         integer :: iptcl, addr
@@ -119,20 +119,20 @@ contains
         ! read corr
         addr = self%headsz + 1
         do iptcl = self%fromp, self%top
-            read(unit=funit,pos=addr) corrs(:,iptcl,1)
+            read(unit=funit,pos=addr) dists(:,iptcl,1)
             addr = addr + self%datasz
         end do
         ! read loc
         do iptcl = self%fromp, self%top
-            read(unit=funit,pos=addr) corrs(:,iptcl,2)
+            read(unit=funit,pos=addr) dists(:,iptcl,2)
             addr = addr + self%datasz
         end do
         call fclose(funit)
     end subroutine read_to_glob
 
-    subroutine write( self, corrs )
+    subroutine write( self, dists )
         class(dist_binfile), intent(inout) :: self
-        real,                intent(in)    :: corrs(self%nrefs,self%fromp:self%top,2)
+        real,                intent(in)    :: dists(self%nrefs,self%fromp:self%top,2)
         integer :: funit
         logical :: success
         integer :: addr, iptcl
@@ -145,12 +145,12 @@ contains
         ! write corr
         addr = self%headsz + 1
         do iptcl = self%fromp,self%top
-            write(funit,pos=addr) corrs(:,iptcl,1)
+            write(funit,pos=addr) dists(:,iptcl,1)
             addr = addr + self%datasz
         end do
         ! write loc
         do iptcl = self%fromp,self%top
-            write(funit,pos=addr) corrs(:,iptcl,2)
+            write(funit,pos=addr) dists(:,iptcl,2)
             addr = addr + self%datasz
         end do
         call fclose(funit)
