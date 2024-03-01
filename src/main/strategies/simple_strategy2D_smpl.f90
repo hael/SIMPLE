@@ -33,26 +33,31 @@ contains
         use simple_regularizer, only: reg_dist_switch
         class(strategy2D_smpl), intent(inout) :: self
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), irot
-        real    :: inpl_corrs(self%s%nrots), ref_corrs(self%s%nrefs), sorted_corrs(self%s%nrots), corr
+        real    :: inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             ! search
-            ref_corrs = TINY
+            s2D%cls_corrs(:,self%s%ithr) = TINY
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle      
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                irot = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_corrs, inds, s2D%smpl_inpl_ns)
-                locs(iref)      = irot
-                ref_corrs(iref) = inpl_corrs(irot)
+                irot       = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                locs(iref) = irot
+                s2D%cls_corrs(iref,self%s%ithr) = inpl_corrs(irot)
             enddo
-            self%s%nrefs_eval = self%s%nrefs
-            iref = greedy_sampling(reg_dist_switch(ref_corrs), s2D%smpl_refs_ns)
-            irot = locs(iref)
-            corr = ref_corrs(iref)
+            iref = greedy_sampling(reg_dist_switch(s2D%cls_corrs(:,self%s%ithr)), s2D%smpl_refs_ns)
+            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
+                ! back-calculating in-plane angle with k-weighing
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, kweight=.true.)
+                irot = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                locs(iref) = irot
+                s2D%cls_corrs(iref,self%s%ithr) = inpl_corrs(irot)
+            endif
             self%s%best_class = iref
-            self%s%best_rot   = irot
-            self%s%best_corr  = corr
+            self%s%best_rot   = locs(iref)
+            self%s%best_corr  = s2D%cls_corrs(iref,self%s%ithr)
             call self%s%inpl_srch
+            self%s%nrefs_eval = self%s%nrefs - s2D%smpl_refs_ns ! for reporting only
             call self%s%store_solution
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
