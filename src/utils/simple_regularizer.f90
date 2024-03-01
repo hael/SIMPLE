@@ -121,9 +121,9 @@ contains
                             dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
                             self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
                             self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
-                        ! else
-                        !     self%dist_loc_tab(iref,iptcl,2) = 0
-                        !     self%dist_loc_tab(iref,iptcl,1) = huge(x)
+                        else
+                            self%dist_loc_tab(iref,iptcl,2) = 0
+                            self%dist_loc_tab(iref,iptcl,1) = huge(x)
                         endif
                     endif
                 enddo
@@ -189,6 +189,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_dist_all)
         do iptcl = params_glob%fromp, params_glob%top
             if( self%ptcl_avail(iptcl) )then
+                self%l_neigh(:,iptcl) = (self%dist_loc_tab(:,iptcl,2) > TINY)    ! communicating partition l_neigh to global l_neigh
                 sum_dist_all = sum(self%dist_loc_tab(:,iptcl,1), mask=self%l_neigh(:,iptcl))
                 if( sum_dist_all < TINY )then
                     self%dist_loc_tab(:,iptcl,1) = 0.
@@ -253,6 +254,7 @@ contains
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
             assigned_iref = ref_smpl() ! contained function, below
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
+            if( .not. self%l_neigh(assigned_iref, assigned_ptcl) ) continue       ! not in the neighborhood
             ptcl_avail(assigned_ptcl)        = .false.
             self%ptcl_ref_map(assigned_ptcl) = assigned_iref
             ! update the ref_dist and ref_dist_inds
