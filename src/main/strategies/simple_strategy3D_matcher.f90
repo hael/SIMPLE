@@ -15,6 +15,7 @@ use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
 use simple_strategy3D_shc,          only: strategy3D_shc
+use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_smpl,         only: strategy3D_smpl
 use simple_strategy3D_shc3,         only: strategy3D_shc3
 use simple_strategy3D_shcc,         only: strategy3D_shcc
@@ -230,6 +231,8 @@ contains
                                 allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('shc_smpl')
+                        allocate(strategy3D_shc_smpl             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc3')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
