@@ -387,11 +387,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-<<<<<<< HEAD
-call simple_print_git_version('443074ff')
-=======
-call simple_print_git_version('9d71bacc')
->>>>>>> c103cf00 (correction smpl refinement mode; cleanup strategy3D_matcher; fixing automask issues)
+call simple_print_git_version('57270878')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
