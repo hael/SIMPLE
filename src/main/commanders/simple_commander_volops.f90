@@ -103,7 +103,7 @@ contains
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(parameters) :: params
-        type(image)      :: vol, vol_copy, vol_even, vol_odd
+        type(image)      :: vol_bfac, vol_no_bfac, vol_even, vol_odd
         type(masker)     :: mskvol, sphere
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
@@ -140,8 +140,8 @@ contains
         fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
         ! read volume(s)
         ldim = [box,box,box]
-        call vol%new(ldim, smpd)
-        call vol%read(fname_vol)
+        call vol_bfac%new(ldim, smpd)
+        call vol_bfac%read(fname_vol)
         if( params%l_nonuniform )then
             if( .not. file_exists(trim(fname_even)) ) THROW_HARD('volume: '//trim(fname_even)//' does not exists')
             if( .not. file_exists(trim(fname_odd))  ) THROW_HARD('volume: '//trim(fname_odd)//' does not exists')
@@ -167,7 +167,7 @@ contains
         endif
         if( has_fsc )then
             ! resolution & optimal low-pass filter from FSC
-            res   = vol%get_res()
+            res   = vol_bfac%get_res()
             fsc   = file2rarr(params%fsc)
             optlp = fsc2optlp(fsc)
             call get_resolution( fsc, res, fsc05, fsc0143 )
@@ -178,7 +178,7 @@ contains
             ! already in params%bfac
         else
             if( lplim < 5. )then
-                params%bfac = vol%guinier_bfac(HPLIM_GUINIER, lplim)
+                params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
                 write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
             else
                 params%bfac = 0.
@@ -196,14 +196,14 @@ contains
             call mskvol%read(params%mskfile)
         endif
         ! B-factor
-        call vol%fft()
-        call vol_copy%copy(vol)
-        call vol%apply_bfac(params%bfac)
+        call vol_bfac%fft()
+        call vol_no_bfac%copy(vol_bfac)
+        call vol_bfac%apply_bfac(params%bfac)
         ! low-pass filter
         if( cline%defined('lp') )then
             ! low-pass overrides all input
-            call vol%bp(0., params%lp)
-            call vol_copy%bp(0., params%lp)
+            call vol_bfac%bp(0., params%lp)
+            call vol_no_bfac%bp(0., params%lp)
         else if( params%l_nonuniform .and. has_fsc )then
             call sphere%new(ldim, smpd)
             sphere = 1.0
@@ -214,75 +214,64 @@ contains
             ! merge volumes
             call vol_odd%add(vol_even)
             call vol_odd%mul(0.5)
-            vol_copy = vol_odd
-            vol      = vol_odd
-            call vol%apply_bfac(params%bfac)
+            vol_no_bfac = vol_odd
+            vol_bfac    = vol_odd
+            call vol_bfac%apply_bfac(params%bfac)
             ! final low-pass filtering for smoothness
-            call vol%bp(0., fsc0143)
-            call vol_copy%bp(0., fsc0143)
+            call vol_bfac%bp(0., fsc0143)
+            call vol_no_bfac%bp(0., fsc0143)
         else if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
             if( params%cc_objfun == OBJFUN_CC )then
-                call vol%apply_filter(optlp)
-                call vol_copy%apply_filter(optlp)
+                call vol_bfac%apply_filter(optlp)
+                call vol_no_bfac%apply_filter(optlp)
             else
                 ! FSC-based regularization is performed upon assembly
             endif
             ! final low-pass filtering for smoothness
-            call vol%bp(0., fsc0143)
-            call vol_copy%bp(0., fsc0143)
+            call vol_bfac%bp(0., fsc0143)
+            call vol_no_bfac%bp(0., fsc0143)
         else
             THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
         endif
         ! write low-pass filtered without B-factor or mask & read the original back in
-        call vol_copy%ifft
-        call vol_copy%write(fname_lp)
-        call vol_copy%read(fname_vol)
+        call vol_no_bfac%ifft
+        call vol_no_bfac%write(fname_lp)
         ! mask
-        call vol%ifft()
+        call vol_bfac%ifft()
         if( params%l_automsk ) has_mskfile = .false. ! turn off masking using file
         if( params%l_automsk )then
-            if( .not. cline%defined('thres') .and. cline%defined('mw') )then
-                write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'
-                write(logfhandle,*) 'Procedure for obtaining thresh:'
-                write(logfhandle,*) '(1) Use UCSF Chimera to look at the *_lp.mrc volume'
-                write(logfhandle,*) '(2) Identify the pixel threshold that excludes any background noise'
-                THROW_HARD('postprocess')
-            endif
-            if( cline%defined('thres') .and. .not. cline%defined('mw') )then
-                THROW_HARD('molecular weight must be provided for threshold-based auto-masking; postprocess')
-            endif
-            if( cline%defined('thres') .and. cline%defined('mw') )then
-                call mskvol%automask3D(vol_copy)
+            if( cline%defined('thres') )then
+                call mskvol%automask3D(vol_no_bfac)
             else
-                call mskvol%automask3D_otsu(vol_copy)
+                call mskvol%automask3D_otsu(vol_no_bfac)
             endif
             call mskvol%write('automask'//params%ext)
-            call vol%zero_background
-            call vol%mul(mskvol)
+            call vol_bfac%zero_background
+            call vol_bfac%mul(mskvol)
             call mskvol%kill
         else if( has_mskfile )then
-            call vol%zero_background
+            call vol_bfac%zero_background
             if( cline%defined('lp_backgr') )then
-                call vol%lp_background(mskvol,params%lp_backgr)
+                call vol_bfac%lp_background(mskvol,params%lp_backgr)
             else
-                call vol%mul(mskvol)
+                call vol_bfac%mul(mskvol)
             endif
             call mskvol%kill
         else
-            call vol%mask(params%msk, 'soft')
+            call vol_bfac%mask(params%msk, 'soft')
         endif
         ! output in cwd
-        call vol%write(fname_pproc)
+        call vol_bfac%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
-            call vol%mirror('x')
-            call vol%write(fname_mirr)
+            call vol_bfac%mirror('x')
+            call vol_bfac%write(fname_mirr)
         endif
         ! destruct
         call spproj%kill
-        call vol%kill
-        call vol_copy%kill
+        call vol_bfac%kill
+        call vol_no_bfac%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
 

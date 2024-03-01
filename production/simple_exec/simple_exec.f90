@@ -19,7 +19,6 @@ use simple_commander_cluster2D_stream
 use simple_commander_cluster2D_stream_dev
 use simple_commander_abinitio
 use simple_commander_refine3D
-use simple_commander_cluster3D
 use simple_commander_rec
 use simple_commander_relion
 use simple_commander_sim
@@ -72,10 +71,6 @@ type(abinitio_3Dmodel_commander)            :: xabinitio_3Dmodel
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
 type(refine3D_commander_distr)              :: xrefine3D_distr
 type(reconstruct3D_commander_distr)         :: xreconstruct3D
-
-! CLUSTER3D WORKFLOWS
-type(cluster3D_commander)                   :: xcluster3D
-type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
@@ -261,12 +256,6 @@ select case(trim(prg))
     case( 'reconstruct3D' )
         call xreconstruct3D%execute( cline )
 
-    ! CLUSTER3D WORKFLOWS
-    case( 'cluster3D' )
-        call xcluster3D%execute( cline )
-    case( 'cluster3D_refine' )
-        call xcluster3D_refine%execute( cline )
-
     ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
@@ -398,7 +387,11 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
+<<<<<<< HEAD
 call simple_print_git_version('443074ff')
+=======
+call simple_print_git_version('9d71bacc')
+>>>>>>> c103cf00 (correction smpl refinement mode; cleanup strategy3D_matcher; fixing automask issues)
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

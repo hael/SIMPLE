@@ -20,7 +20,6 @@ type, extends(binimage) :: masker
     private
     real    :: msk       = 0.   !< maximum circular mask
     real    :: amsklp    = 0.   !< low-pass limit
-    real    :: mw        = 0.   !< moleclular weight (in kDa)
     real    :: pix_thres = 0.   !< binarisation threshold
     integer :: edge      = 3    !< edge width
     integer :: binwidth  = 1    !< additional layers to grow
@@ -42,30 +41,24 @@ contains
         class(image),  intent(inout) :: vol_inout
         integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
         logical        :: was_ft
-        integer        :: imax, sz, nnvox
+        integer        :: imax, sz, ldim(3)
         type(binimage) :: ccimage
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
-        self%mw        = params_glob%mw
         self%binwidth  = params_glob%binwidth
         self%edge      = params_glob%edge
         self%pix_thres = params_glob%thres
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        ! pre-process volume
-        call self%zero_below(self%pix_thres)
-        call self%real_space_filter(WINSZ, 'average')
+        ! binarize volume
+        call self%binarize(self%pix_thres)
         call self%bp(0., self%amsklp)
-        ! find nr of voxels corresponding to mw
-        nnvox = nvoxfind(self%get_smpd(), self%mw)
-        ! binarize
-        call self%binarize(nnvox)
+        call otsu_img(self, mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -101,8 +94,7 @@ contains
         logical, optional, intent(in)    :: do_apply
         integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
         logical        :: was_ft, ddo_apply
-        integer        :: npix, imax, sz
-        real           :: mwkda
+        integer        :: imax, sz
         type(binimage) :: ccimage
         ddo_apply = .true.
         if( present(do_apply) ) ddo_apply = do_apply
@@ -138,12 +130,7 @@ contains
             where( imat_cc > 0 ) imat_cc = 1
             ! this also updates the real-valued image object
             call self%set_imat(imat_cc)
-            npix = count(imat_cc == 1)
-        else
-            npix = self%nforeground()
         endif
-        mwkda = mwkdafind(self%get_smpd(), npix)
-        write(logfhandle,'(A,F7.1,A)') '>>> MOLECULAR WEIGHT:            ', mwkda,        ' kDa'
         ! add layers
         call self%grow_bins(self%binwidth)
         ! add volume soft edge

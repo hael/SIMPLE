@@ -38,14 +38,13 @@ contains
         class(strategy3D_greedy), intent(inout) :: self
         integer,                  intent(in)    :: ithr
         integer   :: iref, isample, loc(1)
-        real      :: inpl_corrs(self%s%nrots), corrs(self%s%nrefs)
+        real      :: inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
             ! search
-            corrs = -1.
             do isample=1,self%s%nrefs
                 iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
@@ -53,7 +52,6 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
-                    corrs(iref) = inpl_corrs(loc(1))
                 endif
             end do
             ! in greedy mode, we evaluate all refs
@@ -61,33 +59,7 @@ contains
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare orientation
-            call self%oris_assign()
-            ! detect peaks
-            ! call self%s%eulspace%detect_peaks(s3D%proj_space_nnmat, corrs, peaks)
-            ! npeaks = count(peaks)
-            ! call build_glob%spproj_field%set(self%s%iptcl, 'npeaks', real(npeaks))
-            ! angdist = 0.
-            ! if( npeaks > 0 )then
-            !     ! report average correlation for peak and non-peak distributions
-            !     call build_glob%spproj_field%set(self%s%iptcl, 'cc_peak',    sum(corrs, mask=     peaks) / real(npeaks))
-            !     call build_glob%spproj_field%set(self%s%iptcl, 'cc_nonpeak', sum(corrs, mask=.not.peaks) / real(count(.not.peaks)))
-            !     ! calculate average angular distance between peaks
-            !     angdist = 0.
-            !     cnt     = 0
-            !     do i = 1,self%s%nrefs
-            !         if( .not. peaks(i) ) cycle
-            !         call self%s%eulspace%get_ori(i, oi)
-            !         do j = 1,self%s%nrefs
-            !             if( .not. peaks(j) .or. i == j ) cycle
-            !             call self%s%eulspace%get_ori(j, oj)
-            !             call build_glob%pgrpsyms%sym_dists(oi, oj, osym, euldist, dist_inpl)
-            !             angdist = angdist + euldist
-            !             cnt = cnt + 1
-            !         end do
-            !     end do
-            !     if( cnt > 0 ) angdist = angdist / real(cnt)
-            ! endif
-            ! call build_glob%spproj_field%set(self%s%iptcl, 'dist_peaks', angdist)
+            call self%oris_assign
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

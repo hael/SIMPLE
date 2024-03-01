@@ -150,7 +150,7 @@ contains
         call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
         call build%vol%read(params%vols(1))
-        if( cline%defined('mw') .and. cline%defined('thres') )then
+        if( cline%defined('thres') )then
             call mskvol%automask3D(build%vol)
         else
             call mskvol%automask3D_otsu(build%vol)
