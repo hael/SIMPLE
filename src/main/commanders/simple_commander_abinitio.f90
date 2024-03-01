@@ -801,6 +801,7 @@ contains
             call cline_refine3D%set('maxits',    MAXITS1)
             call cline_refine3D%set('lp_iters',  MAXITS1)
             call cline_refine3D%set('nspace',    NSPACE1)
+            call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
             call exec_refine3D(iter)
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
@@ -809,6 +810,7 @@ contains
             call cline_refine3D%set('maxits',   MAXITS2)
             call cline_refine3D%set('lp_iters', MAXITS2)
             call cline_refine3D%set('nspace',   NSPACE2)
+            call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
             call cline_refine3D%set('startit',  iter+1)
             call cline_refine3D%set('continue', 'yes')
             call cline_refine3D%set('center',   params%center)
@@ -871,6 +873,7 @@ contains
                     call cline_refine3D%set('nspace', NSPACE2)
                     call cline_refine3D%set('trs',    trslim)
                 end if
+                call cline_refine3D%set('ml_reg', 'no') ! since ml_reg seems to interfer with finding a good lowres shape
                 call exec_refine3D(iter)
             enddo
             ! Final stage
@@ -905,6 +908,11 @@ contains
         call cline_refine3D%set('maxits',   MAXITS2)
         call cline_refine3D%set('lp_iters', MAXITS2)
         call cline_refine3D%set('nspace',   NSPACE3)
+        if( params%l_ml_reg )then
+            call cline_refine3D%set('ml_reg', 'yes')
+        else
+            call cline_refine3D%set('ml_reg', 'no')
+        endif
         call exec_refine3D(iter)
         ! final reconstruction at original scale
         if( l_autoscale )then
