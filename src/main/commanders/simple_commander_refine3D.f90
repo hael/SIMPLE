@@ -432,7 +432,7 @@ contains
                     call cline%set('szsn', real(params%szsn))
                 endif
             endif
-            if( params%refine .eq. 'prob' )then
+            if( str_has_substr(params%refine, 'prob') )then
                 ! generate all corrs
                 call cline_prob_align%set('which_iter', int2str(params%which_iter))
                 call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
@@ -743,29 +743,29 @@ contains
             l_sigma         = .false.
             l_switch2euclid = .false.
             select case(trim(orig_objfun))
-            case('euclid','prob')
-                l_sigma = .true.
-                call cline%set('needs_sigma','yes')
-                params%l_needs_sigma = .true.
-                cline_calc_sigma     = cline
-                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
-                    ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
-                else
-                    ! sigma2 not provided & are calculated
-                    if( build%spproj_field%get_nevenodd() == 0 )then
-                        ! make sure we have e/o partitioning prior to calc_pspec_distr
-                        call build%spproj_field%partition_eo
-                        call build%spproj%write_segment_inside(params%oritype)
+                case('euclid','prob')
+                    l_sigma = .true.
+                    call cline%set('needs_sigma','yes')
+                    params%l_needs_sigma = .true.
+                    cline_calc_sigma     = cline
+                    if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
+                        ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
+                    else
+                        ! sigma2 not provided & are calculated
+                        if( build%spproj_field%get_nevenodd() == 0 )then
+                            ! make sure we have e/o partitioning prior to calc_pspec_distr
+                            call build%spproj_field%partition_eo
+                            call build%spproj%write_segment_inside(params%oritype)
+                        endif
+                        params%objfun    = 'cc'
+                        params%cc_objfun = OBJFUN_CC
+                        cline_calc_pspec_distr = cline
+                        call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
+                        call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+                        l_switch2euclid = .true.
                     endif
-                    params%objfun    = 'cc'
-                    params%cc_objfun = OBJFUN_CC
-                    cline_calc_pspec_distr = cline
-                    call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
-                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-                    l_switch2euclid = .true.
-                endif
-            case('cc')
-                ! nothing to do
+                case('cc')
+                    ! nothing to do
             end select
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
@@ -1256,7 +1256,7 @@ contains
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
         call reg_obj%fill_tab(pftcc, pinds)
-        fname = trim(CORR_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call reg_obj%write_tab(fname)
         call reg_obj%kill
         call killimgbatch
@@ -1304,13 +1304,13 @@ contains
         call job_descr%kill
         ! reading corrs from all parts
         do ipart = 1, params%nparts
-            fname = trim(CORR_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+            fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call reg_obj%read_tab_to_glob(fname, 1, params%nptcls)
         enddo
         call reg_obj%tab_normalize
         call reg_obj%tab_align
         ! write the global corr/loc table
-        fname = trim(CORR_FBODY)//'.dat'
+        fname = trim(DIST_FBODY)//'.dat'
         call reg_obj%write_tab(fname)
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'

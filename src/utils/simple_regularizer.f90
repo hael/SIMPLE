@@ -55,8 +55,6 @@ contains
         do iptcl = params_glob%fromp,params_glob%top
             self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
         enddo
-        allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.true.)
-        self%do_neigh = .false.
         if( l_neigh )then
             ! construct projection direction subspace
             call eulspace_sub%new(params_glob%nspace_sub, is_ptcl=.false.)
@@ -72,6 +70,9 @@ contains
             call eulspace_sub%kill
             allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.false.)
             self%do_neigh = .true.
+        else
+            allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.true.)
+            self%do_neigh = .false.
         endif
     end subroutine new
 
@@ -81,7 +82,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer   :: i, j, iref, iptcl, locn(params_glob%npeaks), refs_ns, ipeak, inpl_ns, ithr
-        real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_sub(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
+        real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_sub(params_glob%nspace_sub,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
         integer   :: inds_sorted(pftcc%nrots,nthr_glob)
         type(ori) :: o
         if( self%do_neigh )then
@@ -95,8 +96,8 @@ contains
                     do j = 1, params_glob%nspace_sub
                         iref = self%subspace_inds(j)
                         call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr)   = reg_dist_switch(dists_inpl(:,ithr))
-                        dists_sub(j,ithr) = minval(dists_inpl(:,ithr)) ! GREEDY HERE ???
+                        dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
+                        dists_sub(j,ithr)  = minval(dists_inpl(:,ithr)) ! GREEDY HERE ???
                     enddo
                     locn = minnloc(dists_sub(:,ithr), params_glob%npeaks)
                     do ipeak = 1,params_glob%npeaks
@@ -120,9 +121,9 @@ contains
                             dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
                             self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
                             self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
-                        else
-                            self%dist_loc_tab(iref,iptcl,2) = 0
-                            self%dist_loc_tab(iref,iptcl,1) = huge(x)
+                        ! else
+                        !     self%dist_loc_tab(iref,iptcl,2) = 0
+                        !     self%dist_loc_tab(iref,iptcl,1) = huge(x)
                         endif
                     endif
                 enddo
@@ -410,6 +411,7 @@ contains
         if( allocated(self%ptcl_ref_map)  ) deallocate(self%ptcl_ref_map)
         if( allocated(self%ptcl_avail)    ) deallocate(self%ptcl_avail)
         if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
+        if( allocated(self%l_neigh)       ) deallocate(self%l_neigh)
     end subroutine kill
 
     ! PUBLIC UTILITITES

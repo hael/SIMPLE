@@ -78,7 +78,7 @@ character(len=*), parameter :: DIR_EXTRACT          = 'extract/'
 character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
 ! REG CORR/ASSIGNMENT
-character(len=*), parameter :: CORR_FBODY           = 'corr_part'
+character(len=*), parameter :: DIST_FBODY           = 'dist_part'
 character(len=*), parameter :: ASSIGNMENT_FBODY     = 'assignment_part'
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'

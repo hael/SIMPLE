@@ -918,9 +918,9 @@ contains
         call cline_postprocess%set('lp', params%lpstop)
         call xpostprocess%execute(cline_postprocess)
         ! cleanup
-        call del_files(CORR_FBODY,      params_glob%nparts,ext='.dat')
+        call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
         call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-        call del_file(trim(CORR_FBODY)      //'.dat')
+        call del_file(trim(DIST_FBODY)      //'.dat')
         call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
         call qsys_cleanup
         call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
@@ -929,9 +929,9 @@ contains
             subroutine exec_refine3D( iter )
                 integer, intent(out) :: iter
                 call cline_refine3D%delete('endit')
-                call del_files(CORR_FBODY,      params_glob%nparts,ext='.dat')
+                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
-                call del_file(trim(CORR_FBODY)      //'.dat')
+                call del_file(trim(DIST_FBODY)      //'.dat')
                 call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
                 params_ptr  => params_glob
                 params_glob => null()
