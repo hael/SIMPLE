@@ -78,7 +78,7 @@ contains
     subroutine read( self, dists )
         class(dist_binfile), intent(inout) :: self
         real,                intent(inout) :: dists(self%nrefs,self%fromp:self%top,2)
-        call self%read_to_glob(int(self%fromp), int(self%top), corrs)
+        call self%read_to_glob(int(self%fromp), int(self%top), dists)
     end subroutine read
 
     ! read in all dists value from file, dists shape is smaller than self%fromp, self%to
