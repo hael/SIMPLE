@@ -17,19 +17,23 @@ contains
         character(len=*), intent(in)    :: prg, executable
         character(len=:), allocatable :: cmd
         type(chash) :: job_descr
-        integer     :: nrestarts, i
+        integer     :: nrestarts, i, istart
         if( .not. cline%defined('nrestarts') )then
             THROW_HARD('nrestarts needs to be defined on command line for restarted_exec')
         else
             nrestarts = cline%get_rarg('nrestarts')
             call cline%delete('nrestarts')
+            istart = 1
+            if( cline%defined('istart') )then
+                istart = cline%get_rarg('istart')
+            endif
         endif
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile needs to be defined on command line for restarted_exec ')
         endif
         call cline%set('prg', trim(prg))
         call cline%gen_job_descr(job_descr)
-        do i = 1, nrestarts
+        do i = istart, nrestarts
             ! compose the command line
             cmd = trim(executable)//' '//trim(job_descr%chash2str())//' > '//uppercase(trim(prg))//'_OUTPUT_RESTART'//int2str(i)
             ! execute
