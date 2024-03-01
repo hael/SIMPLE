@@ -379,7 +379,6 @@ type :: parameters
     real    :: msk_crop=0.         !< mask radius(in pixels)
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
-    real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
@@ -794,7 +793,6 @@ contains
         call check_rarg('msk',            self%msk)
         call check_rarg('msk_crop',       self%msk_crop)
         call check_rarg('mskdiam',        self%mskdiam)
-        call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
         call check_rarg('ndev2D',         self%ndev2D)
         call check_rarg('nsig',           self%nsig)

@@ -15,10 +15,6 @@ interface pixels_dist
    module procedure pixels_dist_1, pixels_dist_2
 end interface
 
-interface nvoxfind
-    module procedure nvoxfind_1, nvoxfind_2
-end interface
-
 interface vis_mat
     module procedure vis_2Dreal_mat, vis_2Dinteger_mat, vis_3Dreal_mat, vis_3Dinteger_mat
 end interface vis_mat
@@ -720,36 +716,6 @@ contains
         integer, intent( in ) :: i, j
         lcm = ( i * j ) / gcd( i, j )
     end function lcm
-
-    pure function nvoxfind_1( smpd, mwkda ) result( nvox )
-        real, intent(in) :: smpd             !< sampling distance
-        real, intent(in) :: mwkda            !< molecular weight
-        integer          :: nvox             !< nr of voxels
-        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
-        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-        nvox = nint((mwkda*one_da*1e30) / (prot_d * (smpd**3.)))
-    end function nvoxfind_1
-
-    pure function nvoxfind_2( smpd, mwkda, dens ) result( nvox )
-        real, intent(in) :: smpd             !< sampling distance
-        real, intent(in) :: mwkda            !< molecular weight
-        real, intent(in) :: dens             !< density in Da/A3  \f$ \si{\dalton\per\angstrom\cubed} \f$
-        real             :: vol_per_pix, vol !< volume per pixel & volume
-        integer          :: nvox             !< nr of voxels
-        vol_per_pix = smpd**3.
-        vol = (mwkda*1000.)/dens
-        nvox = nint(vol/vol_per_pix)
-    end function nvoxfind_2
-
-    pure function mwkdafind( smpd, nvox ) result( mwkda )
-        real,    intent(in) :: smpd !< sampling distance
-        integer, intent(in) :: nvox !< # voxels
-        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
-        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-        real :: pixv, mwkda
-        pixv = smpd * smpd * smpd
-        mwkda = (prot_d * pixv * real(nvox)) / (one_da * 1e30)
-    end function mwkdafind
 
     !>   is for 2d rotation matrix generation
     pure subroutine rotmat2d( ang, mat )
