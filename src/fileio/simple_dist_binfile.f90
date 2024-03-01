@@ -9,13 +9,13 @@ private
 type dist_binfile
     private
     character(len=:), allocatable :: fname
-    integer :: file_header(3) = 0
-    integer :: fromp          = 0
-    integer :: top            = 0
-    integer :: nrefs          = 0
-    integer :: headsz         = 0
-    integer :: datasz         = 0
-    logical :: exists         = .false.
+    integer(kind=8) :: file_header(3) = 0
+    integer(kind=8) :: fromp          = 0
+    integer(kind=8) :: top            = 0
+    integer(kind=8) :: nrefs          = 0
+    integer(kind=8) :: headsz         = 0
+    integer(kind=8) :: datasz         = 0
+    logical         :: exists         = .false.
 contains
     ! constructor
     procedure          :: new
@@ -78,7 +78,7 @@ contains
     subroutine read( self, dists )
         class(dist_binfile), intent(inout) :: self
         real,                intent(inout) :: dists(self%nrefs,self%fromp:self%top,2)
-        call self%read_to_glob(self%fromp, self%top, dists)
+        call self%read_to_glob(int(self%fromp), int(self%top), corrs)
     end subroutine read
 
     ! read in all dists value from file, dists shape is smaller than self%fromp, self%to
@@ -86,9 +86,9 @@ contains
         class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
         real,                intent(inout) :: dists(self%nrefs,fromp:top,2)
-        integer :: funit
+        integer :: funit, iptcl
         logical :: success
-        integer :: iptcl, addr
+        integer(kind=8) :: addr
         success = self%open_only( funit, .true. )
         if( .not. success ) return
         ! read corr
@@ -111,9 +111,9 @@ contains
         class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: fromp, top
         real,                intent(inout) :: dists(self%nrefs,fromp:top,2)
-        integer :: funit
+        integer :: funit, iptcl
         logical :: success
-        integer :: iptcl, addr
+        integer(kind=8) :: addr
         success = self%open_only( funit, .true. )
         if( .not. success ) return
         ! read corr
@@ -133,9 +133,9 @@ contains
     subroutine write( self, dists )
         class(dist_binfile), intent(inout) :: self
         real,                intent(in)    :: dists(self%nrefs,self%fromp:self%top,2)
-        integer :: funit
+        integer :: funit, iptcl
         logical :: success
-        integer :: addr, iptcl
+        integer(kind=8) :: addr
         if( .not. file_exists(self%fname) )then
             call self%create_empty( funit )
         else
@@ -170,7 +170,7 @@ contains
         logical,             intent(in)    :: readonly
         logical :: success
         integer :: io_stat
-        integer :: fromp_here, top_here, nrefs
+        integer(kind=8) :: fromp_here, top_here, nrefs
         if( .not. file_exists(trim(self%fname)) )then
             success = .false.
             return
@@ -219,7 +219,7 @@ contains
 
     subroutine read_header( self )
         class(dist_binfile), intent(inout) :: self
-        integer :: fromp_here, top_here, nrefs_here
+        integer(kind=8) :: fromp_here, top_here, nrefs_here
         integer :: funit, io_stat
         integer :: file_header(3)
         call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
