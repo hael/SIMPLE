@@ -13,15 +13,15 @@ use simple_builder,                 only: build_glob
 use simple_regularizer,             only: regularizer
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
+use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shc_smpl,     only: strategy3D_shc_smpl
 use simple_strategy3D_smpl,         only: strategy3D_smpl
-use simple_strategy3D_shcc,         only: strategy3D_shcc
-use simple_strategy3D_snhc,         only: strategy3D_snhc
+use simple_strategy3D_smpl_sub,     only: strategy3D_smpl_sub
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
-use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
+use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
@@ -246,6 +246,8 @@ contains
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('smpl_sub')
+                        allocate(strategy3D_smpl_sub             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
                     case DEFAULT
