@@ -303,11 +303,7 @@ contains
         class(regularizer), intent(in) :: self
         character(len=*),   intent(in) :: binfname
         type(dist_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        endif
+        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         call binfile%write(self%dist_loc_tab)
         call binfile%kill
     end subroutine write_tab
@@ -317,11 +313,7 @@ contains
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
         type(dist_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        endif
+        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         call binfile%read(self%dist_loc_tab)
         call binfile%kill
     end subroutine read_tab
@@ -334,11 +326,7 @@ contains
         integer,            intent(in)    :: fromp, top
         type(dist_binfile) :: binfile
         integer            :: iptcl, iref
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        endif
+        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         call binfile%read_from_glob(fromp, top, self%dist_loc_tab)
         call binfile%kill
     end subroutine read_tab_from_glob
