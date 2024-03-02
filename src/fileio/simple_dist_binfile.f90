@@ -212,7 +212,7 @@ contains
         if( readonly )then
             call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
         else
-            call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+            call fopen(funit,trim(self%fname),access='STREAM',status='OLD', iostat=io_stat)
         end if
         call fileiochk('dist_binfile; open_and_check_header; file: '//trim(self%fname), io_stat)
     end function open_only
