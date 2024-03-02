@@ -359,14 +359,15 @@ contains
     subroutine write_assignment( self, binfname )
         class(regularizer), intent(in) :: self
         character(len=*),   intent(in) :: binfname
-        integer :: funit, io_stat, addr, iptcl, datasz, pfromto(2)
-        datasz  = sizeof(iptcl)
-        pfromto = [params_glob%fromp, params_glob%top]
+        integer(kind=8) :: file_header(3)
+        integer :: funit, io_stat, addr, iptcl, datasz
+        datasz      = sizeof(iptcl)
+        file_header = [params_glob%fromp, params_glob%top,params_glob%nspace]
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         ! write header
-        write(unit=funit,pos=1) pfromto
+        write(unit=funit,pos=1) file_header
         ! write assignment
-        addr = sizeof(pfromto) + 1
+        addr = sizeof(file_header) + 1
         do iptcl = params_glob%fromp, params_glob%top
             write(funit, pos=addr) iptcl
             addr = addr + datasz
@@ -380,7 +381,8 @@ contains
     subroutine read_assignment( self, binfname )
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
-        integer :: funit, io_stat, addr, iptcl, datasz, file_header(2), fromp, top, iglob
+        integer(kind=8) :: file_header(3)
+        integer :: funit, io_stat, addr, iptcl, datasz, fromp, top, iglob
         datasz = sizeof(iptcl)
         if( .not. file_exists(trim(binfname)) )then
             THROW_HARD('file '//trim(binfname)//' does not exists!')
