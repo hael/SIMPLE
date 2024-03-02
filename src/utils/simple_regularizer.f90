@@ -313,7 +313,11 @@ contains
         class(regularizer), intent(inout) :: self
         character(len=*),   intent(in)    :: binfname
         type(dist_binfile) :: binfile
-        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
+        endif
         call binfile%read(self%dist_loc_tab)
         call binfile%kill
     end subroutine read_tab
@@ -326,7 +330,11 @@ contains
         integer,            intent(in)    :: fromp, top
         type(dist_binfile) :: binfile
         integer            :: iptcl, iref
-        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
+        if( file_exists(binfname) )then
+            call binfile%new_from_file(binfname)
+        else
+            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
+        endif
         call binfile%read_from_glob(fromp, top, self%dist_loc_tab)
         call binfile%kill
     end subroutine read_tab_from_glob
