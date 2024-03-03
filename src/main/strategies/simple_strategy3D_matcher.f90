@@ -23,6 +23,7 @@ use simple_strategy3D_greedy_smpl,  only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,   only: strategy3D_greedy_sub
 use simple_strategy3D_prob,         only: strategy3D_prob
 use simple_strategy3D_neigh,        only: strategy3D_neigh
+use simple_strategy3D_shift,        only: strategy3D_shift
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec
 use simple_convergence,             only: convergence
@@ -248,6 +249,8 @@ contains
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl_neigh')
                         allocate(strategy3D_smpl_sub             :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('shifth')
+                        allocate(strategy3D_shift                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
                     case DEFAULT
