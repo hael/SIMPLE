@@ -246,7 +246,7 @@ contains
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('smpl_sub')
+                    case('smpl_neigh')
                         allocate(strategy3D_smpl_sub             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! first sigma estimation (done below)
