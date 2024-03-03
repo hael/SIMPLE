@@ -163,17 +163,23 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot ) result( cxy )
+    function grad_shsrch_minimize( self, irot, xy ) result( cxy )
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
+        real, optional,           intent(in)    :: xy(2)
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better
-        found_better      = .false.
+        found_better = .false.
+        if( present(xy) )then
+            self%ospec%x      = xy
+            self%ospec%x_8    = dble(xy)
+        else
+            self%ospec%x      = [0.,0.]
+            self%ospec%x_8    = [0.d0,0.d0]
+        endif
         if( self%opt_angle )then
-            self%ospec%x   = [0.,0.]
-            self%ospec%x_8 = [0.d0,0.d0]
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs, kweight=params_glob%l_kweight_rot)
             self%cur_inpl_idx   = maxloc(corrs,dim=1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
@@ -214,8 +220,6 @@ contains
             endif
         else
             self%cur_inpl_idx = irot
-            self%ospec%x      = [0.,0.]
-            self%ospec%x_8    = [0.d0,0.d0]
             lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( perform_rndstart )then
