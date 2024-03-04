@@ -145,7 +145,6 @@ type :: polarft_corrcalc
     procedure          :: gencorrs_weighted_cc, gencorrs_shifted_weighted_cc
     procedure          :: gencorrs_cc,          gencorrs_shifted_cc
     procedure          :: gencorrs_euclid,      gencorrs_shifted_euclid
-    procedure          :: gencorrs_prob,        gencorrs_shifted_prob
     procedure, private :: gencorrs_1,           gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorr_for_rot_8
@@ -158,11 +157,9 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
     procedure          :: gencorr_euclid_for_rot_8
-    procedure          :: gencorr_prob_for_rot_8
     procedure          :: gencorr_cont_grad_euclid_for_rot_8
     procedure          :: gencorr_cont_shift_grad_euclid_for_rot_8
     procedure          :: gencorr_euclid_grad_for_rot_8
-    procedure          :: gencorr_prob_grad_for_rot_8
     procedure          :: gencorr_sigma_contrib
     procedure, private :: calc_frc
     procedure          :: rotate_ref, rotate_ptcl, rotate_ctf
@@ -1251,8 +1248,6 @@ contains
                 endif
             case(OBJFUN_EUCLID)
                 call self%gencorrs_euclid(iptcl, iref, cc)
-            case(OBJFUN_PROB)
-                call self%gencorrs_prob(iptcl, iref, cc)
         end select
     end subroutine gencorrs_1
 
@@ -1286,8 +1281,6 @@ contains
                 endif
             case(OBJFUN_EUCLID)
                 call self%gencorrs_shifted_euclid(pft_ref, iptcl, iref, cc)
-            case(OBJFUN_PROB)
-                call self%gencorrs_shifted_prob(pft_ref, iptcl, iref, cc)
         end select
     end subroutine gencorrs_2
 
@@ -1502,75 +1495,6 @@ contains
         euclids = real( dexp( -self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i) ) )
     end subroutine gencorrs_shifted_euclid
 
-    subroutine gencorrs_prob( self, iptcl, iref, prob )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl, iref
-        real(sp),                intent(out)   :: prob(self%nrots)
-        real(dp) :: w, sumsqptcl
-        integer  :: k, i, j, ithr
-        logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp) / (2.d0*real(self%pftsz,dp))
-            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*
-            if( even )then
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_even(k,iref)%c - &
-                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_even(k,iref)%c
-            else
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c     * self%ft_ref2_odd(k,iref)%c  - &
-                               &2.d0*self%ft_ptcl_ctf(k,i)%c * self%ft_ref_odd(k,iref)%c
-            endif
-            ! IFFT(FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2.X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2.X.CTF.REF )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
-        end do
-        prob = real( dexp(-self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)), dp) ) )
-    end subroutine gencorrs_prob
-
-    subroutine gencorrs_shifted_prob( self, pft_ref, iptcl, iref, prob)
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer,                 intent(in)    :: iptcl, iref
-        real(sp),                intent(out)   :: prob(self%nrots)
-        real(dp) :: w, sumsqptcl
-        integer  :: k, i, j, ithr
-        logical  :: even
-        ithr = omp_get_thread_num() + 1
-        i    = self%pinds(iptcl)
-        even = self%iseven(i)
-        self%heap_vars(ithr)%kcorrs = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            w         = real(k,dp) / real(self%sigma2_noise(k,iptcl),dp) / (2.d0*real(self%pftsz,dp))
-            sumsqptcl = sum(real(csq_fast(self%pfts_ptcls(:,k,i)), dp))
-            ! FT(CTF2) x FT(REF2)*
-            if( even )then
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_even(k,iref)%c
-            else
-                self%cvec1(ithr)%c = self%ft_ctf2(k,i)%c * self%ft_ref2_odd(k,iref)%c
-            endif
-            ! FT(S.REF), shifted reference
-            self%cvec2(ithr)%c(1:self%pftsz)            =       pft_ref(:,k)
-            self%cvec2(ithr)%c(self%pftsz+1:self%nrots) = conjg(pft_ref(:,k))
-            call fftwf_execute_dft(self%plan_fwd1, self%cvec2(ithr)%c, self%cvec2(ithr)%c)
-            ! FT(CTF2) x FT(REF2)*) - 2 * FT(X.CTF) x FT(REF)*
-            self%cvec1(ithr)%c = self%cvec1(ithr)%c - 2.d0 * self%ft_ptcl_ctf(k,i)%c * conjg(self%cvec2(ithr)%c(1:self%pftsz+1))
-            ! IFFT(FT(CTF2) x FT(REF2)* - 2 * FT(X.CTF) x FT(REF)*)
-            call fftwf_execute_dft_c2r(self%plan_bwd1, self%cvec1(ithr)%c, self%rvec1(ithr)%r)
-            ! k/sig2 x ( |CTF.REF|2 - 2X.CTF.REF ), fftw normalized
-            self%drvec(ithr)%r = (w / real(2*self%nrots,dp)) * real(self%rvec1(ithr)%r(1:self%nrots),dp)
-            ! k/sig2 x ( |X|2 + |CTF.REF|2 - 2X.CTF.REF )
-            self%heap_vars(ithr)%kcorrs = self%heap_vars(ithr)%kcorrs + w * sumsqptcl + self%drvec(ithr)%r
-        end do
-        prob = real( dexp(-self%heap_vars(ithr)%kcorrs / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)), dp) ) )
-    end subroutine gencorrs_shifted_prob
-
     real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1601,8 +1525,6 @@ contains
                 gencorr_for_rot_8 = self%gencorr_cc_for_rot_8(pft_ref_tmp_8, i)
             case(OBJFUN_EUCLID)
                 gencorr_for_rot_8 = self%gencorr_euclid_for_rot_8(pft_ref_tmp_8, iptcl)
-            case(OBJFUN_PROB)
-                gencorr_for_rot_8 = self%gencorr_prob_for_rot_8(pft_ref_tmp_8, iptcl)
         end select
     end function gencorr_for_rot_8
 
@@ -1644,21 +1566,6 @@ contains
         gencorr_euclid_for_rot_8 = dexp( -gencorr_euclid_for_rot_8 / self%wsqsums_ptcls(i) )
     end function gencorr_euclid_for_rot_8
 
-    real(dp) function gencorr_prob_for_rot_8( self, pft_ref, iptcl )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp), pointer,    intent(inout) :: pft_ref(:,:)
-        integer,                 intent(in)    :: iptcl
-        integer  :: i,j,k
-        i       = self%pinds(iptcl)
-        pft_ref = pft_ref - self%pfts_ptcls(:,:,i)
-        gencorr_prob_for_rot_8 = 0.d0
-        do k = self%kfromto(1),self%kfromto(2)
-            gencorr_prob_for_rot_8 = gencorr_prob_for_rot_8 +&
-                &(real(k,dp) / self%sigma2_noise(k,iptcl)) * sum(real(csq_fast(pft_ref(:,k)),dp)) / (2.d0*real(self%pftsz,dp))
-        end do
-        gencorr_prob_for_rot_8 = dexp( -gencorr_prob_for_rot_8 / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)), dp) )
-    end function gencorr_prob_for_rot_8
-
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1684,8 +1591,6 @@ contains
                 call self%gencorr_cc_grad_for_rot_8(    pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-            case(OBJFUN_PROB)
-                call self%gencorr_prob_grad_for_rot_8(  pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
         end select
     end subroutine gencorr_grad_for_rot_8
 
@@ -1804,39 +1709,6 @@ contains
         grad = -f * 2.d0 * grad / denom
     end subroutine gencorr_euclid_grad_for_rot_8
 
-    subroutine gencorr_prob_grad_for_rot_8( self, pft_ref, pft_ref_tmp, iptcl, irot, f, grad )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(dp), pointer,    intent(inout) :: pft_ref(:,:), pft_ref_tmp(:,:)
-        integer,                 intent(in)    :: iptcl, irot
-        real(dp),                intent(out)   :: f, grad(2)
-        complex(dp), pointer :: pft_diff(:,:)
-        real(dp) :: w
-        integer  :: k, i, j, ithr
-        ithr  = omp_get_thread_num() + 1
-        i     = self%pinds(iptcl)
-        f     = 0.d0
-        grad  = 0.d0
-        pft_diff => self%heap_vars(ithr)%shmat_8
-        call self%rotate_ref(pft_ref, irot, pft_ref_tmp)
-        if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        pft_diff = pft_ref_tmp - self%pfts_ptcls(:,:,i) ! Ref(shift + rotation + CTF) - Ptcl
-        call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(:self%pftsz,:)), irot, pft_ref_tmp)
-        if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        do k = self%kfromto(1),self%kfromto(2)
-            w       = real(k,dp) / real(self%sigma2_noise(k,iptcl)) / (2.d0*real(self%pftsz,dp))
-            f       = f + w * sum(real(csq_fast(pft_diff(:,k)),dp))
-            grad(1) = grad(1) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-        end do
-        call self%rotate_ref(pft_ref * dcmplx(0.d0,self%argtransf(self%pftsz+1:,:)), irot, pft_ref_tmp)
-        if( self%with_ctf ) pft_ref_tmp = pft_ref_tmp * self%ctfmats(:,:,i)
-        do k = self%kfromto(1),self%kfromto(2)
-            w      = real(k,dp) / real(self%sigma2_noise(k,iptcl)) / (2.d0*real(self%pftsz,dp))
-            grad(2) = grad(2) + w * real(sum(pft_ref_tmp(:,k) * conjg(pft_diff(:,k))),dp)
-        end do
-        f    = dexp(- f  / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)), dp))
-        grad = -f * grad / real(sum((/(j,j=self%kfromto(1),self%kfromto(2))/)), dp)
-    end subroutine gencorr_prob_grad_for_rot_8
-
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1863,8 +1735,6 @@ contains
                 call self%gencorr_cc_grad_only_for_rot_8(pft_ref_8, pft_ref_tmp_8, i, irot, grad)
             case(OBJFUN_EUCLID)
                 call self%gencorr_euclid_grad_for_rot_8(pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
-            case(OBJFUN_PROB)
-                call self%gencorr_prob_grad_for_rot_8( pft_ref_8, pft_ref_tmp_8, iptcl, irot, f, grad)
         end select
     end subroutine gencorr_grad_only_for_rot_8
 

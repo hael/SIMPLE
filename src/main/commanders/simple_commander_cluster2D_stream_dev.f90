@@ -248,9 +248,6 @@ contains
         case(OBJFUN_EUCLID)
             call cline_cluster2D_chunk%set('objfun', 'euclid')
             call cline_cluster2D_pool%set('objfun',  'euclid')
-        case(OBJFUN_PROB)
-            call cline_cluster2D_chunk%set('objfun', 'prob')
-            call cline_cluster2D_pool%set('objfun',  'prob')
         end select
         if( .not.cline%defined('ml_reg') )then
             call cline_cluster2D_chunk%set('ml_reg', 'no')
