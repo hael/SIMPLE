@@ -141,7 +141,7 @@ contains
             l_continue  = .false.
             orig_objfun = trim(cline%get_carg('objfun'))
             if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( (trim(cline%get_carg('objfun')).eq.'euclid'.or. trim(cline%get_carg('objfun')).eq.'prob') .and. .not.l_continue )then
+            if( trim(cline%get_carg('objfun')).eq.'euclid' .and. .not.l_continue )then
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
                 ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
@@ -263,7 +263,7 @@ contains
                     if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
                     deallocate(list)
                 endif
-                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+                if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     call cline_volassemble%set('needs_sigma','yes')
@@ -298,7 +298,7 @@ contains
                     deallocate(list)
                 endif
                 ! if we are doing objfun=euclid the sigm estimates need to be carried over
-                if( trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+                if( trim(params%objfun).eq.'euclid' )then
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     call cline_volassemble%set('needs_sigma','yes')
@@ -415,7 +415,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' .or. trim(params%objfun).eq.'prob' )then
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -672,12 +672,7 @@ contains
                 !     call job_descr%set('ptclw','yes')
                 ! endif
                 params%objfun = trim(orig_objfun)
-                select case(trim(params%objfun))
-                    case('euclid')
-                        params%cc_objfun = OBJFUN_EUCLID
-                    case('prob')
-                        params%cc_objfun = OBJFUN_PROB
-                end select
+                if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid = .false.
             endif
             ! write per iteration star file
@@ -738,35 +733,32 @@ contains
         else
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
-            ! objfun=euclid|prob
+            ! objfun=euclid
             orig_objfun     = trim(params%objfun)
             l_sigma         = .false.
             l_switch2euclid = .false.
-            select case(trim(orig_objfun))
-                case('euclid','prob')
-                    l_sigma = .true.
-                    call cline%set('needs_sigma','yes')
-                    params%l_needs_sigma = .true.
-                    cline_calc_sigma     = cline
-                    if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
-                        ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
-                    else
-                        ! sigma2 not provided & are calculated
-                        if( build%spproj_field%get_nevenodd() == 0 )then
-                            ! make sure we have e/o partitioning prior to calc_pspec_distr
-                            call build%spproj_field%partition_eo
-                            call build%spproj%write_segment_inside(params%oritype)
-                        endif
-                        params%objfun    = 'cc'
-                        params%cc_objfun = OBJFUN_CC
-                        cline_calc_pspec_distr = cline
-                        call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
-                        call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-                        l_switch2euclid = .true.
+            if( orig_objfun == 'euclid' )then
+                l_sigma = .true.
+                call cline%set('needs_sigma','yes')
+                params%l_needs_sigma = .true.
+                cline_calc_sigma     = cline
+                if( file_exists(trim(SIGMA2_GROUP_FBODY)//trim(int2str(params%which_iter))//'.star') )then
+                    ! it is assumed that we already have precalculted sigmas2 and all corresponding flags have been set
+                else
+                    ! sigma2 not provided & are calculated
+                    if( build%spproj_field%get_nevenodd() == 0 )then
+                        ! make sure we have e/o partitioning prior to calc_pspec_distr
+                        call build%spproj_field%partition_eo
+                        call build%spproj%write_segment_inside(params%oritype)
                     endif
-                case('cc')
-                    ! nothing to do
-            end select
+                    params%objfun    = 'cc'
+                    params%cc_objfun = OBJFUN_CC
+                    cline_calc_pspec_distr = cline
+                    call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
+                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
+                    l_switch2euclid = .true.
+                endif
+            endif
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
             if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
@@ -836,12 +828,7 @@ contains
                 ! whether to switch objective function
                 if( l_switch2euclid )then
                     params%objfun = trim(orig_objfun)
-                    select case(trim(params%objfun))
-                        case('euclid')
-                            params%cc_objfun = OBJFUN_EUCLID
-                        case('prob')
-                            params%cc_objfun = OBJFUN_PROB
-                    end select
+                    if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
                     if( .not.cline%defined('gridding') )then
                         call cline%set('gridding', 'yes')
                         params%gridding = 'yes'

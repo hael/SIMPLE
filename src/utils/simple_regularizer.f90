@@ -475,7 +475,7 @@ contains
                 dist = corr
                 where(dist < 0.) dist = 0.
                 dist = 1. - dist
-            case(OBJFUN_PROB, OBJFUN_EUCLID)
+            case(OBJFUN_EUCLID)
                 where( corr < TINY )
                     dist = huge(dist)
                 elsewhere

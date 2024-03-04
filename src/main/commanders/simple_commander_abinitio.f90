@@ -114,7 +114,7 @@ contains
         ! make master parameters
         call params%new(cline)
         select case(params%cc_objfun)
-            case(OBJFUN_EUCLID,OBJFUN_PROB)
+            case(OBJFUN_EUCLID)
                 l_euclid = .true.
             case DEFAULT
                 l_euclid = .false.
@@ -735,7 +735,7 @@ contains
         if( .not. cline%defined('reg_init')  ) call cline%set('reg_init',      'no')
         if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',     10.)
         if( .not. cline%defined('center')    ) call cline%set('center',        'no')
-        if( .not. cline%defined('objfun')    ) call cline%set('objfun',      'prob')
+        if( .not. cline%defined('objfun')    ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',   'ptcl3D')
         if( .not. cline%defined('pgrp')      ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start')) call cline%set('pgrp_start',    'c1')

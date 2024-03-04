@@ -414,10 +414,7 @@ contains
                 call eucl_sigma%allocate_ptcls
             else
                 call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
-                select case(params_glob%cc_objfun)
-                    case(OBJFUN_EUCLID,OBJFUN_PROB)
-                        call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
-                end select
+                if( params_glob%cc_objfun == OBJFUN_EUCLID ) call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
             endif
         endif
         ! prepare the polarizer images
