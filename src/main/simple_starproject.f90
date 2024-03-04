@@ -1098,7 +1098,7 @@ contains
         class(sp_project)                      :: spproj
         logical,    optional,  intent(in)      :: propagate
         integer                                :: i, element, noptics
-        integer                                :: ptclstkid
+        integer                                :: ptclstkid, nmics, nstks
         real                                   :: ogid, box, stkbox
         character(len=LONGSTRLEN)              :: ogname
         character(len=XLONGSTRLEN)             :: cwd
@@ -1111,12 +1111,14 @@ contains
         end if
         if(allocated(self%tiltinfo)) deallocate(self%tiltinfo)
         allocate(self%tiltinfo(0))
-        if(spproj%os_mic%get_noris() > 0) then
+        nmics = spproj%os_mic%get_noris()
+        nstks = spproj%os_stk%get_noris()
+        if(nmics > 0) then
             call self%get_image_basename(spproj%os_mic, 'intg')
         end if
-        if(spproj%os_stk%get_noris() > 0) then
-            if(spproj%os_stk%get_noris() == spproj%os_mic%get_noris()) then
-                do i =1, spproj%os_mic%get_noris()
+        if(nstks > 0) then
+            if(nstks == nmics) then
+                do i =1, nmics
                     if(spproj%os_mic%isthere(i, 'tind')) then
                         call spproj%os_stk%set(i, 'tind', spproj%os_mic%get(i, 'tind'))
                     end if
@@ -1150,10 +1152,10 @@ contains
         if(cline%get_rarg("optics_offset") > 0) then
             call self%apply_optics_offset(int(cline%get_rarg("optics_offset")))
         end if
-        if(spproj%os_mic%get_noris() > 0) then
+        if(nmics > 0) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
-            do i = 1,spproj%os_mic%get_noris()
+            do i = 1,nmics
                 if(spproj%os_mic%isthere(i, "tind")) then
                     element = nint(spproj%os_mic%get(i, "tind"))
                     if(element > 0) then
@@ -1166,10 +1168,10 @@ contains
                 end if
             end do
         end if
-        if(spproj%os_stk%get_noris() > 0) then
+        if(nstks > 0 .and. nmics==nstks) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating stacks in project file with updated optics groups ... "
-            do i = 1, spproj%os_stk%get_noris()
+            do i = 1, nstks
                 if(spproj%os_mic%isthere(i, "tind")) then
                     element = nint(spproj%os_mic%get(i, "tind"))
                     if(element > 0) then
@@ -1182,7 +1184,7 @@ contains
             if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file with box sizes ... "
             noptics = spproj%os_optics%get_noris()
-            do i = 1, spproj%os_stk%get_noris()
+            do i = 1, nstks
                 ogid   = spproj%os_stk%get(i, 'ogid')
                 stkbox = spproj%os_stk%get(i, 'box')
                 if(ogid > 0.0 .and. stkbox > 0.0 .and. ogid <= noptics) then

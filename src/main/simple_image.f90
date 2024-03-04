@@ -267,7 +267,7 @@ contains
     procedure          :: dead_hot_positions
     procedure          :: taper_edges, taper_edges_hann
     procedure          :: subtr_backgr_ramp
-    procedure          :: subtract_background, estimate_background
+    procedure          :: subtract_background, estimate_background, upsample_square_background
     procedure          :: zero
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
@@ -5832,16 +5832,55 @@ contains
         enddo
     end subroutine subtr_backgr_ramp
 
+    subroutine upsample_square_background( self, ldim )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: ldim(2)
+        type(image) :: upsampled
+        integer :: ldim_pd(2), i,j,fx,fy,fpx,fpy
+        real :: scales(2), scale, x,y, dx,dy,b
+        if( ldim(1) /= ldim(2) ) THROW_HARD('Unsupported dimensions!')
+        scales = real(self%ldim(1:2)) / real(ldim(1:2))
+        scale  = product(scales)
+        call upsampled%new([ldim(1), ldim(2), 1], self%smpd/scales(1))
+        !$omp parallel do default(shared) collapse(2) proc_bind(close)&
+        !$omp private(i,j,x,y,fx,fy,fpx,fpy,dx,dy,b)
+        do j = 1,ldim(1)
+            do i = 1,ldim(2)
+                x   = (real(i-1) * scales(1)) + 1.
+                y   = (real(j-1) * scales(2)) + 1.
+                fx  = floor(x)
+                fy  = floor(y)
+                if( fx == self%ldim(1) )then
+                    fpx = fx-1
+                else
+                    fpx = fx+1
+                endif
+                if( fy == self%ldim(2) )then
+                    fpy = fy-1
+                else
+                    fpy = fy+1
+                endif
+                dx = x - real(fx)
+                dy = y - real(fy)
+                b =     self%rmat(fx, fy, 1) * (1.-dx) * (1.-dy)
+                b = b + self%rmat(fpx,fy, 1) *     dx  * (1.-dy)
+                b = b + self%rmat(fx, fpy,1) * (1.-dx) * dy
+                b = b + self%rmat(fpx,fpy,1) *     dx  * dy
+                upsampled%rmat(i,j,1) = b * scale
+            enddo
+        enddo
+        !$omp end parallel do
+        call self%copy(upsampled)
+        call upsampled%kill
+    end subroutine upsample_square_background
+
     !>  Subtracts background, for micrographs
-    subroutine subtract_background( self, freq, backgr, mode)
+    subroutine subtract_background( self, freq, mode)
         class(image),               intent(inout) :: self
         real,                       intent(in)    :: freq
-        class(image),     optional, intent(inout) :: backgr
         character(len=*), optional, intent(in)    :: mode
         integer,    parameter :: CS_DIM  = 1024
-        type(image)           :: tmpimg, mic_pad
-        real                  :: x,y,dx,dy,scale,b
-        integer               :: ldim_pd(3), ldim(3), i,j,fx,fy, fpx,fpy,binning
+        type(image)           :: tmpimg
         character(len=STDLEN) :: cmode
         if( self%ft )      THROW_HARD('Real space only!, subtract_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, subtract_background')
@@ -5849,52 +5888,14 @@ contains
         if( present(mode) ) cmode = mode
         call self%estimate_background(freq, tmpimg, cmode)
         select case(trim(mode))
-        case('cryosparc')
-            ! subtraction of linearly interpolated background
-            ldim    = tmpimg%get_ldim()
-            binning = ceiling(real(self%ldim(1)) / real(ldim(1)))
-            ldim_pd = [binning*ldim(1), binning*ldim(2), 1]
-            scale   = real(binning**2)
-            call mic_pad%new(ldim_pd, self%smpd)
-            call self%pad(mic_pad)
-            !$omp parallel do default(shared) collapse(2) proc_bind(close)&
-            !$omp private(i,j,x,y,fx,fy,fpx,fpy,dx,dy,b)
-            do j = 1,ldim_pd(1)
-                do i = 1,ldim_pd(2)
-                    x   = (real(i-1) / real(binning)) + 1.
-                    y   = (real(j-1) / real(binning)) + 1.
-                    fx  = floor(x)
-                    fy  = floor(y)
-                    if( fx == ldim(1) )then
-                        fpx = fx-1
-                    else
-                        fpx = fx+1
-                    endif
-                    if( fy == ldim(2) )then
-                        fpy = fy-1
-                    else
-                        fpy = fy+1
-                    endif
-                    dx = x - real(fx)
-                    dy = y - real(fy)
-                    b =     tmpimg%rmat(fx, fy, 1) * (1.-dx) * (1.-dy)
-                    b = b + tmpimg%rmat(fpx,fy, 1) *     dx  * (1.-dy)
-                    b = b + tmpimg%rmat(fx, fpy,1) * (1.-dx) * dy
-                    b = b + tmpimg%rmat(fpx,fpy,1) *     dx  * dy
-                    mic_pad%rmat(i,j,1) = mic_pad%rmat(i,j,1) - b / scale
-                enddo
-            enddo
-            !$omp end parallel do
-            call mic_pad%clip(self)
-            call mic_pad%kill
+        case('cryosparc','cs')
+            call tmpimg%upsample_square_background(self%ldim(1:2))
         case DEFAULT
-            ! direct subtraction of background
-            !$omp parallel workshare proc_bind(close)
-            self%rmat = self%rmat - tmpimg%rmat
-            !$omp end parallel workshare
+            ! all done
         end select
-        call mic_pad%kill
-        if( present(backgr) ) call backgr%copy(tmpimg)
+        !$omp parallel workshare proc_bind(close)
+        self%rmat = self%rmat - tmpimg%rmat
+        !$omp end parallel workshare
         call tmpimg%kill
     end subroutine subtract_background
 
@@ -5913,7 +5914,7 @@ contains
         if( self%ft )      THROW_HARD('Real space only!, estimate_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, estimate_background')
         select case(trim(mode))
-        case('cryosparc')
+        case('cryosparc','cs')
             ! produces backround of shape CS_DIM x CS_DIM
             ! bin micrograph
             ldim_cs = [CS_DIM, CS_DIM,1]
