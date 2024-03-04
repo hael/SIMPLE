@@ -407,12 +407,13 @@ contains
         class(fractionate_movies_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         logical,            parameter :: L_DEBUG = .false.
-        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname, mic_fbody, star_fname
+        character(len=:), allocatable :: mic_fname,forctf_fname, ext, mov_fname
+        character(len=:), allocatable :: mic_fbody, star_fname, background_fname
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(mic_generator)           :: generator
         type(ori)                     :: o
-        type(image)                   :: micrograph_dw, micrograph_nodw, mic
+        type(image)                   :: micrograph_dw, micrograph_nodw, mic, background
         real,             allocatable :: frc(:), res(:)
         character(len=LONGSTRLEN)     :: rel_fname, orig_mic
         integer :: nmovies, imov, cnt, n
@@ -448,7 +449,12 @@ contains
             orig_mic = o%get_static('intg')
             ! new micrograph
             call generator%new(o, params%mcconvention, [params%fromf, params%tof], l_bilinear_interp)
-            call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
+            select case(trim(params%mcconvention))
+            case('cs')
+                call generator%generate_micrographs(micrograph_dw, micrograph_nodw, background=background)
+            case DEFAULT
+                call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
+            end select
             ! file naming
             mov_fname = generator%get_moviename()
             mic_fbody = basename(mov_fname)
@@ -461,7 +467,7 @@ contains
             case('motioncorr', 'relion')
                 mic_fname    = trim(adjustl(mic_fbody))//         trim(params%ext)
                 forctf_fname = trim(adjustl(mic_fbody))//'_noDW'//trim(params%ext)
-            case('cryosparc')
+            case('cryosparc','cs')
                 mic_fname    = trim(adjustl(mic_fbody))//'_patch_aligned_doseweighted'//trim(params%ext)
                 forctf_fname = trim(adjustl(mic_fbody))//'_patch_aligned'             //trim(params%ext)
             case DEFAULT
@@ -476,6 +482,10 @@ contains
             else
                 call micrograph_dw%write(mic_fname)
                 call micrograph_nodw%write(forctf_fname)
+            endif
+            if( background%exists() )then
+                background_fname = trim(adjustl(mic_fbody))//'_background'//trim(params%ext)
+                call background%write(background_fname)
             endif
             call generator%write_star(star_fname)
             ! parameters update
@@ -505,6 +515,7 @@ contains
             ! tidy
             call micrograph_dw%kill
             call micrograph_nodw%kill
+            call background%kill
         enddo
         call generator%kill
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)

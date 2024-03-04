@@ -93,7 +93,7 @@ contains
         type(oris) :: espace, cand_axes
         integer    :: fromto(2), ntot, iproj, iproj_best
         integer    :: istop, ithr, iloc
-        real       :: eul(3), corr_best, cost
+        real       :: eul(3), corr_best, cost, rmat(3,3)
         ! dummy association
         fun_self => dummyobject
         ! set range
@@ -122,9 +122,10 @@ contains
         end do
         ! grid search using the spiral geometry
         corrs = -1.
-        !$omp parallel do schedule(static) default(shared) private(iproj) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iproj,rmat) proc_bind(close)
         do iproj=fromto(1),fromto(2)
-            corrs(iproj) = volpft_symsrch_scorefun(rmats(iproj,:,:))
+            rmat         = rmats(iproj,:,:)
+            corrs(iproj) = volpft_symsrch_scorefun(rmat)
         end do
         !$omp end parallel do
         ! identify the best candidates (serial code)
@@ -178,6 +179,7 @@ contains
         real    :: cc, rmat(3,3)
         complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace_nonred)
         complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace_nonred)
+        complex :: tmpmat(kfromto(1):kfromto(2),nspace_nonred)
         real    :: sqsum_targets(nsym), sqsum_sum
         integer :: isym
         sum_of_sym_targets = cmplx(0.,0.)
@@ -185,8 +187,9 @@ contains
             ! extracts Fourier component distribution @ symaxis @ symop isym
             ! ROTATION MATRICES DO NOT COMMUTE
             ! this is the correct order
-            rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
-            call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
+            rmat   = matmul(sym_rmats(isym,:,:), rmat_symaxis)
+            call vpftcc%extract_target(rmat, tmpmat, sqsum_targets(isym))
+            sym_targets(isym,:,:) = tmpmat
             sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
         ! correlate with the average to score the symmetry axis
