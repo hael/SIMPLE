@@ -281,6 +281,7 @@ type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: pgrp_start
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: picker
 type(simple_input_param) :: pick_roi
@@ -1023,6 +1024,7 @@ contains
         'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
+        call set_param(pgrp_start,    'pgrp_start',    'str',    'Initital point-group symmetry', 'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
         call set_param(prune,         'prune',         'binary', 'Automated particles pruning', 'Whether to prune deselected particles(yes|no){no}', 'Automated particles pruning(yes|no){no}', .false., 'no')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
@@ -2396,8 +2398,7 @@ contains
         call initial_3Dmodel%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         call initial_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model")
-        call initial_3Dmodel%set_input('srch_ctrls', 5, 'pgrp_start','str', 'Initial point-group symmetry',&
-        &'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
+        call initial_3Dmodel%set_input('srch_ctrls', 5, pgrp_start)
         call initial_3Dmodel%set_gui_params('srch_ctrls', 5, submenu="model")
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
@@ -2438,7 +2439,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 3, 6, 1, 2, .true.)
+        &0, 0, 0, 5, 6, 1, 2, .true.)
         abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2458,6 +2459,10 @@ contains
         call abinitio_3Dmodel%set_input('srch_ctrls', 3, 'reg_init',  'binary', 'Zero shift offsets', 'Zero particles initial shift offsets(yes|no){no}',&
             &'(yes|no){no}', .false., '{no}')
         call abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="search")
+        call abinitio_3Dmodel%set_input('srch_ctrls', 4, pgrp)
+        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model", advanced=.false.)
+        call abinitio_3Dmodel%set_input('srch_ctrls', 5, pgrp_start)
+        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 5, submenu="model")
         ! filter controls
         call abinitio_3Dmodel%set_input('filt_ctrls', 1, hp)
         call abinitio_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
