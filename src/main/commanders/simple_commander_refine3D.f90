@@ -1260,6 +1260,8 @@ contains
         call reg_obj%write_tab(fname)
         call reg_obj%kill
         call killimgbatch
+        call pftcc%kill
+        call build%kill_general_tbox
         call qsys_job_finished('simple_commander_refine3D :: exec_prob_tab')
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab

@@ -202,11 +202,13 @@ contains
     !>  \brief  extracts the lines defined by the sampling space from the reference
     subroutine extract_ref( self )
         class(volpft_corrcalc), intent(inout) :: self
+        real    :: loc(3)
         integer :: ispace, k
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                loc = self%locs_ref_nonred(k,ispace,:)
                 self%vpft_ref_nonred(k,ispace) =&
-                self%vol_ref%interp_fcomp_trilinear(self%locs_ref_nonred(k,ispace,:))
+                self%vol_ref%interp_fcomp_trilinear(loc)
             end do
         end do
         self%sqsum_ref = sum(csq(self%vpft_ref_nonred))
