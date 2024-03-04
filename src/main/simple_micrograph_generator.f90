@@ -20,7 +20,7 @@ type :: mic_generator
     type(image),      allocatable :: frames(:)
     real,             allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
     integer,          allocatable :: hotpix_coords(:,:)
-    character(len=:), allocatable :: gainrefname, moviename, docname
+    character(len=:), allocatable :: gainrefname, moviename, docname, convention
     type(image)                   :: gain
     type(eer_decoder)             :: eer
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
@@ -47,7 +47,7 @@ type :: mic_generator
     procedure          :: generate_micrographs
     procedure          :: write_star
     procedure          :: display
-    procedure, private :: cure_outliers
+    procedure, private :: cure_outliers_1, cure_outliers_2
     procedure          :: get_moviename
     ! Destructor
     procedure :: kill
@@ -75,12 +75,13 @@ contains
         if( .not.file_exists(self%docname) )then
             THROW_HARD('Movie star doc is absent 2')
         endif
+        self%convention = trim(convention)
         ! weights & interpolation
         self%l_nn_interp    = .not.bilinear_interp
-        select case(trim(convention))
+        select case(trim(self%convention))
         case('simple')
             self%l_frameweights = .true.
-        case('motioncorr','relion','cryosparc')
+        case('motioncorr','relion','cryosparc','cs')
             self%l_frameweights = .false.
         case DEFAULT
             THROW_HARD('Unsupported convention!')
@@ -168,7 +169,12 @@ contains
         endif
         ! outliers curation
         if( self%nhotpix > 0 )then
-            call self%cure_outliers
+            select case(trim(self%convention))
+            case('cs')
+                call self%cure_outliers_1
+            case DEFAULT
+                if( self%nhotpix > 0 ) call self%cure_outliers_2
+            end select
         endif
         call self%gain%kill
         ! downscale frames & dose-weighing
@@ -277,18 +283,20 @@ contains
     end subroutine parse_movie_metadata
 
     !>  Regenerates micrograph from movie frames
-    subroutine generate_micrographs( self, micrograph_dw, micrograph_nodw )
-        class(mic_generator), intent(inout) :: self
-        type(image),          intent(inout) :: micrograph_dw, micrograph_nodw
-        real,        pointer     :: rmatin(:,:,:), rmatout(:,:,:)
+    subroutine generate_micrographs( self, micrograph_dw, micrograph_nodw, background )
+        class(mic_generator),  intent(inout) :: self
+        type(image),           intent(inout) :: micrograph_dw, micrograph_nodw
+        type(image), optional, intent(inout) :: background
+        real,        pointer     :: rmat(:,:,:), rmatin(:,:,:), rmatout(:,:,:)
         complex,     pointer     :: cmat(:,:,:), cmat_sum(:,:,:)
         type(image), allocatable :: local_frames(:)
-        integer                  :: ldim(3), iframe
+        type(image)              :: backgr
+        integer                  :: ldim(3), iframe, n
         ldim = self%ldim_sc
-        if( self%l_poly )then
-            ! STAGE DRIFT + BIM
-            allocate(local_frames(self%fromtof(1):self%fromtof(2)))
-            ! Stage drift
+        n    = self%fromtof(2)-self%fromtof(1)+1
+        allocate(local_frames(self%fromtof(1):self%fromtof(2)))
+        if( trim(self%convention).eq.'cs' )then
+            ! Frames Stage drift
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
             do iframe = self%fromtof(1),self%fromtof(2)
                 call self%frames(iframe)%fft
@@ -297,65 +305,137 @@ contains
                 call local_frames(iframe)%ifft
             end do
             !$omp end parallel do
-            ! Beam-induced motion
-            ! non dose-weighted
-            call bimc(micrograph_nodw)
-            ! dose-weighted
+            ! Sum of raw frames
+            call micrograph_nodw%new(ldim, self%smpd_out)
+            call micrograph_nodw%zero_and_unflag_ft
+            call micrograph_nodw%get_rmat_ptr(rmatout)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call local_frames(iframe)%get_rmat_ptr(rmat)
+                !$omp parallel workshare
+                rmatout = rmatout + rmat
+                !$omp end parallel workshare
+            end do
+            ! Background
+            call micrograph_nodw%estimate_background(200., backgr, self%convention)
+            if( present(background) ) call background%copy(backgr)
+            call backgr%upsample_square_background(ldim(1:2))
+            ! background subtraction
+            call micrograph_nodw%subtr(backgr)
+            call backgr%div(real(n))
+            call backgr%get_rmat_ptr(rmatout)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                call local_frames(iframe)%get_rmat_ptr(rmat)
+                !$omp parallel workshare
+                rmat = rmat - rmatout
+                !$omp end parallel workshare
+            end do
+            nullify(rmatout)
+            ! Non dose-weighted beam-induced correction
+            if( self%l_poly ) call bimc(micrograph_nodw)
+            ! Dose-weighing
             if( self%l_doseweighing )then
+                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call local_frames(iframe)%fft
+                end do
+                !$omp end parallel do
                 call self%apply_dose_weighing
                 !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
                 do iframe = self%fromtof(1),self%fromtof(2)
-                    call local_frames(iframe)%copy_fast(self%frames(iframe))
                     call local_frames(iframe)%ifft
                 end do
                 !$omp end parallel do
-                call bimc(micrograph_dw)
+                if( self%l_poly )then
+                    ! Dose-weighted beam-induced correction
+                    call bimc(micrograph_dw)
+                else
+                    ! Dose-weighted stage-drift correction
+                    call micrograph_dw%new(ldim, self%smpd_out)
+                    call micrograph_dw%zero_and_unflag_ft
+                    call micrograph_dw%get_rmat_ptr(rmatout)
+                    do iframe = self%fromtof(1),self%fromtof(2)
+                        call local_frames(iframe)%get_rmat_ptr(rmat)
+                        !$omp parallel workshare
+                        rmatout = rmatout + rmat
+                        !$omp end parallel workshare
+                    end do
+                endif
             else
                 call micrograph_dw%kill
             endif
-            ! cleanup
-            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-            do iframe = self%fromtof(1),self%fromtof(2)
-                call local_frames(iframe)%kill
-            end do
-            !$omp end parallel do
-            deallocate(local_frames)
         else
-            ! STAGE DRIFT ONLY
-            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-            do iframe = self%fromtof(1),self%fromtof(2)
-                call self%frames(iframe)%fft
-                call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
-            end do
-            !$omp end parallel do
-            call micrograph_nodw%new(ldim, self%smpd_out)
-            call micrograph_nodw%zero_and_flag_ft
-            call micrograph_nodw%get_cmat_ptr(cmat_sum)
-            do iframe = self%fromtof(1),self%fromtof(2)
-                call self%frames(iframe)%get_cmat_ptr(cmat)
-                !$omp parallel workshare proc_bind(close)
-                cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
-                !$omp end parallel workshare
-            end do
-            call micrograph_nodw%ifft
-            if( self%l_doseweighing )then
-                call self%apply_dose_weighing
-                call micrograph_dw%new(ldim, self%smpd_out)
-                call micrograph_dw%zero_and_flag_ft
-                call micrograph_dw%get_cmat_ptr(cmat_sum)
+            if( self%l_poly )then
+                ! Stage drift
+                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call self%frames(iframe)%fft
+                    call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
+                    call local_frames(iframe)%copy(self%frames(iframe))
+                    call local_frames(iframe)%ifft
+                end do
+                !$omp end parallel do
+                ! Beam-induced motion
+                ! non dose-weighted
+                call bimc(micrograph_nodw)
+                ! dose-weighted
+                if( self%l_doseweighing )then
+                    call self%apply_dose_weighing
+                    !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                    do iframe = self%fromtof(1),self%fromtof(2)
+                        call local_frames(iframe)%copy_fast(self%frames(iframe))
+                        call local_frames(iframe)%ifft
+                    end do
+                    !$omp end parallel do
+                    call bimc(micrograph_dw)
+                else
+                    call micrograph_dw%kill
+                endif
+            else
+                ! STAGE DRIFT ONLY
+                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+                do iframe = self%fromtof(1),self%fromtof(2)
+                    call self%frames(iframe)%fft
+                    call self%frames(iframe)%shift2Dserial(-self%isoshifts(:,iframe))
+                end do
+                !$omp end parallel do
+                call micrograph_nodw%new(ldim, self%smpd_out)
+                call micrograph_nodw%zero_and_flag_ft
+                call micrograph_nodw%get_cmat_ptr(cmat_sum)
                 do iframe = self%fromtof(1),self%fromtof(2)
                     call self%frames(iframe)%get_cmat_ptr(cmat)
                     !$omp parallel workshare proc_bind(close)
                     cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
                     !$omp end parallel workshare
                 end do
-                call micrograph_dw%ifft
-            else
-                call micrograph_dw%kill
+                call micrograph_nodw%ifft
+                if( self%l_doseweighing )then
+                    call self%apply_dose_weighing
+                    call micrograph_dw%new(ldim, self%smpd_out)
+                    call micrograph_dw%zero_and_flag_ft
+                    call micrograph_dw%get_cmat_ptr(cmat_sum)
+                    do iframe = self%fromtof(1),self%fromtof(2)
+                        call self%frames(iframe)%get_cmat_ptr(cmat)
+                        !$omp parallel workshare proc_bind(close)
+                        cmat_sum(:,:,:) = cmat_sum(:,:,:) + self%weights(iframe) * cmat(:,:,:)
+                        !$omp end parallel workshare
+                    end do
+                    call micrograph_dw%ifft
+                else
+                    call micrograph_dw%kill
+                endif
             endif
         endif
+        ! Cleanup
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        do iframe = self%fromtof(1),self%fromtof(2)
+            call local_frames(iframe)%kill
+        end do
+        !$omp end parallel do
+        deallocate(local_frames)
+        call backgr%kill
     contains
 
+        ! Performs beam-induced motion correction on real-space frames
         subroutine bimc( mic )
             class(image), intent(inout) :: mic
             real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2
@@ -603,7 +683,79 @@ contains
         enddo
     end subroutine display
 
-    subroutine cure_outliers( self )
+    subroutine cure_outliers_1( self )
+        class(mic_generator), intent(inout)  :: self
+        real,    parameter   :: CS_STDEV = 10.0
+        integer, parameter   :: hwinsz = 1
+        type(image_ptr)      :: prmats(self%nframes)
+        real,        pointer :: prmat(:,:,:)
+        real,    allocatable :: rsum(:,:)
+        real    :: ave, sdev, var, lthresh,uthresh
+        integer :: iframe,noutliers,i,j,is,ie,js,je,n_eff_frames
+        logical :: outliers_exp(self%ldim(1),self%ldim(2)), outliers(self%ldim(1),self%ldim(2)), err
+        allocate(rsum(self%ldim(1),self%ldim(2)),source=0.)
+        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
+        n_eff_frames = self%fromtof(2)-self%fromtof(1)+1
+        ! sum
+        do iframe = self%fromtof(1),self%fromtof(2)
+            call self%frames(iframe)%get_rmat_ptr(prmat)
+            !$omp parallel workshare
+            rsum(:,:) = rsum(:,:) + prmat(:self%ldim(1),:self%ldim(2),1)
+            !$omp end parallel workshare
+        enddo
+        nullify(prmat)
+        ! outliers detection
+        call moment( rsum, ave, sdev, var, err )
+        lthresh   = ave - CS_STDEV * sdev
+        uthresh   = ave + CS_STDEV * sdev
+        !$omp workshare
+        where( rsum<lthresh .or. rsum>uthresh )
+            outliers = .true.
+        elsewhere
+            outliers = .false.
+        end where
+        !$omp end workshare
+        if( self%l_eer .and. self%l_gain )then
+            call self%gain%get_rmat_ptr(prmat)
+            where( is_zero(prmat(:self%ldim(1),:self%ldim(2),1)) )
+                outliers = .true.
+            end where
+            nullify(prmat)
+        endif
+        outliers_exp = .false.
+        do j = 1,self%ldim(2)
+            do i = 1,self%ldim(1)
+                if( outliers(i,j) )then
+                    is = max(1,i-hwinsz)
+                    ie = min(i+hwinsz,self%ldim(1))
+                    js = max(1,j-hwinsz)
+                    je = min(j+hwinsz,self%ldim(2))
+                    outliers_exp(is:ie,js:je) = .true.
+                endif
+            enddo
+        enddo
+        noutliers = count(outliers_exp)
+        if( noutliers > 0 )then
+            write(logfhandle,'(a,1x,i10)') '>>> # DEAD/HOT PIXELS:', noutliers
+            write(logfhandle,'(a,1x,2f10.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
+            ave  =  ave / real(n_eff_frames)
+            sdev = sdev / real(n_eff_frames)
+            !$omp parallel do default(shared) private(iframe,i,j)&
+            !$omp proc_bind(close) schedule(static) collapse(3)
+            do iframe = self%fromtof(1),self%fromtof(2)
+                do j = 1,self%ldim(2)
+                    do i = 1,self%ldim(1)
+                        if( outliers_exp(i,j) )then
+                            call self%frames(iframe)%set([i,j,1], gasdev(ave, sdev))
+                        endif
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine cure_outliers_1
+
+    subroutine cure_outliers_2( self )
         class(mic_generator), intent(inout)  :: self
         integer, parameter   :: hwinsz = 5
         type(image_ptr)      :: prmats(self%nframes)
@@ -611,10 +763,11 @@ contains
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers(:,:), pos_outliers_here(:,:)
         real    :: ave, sdev, var, lthresh,uthresh, l,u,localave
-        integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
+        integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n, n_eff_frames
         logical :: outliers(self%ldim(1),self%ldim(2)), err
         allocate(rsum(self%ldim(1),self%ldim(2)),source=0.)
         write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
+        n_eff_frames = self%fromtof(2)-self%fromtof(1)+1
         ! sum
         do iframe = self%fromtof(1),self%fromtof(2)
             call self%frames(iframe)%get_rmat_ptr(prmat)
@@ -682,11 +835,11 @@ contains
             else
                 pos_outliers_here = pos_outliers
             endif
-            allocate(new_vals(noutliers,self%nframes),vals(nvals))
-            ave  = ave / real(self%nframes)
-            sdev = sdev / real(self%nframes)
-            uthresh = uthresh / real(self%nframes)
-            lthresh = lthresh / real(self%nframes)
+            allocate(new_vals(noutliers,self%fromtof(1):self%fromtof(2)),vals(nvals))
+            ave  = ave / real(n_eff_frames)
+            sdev = sdev / real(n_eff_frames)
+            uthresh = uthresh / real(n_eff_frames)
+            lthresh = lthresh / real(n_eff_frames)
             !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
             do iframe = self%fromtof(1),self%fromtof(2)
@@ -729,7 +882,7 @@ contains
             enddo
             !$omp end parallel do
         endif
-    end subroutine cure_outliers
+    end subroutine cure_outliers_2
 
     ! Frames assumed in fourier space
     subroutine apply_dose_weighing( self )

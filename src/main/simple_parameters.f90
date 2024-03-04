@@ -1549,7 +1549,7 @@ contains
             self%nypatch = 0
         endif
         select case(trim(self%mcconvention))
-            case('simple','unblur','motioncorr','relion','first','central','cryosparc')
+            case('simple','unblur','motioncorr','relion','first','central','cryosparc','cs')
             case DEFAULT
                 THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
         end select
