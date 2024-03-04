@@ -2439,14 +2439,16 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 6, 1, 2, .true.)
+        &0, 1, 0, 5, 6, 1, 2, .true.)
         abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call abinitio_3Dmodel%set_input('parm_ios', 1, oritype)
+        abinitio_3Dmodel%parm_ios(1)%descr_long = 'Oritype segment in project(cls3D|ptcl3D){ptcl3D}'
+        abinitio_3Dmodel%parm_ios(1)%descr_placeholder = '(cls3D|ptcl3D){ptcl3D}'
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -451,7 +451,7 @@ contains
             call generator%new(o, params%mcconvention, [params%fromf, params%tof], l_bilinear_interp)
             select case(trim(params%mcconvention))
             case('cs')
-                call generator%generate_micrographs(micrograph_dw, micrograph_nodw, background=background)
+                call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
             case DEFAULT
                 call generator%generate_micrographs(micrograph_dw, micrograph_nodw)
             end select

@@ -81,7 +81,7 @@ contains
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
-            case('ptcl2D','ptcl3D')
+            case('ptcl2D','ptcl3D','cls3D')
                 fall_over = spproj%get_nptcls() == 0
             case DEFAULT
                 write(logfhandle,*)'Unsupported ORITYPE; simple_commander_euclid :: exec_calc_pspec_distr'
@@ -465,6 +465,7 @@ contains
         if( .not. cline%defined('nthr')     ) THROW_HARD('number of threads (nthr) is needed for first sigma estimation')
         if( .not. cline%defined('nparts')   ) THROW_HARD('number of partitions (npart) is needed for first sigma estimation (distributed workflow)')
         if( .not. cline%defined('projfile') ) THROW_HARD('missing project file entry; exec_estimate_first_sigmas')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
         cline_first_sigmas = cline
         call cline_first_sigmas%set('prg', 'refine3D')
         call cline_first_sigmas%set('center',    'no')
@@ -479,7 +480,6 @@ contains
         call cline_first_sigmas%delete('hp')
         call cline_first_sigmas%delete('lp')
         call cline_first_sigmas%delete('lpstop')
-        call cline_first_sigmas%set('oritype', 'ptcl3D')
         call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
         ! init
         call build%init_params_and_build_spproj(cline_first_sigmas, params)
