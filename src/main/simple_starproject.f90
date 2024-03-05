@@ -653,6 +653,8 @@ contains
             write(logfhandle,*) char(9), 'exporting micrographs to ' // trim(adjustl(self%starfile%filename))
             write(logfhandle,*) ''
         endif
+        self%starfile%filenamebak = trim(adjustl(self%starfile%filename))
+        self%starfile%filename    = trim(adjustl(self%starfile%filenamebak)) // ".tmp"
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
         do i=1, spproj%os_mic%get_noris()
@@ -663,6 +665,7 @@ contains
         call enable_splflags(spproj%os_mic,    self%starfile%micrographs%flags)
         call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics", exclude="rlnImageSize")
         call self%export_stardata(spproj, self%starfile%micrographs%flags, spproj%os_mic, "micrographs")
+        call simple_rename(self%starfile%filename, self%starfile%filenamebak, overwrite=.true.)
     end subroutine export_mics
 
     subroutine export_cls2D(self, spproj, iter)

@@ -77,6 +77,7 @@ contains
         if( .not. cline%defined('mcpatch')          ) call cline%set('mcpatch',        'yes')
         if( .not. cline%defined('mcpatch_thres')    ) call cline%set('mcpatch_thres','  yes')
         if( .not. cline%defined('tilt_thres')       ) call cline%set('tilt_thres',      0.05)
+        if( .not. cline%defined('beamtilt')         ) call cline%set('beamtilt',        'no')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512.)
         if( .not. cline%defined('hp_ctf_estimate')  ) call cline%set('hp_ctf_estimate',  HP_CTF_ESTIMATE)

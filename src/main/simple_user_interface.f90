@@ -3375,7 +3375,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 17, 0, 26, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 17, 0, 27, 9, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D,compute"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3395,11 +3395,11 @@ contains
         call preprocess_stream_dev%set_input('parm_ios', 1, total_dose)
         call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 2, fraction_dose_target)
-        call preprocess_stream_dev%set_gui_params('parm_ios', 2, submenu="data")
+        call preprocess_stream_dev%set_gui_params('parm_ios', 2, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream_dev%set_gui_params('parm_ios', 3, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
-        call preprocess_stream_dev%set_gui_params('parm_ios', 4, submenu="motion correction", advanced=.false.)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 4, submenu="motion correction")
         call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)
         call preprocess_stream_dev%set_gui_params('parm_ios', 5, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast)
@@ -3485,15 +3485,18 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 21, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls', 22, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 22, submenu="motion correction", online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',23, objfun)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 23, submenu="search")
-        call preprocess_stream_dev%set_input('srch_ctrls',24, maxnchunks)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 24, submenu="cluster 2D", online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',25, pick_roi)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 22, submenu="optics groups", online=.true.)
+        call preprocess_stream_dev%set_input('srch_ctrls', 23, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
+        & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){no}', .false., 'no')
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 23, submenu="optics groups")
+        call preprocess_stream_dev%set_input('srch_ctrls',24, objfun)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 24, submenu="cluster 2D")
+        call preprocess_stream_dev%set_input('srch_ctrls',25, maxnchunks)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 25, submenu="cluster 2D", online=.true.)
-        call preprocess_stream_dev%set_input('srch_ctrls',26, backgr_subtr)
+        call preprocess_stream_dev%set_input('srch_ctrls',26, pick_roi)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 26, submenu="cluster 2D", online=.true.)
+        call preprocess_stream_dev%set_input('srch_ctrls',27, backgr_subtr)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 27, submenu="cluster 2D", online=.true.)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3512,7 +3515,7 @@ contains
         call preprocess_stream_dev%set_input('filt_ctrls', 6, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 6, submenu="cluster2D")
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 6, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
