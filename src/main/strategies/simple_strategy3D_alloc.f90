@@ -40,7 +40,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( ptcl_mask )
-        use simple_regularizer, only: calc_num2sample
+        use simple_eul_prob_tab, only: calc_num2sample
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal

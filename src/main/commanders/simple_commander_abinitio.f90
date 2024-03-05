@@ -701,7 +701,7 @@ contains
         real,    parameter :: SCALEFAC      = 0.667
         real,    parameter :: CENLP_DEFAULT = 30.
         real,    parameter :: LP_DEFAULT    = 6.
-        real,    parameter :: LPSTART_DEFAULT=30.,LPSTOP_DEFAULT=LP_DEFAULT
+        real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
@@ -764,21 +764,21 @@ contains
         call spproj%write_segment_inside('projinfo', params%projfile)
         ! always randomize projection directions
         select case(trim(params%oritype))
-        case('cls3D')
-            if( spproj%os_cls3D%get_noris() < 1 )then
-                THROW_HARD('Class averages could not be found in the project')
-            endif
-            vol_type = 'vol_cavg'
-            call spproj%os_cls3D%rnd_oris
-            call spproj%os_cls3D%set_all2single('stkind', 1.)
-        case('ptcl3D')
-            if( spproj%os_ptcl3D%get_noris() < 1 )then
-                THROW_HARD('Particles could not be found in the project')
-            endif
-            vol_type = 'vol'
-            call spproj%os_ptcl3D%rnd_oris
-        case DEFAULT
-            THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
+            case('cls3D')
+                if( spproj%os_cls3D%get_noris() < 1 )then
+                    THROW_HARD('Class averages could not be found in the project')
+                endif
+                vol_type = 'vol_cavg'
+                call spproj%os_cls3D%rnd_oris
+                call spproj%os_cls3D%set_all2single('stkind', 1.)
+            case('ptcl3D')
+                if( spproj%os_ptcl3D%get_noris() < 1 )then
+                    THROW_HARD('Particles could not be found in the project')
+                endif
+                vol_type = 'vol'
+                call spproj%os_ptcl3D%rnd_oris
+            case DEFAULT
+                THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
         end select
         call spproj%write_segment_inside(params%oritype, params%projfile)
         ! centering & symmetry resolution limit

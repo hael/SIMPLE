@@ -30,7 +30,7 @@ contains
     end subroutine new_smpl
 
     subroutine srch_smpl( self )
-        use simple_regularizer, only: reg_dist_switch
+        use simple_eul_prob_tab, only: eulprob_dist_switch
         class(strategy2D_smpl), intent(inout) :: self
         integer :: iref, locs(self%s%nrefs), inds(self%s%nrots), irot
         real    :: inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots)
@@ -41,15 +41,15 @@ contains
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle      
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                irot       = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                irot       = greedy_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
                 locs(iref) = irot
                 s2D%cls_corrs(iref,self%s%ithr) = inpl_corrs(irot)
             enddo
-            iref = greedy_sampling(reg_dist_switch(s2D%cls_corrs(:,self%s%ithr)), s2D%smpl_refs_ns)
+            iref = greedy_sampling(eulprob_dist_switch(s2D%cls_corrs(:,self%s%ithr)), s2D%smpl_refs_ns)
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs, kweight=.true.)
-                irot = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                irot = greedy_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
                 locs(iref) = irot
                 s2D%cls_corrs(iref,self%s%ithr) = inpl_corrs(irot)
             endif

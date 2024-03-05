@@ -1,16 +1,15 @@
 ! orientation regularizer, used in refine3D
-module simple_regularizer
+module simple_eul_prob_tab
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters,   only: params_glob
 use simple_dist_binfile, only: dist_binfile
-use simple_ori,          only: ori
 use simple_builder,      only: build_glob
 implicit none
 
 public :: regularizer
-public :: calc_num2sample, calc_numinpl2sample2D, calc_numcls2sample2D, reg_dist_switch
+public :: calc_num2sample, calc_numinpl2sample2D, calc_numcls2sample2D, eulprob_dist_switch, eulprob_corr_switch
 private
 #include "simple_local_flags.inc"
 
@@ -18,9 +17,6 @@ type :: regularizer
     real,    allocatable :: dist_loc_tab(:,:,:) !< nspace, iptcl, 2 (1->dist, 2->inpl_ind)
     integer, allocatable :: ptcl_ref_map(:)     !< ptcl -> ref assignment map
     logical, allocatable :: ptcl_avail(:)       !< for communicating restraints and state selections
-    integer, allocatable :: subspace_inds(:)    !< indices for multi-neighborhood search
-    logical, allocatable :: l_neigh(:,:)        !< logical representation of multi-neighborhood
-    logical              :: do_neigh = .false.  !< indicates neighborhood search or not
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -42,12 +38,8 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, l_neigh )
-        use simple_oris, only: oris
+    subroutine new( self )
         class(regularizer), intent(inout) :: self
-        logical,            intent(in)    :: l_neigh
-        type(oris) :: eulspace_sub !< discrete projection direction search space, reduced
-        type(ori)  :: o
         integer    :: i, iptcl
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
@@ -56,99 +48,117 @@ contains
         do iptcl = params_glob%fromp,params_glob%top
             self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
         enddo
-        if( l_neigh )then
-            ! construct projection direction subspace
-            call eulspace_sub%new(params_glob%nspace_sub, is_ptcl=.false.)
-            call build_glob%pgrpsyms%build_refspiral(eulspace_sub)
-            ! get indexing in original projection direction space
-            allocate(self%subspace_inds(params_glob%nspace_sub), source=0)
-            !$omp parallel do default(shared) proc_bind(close) private(i,o)
-            do i = 1, params_glob%nspace_sub
-                call eulspace_sub%get_ori(i, o)
-                self%subspace_inds(i) = build_glob%pgrpsyms%find_closest_proj(build_glob%eulspace, o)
-            end do
-            !$omp end parallel do
-            call eulspace_sub%kill
-            allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.false.)
-            self%do_neigh = .true.
-        else
-            allocate(self%l_neigh(params_glob%nspace,params_glob%fromp:params_glob%top), source=.true.)
-            self%do_neigh = .false.
-        endif
     end subroutine new
 
+    ! subroutine fill_tab( self, pftcc, glob_pinds )
+    !     use simple_polarft_corrcalc, only: polarft_corrcalc
+    !     class(regularizer),      intent(inout) :: self
+    !     class(polarft_corrcalc), intent(inout) :: pftcc
+    !     integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
+    !     integer   :: i, j, iref, iptcl, refs_ns, ipeak, inpl_ns, ithr
+    !     real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
+    !     integer   :: inds_sorted(pftcc%nrots,nthr_glob)
+    !     call seed_rnd
+    !     call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
+    !     !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl) proc_bind(close) schedule(static)
+    !     do iref = 1, params_glob%nspace
+    !         do i = 1, pftcc%nptcls
+    !             iptcl = glob_pinds(i)
+    !             if( self%ptcl_avail(iptcl) )then
+    !                 ithr = omp_get_thread_num() + 1
+    !                 call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
+    !                 dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+    !                 self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
+    !                 self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
+    !             endif
+    !         enddo
+    !     enddo
+    !     !$omp end parallel do
+
+    ! contains
+
+    !     ! inpl greedy sampling based on unnormalized corr values of all inpl rotations
+    !     function inpl_smpl( ithr ) result( which )
+    !         integer, intent(in) :: ithr
+    !         integer :: j, which
+    !         real    :: rnd, bound, sum_dist
+    !         dists_inpl_sorted(:,ithr) = dists_inpl(:,ithr)
+    !         inds_sorted(:,ithr)  = (/(j,j=1,pftcc%nrots)/)
+    !         call hpsort(dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
+    !         rnd      = ran3()
+    !         sum_dist = sum(dists_inpl_sorted(1:inpl_ns,ithr))
+    !         if( sum_dist < TINY )then
+    !             ! uniform sampling
+    !             which = 1 + floor(real(inpl_ns) * rnd)
+    !         else
+    !             ! normalizing within the hard-limit
+    !             dists_inpl_sorted(1:inpl_ns,ithr) = dists_inpl_sorted(1:inpl_ns,ithr) / sum_dist
+    !             bound = 0.
+    !             do which = 1,inpl_ns
+    !                 bound = bound + dists_inpl_sorted(which,ithr)
+    !                 if( rnd >= bound )exit
+    !             enddo
+    !             which = min(which,inpl_ns)
+    !         endif
+    !         which = inds_sorted(which,ithr)
+    !     end function inpl_smpl
+
+    ! end subroutine fill_tab
+
     subroutine fill_tab( self, pftcc, glob_pinds )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(regularizer),      intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
-        integer   :: i, j, iref, iptcl, locn(params_glob%npeaks), refs_ns, ipeak, inpl_ns, ithr
-        real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_sub(params_glob%nspace_sub,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
-        integer   :: inds_sorted(pftcc%nrots,nthr_glob)
-        type(ori) :: o
-        if( self%do_neigh )then
-            call calc_num2sample(params_glob%nspace, 'dist', refs_ns)
-            self%l_neigh = .false.
-            !$omp parallel do default(shared) private(i,iptcl,ithr,j,iref,o,locn,ipeak) proc_bind(close) schedule(static)
-            do i = 1, pftcc%nptcls
-                iptcl = glob_pinds(i)
-                if( self%ptcl_avail(iptcl) )then
-                    ithr = omp_get_thread_num() + 1
-                    do j = 1, params_glob%nspace_sub
-                        iref = self%subspace_inds(j)
-                        call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
-                        dists_sub(j,ithr)  = minval(dists_inpl(:,ithr)) ! GREEDY HERE ???
-                    enddo
-                    locn = minnloc(dists_sub(:,ithr), params_glob%npeaks)
-                    do ipeak = 1,params_glob%npeaks
-                        iref = self%subspace_inds(locn(ipeak))
-                        call build_glob%eulspace%get_ori(iref, o)
-                        call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, refs_ns, self%l_neigh(:,iptcl))
-                    end do
-                endif
-            end do
-            !$omp end parallel do
-            call seed_rnd
-            call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
-            !$omp parallel do collapse(2) default(shared) private(i,iref,iptcl,ithr) proc_bind(close) schedule(static)
+        integer,      parameter :: MAXITS = 60
+        integer,    allocatable :: locn(:)
+        type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
+        integer   :: i, j, iref, iptcl, refs_ns, ipeak, inpl_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob)
+        real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
+        real      :: dists_refs(pftcc%nrefs,nthr_glob), lims(2,2), lims_init(2,2), cxy(3)
+        call seed_rnd
+        call calc_num2sample(pftcc%nrots,        'dist_inpl', inpl_ns)
+        call calc_num2sample(params_glob%nspace, 'dist',      refs_ns)
+        allocate(locn(refs_ns), source=0)
+        ! make shift search objects
+        lims(:,1)      = -params_glob%trs
+        lims(:,2)      =  params_glob%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        do ithr = 1,nthr_glob
+            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.false.)
+        end do
+        ! fill the table
+        !$omp parallel do default(shared) private(i,j,iptcl,ithr,iref,irot,cxy,locn) proc_bind(close) schedule(static)
+        do i = 1, pftcc%nptcls
+            iptcl = glob_pinds(i)
+            if( .not. self%ptcl_avail(iptcl) ) cycle
+            ithr = omp_get_thread_num() + 1
             do iref = 1, params_glob%nspace
-                do i = 1, pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    if( self%ptcl_avail(iptcl) )then
-                        ithr = omp_get_thread_num() + 1
-                        if( self%l_neigh(iref,iptcl) )then
-                            call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                            dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
-                            self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
-                            self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
-                        else
-                            self%dist_loc_tab(iref,iptcl,2) = 0
-                            self%dist_loc_tab(iref,iptcl,1) = huge(x)
-                        endif
-                    endif
-                enddo
+                call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
+                dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                irot = inpl_smpl(ithr) ! contained function, below
+                self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
+                self%dist_loc_tab(iref,iptcl,2) = irot
+                dists_refs(iref,ithr) = dists_inpl(irot,ithr)
             enddo
-            !$omp end parallel do
-        else
-            self%l_neigh = .true.
-            call seed_rnd
-            call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
-            !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl) proc_bind(close) schedule(static)
-            do iref = 1, params_glob%nspace
-                do i = 1, pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    if( self%ptcl_avail(iptcl) )then
-                        ithr = omp_get_thread_num() + 1
-                        call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = reg_dist_switch(dists_inpl(:,ithr))
-                        self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
-                        self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
+            locn = minnloc(dists_refs(:,ithr), refs_ns)
+            if( params_glob%l_doshift )then
+                do j = 1,refs_ns
+                    iref = locn(j)
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    irot = nint(self%dist_loc_tab(iref,iptcl,2))
+                    cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
+                        self%dist_loc_tab(iref,iptcl,1) = eulprob_dist_switch(cxy(1))
                     endif
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
+                end do
+            endif
+        enddo
+        !$omp end parallel do
 
     contains
 
@@ -190,8 +200,7 @@ contains
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_dist_all)
         do iptcl = params_glob%fromp, params_glob%top
             if( self%ptcl_avail(iptcl) )then
-                self%l_neigh(:,iptcl) = (self%dist_loc_tab(:,iptcl,2) > TINY)    ! communicating partition l_neigh to global l_neigh
-                sum_dist_all = sum(self%dist_loc_tab(:,iptcl,1), mask=self%l_neigh(:,iptcl))
+                sum_dist_all = sum(self%dist_loc_tab(:,iptcl,1))
                 if( sum_dist_all < TINY )then
                     self%dist_loc_tab(:,iptcl,1) = 0.
                 else
@@ -207,8 +216,8 @@ contains
         !$omp reduction(min:min_dist) reduction(max:max_dist)
         do iptcl = params_glob%fromp,params_glob%top
             if( self%ptcl_avail(iptcl) )then
-                max_dist = max(max_dist, maxval(self%dist_loc_tab(:,iptcl,1), dim=1, mask=self%l_neigh(:,iptcl)))
-                min_dist = min(min_dist, minval(self%dist_loc_tab(:,iptcl,1), dim=1, mask=self%l_neigh(:,iptcl)))
+                max_dist = max(max_dist, maxval(self%dist_loc_tab(:,iptcl,1), dim=1))
+                min_dist = min(min_dist, minval(self%dist_loc_tab(:,iptcl,1), dim=1))
             endif
         enddo
         !$omp end parallel do
@@ -217,8 +226,6 @@ contains
         else
             self%dist_loc_tab(:,:,1) = (self%dist_loc_tab(:,:,1) - min_dist) / (max_dist - min_dist)
         endif
-        ! make sure that particles outside the multi-neighborhood are deselected (put in the bottom)
-        where( .not. self%l_neigh ) self%dist_loc_tab(:,:,1) = 1.
         ! to place unselected particles in the bottom (see below)
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
         do iptcl = params_glob%fromp,params_glob%top
@@ -255,7 +262,6 @@ contains
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
             assigned_iref = ref_smpl() ! contained function, below
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
-            if( .not. self%l_neigh(assigned_iref, assigned_ptcl) ) continue       ! not in the neighborhood
             ptcl_avail(assigned_ptcl)        = .false.
             self%ptcl_ref_map(assigned_ptcl) = assigned_iref
             ! update the ref_dist and ref_dist_inds
@@ -411,8 +417,6 @@ contains
         if( allocated(self%dist_loc_tab)  ) deallocate(self%dist_loc_tab)
         if( allocated(self%ptcl_ref_map)  ) deallocate(self%ptcl_ref_map)
         if( allocated(self%ptcl_avail)    ) deallocate(self%ptcl_avail)
-        if( allocated(self%subspace_inds) ) deallocate(self%subspace_inds)
-        if( allocated(self%l_neigh)       ) deallocate(self%l_neigh)
     end subroutine kill
 
     ! PUBLIC UTILITITES
@@ -467,21 +471,36 @@ contains
     end subroutine calc_numinpl2sample2D
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
-    function reg_dist_switch( corr ) result(dist)
-        real, intent(in) :: corr(:)
-        real :: dist(size(corr))
+    elemental function eulprob_dist_switch( corr ) result(dist)
+        real, intent(in) :: corr
+        real :: dist
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                dist = corr
-                where(dist < 0.) dist = 0.
+                if( corr < 0. )then
+                    dist = 0.
+                else
+                    dist = corr
+                endif
                 dist = 1. - dist
             case(OBJFUN_EUCLID)
-                where( corr < TINY )
+                if( corr < TINY )then
                     dist = huge(dist)
-                elsewhere
+                else
                     dist = - log(corr)
-                endwhere
+                endif
         end select
-    end function reg_dist_switch
+    end function eulprob_dist_switch
 
-end module simple_regularizer
+    ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
+    elemental function eulprob_corr_switch( dist ) result(corr)
+        real, intent(in) :: dist
+        real :: corr
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                corr = 1 - dist
+            case(OBJFUN_EUCLID)
+                corr = exp(-dist)
+        end select
+    end function eulprob_corr_switch
+
+end module simple_eul_prob_tab

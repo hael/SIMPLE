@@ -397,7 +397,7 @@ contains
     subroutine exec_cavg_filter2D( self, cline )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_regularizer,         only: regularizer
+        use simple_eul_prob_tab,         only: regularizer
         class(cavg_filter2D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         complex,          allocatable :: cmat(:,:), cls_avg(:,:), ptcl_rot(:,:), ctf_rot(:,:)

@@ -10,7 +10,7 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
-use simple_regularizer,             only: regularizer
+use simple_eul_prob_tab,             only: regularizer
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
@@ -38,7 +38,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(regularizer),      target :: reg_obj
+type(regularizer),      target :: eulprob_obj
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
@@ -192,9 +192,9 @@ contains
 
         ! ref regularization
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call reg_obj%new(params_glob%l_neigh)
-            call reg_obj%read_tab_from_glob(trim(DIST_FBODY)//'.dat', params_glob%fromp, params_glob%top)
-            call reg_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            call eulprob_obj%new
+            call eulprob_obj%read_tab_from_glob(trim(DIST_FBODY)//'.dat', params_glob%fromp, params_glob%top)
+            call eulprob_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
 
         ! Batch loop
@@ -243,7 +243,7 @@ contains
                         allocate(strategy3D_greedy_sub           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob','prob_neigh')
+                    case('prob')
                         allocate(strategy3D_prob                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('smpl')
                         allocate(strategy3D_smpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -259,7 +259,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%reg_obj => reg_obj
+                if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj => eulprob_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -323,7 +323,7 @@ contains
             call cftcc%kill
         else
             call pftcc%kill
-            if( str_has_substr(params_glob%refine, 'prob') ) call reg_obj%kill
+            if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj%kill
         endif
         call build_glob%vol%kill
         call orientation%kill
