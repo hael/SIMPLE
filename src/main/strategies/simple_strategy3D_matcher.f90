@@ -161,8 +161,6 @@ contains
             t_prep_pftcc = tic()
         endif
 
-        ! cache ref oris
-        if( params_glob%l_reg_per ) call cache_oris%copy(build_glob%eulspace, is_ptcl=.false.)
         call prep_ccobjs4align(cline, batchsz_max)
         call build_glob%img_crop_polarizer%init_polarizer(pftcc, params_glob%alpha)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
@@ -314,10 +312,6 @@ contains
         end select
 
         ! CLEAN
-        if( params_glob%l_reg_per )then
-            call build_glob%eulspace%copy(cache_oris, is_ptcl=.false., no_new=.true.)
-            call cache_oris%kill
-        endif
         call clean_strategy3D ! deallocate s3D singleton
         if( params_glob%l_cartesian )then
             call cftcc%kill
@@ -424,18 +418,6 @@ contains
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
         ! PREPARATION OF REFERENCES IN PFTCC
-        if( params_glob%l_reg_per )then
-            eullims   = build_glob%pgrpsyms%get_eullims()
-            uni_thres = [(ran3() - 0.5) * 2., (ran3() - 0.5) * 2., (ran3() - 0.5) * 2.]
-            ! perturb references to random [-1,1] degree
-            do iref=1,params_glob%nspace
-                call build_glob%eulspace%get_ori(iref, o_tmp)
-                call o_tmp%rnd_euler(uni_thres, eullims)
-                euls    = o_tmp%get_euler()
-                euls(3) = 0.
-                call build_glob%eulspace%set_euler(iref, euls)
-            enddo
-        endif
         ! read reference volumes and create polar projections
         cnt = 0
         do s=1,params_glob%nstates

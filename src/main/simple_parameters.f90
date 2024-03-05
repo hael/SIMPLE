@@ -73,8 +73,8 @@ type :: parameters
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
-    character(len=3)          :: reg_init='no'        !< randomized oris and zero shifts in the reg scheme (yes|no){no}
-    character(len=3)          :: reg_per='no'         !< reg perturbation of reference orientation (yes|no){no}
+    character(len=3)          :: prob_init='no'       !< randomized oris and zero shifts in the prob scheme (yes|no){no}
+    character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: reject_cls='no'
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
@@ -385,8 +385,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: reg_athres=10.      !< angle threshold for reg distribution samplings
-    real    :: reg_sthres=1.       !< reg sampling threshold for references used for alignment
+    real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -433,8 +432,8 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_reg_init     = .false.
-    logical :: l_reg_per      = .false.
+    logical :: l_prob_init    = .false.
+    logical :: l_prob_sh      = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
@@ -574,8 +573,8 @@ contains
         call check_carg('reject_cls',     self%reject_cls)
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
-        call check_carg('reg_init',       self%reg_init)
-        call check_carg('reg_per',        self%reg_per)
+        call check_carg('prob_init',      self%prob_init)
+        call check_carg('prob_sh',        self%prob_sh)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
         call check_carg('silence_fsc',    self%silence_fsc)
@@ -798,8 +797,7 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
-        call check_rarg('reg_athres',     self%reg_athres)
-        call check_rarg('reg_sthres',     self%reg_sthres)
+        call check_rarg('prob_athres',    self%prob_athres)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -1460,8 +1458,8 @@ contains
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg options
-        self%l_reg_init     = trim(self%reg_init    ).eq.'yes'
-        self%l_reg_per      = trim(self%reg_per     ).eq.'yes'
+        self%l_prob_init    = trim(self%prob_init   ).eq.'yes'
+        self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'

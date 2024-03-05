@@ -65,45 +65,64 @@ contains
         call seed_rnd
         call calc_num2sample(pftcc%nrots,        'dist_inpl', inpl_ns)
         call calc_num2sample(params_glob%nspace, 'dist',      refs_ns)
-        allocate(locn(refs_ns), source=0)
-        ! make shift search objects
-        lims(:,1)      = -params_glob%trs
-        lims(:,2)      =  params_glob%trs
-        lims_init(:,1) = -SHC_INPL_TRSHWDTH
-        lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        do ithr = 1,nthr_glob
-            call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.false.)
-        end do
-        ! fill the table
-        !$omp parallel do default(shared) private(i,j,iptcl,ithr,iref,irot,cxy,locn) proc_bind(close) schedule(static)
-        do i = 1, pftcc%nptcls
-            iptcl = glob_pinds(i)
-            if( .not. self%ptcl_avail(iptcl) ) cycle
-            ithr = omp_get_thread_num() + 1
-            do iref = 1, params_glob%nspace
-                call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                irot = inpl_smpl(ithr) ! contained function, below
-                self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
-                self%dist_loc_tab(iref,iptcl,2) = irot
-                dists_refs(iref,ithr) = dists_inpl(irot,ithr)
+        if( params_glob%l_prob_sh )then
+            allocate(locn(refs_ns), source=0)
+            ! make shift search objects
+            lims(:,1)      = -params_glob%trs
+            lims(:,2)      =  params_glob%trs
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            do ithr = 1,nthr_glob
+                call grad_shsrch_obj(ithr)%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.false.)
+            end do
+            ! fill the table
+            !$omp parallel do default(shared) private(i,j,iptcl,ithr,iref,irot,cxy,locn) proc_bind(close) schedule(static)
+            do i = 1, pftcc%nptcls
+                iptcl = glob_pinds(i)
+                if( .not. self%ptcl_avail(iptcl) ) cycle
+                ithr = omp_get_thread_num() + 1
+                do iref = 1, params_glob%nspace
+                    call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
+                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                    irot = inpl_smpl(ithr) ! contained function, below
+                    self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
+                    self%dist_loc_tab(iref,iptcl,2) = irot
+                    dists_refs(iref,ithr) = dists_inpl(irot,ithr)
+                enddo
+                locn = minnloc(dists_refs(:,ithr), refs_ns)
+                if( params_glob%l_doshift )then
+                    do j = 1,refs_ns
+                        iref = locn(j)
+                        ! BFGS over shifts
+                        call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                        irot = nint(self%dist_loc_tab(iref,iptcl,2))
+                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                        if( irot > 0 )then
+                            ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
+                            self%dist_loc_tab(iref,iptcl,1) = eulprob_dist_switch(cxy(1))
+                        endif
+                    end do
+                endif
             enddo
-            locn = minnloc(dists_refs(:,ithr), refs_ns)
-            if( params_glob%l_doshift )then
-                do j = 1,refs_ns
-                    iref = locn(j)
-                    ! BFGS over shifts
-                    call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    irot = nint(self%dist_loc_tab(iref,iptcl,2))
-                    cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
-                        self%dist_loc_tab(iref,iptcl,1) = eulprob_dist_switch(cxy(1))
+            !$omp end parallel do
+        else
+            ! fill the table
+            !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl,irot) proc_bind(close) schedule(static)
+            do iref = 1, params_glob%nspace
+                do i = 1, pftcc%nptcls
+                    iptcl = glob_pinds(i)
+                    if( self%ptcl_avail(iptcl) )then
+                        ithr = omp_get_thread_num() + 1
+                        call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
+                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                        irot = inpl_smpl(ithr) ! contained function, below
+                        self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
+                        self%dist_loc_tab(iref,iptcl,2) = irot
                     endif
-                end do
-            endif
-        enddo
-        !$omp end parallel do
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
 
     contains
 
@@ -379,7 +398,7 @@ contains
         n          = count(ptcl_mask)
         vals       = build_glob%spproj_field%get_all(trim(field_str))
         dist_thres = sum(vals, mask=ptcl_mask) / real(n)
-        athres     = params_glob%reg_athres
+        athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
@@ -390,7 +409,7 @@ contains
         integer, intent(out) :: ncls2smpl
         real    :: athres, dist_thres
         dist_thres = neigh_frac * 180.
-        athres     = params_glob%reg_athres
+        athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         ncls2smpl     = min(ncls, max(1,nint(athres * real(ncls) / 180.)))
     end subroutine calc_numcls2sample2D
@@ -406,7 +425,7 @@ contains
         ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
         ptcl_mask  = ptcl_mask .and. (nint(build_glob%spproj_field%get_all('mi_class')) == 1)
         n          = count(ptcl_mask)
-        athres     = params_glob%reg_athres
+        athres     = params_glob%prob_athres
         if( n > 0 )then
             vals       = build_glob%spproj_field%get_all(trim('dist_inpl'))
             dist_thres = sum(vals, mask=ptcl_mask) / real(n)

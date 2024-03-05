@@ -726,19 +726,20 @@ contains
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
         integer :: iter, it, prev_box_crop, maxits, i
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('refine')    ) call cline%set('refine',      'prob')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',         'no')
-        if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',        'no')
-        if( .not. cline%defined('sigma_est') ) call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('reg_init')  ) call cline%set('reg_init',      'no')
-        if( .not. cline%defined('reg_athres')) call cline%set('reg_athres',     10.)
-        if( .not. cline%defined('center')    ) call cline%set('center',        'no')
-        if( .not. cline%defined('objfun')    ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',   'ptcl3D')
-        if( .not. cline%defined('pgrp')      ) call cline%set('pgrp',          'c1')
-        if( .not. cline%defined('pgrp_start')) call cline%set('pgrp_start',    'c1')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
+        if( .not. cline%defined('refine')     ) call cline%set('refine',      'prob')
+        if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',    'yes')
+        if( .not. cline%defined('ptclw')      ) call cline%set('ptclw',         'no')
+        if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'no')
+        if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global')
+        if( .not. cline%defined('prob_init')  ) call cline%set('prob_init',     'no')
+        if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',       'no')
+        if( .not. cline%defined('prob_athres')) call cline%set('prob_athres',    10.)
+        if( .not. cline%defined('center')     ) call cline%set('center',        'no')
+        if( .not. cline%defined('objfun')     ) call cline%set('objfun',    'euclid')
+        if( .not. cline%defined('oritype')    ) call cline%set('oritype',   'ptcl3D')
+        if( .not. cline%defined('pgrp')       ) call cline%set('pgrp',          'c1')
+        if( .not. cline%defined('pgrp_start') ) call cline%set('pgrp_start',    'c1')
         ! resolution limit strategy
         l_lpset = .false.
         if( cline%defined('lp') )then
@@ -871,7 +872,7 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
             it = 2
-            call cline_refine3D%set('reg_init', 'no')
+            call cline_refine3D%set('prob_init', 'no')
             call cline_refine3D%set('trs',      trslim)
             call cline_refine3D%set('maxits',   MAXITS2)
             call cline_refine3D%set('lp_iters', MAXITS2)
@@ -915,7 +916,7 @@ contains
                 endif
                 if( it > 1 )then
                     call cline_refine3D%set('center', params%center)
-                    call cline_refine3D%set('reg_init', 'no')
+                    call cline_refine3D%set('prob_init', 'no')
                     if( prev_box_crop == params%box_crop )then
                         call cline_refine3D%set('continue',  'yes')
                     else
@@ -985,7 +986,7 @@ contains
             call cline_refine3D%delete('vol1')
             call cline_refine3D%set('pgrp', params%pgrp)
         endif
-        call cline_refine3D%set('reg_init', 'no')
+        call cline_refine3D%set('prob_init', 'no')
         call cline_refine3D%set('box_crop', params%box_crop)
         call cline_refine3D%set('lp',       params%lpstop)
         call cline_refine3D%set('trs',      trslim)
