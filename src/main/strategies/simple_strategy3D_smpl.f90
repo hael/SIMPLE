@@ -60,9 +60,14 @@ contains
             corr = ref_corrs(iref)
             if( self%s%doshift )then
                 call self%s%inpl_srch(ref=iref)
-                irot = s3D%proj_space_inplinds(self%s%ithr, iref)
-                corr = s3D%proj_space_corrs(self%s%ithr, iref)
-                call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
+                ! checking if shift search is good
+                if( s3D%proj_space_inplinds(self%s%ithr, iref) < 1 )then
+                    call assign_ori(self%s, iref, irot, corr, [0.,0.])
+                else
+                    irot = s3D%proj_space_inplinds(self%s%ithr, iref)
+                    corr = s3D%proj_space_corrs(self%s%ithr, iref)
+                    call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
+                endif
             else
                 call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif

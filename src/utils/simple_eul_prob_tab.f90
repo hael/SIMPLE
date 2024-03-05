@@ -40,7 +40,7 @@ contains
 
     subroutine new( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer    :: i, iptcl
+        integer :: iptcl
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
@@ -53,15 +53,15 @@ contains
     subroutine fill_tab( self, pftcc, glob_pinds )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-        class(eul_prob_tab),      intent(inout) :: self
+        class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer,      parameter :: MAXITS = 60
         integer,    allocatable :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
-        integer   :: i, j, iref, iptcl, refs_ns, ipeak, inpl_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob)
-        real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
-        real      :: dists_refs(pftcc%nrefs,nthr_glob), lims(2,2), lims_init(2,2), cxy(3)
+        integer :: i, j, iref, iptcl, refs_ns, inpl_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob)
+        real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
+        real    :: dists_refs(pftcc%nrefs,nthr_glob), lims(2,2), lims_init(2,2), cxy(3)
         call seed_rnd
         call calc_num2sample(pftcc%nrots,        'dist_inpl', inpl_ns)
         call calc_num2sample(params_glob%nspace, 'dist',      refs_ns)
@@ -132,7 +132,7 @@ contains
             integer :: j, which
             real    :: rnd, bound, sum_dist
             dists_inpl_sorted(:,ithr) = dists_inpl(:,ithr)
-            inds_sorted(:,ithr)  = (/(j,j=1,pftcc%nrots)/)
+            inds_sorted(:,ithr)       = (/(j,j=1,pftcc%nrots)/)
             call hpsort(dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
             rnd      = ran3()
             sum_dist = sum(dists_inpl_sorted(1:inpl_ns,ithr))
@@ -407,7 +407,7 @@ contains
         real,    intent(in)  :: neigh_frac
         integer, intent(in)  :: ncls
         integer, intent(out) :: ncls2smpl
-        real    :: athres, dist_thres
+        real :: athres, dist_thres
         dist_thres = neigh_frac * 180.
         athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
