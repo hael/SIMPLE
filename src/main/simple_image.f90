@@ -802,6 +802,7 @@ contains
         class(image), intent(inout) :: self_out
         logical,      intent(out)   :: outside
         integer :: fromc(2), toc(2)
+        print *, 'ENTERED WINDOW_SLIM'
         fromc = coord + 1         ! compensate for the c-range that starts at 0
         toc   = fromc + (box - 1) ! the lower left corner is 1,1
         self_out%rmat = 0.
@@ -812,6 +813,7 @@ contains
         else
             self_out%rmat(1:box,1:box,1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
         endif
+        print *, 'FINISHED WINDOW SLIM'
     end subroutine window_slim
 
     ! for re-generation of micrograph after convolutional PPCA
@@ -2691,7 +2693,11 @@ contains
         where(tmp%rmat < TINY) tmp%rmat=0.
         call tmp%mask(real(self%ldim(1))/2., 'hard')
         call tmp%masscen(xyz)
-        a = arg(xyz(:2))
+        if (self%ldim(3) == 1) then
+            a = arg(xyz(:2))
+        else
+            a = arg(xyz)
+        end if
     end function box_cen_arg
 
     !>  \brief is for estimating the center of an image based on center of mass
@@ -5856,6 +5862,8 @@ contains
                     fpx = fx+1
                 endif
                 if( fy == self%ldim(2) )then
+                endif
+                if( fy == self%ldim(2) )then
                     fpy = fy-1
                 else
                     fpy = fy+1
@@ -5875,12 +5883,15 @@ contains
     end subroutine upsample_square_background
 
     !>  Subtracts background, for micrographs
-    subroutine subtract_background( self, freq, mode)
+    subroutine subtract_background( self, freq, backgr, mode)
         class(image),               intent(inout) :: self
         real,                       intent(in)    :: freq
+        class(image),     optional, intent(inout) :: backgr
         character(len=*), optional, intent(in)    :: mode
         integer,    parameter :: CS_DIM  = 1024
-        type(image)           :: tmpimg
+        type(image)           :: tmpimg, mic_pad
+        real                  :: x,y,dx,dy,scale,b
+        integer               :: ldim_pd(3), ldim(3), i,j,fx,fy, fpx,fpy,binning
         character(len=STDLEN) :: cmode
         if( self%ft )      THROW_HARD('Real space only!, subtract_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, subtract_background')
@@ -5888,14 +5899,52 @@ contains
         if( present(mode) ) cmode = mode
         call self%estimate_background(freq, tmpimg, cmode)
         select case(trim(mode))
-        case('cryosparc','cs')
-            call tmpimg%upsample_square_background(self%ldim(1:2))
+        case('cryosparc')
+            ! subtraction of linearly interpolated background
+            ldim    = tmpimg%get_ldim()
+            binning = ceiling(real(self%ldim(1)) / real(ldim(1)))
+            ldim_pd = [binning*ldim(1), binning*ldim(2), 1]
+            scale   = real(binning**2)
+            call mic_pad%new(ldim_pd, self%smpd)
+            call self%pad(mic_pad)
+            !$omp parallel do default(shared) collapse(2) proc_bind(close)&
+            !$omp private(i,j,x,y,fx,fy,fpx,fpy,dx,dy,b)
+            do j = 1,ldim_pd(1)
+                do i = 1,ldim_pd(2)
+                    x   = (real(i-1) / real(binning)) + 1.
+                    y   = (real(j-1) / real(binning)) + 1.
+                    fx  = floor(x)
+                    fy  = floor(y)
+                    if( fx == ldim(1) )then
+                        fpx = fx-1
+                    else
+                        fpx = fx+1
+                    endif
+                    if( fy == ldim(2) )then
+                        fpy = fy-1
+                    else
+                        fpy = fy+1
+                    endif
+                    dx = x - real(fx)
+                    dy = y - real(fy)
+                    b =     tmpimg%rmat(fx, fy, 1) * (1.-dx) * (1.-dy)
+                    b = b + tmpimg%rmat(fpx,fy, 1) *     dx  * (1.-dy)
+                    b = b + tmpimg%rmat(fx, fpy,1) * (1.-dx) * dy
+                    b = b + tmpimg%rmat(fpx,fpy,1) *     dx  * dy
+                    mic_pad%rmat(i,j,1) = mic_pad%rmat(i,j,1) - b / scale
+                enddo
+            enddo
+            !$omp end parallel do
+            call mic_pad%clip(self)
+            call mic_pad%kill
         case DEFAULT
-            ! all done
+            ! direct subtraction of background
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat - tmpimg%rmat
+            !$omp end parallel workshare
         end select
-        !$omp parallel workshare proc_bind(close)
-        self%rmat = self%rmat - tmpimg%rmat
-        !$omp end parallel workshare
+        call mic_pad%kill
+        if( present(backgr) ) call backgr%copy(tmpimg)
         call tmpimg%kill
     end subroutine subtract_background
 
@@ -5914,7 +5963,7 @@ contains
         if( self%ft )      THROW_HARD('Real space only!, estimate_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, estimate_background')
         select case(trim(mode))
-        case('cryosparc','cs')
+        case('cryosparc')
             ! produces backround of shape CS_DIM x CS_DIM
             ! bin micrograph
             ldim_cs = [CS_DIM, CS_DIM,1]
@@ -7604,9 +7653,9 @@ contains
     end subroutine flipY
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes
-    subroutine radial_cc( self1, self2, rad_corrs , rad_dists)
+    subroutine radial_cc( self1, self2, corr, rad_dist )
         class(image),      intent(inout) :: self1, self2
-        real, allocatable, intent(out)   :: rad_corrs(:), rad_dists(:)
+        real, allocatable, intent(out)   :: corr(:), rad_dist(:)
         real, allocatable :: mean(:)
         type(image) :: dists_img
         integer :: n_shell_pix
@@ -7622,13 +7671,13 @@ contains
         ldim1 = self1%get_ldim()
         ldim2 = self2%get_ldim()
         if( ldim1(1) /= ldim2(1) .or. ldim1(2) /= ldim2(2) .or. ldim1(3) /= ldim2(3) )  &
-        THROW_HARD(' Nonconforming dimensions in image; rad_cc ')
+        THROW_HARD(' Nonconforming dimensions in image; rad_ccf ')
         ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
         radius_pix  = ldim_refs(1) / 2.   
         n_shells    = int(radius_pix)
         allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
         &shell_mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.true.)
-        allocate(rad_corrs(n_shells),rad_dists(n_shells),mean(n_shells))
+        allocate(corr(n_shells),mean(n_shells),rad_dist(n_shells))
         call dists_img%new(ldim_refs, smpd)
         call dists_img%cendist
         call dists_img%get_rmat_ptr( rmat_dists_img )
@@ -7642,7 +7691,7 @@ contains
                 shell_mask = .false.
             end where
             if( count(shell_mask) < 3 )then
-                rad_corrs(n) = 0.
+                corr(n) = 0.
                 mean(n) = 0.
             else
                 rvec1 = self1%serialize(shell_mask)
@@ -7650,9 +7699,9 @@ contains
                 call moment(rvec1, mean1, sdev1, var1, err)
                 call moment(rvec2, mean2, sdev2, var2, err)
                 mean(n) = mean1 - mean2
-                rad_corrs(n) = pearsn_serial(rvec1, rvec2)
+                corr(n) = pearsn_serial(rvec1, rvec2)
             endif
-            rad_dists(n) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
+            rad_dist(n) = ( dist_lbound * smpd + dist_ubound * smpd / 2. )
         enddo
         call dists_img%kill()
     end subroutine radial_cc

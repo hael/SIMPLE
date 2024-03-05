@@ -41,6 +41,7 @@ contains
         call atom%set_element(1,element)
         call atom%set_coord(1,smpd*(real(ldim)/2.)) ! DO NOT NEED THE +1
         call atom%convolve(one_atom, cutoff)
+        call one_atom%write('one_atom_simulated.mrc')
         call one_atom%fft()
         call img_copy%fft()
         call img_copy%phase_corr(one_atom,img_out,1.)
