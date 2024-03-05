@@ -2691,7 +2691,11 @@ contains
         where(tmp%rmat < TINY) tmp%rmat=0.
         call tmp%mask(real(self%ldim(1))/2., 'hard')
         call tmp%masscen(xyz)
-        a = arg(xyz(:2))
+        if (self%ldim(3) == 1) then
+            a = arg(xyz(:2))
+        else
+            a = arg(xyz)
+        end if
     end function box_cen_arg
 
     !>  \brief is for estimating the center of an image based on center of mass
