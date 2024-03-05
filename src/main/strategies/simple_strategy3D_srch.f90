@@ -16,7 +16,7 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    integer,           pointer :: symmat(:,:) => null()
+    integer,            pointer :: symmat(:,:) => null()
     type(eul_prob_tab), pointer :: eulprob_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
@@ -77,7 +77,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
         integer, parameter :: MAXITS = 60
-        real    :: lims(2,2), lims_init(2,2)
+        real :: lims(2,2), lims_init(2,2)
         ! set constants
         self%iptcl         = spec%iptcl
         self%nstates       = params_glob%nstates
@@ -197,14 +197,14 @@ contains
     subroutine inpl_srch( self, ref, xy )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
-        real, optional,         intent(in)    :: xy(2)
-        real      :: cxy(3)
-        integer   :: iref, irot, loc(1)
+        real,    optional,      intent(in)    :: xy(2)
+        real    :: cxy(3)
+        integer :: iref, irot, loc(1)
         if( self%doshift )then
             if( present(ref) )then
                 iref = ref
             else
-                loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
+                loc  = maxloc(s3D%proj_space_corrs(self%ithr,:))
                 iref = loc(1)
             endif
             ! BFGS over shifts with in-plane rot exhaustive callback
@@ -219,8 +219,8 @@ contains
 
     subroutine inpl_srch_peaks( self )
         class(strategy3D_srch), intent(inout) :: self
-        real      :: cxy(3)
-        integer   :: refs(self%npeaks_inpl), irot, ipeak
+        real    :: cxy(3)
+        integer :: refs(self%npeaks_inpl), irot, ipeak
         if( self%doshift )then
             ! BFGS over shifts with in-plane rot exhaustive callback
             refs = maxnloc(s3D%proj_space_corrs(self%ithr,:), self%npeaks_inpl)
