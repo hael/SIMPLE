@@ -239,18 +239,7 @@ contains
         call vol_no_bfac%write(fname_lp)
         ! mask
         call vol_bfac%ifft()
-        if( params%l_automsk ) has_mskfile = .false. ! turn off masking using file
-        if( params%l_automsk )then
-            if( cline%defined('thres') )then
-                call mskvol%automask3D(vol_no_bfac)
-            else
-                call mskvol%automask3D_otsu(vol_no_bfac)
-            endif
-            call mskvol%write('automask'//params%ext)
-            call vol_bfac%zero_background
-            call vol_bfac%mul(mskvol)
-            call mskvol%kill
-        else if( has_mskfile )then
+        if( has_mskfile )then
             call vol_bfac%zero_background
             if( cline%defined('lp_backgr') )then
                 call vol_bfac%lp_background(mskvol,params%lp_backgr)

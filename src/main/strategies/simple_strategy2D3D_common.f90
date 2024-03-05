@@ -463,7 +463,7 @@ contains
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            params_glob%l_filemsk .or. params_glob%l_automsk .or. params_glob%l_frac_update )then
+            params_glob%l_filemsk .or. params_glob%l_frac_update )then
             do_center = .false.
             xyz       = 0.
             return
@@ -789,16 +789,7 @@ contains
                 ! write low-pass filtered without B-factor or mask
                 call build_glob%vol2%write(lpvol)
                 ! masking
-                if( params_glob%l_automsk .or. params_glob%l_filemsk )then
-                    if( params_glob%l_automsk )then
-                        call cline%delete('mskfile')
-                        ! use the non-sharpened volume to make a mask
-                        call envmsk%automask3D_otsu(build_glob%vol2, do_apply=.false.)
-                        mskfile = 'automask'//params_glob%ext
-                        call envmsk%write(mskfile)
-                        call cline%set('mskfile', mskfile)
-                        params_glob%mskfile = mskfile
-                    endif
+                if( params_glob%l_filemsk )then
                     if( params_glob%l_filemsk )then
                         call envmsk%new(ldim, params_glob%smpd_crop)
                         call envmsk%read(params_glob%mskfile)

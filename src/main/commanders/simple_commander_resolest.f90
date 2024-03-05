@@ -316,12 +316,7 @@ contains
             call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        if( params%l_automsk )then
-            call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
-            call nonuni_filt2D_sub(even, odd, mask)
-        else
-            call nonuni_filt2D_sub(even, odd)
-        endif
+        call nonuni_filt2D_sub(even, odd)
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
@@ -370,17 +365,10 @@ contains
             call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        if( params%l_automsk )then
-            call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
-            do iptcl = 1, params%nptcls
-                call mask(iptcl)%get_mat_ptrs(pmask)
-            enddo
-        else
-            do iptcl = 1, params%nptcls
-                call mask(iptcl)%get_mat_ptrs(pmask)
-                pmask%rmat = 1;
-            enddo
-        endif
+        do iptcl = 1, params%nptcls
+            call mask(iptcl)%get_mat_ptrs(pmask)
+            pmask%rmat = 1;
+        enddo
         call uni_filt2D_sub(even, odd, mask)
         ! write output and destruct
         do iptcl = 1, params%nptcls

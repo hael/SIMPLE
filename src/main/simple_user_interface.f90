@@ -3142,7 +3142,7 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 1, 0, 0, 6, 6, 1, .true.)                                         ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 5, 4, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3153,13 +3153,11 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call postprocess%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
-        call postprocess%set_input('filt_ctrls', 2, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
-        call postprocess%set_input('filt_ctrls', 3, bfac)
-        call postprocess%set_input('filt_ctrls', 4, mirr)
-        call postprocess%set_input('filt_ctrls', 5, lp_backgr)
-        call postprocess%set_input('filt_ctrls', 6, nonuniform)
+        call postprocess%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
+        call postprocess%set_input('filt_ctrls', 2, bfac)
+        call postprocess%set_input('filt_ctrls', 3, mirr)
+        call postprocess%set_input('filt_ctrls', 4, lp_backgr)
+        call postprocess%set_input('filt_ctrls', 5, nonuniform)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, mskdiam)
         call postprocess%set_input('mask_ctrls', 2, mskfile)
@@ -3167,9 +3165,6 @@ contains
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call postprocess%set_input('mask_ctrls', 4, 'thres', 'num', 'Volume threshold',&
         &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
-        call postprocess%set_input('mask_ctrls', 5, automsk)
-        call postprocess%set_input('mask_ctrls', 6, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess

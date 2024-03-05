@@ -164,9 +164,6 @@ contains
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_refine3D_distr')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
-        ! take care of automask flag
-        if( cline%defined('automsk') ) call cline%delete('automsk')
-        if( params%l_automsk .and. l_multistates ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
         ! switch from low-pass to e/o refinement
         l_switch2eo = params%lp_iters >= 1
         if( .not.l_lpset ) l_switch2eo = .false. ! is already e/o
@@ -543,13 +540,6 @@ contains
                     endif
                     ! writes os_out
                     call build%spproj%write_segment_inside('out')
-                    ! automasking in postprocess
-                    if( params%l_automsk )then
-                        if( mod(niters,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
-                            call cline_postprocess%delete('mskfile')
-                            call cline_postprocess%set('automsk', trim(params%automsk))
-                        endif
-                    endif
                     ! per state post-process
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
@@ -573,16 +563,6 @@ contains
                             endif
                         endif
                     enddo
-                    ! update command-lines to use the mskfile for the next AUTOMSK_FREQ - 1 iterations
-                    if( params%l_automsk )then
-                        if( mod(niters,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
-                            params%mskfile = 'automask'//params%ext
-                            call cline_postprocess%set('mskfile', trim(params%mskfile))
-                            call cline_postprocess%delete('automsk')
-                            call cline%set('mskfile', trim(params%mskfile))
-                            call job_descr%set('mskfile', trim(params%mskfile))
-                        endif
-                    endif
             end select
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
             ! CONVERGENCE
@@ -698,8 +678,6 @@ contains
                 call fclose(fnr)
             endif
         end do
-        ! put back automsk flag if needed
-        if( params%l_automsk ) call cline%set('automsk', trim(params%automsk))
         call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
@@ -723,9 +701,8 @@ contains
         character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter, orig_objfun
         integer                           :: startit, i, state
         real                              :: corr, corr_prev
-        logical                           :: converged, l_automsk, l_sigma, l_switch2euclid
+        logical                           :: converged, l_sigma, l_switch2euclid
         call build%init_params_and_build_strategy3D_tbox(cline,params)
-        l_automsk = params%l_automsk
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         if( startit == 1 ) call build%spproj_field%clean_updatecnt
@@ -761,9 +738,6 @@ contains
                     l_switch2euclid = .true.
                 endif
             endif
-            ! take care of automask flag
-            if( cline%defined('automsk') ) call cline%delete('automsk')
-            if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
             params%startit     = startit
             params%which_iter  = params%startit
             params%outfile     = 'algndoc'//METADATA_EXT
@@ -781,16 +755,6 @@ contains
                 endif
                 ! exponential cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
-                ! to control the masking behaviour in simple_strategy2D3D_common :: norm_struct_facts
-                if( l_automsk )then
-                    if( mod(params%which_iter,AUTOMSK_FREQ) == 0 .or. i == 1 )then
-                        call cline%set('automsk', trim(params%automsk))
-                        params%l_automsk = .true.
-                    else
-                        call cline%delete('automsk')
-                        params%l_automsk = .false.
-                    endif
-                endif
                 if( l_sigma )then
                     call cline_calc_sigma%set('which_iter',real(i))
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
@@ -852,8 +816,6 @@ contains
                     l_switch2euclid = .false.
                 endif
             end do
-            ! put back automsk flag if needed
-            if( l_automsk ) call cline%set('automsk', trim(params%automsk))
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
