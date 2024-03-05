@@ -203,7 +203,6 @@ type :: nanoparticle
     procedure          :: get_natoms
     procedure          :: get_valid_corrs
     procedure          :: set_img
-    procedure          :: get_img
     procedure          :: set_atomic_coords
     procedure          :: set_coords4stats
     procedure, private :: pack_instance4stats
@@ -317,12 +316,6 @@ contains
                 THROW_HARD('Wrong input parameter img type (which); set_img')
         end select
     end subroutine set_img
-
-    subroutine get_img(self, img)
-        class(nanoparticle), intent(in) :: self
-        type(image), intent(out) :: img
-        img = self%img
-    end subroutine
 
     ! sets the atom positions to be the ones in the inputted PDB file.
     subroutine set_atomic_coords( self, pdb_file )
@@ -1778,7 +1771,6 @@ contains
         integer     :: cc
         if( present(coords) )then
             call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
-            print *, 'SIZE(COORDS) = ', size(coords, dim = 1)
             do cc = 1, size(coords, dim = 2)
                 call set_atm_info
             enddo

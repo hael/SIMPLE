@@ -1308,13 +1308,11 @@ contains
         logical, allocatable :: mask(:)
         integer :: i,j, ninside, funit, iostat
         nptcls  = self%npeaks
-        print *, 'NPTCLS = ', nptcls
         if( nptcls == 0 ) return
         call self%get_positions(pos, smpd_new=smpd)
         if( box == ldim_raw_box(1) )then
             ! nothing to adjust
             updated_pos = pos
-            print *, 'BOX == LDIM_RAW_BOX(1)'
         else
             ! transform
             updated_pos = nint(real(pos) - real(box-ldim_raw_box(1))/2.)
@@ -1323,31 +1321,18 @@ contains
                 ! flag positions
                 allocate(mask(nptcls),source=.true.)
                 do i = 1,nptcls
-                    if( any(updated_pos(i,:) < 0) ) then 
-                        mask(i) = .false.
-                        print *, 'COORDINATES LESS THAN 0 AT: ', updated_pos(i,:), 'i = ', i
-                    endif
-                    if( updated_pos(i,1)+ldim_raw_box(1)-1 >= ldim_raw(1)) then
-                        mask(i) = .false.
-                        print *, 'X-COORDINATE OUT OF BOUNDS AT: ', updated_pos(i,:), 'i = ', i
-                    endif
-                    if( updated_pos(i,2)+ldim_raw_box(2)-1 >= ldim_raw(2)) then
-                        mask(i) = .false.
-                        print *, 'Y-COORDINATE OUT OF BOUNDS AT: ', updated_pos(i,:), 'i = ', i
-                    endif
+                    if( any(updated_pos(i,:) < 0) ) mask(i) = .false.
+                    if( updated_pos(i,1)+ldim_raw_box(1)-1 >= ldim_raw(1)) mask(i) = .false.
+                    if( updated_pos(i,2)+ldim_raw_box(2)-1 >= ldim_raw(2)) mask(i) = .false.
                 enddo
                 ninside = count(mask)
-                print *, 'NINSIDE = ', ninside
                 if( ninside == 0 )then
                     ! all outside
                     nptcls = 0
-                    print *, 'ALL OUTSIDE'
                 else if( ninside == nptcls )then
                     ! all inside
-                    print *, 'ALL INSIDE'
                 else
                     ! some outside
-                    print *, 'SOME INSIDE, SOME OUTSIDE'
                     deallocate(pos)
                     allocate(pos(ninside,2),source=0)
                     j = 0
