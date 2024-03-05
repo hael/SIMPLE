@@ -320,12 +320,6 @@ contains
         ! Fourier cropping
         call img%fft()
         call img%clip(img_out)
-        ! alternatively:
-        ! call img%fft
-        ! call img%clip(img_out)
-        ! call img_out%ifft
-        ! call img_out%norm_noise(build_glob%lmsk_crop, sdev_noise)
-        ! call img_out%fft
         ! Shift image to rotational origin
         crop_factor = real(params_glob%box_crop) / real(params_glob%box)
         x = build_glob%spproj_field%get(iptcl, 'x') * crop_factor
@@ -592,7 +586,7 @@ contains
             call mskvol%kill
         else
             ! circular masking
-            call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
+            call vol_ptr%mask(params_glob%msk_crop, 'soft', backgr=0.0)
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then

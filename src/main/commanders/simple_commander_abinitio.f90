@@ -859,6 +859,7 @@ contains
             else
                 trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
+            it = 1
             call cline_refine3D%set('box_crop',  params%box_crop)
             call cline_refine3D%set('trs',       0.)
             call cline_refine3D%set('lp',        params%lp)
@@ -869,6 +870,7 @@ contains
             call exec_refine3D(iter)
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
+            it = 2
             call cline_refine3D%set('reg_init', 'no')
             call cline_refine3D%set('trs',      trslim)
             call cline_refine3D%set('maxits',   MAXITS2)
@@ -1045,7 +1047,8 @@ contains
         contains
 
             subroutine exec_refine3D( iter )
-                integer, intent(out) :: iter
+                integer,          intent(out) :: iter
+                character(len=:), allocatable :: stage
                 call cline_refine3D%delete('endit')
                 params_ptr  => params_glob
                 params_glob => null()
@@ -1058,6 +1061,13 @@ contains
                 call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
                 call del_file(trim(DIST_FBODY)      //'.dat')
                 call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+                if( (l_lpset.and.it<3) .or. ((.not.l_lpset).and.it<=NSTAGES) )then
+                    stage = '_stage_'//int2str(it)
+                    vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                    vol_pproc = add2fbody(vol,params%ext,PPROC_SUFFIX)
+                    if( file_exists(vol)      ) call simple_copy_file(vol,       add2fbody(vol,params%ext,stage))
+                    if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                endif
             end subroutine exec_refine3D
 
             subroutine symmetrize()
