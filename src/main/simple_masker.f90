@@ -13,7 +13,6 @@ public :: masker, automask2D
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: WINSZ = 3 !< real-space filter half-width window
 logical, parameter :: DEBUG = .false.
 
 type, extends(binimage) :: masker
@@ -23,7 +22,6 @@ type, extends(binimage) :: masker
     real    :: pix_thres = 0.   !< binarisation threshold
     integer :: edge      = 3    !< edge width
     integer :: binwidth  = 1    !< additional layers to grow
-    integer :: n         = 0    !< number of classes
     integer :: idim(3)   = 0    !< image dimension
   contains
     procedure          :: automask3D

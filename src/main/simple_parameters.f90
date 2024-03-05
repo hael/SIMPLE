@@ -409,7 +409,6 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
-    logical :: l_automsk      = .false.
     logical :: l_bfac         = .false.
     logical :: l_cartesian    = .false.
     logical :: l_corrw        = .false.
@@ -1254,19 +1253,10 @@ contains
         endif
         ! automasking options
         self%l_filemsk = .false.
-        self%l_automsk = .false.
         if( cline%defined('mskfile') )then
             if( .not.file_exists(trim(self%mskfile)) ) THROW_HARD('Inputted mask file '//trim(self%mskfile)//' does not exist')
             self%l_filemsk = .true.  ! indicate file is inputted
         endif
-        select case(trim(self%automsk))
-            case('yes','tight')
-                self%l_automsk = .true.
-            case('no')
-                self%l_automsk = .false.
-            case DEFAULT
-                THROW_HARD('automsk flag value: '//trim(self%automsk)//' is unsupported')
-        end select
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag
