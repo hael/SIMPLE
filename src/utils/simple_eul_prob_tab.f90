@@ -1,4 +1,4 @@
-! orientation regularizer, used in refine3D
+! orientation eul_prob_tab, used in refine3D
 module simple_eul_prob_tab
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -8,12 +8,12 @@ use simple_dist_binfile, only: dist_binfile
 use simple_builder,      only: build_glob
 implicit none
 
-public :: regularizer
+public :: eul_prob_tab
 public :: calc_num2sample, calc_numinpl2sample2D, calc_numcls2sample2D, eulprob_dist_switch, eulprob_corr_switch
 private
 #include "simple_local_flags.inc"
 
-type :: regularizer
+type :: eul_prob_tab
     real,    allocatable :: dist_loc_tab(:,:,:) !< nspace, iptcl, 2 (1->dist, 2->inpl_ind)
     integer, allocatable :: ptcl_ref_map(:)     !< ptcl -> ref assignment map
     logical, allocatable :: ptcl_avail(:)       !< for communicating restraints and state selections
@@ -32,14 +32,14 @@ type :: regularizer
     procedure :: read_assignment
     ! DESTRUCTOR
     procedure :: kill
-end type regularizer
+end type eul_prob_tab
 
 contains
 
     ! CONSTRUCTORS
 
     subroutine new( self )
-        class(regularizer), intent(inout) :: self
+        class(eul_prob_tab), intent(inout) :: self
         integer    :: i, iptcl
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
@@ -50,65 +50,10 @@ contains
         enddo
     end subroutine new
 
-    ! subroutine fill_tab( self, pftcc, glob_pinds )
-    !     use simple_polarft_corrcalc, only: polarft_corrcalc
-    !     class(regularizer),      intent(inout) :: self
-    !     class(polarft_corrcalc), intent(inout) :: pftcc
-    !     integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
-    !     integer   :: i, j, iref, iptcl, refs_ns, ipeak, inpl_ns, ithr
-    !     real      :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob), x
-    !     integer   :: inds_sorted(pftcc%nrots,nthr_glob)
-    !     call seed_rnd
-    !     call calc_num2sample(pftcc%nrots, 'dist_inpl', inpl_ns)
-    !     !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl) proc_bind(close) schedule(static)
-    !     do iref = 1, params_glob%nspace
-    !         do i = 1, pftcc%nptcls
-    !             iptcl = glob_pinds(i)
-    !             if( self%ptcl_avail(iptcl) )then
-    !                 ithr = omp_get_thread_num() + 1
-    !                 call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-    !                 dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-    !                 self%dist_loc_tab(iref,iptcl,2) = inpl_smpl(ithr) ! contained function, below
-    !                 self%dist_loc_tab(iref,iptcl,1) = dists_inpl(int(self%dist_loc_tab(iref,iptcl,2)),ithr)
-    !             endif
-    !         enddo
-    !     enddo
-    !     !$omp end parallel do
-
-    ! contains
-
-    !     ! inpl greedy sampling based on unnormalized corr values of all inpl rotations
-    !     function inpl_smpl( ithr ) result( which )
-    !         integer, intent(in) :: ithr
-    !         integer :: j, which
-    !         real    :: rnd, bound, sum_dist
-    !         dists_inpl_sorted(:,ithr) = dists_inpl(:,ithr)
-    !         inds_sorted(:,ithr)  = (/(j,j=1,pftcc%nrots)/)
-    !         call hpsort(dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
-    !         rnd      = ran3()
-    !         sum_dist = sum(dists_inpl_sorted(1:inpl_ns,ithr))
-    !         if( sum_dist < TINY )then
-    !             ! uniform sampling
-    !             which = 1 + floor(real(inpl_ns) * rnd)
-    !         else
-    !             ! normalizing within the hard-limit
-    !             dists_inpl_sorted(1:inpl_ns,ithr) = dists_inpl_sorted(1:inpl_ns,ithr) / sum_dist
-    !             bound = 0.
-    !             do which = 1,inpl_ns
-    !                 bound = bound + dists_inpl_sorted(which,ithr)
-    !                 if( rnd >= bound )exit
-    !             enddo
-    !             which = min(which,inpl_ns)
-    !         endif
-    !         which = inds_sorted(which,ithr)
-    !     end function inpl_smpl
-
-    ! end subroutine fill_tab
-
     subroutine fill_tab( self, pftcc, glob_pinds )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
-        class(regularizer),      intent(inout) :: self
+        class(eul_prob_tab),      intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer,      parameter :: MAXITS = 60
@@ -193,7 +138,7 @@ contains
     ! reference normalization (same energy) of the global dist value table
     ! [0,1] normalization of the whole table
     subroutine tab_normalize( self )
-        class(regularizer), intent(inout) :: self
+        class(eul_prob_tab), intent(inout) :: self
         integer :: iptcl
         real    :: sum_dist_all, min_dist, max_dist
         ! normalize so prob of each ptcl is between [0,1] for all refs
@@ -238,7 +183,7 @@ contains
 
     ! ptcl -> ref assignment using the global normalized dist value table
     subroutine tab_align( self )
-        class(regularizer), intent(inout) :: self
+        class(eul_prob_tab), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
                    &stab_inds(params_glob%fromp:params_glob%top, params_glob%nspace), inds_sorted(params_glob%nspace)
         real    :: sorted_tab(params_glob%fromp:params_glob%top, params_glob%nspace),&
@@ -306,8 +251,8 @@ contains
 
     ! write the partition-wise (or global) dist value table to a binary file
     subroutine write_tab( self, binfname )
-        class(regularizer), intent(in) :: self
-        character(len=*),   intent(in) :: binfname
+        class(eul_prob_tab), intent(in) :: self
+        character(len=*),    intent(in) :: binfname
         type(dist_binfile) :: binfile
         call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
         call binfile%write(self%dist_loc_tab)
@@ -316,8 +261,8 @@ contains
 
     ! read the partition-wise (or global) dist value binary file to partition-wise (or global) reg object's dist value table
     subroutine read_tab( self, binfname )
-        class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in)    :: binfname
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
         type(dist_binfile) :: binfile
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
@@ -331,9 +276,9 @@ contains
     ! read the global dist value binary file to partition-wise reg object's dist value table
     ! [fromp, top]: partition particle index range
     subroutine read_tab_from_glob( self, binfname, fromp, top )
-        class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in)    :: binfname
-        integer,            intent(in)    :: fromp, top
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
+        integer,             intent(in)    :: fromp, top
         type(dist_binfile) :: binfile
         integer            :: iptcl, iref
         if( file_exists(binfname) )then
@@ -348,9 +293,9 @@ contains
     ! read the partition-wise dist value binary file to global reg object's dist value table
     ! [fromp, top]: global partition particle index range
     subroutine read_tab_to_glob( self, binfname, fromp, top )
-        class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in)    :: binfname
-        integer,            intent(in)    :: fromp, top
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
+        integer,             intent(in)    :: fromp, top
         type(dist_binfile) :: binfile
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
@@ -363,8 +308,8 @@ contains
 
     ! write a global assignment map to binary file
     subroutine write_assignment( self, binfname )
-        class(regularizer), intent(in) :: self
-        character(len=*),   intent(in) :: binfname
+        class(eul_prob_tab), intent(in) :: self
+        character(len=*),    intent(in) :: binfname
         integer(kind=8) :: file_header(3)
         integer :: funit, io_stat, addr, iptcl, datasz
         datasz      = sizeof(iptcl)
@@ -385,8 +330,8 @@ contains
 
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )
-        class(regularizer), intent(inout) :: self
-        character(len=*),   intent(in)    :: binfname
+        class(eul_prob_tab), intent(inout) :: self
+        character(len=*),    intent(in)    :: binfname
         integer(kind=8) :: file_header(3)
         integer :: funit, io_stat, addr, iptcl, datasz, fromp, top, iglob
         datasz = sizeof(iptcl)
@@ -413,7 +358,7 @@ contains
     ! DESTRUCTOR
 
     subroutine kill( self )
-        class(regularizer), intent(inout) :: self
+        class(eul_prob_tab), intent(inout) :: self
         if( allocated(self%dist_loc_tab)  ) deallocate(self%dist_loc_tab)
         if( allocated(self%ptcl_ref_map)  ) deallocate(self%ptcl_ref_map)
         if( allocated(self%ptcl_avail)    ) deallocate(self%ptcl_avail)

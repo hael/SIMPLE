@@ -10,7 +10,7 @@ use simple_image,                   only: image
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
-use simple_eul_prob_tab,             only: regularizer
+use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_polarft_corrcalc,        only: polarft_corrcalc
 use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
@@ -38,7 +38,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(regularizer),      target :: eulprob_obj
+type(eul_prob_tab),     target :: eulprob_obj
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
