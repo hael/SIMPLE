@@ -26,7 +26,7 @@ contains
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
-        if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peak_ori')
+        if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; assign_ori')
         call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
         ! in-plane (inpl)
         call build_glob%spproj_field%set(s%iptcl, 'inpl', real(inpl))
@@ -47,7 +47,7 @@ contains
         l_multistates = s%nstates > 1
         if( l_multistates )then
             state = s3D%proj_space_state(ref)
-            if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peak_ori')
+            if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; assign_ori')
         endif
         mi_state = 0.
         if( s%prev_state == state ) mi_state = 1.
@@ -118,6 +118,7 @@ contains
         corr = s3D%proj_space_corrs(s%ithr,ref)
         sh   = s3D%proj_space_shift(:,ref,s%ithr)
         inpl = s3D%proj_space_inplinds(s%ithr, ref)
+        if( params_glob%cc_objfun == OBJFUN_CC .and. corr < 0. ) corr = 0.
         call assign_ori( s, ref, inpl, corr, sh )
     end subroutine extract_peak_ori
 
