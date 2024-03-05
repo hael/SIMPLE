@@ -355,7 +355,7 @@ contains
             enddo
             if( l_switch2euclid )then
                 ! first, estimate group sigmas
-                call cline_calc_sigma%set('which_iter', real(params%startit))
+                call cline_calc_sigma%set('which_iter', params%startit)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
                 ! then, estimate first sigmas given reconstructed starting volumes(s) and previous orientations
                 if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
@@ -416,7 +416,7 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
             if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
-                call cline_calc_sigma%set('which_iter',real(iter))
+                call cline_calc_sigma%set('which_iter', iter)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
             if( have_oris .or. iter > params%startit )then
@@ -429,12 +429,12 @@ contains
                         params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
                     endif
                     call job_descr%set('szsn', int2str(params%szsn))
-                    call cline%set('szsn', real(params%szsn))
+                    call cline%set('szsn', params%szsn)
                 endif
             endif
             if( str_has_substr(params%refine, 'prob') )then
                 ! generate all corrs
-                call cline_prob_align%set('which_iter', int2str(params%which_iter))
+                call cline_prob_align%set('which_iter', params%which_iter)
                 call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
                 call cline_prob_align%set('objfun',     orig_objfun)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
@@ -444,11 +444,11 @@ contains
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set( 'extr_iter',  trim(int2str(params%extr_iter)))
-            call cline%set(     'extr_iter',  real(params%extr_iter))
+            call cline%set(     'extr_iter',  params%extr_iter)
             call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
-            call cline%set(     'which_iter', real(params%which_iter))
+            call cline%set(     'which_iter', params%which_iter)
             call job_descr%set( 'startit',    trim(int2str(iter)))
-            call cline%set(     'startit',    real(iter))
+            call cline%set(     'startit',    iter)
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good
@@ -477,7 +477,7 @@ contains
                     ! nothing to do
                 case DEFAULT
                     call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
-                    call cline_volassemble%set( 'which_iter', int2str(params%which_iter) )
+                    call cline_volassemble%set( 'which_iter', params%which_iter)
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
                         if( str_has_substr(params%refine,'snhc') )then
@@ -715,9 +715,11 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
+        type(prob_align_commander)        :: xprob_align
+        class(parameters), pointer        :: params_ptr => null()
         type(parameters)                  :: params
         type(builder)                     :: build
-        type(cmdline)                     :: cline_calc_sigma, cline_calc_pspec_distr
+        type(cmdline)                     :: cline_calc_sigma, cline_calc_pspec_distr, cline_prob_align
         character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter, orig_objfun
         integer                           :: startit, i, state
         real                              :: corr, corr_prev
@@ -792,6 +794,20 @@ contains
                 if( l_sigma )then
                     call cline_calc_sigma%set('which_iter',real(i))
                     call xcalc_group_sigmas%execute(cline_calc_sigma)
+                endif
+                if( str_has_substr(params%refine, 'prob') )then
+                    cline_prob_align = cline
+                    call cline_prob_align%set('prg',        'prob_align')
+                    call cline_prob_align%set('which_iter', params%which_iter)
+                    call cline_prob_align%set('vol1',       params%vols(1))
+                    call cline_prob_align%set('objfun',     orig_objfun)
+                    call cline_prob_align%set('nparts',     1)
+                    if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
+                    params_ptr  => params_glob
+                    params_glob => null()
+                    call xprob_align%execute( cline_prob_align )
+                    params_glob => params_ptr
+                    params_ptr  => null()
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
@@ -1263,8 +1279,11 @@ contains
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         character(len=:), allocatable :: fname
+        class(builder),       pointer :: build_ptr
+        class(parameters),    pointer :: params_ptr
         type(builder)                 :: build
         type(parameters)              :: params
+        type(prob_tab_commander)      :: xprob_tab
         type(regularizer)             :: reg_obj
         type(cmdline)                 :: cline_prob_tab
         type(qsys_env)                :: qenv
@@ -1283,14 +1302,23 @@ contains
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts, nptcls=params%nptcls)
-        call cline_prob_tab%gen_job_descr(job_descr)
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
+        ! execution
+        if( params%nparts == 1)then
+            ! shared memory execution
+            build_ptr   => build_glob
+            params_ptr  => params_glob
+            nullify(params_glob, build_glob)
+            call xprob_tab%execute(cline_prob_tab)
+            build_glob  => build_ptr
+            params_glob => params_ptr
+            nullify(params_ptr, build_ptr)
+        else
+            ! setup the environment for distributed execution
+            call qenv%new(params%nparts, nptcls=params%nptcls)
+            call cline_prob_tab%gen_job_descr(job_descr)
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        endif
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
@@ -1304,7 +1332,12 @@ contains
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call reg_obj%write_assignment(fname)
+        ! cleanup
         call reg_obj%kill
+        call build%kill_general_tbox
+        call cline_prob_tab%kill
+        call qenv%kill
+        call job_descr%kill
         call qsys_job_finished('simple_commander_refine3D :: exec_prob_align')
         call qsys_cleanup
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)

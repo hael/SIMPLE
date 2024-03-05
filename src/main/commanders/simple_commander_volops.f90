@@ -207,7 +207,7 @@ contains
         else if( params%l_nonuniform .and. has_fsc )then
             call sphere%new(ldim, smpd)
             sphere = 1.0
-            call sphere%mask(params%msk, 'soft', backgr=0.0)
+            call sphere%mask(params%msk_crop, 'soft', backgr=0.0)
             call sphere%one_at_edge
             call nonuni_filt3D(vol_odd, vol_even, sphere)
             call sphere%kill
@@ -259,7 +259,7 @@ contains
             endif
             call mskvol%kill
         else
-            call vol_bfac%mask(params%msk, 'soft')
+            call vol_bfac%mask(params%msk_crop, 'soft')
         endif
         ! output in cwd
         call vol_bfac%write(fname_pproc)
@@ -511,6 +511,7 @@ contains
         type(sym)             :: syme
         character(len=STDLEN) :: fbody
         real                  :: shvec(3)
+        integer               :: box
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 20.)
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
@@ -520,13 +521,13 @@ contains
         ! center volume
         shvec = 0.
         if( params%center.eq.'yes' )then
-            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk_crop)
             call build%vol%shift(shvec)
             fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
             call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
-        call build%vol%mask(params%msk, 'soft')
+        call build%vol%mask(params%msk_crop, 'soft')
         ! init search object
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
@@ -551,6 +552,9 @@ contains
                 call syme%new(params%pgrp)
                 ! rotate the orientations & transfer the 3d shifts to 2d
                 shvec = -1. * shvec ! the sign is right
+                ! accounting for different volume/particle size
+                box   = build%spproj%get_box()
+                shvec = shvec * real(box) / real(params%box_crop)
                 call syme%apply_sym_with_shift(build%spproj_field, symaxis, shvec)
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
             endif
