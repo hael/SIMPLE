@@ -987,7 +987,7 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
-        use simple_regularizer,         only: regularizer
+        use simple_eul_prob_tab,         only: regularizer
         use simple_image
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -1001,7 +1001,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(regularizer)             :: reg_obj
+        type(regularizer)             :: eulprob_obj
         type(ori)                     :: orientation
         integer  :: nptcls, iptcl, s, iref, loc, ithr, iter
         logical  :: l_ctf, do_center
@@ -1018,7 +1018,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
-        call reg_obj%new(params%l_neigh)
+        call eulprob_obj%new
         ! e/o partioning
         if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
             call build%spproj%os_ptcl3D%partition_eo
@@ -1082,10 +1082,10 @@ contains
             print *, 'Aligning the particles ...'
             ! Memoize particles FFT parameters
             call pftcc%memoize_ptcls
-            call reg_obj%fill_tab(pftcc, pinds)
+            call eulprob_obj%fill_tab(pftcc, pinds)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
-            call reg_obj%tab_normalize
-            call reg_obj%tab_align
+            call eulprob_obj%tab_normalize
+            call eulprob_obj%tab_align
             print *, 'Reconstructing the 3D volume (unihard-alignment) ...'
             ! init volumes
             call preprecvols
@@ -1103,18 +1103,18 @@ contains
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
-                iref = reg_obj%ptcl_ref_map(iptcl)
-                if( reg_obj%dist_loc_tab(iref, iptcl, 1) < TINY ) cycle
+                iref = eulprob_obj%ptcl_ref_map(iptcl)
+                if( eulprob_obj%dist_loc_tab(iref, iptcl, 1) < TINY ) cycle
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 euls = build_glob%eulspace%get_euler(iref)
                 ! getting the particle orientation
                 shvec = orientation%get_2Dshift()
                 call orientation%set_shift(shvec)
-                loc     = int(reg_obj%dist_loc_tab(iref, iptcl, 2))
+                loc     = int(eulprob_obj%dist_loc_tab(iref, iptcl, 2))
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', reg_obj%dist_loc_tab(iref, iptcl, 1))
+                call orientation%set('w', eulprob_obj%dist_loc_tab(iref, iptcl, 1))
                 ! update doc
                 call build_glob%spproj_field%set_euler(iptcl, euls)
                 ! insert
@@ -1169,7 +1169,7 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_regularizer,         only: regularizer
+        use simple_eul_prob_tab,         only: regularizer
         use simple_euclid_sigma2,       only: euclid_sigma2
         use simple_image
         class(prob_tab_commander), intent(inout) :: self
@@ -1182,7 +1182,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(regularizer)             :: reg_obj
+        type(regularizer)             :: eulprob_obj
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
@@ -1197,7 +1197,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call reg_obj%new(params%l_neigh)
+        call eulprob_obj%new
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -1258,10 +1258,10 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call reg_obj%fill_tab(pftcc, pinds)
+        call eulprob_obj%fill_tab(pftcc, pinds)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call reg_obj%write_tab(fname)
-        call reg_obj%kill
+        call eulprob_obj%write_tab(fname)
+        call eulprob_obj%kill
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
@@ -1272,7 +1272,7 @@ contains
     subroutine exec_prob_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_regularizer, only: regularizer
+        use simple_eul_prob_tab, only: regularizer
         use simple_image
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -1284,7 +1284,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(prob_tab_commander)      :: xprob_tab
-        type(regularizer)             :: reg_obj
+        type(regularizer)             :: eulprob_obj
         type(cmdline)                 :: cline_prob_tab
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
@@ -1298,7 +1298,7 @@ contains
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
-        call reg_obj%new(params%l_neigh)
+        call eulprob_obj%new
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1322,18 +1322,18 @@ contains
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call reg_obj%read_tab_to_glob(fname, 1, params%nptcls)
+            call eulprob_obj%read_tab_to_glob(fname, 1, params%nptcls)
         enddo
-        call reg_obj%tab_normalize
-        call reg_obj%tab_align
+        call eulprob_obj%tab_normalize
+        call eulprob_obj%tab_align
         ! write the global corr/loc table
         fname = trim(DIST_FBODY)//'.dat'
-        call reg_obj%write_tab(fname)
+        call eulprob_obj%write_tab(fname)
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
-        call reg_obj%write_assignment(fname)
+        call eulprob_obj%write_assignment(fname)
         ! cleanup
-        call reg_obj%kill
+        call eulprob_obj%kill
         call build%kill_general_tbox
         call cline_prob_tab%kill
         call qenv%kill

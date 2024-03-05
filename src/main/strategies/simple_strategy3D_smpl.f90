@@ -8,7 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
-use simple_regularizer,      only: reg_dist_switch
+use simple_eul_prob_tab,      only: eulprob_dist_switch
 implicit none
 
 public :: strategy3D_smpl
@@ -49,23 +49,22 @@ contains
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
+                    irot = greedy_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
                     locs(iref)      = irot
                     ref_corrs(iref) = inpl_corrs(irot)
                 endif
             enddo
             self%s%nrefs_eval = self%s%nrefs
-            iref = greedy_sampling(reg_dist_switch(ref_corrs), s3D%smpl_refs_ns)
+            iref = greedy_sampling(eulprob_dist_switch(ref_corrs), s3D%smpl_refs_ns)
             irot = locs(iref)
             corr = ref_corrs(iref)
-            call self%s%store_solution(iref, irot, corr)
             if( self%s%doshift )then
-                call self%s%inpl_srch
+                call self%s%inpl_srch(ref=iref)
                 irot = s3D%proj_space_inplinds(self%s%ithr, iref)
                 corr = s3D%proj_space_corrs(self%s%ithr, iref)
-                call assign_ori(self%s, iref, irot, corr, sh_in=s3D%proj_space_shift(:,iref,self%s%ithr))
+                call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
             else
-                call assign_ori(self%s, iref, irot, corr)
+                call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

@@ -34,7 +34,7 @@ contains
     end subroutine new_greedy_smpl
 
     subroutine srch_greedy_smpl( self, ithr )
-        use simple_regularizer, only: reg_dist_switch
+        use simple_eul_prob_tab, only: eulprob_dist_switch
         class(strategy3D_greedy_smpl), intent(inout) :: self
         integer,                    intent(in)    :: ithr
         integer :: iref, isample, loc(1), inds(self%s%nrots)
@@ -51,7 +51,7 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc = greedy_sampling(reg_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
+                    loc = greedy_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 end if
             end do

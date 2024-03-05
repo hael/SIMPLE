@@ -7,7 +7,7 @@ use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
-use simple_regularizer,        only: regularizer
+use simple_eul_prob_tab,        only: regularizer
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
@@ -17,7 +17,7 @@ private
 
 type strategy3D_spec
     integer,           pointer :: symmat(:,:) => null()
-    type(regularizer), pointer :: reg_obj
+    type(regularizer), pointer :: eulprob_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
@@ -194,20 +194,25 @@ contains
         cxy = self%cart_shsrch_obj%minimize(nevals, shvec)
     end function shift_srch_cart
 
-    subroutine inpl_srch( self, xy )
+    subroutine inpl_srch( self, ref, xy )
         class(strategy3D_srch), intent(inout) :: self
+        integer, optional,      intent(in)    :: ref
         real, optional,         intent(in)    :: xy(2)
         real      :: cxy(3)
-        integer   :: ref, irot, loc(1)
+        integer   :: iref, irot, loc(1)
         if( self%doshift )then
-            loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
-            ref = loc(1)
+            if( present(ref) )then
+                iref = ref
+            else
+                loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
+                iref = loc(1)
+            endif
             ! BFGS over shifts with in-plane rot exhaustive callback
-            call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+            call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
             cxy = self%grad_shsrch_obj%minimize(irot=irot, xy=xy)
             if( irot > 0 )then
                 ! irot > 0 guarantees improvement found, update solution
-                call self%store_solution(ref, irot, cxy(1), sh=cxy(2:3))
+                call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
             endif
         endif
     end subroutine inpl_srch

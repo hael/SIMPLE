@@ -35,6 +35,7 @@ contains
     end subroutine new_prob
 
     subroutine srch_prob( self, ithr )
+    use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
         integer :: iref, iptcl, irot
@@ -46,17 +47,16 @@ contains
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
             iptcl = self%s%iptcl
-            iref  = self%spec%reg_obj%ptcl_ref_map(iptcl)
-            corr  =     self%spec%reg_obj%dist_loc_tab(iref, iptcl, 1)
-            irot  = int(self%spec%reg_obj%dist_loc_tab(iref, iptcl, 2))
-            call self%s%store_solution(iref, irot, corr)
+            iref  = self%spec%eulprob_obj%ptcl_ref_map(iptcl)
+            corr  = eulprob_corr_switch(self%spec%eulprob_obj%dist_loc_tab(iref, iptcl, 1))
+            irot  =                 int(self%spec%eulprob_obj%dist_loc_tab(iref, iptcl, 2))
             if( self%s%doshift )then
-                call self%s%inpl_srch
+                call self%s%inpl_srch(ref=iref)
                 irot = s3D%proj_space_inplinds(self%s%ithr, iref)
                 corr = s3D%proj_space_corrs(self%s%ithr, iref)
-                call assign_ori(self%s, iref, irot, corr, sh_in=s3D%proj_space_shift(:,iref,self%s%ithr))
+                call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
             else
-                call assign_ori(self%s, iref, irot, corr)
+                call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
@@ -65,7 +65,6 @@ contains
 
     subroutine oris_assign_prob( self )
         class(strategy3D_prob), intent(inout) :: self
-        call extract_peak_ori(self%s)
     end subroutine oris_assign_prob
 
     subroutine kill_prob( self )

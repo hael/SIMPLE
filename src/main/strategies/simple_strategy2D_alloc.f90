@@ -41,7 +41,7 @@ contains
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( neigh_frac )
-        use simple_regularizer, only: calc_numinpl2sample2D, calc_numcls2sample2D
+        use simple_eul_prob_tab, only: calc_numinpl2sample2D, calc_numcls2sample2D
         real, intent(in) :: neigh_frac ! neighborhood size [0,1]
         logical          :: zero_oris, ncls_diff
         integer          :: ncls_eff
