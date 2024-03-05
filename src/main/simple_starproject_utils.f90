@@ -44,6 +44,7 @@ end type star_data
 
 type star_file
     character(len=LONGSTRLEN) :: filename
+    character(len=LONGSTRLEN) :: filenamebak
     character(len=LEN_LINE)   :: rootdir
     type(star_data)           :: optics
     type(star_data)           :: stacks
