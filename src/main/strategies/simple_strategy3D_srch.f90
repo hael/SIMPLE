@@ -7,7 +7,7 @@ use simple_cartft_corrcalc,    only: cftcc_glob
 use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
-use simple_eul_prob_tab,        only: regularizer
+use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_strategy3D_alloc    ! singleton s3D
 implicit none
 
@@ -17,7 +17,7 @@ private
 
 type strategy3D_spec
     integer,           pointer :: symmat(:,:) => null()
-    type(regularizer), pointer :: eulprob_obj
+    type(eul_prob_tab), pointer :: eulprob_obj
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.

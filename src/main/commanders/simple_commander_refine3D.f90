@@ -987,7 +987,7 @@ contains
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_parameters,          only: params_glob
         use simple_fplane,              only: fplane
-        use simple_eul_prob_tab,         only: regularizer
+        use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_image
         class(check_align_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -1001,7 +1001,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(regularizer)             :: eulprob_obj
+        type(eul_prob_tab)             :: eulprob_obj
         type(ori)                     :: orientation
         integer  :: nptcls, iptcl, s, iref, loc, ithr, iter
         logical  :: l_ctf, do_center
@@ -1169,7 +1169,7 @@ contains
         use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
                                              &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
         use simple_polarft_corrcalc,    only: polarft_corrcalc
-        use simple_eul_prob_tab,         only: regularizer
+        use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
         use simple_image
         class(prob_tab_commander), intent(inout) :: self
@@ -1182,7 +1182,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(regularizer)             :: eulprob_obj
+        type(eul_prob_tab)             :: eulprob_obj
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
@@ -1272,7 +1272,7 @@ contains
     subroutine exec_prob_align( self, cline )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_eul_prob_tab, only: regularizer
+        use simple_eul_prob_tab, only: eul_prob_tab
         use simple_image
         class(prob_align_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -1284,7 +1284,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(prob_tab_commander)      :: xprob_tab
-        type(regularizer)             :: eulprob_obj
+        type(eul_prob_tab)            :: eulprob_obj
         type(cmdline)                 :: cline_prob_tab
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr

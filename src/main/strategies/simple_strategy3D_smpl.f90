@@ -8,7 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
-use simple_eul_prob_tab,      only: eulprob_dist_switch
+use simple_eul_prob_tab,     only: eulprob_dist_switch
 implicit none
 
 public :: strategy3D_smpl
