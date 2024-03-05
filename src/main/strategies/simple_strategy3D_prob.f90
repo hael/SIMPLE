@@ -35,7 +35,7 @@ contains
     end subroutine new_prob
 
     subroutine srch_prob( self, ithr )
-    use simple_eul_prob_tab, only: eulprob_corr_switch
+        use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
         integer :: iref, iptcl, irot

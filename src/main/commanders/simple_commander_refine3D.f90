@@ -327,7 +327,7 @@ contains
         enddo
         have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
         do_abinitio = .not. have_oris .and. .not. vol_defined
-        if( params%l_reg_init ) do_abinitio = .true. ! overrides automatic decision
+        if( params%l_prob_init ) do_abinitio = .true. ! overrides automatic decision
         if( do_abinitio )then
             call build%spproj_field%rnd_oris
             have_oris = .true.

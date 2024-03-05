@@ -2458,7 +2458,7 @@ contains
         call abinitio_3Dmodel%set_input('srch_ctrls', 2, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         call abinitio_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model")
-        call abinitio_3Dmodel%set_input('srch_ctrls', 3, 'reg_init',  'binary', 'Zero shift offsets', 'Zero particles initial shift offsets(yes|no){no}',&
+        call abinitio_3Dmodel%set_input('srch_ctrls', 3, 'prob_init', 'binary', 'Zero shift offsets', 'Zero particles initial shift offsets(yes|no){no}',&
             &'(yes|no){no}', .false., '{no}')
         call abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="search")
         call abinitio_3Dmodel%set_input('srch_ctrls', 4, pgrp)
