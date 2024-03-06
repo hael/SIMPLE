@@ -1068,7 +1068,7 @@ contains
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
-                iref = eulprob_obj%ptcl_ref_map(iptcl)
+                iref = nint(eulprob_obj%ptcl_ref_map(iptcl, 1))
                 if( eulprob_obj%dist_loc_tab(iref, iptcl, 1) < TINY ) cycle
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
@@ -1291,9 +1291,6 @@ contains
         enddo
         call eulprob_obj%tab_normalize
         call eulprob_obj%tab_align
-        ! write the global corr/loc table
-        fname = trim(DIST_FBODY)//'.dat'
-        call eulprob_obj%write_tab(fname)
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj%write_assignment(fname)
