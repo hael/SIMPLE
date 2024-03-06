@@ -707,13 +707,14 @@ contains
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
-        ! distributed commanders
+        ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(postprocess_commander)         :: xpostprocess
         type(symaxis_search_commander)      :: xsymsrch
+        type(reconstruct3D_commander)       :: xreconstruct3D
         ! command lines
-        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D
+        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D, cline_rec_shmem
         type(cmdline)                 :: cline_postprocess, cline_symsrch
         ! other
         class(parameters), pointer    :: params_ptr => null()
@@ -724,8 +725,8 @@ contains
         type(image)                   :: final_vol
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
-        integer :: iter, it, prev_box_crop, maxits, i
-        logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran
+        integer :: iter, it, prev_box_crop, maxits
+        logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_shmem, l_sym
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')     ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',    'yes')
@@ -740,6 +741,17 @@ contains
         if( .not. cline%defined('oritype')    ) call cline%set('oritype',   'ptcl3D')
         if( .not. cline%defined('pgrp')       ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start') ) call cline%set('pgrp_start',    'c1')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
         ! resolution limit strategy
         l_lpset = .false.
         if( cline%defined('lp') )then
@@ -796,6 +808,7 @@ contains
         endif
         l_srch4symaxis = trim(params%pgrp) .ne. trim(params%pgrp_start)
         l_symran       = .false.
+        l_sym          = l_srch4symaxis
         if( params%pgrp_start.ne.'c1' .or. params%pgrp.ne.'c1' )then
             se1 = sym(params%pgrp_start)
             se2 = sym(params%pgrp)
@@ -842,6 +855,7 @@ contains
             call cline_symsrch%set('hp',       params%hp)
             call cline_symsrch%set('center',   'yes')
         endif
+        cline_rec_shmem = cline_reconstruct3D
         ! executions & updates
         if( l_lpset )then
             ! Single resolution limit
@@ -861,6 +875,7 @@ contains
                 trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
             endif
             it = 1
+            if( l_shmem ) call rec_shmem
             call cline_refine3D%set('box_crop',  params%box_crop)
             call cline_refine3D%set('trs',       0.)
             call cline_refine3D%set('lp',        params%lp)
@@ -879,13 +894,24 @@ contains
             call cline_refine3D%set('nspace',   NSPACE2)
             call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
             call cline_refine3D%set('startit',  iter+1)
-            call cline_refine3D%set('continue', 'yes')
+            if( l_shmem )then
+                call cline_refine3D%set('continue', 'yes')
+            else
+                call cline_refine3D%set('vol1', trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+            endif
             call cline_refine3D%set('center',   params%center)
             call exec_refine3D(iter)
             call symmetrize
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> FINAL STAGE'
             prev_box_crop = params%box_crop
+            if( l_srch4symaxis .or. l_symran )then
+                ! allows reconstruction to desired point-group
+                call cline_refine3D%delete('continue')
+                call cline_refine3D%delete('vol1')
+                call cline_refine3D%set('pgrp', params%pgrp)
+                if( l_shmem ) call rec_shmem
+            endif
         else
             ! Frequency marching
             iter = 0
@@ -951,6 +977,28 @@ contains
                     call cline_refine3D%set('trs',    trslim)
                 end if
                 call cline_refine3D%set('ml_reg', 'no') ! since ml_reg seems to interfer with finding a good lowres shape
+                ! shared memory section
+                if( l_shmem )then
+                    call cline_refine3D%delete('continue')
+                    if( it == 1 )then
+                        ! starting volume
+                        call rec_shmem
+                    else
+                        if( l_sym .and. (it == SYMSEARCH_ITER+1) )then
+                            ! accounting for change in point-group
+                            call rec_shmem
+                        else
+                            ! accouting for dimensions
+                            if( prev_box_crop == params%box_crop )then
+                                vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                                call cline_refine3D%set('vol1', vol)
+                            else
+                                call rec_shmem
+                            endif
+                        endif
+                    endif
+                endif
+                ! execution
                 call exec_refine3D(iter)
                 ! symmetrization
                 if( it == SYMSEARCH_ITER ) call symmetrize
@@ -973,19 +1021,21 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
             if( prev_box_crop == params%box_crop )then
-                call cline_refine3D%set('continue',  'yes')
+                if( l_shmem )then
+                    vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                    call cline_refine3D%set('vol1', vol)
+                    call cline_refine3D%delete('continue')
+                else
+                    call cline_refine3D%set('continue',  'yes')
+                endif
             else
                 ! allows reconstruction to correct dimension
                 call cline_refine3D%delete('continue')
                 call cline_refine3D%delete('vol1')
+                if( l_shmem ) call rec_shmem
             endif
         endif
-        if( l_srch4symaxis .or. l_symran )then
-            ! allows reconstruction to desired point-group
-            call cline_refine3D%delete('continue')
-            call cline_refine3D%delete('vol1')
-            call cline_refine3D%set('pgrp', params%pgrp)
-        endif
+        ! Final step
         call cline_refine3D%set('prob_init', 'no')
         call cline_refine3D%set('box_crop', params%box_crop)
         call cline_refine3D%set('lp',       params%lpstop)
@@ -1006,11 +1056,15 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
-            params_ptr  => params_glob
-            params_glob => null()
-            call xreconstruct3D_distr%execute(cline_reconstruct3D)
-            params_glob => params_ptr
-            params_ptr  => null()
+            if( l_shmem )then
+                call rec_shmem
+            else
+                params_ptr  => params_glob
+                params_glob => null()
+                call xreconstruct3D_distr%execute(cline_reconstruct3D)
+                params_glob => params_ptr
+                params_ptr  => null()
+            endif
             call spproj%read_segment('out',params%projfile)
             call spproj%add_vol2os_out(vol, params%smpd, 1, vol_type)
             if( trim(params%oritype).eq.'ptcl3D' )then
@@ -1056,6 +1110,7 @@ contains
                 call xrefine3D_distr%execute(cline_refine3D)
                 params_glob => params_ptr
                 params_ptr  => null()
+                call cline_refine3D%printline
                 call conv%read(l_err)
                 iter = nint(conv%get('iter'))
                 call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
@@ -1098,6 +1153,21 @@ contains
                     call del_file('SYMAXIS_SEARCH_FINISHED')
                 endif
             end subroutine symmetrize
+
+            subroutine rec_shmem()
+                call cline_rec_shmem%set('pgrp',     cline_refine3D%get_carg('pgrp'))
+                call cline_rec_shmem%set('box_crop', params%box_crop)
+                params_ptr  => params_glob
+                params_glob => null()
+                call xreconstruct3D%execute(cline_rec_shmem)
+                params_glob => params_ptr
+                params_ptr  => null()
+                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
+                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                call simple_rename('recvol_state01.mrc',      'startvol.mrc')
+                call cline_refine3D%set('vol1', 'startvol.mrc')
+                call cline_refine3D%delete('continue')
+            end subroutine rec_shmem
 
     end subroutine exec_abinitio_3Dmodel
 
