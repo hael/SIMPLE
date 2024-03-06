@@ -7608,57 +7608,56 @@ contains
     end subroutine flipY
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes
-    subroutine radial_cc( self1, self2, rad_corrs , rad_dists)
+    subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
         class(image),      intent(inout) :: self1, self2
-        real, allocatable, intent(out)   :: rad_corrs(:), rad_dists(:)
-        real, allocatable :: mean(:)
-        type(image) :: dists_img
-        integer :: n_shell_pix
-        real(kind=c_float), pointer :: rmat_dists_img(:,:,:)=>null()
-        real,    allocatable        :: rvec1(:), rvec2(:)
-        logical, allocatable        :: mask(:,:,:), shell_mask(:,:,:)
-        real :: smpd
-        real, parameter :: shell_size_pix = 1
-        integer :: n, n_shells, ldim1(3), ldim2(3), ldim_refs(3)
+        real,              intent(in)    :: smpd
+        real,              intent(out)   :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        real,    allocatable :: mean(:)
+        real,    allocatable :: rvec1(:), rvec2(:)
+        logical, allocatable :: mask(:,:,:), shell_mask(:,:,:)
+        real,    parameter   :: shell_size_pix = 1
+        integer :: ldim3, n, n_shells
         real    :: radius_pix, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
         logical :: err
-        smpd  = self1%get_smpd()
-        ldim1 = self1%get_ldim()
-        ldim2 = self2%get_ldim()
-        if( ldim1(1) /= ldim2(1) .or. ldim1(2) /= ldim2(2) .or. ldim1(3) /= ldim2(3) )  &
-        THROW_HARD(' Nonconforming dimensions in image; rad_cc ')
-        ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
-        radius_pix  = ldim_refs(1) / 2.   
+        if( .not. (self1.eqdims.self2) ) THROW_HARD(' Nonconforming dimensions in image; radial_cc ')
+        !ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
+        !radius_pix  = ldim_refs(1) / 2.   
+        radius_pix  = self1%ldim(1) / 2.   
         n_shells    = int(radius_pix)
-        allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
-        &shell_mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)), source=.true.)
-        allocate(rad_corrs(n_shells),rad_dists(n_shells),mean(n_shells))
-        call dists_img%new(ldim_refs, smpd)
-        call dists_img%cendist
-        call dists_img%get_rmat_ptr( rmat_dists_img )
+        if( self1%is_3d() )then
+            ! 3D
+            ldim3 = self1%ldim(3)
+        else
+            ! 2D
+            ldim3 = 1
+        endif
+        allocate(mask(self1%ldim(1), self1%ldim(2), ldim3),&
+        &  shell_mask(self1%ldim(1), self1%ldim(2), ldim3), source=.true.)
+        allocate(mean(n_shells))
+        call self1%cendist
         do n = 1, n_shells 
             dist_lbound = real(n) * shell_size_pix
             dist_ubound = dist_lbound + shell_size_pix
-            where( (rmat_dists_img(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) > dist_lbound) .and. &
-                  &(rmat_dists_img(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < dist_ubound) .and. mask)
-                shell_mask = .true.
+            where( (self1%rmat(:self1%ldim(1),:self1%ldim(2),:ldim3) > dist_lbound) .and. &
+                  &(self1%rmat(:self1%ldim(1),:self1%ldim(2),:ldim3) < dist_ubound) .and. &
+                  &(mask(:self1%ldim(1),:self1%ldim(2),:ldim3) ) )
+                    shell_mask = .true.
             else where
-                shell_mask = .false.
+                    shell_mask = .false.
             end where
             if( count(shell_mask) < 3 )then
                 rad_corrs(n) = 0.
-                mean(n) = 0.
+                mean(n)      = 0.
             else
                 rvec1 = self1%serialize(shell_mask)
                 rvec2 = self2%serialize(shell_mask)
                 call moment(rvec1, mean1, sdev1, var1, err)
                 call moment(rvec2, mean2, sdev2, var2, err)
-                mean(n) = mean1 - mean2
+                mean(n)      = mean1 - mean2
                 rad_corrs(n) = pearsn_serial(rvec1, rvec2)
             endif
             rad_dists(n) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
         enddo
-        call dists_img%kill()
     end subroutine radial_cc
 
     !>  \brief  is the image class unit test

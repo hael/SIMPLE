@@ -1324,7 +1324,7 @@ contains
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
         character(len=:), allocatable :: cavgs_stk
-        real,             allocatable :: rstates(:)
+        real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer :: ncavgs, i, cnt, cnt2
         real    :: smpd
@@ -1380,6 +1380,9 @@ contains
             call xreproject%execute(cline_reproject)
             params_glob => params_ptr
             params_ptr  => null()
+
+            ! compute radial cross-correlation between cavgs and reproj
+            allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2))
             ! write cavgs & reprojections
             allocate(imgs(2*ncavgs), state_mask(ncavgs))
             cnt = 0
@@ -1390,13 +1393,16 @@ contains
                     call imgs(i + 1)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,     cnt)
                     call imgs(i + 1)%read('reprojs.mrc', cnt)
+                    !call imgs(i)%radial_cc(imgs(i+1), smpd, rad_cc(i,:), rad_dists(i,:)) 
+                    ! create radial weights obtained with fsc2optlp and a filter mask with those weights subroutine mask
+                    ! filter out cavgs
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
                     state_mask(cnt) = .true.
                 else
                     state_mask(cnt) = .false.
                 endif
-            end do
+            enddo
             cnt  = 0
             cnt2 = 1 ! needed because we have omissions
             do i = 1,2*ncavgs,2
@@ -1408,7 +1414,7 @@ contains
                     call imgs(i + 1)%kill
                     cnt2 = cnt2 + 2
                 endif
-            end do
+            enddo
             deallocate(imgs)
         endif ! end of class average-based validation
         call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs* reproject_oris.txt stderrout')
