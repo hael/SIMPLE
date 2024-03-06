@@ -217,8 +217,8 @@ contains
         integer :: iref
         iref = (istate-1)*s%nprojs+iproj
         call s%inpl_srch
-        if( s3D%proj_space_corrs(s%ithr,iref) > corr )then
-            corr = s3D%proj_space_corrs(s%ithr,iref)
+        if( s3D%proj_space_corrs(iref,s%ithr) > corr )then
+            corr = s3D%proj_space_corrs(iref,s%ithr)
             call build_glob%spproj_field%set_shift(s%iptcl,s%prev_shvec+s3D%proj_space_shift(:,iref,s%ithr))
             call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(3,iref,s%ithr))
         endif

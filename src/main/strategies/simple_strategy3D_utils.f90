@@ -113,11 +113,11 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         integer :: ref, inpl, loc(1)
         real    :: corr, sh(2)
-        loc  = maxloc(s3D%proj_space_corrs(s%ithr,:))
+        loc  = maxloc(s3D%proj_space_corrs(:,s%ithr))
         ref  = loc(1)
-        corr = s3D%proj_space_corrs(s%ithr,ref)
-        sh   = s3D%proj_space_shift(:,ref,s%ithr)
-        inpl = s3D%proj_space_inplinds(s%ithr, ref)
+        corr = s3D%proj_space_corrs(   ref,s%ithr)
+        sh   = s3D%proj_space_shift(:, ref,s%ithr)
+        inpl = s3D%proj_space_inplinds(ref,s%ithr)
         if( params_glob%cc_objfun == OBJFUN_CC .and. corr < 0. ) corr = 0.
         call assign_ori( s, ref, inpl, corr, sh )
     end subroutine extract_peak_ori
@@ -127,7 +127,7 @@ contains
         integer   :: refs(s%npeaks), state, ipeak
         real      :: shvec(2), corr
         logical   :: l_multistates
-        refs = maxnloc(s3D%proj_space_corrs(s%ithr,:), s%npeaks)
+        refs = maxnloc(s3D%proj_space_corrs(:,s%ithr), s%npeaks)
         if( any(refs < 1) .or. any(refs > s%nrefs) ) THROW_HARD('at least one refs index out of bound; extract_peak_oris')
         l_multistates = s%nstates > 1
         do ipeak = 1, s%npeaks
@@ -142,7 +142,7 @@ contains
                 if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peak_oris')
             endif
             call s%opeaks%set_state(ipeak, state)
-            corr = s3D%proj_space_corrs(s%ithr,refs(ipeak))
+            corr = s3D%proj_space_corrs(refs(ipeak),s%ithr)
             if( params_glob%cc_objfun == OBJFUN_CC )then
                 if( corr < 0. ) corr = 0.
             end if
@@ -161,24 +161,24 @@ contains
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 npix      = pftcc_glob%get_npix()
-                max_diff = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
+                max_diff = corr2distweight(s3D%proj_space_corrs(ref,s%ithr), npix, params_glob%tau)
                 sumw      = 0.
                 do iref = 1,s%nrefs
                     if( s3D%proj_space_mask(iref,s%ithr) )then
-                        diff = corr2distweight(s3D%proj_space_corrs(s%ithr,iref), npix, params_glob%tau) - max_diff
+                        diff = corr2distweight(s3D%proj_space_corrs(iref,s%ithr), npix, params_glob%tau) - max_diff
                         sumw = sumw + exp(-diff)
                     endif
                 enddo
                 pw = max(0.,min(1.,real(1.d0 / sumw)))
             case DEFAULT
                 ! objective function is exp(-euclid/denom) in [0,1] where 1 is best
-                best_score = real(s3D%proj_space_corrs(s%ithr,ref),kind=dp) ! best score as identified by stochastic search
+                best_score = real(s3D%proj_space_corrs(ref,s%ithr),kind=dp) ! best score as identified by stochastic search
                 ! calculate spread around best score
                 sigma = 0.d0
                 cnt   = 0.d0
                 do iref = 1,s%nrefs
                     if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
-                        score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
+                        score = real(s3D%proj_space_corrs(iref,s%ithr),kind=dp)
                         diff  = score - best_score
                         sigma = sigma + diff * diff
                         cnt   = cnt   + 1.d0
@@ -189,7 +189,7 @@ contains
                 sumw = 0.d0
                 do iref = 1,s%nrefs
                     if( s3D%proj_space_mask(iref,s%ithr) )then ! only summing over references that have been evaluated
-                        score = real(s3D%proj_space_corrs(s%ithr,iref),kind=dp)
+                        score = real(s3D%proj_space_corrs(iref,s%ithr),kind=dp)
                         ! the argument to the exponential function is always negative
                         diff = score - best_score
                         ! hence, for the best score the exponent will be 1 and < 1 for all others

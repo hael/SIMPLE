@@ -47,7 +47,7 @@ contains
             self%s%nbetter = 0
             ! search
             do isample=1,self%spec%szsn
-                iref = s3D%srch_order(self%s%ithr,isample) ! set the stochastic reference index
+                iref = s3D%srch_order(isample,self%s%ithr) ! set the stochastic reference index
                 ! calculate in-plane correlations
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 ! identify the top scoring in-plane angle
@@ -71,13 +71,13 @@ contains
         ! stash prev ori
         call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
         ! orientation parameters
-        loc = maxloc(s3D%proj_space_corrs(self%s%ithr,:))
+        loc = maxloc(s3D%proj_space_corrs(:,self%s%ithr))
         ref = loc(1)
         if( ref < 1 .or. ref > self%s%nrefs )then
             THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
         endif
         ! transfer to spproj_field
-        corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref))
+        corr = max(0., s3D%proj_space_corrs(ref,self%s%ithr))
         call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)

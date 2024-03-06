@@ -52,9 +52,9 @@ contains
         ! shared-memory arrays
         allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
             &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
-            &s3D%proj_space_corrs(nthr_glob,nrefs),s3D%proj_space_mask(nrefs,nthr_glob),&
-            &s3D%proj_space_inplinds(nthr_glob,nrefs),& ! s3D%proj_space_nnmat(4,params_glob%nspace)
-            &s3D%proj_space_w(nthr_glob,nrefs),&
+            &s3D%proj_space_corrs(nrefs,nthr_glob),s3D%proj_space_mask(nrefs,nthr_glob),&
+            &s3D%proj_space_inplinds(nrefs,nthr_glob),& ! s3D%proj_space_nnmat(4,params_glob%nspace)
+            &s3D%proj_space_w(nrefs,nthr_glob),&
             &s3D%proj_space_proj(nrefs))
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
@@ -85,8 +85,8 @@ contains
             case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
-                allocate(s3D%srch_order(nthr_glob,nrefs), s3D%srch_order_sub(nthr_glob,nrefs_sub),&
-                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(nthr_glob,pftcc_glob%nrots))
+                allocate(s3D%srch_order(nrefs,nthr_glob), s3D%srch_order_sub(nrefs_sub,nthr_glob),&
+                &s3D%rts(nthr_glob),s3D%rts_inpl(nthr_glob), s3D%rts_sub(nthr_glob), s3D%inpl_order(pftcc_glob%nrots,nthr_glob))
                 do ithr=1,nthr_glob
                     s3D%rts(ithr)      = ran_tabu(nrefs)
                     s3D%rts_inpl(ithr) = ran_tabu(pftcc_glob%nrots)
@@ -109,15 +109,15 @@ contains
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in)    :: ithr
         real(sp)               :: areal
-        s3D%proj_space_euls(:,:,ithr)   = master_proj_space_euls
-        s3D%proj_space_corrs(ithr,:)    = -HUGE(areal)
-        s3D%proj_space_mask(:,ithr)     = .false.
-        s3D%proj_space_shift(:,:,ithr)  = 0.
-        s3D%proj_space_inplinds(ithr,:) = 0
-        s3D%proj_space_w(ithr,:)        = 1.
+        s3D%proj_space_euls(  :,:,ithr) = master_proj_space_euls
+        s3D%proj_space_corrs(   :,ithr) = -HUGE(areal)
+        s3D%proj_space_mask(    :,ithr) = .false.
+        s3D%proj_space_shift( :,:,ithr) = 0.
+        s3D%proj_space_inplinds(:,ithr) = 0
+        s3D%proj_space_w(       :,ithr) = 1.
         if(srch_order_allocated)then
-            s3D%srch_order(ithr,:)     = 0
-            s3D%srch_order_sub(ithr,:) = 0
+            s3D%srch_order(    :,ithr) = 0
+            s3D%srch_order_sub(:,ithr) = 0
         endif
     end subroutine prep_strategy3D_thread
 

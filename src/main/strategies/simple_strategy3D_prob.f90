@@ -53,11 +53,11 @@ contains
             if( self%s%doshift )then
                 call self%s%inpl_srch(ref=iref)
                 ! checking if shift search is good
-                if( s3D%proj_space_inplinds(self%s%ithr, iref) < 1 )then
+                if( s3D%proj_space_inplinds(iref, self%s%ithr) < 1 )then
                     call assign_ori(self%s, iref, irot, corr, [0.,0.])
                 else
-                    irot = s3D%proj_space_inplinds(self%s%ithr, iref)
-                    corr = s3D%proj_space_corrs(self%s%ithr, iref)
+                    irot = s3D%proj_space_inplinds(iref, self%s%ithr)
+                    corr = s3D%proj_space_corrs(   iref, self%s%ithr)
                     call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
                 endif
             else
