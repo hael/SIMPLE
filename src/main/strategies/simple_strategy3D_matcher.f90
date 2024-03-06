@@ -191,7 +191,6 @@ contains
         ! ref regularization
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
             call eulprob_obj%new
-            call eulprob_obj%read_tab_from_glob(trim(DIST_FBODY)//'.dat', params_glob%fromp, params_glob%top)
             call eulprob_obj%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
 

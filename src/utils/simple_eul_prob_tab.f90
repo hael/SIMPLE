@@ -15,7 +15,7 @@ private
 
 type :: eul_prob_tab
     real,    allocatable :: dist_loc_tab(:,:,:) !< nspace, iptcl, 2 (1->dist, 2->inpl_ind)
-    integer, allocatable :: ptcl_ref_map(:)     !< ptcl -> ref assignment map
+    real,    allocatable :: ptcl_ref_map(:,:)   !< nptcls, 3 (1->ref,2->dist, 3->inpl_ind)
     logical, allocatable :: ptcl_avail(:)       !< for communicating restraints and state selections
   contains
     ! CONSTRUCTOR
@@ -43,13 +43,14 @@ contains
         integer :: iptcl
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
-        allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top))
+        allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top,3))
         allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
         do iptcl = params_glob%fromp,params_glob%top
             self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
         enddo
     end subroutine new
 
+    ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
     subroutine fill_tab( self, pftcc, glob_pinds )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
@@ -156,6 +157,7 @@ contains
 
     ! reference normalization (same energy) of the global dist value table
     ! [0,1] normalization of the whole table
+    ! used in the global prob_align commander, in 'exec_prob_align'
     subroutine tab_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: iptcl
@@ -201,6 +203,7 @@ contains
     end subroutine tab_normalize
 
     ! ptcl -> ref assignment using the global normalized dist value table
+    ! used in the global prob_align commander, in 'exec_prob_align'
     subroutine tab_align( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
@@ -208,7 +211,7 @@ contains
         real    :: sorted_tab(params_glob%fromp:params_glob%top, params_glob%nspace),&
                    &ref_dist(params_glob%nspace), dists_sorted(params_glob%nspace)
         logical :: ptcl_avail(params_glob%fromp:params_glob%top)
-        self%ptcl_ref_map = 1
+        self%ptcl_ref_map = 1.
         ! sorting each columns
         call calc_num2sample(params_glob%nspace, 'dist', refs_ns)
         sorted_tab = transpose(self%dist_loc_tab(:,:,1))
@@ -226,8 +229,10 @@ contains
             ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
             assigned_iref = ref_smpl() ! contained function, below
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
-            ptcl_avail(assigned_ptcl)        = .false.
-            self%ptcl_ref_map(assigned_ptcl) = assigned_iref
+            ptcl_avail(assigned_ptcl)          = .false.
+            self%ptcl_ref_map(assigned_ptcl,1) = assigned_iref
+            self%ptcl_ref_map(assigned_ptcl,2) = self%dist_loc_tab(assigned_iref,assigned_ptcl,1)
+            self%ptcl_ref_map(assigned_ptcl,3) = self%dist_loc_tab(assigned_iref,assigned_ptcl,2)
             ! update the ref_dist and ref_dist_inds
             do iref = 1, params_glob%nspace
                 do while( ref_dist_inds(iref) < params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
@@ -330,8 +335,10 @@ contains
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
         integer(kind=8) :: file_header(3)
-        integer :: funit, io_stat, addr, iptcl, datasz
-        datasz      = sizeof(iptcl)
+        integer :: funit, io_stat, addr, iptcl, datasz_int, datasz_real
+        real    :: x
+        datasz_int  = sizeof(iptcl)
+        datasz_real = sizeof(x)
         file_header = [params_glob%fromp, params_glob%top,params_glob%nspace]
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         ! write header
@@ -340,9 +347,13 @@ contains
         addr = sizeof(file_header) + 1
         do iptcl = params_glob%fromp, params_glob%top
             write(funit, pos=addr) iptcl
-            addr = addr + datasz
-            write(funit, pos=addr) self%ptcl_ref_map(iptcl)
-            addr = addr + datasz
+            addr = addr + datasz_int
+            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 1)
+            addr = addr + datasz_real
+            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 2)
+            addr = addr + datasz_real
+            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 3)
+            addr = addr + datasz_real
         end do
         call fclose(funit)
     end subroutine write_assignment
@@ -352,8 +363,10 @@ contains
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
         integer(kind=8) :: file_header(3)
-        integer :: funit, io_stat, addr, iptcl, datasz, fromp, top, iglob
-        datasz = sizeof(iptcl)
+        integer :: funit, io_stat, addr, iptcl, datasz_int, datasz_real, fromp, top, iglob
+        real    :: x
+        datasz_int  = sizeof(iptcl)
+        datasz_real = sizeof(x)
         if( .not. file_exists(trim(binfname)) )then
             THROW_HARD('file '//trim(binfname)//' does not exists!')
         else
@@ -367,9 +380,13 @@ contains
         addr = sizeof(file_header) + 1
         do iglob = fromp, top
             read(unit=funit,pos=addr) iptcl
-            addr = addr + datasz
-            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl)
-            addr = addr + datasz
+            addr = addr + datasz_int
+            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,1)
+            addr = addr + datasz_real
+            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,2)
+            addr = addr + datasz_real
+            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,3)
+            addr = addr + datasz_real
         end do
         call fclose(funit)
     end subroutine read_assignment

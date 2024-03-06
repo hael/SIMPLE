@@ -47,9 +47,9 @@ contains
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
             iptcl = self%s%iptcl
-            iref  = self%spec%eulprob_obj%ptcl_ref_map(iptcl)
-            corr  = eulprob_corr_switch(self%spec%eulprob_obj%dist_loc_tab(iref, iptcl, 1))
-            irot  =                 int(self%spec%eulprob_obj%dist_loc_tab(iref, iptcl, 2))
+            iref  =                nint(self%spec%eulprob_obj%ptcl_ref_map(iptcl,1))
+            corr  = eulprob_corr_switch(self%spec%eulprob_obj%ptcl_ref_map(iptcl,2))
+            irot  =                nint(self%spec%eulprob_obj%ptcl_ref_map(iptcl,3))
             if( self%s%doshift )then
                 call self%s%inpl_srch(ref=iref)
                 ! checking if shift search is good
