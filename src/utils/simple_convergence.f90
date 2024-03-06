@@ -259,12 +259,16 @@ contains
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
                 & params_glob%trs <  MINSHIFT )then
-                ! determine shift bounds
-                params_glob%trs = MSK_FRAC*msk
-                params_glob%trs = max(MINSHIFT,params_glob%trs)
-                params_glob%trs = min(MAXSHIFT,params_glob%trs)
-                ! set shift search flag
-                params_glob%l_doshift = .true.
+                if( cline%defined('trs') .and. params_glob%trs<0.01 )then
+                    ! bound was defined, no update
+                else
+                    ! determine shift bounds
+                    params_glob%trs = MSK_FRAC*msk
+                    params_glob%trs = max(MINSHIFT,params_glob%trs)
+                    params_glob%trs = min(MAXSHIFT,params_glob%trs)
+                    ! set shift search flag
+                    params_glob%l_doshift = .true.
+                endif
             endif
         endif
         ! set limits for convergence
@@ -574,16 +578,16 @@ contains
         call CDataSet__SetDrawMarker(axis, C_FALSE)
         call CDataSet__SetDrawLine(axis, C_TRUE)
         call CDataSet__SetDatasetColor(axis, 0.d0,0.d0,0.d0)
-        call CDataSet_addpoint(axis,-90., 0.)
-        call CDataSet_addpoint(axis, 90., 0.)
+        call CDataSet_addpoint(axis,-180., 0.)
+        call CDataSet_addpoint(axis, 180., 0.)
         call CPlot2D__AddDataSet(figure, axis)
         call CDataSet__delete(axis)
         call CDataSet__new(axis)
         call CDataSet__SetDrawMarker(axis, C_FALSE)
         call CDataSet__SetDrawLine(axis, C_TRUE)
         call CDataSet__SetDatasetColor(axis, 0.d0,0.d0,0.d0)
-        call CDataSet_addpoint(axis, 0.,-90.)
-        call CDataSet_addpoint(axis, 0., 90.)
+        call CDataSet_addpoint(axis, 0.,-180.)
+        call CDataSet_addpoint(axis, 0., 180.)
         call CPlot2D__AddDataSet(figure, axis)
         call CDataSet__delete(axis)
         ! orientations
@@ -592,8 +596,8 @@ contains
             if( pops(proj) == 0 ) cycle
             sz    = 9.d0 * real(logpops(ind),dp)
             color = 1.d0 - real(logpops(ind),dp)
-            x     = 90.d0 * real(cos(deg2rad(phi(proj))) * psi(proj)/180.,dp)
-            y     = 90.d0 * real(sin(deg2rad(phi(proj))) * psi(proj)/180.,dp)
+            x     = real(cos(deg2rad(phi(proj))) * psi(proj),dp)
+            y     = real(sin(deg2rad(phi(proj))) * psi(proj),dp)
             call CDataSet__new(center)
             call CDataSet__SetDrawMarker(center, C_TRUE)
             call CDataSet__SetMarkerSize(center, sz)
