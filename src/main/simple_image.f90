@@ -7620,8 +7620,6 @@ contains
         real    :: radius_pix, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
         logical :: err
         if( .not. (self1.eqdims.self2) ) THROW_HARD(' Nonconforming dimensions in image; radial_cc ')
-        !ldim_refs   = [ldim1(1), ldim1(2), ldim1(3)] 
-        !radius_pix  = ldim_refs(1) / 2.   
         radius_pix  = self1%ldim(1) / 2.   
         n_shells    = int(radius_pix)
         if( self1%is_3d() )then
