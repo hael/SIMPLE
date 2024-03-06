@@ -598,7 +598,12 @@ contains
             call starfile_table__addObject(starfile)
             call starfile_table__setValue_int(starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             if( self%weights(iframe) > 0.000001 )then
-                shift = isoshifts(:,iframe) - isoshifts(:,1)
+                select case(trim(self%convention))
+                case('cs')
+                    shift = isoshifts(:,iframe) - isoshifts(:,self%align_frame)
+                case DEFAULT
+                    shift = isoshifts(:,iframe) - isoshifts(:,1)
+                end select
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_X, shift(1))
                 call starfile_table__setValue_double(starfile, EMDL_MICROGRAPH_SHIFT_Y, shift(2))
                 call starfile_table__setValue_double(starfile, SMPL_MOVIE_FRAME_WEIGHT, real(self%weights(iframe),dp))
