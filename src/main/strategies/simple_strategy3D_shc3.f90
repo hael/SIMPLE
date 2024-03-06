@@ -48,12 +48,12 @@ contains
             self%s%nbetter    = 0
             self%s%nrefs_eval = 0
             do isample=1,self%s%nrefs
-                iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
+                iref = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     do iloc = 1, pftcc_glob%nrots
-                        loc = s3D%inpl_order(self%s%ithr,iloc)
+                        loc = s3D%inpl_order(iloc,self%s%ithr)
                         call self%s%store_solution(iref, loc, inpl_corrs(loc))
                         ! update nbetter to keep track of how many improving solutions we have identified
                         if( inpl_corrs(loc) > self%s%prev_corr )then

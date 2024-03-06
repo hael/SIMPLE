@@ -50,7 +50,7 @@ contains
             call self%s%prep4srch
             ! search
             do isample=1,self%s%nrefs_sub
-                iref = s3D%srch_order_sub(self%s%ithr,isample) ! set the reference index
+                iref = s3D%srch_order_sub(isample,self%s%ithr) ! set the reference index
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)

@@ -138,9 +138,9 @@ contains
         call prep_strategy3D_thread(self%ithr)
         ! search order
         ! -- > full space
-        call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
-        call s3D%rts_inpl(self%ithr)%ne_ran_iarr(s3D%inpl_order(self%ithr,:))
-        call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
+        call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(:,self%ithr))
+        call s3D%rts_inpl(self%ithr)%ne_ran_iarr(s3D%inpl_order(:,self%ithr))
+        call put_last(self%prev_ref, s3D%srch_order(:,self%ithr))
         ! --> subspace
         if( self%l_neigh )then
             call s3D%rts_sub(self%ithr)%ne_ran_iarr(tmp_inds)
@@ -150,11 +150,11 @@ contains
                 prev_proj_sub = build_glob%subspace_inds(&
                 &tmp_inds(iref_sub) - (self%prev_state - 1) * params_glob%nspace_sub)
                 ! but then we need to turn it back into a reference index in the full search space
-                s3D%srch_order_sub(self%ithr,iref_sub) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
+                s3D%srch_order_sub(iref_sub,self%ithr) = (self%prev_state - 1) * self%nprojs + prev_proj_sub
             enddo
             ! --> check if we have prev_ref in subspace, put last
-            if( any(s3D%srch_order_sub(self%ithr,:) == self%prev_ref ) )then
-                call put_last(self%prev_ref, s3D%srch_order_sub(self%ithr,:))
+            if( any(s3D%srch_order_sub(:,self%ithr) == self%prev_ref ) )then
+                call put_last(self%prev_ref, s3D%srch_order_sub(:,self%ithr))
             endif
         endif
         ! sanity check
@@ -204,7 +204,7 @@ contains
             if( present(ref) )then
                 iref = ref
             else
-                loc  = maxloc(s3D%proj_space_corrs(self%ithr,:))
+                loc  = maxloc(s3D%proj_space_corrs(:,self%ithr))
                 iref = loc(1)
             endif
             ! BFGS over shifts with in-plane rot exhaustive callback
@@ -223,7 +223,7 @@ contains
         integer :: refs(self%npeaks_inpl), irot, ipeak
         if( self%doshift )then
             ! BFGS over shifts with in-plane rot exhaustive callback
-            refs = maxnloc(s3D%proj_space_corrs(self%ithr,:), self%npeaks_inpl)
+            refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), self%npeaks_inpl)
             do ipeak = 1, self%npeaks_inpl
                 call self%grad_shsrch_obj%set_indices(refs(ipeak), self%iptcl)
                 cxy = self%grad_shsrch_obj%minimize(irot=irot)
@@ -242,11 +242,11 @@ contains
         real,       optional,   intent(in)    :: sh(2)
         real,       optional,   intent(in)    :: w
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
-        if( present(w) )  s3D%proj_space_w(self%ithr, ref)      = w
-        s3D%proj_space_inplinds(self%ithr,ref) = inpl_ind
-        s3D%proj_space_euls(3,ref,self%ithr)   = 360. - pftcc_glob%get_rot(inpl_ind)
-        s3D%proj_space_corrs(self%ithr,ref)    = corr
-        s3D%proj_space_mask(ref,self%ithr)     = .true.
+        if( present(w) )  s3D%proj_space_w(      ref,self%ithr) = w
+        s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
+        s3D%proj_space_euls(  3,ref,self%ithr) = 360. - pftcc_glob%get_rot(inpl_ind)
+        s3D%proj_space_corrs(   ref,self%ithr) = corr
+        s3D%proj_space_mask(    ref,self%ithr) = .true.
     end subroutine store_solution
 
     subroutine kill( self )

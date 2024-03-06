@@ -56,7 +56,7 @@ contains
             minnrefs   = ceiling(real(self%s%nnn) * NEIGH_MINFRAC)
             ! search
             do isample=1,self%s%nrefs
-                iref  = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
+                iref  = s3D%srch_order(isample,self%s%ithr)  ! set the stochastic reference index
                 iproj = iref - (self%s%prev_state - 1) * params_glob%nspace
                 if( .not. lnns(iproj) ) cycle
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
