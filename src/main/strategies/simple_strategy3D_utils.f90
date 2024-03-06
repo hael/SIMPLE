@@ -100,7 +100,7 @@ contains
         frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
         call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
         ! weight
-        pw = s3D%proj_space_w(s%ithr, ref)
+        pw = s3D%proj_space_w(ref, s%ithr)
         if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
         call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
