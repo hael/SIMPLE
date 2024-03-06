@@ -40,6 +40,7 @@ type convergence
     procedure :: check_conv3Dc
     procedure :: check_conv_cluster
     procedure :: append_stats
+    procedure :: plot_projdirs
     procedure :: get
 end type convergence
 
@@ -328,6 +329,7 @@ contains
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
         call self%ostats%write(STATS_FILE)
         call self%append_stats
+        call self%plot_projdirs(mask)
         ! destruct
         deallocate(mask, updatecnts, pws, states, scores)
         call self%ostats%kill
@@ -470,7 +472,7 @@ contains
     subroutine append_stats( self )
         use CPlot2D_wrapper_module, only: plot2D
         class(convergence), intent(in) :: self
-        type(oris) :: os_prev, os
+        type(oris)        :: os_prev, os
         real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
         real, allocatable :: score(:), proj_overlap(:)
         integer    :: i,nl
@@ -506,6 +508,114 @@ contains
         endif
         call os%kill
     end subroutine append_stats
+
+    subroutine plot_projdirs( self, ptcl_mask )
+        use CPlot2D_wrapper_module
+        class(convergence),   intent(in) :: self
+        logical, allocatable, intent(in) :: ptcl_mask(:)
+        type(str4arr)                 :: title
+        type(CPlot2D_type)            :: figure
+        type(CDataSet_type)           :: center, axis
+        type(CDataPoint_type)         :: p
+        type(oris)                    :: os
+        character(len=STDLEN)         :: titlestr
+        character(len=:), allocatable :: fname_eps, fname_pdf, ps2pdf_cmd
+        real,             allocatable :: phi(:), psi(:), logpops(:)
+        integer,          allocatable :: pops(:), projs(:), inds(:)
+        real(dp) :: color, x,y, sz
+        integer  :: iptcl, nptcls, maxpop, nprojs, proj, l, iostat, ind
+        if( trim(params_glob%iterstats).ne.'yes' ) return
+        nptcls = size(ptcl_mask)
+        projs  = nint(build_glob%spproj_field%get_all('proj'))
+        nprojs = max(params_glob%nspace,maxval(projs,mask=ptcl_mask))
+        ! gather populations & euler angles
+        allocate(phi(nprojs),psi(nprojs),pops(nprojs))
+        pops = 0
+        phi  = -2.
+        psi  = -2.
+        do iptcl = 1,nptcls
+            if( ptcl_mask(iptcl) )then
+                proj = projs(iptcl)
+                pops(proj) = pops(proj) + 1
+                if( phi(proj) < -1. )then
+                    phi(proj) = build_glob%spproj_field%e1get(iptcl)
+                    psi(proj) = build_glob%spproj_field%e2get(iptcl)
+                endif
+            endif
+        enddo
+        where( pops == 0 )
+            phi = 0.
+            psi = 0.
+        end where
+        ! raw populations output
+        call os%new(nprojs,is_ptcl=.false.)
+        do proj = 1,nprojs
+            call os%set(proj,'pop',real(pops(proj)))
+            if( pops(proj) == 0 ) cycle
+            call os%set(proj,'e1',phi(proj))
+            call os%set(proj,'e2',psi(proj))
+        enddo
+        call os%write('projdir_pops.txt')
+        call os%kill
+        ! sorting
+        logpops = log10(1.+real(pops))
+        logpops = logpops / maxval(logpops)
+        inds = (/(proj,proj=1,nprojs)/)
+        call hpsort(logpops,inds)
+        ! Plot
+        call CPlot2D__new(figure, 'Polar Projection Directions Distribution'//C_NULL_CHAR)
+        call CPlot2D__SetDrawXAxisGridLines(figure, C_FALSE)
+        call CPlot2D__SetDrawYAxisGridLines(figure, C_FALSE)
+        call CPlot2D__SetXAxisSize(figure, 400._c_double)
+        call CPlot2D__SetYAxisSize(figure, 400._c_double)
+        call CPlot2D__SetDrawLegend(figure, C_FALSE)
+        ! axes
+        call CDataSet__new(axis)
+        call CDataSet__SetDrawMarker(axis, C_FALSE)
+        call CDataSet__SetDrawLine(axis, C_TRUE)
+        call CDataSet__SetDatasetColor(axis, 0.d0,0.d0,0.d0)
+        call CDataSet_addpoint(axis,-90., 0.)
+        call CDataSet_addpoint(axis, 90., 0.)
+        call CPlot2D__AddDataSet(figure, axis)
+        call CDataSet__delete(axis)
+        call CDataSet__new(axis)
+        call CDataSet__SetDrawMarker(axis, C_FALSE)
+        call CDataSet__SetDrawLine(axis, C_TRUE)
+        call CDataSet__SetDatasetColor(axis, 0.d0,0.d0,0.d0)
+        call CDataSet_addpoint(axis, 0.,-90.)
+        call CDataSet_addpoint(axis, 0., 90.)
+        call CPlot2D__AddDataSet(figure, axis)
+        call CDataSet__delete(axis)
+        ! orientations
+        do ind = 1,nprojs
+            proj = inds(ind)
+            if( pops(proj) == 0 ) cycle
+            sz    = 9.d0 * real(logpops(ind),dp)
+            color = 1.d0 - real(logpops(ind),dp)
+            x     = 90.d0 * real(cos(deg2rad(phi(proj))) * psi(proj)/180.,dp)
+            y     = 90.d0 * real(sin(deg2rad(phi(proj))) * psi(proj)/180.,dp)
+            call CDataSet__new(center)
+            call CDataSet__SetDrawMarker(center, C_TRUE)
+            call CDataSet__SetMarkerSize(center, sz)
+            call CDataSet__SetDatasetColor(center,color,color,1.d0)
+            call CDataPoint__new2(x, y, p)
+            call CDataSet__AddDataPoint(center, p)
+            call CDataPoint__delete(p)
+            call CPlot2D__AddDataSet(figure, center)
+            call CDataSet__delete(center)
+        enddo
+        ! write
+        fname_eps = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.eps'//C_NULL_CHAR
+        call CPlot2D__OutputPostScriptPlot(figure, fname_eps)
+        call CPlot2D__delete(figure)
+        l = len_trim(fname_eps)
+        fname_eps = fname_eps(:l-1) ! removing trailing C NULL character
+        fname_pdf = 'iter_projdir_'//int2str_pad(params_glob%which_iter,3)//'.pdf'
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
+            //trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine plot_projdirs
 
     real function get( self, which )
         class(convergence), intent(in) :: self
