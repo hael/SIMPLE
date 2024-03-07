@@ -12,7 +12,7 @@ public :: exec_gaupick, calc_multipick_avgs, exec_segpick
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, BOX_EXP_FAC = 0.5
+real,    parameter :: SMPD_SHRINK1 = 4.0, SMPD_SHRINK2 = 2.0, BOX_EXP_FAC = 0.667
 integer, parameter :: OFFSET       = 3
 logical, parameter :: L_WRITE      = .false.
 logical, parameter :: L_DEBUG      = .false.
@@ -103,8 +103,8 @@ contains
         else
             ! single moldiam pick
             if( present(pickrefs) )then
-                call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%mskdiam, pickrefs, offset=OFFSET, roi=l_roi)
-                call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%mskdiam, pickrefs, offset=1)
+                call gaup%new_refpicker(       params_glob%pcontrast, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
+                call gaup_refine%new_refpicker(params_glob%pcontrast, SMPD_SHRINK2, pickrefs, offset=1)
             else
                 call gaup%new_gaupicker(       params_glob%pcontrast, SMPD_SHRINK1, params_glob%moldiam, params_glob%moldiam, offset=OFFSET, roi=l_roi)
                 call gaup_refine%new_gaupicker(params_glob%pcontrast, SMPD_SHRINK2, params_glob%moldiam, params_glob%moldiam, offset=1)

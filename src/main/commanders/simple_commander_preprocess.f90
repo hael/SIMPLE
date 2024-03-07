@@ -2637,18 +2637,22 @@ contains
     end subroutine exec_pick_extract
 
     subroutine exec_make_pickrefs( self, cline )
-        use simple_projector_hlev, only: reproject
+         use simple_masker,   only: automask2D
+         use simple_binimage, only: binimage
+         use simple_default_clines
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)              :: params
-        type(stack_io)                :: stkio_r
-        type(sym)                     :: pgrpsyms
-        type(image)                   :: ref2D
-        type(image),      allocatable :: projs(:)
-        integer, parameter :: NREFS=100, NPROJS=20
-        real    :: ang, rot, smpd_here
+        type(parameters)         :: params
+        type(stack_io)           :: stkio_r
+        type(image)              :: ref2D
+        type(image), allocatable :: projs(:), masks(:)
+        real,        allocatable :: diams(:), shifts(:,:)
+        real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
+        integer, parameter :: NREFS=100
+        real    :: ang, rot, smpd_here, xyz(3), lp, diam_max
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ncavgs, icavg
-        integer :: cnt, norefs
+        integer :: cnt, norefs, new_box
+        call set_automask2D_defaults(cline)
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
@@ -2658,24 +2662,44 @@ contains
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
-        if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
-        ! point-group object
-        call pgrpsyms%new(trim(params%pgrp))
         ! read selected cavgs
         call find_ldim_nptcls(params%pickrefs, ldim_here, ncavgs, smpd=smpd_here)
         if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
         ldim_here(3) = 1
-        allocate( projs(ncavgs) )
+        allocate( projs(ncavgs), masks(ncavgs), diams(ncavgs) )
         call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
             call projs(icavg)%new(ldim_here, smpd_here)
             call stkio_r%read(icavg, projs(icavg))
-            call scale_ref(projs(icavg), params%smpd)
+            call masks(icavg)%copy(projs(icavg))
         end do
         call stkio_r%close
+        ! set mask radius in pixels before atomasking
+        params%msk = ldim_here(1)/2 - nint(COSMSKHALFWIDTH) 
+        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
+        do icavg=1,ncavgs
+            call projs(icavg)%mul(masks(icavg))
+            xyz(1) = shifts(icavg,1)
+            xyz(2) = shifts(icavg,2)
+            xyz(3) = 0.
+            print *, xyz(:2)
+            call projs(icavg)%shift(xyz)
+        end do
+        ! estimate new box size and clip
+        diam_max = maxval(diams)
+        lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
+        new_box = round2even(diam_max / smpd_here + 2. * COSMSKHALFWIDTH)
+        write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box
+        ldim_here(1) = new_box
+        ldim_here(2) = new_box
+        ldim_here(3) = 1
+        do icavg=1,ncavgs
+            call projs(icavg)%bp(0.,lp)
+            call projs(icavg)%clip_inplace(ldim_here)
+        end do
+        ! expand in in-plane rotation and write to file
         nrots  = nint( real(NREFS)/real(ncavgs) )
         norefs = ncavgs
-        ! expand in in-plane rotation and write to file
         if( nrots > 1 )then
             call ref2D%new([ldim(1),ldim(2),1], params%smpd)
             ang = 360./real(nrots)

@@ -9,7 +9,7 @@ real,             parameter :: SMPD=0.358
 integer,          parameter :: NGROW=3, WINSZ=1, EDGE=12
 ! variables
 type(image), allocatable :: imgs(:)
-real,        allocatable :: diams(:)
+real,        allocatable :: diams(:), shifts(:,:)
 integer                  ::  n, i, ldim(3)
 ! read images
 call find_ldim_nptcls(STK, ldim, n)
@@ -19,5 +19,5 @@ do i = 1, n
     call imgs(i)%read(STK, i)
 end do
 ! mask
-call automask2D(imgs, NGROW, WINSZ, EDGE, diams)
+call automask2D(imgs, NGROW, WINSZ, EDGE, diams, shifts)
 end program simple_test_nano_mask

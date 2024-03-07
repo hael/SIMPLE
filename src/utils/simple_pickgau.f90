@@ -11,9 +11,9 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: GAUSIG = 5., BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
-integer, parameter :: OFFSET_DEFAULT = 3 , MAXNREFS = 100
-logical, parameter :: L_WRITE  = .false.
+real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
+integer, parameter :: OFFSET_DEFAULT = 3
+logical, parameter :: L_WRITE  = .true.
 logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
@@ -214,18 +214,20 @@ contains
         call self%set_gaurefs(moldiams)
     end subroutine new_gaupicker_multi
 
-    subroutine new_refpicker( self, pcontrast, smpd_shrink, mskdiam, imgs, offset, ndev, roi )
+    subroutine new_refpicker( self, pcontrast, smpd_shrink, imgs, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast
-        real,              intent(in)    :: smpd_shrink, mskdiam
+        real,              intent(in)    :: smpd_shrink
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         logical, optional, intent(in)    :: roi
         integer :: ldim(3)
-        ldim = imgs(1)%get_ldim()
-        call self%new( pcontrast, smpd_shrink, mskdiam, mskdiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
-        call self%set_refs( imgs, mskdiam )
+        real    :: moldiam
+        ldim    = imgs(1)%get_ldim()
+        moldiam = (real(ldim(1)) - 2. * COSMSKHALFWIDTH ) * imgs(1)%get_smpd() 
+        call self%new( pcontrast, smpd_shrink, moldiam, moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
+        call self%set_refs( imgs )
     end subroutine new_refpicker
 
     subroutine get_stats( self, stats )
@@ -273,7 +275,7 @@ contains
             maxdiam_max      = self%maxdiam     ! only one box size considered
             box_max          = self%ldim_box(1) ! only one box size considered
         else
-            self%maxdiam = moldiam + moldiam * BOX_EXP_FAC
+            self%maxdiam     = moldiam + moldiam * BOX_EXP_FAC
             ldim_raw_box(1)  = round2even(self%maxdiam / smpd_raw)
             ldim_raw_box(2)  = ldim_raw_box(1)
             ldim_raw_box(3)  = 1
@@ -337,85 +339,48 @@ contains
             ! backup of shrunk micrograph
             call self%mic_roi%copy(self%mic_shrink)
         endif
-        ! denoise mic_shrink
-        call gauimg%new(self%ldim, self%smpd_shrink)
-        call gauimg%gauimg2D(self%sig,self%sig)
-        call gauimg%fft
-        call self%mic_shrink%fft
-        call self%mic_shrink%mul(gauimg)
-        call self%mic_shrink%ifft
-        call gauimg%kill
-        if( L_WRITE )then
-            if( present(box) )then ! reference-based picking
-                call self%mic_shrink%write('gauconv_mic_shrink.mrc')
-            else
-                call self%mic_shrink%write('gauconv_mic_shrink_moldiam'//numstr//'.mrc')
-            endif
-        endif
         if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
         allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         ! flag existence
         self%exists = .true.
     end subroutine new
 
-    subroutine set_refs( self, imgs, mskdiam )
+    subroutine set_refs( self, imgs )
         class(pickgau), intent(inout) :: self
         class(image),   intent(inout) :: imgs(:)
-        real,           intent(in)    :: mskdiam
-        type(image) :: img_rot
-        integer     :: ldim(3), iimg, nimgs, irot, nrots, cnt
-        real        :: mskrad, smpd, ang, rot
+        type(image) :: img_ref
+        integer     :: ldim(3), iref
+        real        :: smpd
         smpd       = imgs(1)%get_smpd()
         ldim       = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
-        nimgs      = size(imgs)
-        nrots      = nint(real(MAXNREFS) / real(nimgs))
-        self%nrefs = nimgs * nrots
+        self%nrefs = size(imgs)
         ! set # pixels in x/y for both box sizes
         self%nx    = self%ldim(1) - self%ldim_box(1)
         self%ny    = self%ldim(2) - self%ldim_box(2)
-        mskrad     = (mskdiam / self%smpd_shrink) / 2.
-        call self%gauref%fft ! prep for convolution
         if( allocated(self%boxrefs) )then
-            do iimg = 1,size(self%boxrefs)
-                call self%boxrefs(iimg)%kill
+            do iref = 1,size(self%boxrefs)
+                call self%boxrefs(iref)%kill
             end do
             deallocate(self%boxrefs)
         endif
         if( allocated(self%l_err_refs) ) deallocate(self%l_err_refs)
         allocate(self%l_err_refs(self%nrefs), self%boxrefs(self%nrefs))
-        call img_rot%new(ldim, smpd)
-        ang = 360./real(nrots)
-        cnt = 0
-        do iimg = 1,nimgs
-            rot = 0.
-            do irot = 1,nrots
-                cnt = cnt + 1
-                call imgs(iimg)%rtsq(rot, 0., 0., img_rot)
-                call img_rot%fft
-                call self%boxrefs(cnt)%new(self%ldim_box, self%smpd_shrink, wthreads=.false.)
-                call self%boxrefs(cnt)%set_ft(.true.)
-                call img_rot%clip(self%boxrefs(cnt))
-                rot = rot + ang
-            end do
-        end do
-        !$omp parallel do schedule(static) default(shared) private(cnt) proc_bind(close)
-        do cnt = 1,self%nrefs
-            ! convolve with Gaussian
-            call self%boxrefs(cnt)%mul(self%gauref)
-            ! back to real-space
-            call self%boxrefs(cnt)%ifft
-            call self%boxrefs(cnt)%mask(mskrad, 'hard')
-            call self%boxrefs(cnt)%prenorm4real_corr(self%l_err_refs(cnt))
+        !$omp parallel do schedule(static) default(shared) private(iref) proc_bind(close)
+        do iref = 1,self%nrefs
+            call imgs(iref)%fft
+            call self%boxrefs(iref)%new(self%ldim_box, self%smpd_shrink, wthreads=.false.)
+            call self%boxrefs(iref)%set_ft(.true.)
+            call imgs(iref)%clip(self%boxrefs(iref))
+            call imgs(iref)%ifft
+            call self%boxrefs(iref)%prenorm4real_corr(self%l_err_refs(iref))
         end do
         !$omp end parallel do
         if( L_WRITE )then
-            do cnt = 1,self%nrefs
-                call self%boxrefs(cnt)%write('boxrefs_shrink.mrc', cnt)
+            do iref = 1,self%nrefs
+                call self%boxrefs(iref)%write('boxrefs_shrink.mrc', iref)
             enddo
         endif
-        call self%gauref%ifft ! leave in real-space
-        call img_rot%kill
         self%refpick = .true.
     end subroutine set_refs
 

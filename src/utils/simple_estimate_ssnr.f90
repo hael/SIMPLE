@@ -106,7 +106,6 @@ contains
         lpcen   = min(max(mskdiam/6.,  20.), 30.)
     end subroutine mskdiam2lplimits
 
-
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
     subroutine calc_dose_weights( nframes, box, smpd, kV, total_dose, weights )
         integer,           intent(in)    :: nframes, box

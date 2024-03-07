@@ -111,21 +111,21 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters)         :: params
         type(image), allocatable :: imgs(:), masks(:)
-        real,        allocatable :: diams(:)
+        real,        allocatable :: diams(:), shifts(:,:)
         integer :: ldim(3), n, i
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call set_automask2D_defaults(cline)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1 ! 2D
-        allocate(imgs(n), masks(n), diams(n))
+        allocate(imgs(n), masks(n))
         diams = 0.
         do i = 1,n
             call imgs(i)%new(ldim, params%smpd)
             call imgs(i)%read(params%stk, i)
             call masks(i)%copy(imgs(i))
         end do
-        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams)
+        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do i = 1,n
             call imgs(i)%mul(masks(i))
             call imgs(i)%write('automasked.mrc', i)

@@ -775,7 +775,6 @@ contains
 
      !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname, which_iter )
-        use simple_masker, only: automask2D
         character(len=*), intent(in) :: fname
         integer,          intent(in) :: which_iter
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)

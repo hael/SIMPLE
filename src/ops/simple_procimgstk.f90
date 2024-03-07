@@ -367,7 +367,6 @@ contains
             call progress(i,n)
             call stkio_r%read(i, img)
             xyz = img%calc_shiftcen(lp, msk)
-            print *, xyz(:2)
             call img%shift(xyz)
             call stkio_w%write(i, img)
         end do
