@@ -68,7 +68,6 @@ contains
         character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         real,             allocatable :: res(:), tmp_rarr(:), diams(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
-        class(parameters), pointer    :: params_ptr => null()
         character(len=2)      :: str_state
         type(qsys_env)        :: qenv
         type(parameters)      :: params
@@ -348,11 +347,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         if( l_shmem )then
             call rec(cline_refine3D_snhc, l_rnd=.true.)
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D%execute(cline_refine3D_snhc)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xrefine3D%execute_shmem(cline_refine3D_snhc)
         else
             call xrefine3D_distr%execute(cline_refine3D_snhc)
         endif
@@ -360,11 +355,7 @@ contains
         write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
         write(logfhandle,'(A)') '>>>'
         if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D%execute(cline_refine3D_init)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xrefine3D%execute_shmem(cline_refine3D_init)
         else
             call xrefine3D_distr%execute(cline_refine3D_init)
         endif
@@ -382,11 +373,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             call cline_symsrch%set('vol1', trim(vol_iter))
             if( l_shmem .or. qenv%get_qsys() .eq. 'local' )then
-                params_ptr  => params_glob
-                params_glob => null()
-                call xsymsrch%execute(cline_symsrch)
-                params_glob => params_ptr
-                params_ptr  => null()
+                call xsymsrch%execute_shmem(cline_symsrch)
             else
                 call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH_FINISHED')
             endif
@@ -453,9 +440,8 @@ contains
             call cline_calc_pspec%set('box',   real(params%box))
             call cline_calc_pspec%set('smpd',  params%smpd)
             if( l_shmem )then
-                ! TODO in shared memory
                 call cline_calc_pspec%set('which_iter', real(iter))
-                call xcalc_pspec_distr%execute( cline_calc_pspec )
+                call xcalc_pspec_distr%execute_shmem( cline_calc_pspec )
                 call cline_refine3D_refine%set('which_iter', real(iter))
             else
                 call cline_calc_pspec%set('which_iter', 0.)
@@ -468,11 +454,7 @@ contains
         endif
         if( l_shmem )then
             call rec(cline_refine3D_refine, l_rnd=.false.)
-            params_ptr  => params_glob
-            params_glob => null()
-            call xrefine3D%execute(cline_refine3D_refine)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xrefine3D%execute_shmem(cline_refine3D_refine)
         else
             call xrefine3D_distr%execute(cline_refine3D_refine)
         endif
@@ -503,11 +485,7 @@ contains
             ! reconstruction
             call cline_reconstruct3D%set('ml_reg', 'no')
             if( l_shmem )then
-                params_ptr  => params_glob
-                params_glob => null()
-                call xreconstruct3D%execute(cline_reconstruct3D)
-                params_glob => params_ptr
-                params_ptr  => null()
+                call xreconstruct3D%execute_shmem(cline_reconstruct3D)
             else
                 call xreconstruct3D_distr%execute(cline_reconstruct3D)
             endif
@@ -614,11 +592,7 @@ contains
                     call build%spproj%write_segment_inside('ptcl3D', params%projfile)
                 endif
                 call cline%set('mkdir', 'no') ! to avoid nested dirs
-                params_ptr  => params_glob
-                params_glob => null()
-                call xreconstruct3D%execute(cline)
-                params_glob => params_ptr
-                params_ptr  => null()
+                call xreconstruct3D%execute_shmem(cline)
                 call build%spproj_field%kill
                 if( l_rnd )then
                     call simple_rename('snhc_recvol_state01_even.mrc', 'startvol_even.mrc')
@@ -717,7 +691,6 @@ contains
         type(cmdline)                 :: cline_refine3D, cline_reconstruct3D, cline_rec_shmem
         type(cmdline)                 :: cline_postprocess, cline_symsrch
         ! other
-        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(convergence)             :: conv
@@ -1056,14 +1029,11 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
+            params%box_crop = params%box
             if( l_shmem )then
-                call rec_shmem
+                call rec_shmem(rename=.false.)
             else
-                params_ptr  => params_glob
-                params_glob => null()
-                call xreconstruct3D_distr%execute(cline_reconstruct3D)
-                params_glob => params_ptr
-                params_ptr  => null()
+                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
             endif
             call spproj%read_segment('out',params%projfile)
             call spproj%add_vol2os_out(vol, params%smpd, 1, vol_type)
@@ -1105,12 +1075,7 @@ contains
                 integer,          intent(out) :: iter
                 character(len=:), allocatable :: stage
                 call cline_refine3D%delete('endit')
-                params_ptr  => params_glob
-                params_glob => null()
-                call xrefine3D_distr%execute(cline_refine3D)
-                params_glob => params_ptr
-                params_ptr  => null()
-                call cline_refine3D%printline
+                call xrefine3D_distr%execute_shmem(cline_refine3D)
                 call conv%read(l_err)
                 iter = nint(conv%get('iter'))
                 call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
@@ -1145,27 +1110,27 @@ contains
                     call cline_symsrch%set('lp',       symlp)
                     call cline_symsrch%set('box_crop', params%box_crop)
                     call cline_symsrch%set('vol1',     trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
-                    params_ptr  => params_glob
-                    params_glob => null()
-                    call xsymsrch%execute(cline_symsrch)
-                    params_glob => params_ptr
-                    params_ptr  => null()
+                    call xsymsrch%execute_shmem(cline_symsrch)
                     call del_file('SYMAXIS_SEARCH_FINISHED')
                 endif
             end subroutine symmetrize
 
-            subroutine rec_shmem()
+            subroutine rec_shmem( rename )
+                logical, optional, intent(in) :: rename
+                logical :: l_rename
+                l_rename = .true.
+                if( present(rename) ) l_rename = rename
                 call cline_rec_shmem%set('pgrp',     cline_refine3D%get_carg('pgrp'))
                 call cline_rec_shmem%set('box_crop', params%box_crop)
-                params_ptr  => params_glob
-                params_glob => null()
-                call xreconstruct3D%execute(cline_rec_shmem)
-                params_glob => params_ptr
-                params_ptr  => null()
-                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
-                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                call simple_rename('recvol_state01.mrc',      'startvol.mrc')
-                call cline_refine3D%set('vol1', 'startvol.mrc')
+                call xreconstruct3D%execute_shmem(cline_rec_shmem)
+                if( l_rename )then
+                    call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
+                    call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                    call simple_rename('recvol_state01.mrc',      'startvol.mrc')
+                    call cline_refine3D%set('vol1', 'startvol.mrc')
+                else
+                    call cline_refine3D%set('vol1', 'recvol_state01.mrc')
+                endif
                 call cline_refine3D%delete('continue')
             end subroutine rec_shmem
 
