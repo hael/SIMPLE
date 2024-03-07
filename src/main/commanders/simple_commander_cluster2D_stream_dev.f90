@@ -1009,7 +1009,7 @@ contains
         if( .not.pool_available )return
         if( L_BENCH ) t_tot  = tic()
         !poolstats init
-        call pool_stats%init(POOLSTATS_FILE)
+        call pool_stats%init(nlines=2, fname=POOLSTATS_FILE)
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
         nptcls_rejected_glob = 0
@@ -1051,11 +1051,11 @@ contains
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
         ! poolstats
-        call pool_stats%set('ptcls',          nptcls_glob)
-        call pool_stats%set('rejected_ptcls', nptcls_rejected_glob)
-        call pool_stats%set('pool_iters',     pool_iter)
-        call pool_stats%set('ncls',           ncls_glob)
-        call pool_stats%set('res',            current_resolution)
+        call pool_stats%set(2, 'primary_ptcls',    nptcls_glob)
+        call pool_stats%set(2, 'primary_rejected', nptcls_rejected_glob)
+        call pool_stats%set(2, 'primary_iter',     pool_iter)
+        call pool_stats%set(2, 'secondary_ncls',   ncls_glob)
+        call pool_stats%set(2, 'primary_max_res',  current_resolution)
         call pool_stats%write(POOLSTATS_FILE)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)

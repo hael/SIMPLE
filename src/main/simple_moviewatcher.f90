@@ -174,7 +174,7 @@ contains
         self%history(n+1) = trim(adjustl(basename_safe(fname)))
         self%n_history    = self%n_history + 1
         ! write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
-        call lastfoundfile_update()
+        !call lastfoundfile_update()
     end subroutine add2history_2
 
     !>  \brief  is for checking a file has already been reported
