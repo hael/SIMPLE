@@ -694,8 +694,6 @@ contains
         type(calc_group_sigmas_commander) :: xcalc_group_sigmas
         type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
         type(prob_align_commander)        :: xprob_align
-        class(parameters), pointer        :: params_ptr => null()
-        class(builder),    pointer        :: build_ptr => null()
         type(parameters)                  :: params
         type(builder)                     :: build
         type(cmdline)                     :: cline_calc_sigma, cline_calc_pspec_distr, cline_prob_align
@@ -704,6 +702,7 @@ contains
         real                              :: corr, corr_prev
         logical                           :: converged, l_sigma, l_switch2euclid
         call build%init_params_and_build_strategy3D_tbox(cline,params)
+        ! print *,associated(build_glob),associated(build_glob%spproj_field),associated(params_glob)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         if( startit == 1 ) call build%spproj_field%clean_updatecnt
@@ -768,13 +767,7 @@ contains
                     call cline_prob_align%set('objfun',     orig_objfun)
                     call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
-                    build_ptr   => build_glob
-                    params_ptr  => params_glob
-                    nullify(params_glob, build_glob)
-                    call xprob_align%execute( cline_prob_align )
-                    build_glob  => build_ptr
-                    params_glob => params_ptr
-                    nullify(params_ptr, build_ptr)
+                    call xprob_align%execute_shmem( cline_prob_align )
                 endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%which_iter, converged)
@@ -821,6 +814,8 @@ contains
             end do
         endif
         ! end gracefully
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
 
@@ -1244,8 +1239,6 @@ contains
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         character(len=:), allocatable :: fname
-        class(builder),       pointer :: build_ptr
-        class(parameters),    pointer :: params_ptr
         type(builder)                 :: build
         type(parameters)              :: params
         type(prob_tab_commander)      :: xprob_tab
@@ -1269,14 +1262,7 @@ contains
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
         ! execution
         if( params%nparts == 1)then
-            ! shared memory execution
-            build_ptr   => build_glob
-            params_ptr  => params_glob
-            nullify(params_glob, build_glob)
-            call xprob_tab%execute(cline_prob_tab)
-            build_glob  => build_ptr
-            params_glob => params_ptr
-            nullify(params_ptr, build_ptr)
+            call xprob_tab%execute_shmem(cline_prob_tab)
         else
             ! setup the environment for distributed execution
             call qenv%new(params%nparts, nptcls=params%nptcls)

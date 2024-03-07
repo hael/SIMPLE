@@ -762,8 +762,12 @@ contains
                 if( cline%defined('bfac') )then
                     bfac = params_glob%bfac
                 else
-                    bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, lplim)
-                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', bfac
+                    if( lplim < 5. )then
+                        bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, lplim)
+                        write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', bfac
+                    else
+                        bfac = 0.
+                    endif
                 endif
                 ! B-factor application
                 call build_glob%vol2%copy(build_glob%vol)
