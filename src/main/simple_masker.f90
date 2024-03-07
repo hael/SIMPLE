@@ -258,25 +258,26 @@ contains
         deallocate(rmat)
     end subroutine env_rproject
 
-    subroutine automask2D( imgs, ngrow, winsz, edge, diams, write2disk )
+    subroutine automask2D( imgs, ngrow, winsz, edge, diams, shifts, write2disk )
         use simple_segmentation
         use simple_binimage, only: binimage
         class(image),      intent(inout) :: imgs(:)
         integer,           intent(in)    :: ngrow, winsz, edge
-        real, allocatable, intent(inout) :: diams(:)
+        real, allocatable, intent(inout) :: diams(:), shifts(:,:)
         logical, optional, intent(in)    :: write2disk
         type(binimage),    allocatable   :: img_bin(:), cc_img(:)
         real,              allocatable   :: ccsizes(:)
         integer :: i, n, loc(1), ldim(3)
-        real    :: smpd
+        real    :: smpd, xyz(3)
         logical :: l_write
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
         l_write = l_write .and. params_glob%part.eq.1
-        if( allocated(diams) ) deallocate(diams)
+        if( allocated(diams)  ) deallocate(diams)
+        if( allocated(shifts) ) deallocate(shifts)
         ! allocate
-        allocate(diams(n), source=0.)
+        allocate(diams(n), shifts(n,2), source=0.)
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         allocate(img_bin(n), cc_img(n))
@@ -290,16 +291,18 @@ contains
         else
             write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         endif
-        !$omp parallel do default(shared) private(i,ccsizes,loc) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,ccsizes,loc,xyz) schedule(static) proc_bind(close)
         do i = 1,n
             call img_bin(i)%zero_edgeavg
             ! low-pass filter
             call img_bin(i)%bp(0., params_glob%amsklp)
             ! filter with non-local means
             call img_bin(i)%NLmean
-            ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
+            ! call img_bin(i)%write('NLmean_filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
+            call img_bin(i)%masscen(xyz)
+            shifts(i,:) = xyz(:2)
             call img_bin(i)%set_imat
             ! if( l_write ) call img_bin(i)%write(BIN_OTSU, i)
             ! grow ngrow layers
@@ -313,6 +316,8 @@ contains
             call cc_img(i)%diameter_cc(loc(1), diams(i))
             ! turn it into a binary image for mask creation
             call cc_img(i)%cc2bin(loc(1))
+            call cc_img(i)%masscen(xyz)
+            shifts(i,:) = xyz(:2)
             ! median filter to smoothen
             if( winsz > 0 )then
                 call cc_img(i)%real_space_filter(winsz, 'median')
