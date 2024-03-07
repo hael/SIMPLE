@@ -1039,7 +1039,7 @@ contains
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
             frac_srch_space = 0.
             if( iter > 1 ) frac_srch_space = cline_check_2Dconv%get_rarg('frac_srch')
-            ! the below activates shifting & automasking
+            ! the below activates shifting
             if( iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. cline_check_2Dconv%defined('trs')) )then
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search

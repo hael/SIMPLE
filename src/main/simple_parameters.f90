@@ -1489,7 +1489,7 @@ contains
         ! -- shift defaults
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('snhc')
+                case('snhc','snhc_smpl')
                     self%trs = 0.
                 case DEFAULT
                     self%trs = MINSHIFT

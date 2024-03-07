@@ -9,7 +9,7 @@ use simple_builder,      only: build_glob
 implicit none
 
 public :: eul_prob_tab
-public :: calc_num2sample, calc_numinpl2sample2D, calc_numcls2sample2D, eulprob_dist_switch, eulprob_corr_switch
+public :: calc_num2sample, calc_numinpl2sample2D, eulprob_dist_switch, eulprob_corr_switch
 private
 #include "simple_local_flags.inc"
 
@@ -419,17 +419,6 @@ contains
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
-
-    subroutine calc_numcls2sample2D( neigh_frac, ncls, ncls2smpl )
-        real,    intent(in)  :: neigh_frac
-        integer, intent(in)  :: ncls
-        integer, intent(out) :: ncls2smpl
-        real :: athres, dist_thres
-        dist_thres = neigh_frac * 180.
-        athres     = params_glob%prob_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        ncls2smpl     = min(ncls, max(1,nint(athres * real(ncls) / 180.)))
-    end subroutine calc_numcls2sample2D
 
     subroutine calc_numinpl2sample2D( num_all, num_smpl )
         use simple_builder, only: build_glob

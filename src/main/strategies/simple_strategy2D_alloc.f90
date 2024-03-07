@@ -12,8 +12,7 @@ private
 
 type strategy2D_alloc
     ! global parameters
-    integer              :: smpl_refs_ns = 0    !< refine=smpl; # of classes
-    integer              :: smpl_inpl_ns = 0    !< refine=smpl; # of in-plane rotations
+    integer              :: smpl_inpl_ns = 0    !< for refine smpl; # of in-plane rotations
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -40,11 +39,9 @@ contains
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
-    subroutine prep_strategy2D_glob( neigh_frac )
-        use simple_eul_prob_tab, only: calc_numinpl2sample2D, calc_numcls2sample2D
-        real, intent(in) :: neigh_frac ! neighborhood size [0,1]
-        logical          :: zero_oris, ncls_diff
-        integer          :: ncls_eff
+    subroutine prep_strategy2D_glob()
+        use simple_eul_prob_tab, only: calc_numinpl2sample2D
+        logical :: zero_oris, ncls_diff
         ! per-thread allocations
         allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
         allocate(s2D%cls_searched(params_glob%ncls,nthr_glob),source=.false.)
@@ -69,12 +66,10 @@ contains
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
-        if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         if( str_has_substr(params_glob%refine,'smpl') )then
-            ncls_eff = count(s2D%cls_pops>0)
-            call calc_numcls2sample2D(neigh_frac, ncls_eff, s2D%smpl_refs_ns)
             call calc_numinpl2sample2D(pftcc_glob%get_nrots(), s2D%smpl_inpl_ns)
         endif
+        if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
