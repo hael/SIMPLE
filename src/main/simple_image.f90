@@ -186,6 +186,7 @@ contains
     procedure          :: bin2logical
     procedure          :: logical2bin
     procedure          :: collage
+    procedure          :: generate_orthogonal_reprojs
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -2820,6 +2821,40 @@ contains
         img_out%rmat(ldim(1)+border+1:ldim_col(1),:ldim_col(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         call img_pad%kill()
     end subroutine collage
+
+    ! generate the 3 orthogonal reprojections from a volume into a single image
+    subroutine generate_orthogonal_reprojs( self, reprojs)
+        class(image), intent(in)    :: self
+        class(image), intent(inout) :: reprojs
+        integer, parameter :: b=3
+        type(image) :: reproj
+        integer     :: ldim_reproj(3),ldim_reprojs(3),n
+        if( self%is_ft() )      THROW_HARD('Real space only; generate_orthogonal_reprojs')
+        if( .not.self%is_3d() ) THROW_HARD('Volumes only; generate_orthogonal_reprojs')
+        ldim_reproj(1:2) = self%ldim(1:2)
+        ldim_reproj(3)   = 1
+        ldim_reprojs(1)  = 3*ldim_reproj(1) + 4*b
+        ldim_reprojs(2)  = ldim_reproj(2) + 2*b
+        ldim_reprojs(3)  = 1
+        call reproj%new(ldim_reproj,   self%smpd)
+        call reprojs%new(ldim_reprojs, self%smpd)
+        !$omp parallel workshare
+        reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1) = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),dim=3)
+        !$omp end parallel workshare
+        call reproj%norm
+        reprojs%rmat(b+1:b+ldim_reproj(1),b+1:b+ldim_reproj(2),1) = reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1)
+        !$omp parallel workshare
+        reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1) = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),dim=2)
+        !$omp end parallel workshare
+        call reproj%norm
+        reprojs%rmat(ldim_reproj(1)+2*b+1:2*(b+ldim_reproj(1)),b+1:b+ldim_reproj(2),1) = reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1)
+        !$omp parallel workshare
+        reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1) = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),dim=1)
+        !$omp end parallel workshare
+        call reproj%norm
+        reprojs%rmat(2*ldim_reproj(1)+3*b+1:3*(b+ldim_reproj(1)),b+1:b+ldim_reproj(2),1) = reproj%rmat(1:ldim_reproj(1),1:ldim_reproj(2),1)
+        call reproj%kill
+    end subroutine generate_orthogonal_reprojs
 
     ! FILTERS
 

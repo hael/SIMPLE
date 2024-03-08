@@ -670,6 +670,7 @@ contains
     !> for generation of an initial 3d model from particles
     subroutine exec_abinitio_3Dmodel( self, cline )
         use simple_convergence, only: convergence
+        use simple_class_frcs,  only: class_frcs
         class(abinitio_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         real,    parameter :: SCALEFAC      = 0.667
@@ -695,11 +696,13 @@ contains
         type(sp_project)              :: spproj
         type(convergence)             :: conv
         type(sym)                     :: se1, se2
-        type(image)                   :: final_vol
-        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
-        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
+        type(class_frcs)              :: clsfrcs 
+        type(image)                   :: final_vol, reprojs
+        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
+        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, auto_lpstart, auto_lpstop
         integer :: iter, it, prev_box_crop, maxits
-        logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_shmem, l_sym
+        logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_shmem, l_sym, l_lpstop_set
+        logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')     ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',    'yes')
@@ -726,15 +729,17 @@ contains
             l_shmem = .true.
         endif
         ! resolution limit strategy
-        l_lpset = .false.
+        l_lpset       = .false.
+        l_lpstop_set  = cline%defined('lpstop')
+        l_lpstart_set = cline%defined('lpstart')
         if( cline%defined('lp') )then
-            if( cline%defined('lpstart') .or. cline%defined('lpstop') )then
+            if( l_lpstart_set .or. l_lpstop_set )then
                 THROW_HARD('One of LP or LPSTART & LPSTOP must be defined!')
             endif
             l_lpset = .true.
         else
-            if( .not.cline%defined('lpstart') ) call cline%set('lpstart',LPSTART_DEFAULT)
-            if( .not.cline%defined('lpstop')  ) call cline%set('lpstop', LPSTOP_DEFAULT)
+            if( .not.l_lpstart_set ) call cline%set('lpstart',LPSTART_DEFAULT)
+            if( .not.l_lpstop_set  ) call cline%set('lpstop', LPSTOP_DEFAULT)
         endif
         ! make master parameters
         call params%new(cline)
@@ -767,6 +772,38 @@ contains
                 THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
         end select
         call spproj%write_segment_inside(params%oritype, params%projfile)
+        ! ! Automated resolution limits, not active yet
+        ! call mskdiam2lplimits(params%mskdiam, auto_lpstart, auto_lpstop, cenlp)
+        ! if( .not. cline%defined('cenlp') )then
+        !     params%cenlp = cenlp
+        !     call cline%set('cenlp', params%cenlp)
+        ! endif
+        ! if( l_lpset )then
+        !     params%lpstart = params%lp
+        !     params%lpstop  = params%lp
+        ! else
+        !     if( l_lpstart_set .and. l_lpstop_set )then
+        !         ! all set
+        !     else
+        !         if( .not.l_lpstart_set ) params%lpstart = 15.
+        !         if( .not.l_lpstop_set  )then
+        !             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        !             if( file_exists(frcs_fname) )then
+        !                 call clsfrcs%read(frcs_fname)
+        !                 auto_lpstop = clsfrcs%estimate_lp_for_align()
+        !                 auto_lpstop = min(max(auto_lpstop,6.),8.)
+        !                 call clsfrcs%kill
+        !             else
+        !                 auto_lpstop = 8.
+        !             endif
+        !             params%lpstop  = auto_lpstop
+        !         endif
+        !     endif    
+        ! endif
+        ! symlp = params%lpstart
+        ! write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', params%lpstart
+        ! write(logfhandle,'(A,F5.1)') '>>> HARD     RESOLUTION LIMIT (IN A): ', params%lpstop
+        ! write(logfhandle,'(A,F5.1)') '>>> CENTERING  LOW-PASS LIMIT (IN A): ', params%cenlp
         ! centering & symmetry resolution limit
         call mskdiam2lplimits(params%mskdiam, symlp, dummy, cenlp)
         if( .not. cline%defined('cenlp') )then
@@ -993,19 +1030,36 @@ contains
             if( l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
             endif
-            if( prev_box_crop == params%box_crop )then
-                if( l_shmem )then
-                    vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                    call cline_refine3D%set('vol1', vol)
-                    call cline_refine3D%delete('continue')
-                else
-                    call cline_refine3D%set('continue',  'yes')
-                endif
-            else
-                ! allows reconstruction to correct dimension
+            ! Dealing with reconstruction
+            if( params%l_ml_reg )then
+                ! need to reconstruct
+                call cline_refine3D%set('ml_reg', 'yes')
                 call cline_refine3D%delete('continue')
                 call cline_refine3D%delete('vol1')
-                if( l_shmem ) call rec_shmem
+                if( l_shmem )then
+                    call cline_rec_shmem%set('ml_reg',    'yes')
+                    call cline_rec_shmem%set('need_sigma','yes')
+                    call cline_rec_shmem%set('objfun',    params%objfun)
+                    call cline_rec_shmem%set('which_iter',iter) ! correct sigmas
+                    call rec_shmem
+                    call cline_rec_shmem%delete('which_iter')
+                endif
+            else
+                call cline_refine3D%set('ml_reg', 'no')
+                if( prev_box_crop == params%box_crop )then
+                    if( l_shmem )then
+                        vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                        call cline_refine3D%set('vol1', vol)
+                        call cline_refine3D%delete('continue')
+                    else
+                        call cline_refine3D%set('continue',  'yes')
+                    endif
+                else
+                    ! allows reconstruction to correct dimension
+                    call cline_refine3D%delete('continue')
+                    call cline_refine3D%delete('vol1')
+                    if( l_shmem ) call rec_shmem
+                endif
             endif
         endif
         ! Final step
@@ -1017,14 +1071,25 @@ contains
         call cline_refine3D%set('maxits',   MAXITS2)
         call cline_refine3D%set('lp_iters', MAXITS2)
         call cline_refine3D%set('nspace',   NSPACE3)
-        if( params%l_ml_reg )then
-            call cline_refine3D%set('ml_reg', 'yes')
-        else
-            call cline_refine3D%set('ml_reg', 'no')
-        endif
+        ! execution
         call exec_refine3D(iter)
-        ! final reconstruction at original scale
+        ! for visualization
+        call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+        call final_vol%generate_orthogonal_reprojs(reprojs)
+        call reprojs%write_jpg('orthogonal_reprojs.jpg')
+        call final_vol%kill
+        call reprojs%kill
+        ! Final reconstruction at original scale
         vol = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+        ! no ML-filtering
+        call cline_reconstruct3D%set('ml_reg',      'no')
+        call cline_reconstruct3D%set('needs_sigma', 'no')
+        call cline_reconstruct3D%set('objfun',      'cc')
+        call cline_rec_shmem%set('ml_reg',      'no')
+        call cline_rec_shmem%set('needs_sigma', 'no')
+        call cline_rec_shmem%set('objfun',      'cc')
+        ! reconstruction
         if( l_autoscale )then
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
