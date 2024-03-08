@@ -228,6 +228,7 @@ contains
             if( trim(params%picker).eq.'old' )then
                 cline_make_pickrefs = cline
                 call cline_make_pickrefs%set('prg','make_pickrefs')
+                call cline_make_pickrefs%set('neg','yes')
                 call cline_make_pickrefs%set('stream','no')
                 if( cline_make_pickrefs%defined('eer_upsampling') )then
                     pickref_scale = real(params%eer_upsampling) * params%scale
@@ -235,6 +236,7 @@ contains
                 endif
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                 call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             endif
         endif
@@ -750,22 +752,19 @@ contains
         l_pick = .false.
         if( cline%defined('pickrefs') )then
             select case(trim(trim(params%picker)))
-            case('old')
-                cline_make_pickrefs = cline
-                call cline_make_pickrefs%set('prg','make_pickrefs')
-                if( cline_make_pickrefs%defined('eer_upsampling') )then
-                    pickref_scale = real(params%eer_upsampling) * params%scale
-                    call cline_make_pickrefs%set('scale',pickref_scale)
-                endif
-                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                call cline%set('pickrefs', trim(PICKREFS)//params%ext)
-                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-            case('new')
-                if( .not. cline%defined('mskdiam') )then
-                    THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
-                endif
-            case DEFAULT
-                THROW_HARD('Picker not supported!')
+                case('old')
+                    cline_make_pickrefs = cline
+                    call cline_make_pickrefs%set('prg','make_pickrefs')
+                    call cline_make_pickrefs%set('neg','yes')
+                    if( cline_make_pickrefs%defined('eer_upsampling') )then
+                        pickref_scale = real(params%eer_upsampling) * params%scale
+                        call cline_make_pickrefs%set('scale',pickref_scale)
+                    endif
+                    call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                    call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                    write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                case DEFAULT
+                    THROW_HARD('Picker not supported!')
             end select
             l_pick = .true.
         else if( cline%defined('moldiam') )then
@@ -823,18 +822,15 @@ contains
         l_pick = .false.
         if( cline%defined('picker') )then
             select case(trim(params%picker))
-            case('old')
-                if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-            case('new')
-                if(cline%defined('pickrefs'))then
-                    if( .not. cline%defined('mskdiam') )then
-                        THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                case('old')
+                    if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+                case('new')
+                    if(cline%defined('pickrefs'))then
+                    else
+                        if( .not.cline%defined('moldiam') )then
+                            THROW_HARD('MOLDIAM required for picker=new')
+                        endif
                     endif
-                else
-                    if( .not.cline%defined('moldiam') )then
-                        THROW_HARD('MOLDIAM required for picker=new')
-                    endif
-                endif
             end select
             l_pick = .true.
         endif
@@ -1494,7 +1490,6 @@ contains
                 if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
             case('new')
                 if( templates_provided )then
-                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
                 else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams') )then
                     ! at least moldiam is required
                 else
@@ -1508,6 +1503,7 @@ contains
                 ! prepares picking references (always required)
                 cline_make_pickrefs = cline
                 call cline_make_pickrefs%set('prg','make_pickrefs')
+                call cline_make_pickrefs%set('neg','yes')
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                 call cline%set('pickrefs', trim(PICKREFS)//params%ext)
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
@@ -2658,6 +2654,7 @@ contains
         ! set defaults
         call set_automask2D_defaults(cline)
         call cline%set('oritype', 'mic')
+        if( .not.cline%defined('neg') ) call cline%set('neg', 'no') ! default for new picker
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
@@ -2708,6 +2705,7 @@ contains
                 do irot=1,nrots
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
+                    if( params%neg .eq. 'yes' ) call ref2D%neg
                     call ref2D%write(trim(PICKREFS)//params%ext, cnt)
                     rot = rot + ang
                 end do
@@ -2715,6 +2713,7 @@ contains
         else
             ! should never happen
             do iref=1,norefs
+                if( params%neg .eq. 'yes' ) call ref2D%neg
                 call projs(iref)%write(trim(PICKREFS)//params%ext, iref)
             end do
         endif
