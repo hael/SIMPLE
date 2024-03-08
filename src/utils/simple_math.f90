@@ -219,21 +219,15 @@ contains
         integer, intent(in)    :: n, n_ub
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
-        real, allocatable  :: arr(:)
+        real,    allocatable   :: arr(:)
+        integer, allocatable   :: locn(:)
         real    :: ts(2), y
         integer :: narr
-        ts(1) = -huge(y)
-        do
-            narr = count(x >= ts(1))
-            if( narr < n_ub )then
-                t = ts(1)
-                return
-            endif
-            arr  = pack(x, mask=x >= ts(1))
-            call otsu(narr, arr, ts(2))
-            ts(1) = ts(2)
-            deallocate(arr)
-        end do
+        locn  = maxnloc(x, n_ub)
+        ts(1) = minval(x(locn))
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t = ts(2)
     end subroutine detect_peak_thres
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10

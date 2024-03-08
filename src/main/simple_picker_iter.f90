@@ -50,8 +50,7 @@ contains
                 call exec_picker(boxfile, nptcls_out)
                 call kill_picker
             case('new')
-                if( cline%defined('pickrefs') )then
-                    if( .not. cline%defined('mskdiam') ) THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')  
+                if( cline%defined('pickrefs') )then 
                     call self%read_pickrefs(params_glob%pickrefs)
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                 else if( cline%defined('moldiam') .or.  cline%defined('multi_moldiams')  )then
