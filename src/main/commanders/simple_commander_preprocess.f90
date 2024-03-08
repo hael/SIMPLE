@@ -2637,9 +2637,9 @@ contains
     end subroutine exec_pick_extract
 
     subroutine exec_make_pickrefs( self, cline )
-         use simple_masker,   only: automask2D
-         use simple_binimage, only: binimage
-         use simple_default_clines
+        use simple_masker,   only: automask2D
+        use simple_binimage, only: binimage
+        use simple_default_clines
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)         :: params
@@ -2652,13 +2652,12 @@ contains
         real    :: ang, rot, smpd_here, xyz(3), lp, diam_max
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ncavgs, icavg
         integer :: cnt, norefs, new_box
-        call set_automask2D_defaults(cline)
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
         ! set defaults
+        call set_automask2D_defaults(cline)
         call cline%set('oritype', 'mic')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
@@ -2666,7 +2665,7 @@ contains
         call find_ldim_nptcls(params%pickrefs, ldim_here, ncavgs, smpd=smpd_here)
         if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
         ldim_here(3) = 1
-        allocate( projs(ncavgs), masks(ncavgs), diams(ncavgs) )
+        allocate( projs(ncavgs), masks(ncavgs) )
         call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
             call projs(icavg)%new(ldim_here, smpd_here)
@@ -2709,7 +2708,6 @@ contains
                 do irot=1,nrots
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
-                    if(params%pcontrast .eq. 'black') call ref2D%neg
                     call ref2D%write(trim(PICKREFS)//params%ext, cnt)
                     rot = rot + ang
                 end do
@@ -2717,7 +2715,6 @@ contains
         else
             ! should never happen
             do iref=1,norefs
-                if(params%pcontrast .eq. 'black') call projs(iref)%neg
                 call projs(iref)%write(trim(PICKREFS)//params%ext, iref)
             end do
         endif

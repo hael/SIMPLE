@@ -12,6 +12,7 @@ private
 
 ! class constants
 real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
+real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 logical, parameter :: L_WRITE  = .true.
 logical, parameter :: L_DEBUG  = .false.
@@ -250,7 +251,7 @@ contains
         character(len=:), allocatable   :: numstr
         integer     :: box_max
         type(image) :: gauimg
-        real        :: scale, maxdiam_max
+        real        :: scale, maxdiam_max, lp
         if( self%exists ) call self%kill
         self%smpd_shrink = smpd_shrink
         if( present(roi) )then
@@ -339,6 +340,16 @@ contains
             ! backup of shrunk micrograph
             call self%mic_roi%copy(self%mic_shrink)
         endif
+        ! low-pass filter mic_shrink
+        lp = min(max(LP_LB,MSKDIAM2LP * self%maxdiam),LP_UB)
+        call self%mic_shrink%bp(0.,lp)
+        if( L_WRITE )then
+            if( present(box) )then ! reference-based picking
+                call self%mic_shrink%write('mic_shrink_lp.mrc')
+            else
+                call self%mic_shrink%write('mic_shrink_lp_moldiam'//numstr//'.mrc')
+            endif
+        endif
         if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
         allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         ! flag existence
@@ -350,8 +361,6 @@ contains
         class(image),   intent(inout) :: imgs(:)
         type(image) :: img_ref
         integer     :: ldim(3), iref
-        real        :: smpd
-        smpd       = imgs(1)%get_smpd()
         ldim       = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
         self%nrefs = size(imgs)
@@ -373,6 +382,7 @@ contains
             call self%boxrefs(iref)%set_ft(.true.)
             call imgs(iref)%clip(self%boxrefs(iref))
             call imgs(iref)%ifft
+            call self%boxrefs(iref)%ifft
             call self%boxrefs(iref)%prenorm4real_corr(self%l_err_refs(iref))
         end do
         !$omp end parallel do
