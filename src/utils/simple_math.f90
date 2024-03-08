@@ -215,19 +215,29 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
 
-    subroutine detect_peak_thres( n, n_ub, x, t )
-        integer, intent(in)    :: n, n_ub
+    subroutine detect_peak_thres( n, n_ub, level, x, t )
+        integer, intent(in)    :: n, n_ub, level
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
         real,    allocatable   :: arr(:)
         integer, allocatable   :: locn(:)
         real    :: ts(2), y
         integer :: narr
+        if( level < 0 .or. level > 2 )then
+            call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
+        endif
         locn  = maxnloc(x, n_ub)
         ts(1) = minval(x(locn))
+        t     = ts(1)
+        if( level == 0 ) return
         arr   = pack(x, mask=x >= ts(1))
         call otsu(size(arr), arr, ts(2))
-        t = ts(2)
+        t     = ts(2)
+        if( level == 1 ) return
+        ts(1) = ts(2)
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t     = ts(2)
     end subroutine detect_peak_thres
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10

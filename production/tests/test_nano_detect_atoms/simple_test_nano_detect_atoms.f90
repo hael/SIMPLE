@@ -28,7 +28,8 @@ program simple_test_nano_detect_atoms
     logical :: l_err_atom, l_err_box, is_peak
     logical, allocatable :: mask(:), selected_pos(:)
 
-    real, parameter :: box_expansion_factor = 0.111
+    real,    parameter :: box_expansion_factor = 0.111
+    integer, parameter :: PEAK_THRES_LEVEL = 1
 
     filename = 'recvol_state01_iter005.mrc' ! first draft of 3D reconstruction 
     pdb_filename = 'ATMS.pdb' ! first draft of pdb file of atomic positions based on identify_atomic_positions
@@ -131,7 +132,7 @@ program simple_test_nano_detect_atoms
 
     ! find peak thresholding value
     tmp = pack(box_scores, mask=(box_scores > -1 + 1e-10))
-    call detect_peak_thres(size(tmp), nboxes, tmp, thres)
+    call detect_peak_thres(size(tmp), nboxes, PEAK_THRES_LEVEL, tmp, thres)
     print *, 'Peak threshold is ', thres
 
     ! center filter
