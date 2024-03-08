@@ -13,7 +13,7 @@ private
 ! class constants
 real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
 real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
-integer, parameter :: OFFSET_DEFAULT = 3
+integer, parameter :: OFFSET_DEFAULT = 3, PEAK_THRES_LEVEL = 2
 logical, parameter :: L_WRITE  = .true.
 logical, parameter :: L_DEBUG  = .false.
 
@@ -1003,7 +1003,7 @@ contains
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
         tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
-        call detect_peak_thres(size(tmp), self%nboxes_ub, tmp, self%t)
+        call detect_peak_thres(size(tmp), self%nboxes_ub, PEAK_THRES_LEVEL, tmp, self%t)
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
