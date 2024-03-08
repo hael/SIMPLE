@@ -55,7 +55,7 @@ contains
     procedure, private :: gaumatch_boximgs
     procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
-    procedure, private :: center_filter
+    ! procedure, private :: center_filter
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
@@ -149,7 +149,7 @@ contains
         endif
         call self%detect_peaks
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
-        call self%center_filter
+        ! call self%center_filter
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_center_filter.box')
         call self%distance_filter
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
@@ -224,10 +224,9 @@ contains
         real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         logical, optional, intent(in)    :: roi
         integer :: ldim(3)
-        real    :: moldiam
         ldim    = imgs(1)%get_ldim()
-        moldiam = (real(ldim(1)) - 2. * COSMSKHALFWIDTH ) * imgs(1)%get_smpd() 
-        call self%new( pcontrast, smpd_shrink, moldiam, moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
+        params_glob%moldiam = (real(ldim(1)) - 2. * COSMSKHALFWIDTH ) * imgs(1)%get_smpd() 
+        call self%new( pcontrast, smpd_shrink, params_glob%moldiam, params_glob%moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
         call self%set_refs( imgs )
     end subroutine new_refpicker
 
@@ -1040,18 +1039,18 @@ contains
             end do
         end do
         !$omp end parallel do
-        npeaks = count(scores_cen <= real(self%offset))
+        npeaks = count(scores_cen < real(self%offset))
         write(logfhandle,'(a,1x,I5)') '# positions before   center filtering: ', count(self%box_scores >= self%t)
         write(logfhandle,'(a,1x,I5)') '# positions after    center filtering: ', npeaks
         ! modify box_scores and update npeaks
-        where( scores_cen <= real(self%offset) )
+        where( scores_cen < real(self%offset) )
             ! there's a peak
         elsewhere
             self%box_scores = -1.
         endwhere
         ! update npeaks
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# npeaks    after    center filtering: ', self%npeaks
+        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# npeak s    after    center filtering: ', self%npeaks
         ! destruct heap
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -1092,7 +1091,7 @@ contains
             where( mask ) selected_pos = .false.
         end do
         npeaks = count(selected_pos)
-        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
+        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
         write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
         ! update packed arrays
         pos_inds   = pack(pos_inds,   mask=selected_pos)
@@ -1114,7 +1113,7 @@ contains
         end do
         !$omp end parallel do
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
+        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
     end subroutine distance_filter
 
     subroutine remove_outliers( self )
@@ -1166,7 +1165,7 @@ contains
         end do
         !$omp end parallel do
         self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
+        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
         end do
@@ -1195,7 +1194,6 @@ contains
                 end do
             end do
         end do
-
         ! translate background mask to offset coordinates
         mask_backgr_offset = .false.
         mask_count = 0
