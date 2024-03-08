@@ -41,6 +41,7 @@ type, extends(image) :: binimage
     procedure          :: masscen_cc
     ! BINARY IMAGE METHODS
     procedure          :: diameter_bin
+    procedure          :: max_dist
     procedure          :: grow_bins
     procedure          :: cos_edge
     procedure          :: border_mask
@@ -486,6 +487,29 @@ contains
         !$omp end parallel do
         diam = sqrt(real(maxdistsq))
     end subroutine diameter_bin
+
+    subroutine max_dist( self, dist)
+        class(binimage), intent(inout) :: self
+        real,            intent(out)   :: dist
+        integer :: i, j, k
+        real    :: center_coord(3), distsq, maxdistsq 
+        center_coord = nint(self%bldim/2.)
+        !print *, 'CENTER COORD IS = ', center_coord
+        maxdistsq = 0.
+        do i = 1, self%bldim(1)
+            do j = 1, self%bldim(2)
+                do k = 1, self%bldim(3)
+                    if ( self%bimat(i,j,k) < 1 ) cycle
+                    distsq = sum((center_coord - real([i,j,k]))**2)
+                    if( distsq > maxdistsq ) then
+                        maxdistsq = distsq
+                        !print *, 'CURRENT FARTHEST COORD IS = ', [i,j,k]
+                    endif
+                end do
+            end do
+        end do
+        dist = sqrt(maxdistsq)
+    end subroutine max_dist
 
     ! This subroutine modifies the input cc image by making it bin
     ! where just the cc n_cc is kept.
