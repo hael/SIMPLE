@@ -201,6 +201,7 @@ type(simple_input_param) :: cn
 type(simple_input_param) :: cn_min
 type(simple_input_param) :: cn_max
 type(simple_input_param) :: combine_eo
+type(simple_input_param) :: crowded
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -1137,6 +1138,7 @@ contains
         call set_param(kweight_pool,   'kweight_pool', 'multi',  'Pool Correlation weighing scheme', 'Pool correlation weighing scheme(default|inpl|all|none){default}', '(default|inpl|all|none){default}', .false., 'default')
         call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
         call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3084,7 +3086,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                                   ! executable
-        &1, 8, 0, 5, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 7, 0, 4, 0, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         pick%gui_submenu_list = "picking,compute"
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3100,32 +3102,26 @@ contains
         call pick%set_gui_params('parm_ios', 3, submenu="picking")
         call pick%set_input('parm_ios', 4, picker)
         call pick%set_gui_params('parm_ios', 4, submenu="picking")
-        call pick%set_input('parm_ios', 5, mskdiam)
+        call pick%set_input('parm_ios', 5, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5', .false., 5.)
         call pick%set_gui_params('parm_ios', 5, submenu="picking")
-        call pick%set_input('parm_ios', 6, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5', .false., 5.)
+        call pick%set_input_1('parm_ios', 6, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
         call pick%set_gui_params('parm_ios', 6, submenu="picking")
-        call pick%set_input_1('parm_ios', 7, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
+        call pick%set_input('parm_ios', 7, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
         call pick%set_gui_params('parm_ios', 7, submenu="picking")
-        call pick%set_input('parm_ios', 8, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
-        call pick%set_gui_params('parm_ios', 8, submenu="picking")
         pick%parm_ios(5)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in Angs','Distance filter in Angs{24}', '{24}', .false., 24.)
+        call pick%set_input('srch_ctrls', 1, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}', '{2.5}', .false., 2.5)
         call pick%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
-        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}', '{2.5}', .false., 2.5)
-        call pick%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
-        call pick%set_input('srch_ctrls', 3, pgrp)
-        call pick%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
-        pick%srch_ctrls(3)%required = .false.
-        call pick%set_input('srch_ctrls', 4, pick_roi)
+        call pick%set_input('srch_ctrls', 2, pick_roi)
+        call pick%set_gui_params('srch_ctrls', 2, submenu="picking")
+        call pick%set_input('srch_ctrls', 3, backgr_subtr)
+        call pick%set_gui_params('srch_ctrls', 3, submenu="picking")
+        call pick%set_input('srch_ctrls', 4, crowded)
         call pick%set_gui_params('srch_ctrls', 4, submenu="picking")
-        call pick%set_input('srch_ctrls', 5, backgr_subtr)
-        call pick%set_gui_params('srch_ctrls', 5, submenu="picking")
         ! filter controls
-        call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., PICK_LP_DEFAULT)
-        call pick%set_gui_params('filt_ctrls', 1, submenu="picking")
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls

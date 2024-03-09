@@ -19,6 +19,10 @@ interface vis_mat
     module procedure vis_2Dreal_mat, vis_2Dinteger_mat, vis_3Dreal_mat, vis_3Dinteger_mat
 end interface vis_mat
 
+interface detect_peak_thres
+    module procedure detect_peak_thres_1, detect_peak_thres_2
+end interface detect_peak_thres
+
 logical, parameter, private :: warn=.false.
 
 contains
@@ -215,7 +219,7 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
 
-    subroutine detect_peak_thres( n, n_ub, level, x, t )
+    subroutine detect_peak_thres_1( n, n_ub, level, x, t )
         integer, intent(in)    :: n, n_ub, level
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
@@ -238,7 +242,27 @@ contains
         arr   = pack(x, mask=x >= ts(1))
         call otsu(size(arr), arr, ts(2))
         t     = ts(2)
-    end subroutine detect_peak_thres
+    end subroutine detect_peak_thres_1
+
+    subroutine detect_peak_thres_2( n, level, x, t )
+        integer, intent(in)    :: n, level
+        real,    intent(in)    :: x(n)
+        real,    intent(inout) :: t
+        real,    allocatable   :: arr(:)
+        integer, allocatable   :: locn(:)
+        real    :: ts(2), y
+        integer :: narr
+        if( level < 1 .or. level > 2 )then
+            call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
+        endif
+        arr   = pack(x, mask=.true.)
+        call otsu(size(arr), arr, ts(1))
+        t     = ts(1)
+        if( level == 1 ) return
+        arr   = pack(x, mask=x >= ts(1))
+        call otsu(size(arr), arr, ts(2))
+        t     = ts(2)
+    end subroutine detect_peak_thres_2
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_1d( vec, thresh, labels, centroids, populations )
