@@ -37,7 +37,7 @@ type pickgau
     type(image), allocatable :: boxrefs(:)
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
-    real,        allocatable :: box_scores(:,:), box_scores_mem(:,:)
+    real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
     logical                  :: l_roi   = .false.
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
@@ -53,11 +53,9 @@ contains
     procedure, private :: setup_iterators
     procedure, private :: flag_ice
     procedure, private :: flag_amorphous_carbon
-    procedure, private :: flag_outliers
     procedure, private :: gaumatch_boximgs
     procedure, private :: refmatch_boximgs
     procedure, private :: detect_peaks
-    ! procedure, private :: center_filter
     procedure, private :: distance_filter
     procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
@@ -143,8 +141,6 @@ contains
         endif
         ! establish iterators
         call self%setup_iterators
-        ! flag outliers
-        call self%flag_outliers
         ! matching
         if( self%refpick )then
             call self%refmatch_boximgs
@@ -153,8 +149,6 @@ contains
         endif
         call self%detect_peaks
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
-        ! call self%center_filter
-        ! if( L_WRITE ) call self%write_boxfile('pickgau_after_center_filter.box')
         call self%distance_filter
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
         call self%remove_outliers
@@ -478,6 +472,9 @@ contains
         ! allocate box_scores
         if( allocated(self%box_scores) ) deallocate(self%box_scores)
         allocate(self%box_scores(self%nx_offset,self%ny_offset), source = -1.)
+        ! allocate loc_sdevs
+        if( allocated(self%loc_sdevs) ) deallocate(self%loc_sdevs)
+        allocate(self%loc_sdevs(self%nx_offset,self%ny_offset),  source = -1.)
     end subroutine setup_iterators
 
     subroutine flag_ice( self )
@@ -918,59 +915,6 @@ contains
 
     end subroutine flag_amorphous_carbon
 
-    subroutine flag_outliers( self )
-        class(pickgau), intent(inout) :: self
-        real, allocatable :: tmp(:)
-        type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ithr, nboxes_before, nboxes_after, pos(2), ioff, joff, ind
-        logical     :: outside
-        real        :: loc_sdevs(self%nx_offset,self%ny_offset), avg, sdev, t
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
-        end do
-        nboxes_before = self%nboxes
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos,ind) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
-                ind  = self%inds_offset(ioff,joff)
-                if( ind > 0 )then
-                    pos  = self%positions(ind,:)
-                    call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-                    loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
-                else
-                    loc_sdevs(ioff,joff) = -1.
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        tmp = pack(loc_sdevs, mask=loc_sdevs > 0.)
-        call avg_sdev(tmp, avg, sdev)
-        t = avg + self%ndev * sdev
-        nboxes_after = count(tmp < t)
-        write(logfhandle,'(a,1x,f5.2)') '% high contrast outliers flagged:      ', (real(nboxes_before - nboxes_after) / real(nboxes_before)) * 100
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,ind) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
-                ind  = self%inds_offset(ioff,joff)
-                if( ind > 0 )then 
-                    if( loc_sdevs(ioff,joff) < t )then
-                        ! low contrast region
-                    else
-                        ! high contrast region
-                        self%inds_offset(ioff,joff) = 0
-                        self%box_scores(ioff,joff)  = -1.
-                    endif
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%kill
-        end do
-    end subroutine flag_outliers
-
     subroutine gaumatch_boximgs( self )
         class(pickgau), intent(inout) :: self
         logical     :: outside
@@ -986,22 +930,28 @@ contains
             do joff = 1,self%ny_offset
                 if( self%inds_offset(ioff,joff) == 0 )then
                     self%box_scores(ioff,joff) = -1.
+                    self%loc_sdevs(ioff,joff)  = -1.
                 else
                     pos = self%positions(self%inds_offset(ioff,joff),:)
                     if( self%l_mic_mask(pos(1)+1,pos(2)+1) )then
                         ithr = omp_get_thread_num() + 1
                         call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
+                        self%loc_sdevs(ioff,joff)  = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
                         self%box_scores(ioff,joff) = self%gauref%real_corr_prenorm(boximgs_heap(ithr), self%sxx)
                     else
                         self%box_scores(ioff,joff) = -1.
+                        self%loc_sdevs(ioff,joff)  = -1.
                     endif
                 endif
             end do
         end do
         !$omp end parallel do
-        ! save a box_score copy in memory
+        ! save a box_scores copy in memory
         if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
-        allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores) 
+        allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores)
+        ! save a loc_sdevs copy in memory
+        if( allocated(self%loc_sdevs_mem) ) deallocate(self%loc_sdevs_mem)
+        allocate(self%loc_sdevs_mem(self%nx_offset,self%ny_offset), source=self%loc_sdevs)
         ! destruct heap
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -1025,11 +975,13 @@ contains
                 do joff = 1,self%ny_offset
                     if( self%inds_offset(ioff,joff) == 0 )then
                         self%box_scores(ioff,joff) = -1.
+                        self%loc_sdevs(ioff,joff)  = -1.
                     else
                         pos = self%positions(self%inds_offset(ioff,joff),:)
                         if( self%l_mic_mask(pos(1)+1,pos(2)+1) )then
                             ithr = omp_get_thread_num() + 1
                             call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
+                            self%loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
                             call boximgs_heap(ithr)%prenorm4real_corr(l_err)
                             if( l_err )then
                                 self%box_scores(ioff,joff) = 0.
@@ -1045,6 +997,7 @@ contains
                             endif
                         else
                             self%box_scores(ioff,joff) = -1.
+                            self%loc_sdevs(ioff,joff)  = -1.
                         endif
                     endif
                 end do
@@ -1053,9 +1006,12 @@ contains
         else
             THROW_HARD('Instance not setup for reference-based picking')
         endif
-        ! save a box_score copy in memory
+        ! save a box_scores copy in memory
         if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
         allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores)
+        ! save a loc_sdevs copy in memory
+        if( allocated(self%loc_sdevs_mem) ) deallocate(self%loc_sdevs_mem)
+        allocate(self%loc_sdevs_mem(self%nx_offset,self%ny_offset), source=self%loc_sdevs)
         ! destruct heap
         do ithr = 1,nthr_glob
             call boximgs_heap(ithr)%kill
@@ -1078,47 +1034,6 @@ contains
         write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
         write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
     end subroutine detect_peaks
-
-    !  subroutine center_filter( self )
-    !     class(pickgau), intent(inout) :: self
-    !     type(image) :: boximgs_heap(nthr_glob)
-    !     integer     :: ioff, joff, ithr, npeaks, pos(2)
-    !     real        :: scores_cen(self%nx_offset,self%ny_offset)
-    !     logical     :: outside
-    !     do ithr = 1,nthr_glob
-    !         call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
-    !     end do
-    !     !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,pos,outside) proc_bind(close)
-    !     do ioff = 1,self%nx_offset
-    !         do joff = 1,self%ny_offset
-    !             if( self%box_scores(ioff,joff) >= self%t )then
-    !                 ithr = omp_get_thread_num() + 1
-    !                 pos  = self%positions(self%inds_offset(ioff,joff),:)
-    !                 call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-    !                 scores_cen(ioff,joff) = boximgs_heap(ithr)%box_cen_arg(boximgs_heap(ithr))
-    !             else
-    !                 scores_cen(ioff,joff) = real(self%offset) + 1.
-    !             endif
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    !     npeaks = count(scores_cen < real(self%offset))
-    !     write(logfhandle,'(a,1x,I5)') '# positions before   center filtering: ', count(self%box_scores >= self%t)
-    !     write(logfhandle,'(a,1x,I5)') '# positions after    center filtering: ', npeaks
-    !     ! modify box_scores and update npeaks
-    !     where( scores_cen < real(self%offset) )
-    !         ! there's a peak
-    !     elsewhere
-    !         self%box_scores = -1.
-    !     endwhere
-    !     ! update npeaks
-    !     self%npeaks = count(self%box_scores >= self%t)
-    !     if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# npeak s    after    center filtering: ', self%npeaks
-    !     ! destruct heap
-    !     do ithr = 1,nthr_glob
-    !         call boximgs_heap(ithr)%kill
-    !     end do
-    ! end subroutine center_filter
 
     subroutine distance_filter( self, dist_thres )
         class(pickgau), intent(inout) :: self
@@ -1182,33 +1097,9 @@ contains
     subroutine remove_outliers( self )
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
-        type(image) :: boximgs_heap(nthr_glob)
-        integer     :: ithr, npeaks, pos(2), ioff, joff, ind
-        logical     :: outside
-        real        :: loc_sdevs(self%nx_offset,self%ny_offset), avg, sdev, t
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
-        end do
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,pos,ind) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
-                ind  = self%inds_offset(ioff,joff)
-                if( ind > 0 )then
-                    pos  = self%positions(ind,:)
-                    if( self%box_scores(ioff,joff) >= self%t )then
-                        call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-                        loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
-                    else
-                        loc_sdevs(ioff,joff) = -1.
-                    endif
-                else
-                    loc_sdevs(ioff,joff) = -1.
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        tmp = pack(loc_sdevs, mask=loc_sdevs > 0.)
+        integer     :: ithr, npeaks, ioff, joff
+        real        :: avg, sdev, t
+        tmp = pack(self%loc_sdevs, mask=self%box_scores >= self%t .and. self%loc_sdevs > 0.)
         call avg_sdev(tmp, avg, sdev)
         t = avg + self%ndev * sdev
         npeaks = count(tmp < t)
@@ -1218,7 +1109,7 @@ contains
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
                 ithr = omp_get_thread_num() + 1
-                if( loc_sdevs(ioff,joff) < t )then
+                if( self%loc_sdevs(ioff,joff) < t )then
                     ! it is a peak
                 else
                     ! it is not a peak, update box_scores
@@ -1229,9 +1120,6 @@ contains
         !$omp end parallel do
         self%npeaks = count(self%box_scores >= self%t)
         if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%kill
-        end do
     end subroutine remove_outliers
 
     subroutine peak_vs_nonpeak_stats( self )
@@ -1509,6 +1397,8 @@ contains
             if( allocated(self%inds_offset)    ) deallocate(self%inds_offset)
             if( allocated(self%box_scores)     ) deallocate(self%box_scores)
             if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
+            if( allocated(self%loc_sdevs)     ) deallocate(self%loc_sdevs)
+            if( allocated(self%loc_sdevs_mem) ) deallocate(self%loc_sdevs_mem)
             if( allocated(self%boxrefs) )then
                 do iimg = 1,size(self%boxrefs)
                     call self%boxrefs(iimg)%kill
