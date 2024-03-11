@@ -712,6 +712,7 @@ contains
         if( .not. cline%defined('prob_init')  ) call cline%set('prob_init',     'no')
         if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',       'no')
         if( .not. cline%defined('prob_athres')) call cline%set('prob_athres',    10.)
+        if( .not. cline%defined('sh_smpl')    ) call cline%set('sh_smpl',       'no')
         if( .not. cline%defined('center')     ) call cline%set('center',        'no')
         if( .not. cline%defined('objfun')     ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('oritype')    ) call cline%set('oritype',   'ptcl3D')

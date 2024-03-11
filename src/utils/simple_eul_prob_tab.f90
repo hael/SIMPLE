@@ -474,13 +474,25 @@ contains
     end function eulprob_corr_switch
 
     ! shift multinomal sampling within a threshold, units are in Ang
-    function shift_sampling( cur_sh, thres ) result(sh)
-        real,    intent(in) :: cur_sh(2)
-        real,    intent(in) :: thres
-        integer, parameter  :: N_SMPL = 100
+    function shift_sampling( cur_sh, thres_in ) result(sh)
+        real,              intent(in) :: cur_sh(2)
+        real,    optional, intent(in) :: thres_in
+        integer, parameter   :: N_SMPL = 100
+        real,    allocatable :: vals(:)
+        logical, allocatable :: ptcl_mask(:)
         integer :: i, sh_signs(2), which, dim
         real    :: sh(2)
-        real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres
+        real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres, thres
+        if( present(thres_in) )then
+            thres = thres_in
+        else
+            ptcl_mask = nint(build_glob%spproj_field%get_all('state')) == 1
+            vals      = build_glob%spproj_field%get_all(trim('shincarg'))
+            thres     = sum(vals, mask=ptcl_mask) / real(count(ptcl_mask))
+            thres     = thres / 2.  ! be more aggressive for convergence
+        endif
+        sh = cur_sh
+        if( thres < TINY ) return
         ! randomly pick the plus/minus for each x,y dimensions
         sh_signs = 1
         if( ran3() < 0.5 ) sh_signs(1) = -1
