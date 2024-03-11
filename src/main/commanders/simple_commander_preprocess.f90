@@ -1440,7 +1440,6 @@ contains
     end subroutine exec_map_cavgs_states
 
     subroutine exec_pick_distr( self, cline )
-        use simple_picker_utils, only: calc_multipick_avgs
         class(pick_commander_distr), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
@@ -1517,8 +1516,6 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
-        call spproj%write_segment2txt('mic', 'picker_stats.txt')
-        call calc_multipick_avgs(spproj,params%nmoldiams)
         ! cleanup
         call qsys_cleanup
         ! graceful exit
@@ -1535,8 +1532,8 @@ contains
         type(ori)                     :: o
         character(len=:), allocatable :: output_dir, intg_name, imgkind
         character(len=LONGSTRLEN)     :: boxfile
-        integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state, idiam
-        real, allocatable             :: mic_stats(:,:)
+        integer                       :: fromto(2), imic, ntot, nptcls_out, cnt, state
+        real                          :: moldiam_opt
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
@@ -1569,22 +1566,11 @@ contains
             if( o%isthere('state') ) state = nint(o%get('state'))
             if( state == 0 ) cycle
             if( o%isthere('imgkind') )then
-                allocate(mic_stats(params%nmoldiams,5))
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
-                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out,mic_stats=mic_stats)
+                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out,moldiam_opt=moldiam_opt)
                 call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
-                do idiam=1,params%nmoldiams
-                    ! writing picker statistics for each moldiam to binary file
-                    call spproj%os_mic%set(imic,'m_'//int2str(idiam),mic_stats(idiam,1))
-                    call spproj%os_mic%set(imic,'s_'//int2str(idiam),mic_stats(idiam,2))
-                    call spproj%os_mic%set(imic,'k_'//int2str(idiam),mic_stats(idiam,3))
-                    call spproj%os_mic%set(imic,'a_'//int2str(idiam),mic_stats(idiam,4))
-                    call spproj%os_mic%set(imic,'sp_'//int2str(idiam),mic_stats(idiam,5))
-                end do
-                call spproj%os_mic%set(imic,'nmoldiams',real(params%nmoldiams))
-                deallocate(mic_stats)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do

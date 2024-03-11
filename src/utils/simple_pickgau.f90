@@ -26,18 +26,25 @@ character(len=:), allocatable :: fbody
 ! instance
 type pickgau
     private
+    ! control parameters
     real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
     real                     :: dist_thres  = 0., refine_dist_thres = 0.
-    real                     :: smd = 0., ksstat = 0., prob = 0., a_peak = 0., s_peak = 0.
-    real                     :: a_nonpeak = 0., s_nonpeak = 0.
     integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     integer                  :: peak_thres_level
+    ! peak stats
+    real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
+    real                     :: a_corr_peak = 0., s_corr_peak = 0., a_corr_nonpeak = 0., s_corr_nonpeak = 0.
+    ! images
     type(image)              :: mic_shrink, gauref, mic_roi
     type(image), allocatable :: boxrefs(:)
+    ! masks
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
+    ! indices
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
+    ! scores & local standard deviations
     real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
+    ! flags
     logical                  :: l_roi   = .false.
     logical                  :: refpick = .false.
     logical                  :: exists  = .false.
@@ -46,7 +53,6 @@ contains
     procedure          :: new_gaupicker
     procedure          :: new_gaupicker_multi
     procedure          :: new_refpicker
-    procedure          :: get_stats
     procedure, private :: new
     procedure, private :: set_refs
     procedure, private :: set_gaurefs
@@ -69,61 +75,62 @@ end type
 
 contains
 
-    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev, mic_stats )
+    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev, moldiam_opt )
         character(len=*),  intent(in)  :: pcontrast
         real,              intent(in)  :: smpd_shrink, moldiams(:)
         integer, optional, intent(in)  :: offset
         real,    optional, intent(in)  :: ndev
-        real,    optional, intent(out) :: mic_stats(:,:)
+        real,    optional, intent(out) :: moldiam_opt
         type(pickgau), allocatable :: pickers(:)
         integer,       allocatable :: picker_map(:,:)
+        real,          allocatable :: smds_corr(:)
         type(pickgau) :: picker_merged
-        integer :: npickers, ipick, ioff, joff
-        real    :: moldiam_max, pick_stats(5)
+        integer :: npickers, ipick, ioff, joff, loc(1)
+        real    :: moldiam_max
         npickers    = size(moldiams)
         moldiam_max = maxval(moldiams)
-        allocate(pickers(npickers))
+        allocate(pickers(npickers), smds_corr(npickers))
         ! multi-gaussian pick
         do ipick = 1,npickers
             call pickers(ipick)%new_gaupicker(pcontrast, smpd_shrink, moldiams(ipick), moldiam_max, offset, ndev)
             call pickers(ipick)%gaupick
-            call pickers(ipick)%get_stats(pick_stats)
-            mic_stats(ipick,1) = moldiams(ipick)
-            mic_stats(ipick,2) = pick_stats(1)
-            mic_stats(ipick,3) = pick_stats(2)
-            mic_stats(ipick,4) = pick_stats(3)
-            mic_stats(ipick,5) = pick_stats(4)
+            smds_corr(ipick) = pickers(ipick)%smd_corr
             call pickers(ipick)%mic_shrink%kill
         end do
-        !merged pick
-        ! call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
-        ! allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
-        ! picker_merged%box_scores = -1.
-        ! do ioff = 1,picker_merged%nx_offset
-        !     do joff = 1,picker_merged%ny_offset
-        !         do ipick = 1,npickers
-        !             if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
-        !                 if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
-        !                     picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
-        !                     picker_map(ioff,joff) = ipick
-        !                 endif
-        !             endif
-        !         end do
-        !     end do
-        ! end do
-        ! picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
-        ! ! apply distance filter to merged
-        ! call picker_merged%distance_filter
-        ! ! update picker_map
-        ! do ioff = 1,picker_merged%nx_offset
-        !     do joff = 1,picker_merged%ny_offset
-        !         if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
-        !             picker_map(ioff,joff) = 0
-        !         endif
-        !     end do
-        ! end do
+        ! return molecular diameter based on maximizing standard mean distance between peak- and
+        ! non-peak distributions of corr
+        loc = maxloc(smds_corr)
+        moldiam_opt = moldiams(loc(1))
+        write(logfhandle,'(a,1x,f7.2)') 'optimal molecular diameter identified:', moldiam_opt
+        ! merged pick
+        call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
+        call picker_merged%setup_iterators
+        allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
+        picker_merged%box_scores = -1.
+        do ioff = 1,picker_merged%nx_offset
+            do joff = 1,picker_merged%ny_offset
+                do ipick = 1,npickers
+                    if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+                        if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
+                            picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
+                            picker_map(ioff,joff) = ipick
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
+        ! apply distance filter to merged
+        call picker_merged%distance_filter
+        ! update picker_map
+        do ioff = 1,picker_merged%nx_offset
+            do joff = 1,picker_merged%ny_offset
+                if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
+                    picker_map(ioff,joff) = 0
+                endif
+            end do
+        end do
         deallocate(pickers)
-        !call picker_merged%write_boxfile('pick_merged.box')
     end subroutine gaupick_multi
 
     subroutine gaupick( self, self_refine )
@@ -227,15 +234,6 @@ contains
         call self%new( pcontrast, smpd_shrink, params_glob%moldiam, params_glob%moldiam, box=ldim(1), offset=offset, ndev=ndev, roi=roi  )
         call self%set_refs( imgs )
     end subroutine new_refpicker
-
-    subroutine get_stats( self, stats )
-        class(pickgau),    intent(inout) :: self
-        real,              intent(out)   :: stats(4)
-        stats(1) = self%smd
-        stats(2) = self%ksstat
-        stats(3) = self%a_peak
-        stats(4) = self%s_peak
-    end subroutine get_stats
 
     subroutine new( self, pcontrast, smpd_shrink, moldiam, moldiam_max, box, offset, ndev, roi )
         class(pickgau),    intent(inout) :: self
@@ -399,7 +397,7 @@ contains
 
     subroutine set_gaurefs(self, moldiams)
         class(pickgau), intent(inout) :: self
-        real,          intent(in)     :: moldiams(:)
+        real,           intent(in)    :: moldiams(:)
         integer                       :: nmoldiams, idiam, iimg
         real                          :: maxdiam, sig, sxx, moldiam_max
         character(len=:), allocatable :: numstr
@@ -1043,7 +1041,7 @@ contains
         logical, allocatable :: mask(:), selected_pos(:)
         integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak
         real    :: dist, dthres
-        logical :: is_peak
+        logical :: is_corr_peak
         if( present(dist_thres) )then
             dthres = dist_thres
         else
@@ -1075,18 +1073,18 @@ contains
         pos_inds   = pack(pos_inds,   mask=selected_pos)
         pos_scores = pack(pos_scores, mask=selected_pos)
         ! update box_scores
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,is_peak,ipeak) proc_bind(close)
+        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,is_corr_peak,ipeak) proc_bind(close)
         do ioff = 1,self%nx_offset
             do joff = 1,self%ny_offset
                 ithr = omp_get_thread_num() + 1
-                is_peak = .false.
+                is_corr_peak = .false.
                 do ipeak = 1,npeaks
                     if( pos_inds(ipeak) == self%inds_offset(ioff,joff) )then
-                        is_peak = .true.
+                        is_corr_peak = .true.
                         exit
                     endif
                 end do
-                if( .not. is_peak ) self%box_scores(ioff,joff) = -1.
+                if( .not. is_corr_peak ) self%box_scores(ioff,joff) = -1.
             end do
         end do
         !$omp end parallel do
@@ -1124,7 +1122,8 @@ contains
 
     subroutine peak_vs_nonpeak_stats( self )
         class(pickgau), intent(inout) :: self
-        real,    allocatable :: scores_peak(:), scores_nonpeak(:)
+        real,    allocatable :: corrs_peak(:), corrs_nonpeak(:)
+        real,    allocatable :: loc_sdevs_peak(:), loc_sdevs_nonpeak(:)
         integer, allocatable :: pos(:,:)
         real    :: pixrad_shrink, rpos(2)
         integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
@@ -1156,26 +1155,26 @@ contains
                 ny_offset = ny_offset + 1
                 if( mask_backgr(xind,yind) .and. self%box_scores_mem(nx_offset,ny_offset) > -1. + TINY )then
                     mask_backgr_offset(nx_offset,ny_offset) = .true.
-                    mask_count = mask_count + 1 !not currently detecting any background coordinates
+                    mask_count = mask_count + 1 ! not currently detecting any background coordinates
                 endif
             end do
         end do
         ! extract scores
-        scores_peak    = pack(self%box_scores_mem, mask=self%box_scores >= self%t)
-        scores_nonpeak = pack(self%box_scores_mem, mask=mask_backgr_offset)
+        corrs_peak        = pack(self%box_scores_mem, mask=self%box_scores >= self%t)
+        corrs_nonpeak     = pack(self%box_scores_mem, mask=mask_backgr_offset)
         ! calc stats
-        call avg_sdev(scores_peak, self%a_peak, self%s_peak)
-        print *, 'A_PEAK = ', self%a_peak 
-        print *, 'S_PEAK = ', self%s_peak
-        call avg_sdev(scores_nonpeak, self%a_nonpeak, self%s_nonpeak)
-        print *, 'A_NONPEAK = ', self%a_nonpeak
-        print *, 'S_NONPEAK = ', self%s_nonpeak
-        self%smd = std_mean_diff(self%a_peak, self%a_nonpeak, self%s_peak, self%s_nonpeak)
-        call kstwo(scores_peak, size(scores_peak), scores_nonpeak, size(scores_nonpeak), self%ksstat, self%prob)
-        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', self%smd
-        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', self%ksstat
-        write(logfhandle,'(a,1x,f4.2)') 'P             = ', self%prob
-        if( self%smd < 0.2 .and. self%prob > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of fom:s are similar'
+        call avg_sdev(corrs_peak,        self%a_corr_peak,        self%s_corr_peak)
+        call avg_sdev(corrs_nonpeak,     self%a_corr_nonpeak,     self%s_corr_nonpeak)
+        self%smd_corr = std_mean_diff(self%a_corr_peak, self%a_corr_nonpeak, self%s_corr_peak, self%s_corr_nonpeak)
+        call kstwo(corrs_peak, size(corrs_peak), corrs_nonpeak, size(corrs_nonpeak), self%ksstat_corr, self%prob_corr)
+        write(logfhandle,'(a,1x,f4.2)') 'A_PEAK        = ', self%a_corr_peak
+        write(logfhandle,'(a,1x,f4.2)') 'A_NONPEAK     = ', self%a_corr_nonpeak
+        write(logfhandle,'(a,1x,f4.2)') 'S_PEAK        = ', self%s_corr_peak
+        write(logfhandle,'(a,1x,f4.2)') 'S_NONPEAK     = ', self%s_corr_nonpeak
+        write(logfhandle,'(a,1x,f4.2)') 'SMD           = ', self%smd_corr
+        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', self%ksstat_corr
+        write(logfhandle,'(a,1x,f4.2)') 'P             = ', self%prob_corr
+        if( self%smd_corr < 0.2 .and. self%prob_corr > 0.5 ) write(logfhandle,'(a)') 'peak and non-peak distributions of CORRS are similar'
     end subroutine peak_vs_nonpeak_stats
 
     subroutine get_positions( self, pos, smpd_new )
