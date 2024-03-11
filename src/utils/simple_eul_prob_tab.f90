@@ -9,7 +9,7 @@ use simple_builder,      only: build_glob
 implicit none
 
 public :: eul_prob_tab
-public :: calc_num2sample, calc_numinpl2sample2D, eulprob_dist_switch, eulprob_corr_switch
+public :: calc_num2sample, calc_numinpl2sample2D, eulprob_dist_switch, eulprob_corr_switch, shift_sampling
 private
 #include "simple_local_flags.inc"
 
@@ -472,5 +472,32 @@ contains
                 corr = exp(-dist)
         end select
     end function eulprob_corr_switch
+
+    ! shift multinomal sampling within a threshold, units are in Ang
+    function shift_sampling( cur_sh, thres ) result(sh)
+        real,    intent(in) :: cur_sh(2)
+        real,    intent(in) :: thres
+        integer, parameter  :: N_SMPL = 100
+        integer :: i, sh_signs(2), which, dim
+        real    :: sh(2)
+        real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres
+        ! randomly pick the plus/minus for each x,y dimensions
+        sh_signs = 1
+        if( ran3() < 0.5 ) sh_signs(1) = -1
+        if( ran3() < 0.5 ) sh_signs(2) = -1
+        ! sampling for x
+        d_sh = thres / real(N_SMPL-1)
+        sig2 = thres**2.
+        do dim = 1, 2
+            do i = 1, N_SMPL
+                d_thres     = d_sh * (i - 1)
+                gauss_sh(i) = gaussian1D(d_thres, avg=0., sigma_sq=sig2)
+                sh_vals(i)  = d_thres
+            enddo
+            gauss_sh = gauss_sh / sum(gauss_sh)
+            which    = multinomal( gauss_sh )
+            sh(dim)  = cur_sh(dim) + real(sh_signs(dim)) * sh_vals(which)
+        enddo
+    end function shift_sampling
 
 end module simple_eul_prob_tab
