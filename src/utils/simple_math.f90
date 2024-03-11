@@ -831,7 +831,7 @@ contains
 
     real function gaussian1D( x, avg, sigma_sq )
         real, intent(in) ::   x, avg, sigma_sq
-        gaussian1D = (1./(sqrt(2.*PI*sigma_sq)))*exp((1./(2.*sigma_sq))*(x-avg)**2)
+        gaussian1D = exp(-(x - avg)**2.0 / (2.0 * sigma_sq)) / sqrt(2. * PI * sigma_sq)
     end function gaussian1D
 
     real function gaussian2D( center_coords, x, y, xsigma, ysigma )
