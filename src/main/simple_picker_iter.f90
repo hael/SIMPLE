@@ -25,7 +25,7 @@ end type picker_iter
 
 contains
 
-    subroutine iterate( self, cline, smpd, moviename_intg, dir_out, boxfile, nptcls_out, mic_stats )
+    subroutine iterate( self, cline, smpd, moviename_intg, dir_out, boxfile, nptcls_out, moldiam_opt )
         class(picker_iter),        intent(inout) :: self
         class(cmdline),            intent(in)    :: cline
         real,                      intent(in)    :: smpd
@@ -33,7 +33,7 @@ contains
         character(len=*),          intent(in)    :: dir_out
         character(len=LONGSTRLEN), intent(out)   :: boxfile
         integer,                   intent(out)   :: nptcls_out
-        real, optional,            intent(out)   :: mic_stats(params_glob%nmoldiams,5)
+        real, optional,            intent(out)   :: moldiam_opt
         if( .not. file_exists(moviename_intg) ) write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         select case(trim(params_glob%picker))
@@ -55,7 +55,7 @@ contains
                     call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, self%pickrefs, dir_out=dir_out)
                 else if( cline%defined('moldiam') .or.  cline%defined('multi_moldiams')  )then
                     ! at least moldiam is required
-                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, mic_stats=mic_stats, dir_out=dir_out)
+                    call exec_gaupick(moviename_intg, boxfile, smpd, nptcls_out, moldiam_opt=moldiam_opt, dir_out=dir_out)
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
