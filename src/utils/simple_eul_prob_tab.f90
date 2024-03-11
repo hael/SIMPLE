@@ -334,8 +334,8 @@ contains
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
-        integer(kind=8) :: file_header(3)
-        integer :: funit, io_stat, addr, iptcl, datasz_int, datasz_real
+        integer(kind=8) :: file_header(3), addr
+        integer :: funit, io_stat, iptcl, datasz_int, datasz_real
         real    :: x
         datasz_int  = sizeof(iptcl)
         datasz_real = sizeof(x)
@@ -362,8 +362,8 @@ contains
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        integer(kind=8) :: file_header(3)
-        integer :: funit, io_stat, addr, iptcl, datasz_int, datasz_real, fromp, top, iglob
+        integer(kind=8) :: file_header(3), addr
+        integer :: funit, io_stat, iptcl, datasz_int, datasz_real, fromp, top, iglob
         real    :: x
         datasz_int  = sizeof(iptcl)
         datasz_real = sizeof(x)
