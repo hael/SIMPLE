@@ -7,7 +7,7 @@ real,    parameter  :: smpd=0.358
 type(image)                 :: img1, img2
 real,    allocatable        :: rad_corrs(:), rad_dists(:), filt(:)
 character(len=256)          :: fn_img1, fn_img2
-integer                     :: ldim_refs(3), ifoo, ldim1(3), n_shells
+integer                     :: ldim_refs(3), ifoo, ldim1(3), n_shells, i
 if( command_argument_count() /= 2 )then
     write(logfhandle,'(a)')  'Usage: simple_test_radial_cc img1.mrc img2.mrc', NEW_LINE('a')
     stop
@@ -26,6 +26,9 @@ if( .not.(img1.eqdims.img2) ) THROW_HARD('Nonconforming dimensions of images')
 if( .not.(img1%same_smpd(img2)) ) THROW_HARD('Nonconforming smpd of images')
 allocate(rad_corrs(n_shells), rad_dists(n_shells))
 call img1%radial_cc(img2, smpd, rad_corrs, rad_dists)
+do i=1,n_shells
+ write(logfhandle,*) i, rad_dists(i), rad_corrs(i)
+enddo
 ! create output filter for mask
 !   !> \brief  converts the FSC to the optimal low-pass filter
 !    function fsc2optlp( corrs ) result( filt )
