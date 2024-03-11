@@ -803,7 +803,7 @@ contains
         integer  :: nstks, nptcls, iptcl, iter, n_lines, icls, nbins, batch_start, batch_end
         integer  :: ibatch, batchsz, ibin, binpop, ithr, nsel, prev_nsel, ini_pop, cavgs_ncls
         integer  :: ncls, i, j, k,fnr, irot, nptcls_sel, pop, nbatches, batchsz_max, pop_sel, fromc, toc
-        logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_weighted_init, l_write
+        logical  :: l_ctf, l_groundtruth, l_corr_ranking, l_weighted_init, l_write, l_ice, l_neg_corr
         call cline%set('oritype', 'ptcl2D')
         call cline%set('mkdir',   'yes')
         if( .not.cline%defined('objfun') )     call cline%set('objfun',  'cc')
@@ -831,8 +831,10 @@ contains
         nptcls_sel = count(states==1)
         l_groundtruth   = cline%defined('infile')
         l_corr_ranking  = .true.
-        l_weighted_init = .true.
+        l_weighted_init = .false.
         l_write         = .false.
+        l_ice           = .false.
+        l_neg_corr      = .false.
         call build%spproj_field%get_pops(cls_pops, 'class', maxn=ncls)
         cls_mask = cls_pops > 0
         if( l_groundtruth )then
@@ -925,41 +927,45 @@ contains
                 batchsz     = batch_end - batch_start + 1
                 call discrete_read_imgbatch(batchsz, pinds(batch_start:batch_end), [1,batchsz] )
                 cls2batch = (/(i,i=batch_start,batch_end)/)
-                ! flags bad ice
-                !$omp parallel do private(j,i,iptcl,ithr,ctfparms,tfun,ice_score,sdev_noise) default(shared)&
-                !$omp proc_bind(close)
-                do j = batch_start,batch_end
-                    ithr  = omp_get_thread_num()+1
-                    i     = j - batch_start +  1
-                    iptcl = pinds(j)
-                    call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
-                    call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
-                    call tmp_imgs(ithr)%mask(real(params%box)/2.-COSMSKHALFWIDTH-1., 'soft', backgr=0.)
-                    call tmp_imgs(ithr)%fft
-                    ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
-                    tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                    call tfun%calc_ice_frac(tmp_imgs(ithr), ctfparms, ice_score)
-                    call build%spproj_field%set(iptcl,'ice',ice_score)
-                    if( ice_score > 5.0 )then
-                        pinds(i)      = 0
-                        cls2batch(i)  = 0
-                        states(iptcl) = 0
-                    endif
-                    call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
-                    call tmp_imgs(ithr)%fft
-                    call tmp_imgs(ithr)%shift2Dserial(-build%spproj_field%get_2Dshift(iptcl))
-                    call tfun%apply_serial(tmp_imgs(ithr), 'flip', ctfparms)
-                    call tmp_imgs(ithr)%bp(0.,4.)
-                    call tmp_imgs(ithr)%ifft
-                    call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
-                enddo
-                !$omp end parallel do
+                if( l_ice )then
+                    ! flags bad ice
+                    !$omp parallel do private(j,i,iptcl,ithr,ctfparms,tfun,ice_score,sdev_noise) default(shared)&
+                    !$omp proc_bind(close)
+                    do j = batch_start,batch_end
+                        ithr  = omp_get_thread_num()+1
+                        i     = j - batch_start +  1
+                        iptcl = pinds(j)
+                        call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
+                        call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
+                        call tmp_imgs(ithr)%mask(real(params%box)/2.-COSMSKHALFWIDTH-1., 'soft', backgr=0.)
+                        call tmp_imgs(ithr)%fft
+                        ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+                        tfun     = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                        call tfun%calc_ice_frac(tmp_imgs(ithr), ctfparms, ice_score)
+                        call build%spproj_field%set(iptcl,'ice',ice_score)
+                        if( ice_score > 5.0 )then
+                            pinds(i)      = 0
+                            cls2batch(i)  = 0
+                            states(iptcl) = 0
+                        endif
+                        call tmp_imgs(ithr)%copy_fast(build%imgbatch(i))
+                        call tmp_imgs(ithr)%fft
+                        call tmp_imgs(ithr)%shift2Dserial(-build%spproj_field%get_2Dshift(iptcl))
+                        call tfun%apply_serial(tmp_imgs(ithr), 'flip', ctfparms)
+                        call tmp_imgs(ithr)%bp(0.,4.)
+                        call tmp_imgs(ithr)%ifft
+                        call tmp_imgs(ithr)%norm_noise(build%lmsk, sdev_noise)
+                    enddo
+                    !$omp end parallel do
+                endif
             enddo
-            write(logfhandle,*)'Class ',icls,' - Ice rejection: ', count(pinds==0)
-            if( l_groundtruth )then
-                purity(0) = real(sum(labels(pinds(:)),mask=(pinds>0)))
-                purity(0) = purity(0) * 100. / real(count(pinds>0))
-                write(logfhandle,*)'Purity: ',icls,count(pinds>0),purity(0)
+            if( l_ice )then
+                write(logfhandle,*)'Class ',icls,' - Ice rejection: ', count(pinds==0)
+                if( l_groundtruth )then
+                    purity(0) = real(sum(labels(pinds(:)),mask=(pinds>0)))
+                    purity(0) = purity(0) * 100. / real(count(pinds>0))
+                    write(logfhandle,*)'Purity: ',icls,count(pinds>0),purity(0)
+                endif
             endif
             ! pftcc init
             pop   = count(pinds > 0)
@@ -1057,7 +1063,8 @@ contains
                     call pftcc%rotate_ptcl(pftcc%pfts_ptcls(:,:,i), irot, ptcl_rot)
                     call pftcc%rotate_ctf(pinds(i), irot, ctf_rot)
                     diff = ctf_rot * cls_avg - ptcl_rot
-                    selected(i) = (sum(csq_fast(diff)) / r2) < 0.9
+                    ! selected(i) = (sum(csq_fast(diff)) / r2) < 0.9
+                    selected(i) = .true.
                 enddo
                 !$omp end parallel do
                 pop_sel = count(selected)
@@ -1099,35 +1106,37 @@ contains
                 endif
             enddo
             !$omp end parallel do
-            ! negative correlations
-            if( count(selected .and.(corrs<1.e-6)) > 0 )then
-                if( l_write )then
-                    j = 0
-                    do i = 1,pop
-                        if( corrs(i) < 0. .and. selected(i))then
-                            j = j+1
-                            print *,icls,i,cls2batch(i), corrs(i), labels(pinds(i))
-                            call build%imgbatch(cls2batch(i))%write('negcorr_'//int2str_pad(icls,3)//'.mrc',j)
-                        endif
-                    enddo
+            if( l_neg_corr )then
+                ! negative correlations
+                if( count(selected .and.(corrs<1.e-6)) > 0 )then
+                    if( l_write )then
+                        j = 0
+                        do i = 1,pop
+                            if( corrs(i) < 0. .and. selected(i))then
+                                j = j+1
+                                print *,icls,i,cls2batch(i), corrs(i), labels(pinds(i))
+                                call build%imgbatch(cls2batch(i))%write('negcorr_'//int2str_pad(icls,3)//'.mrc',j)
+                            endif
+                        enddo
+                    endif
+                    where( selected .and.(corrs<1.e-6) ) selected = .false.
+                    pop_sel = count(selected)
+                    print *,'Deselected neg: ',icls,pop-pop_sel
+                    nbins = ceiling(real(pop_sel)/real(NPTCLS_PER_BIN))
+                    if( nbins < 3 ) cycle
+                    deallocate(R2s,RmI2s,bin_inds)
+                    allocate(R2s(nbins),RmI2s(nbins),bin_inds(nbins,NPTCLS_PER_BIN))
+                    where(.not. selected)
+                        states(pinds(:)) = 0
+                        weights(:) = 0.d0
+                    end where
+                    call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
+                    call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
+                    pftcc%pfts_refs_even(:,:,1) = cmplx(cls_avg_even,kind=sp)
+                    pftcc%pfts_refs_odd(:,:,1)  = cmplx(cls_avg_odd, kind=sp)
+                    call pftcc%memoize_refs
+                    call update_sigmas(1)
                 endif
-                where( selected .and.(corrs<1.e-6) ) selected = .false.
-                pop_sel = count(selected)
-                print *,'Deselected neg: ',icls,pop-pop_sel
-                nbins = ceiling(real(pop_sel)/real(NPTCLS_PER_BIN))
-                if( nbins < 3 ) cycle
-                deallocate(R2s,RmI2s,bin_inds)
-                allocate(R2s(nbins),RmI2s(nbins),bin_inds(nbins,NPTCLS_PER_BIN))
-                where(.not. selected)
-                    states(pinds(:)) = 0
-                    weights(:) = 0.d0
-                end where
-                call restore_cavgs(pop, weights, optfilter=(params%cc_objfun==OBJFUN_EUCLID))
-                call write_cls(cls_avg, 'cls_'//int2str_pad(icls,3)//'_iter.mrc', 1)
-                pftcc%pfts_refs_even(:,:,1) = cmplx(cls_avg_even,kind=sp)
-                pftcc%pfts_refs_odd(:,:,1)  = cmplx(cls_avg_odd, kind=sp)
-                call pftcc%memoize_refs
-                call update_sigmas(1)
             endif
             ! Iteration loop
             cls_avg_bak    = cls_avg
@@ -1204,8 +1213,8 @@ contains
                         ! cc = cc + corrs(k)
                     enddo
                     if( l_groundtruth ) bin_purity(ibin) = 100.*pu/real(binpop)
-                    write(logfhandle,'(A,3I4,6F8.3)') 'class-iter-bin ',icls,iter,ibin,100.*pu/real(binpop),&
-                        &R2s(ibin),R2s(ibin)*Rmi2s(ibin),RmI2s(ibin),binccs(ibin),bindiff(ibin)
+                    !write(logfhandle,'(A,3I4,6F8.3)') 'class-iter-bin ',icls,iter,ibin,100.*pu/real(binpop),&
+                    !    &R2s(ibin),R2s(ibin)*Rmi2s(ibin),RmI2s(ibin),binccs(ibin),bindiff(ibin)
                 enddo
                 nsel = count(weights > 0.5d0)        
                 if( l_groundtruth )then
@@ -1242,28 +1251,28 @@ contains
                     if( selected(i) )then
                         ithr     = omp_get_thread_num()+1
                         iptcl    = pinds(i)
-                        ! rotation + shift
-                        call pftcc%gencorrs(iter, iptcl, inpl_corrs)
-                        irot = maxloc(inpl_corrs, dim=1)
-                        call grad_shsrch_objs(ithr)%set_indices(iter, iptcl)
-                        cxy = grad_shsrch_objs(ithr)%minimize(irot=irot)
-                        if( irot > 0 )then
-                            corrs(i)    = cxy(1)
-                            shifts(:,i) = cxy(2:3)
-                        else
-                            irot        = maxloc(inpl_corrs, dim=1)
-                            corrs(i)    = inpl_corrs(irot)
-                            shifts(:,i) = 0.
-                        endif
-                        rots(i)  = irot
+                        ! ! rotation + shift
+                        ! call pftcc%gencorrs(iter, iptcl, inpl_corrs)
+                        ! irot = maxloc(inpl_corrs, dim=1)
+                        ! call grad_shsrch_objs(ithr)%set_indices(iter, iptcl)
+                        ! cxy = grad_shsrch_objs(ithr)%minimize(irot=irot)
+                        ! if( irot > 0 )then
+                        !     corrs(i)    = cxy(1)
+                        !     shifts(:,i) = cxy(2:3)
+                        ! else
+                        !     irot        = maxloc(inpl_corrs, dim=1)
+                        !     corrs(i)    = inpl_corrs(irot)
+                        !     shifts(:,i) = 0.
+                        ! endif
+                        ! rots(i)  = irot
                         ! rotation
                         ! call pftcc%gencorrs(iter, iptcl, inpl_corrs)
                         ! irot     = maxloc(inpl_corrs,dim=1)
                         ! corrs(i) = inpl_corrs(irot)
                         ! rots(i)  = irot
                         ! nothing
-                        ! irot = pftcc%get_roind(360.-build%spproj_field%e3get(iptcl))
-                        ! corrs(i) = real(pftcc%gencorr_for_rot_8(iter,iptcl, [0.d0,0.d0], irot))
+                        irot = pftcc%get_roind(360.-build%spproj_field%e3get(iptcl))
+                        corrs(i) = real(pftcc%gencorr_for_rot_8(iter,iptcl, [0.d0,0.d0], irot))
                     else
                         corrs(i) = -2.
                     endif
