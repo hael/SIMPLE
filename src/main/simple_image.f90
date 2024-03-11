@@ -7644,19 +7644,20 @@ contains
 
     !> \brief rad_cc calculates the radial correlation function between two images/volumes
     subroutine radial_cc( self1, self2, smpd, rad_corrs, rad_dists )
-        class(image),      intent(inout) :: self1, self2
-        real,              intent(in)    :: smpd
-        real,              intent(out)   :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        class(image),      intent(inout):: self1, self2
+        real,              intent(in)   :: smpd
+        real,              intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        type(image)          :: distimg
         real,    allocatable :: mean(:)
         real,    allocatable :: rvec1(:), rvec2(:)
         logical, allocatable :: mask(:,:,:), shell_mask(:,:,:)
         real,    parameter   :: shell_size_pix = 1
         integer :: ldim3, n, n_shells
-        real    :: radius_pix, mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
+        real    :: mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
         logical :: err
         if( .not. (self1.eqdims.self2) ) THROW_HARD(' Nonconforming dimensions in image; radial_cc ')
-        radius_pix  = self1%ldim(1) / 2.   
-        n_shells    = int(radius_pix)
+        call distimg%new(self1%ldim,smpd)
+        n_shells    = int(self1%ldim(1) / 2.)
         if( self1%is_3d() )then
             ! 3D
             ldim3 = self1%ldim(3)
@@ -7667,29 +7668,30 @@ contains
         allocate(mask(self1%ldim(1), self1%ldim(2), ldim3),&
         &  shell_mask(self1%ldim(1), self1%ldim(2), ldim3), source=.true.)
         allocate(mean(n_shells))
-        call self1%cendist
-        do n = 1, n_shells 
+        call distimg%cendist
+        do n = 0, n_shells-1
             dist_lbound = real(n) * shell_size_pix
             dist_ubound = dist_lbound + shell_size_pix
-            where( (self1%rmat(:self1%ldim(1),:self1%ldim(2),:ldim3) > dist_lbound) .and. &
-                  &(self1%rmat(:self1%ldim(1),:self1%ldim(2),:ldim3) < dist_ubound) .and. &
-                  &(mask(:self1%ldim(1),:self1%ldim(2),:ldim3) ) )
-                    shell_mask = .true.
+            where( (distimg%rmat(:distimg%ldim(1),:distimg%ldim(2),:ldim3) > dist_lbound) .and. &
+                  &(distimg%rmat(:distimg%ldim(1),:distimg%ldim(2),:ldim3) < dist_ubound) .and. &
+                  &(mask(:distimg%ldim(1),:distimg%ldim(2),:ldim3) ) )
+                shell_mask = .true.
             else where
-                    shell_mask = .false.
+                shell_mask = .false.
             end where
             if( count(shell_mask) < 3 )then
-                rad_corrs(n) = 0.
-                mean(n)      = 0.
+                rad_corrs(n+1) = 0.
+                mean(n+1)      = 0.
             else
-                rvec1 = self1%serialize(shell_mask)
-                rvec2 = self2%serialize(shell_mask)
-                call moment(rvec1, mean1, sdev1, var1, err)
-                call moment(rvec2, mean2, sdev2, var2, err)
-                mean(n)      = mean1 - mean2
-                rad_corrs(n) = pearsn_serial(rvec1, rvec2)
+                rad_corrs(n+1) = self1%real_corr(self2, shell_mask)
+                !rvec1 = self1%serialize(shell_mask)
+                !rvec2 = self2%serialize(shell_mask)
+                !call moment(rvec1, mean1, sdev1, var1, err)
+                !call moment(rvec2, mean2, sdev2, var2, err)
+                !mean(n+1)      = mean1 - mean2
+                !rad_corrs(n+1) = pearsn_serial(rvec1, rvec2)
             endif
-            rad_dists(n) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
+            rad_dists(n+1) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
         enddo
     end subroutine radial_cc
 

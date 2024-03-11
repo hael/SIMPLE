@@ -53,8 +53,9 @@ allocate(mask(ldim_refs(1), ldim_refs(2), ldim_refs(3)),&
 !where( rmat_img_part2(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) < 0. ) mask = .false.
 !call img_part1%zero_below(0.)
 !call img_part2%zero_below(0.)
+corr = 0.; mean = 0.
 ! take averages of shells out to the NP radius
-do n = 0, nshells
+do n = 0, nshells-1
     dist_lbound = real(n)*shell_size_vox
     dist_ubound = dist_lbound + shell_size_vox
     where( (rmat_dists_img(:ldim_refs(1),:ldim_refs(2),:ldim_refs(3)) > dist_lbound) .and.&
@@ -73,9 +74,8 @@ do n = 0, nshells
         call moment(rvec2, mean2, sdev2, var2, err)
         mean = mean1 - mean2
         corr = pearsn_serial(rvec1, rvec2)
-        ! corr = img_part1%real_corr(img_part2, shell_mask) ! works too
     endif
-    print *, n, dist_lbound*smpd, dist_ubound*smpd, corr, mean
+    print *, n+1, dist_lbound*smpd, dist_ubound*smpd, corr, mean
 enddo
 call img_part1%kill()
 call img_part2%kill()
