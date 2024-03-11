@@ -28,7 +28,7 @@ cur_sh   = [0.6, -1.7]
 sh_thres = 1.5
 do i = 1, 10
     smpl_sh = shift_sampling( cur_sh, sh_thres )
-    print *, smpl_sh
+    print *, 'cur_sh = ', cur_sh, '; sh_smpl = ', smpl_sh
     if( any(smpl_sh < cur_sh-sh_thres) .or. any(smpl_sh > cur_sh+sh_thres) )then
         print *, 'UNIT TEST FAILED'
         stop

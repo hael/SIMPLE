@@ -195,6 +195,7 @@ contains
     end function shift_srch_cart
 
     subroutine inpl_srch( self, ref, xy )
+        use simple_eul_prob_tab, only: shift_sampling
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
         real,    optional,      intent(in)    :: xy(2)
@@ -212,6 +213,10 @@ contains
             cxy = self%grad_shsrch_obj%minimize(irot=irot, xy=xy)
             if( irot > 0 )then
                 ! irot > 0 guarantees improvement found, update solution
+                if( params_glob%l_sh_smpl )then
+                    cxy(2:3) = shift_sampling(cxy(2:3))
+                    cxy(1)   = pftcc_glob%gencorr_for_rot_8(iref, self%iptcl, real(cxy(2:3), dp), irot)
+                endif
                 call self%store_solution(iref, irot, cxy(1), sh=cxy(2:3))
             endif
         endif
