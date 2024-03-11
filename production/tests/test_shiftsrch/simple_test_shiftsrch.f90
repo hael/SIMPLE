@@ -1,12 +1,12 @@
 program simple_test_shiftsrch
 include 'simple_lib.f08'
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_cmdline,          only: cmdline
-use simple_builder,          only: builder
-use simple_image,            only: image
-use simple_parameters,       only: parameters
-use simple_polarizer,        only: polarizer
-use simple_pftcc_shsrch_grad,only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_cmdline,           only: cmdline
+use simple_builder,           only: builder
+use simple_image,             only: image
+use simple_parameters,        only: parameters
+use simple_polarizer,         only: polarizer
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 implicit none
 type(cmdline)          :: cline
 type(builder)          :: b
@@ -65,6 +65,8 @@ call img_copy%polarize(pftcc, b%img, 4, isptcl=.true.,  iseven=.true., mask=b%l_
 call pftcc%shift_ptcl(4, [0.,SHMAG,0.]) ! up
 call img_copy%polarize(pftcc, b%img, 5, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 5, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
+call pftcc%gencorr_sigma_contrib(5,5,[SHMAG,SHMAG],1,sigma2_noise(:,5))
+call pftcc%assign_sigma2_noise(sigma2_noise)
 call pftcc%shift_ptcl(5, [SHMAG,SHMAG,0.]) ! left + down
 call img_copy%polarize(pftcc, b%img, 6, isptcl=.false., iseven=.true., mask=b%l_resmsk)
 call img_copy%polarize(pftcc, b%img, 6, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
@@ -90,13 +92,15 @@ lims(1,1) = -6.
 lims(1,2) =  6.
 lims(2,1) = -6.
 lims(2,2) =  6.
-call grad_shsrch_obj%new(lims, opt_angle=.true.)
-call grad_shsrch_obj%set_indices(8, 8)
-irot = 0
+call grad_shsrch_obj%new(lims, opt_angle=.false.)
+call grad_shsrch_obj%set_indices(5, 5)
+irot = 1
 cxy  = grad_shsrch_obj%minimize(irot)
 print *, cxy(1), cxy(2:3), irot
 do i=5,5
-    corrmax = -1.
+    call pftcc%gencorrs(i, i, corrs)
+    print *, 'corr: ', maxval(corrs)
+    corrmax = 0.
     do xsh=-2,2
         do ysh=-2,2
             call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
