@@ -21,6 +21,7 @@ option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API document
 option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
 option(GUI "Install the GUI" ON)
 option(BUILD_GUI "Build single user GUI from source" OFF)
+option(NICE "Install NICE" OFF)
 # We probably don't want these to run on every build.
 option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
@@ -95,6 +96,12 @@ message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
 # ADD SCRIPTS
 # The script folder contains some handy perl scripts for running SIMPLE
 add_subdirectory(scripts)
+
+# INSTALL NICE
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nice)
+  set(GUI OFF)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nice)
+endif()
 
 # INSTALL GUI
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
