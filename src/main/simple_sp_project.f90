@@ -101,6 +101,7 @@ contains
     procedure          :: replace_project
     procedure          :: merge_stream_projects
     procedure          :: report_state2stk
+    procedure          :: report_state2mic
     procedure          :: set_boxcoords
     procedure          :: prune_particles
     ! I/O
@@ -3173,6 +3174,36 @@ contains
             enddo
         endif
     end subroutine report_state2stk
+
+     ! report state selection to os_stk & os_ptcl2D/3D
+    subroutine report_state2mic( self, states )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: states(:)
+        integer    :: imic, nmics, cnt, nsel
+        type(oris) :: tmp
+        type(ori)  :: o
+        nmics = self%os_mic%get_noris()
+        if( nmics == 0 )then
+            THROW_WARN('empty MIC field. Nothing to do; report_state2mic')
+            return
+        endif
+        if(size(states) /= nmics)then
+            THROW_WARN('Inconsistent # number of states & mics; report_state2mic')
+            return
+        endif
+        nsel = count(states == 1)
+        call tmp%new(nsel, is_ptcl=.false.)
+        cnt = 0
+        do imic=1,nmics
+            if( states(imic) == 1 )then
+                cnt = cnt + 1
+                call self%os_mic%get_ori(imic, o)
+                call tmp%set_ori(cnt, o)
+            endif
+        enddo
+        call self%os_mic%copy(tmp, is_ptcl=.false.)
+        call tmp%kill
+    end subroutine report_state2mic
 
     subroutine set_boxcoords( self, iptcl, coords )
         class(sp_project), target, intent(inout) :: self

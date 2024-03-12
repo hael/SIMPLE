@@ -799,7 +799,7 @@ contains
                 call pos%get_pinds(1,            'state', ptcls_in_state)
             endif
             noris_in_state = size(ptcls_in_state)
-            if( params%nran <= noris_in_state ) THROW_HARD('Random sample size (nran) too small, input a number larger than '//int2str(noris_in_state))
+            if( params%nran >= noris_in_state ) THROW_HARD('Random sample size (nran) too small, input a number larger than '//int2str(noris_in_state))
             rt = ran_tabu(noris_in_state)
             allocate(ptcls_rnd(params%nran), source=0)
             call rt%ne_ran_iarr(ptcls_rnd)
@@ -850,7 +850,7 @@ contains
         ! updates relevant segments
         select case(iseg)
             case(MIC_SEG)
-                call spproj%report_state2stk(states)
+                call spproj%report_state2mic(states)
             case(STK_SEG)
                 call spproj%report_state2stk(states)
             case(CLS2D_SEG)
