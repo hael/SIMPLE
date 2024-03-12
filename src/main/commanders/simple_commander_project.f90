@@ -774,9 +774,10 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(parameters)                :: params
         type(sp_project)                :: spproj
-        integer,            allocatable :: states(:)
+        type(ran_tabu)                  :: rt
+        integer,            allocatable :: states(:), ptcls_in_state(:), ptcls_rnd(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks
+        integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state
         real                            :: state
         class(oris), pointer :: pos => NULL()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -786,57 +787,72 @@ contains
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         call spproj%update_projinfo( cline )
-        ! sanity check
-        n_lines = nlines(trim(params%infile))
+        ! check number of oris in field
         noris = spproj%get_n_insegment(params%oritype)
-        if( cline%defined('state') ) then
-            if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
-                write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-                write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', noris
-                THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
-                return
+        ! associate pointer to field
+        call spproj%ptr2oritype(params%oritype, pos)
+        if( cline%defined('nran') )then
+            ! random selection
+            if( cline%defined('state') ) then
+                call pos%get_pinds(params%state, 'state', ptcls_in_state)
+            else
+                call pos%get_pinds(1,            'state', ptcls_in_state)
             endif
+            noris_in_state = size(ptcls_in_state)
+            if( params%nran <= noris_in_state ) THROW_HARD('Random sample size (nran) too small, input a number larger than '//int2str(noris_in_state))
+            rt = ran_tabu(noris_in_state)
+            allocate(ptcls_rnd(params%nran), source=0)
+            call rt%ne_ran_iarr(ptcls_rnd)
+            call rt%kill
+            ! allocate states and set the state-flags
+            allocate(states(noris), source=0)
+            do i=1,params%nran
+                states(ptcls_rnd(i)) = 1
+            end do
         else
-            noris = spproj%get_n_insegment(params%oritype)
-            if( noris /= n_lines )then
-                write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-                write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
-                THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
-                return
-            endif
-        endif
-        ! allocate states and then read the state-flags
-        allocate(states(noris))
-        call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
-        if( cline%defined('state') ) then
-            state = cline%get_rarg("state")
-            call spproj%ptr2oritype(params%oritype, pos)
-            do i=1,noris
-                if( pos%get_state(i) == state ) then
-                    read(fnr,*) states(i)
-                else
-                    states(i) = 0
+            ! selection based on text file input
+            ! sanity check
+            n_lines = nlines(trim(params%infile))
+            if( cline%defined('state') ) then
+                if( spproj%get_n_insegment_state(params%oritype, cline%get_rarg("state")) /= n_lines )then
+                    write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
+                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment with requested state: ', noris
+                    THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment with requested state do not match, aborting; exec_selection')
+                    return
                 endif
-            end do
-        else
-            do i=1,n_lines
-                read(fnr,*) states(i)
-            end do
+            else
+                if( noris /= n_lines )then
+                    write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
+                    write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
+                    THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
+                    return
+                endif
+            endif
+            ! allocate states and then read the state-flags
+            allocate(states(noris))
+            call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
+            if( cline%defined('state') ) then
+                state = cline%get_rarg("state")
+                do i=1,noris
+                    if( pos%get_state(i) == state ) then
+                        read(fnr,*) states(i)
+                    else
+                        states(i) = 0
+                    endif
+                end do
+            else
+                do i=1,n_lines
+                    read(fnr,*) states(i)
+                end do
+            endif
+            call fclose(fnr)
         endif
-        call fclose(fnr)
         ! updates relevant segments
         select case(iseg)
             case(MIC_SEG)
-                call spproj%os_mic%set_all('state', real(states))
-                nstks = spproj%os_stk%get_noris()
-                if(nstks > 0)then
-                    if( noris /= nstks )then
-                        THROW_HARD('This project file has already undergone some selection, use parent project instead')
-                    endif
-                    call spproj%report_state2stk(states)
-                endif
+                call spproj%report_state2stk(states)
             case(STK_SEG)
-                call spproj%report_state2stk(states) ! is this segment update necessary?
+                call spproj%report_state2stk(states)
             case(CLS2D_SEG)
                 call spproj%os_cls2D%set_all('state', real(states))
                 call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
