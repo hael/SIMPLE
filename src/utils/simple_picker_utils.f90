@@ -34,31 +34,23 @@ contains
         character(len=LONGSTRLEN) :: boxfile
         character(len=STDLEN)   :: multi_moldiams
         character(len=4), allocatable :: moldiams_str(:)
-        real    :: maxdiam, stepsz, moldiam_cur, pick_stats(11), moldiam_entry, mmoldiam_opt
-        integer :: box, idiam, istr, num_entries, num_moldiams
+        real    :: maxdiam, mmoldiam_opt
+        integer :: box, istr, num_entries, idiam, num_moldiams
         logical :: l_roi, l_backgr_subtr
         boxfile = basename(fname_new_ext(trim(micname),'box'))
         if( present(dir_out) ) boxfile = trim(dir_out)//'/'//trim(boxfile)
         l_roi          = trim(params_glob%pick_roi).eq.'yes'
         l_backgr_subtr = l_roi .or. (trim(params_glob%backgr_subtr).eq.'yes')
         call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
-        if (params_glob%nmoldiams > 1) then
-            ! multiple moldiam pick to assess best molecular diameters, does not generate .box files
-            allocate(moldiams(params_glob%nmoldiams))
-            ! create moldiams array
-            stepsz = (params_glob%moldiam_max - params_glob%moldiam) / (params_glob%nmoldiams - 1)
-            moldiam_cur = params_glob%moldiam
-            do idiam = 1, params_glob%nmoldiams
-                moldiams(idiam) = moldiam_cur
-                moldiam_cur = moldiam_cur + stepsz
-            enddo
+        if( params_glob%nmoldiams > 1 )then
+            moldiams = equispaced_vals(params_glob%moldiam, params_glob%moldiam_max, params_glob%nmoldiams)
             call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, moldiam_opt=mmoldiam_opt)
             if( present(moldiam_opt) ) moldiam_opt = mmoldiam_opt
             deallocate(moldiams)
-        else if(.not. (params_glob%multi_moldiams  .eq. '')) then
+        else if( .not. (params_glob%multi_moldiams  .eq. '') )then
             ! multiple moldiam pick that uses multiple gaussians, generates .box file outputs
-            istr=1
-            num_entries=0
+            istr        = 1
+            num_entries = 0
             ! find number of molecular diameters
             do 
                 if(params_glob%multi_moldiams(istr:istr) .eq. ' ') then
