@@ -29,6 +29,23 @@ contains
 
     ! array operations
 
+    function equispaced_vals( val_min, val_max, n ) result( vals )
+        real,    intent(in) :: val_min, val_max
+        integer, intent(in) :: n
+        real, allocatable   :: vals(:)
+        real    :: stepsz, val_cur
+        integer :: i
+        if( n > 0 )then
+            allocate(vals(n), source=0.)
+            stepsz  = (val_max - val_min) / real(n - 1)
+            val_cur = val_min
+            do i = 1, n
+                vals(i) = val_cur
+                val_cur = val_cur + stepsz
+            enddo
+        endif
+    end function equispaced_vals
+
     !>   to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
     subroutine put_last( which, arr )

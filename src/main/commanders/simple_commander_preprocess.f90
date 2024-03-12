@@ -1448,7 +1448,8 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         character(len=:), allocatable :: which_picker
-        integer :: nmics
+        real,             allocatable :: moldiams(:), dists(:), moldiams_prob(:), moldiams_ref(:)
+        integer :: nmics, loc(1), i, j, n
         logical :: templates_provided
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
@@ -1516,6 +1517,24 @@ contains
         call spproj%update_projinfo(cline)
         call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
+        if( cline%defined('nmoldiams') )then
+            n            = spproj%os_mic%get_noris()
+            moldiams     = spproj%os_mic%get_all('moldiam')
+            moldiams_ref = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
+            allocate(dists(params%nmoldiams), moldiams_prob(params%nmoldiams), source=0.)
+            do i = 1, n
+                do j = 1, params%nmoldiams
+                    dists(j) = abs(moldiams(i) - moldiams_ref(j))
+                end do
+                loc = minloc(dists)
+                moldiams_prob(loc(1)) = moldiams_prob(loc(1)) + 1.
+            end do
+            moldiams_prob = moldiams_prob / real(n)
+            do j = 1, params%nmoldiams
+                write(logfhandle,'(a,1x,f7.2,1x,a,1x,f7.2)') 'molecular diameter:', moldiams_ref(j), 'probability:', moldiams_prob(j)
+            end do
+            write(logfhandle,'(a,1x,f7.2)') 'Suggested single molecular diameter:', sum(moldiams_ref * moldiams_prob)
+        endif
         ! cleanup
         call qsys_cleanup
         ! graceful exit
@@ -1569,8 +1588,12 @@ contains
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
-                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out,moldiam_opt=moldiam_opt)
-                call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                call piter%iterate(cline, params%smpd, intg_name, output_dir, boxfile, nptcls_out, moldiam_opt=moldiam_opt)
+                if( params_glob%nmoldiams > 1 )then
+                    call spproj%os_mic%set(imic, 'moldiam', moldiam_opt)
+                else
+                    call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
+                endif
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
