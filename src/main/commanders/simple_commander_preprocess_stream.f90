@@ -205,7 +205,7 @@ contains
                     call cline_make_pickrefs%set('scale',pickref_scale)
                 endif
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                call cline%set('pickrefs', '../'//trim(PICKREFS)//trim(params%ext))
+                call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
                 call qsys_cleanup
             endif

@@ -59,7 +59,7 @@ character(len=*), parameter :: ITERSTATS_FILE       = 'simple_iter_stats'//trim(
 ! LOCAL RESOLUTION
 character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 ! PREPROCESSING
-character(len=*), parameter :: PICKREFS             = 'pickrefs'
+character(len=*), parameter :: PICKREFS_FBODY       = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 ! CLUSTER3D

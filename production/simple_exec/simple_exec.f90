@@ -111,6 +111,7 @@ type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
 type(uniform_filter2D_commander)            :: xuniform_filter2D
 type(uniform_filter3D_commander)            :: xuniform_filter3D
+type(make_pickrefs_commander)               :: xmake_pickrefs
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander)                   :: xmake_oris
@@ -331,6 +332,8 @@ select case(trim(prg))
         call xuniform_filter2D%execute(cline)
     case( 'uniform_filter3D' )
         call xuniform_filter3D%execute(cline)
+    case('make_pickrefs')
+        call xmake_pickrefs%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )
@@ -387,7 +390,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('3c870a02')
+call simple_print_git_version('de318213')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

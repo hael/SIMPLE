@@ -117,6 +117,7 @@ type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: abinitio_3Dmodel
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
+type(simple_program), target :: make_pickrefs
 type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
@@ -264,6 +265,7 @@ type(simple_input_param) :: nparts_chunk
 type(simple_input_param) :: nparts_pool
 type(simple_input_param) :: nptcls
 type(simple_input_param) :: nptcls_per_cls
+type(simple_input_param) :: nran
 type(simple_input_param) :: nrestarts
 type(simple_input_param) :: nsearch
 type(simple_input_param) :: nsig
@@ -286,6 +288,7 @@ type(simple_input_param) :: pgrp_start
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: picker
 type(simple_input_param) :: pick_roi
+type(simple_input_param) :: pickrefs
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
@@ -395,6 +398,7 @@ contains
         call new_import_starproject
         call new_make_cavgs
         call new_make_oris
+        call new_make_pickrefs
         call new_map_cavgs_selection
         call new_map_cavgs_states
         call new_mask
@@ -509,6 +513,7 @@ contains
         call push2prg_ptr_array(import_starproject)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
+        call push2prg_ptr_array(make_pickrefs)
         call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(map_cavgs_states)
         call push2prg_ptr_array(mask)
@@ -674,6 +679,8 @@ contains
                 ptr2prg => make_cavgs
             case('make_oris')
                 ptr2prg => make_oris
+            case('make_pickrefs')
+                ptr2prg => make_pickrefs
             case('map_cavgs_selection')
                 ptr2prg => map_cavgs_selection
             case('map_cavgs_states')
@@ -849,6 +856,7 @@ contains
         write(logfhandle,'(A)') import_starproject%name
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
+        write(logfhandle,'(A)') make_pickrefs%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
         write(logfhandle,'(A)') mask%name
@@ -1139,6 +1147,8 @@ contains
         call set_param(cc_iters,       'cc_iters',     'num',    'Number of correlation iterations before switching to ML', 'Number of correlation iterations before switching to ML{10}', '# of iterations{10}', .false., 10.)
         call set_param(backgr_subtr,   'backgr_subtr', 'binary', 'Perform micrograph background subtraction(new picker only)', 'Perform micrograph background subtraction before picking/extraction(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
+        call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2013,8 +2023,7 @@ contains
         call ctfops%set_input('img_ios', 2, outstk)
         ! parameter input/output
         call ctfops%set_input('parm_ios', 1, smpd)
-        call ctfops%set_input('parm_ios', 2, 'neg', 'binary', 'Invert contrast','Invert contrast(yes|no){no}',&
-            '(yes|no){no}', .false., 'no')
+        call ctfops%set_input('parm_ios', 2, neg)
         call ctfops%set_input('parm_ios', 3, oritab)
         call ctfops%set_input('parm_ios', 4, deftab)
         ! alternative inputs
@@ -2726,6 +2735,31 @@ contains
         call make_oris%set_input('comp_ctrls', 1, nthr)
     end subroutine new_make_oris
 
+    subroutine new_make_pickrefs
+        ! PROGRAM SPECIFICATION
+        call make_pickrefs%new(&
+        &'make_pickrefs',&                   ! name
+        &'Make pick references',&            ! descr_short
+        &'is a program for making 2D references for particle picking',&
+        &'simple_exec',&                     ! executable
+        &1, 1, 0, 0, 0, 0, 1, .false.)       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call make_pickrefs%set_input('img_ios', 1,  pickrefs)
+        ! parameter input/output
+        call make_pickrefs%set_input('parm_ios', 1, neg)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call make_pickrefs%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_make_pickrefs
+
     subroutine new_map_cavgs_selection
         ! PROGRAM SPECIFICATION
         call map_cavgs_selection%new(&
@@ -3091,7 +3125,7 @@ contains
         pick%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%set_input('img_ios', 1, 'pickrefs', 'file', 'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
+        call pick%set_input('img_ios', 1, pickrefs)
         call pick%set_gui_params('img_ios', 1, submenu="picking", advanced=.false.)
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
@@ -3229,7 +3263,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
-        call preprocess%set_input('img_ios', 2, 'pickrefs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess%set_input('img_ios', 2, pickrefs)
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  total_dose)
         call preprocess%set_input('parm_ios', 2,  fraction_dose_target)
@@ -3299,7 +3333,7 @@ contains
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, dir_movies)
         call preprocess_stream%set_input('img_ios', 2, gainref)
-        call preprocess_stream%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 3, pickrefs)
         call preprocess_stream%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
@@ -3374,7 +3408,7 @@ contains
         call preprocess_stream_dev%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
         call preprocess_stream_dev%set_gui_params('img_ios', 2, submenu="data", advanced=.false.)
-        call preprocess_stream_dev%set_input('img_ios', 3, 'pickrefs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 3, pickrefs)
         call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
         call preprocess_stream_dev%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
@@ -3745,7 +3779,7 @@ contains
         ! parameter input/output
         call reproject%set_input('parm_ios', 1, smpd)
         call reproject%set_input('parm_ios', 2, oritab)
-        call reproject%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast','Invert contrast of projections(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call reproject%set_input('parm_ios', 3, neg)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4193,21 +4227,22 @@ contains
     subroutine new_selection
         ! PROGRAM SPECIFICATION
         call selection%new(&
-        &'selection',&                                                           ! name
+        &'selection',&                                                                  ! name
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 4, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 3, 2, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call selection%set_input('parm_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
-        &'give .txt selection file', .true., '')
-        call selection%set_input('parm_ios', 2, oritype)
-        call selection%set_input('parm_ios', 3, 'state', 'num', 'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
-        call selection%set_input('parm_ios', 4, prune)
+        call selection%set_input('parm_ios', 1, oritype)
+        call selection%set_input('parm_ios', 2, 'state', 'num', 'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
+        call selection%set_input('parm_ios', 3, prune)
         ! alternative inputs
+        call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
+        &'give .txt selection file', .false., '')
+        call selection%set_input('alt_ios', 2, nran)
         ! <empty>
         ! search controls
         ! <empty>
@@ -4222,11 +4257,11 @@ contains
     subroutine new_scale
         ! PROGRAM SPECIFICATION
         call scale%new(&
-        &'scale', &                                                                             ! name
+        &'scale', &                                                                               ! name
         &'Re-scaling MRC and SPIDER stacks and volumes',&                                         ! descr_short
         &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &0, 6, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                                          ! executable
+        &0, 6, 3, 0, 0, 0, 1, .false.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4550,7 +4585,7 @@ contains
         call stackops%set_input('parm_ios', 1,  smpd)
         call stackops%set_input('parm_ios', 2,  oritab)
         call stackops%set_input('parm_ios', 3,  mirr)
-        call stackops%set_input('parm_ios', 4,  'nran',  'num', 'Number of random samples', 'Number of images to randomly sample', '# random samples', .false., 0.)
+        call stackops%set_input('parm_ios', 4,  nran)
         call stackops%set_input('parm_ios', 5,  frac)
         call stackops%set_input('parm_ios', 6,  'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
         call stackops%set_input('parm_ios', 7,  'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
@@ -4949,7 +4984,7 @@ contains
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
         call tseries_track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call tseries_track_particles%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert image contrast(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call tseries_track_particles%set_input('parm_ios', 3, neg)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -5146,7 +5181,7 @@ contains
         call volops%set_input('parm_ios', 1, smpd)
         volops%parm_ios(1)%required = .false.
         call volops%set_input('parm_ios', 2, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call volops%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert volume contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call volops%set_input('parm_ios', 3, neg)
         call volops%set_input('parm_ios', 4, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
         call volops%set_input('parm_ios', 5, mirr)
         call volops%set_input('parm_ios', 6, e1)

@@ -422,6 +422,7 @@ contains
         call cmd_dict%push('phaseplate',    'images obtained with Volta phaseplate(yes|no){no}')
         call cmd_dict%push('phrand',        'phase randomize(yes|no){no}')
         call cmd_dict%push('phshiftunit',   'additional phase-shift unit (radians|degrees){radians}')
+        call cmd_dict%push('pickrefs',       'MRC stack of picking references')
         call cmd_dict%push('plaintexttab',  'plain text file of input parameters')
         call cmd_dict%push('plot',          'make plot(yes|no){no}')
         call cmd_dict%push('prg',           'SIMPLE program to execute')
@@ -607,10 +608,8 @@ contains
         call private_prgs(11)%set_name('make_pickrefs')
         ! optional keys
         call private_prgs(11)%push_opt_key('nthr')
-        call private_prgs(11)%push_opt_key('refs')
-        call private_prgs(11)%push_opt_key('vol1')
-        call private_prgs(11)%push_opt_key('pcontrast')
-        call private_prgs(11)%push_opt_key('pgrp')
+        call private_prgs(11)%push_opt_key('pickrefs')
+        call private_prgs(11)%push_opt_key('neg')
 
         ! MAP_CAVGS_SELECTION, for mapping class average selection to project
         call private_prgs(12)%set_name('map_cavgs_selection')

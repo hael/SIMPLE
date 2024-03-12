@@ -230,13 +230,13 @@ contains
                 call cline_make_pickrefs%set('prg','make_pickrefs')
                 call cline_make_pickrefs%set('neg','yes')
                 call cline_make_pickrefs%set('stream','no')
+                call cline_make_pickrefs%set('mkdir','no')
                 if( cline_make_pickrefs%defined('eer_upsampling') )then
                     pickref_scale = real(params%eer_upsampling) * params%scale
                     call cline_make_pickrefs%set('scale',pickref_scale)
                 endif
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                call cline%set('pickrefs', trim(PICKREFS)//params%ext)
-
+                call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
             endif
         endif
@@ -756,12 +756,13 @@ contains
                     cline_make_pickrefs = cline
                     call cline_make_pickrefs%set('prg','make_pickrefs')
                     call cline_make_pickrefs%set('neg','yes')
+                    call cline_make_pickrefs%set('mkdir','no')
                     if( cline_make_pickrefs%defined('eer_upsampling') )then
                         pickref_scale = real(params%eer_upsampling) * params%scale
                         call cline_make_pickrefs%set('scale',pickref_scale)
                     endif
                     call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                    call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                    call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
                     write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
                 case DEFAULT
                     THROW_HARD('Picker not supported!')
@@ -1504,8 +1505,9 @@ contains
                 cline_make_pickrefs = cline
                 call cline_make_pickrefs%set('prg','make_pickrefs')
                 call cline_make_pickrefs%set('neg','yes')
+                call cline_make_pickrefs%set('mkdir','no')
                 call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-                call cline%set('pickrefs', trim(PICKREFS)//params%ext)
+                call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         end select
         ! prepare job description
@@ -2663,7 +2665,8 @@ contains
         ! set defaults
         call set_automask2D_defaults(cline)
         call cline%set('oritype', 'mic')
-        if( .not.cline%defined('neg') ) call cline%set('neg', 'no') ! default for new picker
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not.cline%defined('neg')   ) call cline%set('neg',    'no') ! default for new picker
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
@@ -2715,7 +2718,7 @@ contains
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
                     if( params%neg .eq. 'yes' ) call ref2D%neg
-                    call ref2D%write(trim(PICKREFS)//params%ext, cnt)
+                    call ref2D%write(trim(PICKREFS_FBODY)//params%ext, cnt)
                     rot = rot + ang
                 end do
             end do
@@ -2723,7 +2726,7 @@ contains
             ! should never happen
             do iref=1,norefs
                 if( params%neg .eq. 'yes' ) call ref2D%neg
-                call projs(iref)%write(trim(PICKREFS)//params%ext, iref)
+                call projs(iref)%write(trim(PICKREFS_FBODY)//params%ext, iref)
             end do
         endif
         ! end gracefully
