@@ -99,7 +99,6 @@ add_subdirectory(scripts)
 
 # INSTALL NICE
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nice)
-  set(GUI OFF)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nice)
 endif()
 
