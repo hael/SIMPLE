@@ -81,7 +81,8 @@ type :: oris
     procedure          :: print_
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt
-    procedure          :: incr_updatecnt
+    procedure          :: sample4update
+    procedure          :: clean_updatecnt
     procedure          :: has_been_searched
     procedure          :: any_state_zero
     procedure          :: ori2str
@@ -145,7 +146,6 @@ type :: oris
     procedure          :: ini_tseries
     procedure          :: symmetrize
     procedure          :: merge
-    procedure          :: clean_updatecnt
     procedure          :: partition_eo
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
@@ -1220,89 +1220,119 @@ contains
         end do
     end subroutine print_matrices
 
-    subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask )
+    subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask, stoch )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        real,    allocatable :: counts(:), states(:)
-        integer, allocatable :: inds_here(:)
-        integer :: i, cnt, n_nozero, ifirst, ilast, mincnt
+        logical, optional,    intent(in)    :: stoch
+        type(ran_tabu) :: rt
+        integer, allocatable :: inds_rnd(:), states(:), counts(:)
+        integer :: i, cnt, nptcls, ind, max_count
         real    :: val
-        logical :: first_round
-        ! gather info (states & counts & indices)
-        allocate(states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
+        logical :: sstoch
+        sstoch = .false.
+        if( present(stoch) ) sstoch = .true.
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), inds(nptcls), counts(nptcls))
+        cnt = 0
         do i = fromto(1), fromto(2)
+            cnt         = cnt + 1
+            states(cnt) = self%o(i)%get_state()
+            inds(cnt)   = i
             if( self%o(i)%isthere('updatecnt') )then
-                counts(i) = self%o(i)%get('updatecnt')
+                counts(cnt) = nint(self%o(i)%get('updatecnt'))
             else
-                counts(i) = 0
+                counts(cnt) = 0
             endif
-            states(i)     = self%o(i)%get_state()
-            inds_here(i)  = i
         end do
-        n_nozero  = count(states > 0)
-        nsamples  = min(n_nozero, nint(update_frac * real(n_nozero)))
-        if( n_nozero == nsamples )then ! update_frac is 1.0
+        nptcls   = count(states > 0)
+        inds     = pack(inds,   mask=states > 0)
+        counts   = pack(counts, mask=states > 0)
+        nsamples = min(nptcls, nint(update_frac * real(nptcls)))
+        if( nsamples == nptcls )then ! update_frac is 1.0
             mask = .false.
-            cnt  = 0
-            do i = fromto(1), fromto(2)
-                if( states(i) < 1 ) cycle
-                cnt     = cnt + 1
-                mask(i) = .true.
-                val     = self%o(i)%get('updatecnt')
-                call self%o(i)%set('updatecnt', val + 1.0)
-                if( cnt == nsamples ) exit
+            do i = 1, nptcls
+                ind       = inds(i)
+                mask(ind) = .true.
+                val       = self%o(ind)%get('updatecnt')
+                call self%o(ind)%set('updatecnt', val + 1.0)
             end do
         else
-            ! find the minimum updatecnt
-            first_round = all(counts == 0)
-            if( first_round )then
-                mincnt = 0
-            else
-                mincnt = minval(counts, mask=states > 0)
+            max_count = maxval(counts)
+            if( max_count == 0 .or. sstoch )then ! first time around, or always stochastic -> random sampling
+                allocate(inds_rnd(nsamples), source=0)
+                rt = ran_tabu(nptcls)
+                call rt%ne_ran_iarr(inds_rnd)
+                call rt%kill
+                mask = .false.
+                do i = 1, nsamples
+                    ind       = inds(inds_rnd(i))
+                    mask(ind) = .true.
+                    val       = self%o(ind)%get('updatecnt')
+                    call self%o(ind)%set('updatecnt', val + 1.0)
+                end do
+            else ! reproduce previous selection
+                nsamples = count(counts == max_count)
+                inds     = pack(inds, mask=counts == max_count)
+                do i = 1, nsamples
+                    ind       = inds(i)
+                    mask(ind) = .true.
+                    val       = self%o(ind)%get('updatecnt')
+                    call self%o(ind)%set('updatecnt', val + 1.0)
+                end do
             endif
-            ! identify the first & last occurence of mincnt
-            ifirst = 0
-            do i = fromto(1), fromto(2)
-                if( states(i) < 1 ) cycle
-                if( counts(i) == mincnt )then
-                    if( ifirst == 0 ) ifirst = i
-                    ilast = i
-                    if( ilast - ifirst + 1 == nsamples ) exit
-                endif
-            end do
-            ! update mask & counters
-            mask = .false.
-            do i = ifirst, ilast
-                if( states(i) < 1 ) cycle
-                mask(i) = .true.
-                val     = self%o(i)%get('updatecnt')
-                call self%o(i)%set('updatecnt', val + 1.0)
-            end do
-            ! update nsamples in case fewer were found
-            nsamples = count(mask)
         endif
-        if( allocated(inds) ) deallocate(inds)
-        inds = pack(inds_here, mask=mask)
-        if( any(inds == 0) ) THROW_HARD('particle indices cannot be zero')
-        deallocate(states, counts, inds_here)
     end subroutine sample4update_and_incrcnt
 
-    subroutine incr_updatecnt( self, fromto, mask )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: fromto(2)
-        logical,     intent(in)    :: mask(fromto(1):fromto(2))
-        integer :: i
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i=fromto(1),fromto(2)
-            if( .not.mask(i) )cycle
-            call self%o(i)%set('updatecnt', self%o(i)%get('updatecnt') + 1.0)
+    subroutine sample4update( self, fromto, it_history, update_frac, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2), it_history
+        real,                 intent(out)   :: update_frac
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        integer, allocatable :: states(:), counts(:)
+        integer :: i, cnt, nptcls, ind, max_count, lbound_count
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(states(nptcls), inds(nptcls), counts(nptcls))
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt         = cnt + 1
+            states(cnt) = self%o(i)%get_state()
+            inds(cnt)   = i
+            if( self%o(i)%isthere('updatecnt') )then
+                counts(cnt) = nint(self%o(i)%get('updatecnt'))
+            else
+                counts(cnt) = 0
+            endif
         end do
-        !$omp end parallel do
-    end subroutine incr_updatecnt
+        nptcls       = count(states > 0)
+        inds         = pack(inds,   mask=states > 0)
+        counts       = pack(counts, mask=states > 0)
+        max_count    = maxval(counts)
+        if( max_count == 0 ) THROW_HARD('requires past search history')
+        lbound_count = max(1,max_count - it_history)
+        nsamples     = count(counts >= lbound_count)
+        update_frac  = real(nsamples) / real(nptcls)
+        inds         = pack(inds, mask=counts >= lbound_count)
+        do i = 1, nsamples
+            ind       = inds(i)
+            mask(ind) = .true.
+        end do
+    end subroutine sample4update
+
+    subroutine clean_updatecnt( self )
+        class(oris),       intent(inout) :: self
+        integer :: i
+        do i = 1,self%n
+            call self%o(i)%delete_entry('updatecnt')
+        enddo
+    end subroutine clean_updatecnt
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self, i )
@@ -2034,14 +2064,6 @@ contains
         call self%kill
         call self2add%kill
     end subroutine merge
-
-    subroutine clean_updatecnt( self )
-        class(oris),       intent(inout) :: self
-        integer :: i
-        do i = 1,self%n
-            call self%o(i)%delete_entry('updatecnt')
-        enddo
-    end subroutine clean_updatecnt
 
     !>  \brief  for balanced assignment of even/odd partitions
     subroutine partition_eo( self )

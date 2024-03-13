@@ -960,7 +960,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(eul_prob_tab)             :: eulprob_obj
+        type(eul_prob_tab)            :: eulprob_obj
         type(ori)                     :: orientation
         integer  :: nptcls, iptcl, s, iref, loc, ithr, iter
         logical  :: l_ctf, do_center
@@ -977,7 +977,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
-        call eulprob_obj%new
+        call eulprob_obj%new(pinds)
         ! e/o partioning
         if( build%spproj%os_ptcl3D%get_nevenodd() == 0 )then
             call build%spproj%os_ptcl3D%partition_eo
@@ -1142,7 +1142,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(eul_prob_tab)             :: eulprob_obj
+        type(eul_prob_tab)            :: eulprob_obj
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
@@ -1157,7 +1157,7 @@ contains
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call eulprob_obj%new
+        call eulprob_obj%new(pinds)
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -1256,7 +1256,7 @@ contains
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &1.0, nptcls, pinds, ptcl_mask)
         ! more prep
-        call eulprob_obj%new
+        call eulprob_obj%new(pinds)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
