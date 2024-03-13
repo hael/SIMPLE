@@ -15,16 +15,16 @@ program simple_test_nano_detect_atoms
     character(len=100) :: filename, pdb_filename
     integer :: iostat, Z, ldim(3), boxsize, ldim_box(3)
     integer :: offset, nxyz(3), nxyz_offset(3), nboxes, xind, yind, zind, pos(3)
-    integer :: xoff, yoff, zoff, npeaks, nbox, ibox, jbox, loc, ipeak, iimg
+    integer :: xoff, yoff, zoff, npeaks, nbox, ibox, jbox, loc, ipeak, iimg, icoord
     real :: radius, smpd, sxx, thres, dist, dthres, length_diffs
     type(image) :: simulated_atom, nano_img, simulated_NP, boximg, test_NP
-    type(image), allocatable :: atms_array(:)
+    type(image), allocatable :: atms_array(:), convolved_atoms(:)
     type(atoms) :: atom
     type(nanoparticle) :: nano
     type(parameters), target :: params
     integer, allocatable :: positions(:,:), inds_offset(:,:,:), pos_inds(:)
-    real, allocatable :: box_scores(:,:,:), tmp(:), scores_cen(:,:,:), pos_scores(:), coords(:,:)
-    real, allocatable :: rmat_sub(:,:,:), diffs(:)
+    real, allocatable :: box_scores(:,:,:), tmp(:), scores_cen(:,:,:), pos_scores(:), coords(:,:), coords_convolved(:,:)
+    real, allocatable :: pdb_coords(:,:), test_coords(:,:), test_coords_convolved(:,:), distances(:), distances_convolved(:)
     logical :: l_err_atom, l_err_box, is_peak
     logical, allocatable :: mask(:), selected_pos(:)
 
@@ -214,32 +214,57 @@ program simple_test_nano_detect_atoms
         pos = positions(pos_inds(iimg),:)
         call atms_array(iimg)%new(ldim_box,smpd)
         call window_slim_3D(simulated_NP, pos, boxsize, atms_array(iimg))
-        call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
         ! want coordinates of atoms to be at the center of the images
+        call atms_array(iimg)%norm_minmax
+        call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
         call atms_array(iimg)%masscen(coords(iimg,:)) 
         coords(iimg,:) = coords(iimg,:) + real(atms_array(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
     end do
-    call write_centers('test_atomic_centers_masscen',coords)
+    call write_centers('test_atomic_centers',coords)
     deallocate(coords)
 
     ! simulate nanoparticle using new coordinates
     ! and compare to original (simulated) NP?
-    call nano%set_atomic_coords('test_atomic_centers_masscen.pdb')
+    call nano%set_atomic_coords('test_atomic_centers.pdb')
     call nano%simulate_atoms(simatms=test_NP)
     call test_NP%write('test_NP.mrc')
 
-    ! subtract extracted atom images from centered reference image
-    ! one example image
-    allocate(rmat_sub(boxsize,boxsize,boxsize), diffs(boxsize**3))
-    rmat_sub = simulated_atom%get_rmat() - atms_array(1)%get_rmat()
-    diffs = pack(rmat_sub,mask=.true.)
-    !print *, diffs
-    length_diffs = norm_2_sp(diffs)
-    print *, 'DIFFERENCE BETWEEN ACTUAL AND REFERENCE IS ', length_diffs
+    ! Use FT to find more accurate atomic centers
+    ! first, create new array for convolved images
+    allocate(coords_convolved(nbox,3))
+    allocate(convolved_atoms(nbox))
+    ! fourier transform both images, then multiply and inverse fourier transform
+    call simulated_atom%fft()
+    do iimg = 1, nbox
+        pos = positions(pos_inds(iimg),:)
+        call convolved_atoms(iimg)%new(ldim_box,smpd)
+        call atms_array(iimg)%fft()
+        convolved_atoms(iimg) = atms_array(iimg)%conjg() * simulated_atom
+        call convolved_atoms(iimg)%ifft()
+        call atms_array(iimg)%ifft()
+        call convolved_atoms(iimg)%norm_minmax
+        call convolved_atoms(iimg)%write('boximgs_convolved/boximg_'//trim(int2str(iimg))//'.mrc')
+        call convolved_atoms(iimg)%masscen(coords_convolved(iimg,:))
+        coords_convolved(iimg,:) = coords_convolved(iimg,:) + real(convolved_atoms(iimg)%get_ldim())/2. + pos
+    end do
+    call simulated_atom%ifft()
+    call write_centers('test_atomic_coords_convolved', coords_convolved)
+    deallocate(coords_convolved)
 
+    ! get coordinates from pdbfiles
+    call read_pdb2matrix(trim(pdb_filename), pdb_coords)
+    call read_pdb2matrix('test_atomic_centers.pdb',test_coords)
+    allocate(distances(size(pdb_coords,dim=2)))
+    ! find distance between coordinates generated in this test and those of the simualted NP from the start
+    call find_closest(pdb_coords,test_coords,size(pdb_coords,dim=2),size(test_coords,dim=2),distances)
+    print *, 'AVG DISTANCE (no convolution) = ', sum(distances)/size(distances)
+    ! do the same thing for the convolved images
+    allocate(distances_convolved(size(pdb_coords,dim=2)))
+    call read_pdb2matrix('test_atomic_coords_convolved.pdb',test_coords_convolved)
+    call find_closest(pdb_coords,test_coords_convolved,size(pdb_coords,dim=2),size(test_coords,dim=2),distances_convolved,filename='combined_coords_convolved.csv')
+    print *, 'AVG DISTANCE (with convolution) = ', sum(distances_convolved)/size(distances_convolved)
 
-    deallocate(diffs)
-    deallocate(rmat_sub)
+    deallocate(convolved_atoms)
     deallocate(atms_array)
     deallocate(selected_pos)
     deallocate(mask)
@@ -264,6 +289,7 @@ program simple_test_nano_detect_atoms
         deallocate(img_in_rmat) 
     end subroutine window_slim_3D
 
+    ! for finding outliers, not used at the moment
     function avg_loc_sdev_3D( img_in, winsz ) result( asdev )
         class(image), intent(in) :: img_in
         integer,      intent(in) :: winsz
@@ -313,6 +339,38 @@ program simple_test_nano_detect_atoms
         call centers_pdb%writepdb(fname)
 
     end subroutine write_centers
+
+    subroutine find_closest( coords_1, coords_2, length_1, length_2, distances, filename )
+        integer,                    intent(in)  :: length_1, length_2
+        real,                       intent(in)  :: coords_1(3,length_1), coords_2(3,length_2)
+        real,                       intent(out) :: distances(length_1)
+        character(len=*), optional, intent(in)  :: filename
+        integer :: i, j, min_loc(1)
+        real :: closest_coord(3)
+        real, allocatable :: dists(:)
+        real :: min_dist
+
+        if (present(filename)) then
+            open(unit=22, file=filename)
+        else
+            open(unit=22, file='combined_coords.csv')
+        end if
+
+        do i = 1, length_1
+            allocate(dists(length_2))
+            do j = 1, length_2
+                dists(j) = euclid(real(coords_1(:,i)),real(coords_2(:,j)))
+            end do
+            min_loc = minloc(dists)
+            min_dist = minval(dists)
+            distances(i) = min_dist
+            closest_coord = coords_2(:,min_loc(1))
+            write(22,'(7(f8.3))') coords_1(1,i), coords_1(2,i), coords_1(3,i), closest_coord(1), closest_coord(2), closest_coord(3), min_dist
+            deallocate(dists)
+        end do
+
+        close(22)
+    end subroutine find_closest
 
 
 end program simple_test_nano_detect_atoms
