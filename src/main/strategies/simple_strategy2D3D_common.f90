@@ -464,13 +464,13 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_frac_update )then
-                    call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
-                        int2str_pad(istate,2)//'_part'//part_str)
-                    call build_glob%eorecvols(istate)%expand_exp
-                    call build_glob%eorecvols(istate)%apply_weight(1.0 - &
-                        params_glob%update_frac)
-                endif
+                ! if( params_glob%l_frac_update )then
+                !     call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
+                !         int2str_pad(istate,2)//'_part'//part_str)
+                !     call build_glob%eorecvols(istate)%expand_exp
+                !     call build_glob%eorecvols(istate)%apply_weight(1.0 - &
+                !         params_glob%update_frac)
+                ! endif
             endif
         end do
         deallocate(pops)
@@ -498,7 +498,7 @@ contains
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            params_glob%l_filemsk .or. params_glob%l_frac_update )then
+            params_glob%l_filemsk )then ! .or. params_glob%l_frac_update
             do_center = .false.
             xyz       = 0.
             return

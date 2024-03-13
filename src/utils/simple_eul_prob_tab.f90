@@ -38,16 +38,22 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self )
+    subroutine new( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: iptcl
+        integer,             intent(in)    :: pinds(:)
+        ! integer :: iptcl
+        integer :: i
         call self%kill
         allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
         allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top,3))
-        allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
-        do iptcl = params_glob%fromp,params_glob%top
-            self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
-        enddo
+        ! allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
+        ! do iptcl = params_glob%fromp,params_glob%top
+        !     self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
+        ! enddo
+        allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.false.)
+        do i = 1, size(pinds)
+            self%ptcl_avail(pinds(i)) = .true.
+        end do
     end subroutine new
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
