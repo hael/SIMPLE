@@ -17,6 +17,7 @@ type :: fplane
     complex, allocatable, public :: cmplx_plane(:,:)             !< On output image pre-multiplied by CTF
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
+    real,    allocatable         :: hcos(:), hsin(:)             !< For fast shift
     integer,              public :: ldim(3)       = 0            !< dimensions of original image
     integer,              public :: frlims_crop(3,2) = 0         !< Redundant Fourier cropped limits
     integer,              public :: ldim_crop(3)  = 0            !< dimensions of cropped image
@@ -57,7 +58,8 @@ contains
         ! allocations
         allocate(self%cmplx_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
                 &self%ctfsq_plane(self%frlims_crop(1,1):self%frlims_crop(1,2),self%frlims_crop(2,1):self%frlims_crop(2,2)),&
-                self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)))
+                &self%ctf_ang(self%frlims_crop(1,1):self%frlims_crop(1,2), self%frlims_crop(2,1):self%frlims_crop(2,2)),&
+                &self%hcos(self%frlims_crop(1,1):self%frlims_crop(1,2)), self%hsin(self%frlims_crop(1,1):self%frlims_crop(1,2)))
         self%cmplx_plane = cmplx(0.,0.)
         self%ctfsq_plane = 0.
         ! CTF pre-calculations
@@ -75,13 +77,15 @@ contains
     end function does_exist
 
     !> Produces CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes( self, img, ctfvars, iptcl)
+    subroutine gen_planes( self, img, ctfvars, shift, iptcl)
         class(fplane),    intent(inout) :: self
         class(image),     intent(in)    :: img
         class(ctfparams), intent(in)    :: ctfvars
+        real,             intent(in)    :: shift(2)
         integer, optional,intent(in)    :: iptcl
         type(ctf) :: tfun
-        complex   :: c
+        complex   :: c, s
+        real(dp)  :: pshift(2), arg, kcos,ksin
         real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift
         integer   :: sigma2_kfromto(2), h,k,sh
         logical   :: use_sigmas
@@ -92,33 +96,41 @@ contains
             add_phshift = 0.0
             if( ctfvars%l_phaseplate ) add_phshift = ctfvars%phshift
         endif
+        pshift = real(-shift * self%shconst(1:2),dp)
+        do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
+            arg = real(h,dp)*pshift(1)
+            self%hcos(h) = dcos(arg)
+            self%hsin(h) = dsin(arg)
+        enddo
         use_sigmas = present(iptcl) .and. params_glob%l_ml_reg
         if( use_sigmas )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
         end if
-        !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
-        !$omp private(h,k,sh,c,tval,tvalsq,inv,sqSpatFreq)
-        do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
-            do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
+        do k = self%frlims_crop(2,1),self%frlims_crop(2,2)
+            arg  = real(k,dp)*pshift(2)
+            kcos = dcos(arg)
+            ksin = dsin(arg)
+            do h = self%frlims_crop(1,1),self%frlims_crop(1,2)
                 sh = nint(sqrt(real(h*h + k*k)))
                 if( sh > self%nyq_crop )then
-                    c = cmplx(0.,0.)
+                    c      = cmplx(0.,0.)
                     tvalsq = 0.
                 else
+                    ! Shift
+                    s = cmplx(kcos*self%hcos(h)-ksin*self%hsin(h), kcos*self%hsin(h)+ksin*self%hcos(h),sp)
+                    c = img%get_fcomp2D(h,k) * s
                     ! CTF
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
                         tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.params_glob%l_wiener_part)
                         tvalsq     = tval * tval
+                        if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
+                        c          = tval * c
                     else
-                        tval = 1.0
-                        tvalsq = tval
+                        tvalsq = 1.0
                     endif
-                    if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                    ! CTF pre-multiplied Fourier component
-                    c = tval * img%get_fcomp2D(h,k)
                     ! sigma2 weighing
                     if( use_sigmas) then
                         if(sh >= sigma2_kfromto(1))then
@@ -134,7 +146,6 @@ contains
                 self%ctfsq_plane(h,k) = tvalsq
             enddo
         enddo
-        !$omp end parallel do
     end subroutine gen_planes
 
     !>  \brief  is a destructor
@@ -143,6 +154,8 @@ contains
         if(allocated(self%cmplx_plane)    ) deallocate(self%cmplx_plane)
         if(allocated(self%ctfsq_plane)    ) deallocate(self%ctfsq_plane)
         if(allocated(self%ctf_ang)        ) deallocate(self%ctf_ang)
+        if(allocated(self%hcos)           ) deallocate(self%hcos)
+        if(allocated(self%hsin)           ) deallocate(self%hsin)
         self%exists = .false.
     end subroutine kill
 
