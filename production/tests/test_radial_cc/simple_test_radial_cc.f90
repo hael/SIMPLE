@@ -29,20 +29,6 @@ call img1%radial_cc(img2, smpd, rad_corrs, rad_dists)
 do i=1,n_shells
  write(logfhandle,*) i, rad_dists(i), rad_corrs(i)
 enddo
-! create output filter for mask
-!   !> \brief  converts the FSC to the optimal low-pass filter
-!    function fsc2optlp( corrs ) result( filt )
-!filt = fsc2optlp( rad_corrs )
-! create a mask for the different 3D shells
-!> \brief mask  is for spherical masking
-    !! \param mskrad mask radius in pixels
-    !! \param which mask type
-    !! \param inner include cosine edge material
-    !! \param width width of inner patch
-!    subroutine mask( self, mskrad, which, inner, width, backgr )
-
-! apply mask to the 3D volume img%mask
-! create a mask using SIMPLE 
 call img1%kill()
 call img2%kill()
 end program simple_test_radial_cc

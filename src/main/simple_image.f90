@@ -7647,13 +7647,13 @@ contains
         class(image),      intent(inout):: self1, self2
         real,              intent(in)   :: smpd
         real,              intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        real                 :: rad_weights(int(self1%ldim(1)/2.))
         type(image)          :: distimg
-        real,    allocatable :: mean(:)
         real,    allocatable :: rvec1(:), rvec2(:)
         logical, allocatable :: mask(:,:,:), shell_mask(:,:,:)
         real,    parameter   :: shell_size_pix = 1
         integer :: ldim3, n, n_shells
-        real    :: mean1, sdev1, var1, mean2, sdev2, var2, dist_lbound, dist_ubound
+        real    :: dist_lbound, dist_ubound
         logical :: err
         if( .not. (self1.eqdims.self2) ) THROW_HARD(' Nonconforming dimensions in image; radial_cc ')
         call distimg%new(self1%ldim,smpd)
@@ -7667,7 +7667,6 @@ contains
         endif
         allocate(mask(self1%ldim(1), self1%ldim(2), ldim3),&
         &  shell_mask(self1%ldim(1), self1%ldim(2), ldim3), source=.true.)
-        allocate(mean(n_shells))
         call distimg%cendist
         do n = 0, n_shells-1
             dist_lbound = real(n) * shell_size_pix
@@ -7681,17 +7680,16 @@ contains
             end where
             if( count(shell_mask) < 3 )then
                 rad_corrs(n+1) = 0.
-                mean(n+1)      = 0.
             else
                 rad_corrs(n+1) = self1%real_corr(self2, shell_mask)
-                !rvec1 = self1%serialize(shell_mask)
-                !rvec2 = self2%serialize(shell_mask)
-                !call moment(rvec1, mean1, sdev1, var1, err)
-                !call moment(rvec2, mean2, sdev2, var2, err)
-                !mean(n+1)      = mean1 - mean2
-                !rad_corrs(n+1) = pearsn_serial(rvec1, rvec2)
             endif
             rad_dists(n+1) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
+            if( rad_corrs(n+1)   > 0.      ) rad_weights(n+1) = 2 * rad_corrs(n+1) / (rad_corrs(n+1) +1)
+            if( rad_weights(n+1) > 0.99999 ) rad_weights(n+1) = 0.99999
+            rad_dists(n+1) = ( ( dist_lbound * smpd + dist_ubound * smpd ) / 2. )
+            where( shell_mask(:,:,:) .eqv. .true. )
+                self1%rmat = self1%rmat * rad_weights(n+1)
+            end where
         enddo
     end subroutine radial_cc
 
