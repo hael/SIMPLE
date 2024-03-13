@@ -851,6 +851,10 @@ contains
         select case(iseg)
             case(MIC_SEG)
                 call spproj%report_state2mic(states)
+                nstks = spproj%os_stk%get_noris()
+                if( nstks > 0 )then
+                    call spproj%report_state2stk(states)
+                endif
             case(STK_SEG)
                 call spproj%report_state2stk(states)
             case(CLS2D_SEG)
