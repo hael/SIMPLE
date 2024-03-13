@@ -663,7 +663,7 @@ contains
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
         type(kbinterpol) :: kbwin
-        real             :: sdev_noise
+        real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
         ! make the gridding prepper
         kbwin = build_glob%eorecvols(1)%get_kbwin()
@@ -677,7 +677,7 @@ contains
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,iptcl,ibatch,sdev_noise) schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,sdev_noise) schedule(static) proc_bind(close)
             do i=batchlims(1),batchlims(2)
                 iptcl  = pinds(i)
                 ibatch = i - batchlims(1) + 1
@@ -685,7 +685,8 @@ contains
                 call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
                 call build_glob%imgbatch(ibatch)%fft
                 ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl)
+                shift = build_glob%spproj_field%get_2Dshift(iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
             end do
             !$omp end parallel do
             ! gridding

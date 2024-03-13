@@ -103,7 +103,6 @@ contains
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
         ! other variables
-        class(parameters), pointer :: params_ptr => null()
         type(parameters)    :: params
         type(builder)       :: build
         type(qsys_env)      :: qenv
@@ -1051,14 +1050,15 @@ contains
             call preprecvols
             ! prep img, fpls, ctfparms
             if( .not. allocated(fpls) ) allocate(fpls(params_glob%fromp:params_glob%top),ctfparms(params_glob%fromp:params_glob%top))
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sdev,shvec)
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
                 call build%imgbatch(iptcl)%norm_noise(build%lmsk, sdev)
                 call build%imgbatch(iptcl)%fft
                 call fpls(iptcl)%new(build%imgbatch(iptcl))
                 ctfparms(iptcl) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), iptcl=iptcl)
+                shvec = build_glob%spproj_field%get_2Dshift(iptcl)
+                call fpls(iptcl)%gen_planes(build%imgbatch(iptcl), ctfparms(iptcl), shvec, iptcl=iptcl)
             enddo
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top

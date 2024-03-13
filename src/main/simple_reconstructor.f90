@@ -243,9 +243,9 @@ contains
         class(fplane),        intent(in)    :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         type(ori) :: o_sym
-        complex   :: comp, oshift
+        complex   :: comp
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
-        real      :: vec(3), loc(3), odists(3), dists(3), shconst_here(2), arg, ctfval
+        real      :: vec(3), loc(3), odists(3), dists(3), ctfval
         real      :: w000, w001, w010, w011, w100, w101, w110, w111
         integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3), floc(3), cloc(3)
         if( pwght < TINY )return
@@ -260,11 +260,9 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! memoize for origin shifting
-        shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
         if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
-            !$omp private(h,k,sh,comp,arg,oshift,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
+            !$omp private(h,k,sh,comp,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
                 do h=fpl%frlims_crop(1,1),fpl%frlims_crop(1,2)
@@ -278,12 +276,9 @@ contains
                         floc = floor(loc)
                         cloc = floc + 1
                         if( cloc(1) < self%lims(1,1) )cycle
-                        ! shift
-                        arg    = dot_product(shconst_here, vec(1:2))
-                        oshift = cmplx(cos(arg), sin(arg))
                         ! Fourier component x particle weight x shift & CTF
-                        comp   = (pwght * fpl%cmplx_plane(h,k)) * oshift
-                        ctfval =  pwght * fpl%ctfsq_plane(h,k)
+                        comp   = pwght * fpl%cmplx_plane(h,k)
+                        ctfval = pwght * fpl%ctfsq_plane(h,k)
                         ! interpolation Fcs
                         dists  = loc - real(floc)
                         odists = 1.0 - dists
@@ -319,7 +314,7 @@ contains
             !$omp end parallel
         else
             ! KB interpolation
-            !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,ctfval,w,win,vec,loc,dists)&
+            !$omp parallel default(shared) private(i,h,k,sh,comp,ctfval,w,win,vec,loc,dists)&
             !$omp proc_bind(close)
             do isym=1,nsym
                 !$omp do collapse(2) schedule(static)
@@ -337,12 +332,9 @@ contains
                         ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) )cycle
                         ! Fourier component & CTF
-                        comp   = fpl%cmplx_plane(h,k)
-                        ctfval = fpl%ctfsq_plane(h,k)
-                        ! shift
-                        arg    = dot_product(shconst_here, vec(1:2))
-                        oshift = cmplx(cos(arg), sin(arg))
-                        ! (weighted) kernel & CTF values
+                        comp   = pwght * fpl%cmplx_plane(h,k)
+                        ctfval = pwght * fpl%ctfsq_plane(h,k)
+                        ! (weighted) kernel
                         w = 1.
                         do i=1,self%wdim
                             dists    = real(win(1,:) + i - 1) - loc
@@ -351,10 +343,9 @@ contains
                             w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
                         enddo
                         w = w / sum(w)
-                        w = w * pwght
                         ! expanded matrices update
                         self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                            &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
+                            &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + comp*w
                         self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
                             &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
                     end do
