@@ -18,7 +18,7 @@ private
 type strategy3D_spec
     integer,            pointer :: symmat(:,:) => null()
     type(eul_prob_tab), pointer :: eulprob_obj
-    integer :: iptcl=0, szsn=0
+    integer :: iptcl=0, iptcl_map=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
 end type strategy3D_spec
@@ -30,6 +30,7 @@ type strategy3D_srch
     type(ori)               :: o_prev                    !< previous orientation, used in continuous search
     type(oris)              :: opeaks                    !< peak orientations to consider for refinement
     integer                 :: iptcl         = 0         !< global particle index
+    integer                 :: iptcl_map     = 0         !< map particle index
     integer                 :: ithr          = 0         !< thread index
     integer                 :: nrefs         = 0         !< total # references (nstates*nprojs)
     integer                 :: nrefs_sub     = 0         !< total # references (nstates*nprojs), subspace
@@ -80,6 +81,7 @@ contains
         real :: lims(2,2), lims_init(2,2)
         ! set constants
         self%iptcl         = spec%iptcl
+        self%iptcl_map     = spec%iptcl_map
         self%nstates       = params_glob%nstates
         self%nprojs        = params_glob%nspace
         self%nprojs_sub    = params_glob%nspace_sub

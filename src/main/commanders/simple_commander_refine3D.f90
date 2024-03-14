@@ -1041,7 +1041,7 @@ contains
             print *, 'Aligning the particles ...'
             ! Memoize particles FFT parameters
             call pftcc%memoize_ptcls
-            call eulprob_obj%fill_tab(pftcc, pinds)
+            call eulprob_obj%fill_tab(pftcc)
             print *, 'Assembling the class averages with uniformly-hard-sorting the tab...'
             call eulprob_obj%tab_normalize
             call eulprob_obj%tab_align
@@ -1063,18 +1063,18 @@ contains
             !$omp end parallel do
             do iptcl = params_glob%fromp,params_glob%top
                 if( .not.ptcl_mask(iptcl) ) cycle
-                iref = nint(eulprob_obj%ptcl_ref_map(iptcl, 1))
-                if( eulprob_obj%dist_loc_tab(iref, iptcl, 1) < TINY ) cycle
+                iref = eulprob_obj%assgn_map(iptcl)%iref
+                if( eulprob_obj%loc_tab(iref, iptcl)%dist < TINY ) cycle
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 euls = build_glob%eulspace%get_euler(iref)
                 ! getting the particle orientation
                 shvec = orientation%get_2Dshift()
                 call orientation%set_shift(shvec)
-                loc     = int(eulprob_obj%dist_loc_tab(iref, iptcl, 2))
+                loc     = eulprob_obj%loc_tab(iref, iptcl)%inpl
                 euls(3) = 360. - pftcc%get_rot(loc)
                 call orientation%set_euler(euls)
-                call orientation%set('w', eulprob_obj%dist_loc_tab(iref, iptcl, 1))
+                call orientation%set('w', eulprob_obj%loc_tab(iref, iptcl)%dist)
                 ! update doc
                 call build_glob%spproj_field%set_euler(iptcl, euls)
                 ! insert
@@ -1218,7 +1218,7 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj%fill_tab(pftcc, pinds)
+        call eulprob_obj%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj%write_tab(fname)
         call eulprob_obj%kill
@@ -1273,7 +1273,7 @@ contains
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call eulprob_obj%read_tab_to_glob(fname, 1, params%nptcls)
+            call eulprob_obj%read_tab_to_glob(fname, nptcls)
         enddo
         call eulprob_obj%tab_normalize
         call eulprob_obj%tab_align
@@ -1282,7 +1282,7 @@ contains
         call eulprob_obj%write_assignment(fname)
         ! cleanup
         call eulprob_obj%kill
-        call build%kill_general_tbox
+        ! call build%kill_general_tbox
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill

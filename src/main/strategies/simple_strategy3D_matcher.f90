@@ -253,8 +253,9 @@ contains
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
-                strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
-                strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
+                strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
+                strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
+                strategy3Dspecs(iptcl_batch)%szsn      = params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
                 if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj => eulprob_obj
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)

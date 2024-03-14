@@ -38,7 +38,7 @@ contains
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, iptcl, irot
+        integer :: iref, iptcl, iptcl_map, irot
         real    :: corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -46,10 +46,11 @@ contains
             ! prep
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
-            iptcl = self%s%iptcl
-            iref  =                nint(self%spec%eulprob_obj%ptcl_ref_map(iptcl,1))
-            corr  = eulprob_corr_switch(self%spec%eulprob_obj%ptcl_ref_map(iptcl,2))
-            irot  =                nint(self%spec%eulprob_obj%ptcl_ref_map(iptcl,3))
+            iptcl     = self%s%iptcl
+            iptcl_map = self%s%iptcl_map
+            iref      =                     self%spec%eulprob_obj%assgn_map(iptcl_map)%iref
+            corr      = eulprob_corr_switch(self%spec%eulprob_obj%assgn_map(iptcl_map)%dist)
+            irot      =                     self%spec%eulprob_obj%assgn_map(iptcl_map)%inpl
             if( self%s%doshift )then
                 call self%s%inpl_srch(ref=iref)
                 ! checking if shift search is good
