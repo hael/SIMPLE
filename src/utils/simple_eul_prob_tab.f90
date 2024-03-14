@@ -333,11 +333,6 @@ contains
             end do
         end do
         !$omp end parallel do
-        ! !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc)
-        ! do i_loc = 1, self%nptcls
-        !     self%assgn_map(i_loc) = assgn_glob(self%assgn_map(i_loc)%pind)
-        ! end do
-        ! !$omp end parallel do
     end subroutine read_assignment
 
     ! DESTRUCTOR

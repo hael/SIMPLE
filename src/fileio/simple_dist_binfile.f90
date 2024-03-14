@@ -67,7 +67,7 @@ contains
         integer,             intent(in)    :: nptcls_glob
         type(ptcl_ref),      intent(inout) :: mat_glob(self%nrefs,nptcls_glob)
         type(ptcl_ref) :: mat_loc(self%nrefs,self%nptcls)
-        integer :: funit, i_loc, iref, pind, addr, i_glob, i
+        integer :: funit, i_loc, addr, i_glob
         logical :: success
         success = self%open_only( funit, .true. )
         if( .not. success ) return
@@ -78,18 +78,10 @@ contains
         !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
         do i_loc = 1, self%nptcls
             do i_glob = 1, nptcls_glob
-                where( mat_loc(:,i_loc)%pind == mat_glob(:,i_glob)%pind ) mat_glob(:,i_glob) = mat_loc(:,i_loc)
+                if( mat_loc(1,i_loc)%pind == mat_glob(1,i_glob)%pind ) mat_glob(:,i_glob) = mat_loc(:,i_loc)
             end do
         end do
         !$omp end parallel do
-        ! !$omp parallel do default(shared) private(i,iref,pind) proc_bind(close) schedule(static)
-        ! do i = 1, self%nptcls
-        !     do iref = 1, self%nrefs
-        !         pind                = mat_loc(iref,i)%pind
-        !         mat_glob(iref,pind) = mat_loc(iref,i)
-        !     end do
-        ! end do
-        ! !$omp end parallel do
     end subroutine read_to_glob
 
     subroutine write( self, mat )
