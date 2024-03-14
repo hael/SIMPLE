@@ -99,6 +99,12 @@ type stats_struct
     real :: minv = 0.
 end type stats_struct
 
+! type for particle reference relation in eul_prob_tab
+type ptcl_ref
+    integer :: pind = 0, iref = 0, inpl = 0
+    real    :: dist = 0.
+end type ptcl_ref
+
 ! oritype enumeration
 enum, bind(c)
     enumerator :: ENUM_ORISEG = 0

@@ -14,9 +14,10 @@ private
 #include "simple_local_flags.inc"
 
 type :: eul_prob_tab
-    real,    allocatable :: dist_loc_tab(:,:,:) !< nspace, iptcl, 2 (1->dist, 2->inpl_ind)
-    real,    allocatable :: ptcl_ref_map(:,:)   !< nptcls, 3 (1->ref,2->dist, 3->inpl_ind)
-    logical, allocatable :: ptcl_avail(:)       !< for communicating restraints and state selections
+    type(ptcl_ref), allocatable :: loc_tab(:,:) !< search table
+    type(ptcl_ref), allocatable :: assgn_map(:) !< assignment map
+    integer, allocatable :: pinds(:)            !< particle indices for processing
+    integer              :: nptcls              !< size of pinds array
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -25,8 +26,6 @@ type :: eul_prob_tab
     procedure :: tab_normalize
     procedure :: tab_align
     procedure :: write_tab
-    procedure :: read_tab
-    procedure :: read_tab_from_glob
     procedure :: read_tab_to_glob
     procedure :: write_assignment
     procedure :: read_assignment
@@ -41,28 +40,35 @@ contains
     subroutine new( self, pinds )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: pinds(:)
-        ! integer :: iptcl
-        integer :: i
+        integer :: i, iref, iptcl
+        real    :: x
         call self%kill
-        allocate(self%dist_loc_tab(params_glob%nspace,params_glob%fromp:params_glob%top,2), source=0.)
-        allocate(self%ptcl_ref_map(params_glob%fromp:params_glob%top,3))
-        ! allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.true.)
-        ! do iptcl = params_glob%fromp,params_glob%top
-        !     self%ptcl_avail(iptcl) = (build_glob%spproj_field%get_state(iptcl) > 0) ! state selection, 0 means deselected
-        ! enddo
-        allocate(self%ptcl_avail(params_glob%fromp:params_glob%top), source=.false.)
-        do i = 1, size(pinds)
-            self%ptcl_avail(pinds(i)) = .true.
+        self%nptcls = size(pinds)
+        allocate(self%pinds(self%nptcls), source=pinds)
+        allocate(self%loc_tab(params_glob%nspace,self%nptcls), self%assgn_map(self%nptcls))
+        !$omp parallel do default(shared) private(i,iptcl,iref) proc_bind(close) schedule(static)
+        do i = 1,self%nptcls
+            iptcl = self%pinds(i)
+            self%assgn_map(i)%pind = iptcl
+            self%assgn_map(i)%iref = 0
+            self%assgn_map(i)%inpl = 0
+            self%assgn_map(i)%dist = huge(x)
+            do iref = 1,params_glob%nspace
+                self%loc_tab(iref,i)%pind = iptcl
+                self%loc_tab(iref,i)%iref = iref
+                self%loc_tab(iref,i)%inpl = 0
+                self%loc_tab(iref,i)%dist = huge(x)
+            end do
         end do
+        !$omp end parallel do 
     end subroutine new
 
     ! partition-wise table filling, used only in shared-memory commander 'exec_prob_tab'
-    subroutine fill_tab( self, pftcc, glob_pinds )
+    subroutine fill_tab( self, pftcc )
         use simple_polarft_corrcalc,  only: polarft_corrcalc
         use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
         class(eul_prob_tab),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: glob_pinds(pftcc%nptcls)
         integer,      parameter :: MAXITS = 60
         integer,    allocatable :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
@@ -84,16 +90,15 @@ contains
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,j,iptcl,ithr,iref,irot,cxy,locn) proc_bind(close) schedule(static)
-            do i = 1, pftcc%nptcls
-                iptcl = glob_pinds(i)
-                if( .not. self%ptcl_avail(iptcl) ) cycle
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
                 ithr = omp_get_thread_num() + 1
                 do iref = 1, params_glob%nspace
                     call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                     irot = inpl_smpl(ithr) ! contained function, below
-                    self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
-                    self%dist_loc_tab(iref,iptcl,2) = irot
+                    self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
+                    self%loc_tab(iref,i)%inpl = irot
                     dists_refs(iref,ithr) = dists_inpl(irot,ithr)
                 enddo
                 locn = minnloc(dists_refs(:,ithr), refs_ns)
@@ -102,11 +107,11 @@ contains
                         iref = locn(j)
                         ! BFGS over shifts
                         call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                        irot = nint(self%dist_loc_tab(iref,iptcl,2))
+                        irot = self%loc_tab(iref,i)%inpl
                         cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
                         if( irot > 0 )then
                             ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
-                            self%dist_loc_tab(iref,iptcl,1) = eulprob_dist_switch(cxy(1))
+                            self%loc_tab(iref,i)%dist = eulprob_dist_switch(cxy(1))
                         endif
                     end do
                 endif
@@ -116,16 +121,14 @@ contains
             ! fill the table
             !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl,irot) proc_bind(close) schedule(static)
             do iref = 1, params_glob%nspace
-                do i = 1, pftcc%nptcls
-                    iptcl = glob_pinds(i)
-                    if( self%ptcl_avail(iptcl) )then
-                        ithr = omp_get_thread_num() + 1
-                        call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
-                        dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                        irot = inpl_smpl(ithr) ! contained function, below
-                        self%dist_loc_tab(iref,iptcl,1) = dists_inpl(irot,ithr)
-                        self%dist_loc_tab(iref,iptcl,2) = irot
-                    endif
+                do i = 1, self%nptcls
+                    iptcl = self%pinds(i)
+                    ithr = omp_get_thread_num() + 1
+                    call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
+                    dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
+                    irot = inpl_smpl(ithr) ! contained function, below
+                    self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
+                    self%loc_tab(iref,i)%inpl = irot
                 enddo
             enddo
             !$omp end parallel do
@@ -166,82 +169,69 @@ contains
     ! used in the global prob_align commander, in 'exec_prob_align'
     subroutine tab_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: iptcl
         real    :: sum_dist_all, min_dist, max_dist
+        integer :: i
         ! normalize so prob of each ptcl is between [0,1] for all refs
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl,sum_dist_all)
-        do iptcl = params_glob%fromp, params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                sum_dist_all = sum(self%dist_loc_tab(:,iptcl,1))
-                if( sum_dist_all < TINY )then
-                    self%dist_loc_tab(:,iptcl,1) = 0.
-                else
-                    self%dist_loc_tab(:,iptcl,1) = self%dist_loc_tab(:,iptcl,1) / sum_dist_all
-                endif
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
+        do i = 1, self%nptcls
+            sum_dist_all = sum(self%loc_tab(:,i)%dist)
+            if( sum_dist_all < TINY )then
+                self%loc_tab(:,i)%dist = 0.
+            else
+                self%loc_tab(:,i)%dist = self%loc_tab(:,i)%dist / sum_dist_all
             endif
         enddo
         !$omp end parallel do
         ! min/max normalization to obtain values between 0 and 1
         max_dist = 0.
         min_dist = huge(min_dist)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)&
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i)&
         !$omp reduction(min:min_dist) reduction(max:max_dist)
-        do iptcl = params_glob%fromp,params_glob%top
-            if( self%ptcl_avail(iptcl) )then
-                max_dist = max(max_dist, maxval(self%dist_loc_tab(:,iptcl,1), dim=1))
-                min_dist = min(min_dist, minval(self%dist_loc_tab(:,iptcl,1), dim=1))
-            endif
+        do i = 1, self%nptcls
+            max_dist = max(max_dist, maxval(self%loc_tab(:,i)%dist, dim=1))
+            min_dist = min(min_dist, minval(self%loc_tab(:,i)%dist, dim=1))
         enddo
         !$omp end parallel do
         if( (max_dist - min_dist) < TINY )then
-            self%dist_loc_tab(:,:,1) = 0.
+            self%loc_tab(:,:)%dist = 0.
         else
-            self%dist_loc_tab(:,:,1) = (self%dist_loc_tab(:,:,1) - min_dist) / (max_dist - min_dist)
+            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
         endif
-        ! to place unselected particles in the bottom (see below)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iptcl)
-        do iptcl = params_glob%fromp,params_glob%top
-            if( .not. self%ptcl_avail(iptcl) )then
-                self%dist_loc_tab(:,iptcl,1) = 1.
-            endif
-        enddo
-        !$omp end parallel do
     end subroutine tab_normalize
 
     ! ptcl -> ref assignment using the global normalized dist value table
     ! used in the global prob_align commander, in 'exec_prob_align'
     subroutine tab_align( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: iref, iptcl, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
-                   &stab_inds(params_glob%fromp:params_glob%top, params_glob%nspace), inds_sorted(params_glob%nspace)
-        real    :: sorted_tab(params_glob%fromp:params_glob%top, params_glob%nspace),&
+        integer :: i, iref, assigned_iref, assigned_ptcl, refs_ns, ref_dist_inds(params_glob%nspace),&
+                   &stab_inds(self%nptcls, params_glob%nspace), inds_sorted(params_glob%nspace)
+        real    :: sorted_tab(self%nptcls, params_glob%nspace),&
                    &ref_dist(params_glob%nspace), dists_sorted(params_glob%nspace)
-        logical :: ptcl_avail(params_glob%fromp:params_glob%top)
-        self%ptcl_ref_map = 1.
+        logical :: ptcl_avail(self%nptcls)
         ! sorting each columns
         call calc_num2sample(params_glob%nspace, 'dist', refs_ns)
-        sorted_tab = transpose(self%dist_loc_tab(:,:,1))
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,iptcl)
+        sorted_tab = transpose(self%loc_tab(:,:)%dist)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i)
         do iref = 1, params_glob%nspace
-            stab_inds(:,iref) = (/(iptcl,iptcl=params_glob%fromp,params_glob%top)/)
+            stab_inds(:,iref) = (/(i,i=1,self%nptcls)/)
             call hpsort(sorted_tab(:,iref), stab_inds(:,iref))
         enddo
         !$omp end parallel do
         ! first row is the current best ref distribution
-        ref_dist_inds = params_glob%fromp
-        ref_dist      = sorted_tab(params_glob%fromp,:)
-        ptcl_avail    = self%ptcl_avail
+        ref_dist_inds = 1
+        ref_dist      = sorted_tab(1,:)
+        ptcl_avail    = .true.
         do while( any(ptcl_avail) )
-            ! sampling the ref distribution to choose next iref to assign corresponding iptcl to
+            ! sampling the ref distribution to choose next iref to assign
             assigned_iref = ref_smpl() ! contained function, below
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)          = .false.
-            self%ptcl_ref_map(assigned_ptcl,1) = assigned_iref
-            self%ptcl_ref_map(assigned_ptcl,2) = self%dist_loc_tab(assigned_iref,assigned_ptcl,1)
-            self%ptcl_ref_map(assigned_ptcl,3) = self%dist_loc_tab(assigned_iref,assigned_ptcl,2)
+            self%assgn_map(assigned_ptcl)%iref = assigned_iref
+            self%assgn_map(assigned_ptcl)%dist = self%loc_tab(assigned_iref,assigned_ptcl)%dist
+            self%assgn_map(assigned_ptcl)%inpl = self%loc_tab(assigned_iref,assigned_ptcl)%inpl
             ! update the ref_dist and ref_dist_inds
             do iref = 1, params_glob%nspace
-                do while( ref_dist_inds(iref) < params_glob%top .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))) )
+                do while( ref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))))
                     ref_dist_inds(iref) = ref_dist_inds(iref) + 1
                     ref_dist(iref)      = sorted_tab(ref_dist_inds(iref), iref)
                 enddo
@@ -284,55 +274,24 @@ contains
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
         type(dist_binfile) :: binfile
-        call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        call binfile%write(self%dist_loc_tab)
+        call binfile%new(binfname, params_glob%nspace, self%nptcls)
+        call binfile%write(self%loc_tab)
         call binfile%kill
     end subroutine write_tab
 
-    ! read the partition-wise (or global) dist value binary file to partition-wise (or global) reg object's dist value table
-    subroutine read_tab( self, binfname )
-        class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
-        type(dist_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        endif
-        call binfile%read(self%dist_loc_tab)
-        call binfile%kill
-    end subroutine read_tab
-
-    ! read the global dist value binary file to partition-wise reg object's dist value table
-    ! [fromp, top]: partition particle index range
-    subroutine read_tab_from_glob( self, binfname, fromp, top )
-        class(eul_prob_tab), intent(inout) :: self
-        character(len=*),    intent(in)    :: binfname
-        integer,             intent(in)    :: fromp, top
-        type(dist_binfile) :: binfile
-        integer            :: iptcl, iref
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
-        else
-            call binfile%new(binfname, params_glob%fromp, params_glob%top, params_glob%nspace)
-        endif
-        call binfile%read_from_glob(fromp, top, self%dist_loc_tab)
-        call binfile%kill
-    end subroutine read_tab_from_glob
-
     ! read the partition-wise dist value binary file to global reg object's dist value table
     ! [fromp, top]: global partition particle index range
-    subroutine read_tab_to_glob( self, binfname, fromp, top )
+    subroutine read_tab_to_glob( self, binfname, nptcls_glob )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        integer,             intent(in)    :: fromp, top
+        integer,             intent(in)    :: nptcls_glob
         type(dist_binfile) :: binfile
         if( file_exists(binfname) )then
             call binfile%new_from_file(binfname)
         else
             THROW_HARD( 'corr/rot files of partitions should be ready! ' )
         endif
-        call binfile%read_to_glob(fromp, top, self%dist_loc_tab)
+        call binfile%read_to_glob(nptcls_glob, self%loc_tab)
         call binfile%kill
     end subroutine read_tab_to_glob
 
@@ -340,27 +299,11 @@ contains
     subroutine write_assignment( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
-        integer(kind=8) :: file_header(3), addr
-        integer :: funit, io_stat, iptcl, datasz_int, datasz_real
-        real    :: x
-        datasz_int  = sizeof(iptcl)
-        datasz_real = sizeof(x)
-        file_header = [params_glob%fromp, params_glob%top,params_glob%nspace]
+        integer :: funit, io_stat, headsz
+        headsz = sizeof(self%nptcls)
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        ! write header
-        write(unit=funit,pos=1) file_header
-        ! write assignment
-        addr = sizeof(file_header) + 1
-        do iptcl = params_glob%fromp, params_glob%top
-            write(funit, pos=addr) iptcl
-            addr = addr + datasz_int
-            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 1)
-            addr = addr + datasz_real
-            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 2)
-            addr = addr + datasz_real
-            write(funit, pos=addr) self%ptcl_ref_map(iptcl, 3)
-            addr = addr + datasz_real
-        end do
+        write(unit=funit,pos=1) self%nptcls
+        write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
     end subroutine write_assignment
 
@@ -368,42 +311,37 @@ contains
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        integer(kind=8) :: file_header(3), addr
-        integer :: funit, io_stat, iptcl, datasz_int, datasz_real, fromp, top, iglob
-        real    :: x
-        datasz_int  = sizeof(iptcl)
-        datasz_real = sizeof(x)
+        type(ptcl_ref), allocatable :: assgn_glob(:)
+        integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
+        headsz = sizeof(nptcls_glob)
         if( .not. file_exists(trim(binfname)) )then
             THROW_HARD('file '//trim(binfname)//' does not exists!')
         else
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
         call fileiochk('dist_binfile; read_header; file: '//trim(binfname), io_stat)
-        read(unit=funit,pos=1) file_header
-        fromp = file_header(1)
-        top   = file_header(2)
-        ! write assignment
-        addr = sizeof(file_header) + 1
-        do iglob = fromp, top
-            read(unit=funit,pos=addr) iptcl
-            addr = addr + datasz_int
-            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,1)
-            addr = addr + datasz_real
-            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,2)
-            addr = addr + datasz_real
-            if( iptcl >= params_glob%fromp .and. iptcl <= params_glob%top ) read(unit=funit,pos=addr) self%ptcl_ref_map(iptcl,3)
-            addr = addr + datasz_real
-        end do
+        read(unit=funit,pos=1) nptcls_glob
+        allocate(assgn_glob(nptcls_glob))
+        read(unit=funit,pos=headsz + 1) assgn_glob
         call fclose(funit)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, self%nptcls
+            do i_glob = 1, nptcls_glob
+                if( self%assgn_map(i_loc)%pind == assgn_glob(i_glob)%pind )then
+                    self%assgn_map(i_loc) = assgn_glob(i_glob)
+                endif
+            end do
+        end do
+        !$omp end parallel do
     end subroutine read_assignment
 
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(eul_prob_tab), intent(inout) :: self
-        if( allocated(self%dist_loc_tab)  ) deallocate(self%dist_loc_tab)
-        if( allocated(self%ptcl_ref_map)  ) deallocate(self%ptcl_ref_map)
-        if( allocated(self%ptcl_avail)    ) deallocate(self%ptcl_avail)
+        if( allocated(self%loc_tab)   ) deallocate(self%loc_tab)
+        if( allocated(self%assgn_map) ) deallocate(self%assgn_map)
+        if( allocated(self%pinds)     ) deallocate(self%pinds)
     end subroutine kill
 
     ! PUBLIC UTILITITES
