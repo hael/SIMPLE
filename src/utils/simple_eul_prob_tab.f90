@@ -16,8 +16,8 @@ private
 type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:) !< search table
     type(ptcl_ref), allocatable :: assgn_map(:) !< assignment map
-    integer, allocatable :: pinds(:)            !< particle indices for processing
-    integer              :: nptcls              !< size of pinds array
+    integer,        allocatable :: pinds(:)     !< particle indices for processing
+    integer                     :: nptcls       !< size of pinds array
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -193,9 +193,9 @@ contains
         enddo
         !$omp end parallel do
         if( (max_dist - min_dist) < TINY )then
-            self%loc_tab(:,:)%dist = 0.
+            self%loc_tab%dist = 0.
         else
-            self%loc_tab(:,:)%dist = (self%loc_tab(:,:)%dist - min_dist) / (max_dist - min_dist)
+            self%loc_tab%dist = (self%loc_tab%dist - min_dist) / (max_dist - min_dist)
         endif
     end subroutine tab_normalize
 
@@ -302,7 +302,7 @@ contains
         integer :: funit, io_stat, headsz
         headsz = sizeof(self%nptcls)
         call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1) self%nptcls
+        write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
     end subroutine write_assignment
@@ -311,7 +311,7 @@ contains
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        type(ptcl_ref), allocatable :: assgn_glob(:)
+        type(ptcl_ref),      allocatable   :: assgn_glob(:)
         integer :: funit, io_stat, nptcls_glob, headsz, i_loc, i_glob
         headsz = sizeof(nptcls_glob)
         if( .not. file_exists(trim(binfname)) )then
@@ -333,6 +333,11 @@ contains
             end do
         end do
         !$omp end parallel do
+        ! !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i_loc)
+        ! do i_loc = 1, self%nptcls
+        !     self%assgn_map(i_loc) = assgn_glob(self%assgn_map(i_loc)%pind)
+        ! end do
+        ! !$omp end parallel do
     end subroutine read_assignment
 
     ! DESTRUCTOR

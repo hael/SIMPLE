@@ -36,7 +36,6 @@ contains
         class(dist_binfile), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         integer,             intent(in)    :: nrefs, nptcls
-        type(ptcl_ref) :: r
         call self%kill
         self%fname          = trim(fname)
         self%nrefs          = nrefs
@@ -50,15 +49,14 @@ contains
     subroutine new_from_file( self, fname )
         class(dist_binfile), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        type(ptcl_ref) :: r
         call self%kill
         if (.not. file_exists(fname)) then
             THROW_HARD('dist_binfile: new_from_file; file ' // trim(fname) // ' does not exist')
         end if
-        self%fname          = trim(fname)
+        self%fname  = trim(fname)
         call self%read_header
-        self%headsz         = sizeof(self%file_header)
-        self%exists         = .true.
+        self%headsz = sizeof(self%file_header)
+        self%exists = .true.
     end subroutine new_from_file
 
     ! I/O
@@ -69,22 +67,29 @@ contains
         integer,             intent(in)    :: nptcls_glob
         type(ptcl_ref),      intent(inout) :: mat_glob(self%nrefs,nptcls_glob)
         type(ptcl_ref) :: mat_loc(self%nrefs,self%nptcls)
-        integer :: funit, i, iref, pind, addr
+        integer :: funit, i_loc, iref, pind, addr, i_glob, i
         logical :: success
         success = self%open_only( funit, .true. )
         if( .not. success ) return
         addr = self%headsz + 1
         ! read partition information
         read(unit=funit,pos=addr) mat_loc
-        !$omp parallel do default(shared) private(i,iref,pind) proc_bind(close) schedule(static)
-        do i = 1, self%nptcls
-            do iref = 1, self%nrefs
-                pind = mat_loc(iref,i)%pind
-                mat_glob(iref,pind) = mat_loc(iref,i)
+        call fclose(funit)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, self%nptcls
+            do i_glob = 1, nptcls_glob
+                where( mat_loc(:,i_loc)%pind == mat_glob(:,i_glob)%pind ) mat_glob(:,i_glob) = mat_loc(:,i_loc)
             end do
         end do
         !$omp end parallel do
-        call fclose(funit)
+        ! !$omp parallel do default(shared) private(i,iref,pind) proc_bind(close) schedule(static)
+        ! do i = 1, self%nptcls
+        !     do iref = 1, self%nrefs
+        !         pind                = mat_loc(iref,i)%pind
+        !         mat_glob(iref,pind) = mat_loc(iref,i)
+        !     end do
+        ! end do
+        ! !$omp end parallel do
     end subroutine read_to_glob
 
     subroutine write( self, mat )
@@ -114,8 +119,7 @@ contains
         integer,             intent(out)   :: funit
         logical,             intent(in)    :: readonly
         logical :: success
-        integer :: io_stat
-        integer :: nrefs, nptcls
+        integer :: io_stat, nrefs, nptcls
         if( .not. file_exists(trim(self%fname)) )then
             success = .false.
             return
@@ -174,10 +178,10 @@ contains
     subroutine create_empty( self, funit )
         class(dist_binfile), intent(in)  :: self
         integer,             intent(out) :: funit
-        integer  :: io_stat
+        integer       :: io_stat
         type(ptcl_ref):: mat(self%nrefs,self%nptcls)
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1) self%file_header
+        write(unit=funit,pos=1)               self%file_header
         write(unit=funit,pos=self%headsz + 1) mat
     end subroutine create_empty
 
@@ -185,11 +189,11 @@ contains
 
     subroutine kill( self )
         class(dist_binfile), intent(inout) :: self
-        self%file_header  = 0
-        self%headsz       = 0
-        self%nrefs        = 0
-        self%nptcls       = 0
-        self%exists       = .false.
+        self%file_header = 0
+        self%headsz      = 0
+        self%nrefs       = 0
+        self%nptcls      = 0
+        self%exists      = .false.
     end subroutine kill
 
 end module simple_dist_binfile
