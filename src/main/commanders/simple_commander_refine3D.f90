@@ -1154,7 +1154,7 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params%fromp:params%top))
         call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
-            &1.0, nptcls, pinds, ptcl_mask)
+            &params_glob%update_frac, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call eulprob_obj%new(pinds)
@@ -1254,7 +1254,7 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(1:params%nptcls))
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
-            &1.0, nptcls, pinds, ptcl_mask)
+            &params_glob%update_frac, nptcls, pinds, ptcl_mask)
         ! more prep
         call eulprob_obj%new(pinds)
         ! generating all corrs on all parts
