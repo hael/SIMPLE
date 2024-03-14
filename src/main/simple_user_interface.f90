@@ -135,7 +135,6 @@ type(simple_program), target :: postprocess
 type(simple_program), target :: ppca_denoise
 type(simple_program), target :: ppca_denoise_classes
 type(simple_program), target :: preprocess
-type(simple_program), target :: preprocess_stream
 type(simple_program), target :: preprocess_stream_dev
 type(simple_program), target :: print_dose_weights
 type(simple_program), target :: print_fsc
@@ -165,6 +164,7 @@ type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: split_
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
+type(simple_program), target :: simple_stream
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
@@ -416,7 +416,6 @@ contains
         call new_ppca_denoise
         call new_ppca_denoise_classes
         call new_preprocess
-        call new_preprocess_stream
         call new_preprocess_stream_dev
         call new_print_dose_weights
         call new_print_fsc
@@ -437,6 +436,7 @@ contains
         call new_scale
         call new_scale_project
         call new_select_
+        call new_simple_stream
         call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
@@ -530,7 +530,6 @@ contains
         call push2prg_ptr_array(ppca_denoise)
         call push2prg_ptr_array(ppca_denoise_classes)
         call push2prg_ptr_array(preprocess)
-        call push2prg_ptr_array(preprocess_stream)
         call push2prg_ptr_array(preprocess_stream_dev)
         call push2prg_ptr_array(print_dose_weights)
         call push2prg_ptr_array(print_fsc)
@@ -551,6 +550,7 @@ contains
         call push2prg_ptr_array(scale)
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(select_)
+        call push2prg_ptr_array(simple_stream)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
@@ -715,8 +715,6 @@ contains
                 ptr2prg => ppca_denoise_classes
             case('preprocess')
                 ptr2prg => preprocess
-            case('preprocess_stream')
-                ptr2prg => preprocess_stream
             case('preprocess_stream_dev')
                 ptr2prg => preprocess_stream_dev
             case('print_dose_weights')
@@ -759,6 +757,8 @@ contains
                 ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
+            case('simple_stream')
+                ptr2prg => simple_stream
             case('simulate_atoms')
                 ptr2prg => simulate_atoms
             case('simulate_movie')
@@ -874,7 +874,6 @@ contains
         write(logfhandle,'(A)') ppca_denoise%name
         write(logfhandle,'(A)') ppca_denoise_classes%name
         write(logfhandle,'(A)') preprocess%name
-        write(logfhandle,'(A)') preprocess_stream%name
         write(logfhandle,'(A)') print_dose_weights%name
         write(logfhandle,'(A)') print_fsc%name
         write(logfhandle,'(A)') print_magic_boxes%name
@@ -3320,78 +3319,6 @@ contains
         call preprocess%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess
 
-    subroutine new_preprocess_stream
-        ! PROGRAM SPECIFICATION
-        call preprocess_stream%new(&
-        &'preprocess_stream', &                                                             ! name
-        &'Preprocessing in streaming mode',&                                                ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
-        &' in streaming mode as the microscope collects the data',&
-        &'simple_exec',&                                                                    ! executable
-        &4, 14, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call preprocess_stream%set_input('img_ios', 1, dir_movies)
-        call preprocess_stream%set_input('img_ios', 2, gainref)
-        call preprocess_stream%set_input('img_ios', 3, pickrefs)
-        call preprocess_stream%set_input('img_ios', 4, 'dir_prev', 'file', 'Previous run directory',&
-            &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
-        ! parameter input/output
-        call preprocess_stream%set_input('parm_ios', 1, total_dose)
-        call preprocess_stream%set_input('parm_ios', 2, fraction_dose_target)
-        call preprocess_stream%set_input('parm_ios', 3, max_dose)
-        call preprocess_stream%set_input('parm_ios', 4, scale_movies)
-        call preprocess_stream%set_input('parm_ios', 5, eer_fraction)
-        call preprocess_stream%set_input('parm_ios', 6, eer_upsampling)
-        call preprocess_stream%set_input('parm_ios', 7, pcontrast)
-        call preprocess_stream%set_input('parm_ios', 8, box_extract)
-        call preprocess_stream%set_input('parm_ios', 9, pspecsz)
-        call preprocess_stream%set_input('parm_ios',10, kv)
-        preprocess_stream%parm_ios(10)%required = .true.
-        call preprocess_stream%set_input('parm_ios',11, cs)
-        preprocess_stream%parm_ios(11)%required = .true.
-        call preprocess_stream%set_input('parm_ios',12, fraca)
-        preprocess_stream%parm_ios(12)%required = .true.
-        call preprocess_stream%set_input('parm_ios',13, smpd)
-        preprocess_stream%parm_ios(13)%required = .true.
-        call preprocess_stream%set_input('parm_ios',14, ctfpatch)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call preprocess_stream%set_input('srch_ctrls', 1, trs)
-        preprocess_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
-        preprocess_stream%srch_ctrls(1)%rval_default      = 20.
-        call preprocess_stream%set_input('srch_ctrls', 2, dfmin)
-        call preprocess_stream%set_input('srch_ctrls', 3, dfmax)
-        call preprocess_stream%set_input('srch_ctrls', 4, astigtol)
-        call preprocess_stream%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess_stream%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls', 7, pgrp)
-        preprocess_stream%srch_ctrls(7)%required = .false.
-        call preprocess_stream%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess_stream%set_input('srch_ctrls', 9, mcpatch)
-        call preprocess_stream%set_input('srch_ctrls',10, nxpatch)
-        call preprocess_stream%set_input('srch_ctrls',11, nypatch)
-        call preprocess_stream%set_input('srch_ctrls',12, mcconvention)
-        call preprocess_stream%set_input('srch_ctrls',13, algorithm)
-        call preprocess_stream%set_input('srch_ctrls',14, mcpatch_thres)
-        ! filter controls
-        call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
-        call preprocess_stream%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
-        call preprocess_stream%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
-        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
-        call preprocess_stream%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
-        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
-        call preprocess_stream%set_input('filt_ctrls', 5, lp_pick)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call preprocess_stream%set_input('comp_ctrls', 1, nparts)
-        call preprocess_stream%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_preprocess_stream
-
     subroutine new_preprocess_stream_dev
         ! PROGRAM SPECIFICATION
         call preprocess_stream_dev%new(&
@@ -4347,6 +4274,123 @@ contains
         ! computer controls
         call select_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_select_
+
+    subroutine new_simple_stream
+        ! PROGRAM SPECIFICATION
+        call simple_stream%new(&
+        &'simple_stream', &                                                        ! name
+        &'Preprocessing in streaming mode',&                                       ! descr_short
+        &'is a distributed workflow that executes motion_correct, ctf_estimate'//& ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_exec',&                                                           ! executable
+        &4, 11, 0, 13, 6, 0, 3, .true.)                                           ! # entries in each group, requires sp_project
+        simple_stream%gui_submenu_list = "data,motion correction,CTF estimation"
+        simple_stream%advanced = .false.
+        ! image input/output
+        call simple_stream%set_input('img_ios', 1, dir_movies)
+        call simple_stream%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
+        call simple_stream%set_input('img_ios', 2, gainref)
+        call simple_stream%set_gui_params('img_ios', 2, submenu="data", advanced=.false.)
+        call simple_stream%set_input('img_ios', 3, 'dir_prev', 'file', 'Previous run directory',&
+            &'Directory where a previous stream application was run', 'e.g. 2_simple_stream', .false., '')
+        call simple_stream%set_gui_params('img_ios', 3, submenu="data")
+        call simple_stream%set_input('img_ios', 4, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
+            &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '')
+        call simple_stream%set_gui_params('img_ios', 4, submenu="data", advanced=.false.)
+        ! parameter input/output
+        call simple_stream%set_input('parm_ios', 1, total_dose)
+        call simple_stream%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios', 2, fraction_dose_target)
+        call simple_stream%set_gui_params('parm_ios', 2, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios', 3, scale_movies)
+        call simple_stream%set_gui_params('parm_ios', 3, submenu="motion correction", advanced=.false.)
+        call simple_stream%set_input('parm_ios', 4, eer_fraction)
+        call simple_stream%set_gui_params('parm_ios', 4, submenu="motion correction")
+        call simple_stream%set_input('parm_ios', 5, eer_upsampling)
+        call simple_stream%set_gui_params('parm_ios', 5, submenu="motion correction", advanced=.false.)
+        call simple_stream%set_input('parm_ios', 6, max_dose)
+        call simple_stream%set_gui_params('parm_ios', 6, submenu="motion correction")
+        call simple_stream%set_input('parm_ios',7, kv)
+        simple_stream%parm_ios(7)%required = .true.
+        call simple_stream%set_gui_params('parm_ios', 7, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios',8, cs)
+        simple_stream%parm_ios(8)%required = .true.
+        call simple_stream%set_gui_params('parm_ios', 8, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios',9, fraca)
+        simple_stream%parm_ios(9)%required = .true.
+        call simple_stream%set_gui_params('parm_ios', 9, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios',10, smpd)
+        simple_stream%parm_ios(10)%required = .true.
+        call simple_stream%set_gui_params('parm_ios', 10, submenu="data", advanced=.false.)
+        call simple_stream%set_input('parm_ios',11, ctfpatch)
+        call simple_stream%set_gui_params('parm_ios', 11, submenu="CTF estimation")
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call simple_stream%set_input('srch_ctrls', 1, trs)
+        call simple_stream%set_gui_params('srch_ctrls', 1, submenu="motion correction")
+        simple_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
+        simple_stream%srch_ctrls(1)%rval_default      = 20.
+        call simple_stream%set_input('srch_ctrls', 2, dfmin)
+        call simple_stream%set_gui_params('srch_ctrls', 2, submenu="CTF estimation")
+        call simple_stream%set_input('srch_ctrls', 3, dfmax)
+        call simple_stream%set_gui_params('srch_ctrls', 3, submenu="CTF estimation")
+        call simple_stream%set_input('srch_ctrls', 4, astigtol)
+        call simple_stream%set_gui_params('srch_ctrls', 4, submenu="CTF estimation")
+        call simple_stream%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call simple_stream%set_gui_params('srch_ctrls', 5, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls', 6, mcpatch)
+        call simple_stream%set_gui_params('srch_ctrls', 6, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls', 7, nxpatch)
+        call simple_stream%set_gui_params('srch_ctrls', 7, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls', 8, nypatch)
+        call simple_stream%set_gui_params('srch_ctrls', 8, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls', 9, mcconvention)
+        call simple_stream%set_gui_params('srch_ctrls', 9, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls',10, algorithm)
+        call simple_stream%set_gui_params('srch_ctrls',10, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls',11, mcpatch_thres)
+        call simple_stream%set_gui_params('srch_ctrls',11, submenu="motion correction")
+        call simple_stream%set_input('srch_ctrls',12, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
+        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        call simple_stream%set_gui_params('srch_ctrls',12, submenu="optics groups", online=.true.)
+        call simple_stream%set_input('srch_ctrls',13, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
+        & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}', 'beamtilt(yes|no){no}', .false., 'no')
+        call simple_stream%set_gui_params('srch_ctrls',13, submenu="optics groups")
+        ! filter controls
+        call simple_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call simple_stream%set_gui_params('filt_ctrls', 1, submenu="motion correction")
+        call simple_stream%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call simple_stream%set_gui_params('filt_ctrls', 2, submenu="motion correction")
+        call simple_stream%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
+        call simple_stream%set_gui_params('filt_ctrls', 3, submenu="CTF estimation")
+        call simple_stream%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
+        call simple_stream%set_gui_params('filt_ctrls', 4, submenu="CTF estimation")
+        call simple_stream%set_input('filt_ctrls', 5, ctfresthreshold)
+        simple_stream%filt_ctrls(5)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
+        simple_stream%filt_ctrls(5)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
+        simple_stream%filt_ctrls(5)%rval_default      = CTFRES_THRESHOLD_STREAM
+        call simple_stream%set_gui_params('filt_ctrls', 5, submenu="CTF estimation")
+        call simple_stream%set_input('filt_ctrls', 6, icefracthreshold)
+        simple_stream%filt_ctrls(6)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
+        simple_stream%filt_ctrls(6)%descr_placeholder = 'Ice fraction threshold{1.0}'
+        simple_stream%filt_ctrls(6)%rval_default      = ICEFRAC_THRESHOLD_STREAM
+        call simple_stream%set_gui_params('filt_ctrls', 6, submenu="CTF estimation")
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call simple_stream%set_input('comp_ctrls', 1, nparts)
+        call simple_stream%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        call simple_stream%set_input('comp_ctrls', 2, nthr)
+        call simple_stream%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+        call simple_stream%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740.)
+        call simple_stream%set_gui_params('comp_ctrls', 3, submenu="compute")
+    end subroutine new_simple_stream
 
     subroutine new_simulate_atoms
         ! PROGRAM SPECIFICATION
