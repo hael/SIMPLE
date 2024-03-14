@@ -1274,7 +1274,9 @@ contains
                     mask(ind) = .true.
                     val       = self%o(ind)%get('updatecnt')
                     call self%o(ind)%set('updatecnt', val + 1.0)
+                    counts(i) = 1
                 end do
+                inds = pack(inds, mask=counts == 1)
             else ! reproduce previous selection
                 nsamples = count(counts == max_count)
                 inds     = pack(inds, mask=counts == max_count)

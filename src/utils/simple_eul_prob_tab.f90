@@ -44,6 +44,7 @@ contains
         real    :: x
         call self%kill
         self%nptcls = size(pinds)
+        print *, 'nptcls = ', self%nptcls
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls), self%assgn_map(self%nptcls))
         !$omp parallel do default(shared) private(i,iptcl,iref) proc_bind(close) schedule(static)

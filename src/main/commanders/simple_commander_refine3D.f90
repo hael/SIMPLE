@@ -1255,6 +1255,7 @@ contains
         allocate(ptcl_mask(1:params%nptcls))
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &params_glob%update_frac, nptcls, pinds, ptcl_mask)
+        call build%spproj%write_segment_inside(params%oritype)
         ! more prep
         call eulprob_obj%new(pinds)
         ! generating all corrs on all parts
