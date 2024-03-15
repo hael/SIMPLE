@@ -20,10 +20,13 @@ public :: commander_stream
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: dir_preprocess  = trim(PATH_HERE)//'spprojs/'
-character(len=STDLEN), parameter :: micspproj_fname = './streamdata.simple'
-character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'
+character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
+character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
+character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here?
+integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once
+character(len=STDLEN), parameter :: MICSSPPROJ_FNAME = './streamdata.simple' ! not necessary?
 
+integer :: movies_set_counter = 0
 
 type, extends(commander_base) :: commander_stream
   contains
@@ -44,18 +47,16 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
+        type(cmdline)                          :: cline_exec
         type(qsys_env)                         :: qenv
         type(moviewatcher)                     :: movie_buff
-        type(sp_project)                       :: spproj, stream_spproj, tmp_spproj
+        type(sp_project)                       :: spproj    ! global project
         type(starproject)                      :: starproj
-        character(len=LONGSTRLEN), allocatable :: movies(:), completed_fnames(:)
+        character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
-        character(len=LONGSTRLEN)              :: movie
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, iproj
-        integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
+        integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
         logical                                :: l_movies_left, l_haschanged
-        integer(timer_int_kind) :: t0
-        real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
@@ -100,9 +101,10 @@ contains
         call spproj%read( params%projfile )
         call spproj%update_projinfo(cline)
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
-        call spproj%write(micspproj_fname)
+        call spproj%write(MICSSPPROJ_FNAME)
         ! output directories
-        output_dir = trim(PATH_HERE)//trim(dir_preprocess)
+        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+        output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
         call simple_mkdir(output_dir)
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         output_dir_ctf_estimate   = filepath(trim(PATH_HERE), trim(DIR_CTF_ESTIMATE))
@@ -111,11 +113,11 @@ contains
         call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         call cline%set('dir','../')
         ! setup the environment for distributed execution
-        call qenv%new(1,stream=.true.)
+        call qenv%new(1,stream=.true.,exec_bin='simple_exec')
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
-        ! import previous runs
-        call import_prev_streams
+        ! import previous run
+        call import_prev_streams ! TODO
         ! start watching
         last_injection        = simple_gettime()
         prev_stacksz          = 0
@@ -125,11 +127,15 @@ contains
         n_failed_jobs         = 0
         n_added               = 0
         nmic_star             = 0
+        movies_set_counter    = 0
         l_movies_left         = .false.
         l_haschanged          = .false.
+        cline_exec = cline
+        call cline_exec%set('fromp',1)
+        call cline_exec%set('top',  NMOVS_SET)
         do
             ! guistats init each loop
-            call gui_stats%init(nlines=2)
+            call gui_stats%init(nlines=2) ! only one line?
             call gui_stats%set(1, "title", "micrographs")
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -138,19 +144,20 @@ contains
             endif
             iter = iter + 1
             ! detection of new movies
-            call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts )
+            call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*NMOVS_SET )
             ! append movies to processing stack
-            if( nmovies > 0 )then
+            if( nmovies >= NMOVS_SET )then
                 cnt = 0
-                do imovie = 1, nmovies
-                    movie = trim(adjustl(movies(imovie)))
-                    call create_individual_project(movie)
-                    call qenv%qscripts%add_to_streaming( cline )
+                do iset = 1,nmovies,NMOVS_SET
+                    call create_movies_set_project(movies(iset:iset+NMOVS_SET-1))
+                    call qenv%qscripts%add_to_streaming( cline_exec )
                     call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
-                    call movie_buff%add2history( movies(imovie) )
-                    cnt = cnt+1
-                    n_added = n_added+1
-                    if( cnt == min(params%nparts,nmovies) ) exit
+                    do imovie = 1,NMOVS_SET
+                        call movie_buff%add2history( movies(iset+imovie-1) )
+                        cnt     = cnt     + 1
+                        n_added = n_added + 1
+                    enddo
+                    if( cnt == min(params%nparts*NMOVS_SET,nmovies) ) exit
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
@@ -162,18 +169,14 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz
+                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*NMOVS_SET
                 ! guistats
-               call gui_stats%set(1, 'primary_movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz + spproj%os_mic%get_noris()))
+               call gui_stats%set(1, 'primary_movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj%os_mic%get_noris()))
             endif
             ! fetch completed jobs list
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_projects_list( completed_fnames, n_imported )
-                do cnt = 1,size(completed_jobs_clines)
-                    call completed_jobs_clines(cnt)%kill
-                enddo
-                deallocate(completed_jobs_clines)
+                call update_projects_list( n_imported )
             else
                 n_imported = 0 ! newly imported
             endif
@@ -202,7 +205,7 @@ contains
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
-                call spproj%write_segment_inside('mic',micspproj_fname)
+                call spproj%write_segment_inside('mic',MICSSPPROJ_FNAME)
                 last_injection = simple_gettime()
                 ! guistats
                 call gui_stats%set_now(1, 'secondary_last_injection')
@@ -236,7 +239,6 @@ contains
             ! read beamtilts
             if( cline%defined('dir_meta')) call read_xml_beamtilts()
             ! guistats
-            call gui_stats%merge(POOLSTATS_FILE, 2)
             call gui_stats%write
         end do
         ! termination
@@ -245,14 +247,13 @@ contains
         call update_user_params(cline)
         call write_migrographs_starfile
         ! final stats
-        call gui_stats%merge(POOLSTATS_FILE, 2, delete = .true.)
         call gui_stats%remove(1, 'secondary_compute')
         call gui_stats%write
         call gui_stats%kill
         ! cleanup
         call spproj%kill
         call qsys_cleanup
-        call del_file(micspproj_fname)
+        call del_file(MICSSPPROJ_FNAME)
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
@@ -279,124 +280,131 @@ contains
             end subroutine write_migrographs_starfile
 
             ! returns list of completed jobs
-            subroutine update_projects_list( completedfnames, nimported )
-                character(len=LONGSTRLEN), allocatable, intent(inout) :: completedfnames(:)
-                integer,                                intent(inout) :: nimported
-                type(sp_project)                       :: streamspproj
+            subroutine update_projects_list( nimported )
+                integer,                   intent(out) :: nimported
+                type(sp_project), allocatable          :: streamspprojs(:)
+                character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
                 character(len=:),          allocatable :: fname, abs_fname
-                character(len=LONGSTRLEN), allocatable :: old_fnames(:)
-                logical,                   allocatable :: spproj_mask(:)
-                integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed, nptcls
+                logical,                   allocatable :: mics_mask(:)
+                integer :: i, n_spprojs, n_old, j, n2import, n_completed, iproj, nmics, imic, cnt
                 n_completed = 0
                 nimported   = 0
-                ! projects to import
-                n_spprojs = size(completed_jobs_clines)
+                n_spprojs = size(completed_jobs_clines) ! projects to import
                 if( n_spprojs == 0 )return
-                allocate(spproj_mask(n_spprojs),source=.true.)
-                ! previously completed projects
-                n_old = 0 ! on first import
-                if( allocated(completedfnames) ) n_old = size(completed_fnames)
-                do i = 1,n_spprojs
-                    ! flags zero-picked mics that will not be imported
-                    fname = trim(output_dir)//trim(completed_jobs_clines(i)%get_carg('projfile'))
-                    call check_nptcls(fname, nptcls_here, state)
-                    spproj_mask(i) = state > 0
+                n_old = spproj%os_mic%get_noris()       ! previously processed mmovies
+                nmics = NMOVS_SET * n_spprojs           ! incoming number of processed movies
+                allocate(streamspprojs(n_spprojs), completed_fnames(n_spprojs), mics_mask(nmics))
+                ! read all
+                do iproj = 1,n_spprojs
+                    fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
+                    abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
+                    completed_fnames(iproj) = trim(abs_fname)
+                    call streamspprojs(iproj)%read_segment('mic', abs_fname)
+                    cnt = 0
+                    do imic = (iproj-1)*NMOVS_SET+1, iproj*NMOVS_SET
+                        cnt = cnt + 1
+                        mics_mask(imic) = streamspprojs(iproj)%os_mic%get_state(cnt) == 1
+                    enddo
                 enddo
-                n2import      = count(spproj_mask)
-                n_failed_jobs = n_failed_jobs + (n_spprojs-n2import)
+                n2import      = count(mics_mask)
+                n_failed_jobs = n_failed_jobs + (nmics-n2import)
                 if( n2import > 0 )then
+                    ! reallocate global project
                     n_completed = n_old + n2import
                     nimported   = n2import
-                    nprev_imports = spproj%os_mic%get_noris() ! should be equal to n_old ?
-                    if( nprev_imports == 0 )then
-                        call spproj%os_mic%new(n2import, is_ptcl=.false.) ! first time
-                        allocate(completedfnames(n_completed))
+                    if( n_old == 0 )then
+                        ! first time
+                        call spproj%os_mic%new(n2import, is_ptcl=.false.)
                     else
                         call spproj%os_mic%reallocate(n_completed)
-                        old_fnames = completed_fnames(:)
-                        deallocate(completedfnames)
-                        allocate(completedfnames(n_completed))
-                        if( n_old > 0 )then
-                            completedfnames(1:n_old) = old_fnames(:)
-                        endif
-                        deallocate(old_fnames)
                     endif
-                    j = 0
-                    do i=1,n_spprojs
-                        if( .not.spproj_mask(i) ) cycle
-                        j = j+1
-                        fname     = trim(output_dir)//trim(completed_jobs_clines(i)%get_carg('projfile'))
-                        abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
-                        completedfnames(n_old+j) = trim(abs_fname)
-                        call streamspproj%read_segment('mic', abs_fname)
-                        call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
-                        call streamspproj%kill
-                        ! update paths such that relative paths are with respect to root folder
-                        call update_path(spproj%os_mic, n_old+j, 'mc_starfile')
-                        call update_path(spproj%os_mic, n_old+j, 'intg')
-                        call update_path(spproj%os_mic, n_old+j, 'forctf')
-                        call update_path(spproj%os_mic, n_old+j, 'thumb')
-                        call update_path(spproj%os_mic, n_old+j, 'mceps')
-                        call update_path(spproj%os_mic, n_old+j, 'ctfdoc')
-                        call update_path(spproj%os_mic, n_old+j, 'ctfjpg')
+                    ! actual import
+                    imic = 0
+                    j    = n_old
+                    do iproj = 1,n_spprojs
+                        do i = 1,NMOVS_SET
+                            imic = imic+1
+                            if( mics_mask(imic) )then
+                                j   = j + 1
+                                ! transfer info
+                                call spproj%os_mic%transfer_ori(j, streamspprojs(iproj)%os_mic, i)
+                                ! update paths such that relative paths are with respect to root folder
+                                call update_path(spproj%os_mic, j, 'mc_starfile')
+                                call update_path(spproj%os_mic, j, 'intg')
+                                call update_path(spproj%os_mic, j, 'forctf')
+                                call update_path(spproj%os_mic, j, 'thumb')
+                                call update_path(spproj%os_mic, j, 'mceps')
+                                call update_path(spproj%os_mic, j, 'ctfdoc')
+                                call update_path(spproj%os_mic, j, 'ctfjpg')
+                            endif
+                        enddo
+                        call streamspprojs(iproj)%kill
                     enddo
-                else
-                    nimported  = 0
-                    return
                 endif
-                ! call write_filetable(STREAM_SPPROJFILES, completedfnames)
+                ! finally we move the completed projects to appropriate directory
+                do iproj = 1,n_spprojs
+                    imic = (iproj-1)*NMOVS_SET+1
+                    if( any(mics_mask(imic:imic+NMOVS_SET-1)) )then
+                        fname = trim(DIR_STREAM_COMPLETED)//trim(basename(completed_fnames(iproj)))
+                        call simple_rename(completed_fnames(iproj), fname)
+                    endif
+                enddo
+                ! cleanup
+                do iproj = 1,n_spprojs
+                    call completed_jobs_clines(iproj)%kill
+                enddo
+                deallocate(completed_jobs_clines)
+                deallocate(streamspprojs,mics_mask,completed_fnames)
             end subroutine update_projects_list
 
-            subroutine create_individual_project( movie )
-                character(len=*), intent(in) :: movie
+            subroutine create_movies_set_project( movie_names )
+                character(len=*), intent(in) :: movie_names(NMOVS_SET)
                 type(sp_project)             :: spproj_here
-                type(cmdline)                :: cline_here
                 type(ctfparams)              :: ctfvars
-                character(len=STDLEN)        :: ext, movie_here
                 character(len=LONGSTRLEN)    :: projname, projfile,xmlfile,xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
+                integer :: imovie
                 cwd_old = trim(cwd_glob)
                 call chdir(output_dir)
                 call simple_getcwd(cwd)
                 cwd_glob = trim(cwd)
-                movie_here = basename(trim(movie))
-                ext        = fname2ext(trim(movie_here))
-                projname   = trim(PREPROCESS_PREFIX)//trim(get_fbody(trim(movie_here), trim(ext)))
+                ! movies set
+                movies_set_counter = movies_set_counter + 1
+                projname   = int2str_pad(movies_set_counter,6)
                 projfile   = trim(projname)//trim(METADATA_EXT)
-                call cline_here%set('projname', trim(projname))
-                call cline_here%set('projfile', trim(projfile))
-                call spproj_here%update_projinfo(cline_here)
+                call cline_exec%set('projname', trim(projname))
+                call cline_exec%set('projfile', trim(projfile))
+                call spproj_here%update_projinfo(cline_exec)
+                call cline_exec%set('projname', trim(projname))
+                call cline_exec%set('projfile', trim(projfile))
+                call spproj_here%update_projinfo(cline_exec)
                 spproj_here%compenv  = spproj%compenv
                 spproj_here%jobproc  = spproj%jobproc
+                ! movies parameters
                 ctfvars%ctfflag      = CTFFLAG_YES
                 ctfvars%smpd         = params%smpd
                 ctfvars%cs           = params%cs
                 ctfvars%kv           = params%kv
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
-                call spproj_here%add_single_movie(trim(movie), ctfvars)
+                call spproj_here%add_movies(movie_names(1:NMOVS_SET), ctfvars, verbose = .false.)
                 if(cline%defined('dir_meta')) then
-                    xmlfile = basename(trim(movie))
                     xmldir = cline%get_carg('dir_meta')
-                    if(index(xmlfile, '_fractions') > 0) then
-                        xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
-                    end if
-                    if(index(xmlfile, '_EER') > 0) then
-                        xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
-                    end if
-                    xmlfile = trim(adjustl(xmldir)) // '/' // trim(adjustl(xmlfile)) // '.xml'
-                    call spproj_here%os_mic%set(1, "meta", trim(adjustl(xmlfile)))
-                    call spproj_here%os_mic%set(1, "tiltx", 0.0)
-                    call spproj_here%os_mic%set(1, "tilty", 0.0)
+                    do imovie = 1,NMOVS_SET
+                        xmlfile = basename(trim(movie_names(imovie)))
+                        if(index(xmlfile, '_fractions') > 0) xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
+                        if(index(xmlfile, '_EER') > 0)       xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
+                        xmlfile = trim(adjustl(xmldir))//'/'//trim(adjustl(xmlfile))//'.xml'
+                        call spproj_here%os_mic%set(imovie, "meta", trim(adjustl(xmlfile)))
+                        call spproj_here%os_mic%set(imovie, "tiltx", 0.0)
+                        call spproj_here%os_mic%set(imovie, "tilty", 0.0)
+                    enddo
                 end if
                 call spproj_here%write
-                call cline%set('projname', trim(projname))
-                call cline%set('projfile', trim(projfile))
                 call chdir(cwd_old)
                 cwd_glob = trim(cwd_old)
                 call spproj_here%kill
-                call cline_here%kill
-            end subroutine create_individual_project
+            end subroutine create_movies_set_project
 
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
@@ -409,8 +417,8 @@ contains
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 err = .false.
-                dir = filepath(params%dir_prev, 'spprojs/')
-                call simple_list_files_regexp(dir,'^'//trim(PREPROCESS_PREFIX)//'.*\.simple$',sp_files)
+                dir = filepath(params%dir_prev, '/'//trim(DIR_STREAM_COMPLETED))
+                call simple_list_files_regexp(dir,'\.simple$',sp_files)
                 if( .not.allocated(sp_files) )then
                     write(logfhandle,'(A)') '>>> Could not find previously processed movies'
                     return
@@ -418,58 +426,59 @@ contains
                 nprojs = size(sp_files)
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
-                do iproj = 1,nprojs
-                    call streamspproj%read_segment('mic', sp_files(iproj) )
-                    if( streamspproj%os_mic%get_noris() /= 1 )then
-                        THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
-                        cycle
-                    endif
-                    if( .not. streamspproj%os_mic%isthere(1,'intg') )cycle
-                    spproj_mask(iproj) = .true.
-                enddo
-                if( count(spproj_mask) == 0 ) return
-                icnt = 0
-                do iproj = 1,nprojs
-                    if( .not.spproj_mask(iproj) )cycle
-                    call streamspproj%read_segment('mic',sp_files(iproj))
-                    call streamspproj%os_mic%get_ori(1, o)
-                    ! import mic segment
-                    call movefile2folder('intg',        dir, output_dir_motion_correct, o, err)
-                    call movefile2folder('forctf',      dir, output_dir_motion_correct, o, err)
-                    call movefile2folder('thumb',       dir, output_dir_motion_correct, o, err)
-                    call movefile2folder('mc_starfile', dir, output_dir_motion_correct, o, err)
-                    call movefile2folder('mceps',       dir, output_dir_motion_correct, o, err)
-                    call movefile2folder('ctfjpg',      dir, output_dir_ctf_estimate,   o, err)
-                    call movefile2folder('ctfdoc',      dir, output_dir_ctf_estimate,   o, err)
-                    ! import mic segment
-                    call streamspproj%os_mic%set_ori(1, o)
-                    ! add to history
-                    call o%getter('movie', mov)
-                    call o%getter('intg', mic)
-                    call movie_buff%add2history(mov)
-                    call movie_buff%add2history(mic)
-                    ! write updated individual project file
-                    call streamspproj%write(trim(dir_preprocess)//basename(sp_files(iproj)))
-                    ! count
-                    icnt = icnt + 1
-                enddo
-                if( icnt > 0 )then
-                    ! updating STREAM_SPPROJFILES
-                    allocate(completed_jobs_clines(icnt))
-                    icnt = 0
-                    do iproj = 1,nprojs
-                        if(spproj_mask(iproj))then
-                            icnt = icnt+1
-                            call completed_jobs_clines(icnt)%set('projfile',basename(sp_files(iproj)))
-                        endif
-                    enddo
-                    call update_projects_list(completed_fnames, n_imported)
-                    deallocate(completed_jobs_clines)
-                endif
-                call o%kill
-                call o_stk%kill
-                call streamspproj%kill
-                write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', icnt
+                THROW_HARD('not implemented yet')
+                ! do iproj = 1,nprojs
+                !     call streamspproj%read_segment('mic', sp_files(iproj) )
+                !     if( streamspproj%os_mic%get_noris() /= 1 )then
+                !         THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
+                !         cycle
+                !     endif
+                !     if( .not. streamspproj%os_mic%isthere(1,'intg') )cycle
+                !     spproj_mask(iproj) = .true.
+                ! enddo
+                ! if( count(spproj_mask) == 0 ) return
+                ! icnt = 0
+                ! do iproj = 1,nprojs
+                !     if( .not.spproj_mask(iproj) )cycle
+                !     call streamspproj%read_segment('mic',sp_files(iproj))
+                !     call streamspproj%os_mic%get_ori(1, o)
+                !     ! import mic segment
+                !     call movefile2folder('intg',        dir, output_dir_motion_correct, o, err)
+                !     call movefile2folder('forctf',      dir, output_dir_motion_correct, o, err)
+                !     call movefile2folder('thumb',       dir, output_dir_motion_correct, o, err)
+                !     call movefile2folder('mc_starfile', dir, output_dir_motion_correct, o, err)
+                !     call movefile2folder('mceps',       dir, output_dir_motion_correct, o, err)
+                !     call movefile2folder('ctfjpg',      dir, output_dir_ctf_estimate,   o, err)
+                !     call movefile2folder('ctfdoc',      dir, output_dir_ctf_estimate,   o, err)
+                !     ! import mic segment
+                !     call streamspproj%os_mic%set_ori(1, o)
+                !     ! add to history
+                !     call o%getter('movie', mov)
+                !     call o%getter('intg', mic)
+                !     call movie_buff%add2history(mov)
+                !     call movie_buff%add2history(mic)
+                !     ! write updated individual project file
+                !     call streamspproj%write(trim(DIR_STREAM)//basename(sp_files(iproj)))
+                !     ! count
+                !     icnt = icnt + 1
+                ! enddo
+                ! if( icnt > 0 )then
+                !     ! updating STREAM_SPPROJFILES
+                !     allocate(completed_jobs_clines(icnt))
+                !     icnt = 0
+                !     do iproj = 1,nprojs
+                !         if(spproj_mask(iproj))then
+                !             icnt = icnt+1
+                !             call completed_jobs_clines(icnt)%set('projfile',basename(sp_files(iproj)))
+                !         endif
+                !     enddo
+                !     call update_projects_list(n_imported)
+                !     deallocate(completed_jobs_clines)
+                ! endif
+                ! call o%kill
+                ! call o_stk%kill
+                ! call streamspproj%kill
+                ! write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', icnt
             end subroutine import_prev_streams
 
             subroutine movefile2folder(key, input_dir, folder, o, err)
@@ -523,11 +532,11 @@ contains
 
     end subroutine exec_simple_stream
 
-        !> updates current parameters with user input
+    !> updates current parameters with user input
     subroutine update_user_params( cline_here )
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
-        real       :: lpthres, ndev, tilt_thres
+        real       :: tilt_thres
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             if( os%isthere(1,'tilt_thres') ) then
@@ -550,22 +559,6 @@ contains
     end subroutine update_user_params
 
     ! Common utility functions
-
-    subroutine check_nptcls( fname, nptcls, state )
-        character(len=*), intent(in)  :: fname
-        integer,          intent(out) :: nptcls, state
-        type(sp_project) :: spproj_here
-        integer :: nmics, nstks
-        state  = 0
-        call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
-        if( nmics /= 1 )then
-            THROW_WARN('No micrograph for: '//trim(fname)//'. Skipping')
-        else
-            call spproj_here%read_segment('mic',fname)
-            state = spproj_here%os_mic%get_state(1)
-            call spproj_here%kill
-        endif
-    end subroutine check_nptcls
 
     subroutine update_path(os, i, key)
         class(oris),      intent(inout) :: os

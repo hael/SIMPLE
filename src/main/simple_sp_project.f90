@@ -587,17 +587,20 @@ contains
     end subroutine add_single_movie
 
     !> Add/append movies or micrographs without ctf parameters
-    subroutine add_movies( self, movies_array, ctfvars, singleframe )
+    subroutine add_movies( self, movies_array, ctfvars, singleframe, verbose )
         class(sp_project), target, intent(inout) :: self
         character(LONGSTRLEN),     intent(in)    :: movies_array(:)
         type(ctfparams),           intent(in)    :: ctfvars
         logical,         optional, intent(in)    :: singleframe
+        logical,         optional, intent(in)    :: verbose
         class(oris),      pointer     :: os_ptr
         type(ctfparams)               :: prev_ctfvars
         character(len=:), allocatable :: name
         character(len=LONGSTRLEN)     :: rel_moviename
         integer                       :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
-        logical                       :: is_movie, l_singleframe
+        logical                       :: is_movie, l_singleframe, l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
         is_movie = .true.
         l_singleframe = .false.
         if( present(singleframe) ) l_singleframe = singleframe
@@ -697,8 +700,10 @@ contains
                 name = 'MICROGRAPH(S)'
             endif
         endif
-        write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
-        write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
+        if( l_verbose )then
+            write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
+            write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
+        endif
     end subroutine add_movies
 
     !> Add/append micrographs with ctf parameters
