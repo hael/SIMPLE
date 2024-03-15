@@ -1177,7 +1177,12 @@ contains
         ! ldim & box from stack
         call set_ldim_box_from_stk
         ! fractional search and volume update
-        if( self%update_frac <= .99) self%l_frac_update = .true.
+        if( self%update_frac <= .99)then
+            self%l_frac_update = .true.
+        else
+            self%update_frac   = 1.0
+            self%l_frac_update = .false.
+        endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
