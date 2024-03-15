@@ -4,11 +4,11 @@ use simple_eul_prob_tab, only: shift_sampling
 implicit none
 integer, parameter :: N = 10000
 real    :: x, dx, gauss(N), sig2, total_energy, x_max, g_max, g_min, smpl_sh(2), cur_sh(2), sh_thres
-integer :: cnt, i
+integer :: cnt, i, which
 sig2  = 1.
 x_max = sqrt(sig2)
 x     = 0.
-dx    = 0.01
+dx    = 0.1
 cnt   = 0
 gauss = 0.
 do while( x <= x_max )
@@ -17,11 +17,15 @@ do while( x <= x_max )
     x          = x + dx
 enddo
 gauss        = gauss / sum(gauss(1:cnt))
+gauss(1:cnt) = (1. - gauss(1:cnt))
+gauss        = gauss / sum(gauss(1:cnt))
 total_energy = sum(gauss(1:cnt))
-print *, total_energy , gauss(1)
+print *, total_energy
+print *, gauss(1:cnt)
 ! testing multinomal
 do i = 1, 10
-    print *, multinomal( gauss(1:cnt) )
+    which = greedy_sampling( gauss(1:cnt), cnt )
+    print *, which
 enddo
 ! testing shift_sampling
 cur_sh   = [0.6, -1.7]
