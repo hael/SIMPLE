@@ -134,8 +134,8 @@ contains
         call cline_exec%set('top',  NMOVS_SET)
         do
             ! guistats init each loop
-            call gui_stats%init(nlines=2) ! only one line?
-            call gui_stats%set(1, "title", "micrographs")
+            !call gui_stats%init(nlines=2) ! only one line?
+            !call gui_stats%set(1, "title", "micrographs")
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -170,7 +170,7 @@ contains
                 prev_stacksz = stacksz
                 write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*NMOVS_SET
                 ! guistats
-               call gui_stats%set(1, 'primary_movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj%os_mic%get_noris()))
+               !call gui_stats%set(1, 'primary_movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj%os_mic%get_noris()))
             endif
             ! fetch completed jobs list
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -197,17 +197,17 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set(1, 'primary_movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj%os_mic%get_noris()))
-                call gui_stats%set(1, 'secondary_compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
-                if( n_failed_jobs > 0 ) call gui_stats%set(1, 'primary_rejected', n_failed_jobs)
-                if(spproj%os_mic%isthere("ctfres"))  call gui_stats%set(1, 'primary_avg_ctf_res', spproj%os_mic%get_avg("ctfres"))
+                !call gui_stats%set(1, 'primary_movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj%os_mic%get_noris()))
+                !call gui_stats%set(1, 'secondary_compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
+                !if( n_failed_jobs > 0 ) call gui_stats%set(1, 'primary_rejected', n_failed_jobs)
+                !if(spproj%os_mic%isthere("ctfres"))  call gui_stats%set(1, 'primary_avg_ctf_res', spproj%os_mic%get_avg("ctfres"))
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
                 call spproj%write_segment_inside('mic',MICSSPPROJ_FNAME)
                 last_injection = simple_gettime()
                 ! guistats
-                call gui_stats%set_now(1, 'secondary_last_injection')
+                !call gui_stats%set_now(1, 'secondary_last_injection')
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
@@ -238,7 +238,7 @@ contains
             ! read beamtilts
             if( cline%defined('dir_meta')) call read_xml_beamtilts()
             ! guistats
-            call gui_stats%write
+            !call gui_stats%write
         end do
         ! termination
         call spproj%write_segment_inside('mic', params%projfile)
@@ -246,9 +246,9 @@ contains
         call update_user_params(cline)
         call write_migrographs_starfile
         ! final stats
-        call gui_stats%remove(1, 'secondary_compute')
-        call gui_stats%write
-        call gui_stats%kill
+        !call gui_stats%remove(1, 'secondary_compute')
+        !call gui_stats%write
+        !call gui_stats%kill
         ! cleanup
         call spproj%kill
         call qsys_cleanup

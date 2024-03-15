@@ -186,6 +186,7 @@ contains
     procedure          :: bin2logical
     procedure          :: logical2bin
     procedure          :: collage
+    procedure          :: tile
     procedure          :: generate_orthogonal_reprojs
     ! FILTERS
     procedure          :: acf
@@ -2821,6 +2822,25 @@ contains
         img_out%rmat(ldim(1)+border+1:ldim_col(1),:ldim_col(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
         call img_pad%kill()
     end subroutine collage
+
+    ! place stack i in tile position x,y
+    subroutine tile( self, stkimg, x, y)
+        class(image), intent(inout) :: self
+        class(image), intent(inout) :: stkimg
+        integer,      intent(in)    :: x, y
+        type(image)                 :: img_tmp
+        integer                     :: stkimg_ldim(3), x_start, y_start, x_end, y_end
+        stkimg_ldim = stkimg%get_ldim()
+        x_start = (x - 1) * stkimg_ldim(1) + 1
+        y_start = (y - 1) * stkimg_ldim(2) + 1
+        x_end = x * stkimg_ldim(1)
+        y_end = y * stkimg_ldim(2)
+        if(x_start .lt. 1 .or. y_start .lt. 1) THROW_HARD('tile: out of bounds')
+        if(x_end .gt. self%ldim(1) .or. y_end .gt. self%ldim(2)) THROW_HARD('tile: out of bounds')
+        call stkimg%norm4viz(brightness=128.0)
+        self%rmat(x_start:x_end, y_start:y_end, 1) = stkimg%rmat(:stkimg_ldim(1), :stkimg_ldim(2), 1)
+        call img_tmp%kill()
+    end subroutine tile
 
     ! generate the 3 orthogonal reprojections from a volume into a single image
     subroutine generate_orthogonal_reprojs( self, reprojs)
@@ -7234,11 +7254,15 @@ contains
             &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
     end subroutine norm_bin
 
-    subroutine norm4viz( self  )
-        class(image), intent(inout) :: self
+    subroutine norm4viz( self, brightness)
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: brightness
+        real                          :: brightness_l
+        brightness_l = 128.0
+        if(present(brightness)) brightness_l = brightness
         if(self%is_ft())THROW_HARD('real space only; norm4viz')
         call self%norm
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + 10.5 *& ! magic numbers from Joe
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = brightness_l + 10.5 *& ! magic numbers from Joe
             &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
         ! thresholding
         where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 255. )
