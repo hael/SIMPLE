@@ -977,8 +977,7 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params%fromp:params%top))
-        call build_glob%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
-            &1.0, nptcls, pinds, ptcl_mask)
+        call build_glob%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask)
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
         call eulprob_obj%new(pinds)
@@ -1150,11 +1149,16 @@ contains
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
-        real     :: xyz(3), update_frac
+        real     :: xyz(3), ufrac
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update([params%fromp,params%top], 0, update_frac, nptcls, pinds, ptcl_mask)
+        if( params%l_frac_update )then
+            ! generation of random sample and updatecnt incr deferred
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], ufrac, nptcls, pinds, ptcl_mask)
+        else
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+        endif
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call eulprob_obj%new(pinds)
@@ -1247,13 +1251,24 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         integer :: nptcls, ipart
+        real    :: effective_update_frac
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         if( params%startit == 1 ) call build%spproj_field%clean_updatecnt
         allocate(ptcl_mask(1:params%nptcls))
-        call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
-            &params_glob%update_frac, nptcls, pinds, ptcl_mask)
-        call build%spproj%write_segment_inside(params%oritype)
+        if( params%l_frac_update )then
+            if( build%spproj_field%updatecnt_has_been_incr() )then ! we have a random subset
+                call build%spproj_field%sample4update_reprod([1,params%nptcls], effective_update_frac, nptcls, pinds, ptcl_mask)
+            else                                                   ! we generate a random subset
+                call build%spproj_field%sample4update_rnd([1,params%nptcls], params%update_frac, nptcls, pinds, ptcl_mask)
+            endif
+        else                                                       ! we sample all state > 0
+            call build%spproj_field%sample4update_all([1,params%nptcls], nptcls, pinds, ptcl_mask)
+        endif
+        ! increment update counter
+        call build%spproj_field%incr_updatecnt([1,params%nptcls], ptcl_mask)
+        ! communicate to project file
+        call build%spproj%write_segment_inside(params%oritype)        
         ! more prep
         call eulprob_obj%new(pinds)
         ! generating all corrs on all parts

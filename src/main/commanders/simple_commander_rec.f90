@@ -141,6 +141,7 @@ contains
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         integer :: nptcls2update
+        real    :: effective_update_frac
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
@@ -157,8 +158,12 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
-        &1.0, nptcls2update, pinds, ptcl_mask)
+        if( params%l_frac_update )then
+            ! generation of random sample and updatecnt incr deferred
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], effective_update_frac, nptcls2update, pinds, ptcl_mask)
+        else
+            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
+        endif
         if( params%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call eucl_sigma%new(fname, params%box)

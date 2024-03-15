@@ -103,12 +103,24 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( trim(params_glob%refine).eq.'prob' )then
-            ! increments of updatecnts are delegated to prob_align
-            call build_glob%spproj_field%sample4update([params_glob%fromp,params_glob%top], 0,&
-                &effective_update_frac,nptcls2update, pinds, ptcl_mask )
+            ! generation of random sample and incr of updatecnts delegated to prob_align
+            call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+            &effective_update_frac, nptcls2update, pinds, ptcl_mask )
         else
-            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+            if( params_glob%l_frac_update )then
+                if( build_glob%spproj_field%updatecnt_has_been_incr() )then ! we have a random subset
+                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                    &effective_update_frac,   nptcls2update, pinds, ptcl_mask)
+                else                                                        ! we generate a random subset
+                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+                endif
+            else                                                            ! we sample all state > 0
+                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
+                                             &nptcls2update, pinds, ptcl_mask)
+            endif
+            ! increment update counter
+            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
         endif
 
         ! EXTREMAL LOGICS
