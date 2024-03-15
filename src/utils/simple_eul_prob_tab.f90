@@ -13,6 +13,8 @@ public :: calc_num2sample, calc_numinpl2sample2D, eulprob_dist_switch, eulprob_c
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: DEBUG = .false.
+
 type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:) !< search table
     type(ptcl_ref), allocatable :: assgn_map(:) !< assignment map
@@ -45,6 +47,7 @@ contains
         call self%kill
         self%nptcls = size(pinds)
         print *, 'nptcls = ', self%nptcls
+        print *, 'pinds  = ', pinds
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%loc_tab(params_glob%nspace,self%nptcls), self%assgn_map(self%nptcls))
         !$omp parallel do default(shared) private(i,iptcl,iref) proc_bind(close) schedule(static)
@@ -306,6 +309,12 @@ contains
         write(unit=funit,pos=1)          self%nptcls
         write(unit=funit,pos=headsz + 1) self%assgn_map
         call fclose(funit)
+        if( DEBUG )then
+            print *, 'MASTER ----'
+            print *, 'pinds = ', self%assgn_map(:)%pind
+            print *, 'irefs = ', self%assgn_map(:)%iref
+            print *, 'inpls = ', self%assgn_map(:)%inpl
+        endif
     end subroutine write_assignment
 
     ! read from the global assignment map to local partition for shift search and further refinement
@@ -334,6 +343,12 @@ contains
             end do
         end do
         !$omp end parallel do
+        if( DEBUG )then
+            print *, 'PARTITION ----'
+            print *, 'pinds = ', self%assgn_map(:)%pind
+            print *, 'irefs = ', self%assgn_map(:)%iref
+            print *, 'inpls = ', self%assgn_map(:)%inpl
+        endif
     end subroutine read_assignment
 
     ! DESTRUCTOR
