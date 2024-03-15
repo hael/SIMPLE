@@ -15,7 +15,7 @@ use simple_progress
 use FoX_dom
 implicit none
 
-public :: commander_stream
+public :: commander_stream_preprocess
 
 private
 #include "simple_local_flags.inc"
@@ -28,18 +28,17 @@ character(len=STDLEN), parameter :: MICSSPPROJ_FNAME = './streamdata.simple' ! n
 
 integer :: movies_set_counter = 0
 
-type, extends(commander_base) :: commander_stream
+type, extends(commander_base) :: commander_stream_preprocess
   contains
-    procedure :: execute => exec_simple_stream
-end type commander_stream
+    procedure :: execute => exec_stream_preprocess
+end type commander_stream_preprocess
 
 contains
 
-    subroutine exec_simple_stream( self, cline )
+    subroutine exec_stream_preprocess( self, cline )
         use simple_moviewatcher, only: moviewatcher
-        use simple_timer
-        class(commander_stream), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(commander_stream_preprocess), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
         integer,                   parameter   :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
@@ -113,7 +112,7 @@ contains
         call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         call cline%set('dir','../')
         ! setup the environment for distributed execution
-        call qenv%new(1,stream=.true.,exec_bin='simple_exec')
+        call qenv%new(1,stream=.true.)
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
         ! import previous run
@@ -530,7 +529,7 @@ contains
                 end do
             end subroutine read_xml_beamtilts
 
-    end subroutine exec_simple_stream
+    end subroutine exec_stream_preprocess
 
     !> updates current parameters with user input
     subroutine update_user_params( cline_here )

@@ -117,6 +117,9 @@ contains
                 case('single_exec')
                     call list_single_prgs_in_ui
                     stop
+                case('simple_stream')
+                    call list_stream_prgs_in_ui
+                    stop
                 case DEFAULT
                     THROW_HARD('Program '//prgname//' not supported; parse')
             end select
