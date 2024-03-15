@@ -1229,7 +1229,7 @@ contains
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         logical, optional,    intent(in)    :: stoch
         type(ran_tabu) :: rt
-        integer, allocatable :: inds_rnd(:), states(:), counts(:)
+        integer, allocatable :: states(:), counts(:)
         integer :: i, cnt, nptcls, ind, max_count
         real    :: val
         logical :: sstoch
@@ -1253,8 +1253,8 @@ contains
         inds     = pack(inds,   mask=states > 0)
         counts   = pack(counts, mask=states > 0)
         nsamples = min(nptcls, nint(update_frac * real(nptcls)))
+        mask     = .false.
         if( nsamples == nptcls )then ! update_frac is 1.0
-            mask = .false.
             do i = 1, nptcls
                 ind       = inds(i)
                 mask(ind) = .true.
@@ -1264,29 +1264,22 @@ contains
         else
             max_count = maxval(counts)
             if( max_count == 0 .or. sstoch )then ! first time around, or always stochastic -> random sampling
-                allocate(inds_rnd(nsamples), source=0)
+                counts = 0
                 rt = ran_tabu(nptcls)
-                call rt%ne_ran_iarr(inds_rnd)
+                call rt%shuffle(inds)
                 call rt%kill
-                mask = .false.
-                do i = 1, nsamples
-                    ind       = inds(inds_rnd(i))
-                    mask(ind) = .true.
-                    val       = self%o(ind)%get('updatecnt')
-                    call self%o(ind)%set('updatecnt', val + 1.0)
-                    counts(i) = 1
-                end do
-                inds = pack(inds, mask=counts == 1)
+                inds = inds(1:nsamples)
+                call hpsort(inds)
             else ! reproduce previous selection
                 nsamples = count(counts == max_count)
                 inds     = pack(inds, mask=counts == max_count)
-                do i = 1, nsamples
-                    ind       = inds(i)
-                    mask(ind) = .true.
-                    val       = self%o(ind)%get('updatecnt')
-                    call self%o(ind)%set('updatecnt', val + 1.0)
-                end do
             endif
+            do i = 1, nsamples
+                ind       = inds(i)
+                mask(ind) = .true.
+                val       = self%o(ind)%get('updatecnt')
+                call self%o(ind)%set('updatecnt', val + 1.0)
+            end do
         endif
     end subroutine sample4update_and_incrcnt
 

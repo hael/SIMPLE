@@ -72,8 +72,7 @@ contains
         integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        type(oris)        :: cache_oris
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, effective_update_frac
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
@@ -103,8 +102,14 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
-            &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+        if( trim(params_glob%refine).eq.'prob' )then
+            ! increments of updatecnts are delegated to prob_align
+            call build_glob%spproj_field%sample4update([params_glob%fromp,params_glob%top], 0,&
+                &effective_update_frac,nptcls2update, pinds, ptcl_mask )
+        else
+            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+        endif
 
         ! EXTREMAL LOGICS
         do_extr           = .false.

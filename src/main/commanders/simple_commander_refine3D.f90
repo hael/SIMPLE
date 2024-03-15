@@ -433,6 +433,7 @@ contains
                 call cline_prob_align%set('which_iter', params%which_iter)
                 call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
                 call cline_prob_align%set('objfun',     orig_objfun)
+                call cline_prob_align%set('startit',    iter)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
                 call xprob_align%execute( cline_prob_align )
@@ -701,10 +702,14 @@ contains
         real                              :: corr, corr_prev
         logical                           :: converged, l_sigma, l_switch2euclid
         call build%init_params_and_build_strategy3D_tbox(cline,params)
-        ! print *,associated(build_glob),associated(build_glob%spproj_field),associated(params_glob)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_updatecnt
+        select case(trim(params%refine))
+        case('prob')
+            ! update_cnt dealt with in prob_align
+        case DEFAULT
+            if( startit == 1 ) call build%spproj_field%clean_updatecnt
+        end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
@@ -828,7 +833,6 @@ contains
         real,             allocatable :: fsc(:), res(:)
         real    :: prev_smpd, curr_smpd, smpd, msk
         integer :: prev_ldim(3), curr_ldim(3), n
-        print *,trim(prev_fname), trim(curr_fname)
         call find_ldim_nptcls(prev_fname, prev_ldim, n, smpd=prev_smpd)
         call find_ldim_nptcls(curr_fname, curr_ldim, n, smpd=curr_smpd)
         call prev_vol%new(prev_ldim,prev_smpd)
@@ -1146,15 +1150,11 @@ contains
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
-        real     :: xyz(3)
+        real     :: xyz(3), update_frac
         call cline%set('mkdir', 'no')
-        call cline%set('stream','no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params%fromp:params%top))
-        call build%spproj_field%sample4update_and_incrcnt([params%fromp,params%top],&
-            &params_glob%update_frac, nptcls, pinds, ptcl_mask)
+        call build%spproj_field%sample4update([params%fromp,params%top], 0, update_frac, nptcls, pinds, ptcl_mask)
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call eulprob_obj%new(pinds)
@@ -1248,10 +1248,8 @@ contains
         type(chash)                   :: job_descr
         integer :: nptcls, ipart
         call cline%set('mkdir', 'no')
-        call cline%set('stream','no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        if( params%startit == 1 ) call build%spproj_field%clean_updatecnt
         allocate(ptcl_mask(1:params%nptcls))
         call build%spproj_field%sample4update_and_incrcnt([1,params%nptcls],&
             &params_glob%update_frac, nptcls, pinds, ptcl_mask)
