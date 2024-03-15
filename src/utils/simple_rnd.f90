@@ -153,26 +153,30 @@ contains
     end function multinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
-    function greedy_sampling_1( pvec, thres ) result( which )
+    function greedy_sampling_1( pvec, thres, thres_safe ) result( which )
         use simple_math, only: hpsort
-        real,     intent(in) :: pvec(:) !< probabilities
-        integer,  intent(in) :: thres
+        real,              intent(in) :: pvec(:) !< probabilities
+        integer,           intent(in) :: thres
+        integer, optional, intent(in) :: thres_safe
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),inds(n))
-        which = greedy_sampling_2(pvec, pvec_sorted, inds, thres)
+        which = greedy_sampling_2(pvec, pvec_sorted, inds, thres, thres_safe)
     end function greedy_sampling_1
 
-    function greedy_sampling_2( pvec, pvec_sorted, inds, thres ) result( which )
+    function greedy_sampling_2( pvec, pvec_sorted, inds, thres, thres_safe_in ) result( which )
         use simple_math, only: hpsort
-        real,    intent(in)    :: pvec(:)        !< probabilities
-        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer, intent(inout) :: inds(:)
-        integer, intent(in)    :: thres
-        integer :: which, i
-        real    :: bound, sum_pvec, rnd
+        real,              intent(in)    :: pvec(:)        !< probabilities
+        real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        integer,           intent(inout) :: inds(:)
+        integer,           intent(in)    :: thres
+        integer, optional, intent(in)    :: thres_safe_in
+        integer :: which, i, thres_safe
+        real    :: sum_pvec, rnd
+        thres_safe  = 1
+        if( present(thres_safe_in) ) thres_safe = thres_safe_in
         pvec_sorted = pvec
         rnd         = ran3()
         inds        = (/(i,i=1,size(pvec))/)
@@ -183,13 +187,15 @@ contains
             which = 1 + floor(real(thres) * rnd)
         else
             pvec_sorted = pvec_sorted/sum_pvec
-            bound = 0.
-            do which = 1, thres-1
-                bound = bound + pvec_sorted(which)
-                if( rnd >= bound )exit
-            enddo
+            ! doing probabilistic greedy assignment
+            if( rnd > sum(pvec_sorted(1:thres_safe)) )then
+                ! uniform sampling within the safe neighborhood (exploration)
+                which = inds(1 + floor(real(thres_safe) * ran3()))
+            else
+                ! push to the boundary of the sample space (exploitation)
+                which = inds(thres)
+            endif
         endif
-        which = inds(which)
     end function greedy_sampling_2
 
     !>  \brief  random number generator yielding normal distribution
