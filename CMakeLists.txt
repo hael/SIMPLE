@@ -46,6 +46,7 @@ set(SCRIPTS_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/scripts")
 # Define the executable names
 set(SIMPLE_EXE simple_exec)
 set(SINGLE_EXE single_exec)
+set(STREAM_EXE simple_stream)
 set(SIMPLE_PRIVATE_EXE simple_private_exec)
 # Define the library name lib<name>.so
 set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")

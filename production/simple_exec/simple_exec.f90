@@ -48,7 +48,6 @@ type(assign_optics_groups_commander)        :: xassign_optics_groups
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
-type(commander_stream)                      :: xsimple_stream
 type(preprocess_commander_stream_dev)       :: xpreprocess_stream_dev
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
@@ -207,8 +206,6 @@ select case(trim(prg))
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
-    case( 'simple_stream' )
-        call xsimple_stream%execute(cline)
     case( 'preprocess_stream_dev' )
         call xpreprocess_stream_dev%execute(cline)
     case( 'extract' )
@@ -391,7 +388,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('6b6361c3')
+call simple_print_git_version('bb7255d6')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
