@@ -22,10 +22,8 @@ private
 
 character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here?
+character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here? - left in for now
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once
-character(len=STDLEN), parameter :: MICSSPPROJ_FNAME = './streamdata.simple' ! not necessary?
-
 integer :: movies_set_counter = 0
 
 type, extends(commander_base) :: commander_stream_preprocess
@@ -100,7 +98,6 @@ contains
         call spproj%read( params%projfile )
         call spproj%update_projinfo(cline)
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
-        call spproj%write(MICSSPPROJ_FNAME)
         ! output directories
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
@@ -132,10 +129,9 @@ contains
         cline_exec = cline
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  NMOVS_SET)
+        ! guistats init
+        call gui_stats%init
         do
-            ! guistats init each loop
-            !call gui_stats%init(nlines=2) ! only one line?
-            !call gui_stats%set(1, "title", "micrographs")
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -170,7 +166,7 @@ contains
                 prev_stacksz = stacksz
                 write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*NMOVS_SET
                 ! guistats
-               !call gui_stats%set(1, 'primary_movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj%os_mic%get_noris()))
+                call gui_stats%set('micrographs', 'movies', int2str(spproj%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj%os_mic%get_noris()), primary=.true.)
             endif
             ! fetch completed jobs list
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -197,17 +193,20 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                !call gui_stats%set(1, 'primary_movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj%os_mic%get_noris()))
-                !call gui_stats%set(1, 'secondary_compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
-                !if( n_failed_jobs > 0 ) call gui_stats%set(1, 'primary_rejected', n_failed_jobs)
-                !if(spproj%os_mic%isthere("ctfres"))  call gui_stats%set(1, 'primary_avg_ctf_res', spproj%os_mic%get_avg("ctfres"))
+                call gui_stats%set('micrographs', 'movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj%os_mic%get_noris()), primary=.true.)
+                call gui_stats%set('micrographs', 'compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
+                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'rejected', n_failed_jobs, primary=.true.)
+                if(spproj%os_mic%isthere("ctfres")) then
+                    call gui_stats%set('micrographs', 'avg_ctf_res', spproj%os_mic%get_avg("ctfres"), primary=.true.)
+                end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
-                ! write project for gui, micrographs field only
-                call spproj%write_segment_inside('mic',MICSSPPROJ_FNAME)
                 last_injection = simple_gettime()
                 ! guistats
-                !call gui_stats%set_now(1, 'secondary_last_injection')
+                call gui_stats%set_now('micrographs', 'last_new_movie')
+                if(spproj%os_mic%isthere('thumb')) then
+                    call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(CWD_GLOB)) // '/' // trim(adjustl(spproj%os_mic%get_static(spproj%os_mic%get_noris(), 'thumb'))), thumbnail=.true.)
+                end if
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
@@ -238,7 +237,7 @@ contains
             ! read beamtilts
             if( cline%defined('dir_meta')) call read_xml_beamtilts()
             ! guistats
-            !call gui_stats%write
+            call gui_stats%write_json
         end do
         ! termination
         call spproj%write_segment_inside('mic', params%projfile)
@@ -246,13 +245,12 @@ contains
         call update_user_params(cline)
         call write_migrographs_starfile
         ! final stats
-        !call gui_stats%remove(1, 'secondary_compute')
-        !call gui_stats%write
-        !call gui_stats%kill
+        call gui_stats%hide('micrographs', 'compute')
+        call gui_stats%write_json
+        call gui_stats%kill
         ! cleanup
         call spproj%kill
         call qsys_cleanup
-        call del_file(MICSSPPROJ_FNAME)
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
