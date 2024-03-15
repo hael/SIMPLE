@@ -83,6 +83,7 @@ type :: oris
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_reprod
+    procedure          :: find_opt_updatecnt_history
     procedure          :: incr_updatecnt
     procedure          :: clean_updatecnt
     procedure          :: updatecnt_has_been_incr
@@ -1282,21 +1283,21 @@ contains
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_reprod( self, fromto, update_frac, nsamples, inds, mask, it_history )
+    subroutine sample4update_reprod( self, fromto, update_frac, nsamples, inds, mask, ucnt_history )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(out)   :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        integer, optional,    intent(in)    :: it_history
+        integer, optional,    intent(in)    :: ucnt_history
         integer, allocatable :: states(:), counts(:)
-        integer :: i, cnt, nptcls, max_count, lbound_count, iit_history
-        iit_history = 0
-        if( present(it_history) ) iit_history = it_history
+        integer :: i, cnt, nptcls, max_count, lbound_count, uucnt_history
+        uucnt_history = 0
+        if( present(ucnt_history) ) uucnt_history = ucnt_history
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
-        allocate(states(nptcls), inds(nptcls), counts(nptcls))
+        allocate(states(nptcls), inds(nptcls), counts(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
             cnt         = cnt + 1
@@ -1313,7 +1314,7 @@ contains
         counts       = pack(counts, mask=states > 0)
         max_count    = maxval(counts)
         if( max_count == 0 ) THROW_HARD('requires past search history')
-        lbound_count = max(1,max_count - iit_history)
+        lbound_count = max(1,max_count - uucnt_history)
         nsamples     = count(counts >= lbound_count)
         update_frac  = real(nsamples) / real(nptcls)
         inds         = pack(inds, mask=counts >= lbound_count)
@@ -1322,6 +1323,46 @@ contains
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_reprod
+
+    subroutine find_opt_updatecnt_history( self, nsamples_target, ucnt_history )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nsamples_target
+        integer,     intent(out)   :: ucnt_history
+        integer, allocatable :: states(:), counts(:), inds(:)
+        integer :: i, nptcls, cnt_lb, dist, dist_opt, cnt_lb_opt, nsamples, cnt_min, cnt_max
+        real    :: eff_udfrac
+        nptcls = self%n
+        allocate(states(nptcls), inds(nptcls), counts(nptcls))
+        do i = 1,nptcls
+            states(i) = self%o(i)%get_state()
+            inds(i)   = i
+            if( self%o(i)%isthere('updatecnt') )then
+                counts(i) = nint(self%o(i)%get('updatecnt'))
+            else
+                counts(i) = 0
+            endif
+        end do
+        nptcls  = count(states > 0)
+        inds    = pack(inds,   mask=states > 0)
+        counts  = pack(counts, mask=states > 0)
+        cnt_max = maxval(counts)
+        if( cnt_max == 0 ) THROW_HARD('requires past search history')
+        cnt_min = minval(counts, mask=counts > 0)
+        dist_opt = nptcls
+        do cnt_lb = cnt_min,cnt_max
+            nsamples   = count(counts >= cnt_lb)
+            eff_udfrac = real(nsamples) / real(nptcls)
+            dist       = abs(nsamples_target - nsamples)
+            if( dist < dist_opt )then
+                dist_opt   = dist
+                cnt_lb_opt = cnt_lb
+            endif
+            print *, 'cnt_lb, nsamples, eff_udfrac ', cnt_lb, nsamples, eff_udfrac
+        end do
+        print *, 'found optimal cnt_lb       ', cnt_lb_opt
+        ucnt_history = cnt_max - cnt_lb_opt
+        print *, 'found optimal ucnt_history ', ucnt_history
+    end subroutine find_opt_updatecnt_history
 
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self
