@@ -698,9 +698,11 @@ contains
         type(sym)                     :: se1, se2
         type(class_frcs)              :: clsfrcs 
         type(image)                   :: final_vol, reprojs
+        logical,          allocatable :: mask(:)
+        integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, auto_lpstart, auto_lpstop
-        integer :: iter, it, prev_box_crop, maxits
+        integer :: iter, it, prev_box_crop, maxits, noris, nsamples
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_shmem, l_sym, l_lpstop_set
         logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
@@ -769,6 +771,11 @@ contains
                 endif
                 vol_type = 'vol'
                 call spproj%os_ptcl3D%rnd_oris
+                if( params%l_frac_update )then
+                    noris = spproj%os_ptcl3D%get_noris()
+                    call spproj%os_ptcl3D%sample4update_rnd([1,noris], params%update_frac, nsamples, pinds, mask)
+                    call spproj%os_ptcl3D%incr_updatecnt([1,noris], mask)
+                endif
             case DEFAULT
                 THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
         end select
