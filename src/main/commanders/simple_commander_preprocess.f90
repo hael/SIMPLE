@@ -308,6 +308,10 @@ contains
         if( trim(params%stream).eq.'yes' )then
             ! STREAMING MODE
             fromto(:) = 1
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = params%fromp
+                fromto(2) = params%top
+            endif
         else
             ! DISTRIBUTED MODE
             if( cline%defined('fromp') .and. cline%defined('top') )then
