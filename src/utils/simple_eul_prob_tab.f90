@@ -102,7 +102,7 @@ contains
                 do iref = 1, params_glob%nspace
                     call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                    irot = inpl_smpl(ithr) ! contained function, below
+                    irot = greedy_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_ns)
                     self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
                     self%loc_tab(iref,i)%inpl = irot
                     dists_refs(iref,ithr) = dists_inpl(irot,ithr)
@@ -132,42 +132,13 @@ contains
                     ithr = omp_get_thread_num() + 1
                     call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
-                    irot = inpl_smpl(ithr) ! contained function, below
+                    irot = greedy_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_ns)
                     self%loc_tab(iref,i)%dist = dists_inpl(irot,ithr)
                     self%loc_tab(iref,i)%inpl = irot
                 enddo
             enddo
             !$omp end parallel do
         endif
-
-    contains
-
-        ! inpl greedy sampling based on unnormalized corr values of all inpl rotations
-        function inpl_smpl( ithr ) result( which )
-            integer, intent(in) :: ithr
-            integer :: j, which
-            real    :: rnd, bound, sum_dist
-            dists_inpl_sorted(:,ithr) = dists_inpl(:,ithr)
-            inds_sorted(:,ithr)       = (/(j,j=1,pftcc%nrots)/)
-            call hpsort(dists_inpl_sorted(:,ithr), inds_sorted(:,ithr))
-            rnd      = ran3()
-            sum_dist = sum(dists_inpl_sorted(1:inpl_ns,ithr))
-            if( sum_dist < TINY )then
-                ! uniform sampling
-                which = 1 + floor(real(inpl_ns) * rnd)
-            else
-                ! normalizing within the hard-limit
-                dists_inpl_sorted(1:inpl_ns,ithr) = dists_inpl_sorted(1:inpl_ns,ithr) / sum_dist
-                bound = 0.
-                do which = 1,inpl_ns
-                    bound = bound + dists_inpl_sorted(which,ithr)
-                    if( rnd >= bound )exit
-                enddo
-                which = min(which,inpl_ns)
-            endif
-            which = inds_sorted(which,ithr)
-        end function inpl_smpl
-
     end subroutine fill_tab
 
     ! reference normalization (same energy) of the global dist value table
@@ -229,7 +200,7 @@ contains
         ptcl_avail    = .true.
         do while( any(ptcl_avail) )
             ! sampling the ref distribution to choose next iref to assign
-            assigned_iref = ref_smpl() ! contained function, below
+            assigned_iref = greedy_sampling(ref_dist, dists_sorted, inds_sorted, refs_ns)
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)          = .false.
             self%assgn_map(assigned_ptcl)%iref = assigned_iref
@@ -243,34 +214,6 @@ contains
                 enddo
             enddo
         enddo
-
-    contains
-
-        ! ref greedy sampling based on the current reference distribution
-        function ref_smpl( ) result( which )
-            integer :: i, which
-            real    :: rnd, bound, sum_dists_sorted
-            rnd          = ran3()
-            dists_sorted = ref_dist
-            inds_sorted  = (/(i,i=1,params_glob%nspace)/)
-            call hpsort(dists_sorted, inds_sorted)
-            sum_dists_sorted = sum(dists_sorted(1:refs_ns))
-            if( sum_dists_sorted < TINY )then
-                ! uniform sampling
-                which = 1 + floor(real(refs_ns) * rnd)
-            else
-                ! normalizing within the hard-limit
-                dists_sorted(1:refs_ns) = dists_sorted(1:refs_ns) / sum_dists_sorted
-                bound = 0.
-                do which = 1,refs_ns
-                    bound = bound + dists_sorted(which)
-                    if( rnd >= bound )exit
-                enddo
-                which = min(which, refs_ns)
-            endif
-            which = inds_sorted(which)
-        end function ref_smpl
-        
     end subroutine tab_align
 
     ! FILE IO
@@ -436,22 +379,23 @@ contains
     end function eulprob_corr_switch
 
     ! shift multinomal sampling within a threshold, units are in Ang
-    function shift_sampling( cur_sh, thres_in ) result(sh)
+    function shift_sampling( cur_sh, thres_bound ) result(sh)
         real,              intent(in) :: cur_sh(2)
-        real,    optional, intent(in) :: thres_in
-        integer, parameter   :: N_SMPL = 100
+        real,    optional, intent(in) :: thres_bound
+        integer, parameter   :: N_SMPL     = 100
+        real,    parameter   :: THRES_SAFE = 0.1    ! in Angstrom unit
         real,    allocatable :: vals(:)
         logical, allocatable :: ptcl_mask(:)
-        integer :: i, sh_signs(2), which, dim
+        integer :: i, sh_signs(2), which, dim, n_safe
         real    :: sh(2)
         real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres, thres
-        if( present(thres_in) )then
-            thres = thres_in
+        if( present(thres_bound) )then
+            thres = thres_bound
         else
             ptcl_mask = nint(build_glob%spproj_field%get_all('state')) == 1
             vals      = build_glob%spproj_field%get_all(trim('shincarg'))
             thres     = sum(vals, mask=ptcl_mask) / real(count(ptcl_mask))
-            thres     = thres / 2.  ! be more aggressive for convergence
+            thres     = thres / 2.
         endif
         sh = cur_sh
         if( thres < TINY ) return
@@ -460,16 +404,19 @@ contains
         if( ran3() < 0.5 ) sh_signs(1) = -1
         if( ran3() < 0.5 ) sh_signs(2) = -1
         ! sampling for x
-        d_sh = thres / real(N_SMPL-1)
-        sig2 = thres**2.
+        d_sh   = thres / real(N_SMPL-1)
+        n_safe = 1
+        if( thres > thres_safe ) n_safe = 1 + floor(THRES_SAFE / d_sh)
+        sig2   = thres**2.
         do dim = 1, 2
             do i = 1, N_SMPL
-                d_thres     = d_sh * (i - 1)
+                d_thres     = d_sh * real(i - 1)
                 gauss_sh(i) = gaussian1D(d_thres, avg=0., sigma_sq=sig2)
                 sh_vals(i)  = d_thres
             enddo
+            gauss_sh = (1. - gauss_sh)
             gauss_sh = gauss_sh / sum(gauss_sh)
-            which    = multinomal( gauss_sh )
+            which    = greedy_sampling( gauss_sh, N_SMPL, n_safe )
             sh(dim)  = cur_sh(dim) + real(sh_signs(dim)) * sh_vals(which)
         enddo
     end function shift_sampling

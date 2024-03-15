@@ -740,16 +740,20 @@ contains
         complex(dp),             intent(in)    :: ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
         complex(dp),             intent(out)   :: ref_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: rot, jrot
-        do jrot = 1,self%pftsz
-            rot = jrot - (irot - 1) ! reverse rotation
-            if( rot < 1 ) rot = rot + self%nrots
-            if( rot > self%pftsz )then
-                ref_rot(jrot,:) = conjg(ref(rot-self%pftsz,:))
-            else
-                ref_rot(jrot,:) = ref(rot,:)
-            endif
-        enddo
+        integer :: mid
+        if( irot == 1 )then
+            ref_rot = ref
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid = self%pftsz - irot + 1
+            ref_rot(   1:irot-1,    :) = conjg(ref(mid+1:self%pftsz,:))
+            ref_rot(irot:self%pftsz,:) =       ref(    1:mid,       :)
+        elseif( irot == self%pftsz + 1 )then
+            ref_rot = conjg(ref)
+        else
+            mid = self%nrots - irot + 1
+            ref_rot(irot-self%pftsz:self%pftsz,       :) = conjg(ref(    1:mid,       :))
+            ref_rot(              1:irot-self%pftsz-1,:) =       ref(mid+1:self%pftsz,:)
+        endif
     end subroutine rotate_ref
 
     ! Particle rotation
@@ -757,35 +761,43 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: ptcl(1:self%pftsz,self%kfromto(1):self%kfromto(2))
         integer,                 intent(in)    :: irot
-        complex(sp), optional,   intent(out)   :: ptcl_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: rot, jrot
-        do jrot = 1,self%pftsz
-            rot = jrot - (irot - 1) ! reverse rotation
-            if( rot < 1 ) rot = rot + self%nrots
-            if( rot > self%pftsz )then
-                ptcl_rot(jrot,:) = conjg(ptcl(rot-self%pftsz,:))
-            else
-                ptcl_rot(jrot,:) = ptcl(rot,:)
-            endif
-        enddo
+        complex(sp),             intent(out)   :: ptcl_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: mid
+        if( irot == 1 )then
+            ptcl_rot = ptcl
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid = self%pftsz - irot + 1
+            ptcl_rot(   1:irot-1,    :) = conjg(ptcl(mid+1:self%pftsz,:))
+            ptcl_rot(irot:self%pftsz,:) =       ptcl(    1:mid,       :)
+        elseif( irot == self%pftsz + 1 )then
+            ptcl_rot = conjg(ptcl)
+        else
+            mid = self%nrots - irot + 1
+            ptcl_rot(irot-self%pftsz:self%pftsz,       :) = conjg(ptcl(    1:mid,       :))
+            ptcl_rot(              1:irot-self%pftsz-1,:) =       ptcl(mid+1:self%pftsz,:)
+        endif
     end subroutine rotate_ptcl
 
     ! Particle rotation of the reference
     subroutine rotate_ctf( self, iptcl, irot, ctf_rot)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot
-        real(sp), optional,      intent(out)   :: ctf_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: i, rot, jrot
+        real(sp),                intent(out)   :: ctf_rot(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: i, mid
         i = self%pinds(iptcl)
-        do jrot = 1,self%pftsz
-            rot = jrot - (irot - 1) ! reverse rotation
-            if( rot < 1 ) rot = rot + self%nrots
-            if( rot > self%pftsz )then
-                ctf_rot(jrot,:) = self%ctfmats(rot-self%pftsz,:,i)
-            else
-                ctf_rot(jrot,:) = self%ctfmats(rot,:,i)
-            endif
-        enddo
+        if( irot == 1 )then
+            ctf_rot = self%ctfmats(:,:,i)
+        elseif( irot >= 2 .and. irot <= self%pftsz )then
+            mid = self%pftsz - irot + 1
+            ctf_rot(   1:irot-1,    :) = self%ctfmats(mid+1:self%pftsz,:,i)
+            ctf_rot(irot:self%pftsz,:) = self%ctfmats(    1:mid,       :,i)
+        elseif( irot == self%pftsz + 1 )then
+            ctf_rot = self%ctfmats(:,:,i)
+        else
+            mid = self%nrots - irot + 1
+            ctf_rot(irot-self%pftsz:self%pftsz,       :) = self%ctfmats(    1:mid,       :,i)
+            ctf_rot(              1:irot-self%pftsz-1,:) = self%ctfmats(mid+1:self%pftsz,:,i)
+        endif
     end subroutine rotate_ctf
 
     subroutine calc_polar_ctf( self, iptcl, smpd, kv, cs, fraca, dfx, dfy, angast )
