@@ -705,10 +705,11 @@ contains
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         select case(trim(params%refine))
-        case('prob')
-            ! update_cnt dealt with in prob_align
-        case DEFAULT
-            if( startit == 1 ) call build%spproj_field%clean_updatecnt
+            case('prob')
+                ! random sampling and updatecnt dealt with in prob_align
+            case DEFAULT
+                if( startit == 1          ) call build%spproj_field%clean_updatecnt
+                if( params%l_stoch_update ) call build%spproj_field%clean_sampled
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -1149,13 +1150,16 @@ contains
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
-        real     :: xyz(3), ufrac
+        real     :: xyz(3)
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(params%fromp:params%top))
         if( params%l_frac_update )then
-            ! generation of random sample and updatecnt incr deferred
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], ufrac, nptcls, pinds, ptcl_mask)
+            if( build%spproj_field%has_been_sampled() )then
+                call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+            else
+                call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls, pinds, ptcl_mask)
+            endif
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask)
         endif
@@ -1251,18 +1255,18 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         integer :: nptcls, ipart
-        real    :: effective_update_frac
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( params%startit == 1 ) call build%spproj_field%clean_updatecnt
+        if( params%startit == 1   ) call build%spproj_field%clean_updatecnt
+        if( params%l_stoch_update ) call build%spproj_field%clean_sampled
         allocate(ptcl_mask(1:params%nptcls))
         if( params%l_frac_update )then
-            if( build%spproj_field%updatecnt_has_been_incr() )then ! we have a random subset
-                call build%spproj_field%sample4update_reprod([1,params%nptcls], effective_update_frac, nptcls, pinds, ptcl_mask)
-            else                                                   ! we generate a random subset
+            if( build%spproj_field%has_been_sampled() )then ! we have a random subset
+                call build%spproj_field%sample4update_reprod([1,params%nptcls], nptcls, pinds, ptcl_mask)
+            else                                            ! we generate a random subset
                 call build%spproj_field%sample4update_rnd([1,params%nptcls], params%update_frac, nptcls, pinds, ptcl_mask)
             endif
-        else                                                       ! we sample all state > 0
+        else                                                ! we sample all state > 0
             call build%spproj_field%sample4update_all([1,params%nptcls], nptcls, pinds, ptcl_mask)
         endif
         ! increment update counter

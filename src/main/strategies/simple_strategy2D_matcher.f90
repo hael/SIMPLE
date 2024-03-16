@@ -55,7 +55,7 @@ contains
         real,                      allocatable :: states(:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, neigh_frac, effective_update_frac
+        real    :: frac_srch_space, neigh_frac
         integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_frac_update, have_frcs
@@ -116,14 +116,14 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( l_frac_update )then
-            if( build_glob%spproj_field%updatecnt_has_been_incr() )then ! we have a random subset
+            if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
                 call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                &effective_update_frac,   nptcls2update, pinds, ptcl_mask)
-            else                                                        ! we generate a random subset
+                                         &nptcls2update, pinds, ptcl_mask)
+            else                                                 ! we generate a random subset
                 call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
                 &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
             endif
-        else                                                            ! we sample all state > 0
+        else                                                     ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
                                          &nptcls2update, pinds, ptcl_mask)
         endif

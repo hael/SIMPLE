@@ -54,6 +54,7 @@ type :: oris
     procedure          :: get_class
     procedure          :: get_label_inds
     procedure          :: get_eo
+    procedure          :: get_sampled
     procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
     procedure, private :: isthere_1
@@ -83,10 +84,12 @@ type :: oris
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_reprod
+    procedure          :: sample4update_history
     procedure          :: find_opt_updatecnt_history
     procedure          :: incr_updatecnt
+    procedure          :: clean_sampled
     procedure          :: clean_updatecnt
-    procedure          :: updatecnt_has_been_incr
+    procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
     procedure          :: ori2str
@@ -197,7 +200,6 @@ type :: oris
     procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
-    procedure          :: sig3weights
     procedure          :: find_best_classes
     procedure          :: class_moments_rejection, class_corres_rejection
     procedure          :: find_closest_proj
@@ -464,6 +466,12 @@ contains
         integer,     intent(in) :: i
         get_eo = self%o(i)%get_eo()
     end function get_eo
+
+     pure integer function get_sampled( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_sampled = self%o(i)%get_sampled()
+    end function get_sampled
 
     pure integer function get_updatecnt( self, i )
         class(oris), intent(in) :: self
@@ -1238,6 +1246,7 @@ contains
         allocate(states(nptcls), inds(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
+            call self%o(i)%set('sampled', 0.0)
             cnt         = cnt + 1
             states(cnt) = self%o(i)%get_state()
             inds(cnt)   = i
@@ -1246,6 +1255,7 @@ contains
         inds     = pack(inds, mask=states > 0)
         mask     = .false.
         do i = 1, nsamples
+            call self%o(inds(i))%set('sampled', 1.0)
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_all
@@ -1265,6 +1275,7 @@ contains
         allocate(states(nptcls), inds(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
+            call self%o(i)%set('sampled', 0.0)
             cnt         = cnt + 1
             states(cnt) = self%o(i)%get_state()
             inds(cnt)   = i
@@ -1279,11 +1290,42 @@ contains
         call hpsort(inds)
         mask = .false.
         do i = 1, nsamples
+            call self%o(inds(i))%set('sampled', 1.0)
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_rnd
 
-    subroutine sample4update_reprod( self, fromto, update_frac, nsamples, inds, mask, ucnt_history )
+    subroutine sample4update_reprod( self, fromto, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        integer, allocatable :: sampled(:)
+        integer :: i, cnt, nptcls
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(inds(nptcls), sampled(nptcls), source=0)
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt         = cnt + 1
+            inds(cnt)   = i
+            if( self%o(i)%isthere('sampled') )then
+                sampled(cnt) = nint(self%o(i)%get('sampled'))
+            else
+                sampled(cnt) = 0
+            endif
+        end do
+        nsamples = count(sampled == 1)
+        if( nsamples  == 0 ) THROW_HARD('requires previous sampling')
+        inds     = pack(inds, mask=sampled == 1)
+        mask     = .false.
+        do i = 1, nsamples
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4update_reprod
+
+    subroutine sample4update_history( self, fromto, update_frac, nsamples, inds, mask, ucnt_history )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(out)   :: update_frac
@@ -1292,7 +1334,7 @@ contains
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         integer, optional,    intent(in)    :: ucnt_history
         integer, allocatable :: states(:), counts(:)
-        integer :: i, cnt, nptcls, max_count, lbound_count, uucnt_history
+        integer :: i, cnt, nptcls, cnt_max, cnt_lb, uucnt_history
         uucnt_history = 0
         if( present(ucnt_history) ) uucnt_history = ucnt_history
         nptcls = fromto(2) - fromto(1) + 1
@@ -1312,17 +1354,17 @@ contains
         nptcls       = count(states > 0)
         inds         = pack(inds,   mask=states > 0)
         counts       = pack(counts, mask=states > 0)
-        max_count    = maxval(counts)
-        if( max_count == 0 ) THROW_HARD('requires past search history')
-        lbound_count = max(1,max_count - uucnt_history)
-        nsamples     = count(counts >= lbound_count)
+        cnt_max      = maxval(counts)
+        if( cnt_max == 0 ) THROW_HARD('requires past search history')
+        cnt_lb       = max(1,cnt_max - uucnt_history)
+        nsamples     = count(counts >= cnt_lb)
         update_frac  = real(nsamples) / real(nptcls)
-        inds         = pack(inds, mask=counts >= lbound_count)
+        inds         = pack(inds, mask=counts >= cnt_lb)
         mask = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
-    end subroutine sample4update_reprod
+    end subroutine sample4update_history
 
     subroutine find_opt_updatecnt_history( self, nsamples_target, ucnt_history )
         class(oris), intent(inout) :: self
@@ -1378,6 +1420,14 @@ contains
         end do
     end subroutine incr_updatecnt
 
+    subroutine clean_sampled( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1,self%n
+            call self%o(i)%delete_entry('sampled')
+        enddo
+    end subroutine clean_sampled
+
     subroutine clean_updatecnt( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -1386,17 +1436,17 @@ contains
         enddo
     end subroutine clean_updatecnt
 
-    logical function updatecnt_has_been_incr( self )
+    logical function has_been_sampled( self )
         class(oris), intent(inout) :: self
         integer :: i
-        updatecnt_has_been_incr =.false.
+        has_been_sampled =.false.
         do i = 1,self%n
-            if( nint(self%o(i)%get('updatecnt')) > 0 )then
-                updatecnt_has_been_incr = .true.
+            if( nint(self%o(i)%get('sampled')) == 1 )then
+                has_been_sampled = .true.
                 exit
             endif
         end do
-    end function updatecnt_has_been_incr
+    end function has_been_sampled
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self, i )
@@ -3048,32 +3098,6 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_soft_weights2D
-
-    subroutine sig3weights( self )
-        class(oris), intent(inout) :: self
-        real,    allocatable :: states(:), corrs(:), updatecnts(:)
-        logical, allocatable :: mask(:)
-        integer :: i
-        real    :: corr_t
-        states     = self%get_all('state')
-        corrs      = self%get_all('corr')
-        if( any(corrs > TINY) )then
-            corr_t     = robust_sigma_thres(corrs, -3.0)
-            updatecnts = self%get_all('updatecnt')
-            allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
-            do i=1,self%n
-                if( corrs(i) > corr_t )then
-                    call self%o(i)%set('w', 1.)
-                else
-                    call self%o(i)%set('w', 0.)
-                endif
-            end do
-            deallocate(updatecnts)
-        else
-            call self%set_all2single('w', 1.)
-        endif
-        deallocate(states, corrs, updatecnts)
-    end subroutine sig3weights
 
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL

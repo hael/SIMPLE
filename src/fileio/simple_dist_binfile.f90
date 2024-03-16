@@ -22,7 +22,6 @@ contains
     procedure          :: read_to_glob
     procedure          :: write
     procedure          :: write_info
-    procedure, private :: create_empty
     procedure, private :: open_and_check_header
     procedure, private :: open_only
     procedure, private :: read_header
@@ -89,12 +88,8 @@ contains
         type(ptcl_ref),      intent(in)    :: mat(self%nrefs,self%nptcls)
         integer :: funit, addr
         logical :: success
-        if( .not. file_exists(self%fname) )then
-            call self%create_empty( funit )
-        else
-            success = self%open_and_check_header( funit, .false. )
-            if( .not. success ) return
-        end if
+        call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        write(unit=funit,pos=1) self%file_header
         addr = self%headsz + 1
         write(funit,pos=addr) mat
         call fclose(funit)
@@ -166,16 +161,6 @@ contains
         self%nrefs  = self%file_header(1)
         self%nptcls = self%file_header(2)
     end subroutine read_header
-
-    subroutine create_empty( self, funit )
-        class(dist_binfile), intent(in)  :: self
-        integer,             intent(out) :: funit
-        integer       :: io_stat
-        type(ptcl_ref):: mat(self%nrefs,self%nptcls)
-        call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1)               self%file_header
-        write(unit=funit,pos=self%headsz + 1) mat
-    end subroutine create_empty
 
     ! destructor
 
