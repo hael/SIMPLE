@@ -86,7 +86,7 @@ contains
     subroutine write( self, mat )
         class(dist_binfile), intent(inout) :: self
         type(ptcl_ref),      intent(in)    :: mat(self%nrefs,self%nptcls)
-        integer :: funit, addr
+        integer :: funit, addr, io_stat
         logical :: success
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
