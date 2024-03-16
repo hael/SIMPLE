@@ -84,6 +84,7 @@ type :: ori
     procedure          :: get_class
     procedure          :: get_dfx, get_dfy
     procedure          :: get_eo
+    procedure          :: get_sampled
     procedure          :: get_updatecnt
     procedure          :: isthere
     procedure          :: ischar
@@ -322,6 +323,7 @@ contains
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
             self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
+            self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
             self_out%pparms(I_W)         = self_in%pparms(I_W)
             self_out%pparms(I_EO)        = self_in%pparms(I_EO)
@@ -330,6 +332,7 @@ contains
             call self_out%htab%set('corr',     self_in%htab%get('corr'))
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
             call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+            call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
             call self_out%htab%set('w',        self_in%htab%get('w'))
             call self_out%htab%set('eo',       self_in%htab%get('eo'))
@@ -347,6 +350,7 @@ contains
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
             self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
             self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
+            self_out%pparms(I_SAMPLED)   = self_in%pparms(I_SAMPLED)
             self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
             self_out%pparms(I_W)         = self_in%pparms(I_W)
             self_out%pparms(I_EO)        = self_in%pparms(I_EO)
@@ -355,6 +359,7 @@ contains
             call self_out%htab%set('corr',     self_in%htab%get('corr'))
             call self_out%htab%set('frac',     self_in%htab%get('frac'))
             call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+            call self_out%htab%set('sampled',  self_in%htab%get('sampled'))
             call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
             call self_out%htab%set('w',        self_in%htab%get('w'))
             call self_out%htab%set('eo',       self_in%htab%get('eo'))
@@ -878,6 +883,15 @@ contains
             get_eo = nint(self%htab%get('eo'))
         endif
     end function get_eo
+
+    pure integer function get_sampled( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_sampled = nint(self%pparms(I_SAMPLED))
+        else
+            get_sampled = nint(self%htab%get('sampled'))
+        endif
+    end function get_sampled
 
     pure integer function get_updatecnt( self )
         class(ori), intent(in) :: self

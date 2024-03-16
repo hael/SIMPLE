@@ -453,8 +453,7 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols( wcluster )
-        real, optional, intent(in)    :: wcluster
+    subroutine preprecvols
         character(len=:), allocatable :: part_str
         integer, allocatable :: pops(:)
         integer :: istate
@@ -464,13 +463,11 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                ! if( params_glob%l_frac_update )then
-                !     call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
-                !         int2str_pad(istate,2)//'_part'//part_str)
-                !     call build_glob%eorecvols(istate)%expand_exp
-                !     call build_glob%eorecvols(istate)%apply_weight(1.0 - &
-                !         params_glob%update_frac)
-                ! endif
+                if( params_glob%l_stoch_update )then
+                    call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
+                        int2str_pad(istate,2)//'_part'//part_str)
+                    call build_glob%eorecvols(istate)%expand_exp
+                endif
             endif
         end do
         deallocate(pops)

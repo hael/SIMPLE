@@ -1145,7 +1145,8 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 )call build%spproj_field%clean_updatecnt
+        if( startit == 1          ) call build%spproj_field%clean_updatecnt
+        if( params%l_stoch_update ) call build%spproj_field%clean_sampled
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call cluster2D_exec( cline, startit, converged )

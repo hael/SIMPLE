@@ -72,7 +72,7 @@ contains
         integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
         type(ori)         :: orientation
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio, effective_update_frac
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
@@ -105,17 +105,17 @@ contains
         if( trim(params_glob%refine).eq.'prob' )then
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-            &effective_update_frac, nptcls2update, pinds, ptcl_mask )
+            &nptcls2update, pinds, ptcl_mask )
         else
             if( params_glob%l_frac_update )then
-                if( build_glob%spproj_field%updatecnt_has_been_incr() )then ! we have a random subset
+                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
                     call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                    &effective_update_frac,   nptcls2update, pinds, ptcl_mask)
-                else                                                        ! we generate a random subset
+                                             &nptcls2update, pinds, ptcl_mask)
+                else                                                 ! we generate a random subset
                     call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
                     &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
                 endif
-            else                                                            ! we sample all state > 0
+            else                                                     ! we sample all state > 0
                 call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
                                              &nptcls2update, pinds, ptcl_mask)
             endif

@@ -37,21 +37,17 @@ enum, bind(c)
     enumerator :: I_GID        = 33
     enumerator :: I_OGID       = 34
     enumerator :: I_PIND       = 35
-    ! added Oct 31 2022
     enumerator :: I_NEVALS     = 36
     enumerator :: I_NGEVALS    = 37
     enumerator :: I_BETTER     = 38
-    ! added Nov 2 2022
     enumerator :: I_NPEAKS     = 39
     enumerator :: I_DIST_PEAKS = 40
-    ! added Nov3 2022
     enumerator :: I_CC_PEAK    = 41
     enumerator :: I_CC_NONPEAK = 42
-    ! added Nov12 2022
     enumerator :: I_FRAC_SH    = 43
     enumerator :: I_BETTER_L   = 44
+    enumerator :: I_SAMPLED    = 45
     ! empties
-    enumerator :: I_EMPTY5     = 45
     enumerator :: I_EMPTY6     = 46
     enumerator :: I_EMPTY7     = 47
     enumerator :: I_EMPTY8     = 48
@@ -60,7 +56,7 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
-integer, parameter :: N_NON_EMPTY      = 44
+integer, parameter :: N_NON_EMPTY      = 45
 
 contains
 
@@ -138,28 +134,26 @@ contains
                 get_oriparam_ind = I_OGID
             case('pind')
                 get_oriparam_ind = I_PIND
-             ! added Oct 31 2022
             case('nevals')
                 get_oriparam_ind = I_NEVALS
             case('ngevals')
                 get_oriparam_ind = I_NGEVALS
             case('better')
                 get_oriparam_ind = I_BETTER
-            ! added Nov 2 2022
             case('npeaks')
                 get_oriparam_ind = I_NPEAKS
             case('dist_peaks')
                 get_oriparam_ind = I_DIST_PEAKS
-            ! added Nov3 2022
             case('cc_peak')
                 get_oriparam_ind = I_CC_PEAK
             case('cc_nonpeak')
                 get_oriparam_ind = I_CC_NONPEAK
-            ! added Nov12 2022
             case('frac_sh')
                 get_oriparam_ind = I_FRAC_SH
             case('better_l')
                 get_oriparam_ind = I_BETTER_L
+            case('sampled')
+                get_oriparam_ind = I_SAMPLED
         end select
     end function get_oriparam_ind
 
@@ -237,28 +231,26 @@ contains
                 flag ='ogid'
             case(I_PIND)
                 flag ='pind'
-             ! added Oct 31 2022
             case(I_NEVALS)
                 flag ='nevals'
             case(I_NGEVALS)
                 flag ='ngevals'
             case(I_BETTER)
                 flag ='better'
-            ! added Nov 2 2022
             case(I_NPEAKS)
                 flag = 'npeaks'
             case(I_DIST_PEAKS)
                 flag = 'dist_peaks'
-            ! added Nov3 2022
             case(I_CC_PEAK)
                 flag = 'cc_peak'
             case(I_CC_NONPEAK)
                 flag = 'cc_nonpeak'
-            ! added Nov12 2022
             case(I_FRAC_SH)
                 flag = 'frac_sh'
             case(I_BETTER_L)
                 flag ='better_l'
+            case(I_SAMPLED)
+                flag ='sampled'
             case DEFAULT
                 flag = 'empty'
         end select

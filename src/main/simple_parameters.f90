@@ -84,6 +84,7 @@ type :: parameters
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: sh_smpl='no'         !< do shift sampling(yes|no){no}
+    character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
@@ -422,6 +423,7 @@ type :: parameters
     logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
+    logical :: l_stoch_update = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
@@ -588,6 +590,7 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
         call check_carg('stats',          self%stats)
+        call check_carg('stoch_update',   self%stoch_update)
         call check_carg('stream',         self%stream)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('tag',            self%tag)
@@ -1183,6 +1186,8 @@ contains
             self%update_frac   = 1.0
             self%l_frac_update = .false.
         endif
+        ! set stochastic update flag
+        self%l_stoch_update = self%stoch_update .ne. 'no'
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts
