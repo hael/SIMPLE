@@ -18,7 +18,6 @@ type moviewatcher
     character(len=LONGSTRLEN)          :: cwd            = ''    !< CWD
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
-    character(len=STDLEN)              :: fbody          = ''    !< template name
     character(len=STDLEN)              :: regexp         = ''    !< movies extensions
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
@@ -50,24 +49,40 @@ integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
 contains
 
     !>  \brief  is a constructor
-    function constructor( report_time )result( self )
-        integer, intent(in) :: report_time  ! in seconds
+    function constructor( report_time, dir, spproj )result( self )
+        integer,           intent(in) :: report_time  ! in seconds
+        character(len=*),  intent(in) :: dir
+        logical, optional, intent(in) :: spproj
         type(moviewatcher)  :: self
+        logical :: l_movies
         call self%kill
-        self%watch_dir = trim(adjustl(params_glob%dir_movies))
-        if( .not.file_exists(self%watch_dir) )then
-            THROW_HARD('Directory does not exist: '//trim(self%watch_dir))
-        else
-            write(logfhandle,'(A,A)')'>>> MOVIES WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
-        endif
+        l_movies = .true.
+        if( present(spproj) ) l_movies = .not.spproj
+        self%watch_dir = trim(adjustl(dir))
         self%cwd         = trim(params_glob%cwd)
         self%report_time = report_time
-        self%ext         = trim(adjustl(params_glob%ext))
-        self%fbody       = trim(adjustl(params_glob%fbody))
-        self%regexp = '\.mrc$|\.mrcs$'
+        if( l_movies )then
+            ! watching movies
+            if( .not.file_exists(self%watch_dir) )then
+                THROW_HARD('Directory does not exist: '//trim(self%watch_dir))
+            else
+                write(logfhandle,'(A,A)')'>>> MOVIES WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
+            endif
+            self%ext         = trim(adjustl(params_glob%ext))
+            self%regexp = '\.mrc$|\.mrcs$'
 #ifdef USING_TIFF
-        self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
+            self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
 #endif
+        else
+            ! watching simple projects
+            if( .not.file_exists(self%watch_dir) )then
+                THROW_HARD('Directory does not exist: '//trim(self%watch_dir))
+            else
+                write(logfhandle,'(A,A)')'>>> PROJECTS WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
+            endif
+            self%ext         = trim(adjustl(METADATA_EXT))
+            self%regexp = '\.simple$'
+        endif
     end function constructor
 
     !>  \brief  is the watching procedure

@@ -24,12 +24,20 @@ character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spp
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
 character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here? - left in for now
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once
+integer,               parameter :: LONGTIME        = 300                                        ! time lag after which a movie is processed
+integer,             parameter   :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
+
 integer :: movies_set_counter = 0
 
 type, extends(commander_base) :: commander_stream_preprocess
   contains
     procedure :: execute => exec_stream_preprocess
 end type commander_stream_preprocess
+
+type, extends(commander_base) :: commander_stream_pick
+  contains
+    procedure :: execute => exec_stream_pick
+end type commander_stream_pick
 
 contains
 
@@ -39,8 +47,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
-        integer,                   parameter   :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
-        integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
@@ -105,13 +111,13 @@ contains
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         output_dir_ctf_estimate   = filepath(trim(PATH_HERE), trim(DIR_CTF_ESTIMATE))
         output_dir_motion_correct = filepath(trim(PATH_HERE), trim(DIR_MOTION_CORRECT))
-        call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
-        call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream :: exec_preprocess_stream;  ")
+        call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream :: exec_preprocess_stream;  ")
         call cline%set('dir','../')
         ! setup the environment for distributed execution
         call qenv%new(1,stream=.true.)
         ! movie watcher init
-        movie_buff = moviewatcher(LONGTIME)
+        movie_buff = moviewatcher(LONGTIME, params%dir_movies)
         ! import previous run
         call import_prev_streams ! TODO
         ! start watching
@@ -252,7 +258,7 @@ contains
         call spproj%kill
         call qsys_cleanup
         ! end gracefully
-        call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
         contains
 
             !>  write starfile snapshot
@@ -528,6 +534,136 @@ contains
             end subroutine read_xml_beamtilts
 
     end subroutine exec_stream_preprocess
+
+    subroutine exec_stream_pick( self, cline )
+        use simple_moviewatcher, only: moviewatcher
+        class(commander_stream_pick), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(sp_project), allocatable :: tmpprojs(:)
+        type(parameters)              :: params
+        type(moviewatcher)            :: project_buff
+        type(cmdline)                 :: cline_exec
+        type(qsys_env)                :: qenv
+        type(sp_project)              :: spproj_glob    ! global project
+        type(starproject)             :: starproj
+        type(ctfparams)               :: ctfvars
+        character(len=:),          allocatable :: output_dir, output_dir_picker, dir_watch
+        character(len=LONGSTRLEN), allocatable :: spproj_fnames(:)
+        integer,                   allocatable :: states(:), mics_states(:)
+        integer :: nprojs, min_nprojs, imic, nmics, nmics_target, nspprojs_target, nmics_glob, iproj, cnt
+        integer :: nvalid_mics
+        logical :: l_terminate
+        if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
+        ! picking
+        if( .not. cline%defined('picker')          ) call cline%set('picker',         'old')
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         PICK_LP_DEFAULT)
+        if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
+        if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
+        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',        'no')
+        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',    'no')
+        nmics_target    = 50                                             ! TBD
+        nspprojs_target = ceiling(real(nmics_target)/real(NMOVS_SET))    ! TBD
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
+        ! master parameters
+        call cline%set('numlen', 5.)
+        call cline%set('stream','yes')
+        call params%new(cline)
+        params_glob%split_mode = 'stream'
+        params_glob%ncunits    = params%nparts
+        call cline%set('mkdir', 'no')
+        call cline%set('prg',   'pick_extract')
+        if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
+            THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
+        endif
+        ! initialise progress monitor
+        call progressfile_init()
+        ! master project file
+        call spproj_glob%read( params%projfile )
+        call spproj_glob%update_projinfo(cline)
+        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream multi_pick must start from an empty project (eg from root project folder)')
+        ! output directories
+        call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
+        output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
+        call simple_mkdir(output_dir)
+        call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
+        output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
+        call simple_mkdir(output_dir_picker,errmsg="commander_stream :: exec_stream_pick_extract;  ")
+        call cline%set('dir','../')
+        ! setup the environment for distributed execution
+        call qenv%new(1,stream=.true.)
+        ! projects watcher
+        dir_watch    = trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED)
+        project_buff = moviewatcher(LONGTIME, params%dir_target, spproj=.true.)
+        ! wait until a sufficient number of micrographs
+        ! ( to take account ctfres/ice)
+        nmics_glob  = 0
+        l_terminate = .false.
+        do
+            if( file_exists(trim(TERM_STREAM)) )then
+                ! termination
+                write(logfhandle,'(A)')'>>> TERMINATING STREAM_PICK_EXTRACT'
+                l_terminate = .true.
+                exit
+            endif
+            call project_buff%watch(nprojs, spproj_fnames, max_nmovies=nspprojs_target)
+            if( nprojs > 0 )then
+                nvalid_mics = 0
+                allocate(tmpprojs(nprojs))
+                do iproj = 1,nprojs
+                    ! read
+                    call tmpprojs(iproj)%read(spproj_fnames(iproj))
+                    states = nint(tmpprojs(iproj)%os_mic%get_all('state'))
+                    nmics  = count(states==1)
+                    if( nmics > 1 )then
+                        ! apply selection thresholds here
+                        ! ...
+                    endif
+                    if( nmics > 1 )then
+                        nvalid_mics = nvalid_mics + 1
+                        if( nmics_glob == 0 )then
+                            mics_states = states
+                        else
+                            mics_states = [mics_states, states]
+                        endif
+                    endif
+                    call project_buff%add2history(spproj_fnames(iproj))
+                enddo
+                if( nvalid_mics > 0 )then
+                    ! import selected
+                    if( nmics_glob == 0 )then
+                        call spproj_glob%os_mic%new(nvalid_mics, is_ptcl=.false.)
+                    else
+                        call spproj_glob%os_mic%reallocate(nmics_glob+nvalid_mics)
+                    endif
+                    cnt = 0
+                    do iproj = 1,nprojs
+                        do imic = 1,tmpprojs(iproj)%os_mic%get_noris()
+                            cnt = cnt + 1
+                            if( mics_states(cnt) == 0 ) cycle
+                            nmics_glob = nmics_glob + 1
+                            call spproj_glob%os_mic%transfer_ori(nmics_glob, tmpprojs(iproj)%os_mic, imic)
+                        enddo
+                        call tmpprojs(iproj)%kill
+                    enddo
+                endif
+                deallocate(tmpprojs)
+                ! sufficient number of micrographs
+                if( nvalid_mics > nmics_target ) exit
+            endif
+            call sleep(WAITTIME)
+        enddo
+        if( l_terminate )then
+            ! nothign to do
+        else
+            ! extract parameters
+            ctfvars = spproj_glob%os_mic%get_ctfvars(1)
+        endif
+        call spproj_glob%write(params%projfile)
+        call simple_end('**** SIMPLE_STREAM_PICK NORMAL STOP ****')
+    end subroutine exec_stream_pick
 
     !> updates current parameters with user input
     subroutine update_user_params( cline_here )
