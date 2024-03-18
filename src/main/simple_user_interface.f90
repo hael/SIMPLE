@@ -124,6 +124,7 @@ type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
+type(simple_program), target :: multipick_cluster2D
 type(simple_program), target :: new_project
 type(simple_program), target :: nununiform_filter2D
 type(simple_program), target :: nununiform_filter3D
@@ -405,6 +406,7 @@ contains
         call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
+        call new_multipick_cluster2D
         call new_new_project
         call new_nununiform_filter2D
         call new_nununiform_filter3D
@@ -519,6 +521,7 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
+        call push2prg_ptr_array(multipick_cluster2D)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nununiform_filter2D)
         call push2prg_ptr_array(nununiform_filter3D)
@@ -693,6 +696,8 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('multipick_cluster2D')
+                ptr2prg => multipick_cluster2D
             case('new_project')
                 ptr2prg => new_project
             case('nununiform_filter2D')
@@ -914,6 +919,7 @@ contains
 
     subroutine list_stream_prgs_in_ui
         write(logfhandle,'(A)') preproc%name
+        write(logfhandle,'(A)') multipick_cluster2D%name
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
@@ -2983,6 +2989,55 @@ contains
         call motion_correct%set_gui_params('comp_ctrls', 2, submenu="compute")
     end subroutine new_motion_correct
 
+    subroutine new_multipick_cluster2D
+        ! PROGRAM SPECIFICATION
+        call multipick_cluster2D%new(&
+        &'multipick_cluster2D', &                                          ! name
+        &'Blind picker references generation',&                            ! descr_short
+        &'is a distributed workflow for bling picking references generation from micrographs',& ! descr_long
+        &'simple_stream',&                                                 ! executable
+        &0, 6, 0, 4, 0, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        multipick_cluster2D%gui_submenu_list = "picking,compute"
+        multipick_cluster2D%advanced = .false.
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call multipick_cluster2D%set_input('parm_ios', 1, pcontrast)
+        call multipick_cluster2D%set_gui_params('parm_ios', 1, submenu="picking")
+        call multipick_cluster2D%set_input('parm_ios', 2, moldiam)
+        call multipick_cluster2D%set_gui_params('parm_ios', 2, submenu="picking")
+        call multipick_cluster2D%set_input('parm_ios', 3, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5', .false., 5.)
+        call multipick_cluster2D%set_gui_params('parm_ios', 3, submenu="picking")
+        call multipick_cluster2D%set_input_1('parm_ios', 4, 'moldiam_max', 'num', 'Upper bound molecular diameter in multipick', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
+        call multipick_cluster2D%set_gui_params('parm_ios', 4, submenu="picking")
+        call multipick_cluster2D%set_input('parm_ios', 5, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
+        call multipick_cluster2D%set_gui_params('parm_ios', 5, submenu="picking")
+        multipick_cluster2D%parm_ios(5)%required = .false.
+        call multipick_cluster2D%set_input('parm_ios', 6, nran)
+        call multipick_cluster2D%set_gui_params('parm_ios', 6, submenu="picking")
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call multipick_cluster2D%set_input('srch_ctrls', 1, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}', '{2.5}', .false., 2.5)
+        call multipick_cluster2D%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
+        call multipick_cluster2D%set_input('srch_ctrls', 2, pick_roi)
+        call multipick_cluster2D%set_gui_params('srch_ctrls', 2, submenu="picking")
+        call multipick_cluster2D%set_input('srch_ctrls', 3, backgr_subtr)
+        call multipick_cluster2D%set_gui_params('srch_ctrls', 3, submenu="picking")
+        call multipick_cluster2D%set_input('srch_ctrls', 4, crowded)
+        call multipick_cluster2D%set_gui_params('srch_ctrls', 4, submenu="picking")
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call multipick_cluster2D%set_input('comp_ctrls', 1, nparts)
+        call multipick_cluster2D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        call multipick_cluster2D%set_input('comp_ctrls', 2, nthr)
+        call multipick_cluster2D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+    end subroutine new_multipick_cluster2D
+
     subroutine new_nununiform_filter2D
         ! PROGRAM SPECIFICATION
         call nununiform_filter2D%new(&
@@ -3145,7 +3200,7 @@ contains
         call pick%set_gui_params('parm_ios', 6, submenu="picking")
         call pick%set_input('parm_ios', 7, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
         call pick%set_gui_params('parm_ios', 7, submenu="picking")
-        pick%parm_ios(5)%required = .false.
+        pick%parm_ios(7)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls

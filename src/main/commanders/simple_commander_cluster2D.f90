@@ -284,7 +284,6 @@ contains
         integer                             :: last_iter
         logical                             :: l_scaling, l_shmem, l_euclid
         ! parameters
-        !character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
         integer, parameter    :: MINBOX      = 128
         real,    parameter    :: TARGET_LP   = 15.
         real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.
