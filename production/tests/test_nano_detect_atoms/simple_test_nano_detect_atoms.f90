@@ -1,280 +1,12 @@
-program simple_test_nano_detect_atoms
-
+module nano_picker_utils
     include 'simple_lib.f08'
     use simple_image
-    use simple_nanoparticle
-    use simple_nanoparticle_utils
-    use simple_parameters
-    use simple_defs_atoms
     use simple_atoms
     use simple_parameters
-    use simple_math
-    use simple_linalg
-    use simple_strings
 
-    character(len=100) :: filename, pdb_filename
-    integer :: iostat, Z, ldim(3), boxsize, ldim_box(3)
-    integer :: offset, nxyz(3), nxyz_offset(3), nboxes, xind, yind, zind, pos(3)
-    integer :: xoff, yoff, zoff, npeaks, nbox, ibox, jbox, loc, ipeak, iimg, icoord
-    real :: radius, smpd, sxx, thres, dist, dthres, length_diffs
-    type(image) :: simulated_atom, nano_img, simulated_NP, boximg, test_NP
-    type(image), allocatable :: atms_array(:), convolved_atoms(:)
-    type(atoms) :: atom
-    type(nanoparticle) :: nano
-    type(parameters), target :: params
-    integer, allocatable :: positions(:,:), inds_offset(:,:,:), pos_inds(:)
-    real, allocatable :: box_scores(:,:,:), tmp(:), scores_cen(:,:,:), pos_scores(:), coords(:,:), coords_convolved(:,:)
-    real, allocatable :: pdb_coords(:,:), test_coords(:,:), test_coords_convolved(:,:), distances(:), distances_convolved(:)
-    logical :: l_err_atom, l_err_box, is_peak
-    logical, allocatable :: mask(:), selected_pos(:)
+    implicit none
 
-    real,    parameter :: box_expansion_factor = 0.111
-    integer, parameter :: PEAK_THRES_LEVEL = 1
-
-    filename = 'recvol_state01_iter005.mrc' ! first draft of 3D reconstruction 
-    pdb_filename = 'ATMS.pdb' ! first draft of pdb file of atomic positions based on identify_atomic_positions
-
-    ! checking that files can be opened without issue
-    open(unit=35, file=trim(filename), iostat=iostat, status='old')
-    if (iostat .eq. 0) then
-        print *, 'File ' // trim(filename) // ' exists'
-    else
-        print *, 'An error occured when trying to open the file ' // trim(filename)
-    end if
-    close(35)
-
-    open(unit=36, file=trim(pdb_filename), iostat=iostat, status='old')
-    if (iostat .eq. 0) then
-        print *, 'File ' // trim(pdb_filename) // ' exists'
-    else
-        print *, 'An error occured when trying to open the file ' // trim(pdb_filename)
-    end if
-    close(36)
-
-    ! get atomic radius for platinum
-    call get_element_Z_and_radius('PT', Z, radius)
-
-    ! simulate one atom
-    call atom%new(1)
-    call atom%set_element(1,'PT')
-    ldim = [120,120,120]
-    smpd = 0.358
-    boxsize = round2even(radius  / smpd) * 2
-    ldim_box = [boxsize,boxsize,boxsize]
-    call atom%set_coord(1,(smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
-    call simulated_atom%new(ldim_box,smpd)
-    call atom%convolve(simulated_atom, cutoff=8*smpd)
-    call simulated_atom%write('simulated_atom.mrc')
-    call simulated_atom%prenorm4real_corr(l_err_atom)
-
-    ! create new nanoparticle from image stored at filename
-    params_glob => params
-    params_glob%element = 'PT'
-    params_glob%smpd = smpd
-    call nano%new(filename)
-    !call nano%get_img(nano_img)
-
-    ! simulating noise free NP map (for testing)
-    call nano%set_atomic_coords(trim(pdb_filename))
-    call nano%simulate_atoms(simatms=simulated_NP)
-    call simulated_NP%write('simulated_NP.mrc')
-
-    ! set up picking infrastructure
-    offset = 2
-    nxyz = simulated_NP%get_ldim() - boxsize ! number of pixels in each direction in simulated image, with boxsize subtracted
-    nxyz_offset = 0
-    ! find number of boxes
-    do xind = 0, nxyz(1), offset
-        nxyz_offset(1) = nxyz_offset(1) + 1
-        nxyz_offset(2) = 0
-        do yind = 0, nxyz(2), offset
-            nxyz_offset(2) = nxyz_offset(2) + 1
-            nxyz_offset(3) = 0
-            do zind = 0, nxyz(3), offset
-                nxyz_offset(3) = nxyz_offset(3) + 1
-                nboxes = nboxes + 1
-            end do
-        end do
-    end do
-    ! set up positions and inds_offset
-    allocate(positions(nboxes,3), inds_offset(nxyz_offset(1),nxyz_offset(2),nxyz_offset(3)), source=0)
-    nxyz_offset = 0
-    nboxes = 0
-    do xind = 0, nxyz(1), offset
-        nxyz_offset(1) = nxyz_offset(1) + 1
-        nxyz_offset(2) = 0
-        do yind = 0, nxyz(2), offset
-            nxyz_offset(2) = nxyz_offset(2) + 1
-            nxyz_offset(3) = 0
-            do zind = 0, nxyz(3), offset
-                nxyz_offset(3) = nxyz_offset(3) + 1
-                nboxes = nboxes + 1
-                positions(nboxes,:) = [xind,yind,zind]
-                inds_offset(nxyz_offset(1),nxyz_offset(2),nxyz_offset(3)) = nboxes
-            end do
-        end do
-    end do
-    allocate(box_scores(nxyz_offset(1),nxyz_offset(2),nxyz_offset(3)), source = -1.)
-
-    ! iterate through positions in simulated image, compare to simulated atom 
-    do xoff = 1, nxyz_offset(1)
-        do yoff = 1, nxyz_offset(2)
-            do zoff = 1, nxyz_offset(3)
-                call boximg%new([boxsize,boxsize,boxsize],smpd)
-                pos = positions(inds_offset(xoff,yoff,zoff),:)
-                call window_slim_3D(simulated_NP, pos, boxsize, boximg)
-                call boximg%prenorm4real_corr(l_err_box)
-                box_scores(xoff,yoff,zoff) = simulated_atom%real_corr_prenorm(boximg)
-                call boximg%kill
-            end do 
-        end do 
-    end do
-
-    ! find peak thresholding value
-    tmp = pack(box_scores, mask=(box_scores > -1 + 1e-10))
-    call detect_peak_thres(size(tmp), nboxes, PEAK_THRES_LEVEL, tmp, thres)
-    print *, 'Peak threshold is ', thres
-
-    ! center filter
-    allocate(scores_cen(nxyz_offset(1), nxyz_offset(2), nxyz_offset(3)))
-    do xoff = 1, nxyz_offset(1)
-        do yoff = 1, nxyz_offset(2)
-            do zoff = 1, nxyz_offset(3)
-            if( box_scores(xoff,yoff,zoff) >= thres )then
-                call boximg%new([boxsize,boxsize,boxsize],smpd)
-                pos  = positions(inds_offset(xoff,yoff,zoff),:)
-                call window_slim_3D(simulated_NP, pos, boxsize, boximg)
-                scores_cen(xoff, yoff, zoff) = boximg%box_cen_arg(boximg)
-                call boximg%kill
-            else
-                scores_cen(xoff,yoff,zoff) = real(offset) + 1.
-            endif
-            end do
-        end do
-    end do
-    print *, 'NPEAKS BEFORE CENTER FILTER = ', count(box_scores >= thres)
-    npeaks = count(scores_cen <= real(offset))
-    where( scores_cen <= real(offset) )
-            ! there's a peak
-    elsewhere
-            box_scores = -1.
-    endwhere
-    print *, 'NPEAKS AFTER CENTER FILTER = ', npeaks
-    
-    ! distance filter
-    dthres = real(offset)
-    pos_inds   = pack(inds_offset(:,:,:),  mask=box_scores(:,:,:) >= thres)
-    pos_scores = pack( box_scores(:,:,:),  mask=box_scores(:,:,:) >= thres)
-    nbox       = size(pos_inds)
-    allocate(mask(nbox),         source=.false.)
-    allocate(selected_pos(nbox), source=.true. )
-    do ibox = 1, nbox
-        mask = .false.
-        ! identify boxes in neighborhood
-        do jbox = 1, nbox
-            dist = euclid(real(positions(pos_inds(ibox),:)),real(positions(pos_inds(jbox),:)))
-            if( dist <= dthres ) mask(jbox) = .true.
-        end do
-        ! find highest correlation score in neighborhood
-        loc = maxloc(pos_scores, mask=mask, dim=1)
-        ! eliminate all but the best
-        mask(loc) = .false.
-        where( mask ) selected_pos = .false.
-    end do
-    npeaks = count(selected_pos)
-    print *, 'NPEAKS BEFORE DISTANCE FILTER = ', nbox
-    print *, 'NPEAKS AFTER DISTANCE FILTER = ', npeaks
-    ! update packed arrays
-    pos_inds   = pack(pos_inds,   mask=selected_pos)
-    pos_scores = pack(pos_scores, mask=selected_pos)
-    ! update box scores
-    do xoff = 1, nxyz_offset(1)
-        do yoff = 1, nxyz_offset(2)
-            do zoff = 1, nxyz_offset(3)
-                is_peak = .false.
-                do ipeak = 1,npeaks
-                    if( pos_inds(ipeak) == inds_offset(xoff,yoff,zoff) )then
-                        is_peak = .true.
-                        exit
-                    endif
-                end do
-                if( .not. is_peak ) box_scores(xoff,yoff,zoff) = -1.
-            end do
-        end do
-    end do
-
-    ! remove outliers
-    
-    ! make array of images containing the images of identified atoms and extract coordinates of peaks
-    pos_inds   = pack(inds_offset(:,:,:),  mask=box_scores(:,:,:) >= thres)
-    nbox = size(pos_inds, dim=1)
-    allocate(coords(nbox,3))
-    allocate(atms_array(nbox))
-    do iimg = 1, nbox
-        pos = positions(pos_inds(iimg),:)
-        call atms_array(iimg)%new(ldim_box,smpd)
-        call window_slim_3D(simulated_NP, pos, boxsize, atms_array(iimg))
-        ! want coordinates of atoms to be at the center of the images
-        call atms_array(iimg)%norm_minmax
-        call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
-        call atms_array(iimg)%masscen(coords(iimg,:)) 
-        coords(iimg,:) = coords(iimg,:) + real(atms_array(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
-    end do
-    call write_centers('test_atomic_centers',coords)
-    deallocate(coords)
-
-    ! simulate nanoparticle using new coordinates
-    ! and compare to original (simulated) NP?
-    call nano%set_atomic_coords('test_atomic_centers.pdb')
-    call nano%simulate_atoms(simatms=test_NP)
-    call test_NP%write('test_NP.mrc')
-
-    ! Use FT to find more accurate atomic centers
-    ! first, create new array for convolved images
-    allocate(coords_convolved(nbox,3))
-    allocate(convolved_atoms(nbox))
-    ! fourier transform both images, then multiply and inverse fourier transform
-    call simulated_atom%fft()
-    do iimg = 1, nbox
-        pos = positions(pos_inds(iimg),:)
-        call convolved_atoms(iimg)%new(ldim_box,smpd)
-        call atms_array(iimg)%fft()
-        convolved_atoms(iimg) = atms_array(iimg)%conjg() * simulated_atom
-        call convolved_atoms(iimg)%ifft()
-        call atms_array(iimg)%ifft()
-        call convolved_atoms(iimg)%norm_minmax
-        call convolved_atoms(iimg)%write('boximgs_convolved/boximg_'//trim(int2str(iimg))//'.mrc')
-        call convolved_atoms(iimg)%masscen(coords_convolved(iimg,:))
-        coords_convolved(iimg,:) = coords_convolved(iimg,:) + real(convolved_atoms(iimg)%get_ldim())/2. + pos
-    end do
-    call simulated_atom%ifft()
-    call write_centers('test_atomic_coords_convolved', coords_convolved)
-    deallocate(coords_convolved)
-
-    ! get coordinates from pdbfiles
-    call read_pdb2matrix(trim(pdb_filename), pdb_coords)
-    call read_pdb2matrix('test_atomic_centers.pdb',test_coords)
-    allocate(distances(size(pdb_coords,dim=2)))
-    ! find distance between coordinates generated in this test and those of the simualted NP from the start
-    call find_closest(pdb_coords,test_coords,size(pdb_coords,dim=2),size(test_coords,dim=2),distances)
-    print *, 'AVG DISTANCE (no convolution) = ', sum(distances)/size(distances)
-    ! do the same thing for the convolved images
-    allocate(distances_convolved(size(pdb_coords,dim=2)))
-    call read_pdb2matrix('test_atomic_coords_convolved.pdb',test_coords_convolved)
-    call find_closest(pdb_coords,test_coords_convolved,size(pdb_coords,dim=2),size(test_coords,dim=2),distances_convolved,filename='combined_coords_convolved.csv')
-    print *, 'AVG DISTANCE (with convolution) = ', sum(distances_convolved)/size(distances_convolved)
-
-    deallocate(convolved_atoms)
-    deallocate(atms_array)
-    deallocate(selected_pos)
-    deallocate(mask)
-    deallocate(scores_cen)
-    deallocate(box_scores)
-    deallocate(positions)
-    deallocate(inds_offset)
-
-
-    contains
+    contains 
 
     subroutine window_slim_3D( img_in, coord, box, img_out)
         class(image), intent(in)    :: img_in
@@ -288,57 +20,6 @@ program simple_test_nano_detect_atoms
         call img_out%set_rmat(img_in_rmat(fromc(1):toc(1), fromc(2):toc(2), fromc(3):toc(3)), ft=.false.)
         deallocate(img_in_rmat) 
     end subroutine window_slim_3D
-
-    ! for finding outliers, not used at the moment
-    function avg_loc_sdev_3D( img_in, winsz ) result( asdev )
-        class(image), intent(in) :: img_in
-        integer,      intent(in) :: winsz
-        real    :: avg, asdev
-        real, allocatable :: sdevs(:,:,:), rmat(:,:,:)
-        integer :: i, j, k, ir(2), jr(2), kr(2), isz, jsz, ksz, npix, ldim(3)
-        ldim = img_in%get_ldim()
-        allocate(sdevs(ldim(1),ldim(2),ldim(3)))
-        allocate(rmat( ldim(1),ldim(2),ldim(3)))
-        rmat = img_in%get_rmat()
-        do i = 1,ldim(1)
-            ir(1) = max(1,       i - winsz)
-            ir(2) = min(ldim(1), i + winsz)
-            isz   = ir(2) - ir(1) + 1
-            do j = 1,ldim(2)
-                jr(1) = max(1,       j - winsz)
-                jr(2) = min(ldim(2), j + winsz)
-                jsz   = jr(2) - jr(1) + 1
-                do k = 1, ldim(3)
-                    kr(1) = max(1,       k - winsz)
-                    kr(2) = min(ldim(3), k + winsz)
-                    ksz   = kr(2) - kr(1) + 1
-                    npix         = isz * jsz + ksz
-                    avg          = sum(rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2))) / real(npix)
-                    sdevs(i,j,k) = sqrt(sum((rmat(ir(1):ir(2),jr(1):jr(2),kr(1):kr(2)) - avg)**2.0) / real(npix - 1))
-                end do
-            end do
-        end do
-        asdev = sum(sdevs) / real(ldim(1) * ldim(2) * ldim(3))
-        deallocate(rmat)
-        deallocate(sdevs)
-    end function avg_loc_sdev_3D
-
-    subroutine write_centers(fname, coords )
-        character(len=*),           intent(in)    :: fname
-        real,                       intent(in)    :: coords(:,:)
-        type(atoms) :: centers_pdb
-        integer     :: cc
-        call centers_pdb%new(size(coords, dim = 1), dummy=.true.)
-        do cc = 1, size(coords, dim = 1)
-            call centers_pdb%set_name(cc,params_glob%element)
-            call centers_pdb%set_element(cc,params_glob%element)
-            call centers_pdb%set_coord(cc,coords(cc,:)*smpd)
-            !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
-            call centers_pdb%set_resnum(cc,cc)
-        enddo
-        call centers_pdb%writepdb(fname)
-
-    end subroutine write_centers
 
     subroutine find_closest( coords_1, coords_2, length_1, length_2, distances, filename )
         integer,                    intent(in)  :: length_1, length_2
@@ -372,5 +53,468 @@ program simple_test_nano_detect_atoms
         close(22)
     end subroutine find_closest
 
+    subroutine write_centers(fname, coords, smpd)
+        character(len=*),           intent(in)    :: fname
+        real,                       intent(in)    :: coords(:,:)
+        real,                       intent(in)    :: smpd
+        type(atoms) :: centers_pdb
+        integer     :: cc
+        call centers_pdb%new(size(coords, dim = 1), dummy=.true.)
+        do cc = 1, size(coords, dim = 1)
+            call centers_pdb%set_name(cc,params_glob%element)
+            call centers_pdb%set_element(cc,params_glob%element)
+            call centers_pdb%set_coord(cc,coords(cc,:)*smpd)
+            !call centers_pdb%set_beta(cc,nano%atominfo(cc)%valid_corr) ! use per atom valid corr
+            call centers_pdb%set_resnum(cc,cc)
+        enddo
+        call centers_pdb%writepdb(fname)
+    end subroutine write_centers
 
+end module nano_picker_utils
+
+module nano_detect_atoms
+    !$ use omp_lib
+    !$ use omp_lib_kinds
+    include 'simple_lib.f08'
+    use simple_image
+    use simple_atoms
+    use simple_nanoparticle
+    use simple_parameters
+    use nano_picker_utils
+    use simple_math
+    use simple_linalg
+    use simple_nanoparticle_utils
+    use simple_defs_atoms
+
+    implicit none
+    
+    type :: nano_picker
+        private
+        character(len=4)   :: element
+        integer :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
+        integer, allocatable :: positions(:,:), inds_offset(:,:,:)
+        type(image) :: simulated_atom, nano_img
+        type(image), allocatable :: convolved_atoms(:)
+        real :: smpd, thres
+        real, allocatable :: box_scores(:,:,:)
+
+    contains
+        procedure :: new
+        procedure :: simulate_atom
+        procedure :: setup_iterators
+        procedure :: match_boxes
+        procedure :: identify_threshold
+        procedure :: center_filter
+        procedure :: distance_filter
+        procedure :: find_centers
+        procedure :: write_boximgs
+        procedure :: compare_pick
+        procedure :: kill
+
+    end type nano_picker
+
+    contains
+
+    subroutine new(self, smpd, element, filename, peak_thres_level)
+        class(nano_picker), intent(inout) :: self
+        real, intent(in)                  :: smpd
+        character(len=*), intent(in)      :: element
+        character(len=100), intent(in)    :: filename
+        integer, intent(in)               :: peak_thres_level
+        type(nanoparticle)       :: nano
+        type(parameters), target :: params
+        self%smpd = smpd
+        self%element = element
+        ! retrieve nano_img from filename and find ldim
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd = self%smpd
+        call nano%new(filename)
+        call nano%get_img(self%nano_img)
+        self%ldim = self%nano_img%get_ldim()
+        self%peak_thres_level = peak_thres_level
+    end subroutine new
+
+    subroutine simulate_atom(self)
+        class(nano_picker), intent(inout) :: self
+        real        :: radius
+        integer     :: Z, ldim_box(3)
+        type(atoms) :: atom
+        logical     :: l_err_atom
+        !call get_element_Z_and_radius(self%element, Z, radius)
+        radius = 1.1
+        call atom%new(1)
+        call atom%set_element(1,trim(self%element))
+        self%boxsize = round2even(radius / self%smpd) * 2
+        ldim_box = [self%boxsize,self%boxsize,self%boxsize]
+        call atom%set_coord(1,(self%smpd*real(ldim_box)/2.)) ! make sure atom is in center of box
+        call self%simulated_atom%new(ldim_box,self%smpd)
+        call atom%convolve(self%simulated_atom, cutoff=8*self%smpd)
+        call self%simulated_atom%write('simulated_atom.mrc')
+        call self%simulated_atom%prenorm4real_corr(l_err_atom)
+    end subroutine simulate_atom
+
+    subroutine setup_iterators(self, offset)
+        class(nano_picker), intent(inout) :: self
+        integer,            intent(in)    :: offset
+        integer :: nxyz(3), xind, yind, zind, nboxes
+        ! set up picking infrastructure
+        self%offset = offset
+        nxyz = self%ldim - self%boxsize
+        self%nxyz_offset = 0
+        nboxes=0
+        ! find number of boxes
+        do xind = 0, nxyz(1), self%offset
+            self%nxyz_offset(1) = self%nxyz_offset(1) + 1
+            self%nxyz_offset(2) = 0
+            do yind = 0, nxyz(2), self%offset
+                self%nxyz_offset(2) = self%nxyz_offset(2) + 1
+                self%nxyz_offset(3) = 0
+                do zind = 0, nxyz(3), offset
+                    self%nxyz_offset(3) = self%nxyz_offset(3) + 1
+                    nboxes = nboxes + 1
+                end do
+            end do
+        end do
+        ! set up positions and inds_offset
+        allocate(self%positions(nboxes,3), source = 0)
+        allocate(self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=0)
+        self%nxyz_offset = 0
+        nboxes = 0
+        do xind = 0, nxyz(1), self%offset
+            self%nxyz_offset(1) = self%nxyz_offset(1) + 1
+            self%nxyz_offset(2) = 0
+            do yind = 0, nxyz(2), self%offset
+                self%nxyz_offset(2) = self%nxyz_offset(2) + 1
+                self%nxyz_offset(3) = 0
+                do zind = 0, nxyz(3), self%offset
+                    self%nxyz_offset(3) = self%nxyz_offset(3) + 1
+                    nboxes = nboxes + 1
+                    self%positions(nboxes,:) = [xind,yind,zind]
+                    self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = nboxes
+                end do
+            end do
+        end do
+        allocate(self%box_scores(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source = -1.)
+    end subroutine setup_iterators
+
+    subroutine match_boxes(self)
+        class(nano_picker), intent(inout) :: self
+        type(image), allocatable :: boximgs(:)
+        integer                  :: xoff, yoff, zoff, pos(3), ithr, nthr
+        logical                  :: l_err_box
+        ! construct array of boximgs
+        !$ nthr = omp_get_max_threads()
+        allocate(boximgs(nthr))
+        do ithr = 1,nthr
+            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+        end do
+        ! iterate through positions in nanoparticle image, compare to simulated atom 
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos,l_err_box) proc_bind(close)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    !call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                    ithr = omp_get_thread_num() + 1
+                    pos = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+                    call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
+                    call boximgs(ithr)%prenorm4real_corr(l_err_box)
+                    self%box_scores(xoff,yoff,zoff) = self%simulated_atom%real_corr_prenorm(boximgs(ithr))
+                    !call boximg%kill
+                end do 
+            end do 
+        end do
+        !$omp end parallel do
+        ! kill boximgs
+        do ithr = 1,nthr
+            call boximgs(ithr)%kill
+        end do
+        deallocate(boximgs)
+    end subroutine match_boxes
+
+    subroutine identify_threshold(self,min_thres)
+        class(nano_picker), intent(inout) :: self
+        real, optional,     intent(in)    :: min_thres
+        real, allocatable :: tmp(:)
+        !integer           :: nboxes
+        ! find peak thresholding value
+        if (present(min_thres)) then
+            tmp = pack(self%box_scores, mask=(self%box_scores > min_thres))
+        else ! idk if this is something that makes sense to do..
+            tmp = pack(self%box_scores, mask=(self%box_scores > -1 + 1e-10))
+        end if
+        call detect_peak_thres(size(tmp), size(tmp), self%peak_thres_level, tmp, self%thres)
+        print *, 'Peak threshold is ', self%thres
+        deallocate(tmp)
+    end subroutine identify_threshold
+
+    subroutine center_filter(self)
+        class(nano_picker), intent(inout) :: self
+        real, allocatable        :: scores_cen(:,:,:)
+        integer                  :: xoff, yoff, zoff, pos(3), npeaks, ithr, nthr
+        type(image), allocatable :: boximgs(:)
+        ! construct array of boximgs
+        !$ nthr = omp_get_max_threads()
+        allocate(boximgs(nthr))
+        do ithr = 1,nthr
+            call boximgs(ithr)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+        end do
+        allocate(scores_cen(self%nxyz_offset(1), self%nxyz_offset(2), self%nxyz_offset(3)))
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,ithr,pos) proc_bind(close)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                if( self%box_scores(xoff,yoff,zoff) >= self%thres )then
+                    !call boximg%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+                    ithr = omp_get_thread_num() + 1
+                    pos  = self%positions(self%inds_offset(xoff,yoff,zoff),:)
+                    call window_slim_3D(self%nano_img, pos, self%boxsize, boximgs(ithr))
+                    scores_cen(xoff, yoff, zoff) = boximgs(ithr)%box_cen_arg(boximgs(ithr))
+                    !call boximg%kill
+                else
+                    scores_cen(xoff,yoff,zoff) = real(self%offset) + 1.
+                endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! kill boximgs
+        do ithr = 1,nthr
+            call boximgs(ithr)%kill
+        end do
+        deallocate(boximgs)
+        print *, 'NPEAKS BEFORE CENTER FILTER = ', count(self%box_scores >= self%thres)
+        npeaks = count(scores_cen <= real(self%offset))
+        where( scores_cen <= real(self%offset))
+            ! there's a peak
+        elsewhere
+            self%box_scores = -1.
+        endwhere
+        print *, 'NPEAKS AFTER CENTER FILTER = ', npeaks
+        deallocate(scores_cen)
+    end subroutine center_filter
+
+    subroutine distance_filter(self, dist_thres)
+        class(nano_picker), intent(inout) :: self
+        real,   optional,   intent(in)    :: dist_thres
+        real :: dist_thres_here, dist
+        integer :: nbox, ibox, jbox, xoff, yoff, zoff, npeaks, ipeak, loc
+        integer, allocatable :: pos_inds(:)
+        real, allocatable :: pos_scores(:)
+        logical, allocatable :: mask(:), selected_pos(:)
+        logical :: is_peak
+        ! distance filter
+        if (present(dist_thres)) then
+            dist_thres_here = dist_thres
+        else
+            dist_thres_here = real(self%offset)
+        end if
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+        nbox       = size(pos_inds)
+        allocate(mask(nbox),         source=.false.)
+        allocate(selected_pos(nbox), source=.true. )
+        do ibox = 1, nbox
+            mask = .false.
+            ! identify boxes in neighborhood
+            do jbox = 1, nbox
+                dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
+                if( dist <= dist_thres_here ) mask(jbox) = .true.
+            end do
+            ! find highest correlation score in neighborhood
+            loc = maxloc(pos_scores, mask=mask, dim=1)
+            ! eliminate all but the best
+            mask(loc) = .false.
+            where( mask ) selected_pos = .false.
+        end do
+        npeaks = count(selected_pos)
+        print *, 'NPEAKS BEFORE DISTANCE FILTER = ', nbox
+        print *, 'NPEAKS AFTER DISTANCE FILTER = ', npeaks
+        ! update packed arrays
+        pos_inds   = pack(pos_inds,   mask=selected_pos)
+        pos_scores = pack(pos_scores, mask=selected_pos)
+        ! update box scores
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1,npeaks
+                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                            is_peak = .true.
+                            exit
+                        endif
+                    end do
+                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                end do
+            end do
+        end do
+        deallocate(pos_inds, pos_scores, mask, selected_pos)
+    end subroutine distance_filter
+
+    ! input filename with no extension
+    subroutine find_centers(self,filename)
+        class(nano_picker),         intent(inout) :: self
+        character(len=*), optional, intent(in)    :: filename
+        integer,     allocatable :: pos_inds(:)
+        real,        allocatable :: coords(:,:)
+        type(image), allocatable :: atms_array(:)
+        integer :: nbox, iimg, pos(3)
+        ! make array of images containing the images of identified atoms and extract coordinates of peaks
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds, dim=1)
+        allocate(coords(nbox,3))
+        allocate(atms_array(nbox))
+        allocate(self%convolved_atoms(nbox))
+        call self%simulated_atom%fft()
+        do iimg = 1, nbox
+            pos = self%positions(pos_inds(iimg),:)
+            call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+            call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
+            call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
+            call atms_array(iimg)%fft()
+            self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
+            call self%convolved_atoms(iimg)%ifft()
+            call atms_array(iimg)%ifft()
+            ! want coordinates of atoms to be at the center of the images
+            call self%convolved_atoms(iimg)%norm_minmax
+            call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
+            coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+        end do
+        call self%simulated_atom%ifft()
+        if (present(filename)) then
+            call write_centers(filename,coords,self%smpd)
+        else
+            call write_centers('test_atomic_centers',coords,self%smpd)
+        end if
+        deallocate(atms_array)
+        deallocate(coords)
+        deallocate(pos_inds)
+    end subroutine find_centers
+
+    subroutine write_boximgs(self, foldername)
+        class(nano_picker),          intent(inout) :: self
+        character(len=*), optional,  intent(in)    :: foldername
+        integer              :: iimg, nbox
+        integer, allocatable :: pos_inds(:)
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds, dim=1)
+        do iimg = 1, nbox
+            if (present(foldername)) then 
+                call self%convolved_atoms(iimg)%write(trim(adjustl(foldername))//'/boximg_'//trim(int2str(iimg))//'.mrc')
+            else
+                call self%convolved_atoms(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
+            end if
+        end do
+        deallocate(pos_inds)
+    end subroutine write_boximgs
+
+    ! input both pdbfile_* with .pdb extension
+    subroutine compare_pick(self, pdbfile_ref, pdbfile_exp )
+        class(nano_picker),         intent(inout) :: self
+        character(len=*),           intent(in)    :: pdbfile_ref
+        character(len=*), optional, intent(in)    :: pdbfile_exp
+        real, allocatable :: pdb_ref_coords(:,:), pdb_exp_coords(:,:), distances(:)
+        integer           :: iostat
+        call read_pdb2matrix(trim(pdbfile_ref), pdb_ref_coords)
+        if (present(pdbfile_exp)) then 
+            call read_pdb2matrix(trim(pdbfile_exp),pdb_exp_coords)
+        else
+            open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
+            if (iostat /= 0) then
+                print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
+                return
+            end if
+            call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
+        end if
+        allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
+        call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
+        print *, 'AVG DISTANCE = ', sum(distances)/size(distances)
+    end subroutine compare_pick
+
+    subroutine kill(self)
+        class(nano_picker), intent(inout) :: self
+        if (allocated(self%positions)) deallocate(self%positions)
+        if (allocated(self%inds_offset)) deallocate(self%inds_offset)
+        if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
+        if (allocated(self%box_scores)) deallocate(self%box_scores)
+    end subroutine kill
+
+end module nano_detect_atoms
+    
+program simple_test_nano_detect_atoms
+    include 'simple_lib.f08'
+    use nano_detect_atoms
+    use simple_nanoparticle
+    use simple_image
+    use simple_parameters
+
+    type(nano_picker) :: test_sim, test_exp
+    type(nanoparticle) :: nano
+    real :: smpd, dist_thres
+    real :: startTime, stopTime
+    character(len=2) :: element
+    character(len=100) :: filename_exp, filename_sim, pdbfile_ref
+    character(STDLEN) :: timestr
+    type(image) :: simulated_NP
+    integer :: offset, peak_thres_level
+    type(parameters), target :: params
+
+    ! keeping track of how long program takes
+    call date_and_time(TIME=timestr)
+    startTime = str2real(timestr)
+
+    ! Inputs
+    !filename_exp = 'recvol_state01_iter005.mrc' ! first draft of 3D reconstruction
+    filename_exp = 'rec_merged.mrc'
+    filename_sim = 'simulated_NP.mrc'
+    !pdbfile_ref = 'ATMS.pdb'
+    pdbfile_ref = 'rec_merged_ATMS.pdb'
+
+    element = 'PT'
+    smpd = 0.358
+    offset = 2
+    peak_thres_level = 2
+    dist_thres = 2.
+    
+    ! simulate nanoparticle
+    ! params_glob has to be set because of the way simple_nanoparticle is set up
+    params_glob => params
+    params_glob%element = element
+    params_glob%smpd = smpd
+    call nano%new(trim(filename_exp))
+    call nano%set_atomic_coords(trim(pdbfile_ref))
+    call nano%simulate_atoms(simatms=simulated_NP)
+    call simulated_NP%write(trim(filename_sim))
+
+    print *, 'SIMULATED DATA'
+    !run picker workflow for simulated NP
+    call test_sim%new(smpd, element, filename_sim, peak_thres_level)
+    call test_sim%simulate_atom
+    call test_sim%setup_iterators(offset)
+    call test_sim%match_boxes
+    call test_sim%identify_threshold
+    call test_sim%center_filter
+    call test_sim%distance_filter(dist_thres)
+    call test_sim%find_centers('simulated_centers')
+    call test_sim%compare_pick(trim(pdbfile_ref),'simulated_centers.pdb')
+
+    ! print *, ' '
+
+    ! print *, 'EXPERIMENTAL DATA'
+    ! ! run picker workflow for experimental data
+    ! call test_exp%new(smpd, element, filename_exp, peak_thres_level)
+    ! call test_exp%simulate_atom
+    ! call test_exp%setup_iterators(offset)
+    ! call test_exp%match_boxes
+    ! call test_exp%identify_threshold
+    ! call test_exp%center_filter
+    ! call test_exp%distance_filter(dist_thres)
+    ! call test_exp%find_centers('experimental_centers')
+    ! call test_exp%write_boximgs('exp_boximgs')
+    ! call test_exp%compare_pick(trim(pdbfile_ref),'experimental_centers.pdb')
+
+    call date_and_time(TIME=timestr)
+    stopTime = str2real(timestr)
+    print *, 'RUNTIME = ', (stopTime - startTime), ' s'
+    
 end program simple_test_nano_detect_atoms
