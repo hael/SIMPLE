@@ -202,6 +202,7 @@ type :: nanoparticle
     procedure          :: get_ldim
     procedure          :: get_natoms
     procedure          :: get_valid_corrs
+    procedure          :: get_img
     procedure          :: set_img
     procedure          :: set_atomic_coords
     procedure          :: set_coords4stats
@@ -293,6 +294,12 @@ contains
             allocate(corrs(size(self%atominfo)), source=self%atominfo(:)%valid_corr)
         endif
     end function get_valid_corrs
+
+    subroutine get_img(self, img)
+        class(nanoparticle), intent(in)  :: self
+        type(image),         intent(out) :: img
+        img = self%img
+    end subroutine get_img
 
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )
