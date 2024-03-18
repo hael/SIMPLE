@@ -35,7 +35,7 @@ UNSET (OPENMP_FOUND CACHE)
 SET (OpenMP_Fortran_FLAG_CANDIDATES
   #Gnu
   "-fopenmp"
-  #Intel
+  #IntelLLVM
   "-qopenmp"
   #IBM XL C/c++
   "-qsmp"
@@ -47,7 +47,7 @@ SET (OpenMP_Fortran_FLAG_CANDIDATES
   "-xopenmp"
   #HP
   "+Oopenmp"
-  #PathScale, Intel
+  #PathScale, IntelLLVM
   "-openmp"
   #Microsoft Visual Studio
   "/openmp"
@@ -79,12 +79,12 @@ endif() # building on MASSIVE
 
 
 if(NOT OPENMP_FOUND)
-  if(CMAKE_${LANG}_COMPILER_ID STREQUAL "Intel")
+  if(CMAKE_${LANG}_COMPILER_ID STREQUAL "IntelLLVM")
     add_definitions("-DUSE_MPIF08_MODULE=1")
     if("${CMAKE_${LANG}_COMPILER_VERSION}" VERSION_LESS "15.0.0.20140528")
-      set(OMP_FLAG_Intel "-openmp")
+      set(OMP_FLAG_IntelLLVM "-openmp")
     else()
-      set(OMP_FLAG_Intel "-qopenmp")
+      set(OMP_FLAG_IntelLLVM "-qopenmp")
     endif()
   endif()
   set(OMP_FLAG_PGI "-mp")

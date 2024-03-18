@@ -21,6 +21,9 @@
 ! -----------------------------------------------------------------------------!
 
 module simple_timer
+#ifdef IFX
+  use IFPORT
+#endif
 use simple_defs
 use simple_error
 implicit none

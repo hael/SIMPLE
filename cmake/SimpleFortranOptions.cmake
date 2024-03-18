@@ -13,7 +13,7 @@ if(NOT CMAKE_CPP_COMPILER)
   if(NOT $ENV{CPP} STREQUAL "")
     set(TMP_CPP_COMPILER $ENV{CPP})
   else()
-    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
       set(TMP_CPP_COMPILER fpp)
     elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
       set(TMP_CPP_COMPILER "pgcc -E")
@@ -249,17 +249,17 @@ endif()
 if(USE_AGGRESSIVE_OPTIMISATION)
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   Fortran
-  "-unroll-aggressive"        # Intel
-  "-funroll-all-loops"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Munroll "                 # Portland Group
+  "-unroll-aggressive"                         # IntelLLVM
+  "-funroll-all-loops"                         # GNU, Intel, Clang
+  "/unroll"                                    # Intel Windows
+  "-Munroll "                                  # Portland Group
   )
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   Fortran
-  "-inline-level=2"           # Intel
-  "-finline-functions"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
+  "-inline-level=2"                            # IntelLLVM
+  "-finline-functions"                         # GNU, IntelLLVM, Clang
+  "/unroll"                                    # Intel Windows
+  "-Minline=maxsize=100,reshape,smallsize=10"  # Portland Group
   )
 endif()
 if(USE_LINK_TIME_OPTIMISATION)
@@ -268,19 +268,19 @@ if(USE_LINK_TIME_OPTIMISATION)
   #  may need to use -ipo-separate in case of multi-file problems),  using the -ffat-lto-objects compiler option is provided for GCC compatibility
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-ipo-separate -ffat-lto-object"   # Intel (Linux OS X)
-    "/Qipo-separate"                   # Intel Windows
-    "-flto "                           # GNU
-    "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
+    "-ipo-separate -ffat-lto-object"               # IntelLLVM (Linux OS X)
+    "/Qipo-separate"                               # Intel Windows
+    "-flto "                                       # GNU
+    "-Mipa=fast,libinline,vestigial,reaggregation" # Portland Group
     )
 
   #Profile optimizations
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-ip-dir=.profiling"           # Intel
+    "-ip-dir=.profiling"           # IntelLLVM
     "/Qip-dir=_profiling"          # Intel Windows
-    "-fprofile-dir=.profiling" # GNU
-    "-Mpfo "# PGI
+    "-fprofile-dir=.profiling"     # GNU
+    "-Mpfo "                       # PGI
     )
 endif(USE_LINK_TIME_OPTIMISATION)
 
@@ -288,10 +288,10 @@ endif(USE_LINK_TIME_OPTIMISATION)
 #   # Interprocedural (link-time) optimizations
 #   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #     Fortran
-#     "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
-#     "/Qipo"             # Intel Windows
-#     "-flto "            # GNU
-#     "-Mvect"    # Portland Group
+#     "-m"                        # Intel ( may need to use -ipo-separate in case of multi-file problems)
+#     "/Qipo"                     # Intel Windows
+#     "-flto "                    # GNU
+#     "-Mvect"                    # Portland Group
 #     )
 # endif()
 
@@ -300,21 +300,21 @@ endif(USE_LINK_TIME_OPTIMISATION)
 if (USE_FAST_MATH_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-fast"             # Intel, PGI
-    "/Ofast"     # Intel Windows
-    "-Ofast"            # GNU
+    "-fast"                       # IntelLLVM, PGI
+    "/Ofast"                      # Intel Windows
+    "-Ofast"                      # GNU
     )
   # Fast math code
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-fastmath"        # Intel
-    "-ffast-math"      # GNU
-    "-Mcuda=fastmath"  # Portland Group
+    "-fastmath"                   # IntelLLVM
+    "-ffast-math"                 # GNU
+    "-Mcuda=fastmath"             # Portland Group
     )
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-ffp-contract=fast"              # GNU
-    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
+    "-ffp-contract=fast"          # GNU
+    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"  # Portland Group
     )   # PGI
 endif(USE_FAST_MATH_OPTIMISATION)
 
@@ -323,7 +323,7 @@ if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQ
   if (USE_AUTO_PARALLELISE)
     SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
       Fortran
-      "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
+      "-parallel -opt-report-phase=par -opt-report:5"            # IntelLLVM (Linux)
       "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
       "-Mconcur=bind,allcores,cncall"                            # PGI
       "-floop-parallelize-all -ftree-parallelize-loops=4"        # GNU
@@ -351,7 +351,7 @@ if (USE_OPENMP)
   # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   #      Fortran REQUIRED
   #      "-fopenmp"            # GNU
-  #      "-qopenmp"            # Intel
+  #      "-qopenmp"            # IntelLLVM
   #      "-openmp"             # depreciated Intel Open MP flag
   #      "/mp"
   #      )
@@ -377,13 +377,12 @@ endif()
 if(USE_PROFILE_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
-    "-Mpfo"                 # PGI
-    "-fpfo "                # GNU
-    "-prof-gen"             # Intel (Linux, OS X)
-    "/Qprof-gen"            # Intel (Windows)
+    "-Mpfo"                   # PGI
+    "-fpfo "                  # GNU
+    "-prof-gen"               # IntelLLVM (Linux, OS X)
+    "/Qprof-gen"              # Intel (Windows)
     )
 endif()
-
 
 
 
@@ -501,7 +500,7 @@ endif(USE_CUDA)
 ################################################################
 # FFTW  -- MKL core already inlcuded in Intel config
 ################################################################
-if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
   # Append MKL FFTW interface libs
   # https://software.intel.com/en-us/articles/intel-mkl-main-libraries-contain-fftw3-interfaces
   # https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
@@ -629,9 +628,9 @@ if(USE_LIBTIFF)
     include_directories(${TIFF_INCLUDE_DIR})
     set(EXTRA_LIBS ${EXTRA_LIBS} -lm )
   else()
-    message(STATUS "ERROR: Dependencies for TIFF support were not all found (see above)")
-    message(STATUS "ERROR: Install dependencies or check for missing soft links and INCLUDE directories")
-    message(FATAL_ERROR "CMake configuration cannot proceed")
+    message(STATUS "ERROR: Dependencies for TIFF support were not all found (see above).")
+    message(STATUS "ERROR: Install dependencies or check for missing soft links and INCLUDE directories.")
+    message(FATAL_ERROR "CMake configuration cannot proceed.")
   endif()
 endif()
 
@@ -663,7 +662,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
   # -Wimplicit-interface -Wunderflow -fbounds-check -fimplicit-none
   # -Wunused-parameter -Wunused-variable -Wuninitialized ")
 
-  set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include.*timer is present
+  set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -qopenmp") # only seen by preprocessor if #include.*timer is present
   set(CMAKE_Fortran_FLAGS                "${EXTRA_FLAGS} ")
   set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${EXTRA_FLAGS} " )
   set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
@@ -768,7 +767,7 @@ endif()
         set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=medium")
     endif()
   endif()
-  message(STATUS "Intel CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} ")
+  message(STATUS "IntelLLVM CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} ")
   ## end Intel compilation section
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")

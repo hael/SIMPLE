@@ -1,4 +1,7 @@
 module simple_syslib
+#ifdef IFX
+  use IFPORT
+#endif
 use simple_defs
 use simple_error
 use, intrinsic :: iso_fortran_env
