@@ -367,7 +367,7 @@ contains
             call read_filetable(params%filetab, movfnames)
         else if( inputted_dir_movies) then
             ! movie watcher init for files older that 1 second (assumed already in place at exec)
-            movie_buff = moviewatcher(1)
+            movie_buff = moviewatcher(1,params%dir_movies)
             call movie_buff%watch( nmovf, movfnames )
             call movie_buff%kill
         endif

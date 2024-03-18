@@ -212,7 +212,7 @@ contains
             endif
         endif
         ! movie watcher init
-        movie_buff = moviewatcher(LONGTIME)
+        movie_buff = moviewatcher(LONGTIME, params%dir_movies)
         ! import previous runs
         nptcls_glob = 0
         call import_prev_streams
