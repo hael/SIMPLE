@@ -451,17 +451,15 @@ program simple_test_nano_detect_atoms
     type(nano_picker) :: test_sim, test_exp
     type(nanoparticle) :: nano
     real :: smpd, dist_thres
-    real :: startTime, stopTime
     character(len=2) :: element
     character(len=100) :: filename_exp, filename_sim, pdbfile_ref
     character(STDLEN) :: timestr
     type(image) :: simulated_NP
-    integer :: offset, peak_thres_level
+    integer :: offset, peak_thres_level, startTime, stopTime
     type(parameters), target :: params
 
     ! keeping track of how long program takes
-    call date_and_time(TIME=timestr)
-    startTime = str2real(timestr)
+    startTime= real(time())
 
     ! Inputs
     !filename_exp = 'recvol_state01_iter005.mrc' ! first draft of 3D reconstruction
@@ -469,7 +467,6 @@ program simple_test_nano_detect_atoms
     filename_sim = 'simulated_NP.mrc'
     !pdbfile_ref = 'ATMS.pdb'
     pdbfile_ref = 'rec_merged_ATMS.pdb'
-
     element = 'PT'
     smpd = 0.358
     offset = 2
@@ -498,23 +495,23 @@ program simple_test_nano_detect_atoms
     call test_sim%find_centers('simulated_centers')
     call test_sim%compare_pick(trim(pdbfile_ref),'simulated_centers.pdb')
 
-    ! print *, ' '
+    print *, ' '
 
-    ! print *, 'EXPERIMENTAL DATA'
-    ! ! run picker workflow for experimental data
-    ! call test_exp%new(smpd, element, filename_exp, peak_thres_level)
-    ! call test_exp%simulate_atom
-    ! call test_exp%setup_iterators(offset)
-    ! call test_exp%match_boxes
-    ! call test_exp%identify_threshold
-    ! call test_exp%center_filter
-    ! call test_exp%distance_filter(dist_thres)
-    ! call test_exp%find_centers('experimental_centers')
-    ! call test_exp%write_boximgs('exp_boximgs')
-    ! call test_exp%compare_pick(trim(pdbfile_ref),'experimental_centers.pdb')
+    print *, 'EXPERIMENTAL DATA'
+    ! run picker workflow for experimental data
+    call test_exp%new(smpd, element, filename_exp, peak_thres_level)
+    call test_exp%simulate_atom
+    call test_exp%setup_iterators(offset)
+    call test_exp%match_boxes
+    call test_exp%identify_threshold
+    !call test_exp%identify_threshold(0.155)
+    call test_exp%center_filter
+    call test_exp%distance_filter(dist_thres)
+    call test_exp%find_centers('experimental_centers')
+    call test_exp%write_boximgs('exp_boximgs')
+    call test_exp%compare_pick(trim(pdbfile_ref),'experimental_centers.pdb')
 
-    call date_and_time(TIME=timestr)
-    stopTime = str2real(timestr)
+    stopTime = time()
     print *, 'RUNTIME = ', (stopTime - startTime), ' s'
     
 end program simple_test_nano_detect_atoms
