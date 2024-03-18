@@ -11,6 +11,7 @@ implicit none
 
 ! PROGRAMS
 type(commander_stream_preprocess)           :: xpreprocess
+type(commander_multipick_cluster2D)         :: xmultipick_cluster2D
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)                       :: xarg, prg, entire_line
@@ -41,6 +42,8 @@ call script_exec(cline, trim(prg), 'simple_stream')
 select case(trim(prg))
     case( 'preproc' )
         call xpreprocess%execute(cline)
+    case( 'multipick_cluster2D' )
+        call xmultipick_cluster2D%execute(cline)
 
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')

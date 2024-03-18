@@ -16,6 +16,7 @@ use FoX_dom
 implicit none
 
 public :: commander_stream_preprocess
+public :: commander_multipick_cluster2D
 
 private
 #include "simple_local_flags.inc"
@@ -39,6 +40,11 @@ type, extends(commander_base) :: commander_stream_pick
     procedure :: execute => exec_stream_pick
 end type commander_stream_pick
 
+type, extends(commander_base) :: commander_multipick_cluster2D
+  contains
+    procedure :: execute => exec_multipick_cluster2D
+end type commander_multipick_cluster2D
+
 contains
 
     subroutine exec_stream_preprocess( self, cline )
@@ -60,8 +66,8 @@ contains
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
         logical                                :: l_movies_left, l_haschanged
-        if( .not. cline%defined('oritype')          ) call cline%set('oritype',        'mic')
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
+        call cline%set('oritype', 'mic')
+        call cline%set('mkdir',   'yes')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! motion correction
         if( .not. cline%defined('trs')              ) call cline%set('trs',              20.)
@@ -219,10 +225,14 @@ contains
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
                     call write_migrographs_starfile
+                    call spproj%write_segment_inside('mic', params%projfile)
+                    call spproj%write_non_data_segments(params%projfile)
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
                     call update_user_params(cline)
                     call write_migrographs_starfile
                     nmic_star = n_imported
+                    call spproj%write_segment_inside('mic', params%projfile)
+                    call spproj%write_non_data_segments(params%projfile)
                 endif
             else
                 ! wait & write snapshot
@@ -373,7 +383,7 @@ contains
                 cwd_glob = trim(cwd)
                 ! movies set
                 movies_set_counter = movies_set_counter + 1
-                projname   = int2str_pad(movies_set_counter,6)
+                projname   = int2str_pad(movies_set_counter,params%numlen)
                 projfile   = trim(projname)//trim(METADATA_EXT)
                 call cline_exec%set('projname', trim(projname))
                 call cline_exec%set('projfile', trim(projfile))
@@ -664,6 +674,157 @@ contains
         call spproj_glob%write(params%projfile)
         call simple_end('**** SIMPLE_STREAM_PICK NORMAL STOP ****')
     end subroutine exec_stream_pick
+
+    subroutine exec_multipick_cluster2D( self, cline )
+        use simple_commander_preprocess, only: pick_commander_distr
+        use simple_commander_preprocess, only: extract_commander_distr
+        use simple_commander_preprocess, only: make_pickrefs_commander
+        use simple_commander_cluster2D,  only: cleanup2D_commander_hlev
+        class(commander_multipick_cluster2D), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        integer, parameter :: NPTCLS_PER_CLS = 600
+        type(pick_commander_distr)     :: xpick
+        type(extract_commander_distr)  :: xextract
+        type(make_pickrefs_commander)  :: xmake_pickrefs
+        type(cleanup2D_commander_hlev) :: xcleanup2D
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(cmdline)    :: cline_multipick, cline_pick, cline_extract
+        type(cmdline)    :: cline_pickrefs, cline_cleanup2D
+        type(ran_tabu)   :: rt
+        character(len=:), allocatable :: cavgs
+        integer,          allocatable :: states(:), states_backup(:), vec(:)
+        real    :: smpd
+        integer :: nmics, ncls, nptcls, cnt, nmics_sel, imic
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('thres')       ) call cline%set('thres',         24.)
+        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
+        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no')
+        if( .not. cline%defined('nran')        ) call cline%set('nran',          50.)
+        if( .not. cline%defined('walltime')    ) call cline%set('walltime',29.0*60.0) ! 29 minutes
+        call cline%set('picker',  'new')
+        call cline%set('oritype', 'mic')
+        if( .not.cline%defined('moldiam') .and. .not.cline%defined('multi_moldiams') )then
+            THROW_HARD('MOLDIAM or MULTI_MOLDIAMS must be defined!')
+        endif
+        call params%new(cline)
+        ! sanity check
+        call spproj%read(params%projfile)
+        nmics = spproj%get_nintgs()
+        if( nmics == 0 ) THROW_HARD('No micrograph to process! exec_pick_distr')
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        if( cline%defined('nparts') )then
+            params%nparts = min(params%nparts, nmics)
+            call cline%set('nparts', params%nparts)
+        endif
+        params%numlen = len(int2str(params%nparts))
+        call cline%set('numlen', real(params%numlen))
+        ! more sanity checks
+        if( trim(params%pick_roi).eq.'yes' )then
+            params%backgr_subtr = 'yes'
+            call cline%set('backgr_subtr', params%backgr_subtr)
+        endif
+        ! Micrographs rejection and random selection
+        nmics         = spproj%os_mic%get_noris()
+        states        = nint(spproj%os_mic%get_all('state'))
+        states_backup = states
+        if( cline%defined('ctfresthreshold') )then
+            do imic = 1, nmics
+                if( states(imic) == 1 )then
+                    if(spproj%os_mic%get(imic,'ctfres') > params%ctfresthreshold) states(imic) = 0
+                endif
+            enddo
+        endif
+        if( cline%defined('icefracthreshold') )then
+            do imic = 1, nmics
+                if( states(imic) == 1 )then
+                    if(spproj%os_mic%get(imic,'icefrac') > params%icefracthreshold) states(imic) = 0
+                endif
+            enddo
+        endif
+        nmics_sel     = count(states == 1)
+        if( nmics_sel < params%nran )then
+            THROW_HARD('Insufficient number of micrographs!')
+        endif
+        rt = ran_tabu(nmics_sel)
+        allocate(vec(nmics_sel),source=0)
+        vec(1:params%nran) = 1
+        call rt%shuffle(vec)
+        cnt = 0
+        do imic = 1,nmics
+            if( states(imic)==1 )then
+                cnt = cnt+1
+                call spproj%os_mic%set(imic,'state',real(vec(cnt)))
+            endif
+        enddo
+        call rt%kill
+        deallocate(vec)
+        call spproj%write_segment_inside('mic',params%projfile)
+        ! multi pick
+        write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
+        cline_multipick = cline
+        call cline_multipick%set('prg', 'pick')
+        call xpick%execute(cline_multipick)
+        call qsys_cleanup
+        ! diameter selection
+        ! interaction with gui here
+        ! ... TBD: moldiam and any other relevant option
+        params%moldiam = 138.5 !!!!!!!!!
+        ! single pick
+        write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
+        call cline%delete('nmoldiams')
+        call cline%delete('moldiam_max')
+        call cline%delete('multi_moldiam')
+        call cline%set('moldiam', params%moldiam)
+        cline_pick = cline
+        call cline_pick%set('prg', 'pick')
+        call xpick%execute(cline_pick)
+        call qsys_cleanup
+        ! extraction
+        write(logfhandle,'(A)')'>>> PERFORMING EXTRACTION'
+        cline_extract = cline
+        call cline_extract%set('prg', 'extract')
+        call xextract%execute(cline_extract)
+        ! 2D classification
+        write(logfhandle,'(A)')'>>> PERFORMING 2D CLASSIFICATION'
+        params%mskdiam = 1.1*params%moldiam
+        call spproj%read_segment('stk', params%projfile)
+        params%nptcls = spproj%get_nptcls()
+        params%ncls   = min(30,ceiling(real(params%nptcls)/real(NPTCLS_PER_CLS)))
+        call spproj%os_ptcl2D%kill
+        write(logfhandle,'(A,I6)')'>>> # OF PARTICLES: ', params%nptcls
+        write(logfhandle,'(A,I6)')'>>> # OF CLASSES  : ', params%ncls
+        cline_cleanup2D = cline
+        call cline_cleanup2D%set('prg',     'cleanup2D')
+        call cline_cleanup2D%set('oritype', 'ptcl2D')
+        call cline_cleanup2D%set('mskdiam', params%mskdiam)
+        call cline_cleanup2D%set('ncls',    params%ncls)
+        call xcleanup2D%execute(cline_cleanup2D)
+        call qsys_cleanup
+        ! restores states
+        call spproj%os_mic%set_all('state',real(states_backup))
+        call spproj%write_segment_inside('mic',params%projfile)
+        ! class averages selection here
+        ! ...
+        ! picking references
+        write(logfhandle,'(A)')'>>> GENERATING PICKING REFERENCES'
+        call spproj%read_segment('out', params%projfile)
+        call spproj%get_cavgs_stk(cavgs, ncls, smpd, imgkind='cavg')
+        cline_pickrefs = cline
+        call cline_pickrefs%set('prg',  'make_pickrefs')
+        call cline_pickrefs%set('pickrefs', cavgs)
+        call xmake_pickrefs%execute_shmem(cline_pickrefs)
+        ! cleanup
+        call spproj%kill
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_MULTIPICK_CLUSTER2D NORMAL STOP ****')
+    end subroutine exec_multipick_cluster2D
+
+    ! UTLITIES
 
     !> updates current parameters with user input
     subroutine update_user_params( cline_here )

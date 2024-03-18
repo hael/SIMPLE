@@ -2007,7 +2007,7 @@ contains
             case('ptcl2D','ptcl3D')
                 ! # ptcl2D = # ptcl3D
                 if( self%os_ptcl2D%get_noris() /= self%os_ptcl3D%get_noris() )then
-                   THROW_HARD('Inconstitent number of particles in STK/PTCL2D/PTCL3D segments; get_n_insegment_state')
+                   THROW_HARD('Inconsistent number of particles in STK/PTCL2D/PTCL3D segments; get_n_insegment_state')
                 endif
         end select
         call self%ptr2oritype(oritype, pos)
