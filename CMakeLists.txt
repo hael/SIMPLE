@@ -12,28 +12,28 @@ set(SIMPLE_VERSION_PATCH 0)
 set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}.${SIMPLE_VERSION_PATCH}")
 
 # OPTIONS
-option(USE_OPENMP  "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
-option(USE_MPI     "Use OpenMPI for parallelization - in developement" OFF )
-option(USE_LIBTIFF "Use libtiff" ON)
-option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
-option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
-option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
-option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
-option(GUI "Install the GUI" ON)
-option(BUILD_GUI "Build single user GUI from source" OFF)
-option(NICE "Install NICE" OFF)
+option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
+option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
+option(USE_LIBTIFF                 "Use libtiff." ON)
+option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
+option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
+option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." OFF)
+option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
+option(GUI                         "Install the GUI." ON)
+option(BUILD_GUI                   "Build single user GUI from source." OFF)
+option(NICE                        "Install NICE." OFF)
 # We probably don't want these to run on every build.
-option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
-OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
-OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
-option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
+option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
+OPTION(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
+OPTION(USE_PROFILING               "Enable symbol generation without debug support." OFF)
+option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
 
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 
-set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend ")
+set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend. ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 # Define the main targets
@@ -134,7 +134,7 @@ INSTALL(
   CONFIGURATIONS DEBUG
   COMPONENT dev)
 
-message( STATUS "Set runtime variables ")
+message( STATUS "Set runtime variables. ")
 if(NOT BUILD_SHARED_LIBS)
   configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
   configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
@@ -158,12 +158,12 @@ if(${BUILD_DOCS})
   #
   # Doxygen
   #
-  option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation" ON)
+  option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation." ON)
   if (ENABLE_DOXYGEN)
     add_custom_target(doc
       ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "Generating API documentation with Doxygen" VERBATIM
+      COMMENT "Generating API documentation with Doxygen." VERBATIM
       )
     include(UseDoxygen OPTIONAL)
     # add_doxygen(
@@ -186,16 +186,16 @@ endif()
 
 
 if(VERBOSE) #only for the fool-hardy
-  OPTION(USE_FAST_MATH_OPTIMISATION "Optimize code for fastmath. " OFF)
-  OPTION(USE_PROFILE_OPTIMISATION "Optimize code for PFO. (GNU: -fpfo )" OFF)
-  OPTION(USE_AUTO_PARALLELISE "Optimize code for parallel systems. [Intel and PGI only]" OFF)
+  OPTION(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
+  OPTION(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
+  OPTION(USE_AUTO_PARALLELISE        "Optimize code for parallel systems. [Intel and PGI only]." OFF)
   OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
-  option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
+  option(CPACK_GENERATOR             "Enable build of distribution packages using CPack." TGZ)
 
   #
   # CPack
   #
-  option(CPACK_GENERATOR "Enable build of distribution packages using CPack" OFF)
+  option(CPACK_GENERATOR "Enable build of distribution packages using CPack." OFF)
   include(SimplePackage)
   ## Debugging CMAKE
   include(CMakeGraphVizOptions)

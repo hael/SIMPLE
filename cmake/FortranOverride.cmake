@@ -338,12 +338,12 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(cstd   "-c1x" )
   set(cppstd "--c++14")
 
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
-  set(preproc  "-fpp")
+  set(preproc  "-fpp -D IFX")
 
-  set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
+  set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
   set(checks   "-check bounds -check uninit")
 
   set(warn     "-warn all")
