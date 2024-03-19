@@ -771,12 +771,6 @@ contains
                 endif
                 vol_type = 'vol'
                 call spproj%os_ptcl3D%rnd_oris
-                if( params%l_frac_update )then
-                    noris = spproj%os_ptcl3D%get_noris()
-                    allocate(mask(1:noris), source=.false.)
-                    ! fresh sampling
-                    call spproj%os_ptcl3D%sample4update_rnd([1,noris], params%update_frac, nsamples, pinds, mask)
-                endif
             case DEFAULT
                 THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
         end select
