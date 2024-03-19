@@ -90,6 +90,7 @@ type :: oris
     procedure          :: incr_updatecnt
     procedure          :: clean_sampled
     procedure          :: clean_updatecnt
+    procedure          :: clean_updatecnt_sampled
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
@@ -1449,6 +1450,15 @@ contains
             call self%o(i)%delete_entry('updatecnt')
         enddo
     end subroutine clean_updatecnt
+
+    subroutine clean_updatecnt_sampled( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1,self%n
+            call self%o(i)%delete_entry('updatecnt')
+            call self%o(i)%delete_entry('sampled')
+        enddo
+    end subroutine clean_updatecnt_sampled
 
     logical function has_been_sampled( self )
         class(oris), intent(inout) :: self
