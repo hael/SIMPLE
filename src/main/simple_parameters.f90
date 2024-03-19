@@ -413,7 +413,6 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
     logical :: l_bfac         = .false.
-    logical :: l_cartesian    = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
     logical :: l_dose_weight  = .false.
@@ -1516,30 +1515,6 @@ contains
         if( self%trs < 0.1 )then
             self%trs       = 0.
             self%l_doshift = .false.
-        endif
-        ! -- Cartesian refinement flag
-        select case(trim(self%refine))
-            case('shcc','neighc','greedyc','neigh_test')
-                self%l_cartesian = .true.
-            case DEFAULT
-                self%l_cartesian = .false.
-        end select
-        if( self%l_cartesian )then
-            select case(trim(self%refine))
-                case('shcc')
-                    if( .not. cline%defined('nsample')       ) self%nsample       = 2000
-                case('neighc')
-                    if( .not. cline%defined('nsample')       ) self%nsample       = 2000
-                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 500
-                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
-                case('neigh_test')
-                    if( .not. cline%defined('nsample')       ) self%nsample       = 2000
-                    if( .not. cline%defined('nsample_neigh') ) self%nsample_neigh = 500
-                    if( .not. cline%defined('nsample_trs')   ) self%nsample_trs   = 50
-                case('greedyc')
-                    if( .not. cline%defined('nspace')        ) self%nspace        = 500
-                    if( .not. cline%defined('athres')        ) self%athres        = 10.
-            end select
         endif
         ! motion correction
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'

@@ -53,6 +53,7 @@ type :: reconstructor_eo
     ! readers
     procedure          :: read_eos
     procedure, private :: read_eos_parallel_io
+    procedure          :: ldim_even_match
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
@@ -367,6 +368,23 @@ contains
             call self%reset_odd
         endif
     end subroutine read_eos_parallel_io
+
+    function ldim_even_match( self, fbody ) result( l_match )
+        class(reconstructor_eo), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        character(len=:), allocatable :: fname
+        logical :: l_match
+        integer :: dummy, ldim_read(3), ldim(3)
+        fname = trim(adjustl(fbody))//'_even'//self%ext
+        if( file_exists(fname) )then
+            call find_ldim_nptcls(fname, ldim_read, dummy)
+        else
+            l_match = .false.
+            return
+        endif
+        ldim    = self%even%get_ldim()
+        l_match = all(ldim == ldim_read)
+    end function ldim_even_match
 
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )

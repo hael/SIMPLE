@@ -15,7 +15,6 @@ type convergence
     type(stats_struct) :: score      !< objective function stats
     type(stats_struct) :: dist       !< angular distance stats
     type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
-    type(stats_struct) :: dist_peaks !< average angular distance between peaks
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
     type(stats_struct) :: frac_sh    !< fraction of search space scanned stats, shifts
     type(stats_struct) :: shincarg   !< shift increment
@@ -24,9 +23,6 @@ type convergence
     type(stats_struct) :: ngevals    !< # gradient evaluations
     type(stats_struct) :: better     !< improvement statistics
     type(stats_struct) :: better_l   !< improvement statistics, LBFGS-B
-    type(stats_struct) :: npeaks     !< peak statistics
-    type(stats_struct) :: cc_peak    !< cc peak statistics
-    type(stats_struct) :: cc_nonpeak !< cc non-peak statistics
     type(oris)         :: ostats     !< centralize stats for writing
     integer :: iteration = 0         !< current interation
     real    :: mi_class  = 0.        !< class parameter distribution overlap
@@ -76,7 +72,7 @@ contains
         real,    allocatable :: updatecnts(:), states(:), scores(:), pws(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: n
-        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, score_t, percen_nonzero_pw, lim_updatecnt
+        real    :: avg_updatecnt, overlap_lim, fracsrch_lim, percen_nonzero_pw, lim_updatecnt
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -104,7 +100,6 @@ contains
         call os%stats('shincarg',  self%shincarg,  mask=mask)
         call os%stats('w',         self%pw,        mask=mask)
         self%mi_class = os%get_avg('mi_class',    mask=mask)
-        score_t       = self%score%avg - 2. * self%score%sdev
         ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
@@ -114,8 +109,6 @@ contains
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         ! score & particle weights
         write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,601) '>>> % PARTICLES      S > S_AVG - 2 * S_SDEV:', 100. * real(count(scores > score_t .and. mask)) / real(count(mask))
-        write(logfhandle,601) '>>> SCORE                         THRESHOLD:', score_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT         ', percen_nonzero_pw
         ! dynamic shift search range update
@@ -203,7 +196,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, score_t, lim_updatecnt
+        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, lim_updatecnt
         logical :: converged
         integer :: iptcl, istate, n
         601 format(A,1X,F12.3)
@@ -227,12 +220,6 @@ contains
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',       self%score,      mask=mask)
-        call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
-        if( self%npeaks%avg > 1e-6 )then
-        call build_glob%spproj_field%stats('cc_peak',    self%cc_peak,    mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('cc_nonpeak', self%cc_nonpeak, mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask, nozero=.true.)
-        endif
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
         call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
@@ -240,7 +227,6 @@ contains
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        score_t        = self%score%avg - 2. * self%score%sdev
         ! overlaps and particle updates
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
         if( params_glob%nstates > 1 )then
@@ -250,20 +236,10 @@ contains
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        if( self%npeaks%avg > 1e-6 )then
-        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
-        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:', self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
-        endif
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         ! score & particle weights
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        if( self%npeaks%avg > 1e-6 )then
-        write(logfhandle,604) '>>> SCORE, PEAK              AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
-        write(logfhandle,604) '>>> SCORE, NONPEAK           AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
-        endif
-        write(logfhandle,601) '>>> % PARTICLES        S > S_AVG - 2 * S_SDEV:', 100. * real(count(scores > score_t .and. mask)) / real(count(mask))
-        write(logfhandle,601) '>>> SCORE                           THRESHOLD:', score_t
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
         ! dynamic shift search range update
