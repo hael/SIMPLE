@@ -3,8 +3,8 @@ include 'simple_lib.f08'
 implicit none
 
 integer, parameter :: NPTCLS    = 2000000 ! two million
-integer, parameter :: NSAMPL_LB = 50000   ! minimum 50k
-integer, parameter :: NSAMPL_UB = 200000  ! maximum 200k
+integer, parameter :: NSAMPL_LB = 50000   ! minimum 50k,  default: min(NSAMPL_LB, nint(0.5 * real(NPTCLS)))
+integer, parameter :: NSAMPL_UB = 200000  ! maximum 200k, default: min(NSAMPL_UB, NPTCLS) 
 integer, parameter :: MAXITS    = 40      ! upper iteration bound
 real    :: update_frac
 integer :: nsampl, i
