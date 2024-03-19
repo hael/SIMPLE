@@ -340,7 +340,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
 
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # ifort
-  # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
+  # set(FC "ifx" CACHE PATH "IntelLLVM Fortran compiler")
   set(preproc  "-fpp -D IFX")
 
   set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
@@ -348,7 +348,8 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
 
   set(warn     "-warn all")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
-  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
+  #set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
+  set(forspeed "-O3 -fp-model fast=2 -inline all")
   set(forpar   " ")
   set(target   "-no-prec-div -fPIC -xHost -traceback ")
   if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
