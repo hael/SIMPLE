@@ -24,8 +24,8 @@ if(${GUI})
 
 		ExternalProject_Add(
                         nodejs_apple
-                        URL https://nodejs.org/dist/v16.13.0/node-v16.13.0-darwin-x64.tar.gz
-                        URL_MD5 fa4e4210611a00d34a50dd2a6ce0b738
+                        URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-darwin-x64.tar.gz
+                        URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6 
                         DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
                         SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
                         CONFIGURE_COMMAND ""
@@ -66,8 +66,8 @@ if(${GUI})
 
 		ExternalProject_Add(
 			nodejs_unix
-    			URL https://nodejs.org/dist/v16.13.0/node-v16.13.0-linux-x64.tar.gz
-			URL_MD5 bb20c3f845896272f18bd8c91d1c9b07
+    			URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-linux-x64.tar.gz
+			URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6
 			DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
 			SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
 			CONFIGURE_COMMAND ""
