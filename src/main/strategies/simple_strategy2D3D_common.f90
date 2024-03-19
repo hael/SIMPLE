@@ -454,8 +454,8 @@ contains
 
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols
-        character(len=:), allocatable :: part_str
-        integer, allocatable :: pops(:)
+        character(len=:), allocatable :: part_str, fbody
+        integer,          allocatable :: pops(:)
         integer :: istate
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
@@ -464,9 +464,11 @@ contains
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
                 if( params_glob%l_stoch_update )then
-                    call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
-                        int2str_pad(istate,2)//'_part'//part_str)
-                    call build_glob%eorecvols(istate)%expand_exp
+                    fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
+                    if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then  
+                        call build_glob%eorecvols(istate)%read_eos(fbody)
+                        call build_glob%eorecvols(istate)%expand_exp
+                    endif
                 endif
             endif
         end do

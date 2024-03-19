@@ -41,9 +41,9 @@ enum, bind(c)
     enumerator :: I_NGEVALS    = 37
     enumerator :: I_BETTER     = 38
     enumerator :: I_NPEAKS     = 39
-    enumerator :: I_DIST_PEAKS = 40
-    enumerator :: I_CC_PEAK    = 41
-    enumerator :: I_CC_NONPEAK = 42
+    enumerator :: I_DIST_PEAKS = 40 ! unused
+    enumerator :: I_CC_PEAK    = 41 ! unused
+    enumerator :: I_CC_NONPEAK = 42 ! unused
     enumerator :: I_FRAC_SH    = 43
     enumerator :: I_BETTER_L   = 44
     enumerator :: I_SAMPLED    = 45
@@ -143,11 +143,11 @@ contains
             case('npeaks')
                 get_oriparam_ind = I_NPEAKS
             case('dist_peaks')
-                get_oriparam_ind = I_DIST_PEAKS
+                get_oriparam_ind = I_DIST_PEAKS ! unused
             case('cc_peak')
-                get_oriparam_ind = I_CC_PEAK
+                get_oriparam_ind = I_CC_PEAK    ! unused
             case('cc_nonpeak')
-                get_oriparam_ind = I_CC_NONPEAK
+                get_oriparam_ind = I_CC_NONPEAK ! unused
             case('frac_sh')
                 get_oriparam_ind = I_FRAC_SH
             case('better_l')
@@ -240,11 +240,11 @@ contains
             case(I_NPEAKS)
                 flag = 'npeaks'
             case(I_DIST_PEAKS)
-                flag = 'dist_peaks'
+                flag = 'dist_peaks' ! unused
             case(I_CC_PEAK)
-                flag = 'cc_peak'
+                flag = 'cc_peak'    ! unused
             case(I_CC_NONPEAK)
-                flag = 'cc_nonpeak'
+                flag = 'cc_nonpeak' ! unused
             case(I_FRAC_SH)
                 flag = 'frac_sh'
             case(I_BETTER_L)

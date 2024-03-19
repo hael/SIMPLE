@@ -263,7 +263,7 @@ contains
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     call cline_volassemble%set('needs_sigma','yes')
-                    if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
+                    if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -298,7 +298,7 @@ contains
                     call cline%set('needs_sigma','yes')
                     call cline_reconstruct3D_distr%set('needs_sigma','yes')
                     call cline_volassemble%set('needs_sigma','yes')
-                    if( .not.l_griddingset .and. .not.params%l_cartesian ) call cline%set('gridding','yes')
+                    if( .not.l_griddingset ) call cline%set('gridding','yes')
                     call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                     nfiles = size(list)
                     if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -635,7 +635,7 @@ contains
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A,A)')'>>> SWITCHING TO OBJFUN=',trim(orig_objfun)
                 call cline%set('objfun', orig_objfun)
-                if(.not.l_griddingset .and. .not.params%l_cartesian )then
+                if(.not.l_griddingset )then
                     call cline%set('gridding',     'yes')
                     call job_descr%set('gridding', 'yes')
                 endif
