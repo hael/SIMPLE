@@ -45,6 +45,7 @@ type :: oris
     procedure, private :: getter_2
     generic            :: getter => getter_1, getter_2
     procedure          :: get_all
+    procedure          :: get_all_sampled
     procedure          :: get_all_rmats
     procedure          :: get_mat
     procedure          :: get_normal
@@ -390,12 +391,25 @@ contains
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
-        if(allocated(arr))deallocate(arr)
         allocate( arr(ffromto(1):ffromto(2)) )
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
     end function get_all
+
+    !>  \brief  is for getting an array of 'key' values
+    function get_all_sampled( self, key ) result( arr )
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: key
+        real, allocatable :: arr(:), sampled(:)
+        integer :: i
+        allocate(arr(self%n), sampled(self%n), source=0.)
+        do i=1,self%n
+            arr(i)     = self%o(i)%get(key)
+            sampled(i) = self%o(i)%get('sampled')
+        enddo
+        arr = pack(arr, mask=sampled > 0.5)
+    end function get_all_sampled
 
     !>  \brief  is for getting the i:th rotation matrix
     pure function get_mat( self, i ) result( mat )

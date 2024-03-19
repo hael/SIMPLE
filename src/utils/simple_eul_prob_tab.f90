@@ -313,19 +313,20 @@ contains
         character(len=*), intent(in)  :: field_str
         integer,          intent(out) :: num_smpl
         real,    allocatable :: vals(:)
-        logical, allocatable :: ptcl_mask(:)
         real    :: athres, dist_thres
         integer :: n
-        ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
-        n          = count(ptcl_mask)
-        vals       = build_glob%spproj_field%get_all(trim(field_str))
-        dist_thres = sum(vals, mask=ptcl_mask) / real(n)
+        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str))
+        n          = size(vals)
+        dist_thres = sum(vals) / real(n)
         athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
         num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 
     subroutine calc_numinpl2sample2D( num_all, num_smpl )
+
+        !!!!!!!!!!!!!! NEEDS TO CHANGE, SEE ABOVE
+
         use simple_builder, only: build_glob
         integer, intent(in)  :: num_all
         integer, intent(out) :: num_smpl
@@ -385,16 +386,15 @@ contains
         integer, parameter   :: N_SMPL     = 100
         real,    parameter   :: THRES_SAFE = 0.1    ! in Angstrom unit
         real,    allocatable :: vals(:)
-        logical, allocatable :: ptcl_mask(:)
-        integer :: i, sh_signs(2), which, dim, n_safe
+        integer :: i, sh_signs(2), which, dim, n_safe, n
         real    :: sh(2)
         real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres, thres
         if( present(thres_bound) )then
             thres = thres_bound
         else
-            ptcl_mask = nint(build_glob%spproj_field%get_all('state')) == 1
-            vals      = build_glob%spproj_field%get_all(trim('shincarg'))
-            thres     = sum(vals, mask=ptcl_mask) / real(count(ptcl_mask))
+            vals      = build_glob%spproj_field%get_all_sampled(trim('shincarg'))
+            n         = size(vals)
+            thres     = sum(vals) / real(n)
             thres     = thres / 2.
         endif
         sh = cur_sh
