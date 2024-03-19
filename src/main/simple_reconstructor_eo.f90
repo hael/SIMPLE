@@ -239,12 +239,18 @@ contains
         use simple_imgfile, only: imgfile
         class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        character(len=:),          allocatable :: even_vol, even_rho, odd_vol, odd_rho
         real(kind=c_float),            pointer :: rmat_ptr(:,:,:) => null() !< image pixels/voxels (in data)
         real(kind=c_float),            pointer :: rho_ptr(:,:,:)  => null() !< sampling+CTF**2 density
-        integer       :: fhandle_rho_e, fhandle_rho_o, i, ierr
+        complex(kind=c_float_complex), pointer :: pcmate(:,:,:),pcmato(:,:,:), pprevcmate(:,:,:),pprevcmato(:,:,:)
+        real(kind=c_float),            pointer :: prhoe(:,:,:), prhoo(:,:,:)
+        real,                      allocatable :: rho_e(:,:,:), rho_o(:,:,:)
+        character(len=:),          allocatable :: even_vol, even_rho, odd_vol, odd_rho
+        type(image)   :: prev_vol_e, prev_vol_o
         type(imgfile) :: ioimg_e, ioimg_o
-        logical       :: here(4)
+        integer       :: lims(3,2), cshape(3), prev_ldim(3), phys_out(3),phys_in(3)
+        integer       :: h,k,l, fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
+        real          :: prev_smpd
+        logical       :: here(4), l_pad_with_zeros
         even_vol = trim(adjustl(fbody))//'_even'//self%ext
         even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
         odd_vol  = trim(adjustl(fbody))//'_odd'//self%ext
@@ -254,34 +260,104 @@ contains
         here(3)  = file_exists(odd_vol)
         here(4)  = file_exists(odd_rho)
         if( all(here) )then
-            call ioimg_e%open(even_vol, self%ldim, self%even%get_smpd(), formatchar='M', readhead=.false., rwaction='read')
-            call ioimg_o%open(odd_vol,  self%ldim, self%odd%get_smpd(),  formatchar='M', readhead=.false., rwaction='read')
+            l_pad_with_zeros = .false.
+            if( params_glob%l_stoch_update )then
+                ! check dimensions
+                call find_ldim_nptcls(even_vol, prev_ldim, dummy, smpd=prev_smpd)
+                if( prev_ldim(1) == self%ldim(1) )then
+                    ! all good
+                elseif( prev_ldim(1) > self%ldim(1) )then
+                    THROW_HARD('Incorrect dimensions')
+                else
+                    l_pad_with_zeros = .true.
+                endif
+            endif
             call fopen(fhandle_rho_e, file=trim(even_rho), status='OLD', action='READ', access='STREAM', iostat=ierr)
             call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(even_rho), ierr)
             call fopen(fhandle_rho_o, file=trim(odd_rho),  status='OLD', action='READ', access='STREAM', iostat=ierr)
             call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//trim(odd_rho),  ierr)
-            !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
-            do i = 1, 4
-                select case(i)
-                    case(1)
-                        call self%even%get_rmat_ptr(rmat_ptr)
-                        call ioimg_e%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
-                    case(2)
-                        call self%odd%get_rmat_ptr(rmat_ptr)
-                        call ioimg_o%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
-                    case(3)
-                        call self%even%get_rho_ptr(rho_ptr)
-                        read(fhandle_rho_e, pos=1, iostat=ierr) rho_ptr
-                        if( ierr .ne. 0 )&
-                            &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
-                    case(4)
-                        call self%odd%get_rho_ptr(rho_ptr)
-                        read(fhandle_rho_o, pos=1, iostat=ierr) rho_ptr
-                        if( ierr .ne. 0 )&
-                            &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
-                end select
-            end do
-            !$omp end parallel do
+            if( l_pad_with_zeros )then
+                call ioimg_e%open(even_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
+                call ioimg_o%open(odd_vol,  prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
+                call prev_vol_e%new(prev_ldim, prev_smpd)
+                call prev_vol_o%new(prev_ldim, prev_smpd)
+                cshape = [fdim(prev_ldim(1)), prev_ldim(2), prev_ldim(3)]
+                allocate(rho_e(1:cshape(1),1:cshape(2),1:cshape(3)), rho_o(1:cshape(1),1:cshape(2),1:cshape(3)))
+                call self%reset_even
+                call self%reset_odd
+                ! read
+                !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+                do i = 1, 4
+                    select case(i)
+                        case(1)
+                            call prev_vol_e%get_rmat_ptr(rmat_ptr)
+                            call ioimg_e%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+                        case(2)
+                            call prev_vol_o%get_rmat_ptr(rmat_ptr)
+                            call ioimg_o%rSlices(1,prev_ldim(1),rmat_ptr,is_mrc=.true.)
+                        case(3)
+                            read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
+                            if( ierr .ne. 0 )&
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
+                        case(4)
+                            read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
+                            if( ierr .ne. 0 )&
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
+                        end select
+                end do
+                !$omp end parallel do
+                ! pad
+                lims = prev_vol_e%loop_lims(2)
+                call self%even%get_cmat_ptr(pcmate)
+                call self%odd%get_cmat_ptr(pcmato)
+                call self%even%get_rho_ptr(prhoe)
+                call self%odd%get_rho_ptr(prhoo)
+                call prev_vol_e%get_cmat_ptr(pprevcmate)
+                call prev_vol_o%get_cmat_ptr(pprevcmato)
+                !$omp parallel do collapse(3) schedule(static) default(shared)&
+                !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys_out = self%even%comp_addr_phys(h,k,l)
+                            phys_in  = prev_vol_e%comp_addr_phys(h,k,l)
+                            pcmate(phys_out(1),phys_out(2),phys_out(3))= pprevcmate(phys_in(1),phys_in(2),phys_in(3))
+                            pcmato(phys_out(1),phys_out(2),phys_out(3))= pprevcmato(phys_in(1),phys_in(2),phys_in(3))
+                            prhoe(phys_out(1),phys_out(2),phys_out(3)) = rho_e(phys_in(1),phys_in(2),phys_in(3))
+                            prhoo(phys_out(1),phys_out(2),phys_out(3)) = rho_o(phys_in(1),phys_in(2),phys_in(3))
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+                call prev_vol_e%kill
+                call prev_vol_o%kill
+                deallocate(rho_e,rho_o)
+            else
+                call ioimg_e%open(even_vol, self%ldim, self%even%get_smpd(), formatchar='M', readhead=.false., rwaction='read')
+                call ioimg_o%open(odd_vol,  self%ldim, self%odd%get_smpd(),  formatchar='M', readhead=.false., rwaction='read')
+                !$omp parallel do default(shared) private(i,rmat_ptr,rho_ptr,ierr) schedule(static) num_threads(4)
+                do i = 1, 4
+                    select case(i)
+                        case(1)
+                            call self%even%get_rmat_ptr(rmat_ptr)
+                            call ioimg_e%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                        case(2)
+                            call self%odd%get_rmat_ptr(rmat_ptr)
+                            call ioimg_o%rSlices(1,self%ldim(1),rmat_ptr,is_mrc=.true.)
+                        case(3)
+                            call self%even%get_rho_ptr(rho_ptr)
+                            read(fhandle_rho_e, pos=1, iostat=ierr) rho_ptr
+                            if( ierr .ne. 0 )&
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(even_rho), ierr)
+                        case(4)
+                            call self%odd%get_rho_ptr(rho_ptr)
+                            read(fhandle_rho_o, pos=1, iostat=ierr) rho_ptr
+                            if( ierr .ne. 0 )&
+                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// trim(odd_rho), ierr)
+                    end select
+                end do
+                !$omp end parallel do
+            endif
             call ioimg_e%close
             call ioimg_o%close
             call fclose(fhandle_rho_e)
