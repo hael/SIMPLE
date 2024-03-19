@@ -708,7 +708,7 @@ contains
             case('prob')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( startit == 1          ) call build%spproj_field%clean_updatecnt
+                if( startit == 1          ) call build%spproj_field%clean_updatecnt_sampled
                 if( params%l_stoch_update ) call build%spproj_field%clean_sampled
         end select
         if( params%l_distr_exec )then
@@ -1242,7 +1242,7 @@ contains
         integer :: nptcls, ipart
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( params%startit == 1   ) call build%spproj_field%clean_updatecnt
+        if( params%startit == 1   ) call build%spproj_field%clean_updatecnt_sampled
         if( params%l_stoch_update ) call build%spproj_field%clean_sampled
         allocate(ptcl_mask(1:params%nptcls))
         if( params%l_frac_update )then
