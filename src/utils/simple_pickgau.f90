@@ -14,7 +14,7 @@ private
 real,    parameter :: GAUSIG = 2.5, BOX_EXP_FAC = 0.111, NDEV_DEFAULT = 2.5
 real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
-logical, parameter :: L_WRITE  = .true.
+logical, parameter :: L_WRITE  = .false.
 logical, parameter :: L_DEBUG  = .false.
 
 ! class variables

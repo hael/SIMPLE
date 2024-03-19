@@ -634,13 +634,11 @@ contains
         call private_prgs(14)%set_name('pick_extract')
         ! required keys
         call private_prgs(14)%push_req_key('projfile')
-        call private_prgs(14)%push_req_key('refs')
         ! optional keys
         call private_prgs(14)%push_opt_key('nthr')
         call private_prgs(14)%push_opt_key('lp')
         call private_prgs(14)%push_opt_key('thres')
         call private_prgs(14)%push_opt_key('ndev')
-        call private_prgs(14)%push_opt_key('box_extract')
         call private_prgs(14)%push_opt_key('pcontrast')
         call private_prgs(14)%push_opt_key('outside')
 
