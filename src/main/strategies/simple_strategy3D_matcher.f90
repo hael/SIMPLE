@@ -283,11 +283,7 @@ contains
                     params_glob%l_doshift = .true.
                     ! updating sigma with new orientation (same reference though), when ptr2 is set
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( params_glob%l_cartesian )then
-                        call eucl_sigma%update_sigma2(cftcc, iptcl, orientation, 'proj')
-                    else
-                        call eucl_sigma%update_sigma2(pftcc, iptcl, orientation, 'proj')
-                    endif
+                    call eucl_sigma%update_sigma2(pftcc, iptcl, orientation, 'proj')
                     call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
                     call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
                     call strategy3Dsrch(iptcl_batch)%ptr2%kill
@@ -295,11 +291,7 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     call build_glob%spproj_field%get_ori(iptcl, orientation)
-                    if( params_glob%l_cartesian )then
-                        call eucl_sigma%calc_sigma2(cftcc, iptcl, orientation, 'proj')
-                    else
-                        call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
-                    endif
+                    call eucl_sigma%calc_sigma2(pftcc, iptcl, orientation, 'proj')
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -325,12 +317,8 @@ contains
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        if( params_glob%l_cartesian )then
-            call cftcc%kill
-        else
-            call pftcc%kill
-            if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj%kill
-        endif
+        call pftcc%kill
+        if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj%kill
         call build_glob%vol%kill
         call orientation%kill
         if( allocated(symmat)   ) deallocate(symmat)
@@ -375,11 +363,7 @@ contains
         ! REPORT CONVERGENCE
         call qsys_job_finished('simple_strategy3D_matcher :: refine3D_exec')
         if( .not. params_glob%l_distr_exec )then
-            if( params_glob%l_cartesian )then
-                converged = conv%check_conv3Dc(cline, params_glob%msk)
-            else
-                converged = conv%check_conv3D(cline, params_glob%msk)
-            endif
+            converged = conv%check_conv3D(cline, params_glob%msk)
         endif
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
@@ -471,9 +455,6 @@ contains
             !$omp end parallel do
         end do
         call pftcc%memoize_refs
-        ! then the Cartesian
-        ! must be done here since params_glob%kfromto is dynamically set
-        if( params_glob%l_cartesian ) call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max])
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished prep_ccobjs4align'
     end subroutine prep_ccobjs4align
 
@@ -485,7 +466,6 @@ contains
         call discrete_read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here], params_glob%l_use_denoised )
         ! reassign particles indices & associated variables
         call pftcc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( params_glob%l_cartesian ) call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -494,15 +474,11 @@ contains
             call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), ptcl_match_imgs(ithr))
             ! transfer to polar coordinates
             call build_glob%img_crop_polarizer%polarize(pftcc, ptcl_match_imgs(ithr), iptcl, .true., .true., mask=build_glob%l_resmsk)
-            ! set Cartesian
-            if( params_glob%l_cartesian ) call cftcc%set_ptcl(iptcl, build_glob%imgbatch(iptcl_batch))
             ! e/o flags
             call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-            if( params_glob%l_cartesian ) call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
         end do
         !$omp end parallel do
         call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-        if( params_glob%l_cartesian ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
         ! Memoize particles FFT parameters
         call pftcc%memoize_ptcls
     end subroutine build_batch_particles
