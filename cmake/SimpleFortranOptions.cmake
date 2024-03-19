@@ -227,7 +227,7 @@ endif()
 # message(STATUS "Testing flag host arch")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #   Fortran
-#   "-xHost"        # Intel
+#   "-xHost"        # IntelLLVM
 #   "/QxHost"       # Intel Windows
 #   ${GNUNATIVE}    # GNU
 #   "-tp=x64"      # Portland Group - generic 64 bit platform
@@ -249,7 +249,7 @@ endif()
 if(USE_AGGRESSIVE_OPTIMISATION)
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   Fortran
-  "-unroll-aggressive"                         # IntelLLVM
+  #"-unroll-aggressive"                        # IntelLLVM
   "-funroll-all-loops"                         # GNU, Intel, Clang
   "/unroll"                                    # Intel Windows
   "-Munroll "                                  # Portland Group
@@ -318,7 +318,7 @@ if (USE_FAST_MATH_OPTIMISATION)
     )   # PGI
 endif(USE_FAST_MATH_OPTIMISATION)
 
-if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # Auto parallelize
   if (USE_AUTO_PARALLELISE)
     SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
@@ -388,9 +388,9 @@ endif()
 
 if(USE_MPI)
   find_package(MPI REQUIRED)
- # if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+ # if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
  #     if(MPI_Fortran_FOUND)
-        # do something different for Intel MPI
+        # do something different for IntelLLVM MPI
 
  #     else()
 
@@ -498,7 +498,7 @@ if(USE_CUDA)
 endif(USE_CUDA)
 
 ################################################################
-# FFTW  -- MKL core already inlcuded in Intel config
+# FFTW  -- MKL core already inlcuded in IntelLLVM config
 ################################################################
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
   # Append MKL FFTW interface libs
@@ -718,7 +718,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
      endif()
   endif()
 
-elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME MATCHES "ifort*" OR Fortran_COMPILER_NAME MATCHES "mpiifort*")
+elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NAME MATCHES "ifx*" OR Fortran_COMPILER_NAME MATCHES "mpiifx*")
   #############################################
   #
   ## INTEL fortran
