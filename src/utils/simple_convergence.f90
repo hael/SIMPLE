@@ -99,8 +99,8 @@ contains
         self%mi_class = os%get_avg('mi_class',     mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
-        write(logfhandle,601) '>>> % PARTICLE SAMPLED THIS ITERATION       ', percen_sampled
-        write(logfhandle,601) '>>> % PARTICLE UPDATED SO FAR               ', percen_updated
+        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION      ', percen_sampled
+        write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR              ', percen_updated
         ! dists and % search space
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
@@ -228,8 +228,8 @@ contains
         if( params_glob%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
         endif
-        write(logfhandle,601) '>>> % PARTICLE SAMPLED THIS ITERATION         ', percen_sampled
-        write(logfhandle,601) '>>> % PARTICLE UPDATED SO FAR                 ', percen_updated
+        write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
+        write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
