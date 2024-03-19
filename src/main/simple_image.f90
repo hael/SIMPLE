@@ -6931,38 +6931,57 @@ contains
     !! \param self_in image object
     !! \param self_out image object
     !! \param backgr
-    subroutine pad( self_in, self_out, backgr )
-        class(image),   intent(inout) :: self_in, self_out
-        real, optional, intent(in)    :: backgr
+    subroutine pad( self_in, self_out, backgr, antialiasing )
+        class(image),      intent(inout) :: self_in, self_out
+        real,    optional, intent(in)    :: backgr
+        logical, optional, intent(in)    :: antialiasing
+        real, allocatable :: antialw(:)
         real              :: w, ratio
         integer           :: starts(3), stops(3), lims(3,2)
         integer           :: h, k, l, phys_in(3), phys_out(3)
-        real, allocatable :: antialw(:)
+        logical           :: l_antialiasing
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
         endif
+        l_antialiasing = .true.
+        if( present(antialiasing) ) l_antialiasing = antialiasing
         if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2)&
         .and. self_out%ldim(3) >= self_in%ldim(3) )then
             if( self_in%ft )then
                 self_out = cmplx(0.,0.)
-                antialw = self_in%hannw()
                 lims = self_in%fit%loop_lims(2)
-                !$omp parallel do collapse(3) schedule(static) default(shared)&
-                !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(l)))
-                            phys_out = self_out%fit%comp_addr_phys(h,k,l)
-                            phys_in  = self_in%fit%comp_addr_phys(h,k,l)
-                            self_out%cmat(phys_out(1),phys_out(2),phys_out(3))=&
-                            self_in%cmat(phys_in(1),phys_in(2),phys_in(3))*w
+                if( l_antialiasing )then
+                    antialw = self_in%hannw()
+                    !$omp parallel do collapse(3) schedule(static) default(shared)&
+                    !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
+                    do h=lims(1,1),lims(1,2)
+                        do k=lims(2,1),lims(2,2)
+                            do l=lims(3,1),lims(3,2)
+                                w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(l)))
+                                phys_out = self_out%fit%comp_addr_phys(h,k,l)
+                                phys_in  = self_in%fit%comp_addr_phys(h,k,l)
+                                self_out%cmat(phys_out(1),phys_out(2),phys_out(3))=&
+                                self_in%cmat(phys_in(1),phys_in(2),phys_in(3))*w
+                            end do
                         end do
                     end do
-                end do
-                !$omp end parallel do
-                deallocate(antialw)
+                    !$omp end parallel do
+                    deallocate(antialw)
+                else
+                    !$omp parallel do collapse(3) schedule(static) default(shared)&
+                    !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
+                    do h=lims(1,1),lims(1,2)
+                        do k=lims(2,1),lims(2,2)
+                            do l=lims(3,1),lims(3,2)
+                                phys_out = self_out%fit%comp_addr_phys(h,k,l)
+                                phys_in  = self_in%fit%comp_addr_phys(h,k,l)
+                                self_out%cmat(phys_out(1),phys_out(2),phys_out(3))= self_in%cmat(phys_in(1),phys_in(2),phys_in(3))
+                            end do
+                        end do
+                    end do
+                    !$omp end parallel do
+                endif
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
                 self_out%smpd = self_in%smpd*ratio ! padding Fourier transform, so sampling is finer
                 self_out%ft = .true.
