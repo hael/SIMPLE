@@ -110,9 +110,6 @@ contains
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = pftcc_glob%get_nrots()
-        if( params_glob%l_cartesian )then
-            call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
-        endif
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
         &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
         self%exists = .true.

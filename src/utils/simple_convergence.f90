@@ -29,16 +29,14 @@ type convergence
     type(stats_struct) :: cc_nonpeak !< cc non-peak statistics
     type(oris)         :: ostats     !< centralize stats for writing
     integer :: iteration = 0         !< current interation
-    real    :: mi_class = 0.         !< class parameter distribution overlap
-    real    :: mi_proj  = 0.         !< projection parameter distribution overlap
-    real    :: mi_state = 0.         !< state parameter distribution overlap
-    real    :: progress = 0.         !< progress estimation
+    real    :: mi_class  = 0.        !< class parameter distribution overlap
+    real    :: mi_proj   = 0.        !< projection parameter distribution overlap
+    real    :: mi_state  = 0.        !< state parameter distribution overlap
+    real    :: progress  = 0.        !< progress estimation
   contains
     procedure :: read
     procedure :: check_conv2D
     procedure :: check_conv3D
-    procedure :: check_conv3Dc
-    procedure :: check_conv_cluster
     procedure :: append_stats
     procedure :: plot_projdirs
     procedure :: get
@@ -75,21 +73,28 @@ contains
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), states(:), scores(:), pws(:)
+        real,    allocatable :: updatecnts(:), states(:), scores(:), pws(:), sampled(:)
         logical, allocatable :: mask(:)
+        integer :: n
         real    :: avg_updatecnt, overlap_lim, fracsrch_lim, score_t, percen_nonzero_pw, lim_updatecnt
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        states            = os%get_all('state')
-        scores            = os%get_all('corr')
-        updatecnts        = os%get_all('updatecnt')
-        lim_updatecnt     = maxval(updatecnts) - 0.5
-        avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
+        states        = os%get_all('state')
+        scores        = os%get_all('corr')
+        updatecnts    = os%get_all('updatecnt')
+        sampled       = os%get_all('sampled')
+        lim_updatecnt = maxval(updatecnts) - 0.5
+        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        n             = size(states)
         if( params_glob%l_frac_update )then
-            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
+            if( params_glob%l_stoch_update )then
+                allocate(mask(n), source=sampled    > 0.5           .and. states > 0.5)
+            else
+                allocate(mask(n), source=updatecnts > lim_updatecnt .and. states > 0.5)
+            endif
         else
-            allocate(mask(size(updatecnts)), source=updatecnts > 0.5            .and. states > 0.5)
+                allocate(mask(n), source=updatecnts > 0.5           .and. states > 0.5)
         endif
         pws               = os%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
@@ -188,7 +193,7 @@ contains
         call self%ostats%set(1,'SCORE',self%score%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, states, scores, pws)
+        deallocate(mask, updatecnts, states, scores, pws, sampled)
         call self%ostats%kill
     end function check_conv2D
 
@@ -196,22 +201,28 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim, score_t, lim_updatecnt
         logical :: converged
-        integer :: iptcl, istate
+        integer :: iptcl, istate, n
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states        = build_glob%spproj_field%get_all('state')
         scores        = build_glob%spproj_field%get_all('corr')
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-        lim_updatecnt     = maxval(updatecnts) - 0.5
-        avg_updatecnt     = sum(updatecnts) / real(count(states > 0.5))
+        sampled       = build_glob%spproj_field%get_all('sampled')
+        lim_updatecnt = maxval(updatecnts) - 0.5
+        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        n             = size(states)
         if( params_glob%l_frac_update )then
-            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
+            if( params_glob%l_stoch_update )then
+                allocate(mask(n), source=sampled    > 0.5           .and. states > 0.5)
+            else
+                allocate(mask(n), source=updatecnts > lim_updatecnt .and. states > 0.5)
+            endif
         else
-            allocate(mask(size(updatecnts)), source=updatecnts > 0.5            .and. states > 0.5)
+                allocate(mask(n), source=updatecnts > 0.5           .and. states > 0.5)
         endif
         pws = build_glob%spproj_field%get_all('w')
         percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
@@ -335,143 +346,9 @@ contains
         call self%append_stats
         call self%plot_projdirs(mask)
         ! destruct
-        deallocate(mask, updatecnts, pws, states, scores)
+        deallocate(mask, updatecnts, pws, states, scores, sampled)
         call self%ostats%kill
     end function check_conv3D
-
-    function check_conv3Dc( self, cline, msk ) result( converged )
-        class(convergence), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
-        real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), pws(:), states(:), scores(:)
-        logical, allocatable :: mask(:)
-        real    :: avg_updatecnt, percen_nonzero_pw, score_t, lim_updatecnt
-        logical :: converged
-        601 format(A,1X,F12.3)
-        604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
-        states        = build_glob%spproj_field%get_all('state')
-        scores        = build_glob%spproj_field%get_all('corr')
-        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
-        lim_updatecnt = maxval(updatecnts) - 0.5
-        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
-        if( params_glob%l_frac_update )then
-            allocate(mask(size(updatecnts)), source=updatecnts > lim_updatecnt .and. states > 0.5)
-        else
-            allocate(mask(size(updatecnts)), source=updatecnts > 0.5           .and. states > 0.5)
-        endif
-        pws = build_glob%spproj_field%get_all('w')
-        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
-        call build_glob%spproj_field%stats('corr',       self%score,      mask=mask)
-        call build_glob%spproj_field%stats('npeaks',     self%npeaks,     mask=mask)
-        if( self%npeaks%avg > 1e-6 )then
-        call build_glob%spproj_field%stats('cc_peak',    self%cc_peak,    mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('cc_nonpeak', self%cc_nonpeak, mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('dist_peaks', self%dist_peaks, mask=mask, nozero=.true.)
-        endif
-        call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
-        call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
-        call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
-        call build_glob%spproj_field%stats('frac_sh',    self%frac_sh,    mask=mask)
-        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
-        call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
-        call build_glob%spproj_field%stats('nevals',     self%nevals,     mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('ngevals',    self%ngevals,    mask=mask, nozero=.true.)
-        call build_glob%spproj_field%stats('better',     self%better,     mask=mask)
-        call build_glob%spproj_field%stats('better_l',   self%better_l,   mask=mask)
-        score_t = self%score%avg - 2. * self%score%sdev
-        ! particle updates
-        write(logfhandle,601) '>>> # PARTICLE UPDATES       AVG:             ', avg_updatecnt
-        ! dists and % search space
-        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
-        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        if( self%npeaks%avg > 1e-6 )then
-        write(logfhandle,604) '>>> # PROJECTION PEAKS       AVG/SDEV/MIN/MAX:', self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
-        write(logfhandle,604) '>>> PEAK DIST          (DEG) AVG/SDEV/MIN/MAX:', self%dist_peaks%avg, self%dist_peaks%sdev, self%dist_peaks%minv, self%dist_peaks%maxv
-        endif
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
-        write(logfhandle,604) '>>> % EULER SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> % SHIFT SPACE SCANNED    AVG/SDEV/MIN/MAX:', self%frac_sh%avg, self%frac_sh%sdev, self%frac_sh%minv, self%frac_sh%maxv
-        write(logfhandle,604) '>>> % IMPROVED SOLUTIONS     AVG/SDEV/MIN/MAX:', 100.*self%better%avg, 100.*self%better%sdev, 100.*self%better%minv, 100.*self%better%maxv
-        write(logfhandle,604) '>>> % IMPROVED LBFGS-B       AVG/SDEV/MIN/MAX:', 100.*self%better_l%avg, 100.*self%better_l%sdev, 100.*self%better_l%minv, 100.*self%better_l%maxv
-        ! score & particle weights
-        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        if( self%npeaks%avg > 1e-6 )then
-        write(logfhandle,604) '>>> SCORE, PEAK        AVG/SDEV/MIN/MAX:', self%cc_peak%avg, self%cc_peak%sdev, self%cc_peak%minv, self%cc_peak%maxv
-        write(logfhandle,604) '>>> SCORE, NONPEAK     AVG/SDEV/MIN/MAX:', self%cc_nonpeak%avg, self%cc_nonpeak%sdev, self%cc_nonpeak%minv, self%cc_nonpeak%maxv
-        endif
-        write(logfhandle,601) '>>> % PARTICLES     CC > CC_AVG - 2 * CC_SDEV:', 100. * real(count(scores > score_t .and. mask)) / real(count(mask))
-        write(logfhandle,601) '>>> SCORE                           THRESHOLD:', score_t
-        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
-        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
-        ! cost and gradient evals
-        write(logfhandle,604) '>>> # COST FUN EVALS         AVG/SDEV/MIN/MAX:', self%nevals%avg, self%nevals%sdev, self%nevals%minv, self%nevals%maxv
-        write(logfhandle,604) '>>> # GRADIENT EVALS         AVG/SDEV/MIN/MAX:', self%ngevals%avg, self%ngevals%sdev, self%ngevals%minv, self%ngevals%maxv
-
-        ! determine convergence
-        converged = .false.
-        if( self%better%avg * 100. < 5. )then ! less than 5 % improved solutions
-            converged = .true.
-        endif
-        ! stats
-        call self%ostats%new(1, is_ptcl=.false.)
-        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
-        call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
-        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
-        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
-        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
-        call self%ostats%set(1,'SCORE',self%score%avg)
-        call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
-        call self%ostats%write(STATS_FILE)
-        ! destruct
-        deallocate(mask, updatecnts, pws, scores)
-        call self%ostats%kill
-    end function check_conv3Dc
-
-    function check_conv_cluster( self, cline ) result( converged )
-        class(convergence), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
-        logical :: converged
-
-        converged = .false.
-
-        ! 601 format(A,1X,F8.3)
-        ! 604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        ! call build_glob%spproj_field%stats('frac', self%frac_srch)
-        ! self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        ! write(logfhandle,601) '>>> STATE OVERLAP:                          ', self%mi_state
-        ! write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
-        ! &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        ! ! provides convergence stats for multiple states
-        ! ! by calculating mi_joint for individual states
-        ! call build_glob%spproj_field%get_pops(statepops,'state')
-        ! call build_glob%spproj_field%stats('corr', self%corr)
-        ! write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
-        ! &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
-        ! ! print the overlaps and pops for the different states
-        ! do istate=1,params_glob%nstates
-        !     write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
-        ! end do
-        ! if( self%mi_state > OVERLAP_STATE_HET .and.&
-        !     self%frac_srch%avg > FRACSRCHSPACE_HET     )then
-        !     write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-        !     converged = .true.
-        ! else
-        !     write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-        !     converged = .false.
-        ! endif
-        ! ! stats
-        ! call self%ostats%new(1, is_ptcl=.false.)
-        ! call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
-        ! call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
-        ! call self%ostats%set(1,'CORRELATION',         self%corr%avg)
-        ! do istate=1,params_glob%nstates
-        !     call self%ostats%set(1,'STATE_POPULATION_'//int2str(istate), real(statepops(istate)))
-        ! enddo
-        ! call self%ostats%write(STATS_FILE)
-        ! ! cleanup
-        ! call self%ostats%kill
-        ! deallocate( statepops )
-    end function check_conv_cluster
 
     subroutine append_stats( self )
         use CPlot2D_wrapper_module, only: plot2D
