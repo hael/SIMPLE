@@ -354,6 +354,15 @@ contains
                 ! no reconstruction
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
+                if( params_glob%l_frac_update )then
+                    if( params_glob%it_history > 0 )then
+                        if( build_glob%spproj_field%updatecnt_has_been_incr() )then
+                            ! re-sample indices
+                            call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
+                            params_glob%it_history, nptcls2update, pinds, ptcl_mask)
+                        endif
+                    endif
+                endif
                 call calc_3Drec( cline, nptcls2update, pinds, which_iter )
                 call eucl_sigma%kill
                 call killimgbatch
