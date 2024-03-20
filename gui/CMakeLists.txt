@@ -40,7 +40,7 @@ if(${GUI})
                         gui_multi_apple ALL
                         COMMENT "Installing GUI multiuser ... "
                         DEPENDS gui_core nodejs_apple
-                        COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm install
+                        COMMAND ${CMAKE_COMMAND} -E env "PATH=${CMAKE_BINARY_DIR}/bin/nodejs/bin:$ENV{PATH}" npm install -g --unsafe-perm binding
 			COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/server/multi_user/simple_multiuser.sh ${CMAKE_BINARY_DIR}/bin/simple_multiuser
                         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gui_data/server/multi_user
                 )
