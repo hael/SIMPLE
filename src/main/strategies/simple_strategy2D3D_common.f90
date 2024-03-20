@@ -463,7 +463,7 @@ contains
             if( pops(istate) > 0)then
                 call build_glob%eorecvols(istate)%new(build_glob%spproj)
                 call build_glob%eorecvols(istate)%reset_all
-                if( params_glob%l_stoch_update )then
+                if( params_glob%l_mov_avg_vol )then
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
                     if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then  
                         call build_glob%eorecvols(istate)%read_eos(fbody)

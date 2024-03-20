@@ -85,12 +85,15 @@ type :: oris
     procedure          :: sample4update_all
     procedure          :: sample4update_rnd
     procedure          :: sample4update_reprod
-    procedure          :: sample4update_history
+    procedure, private :: sample4update_history_1
+    procedure, private :: sample4update_history_2
+    generic            :: sample4update_history => sample4update_history_1, sample4update_history_2
     procedure          :: find_opt_updatecnt_history
     procedure          :: incr_updatecnt
     procedure          :: clean_sampled
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
+    procedure          :: updatecnt_has_been_incr
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
@@ -1340,18 +1343,15 @@ contains
         end do
     end subroutine sample4update_reprod
 
-    subroutine sample4update_history( self, fromto, update_frac, nsamples, inds, mask, ucnt_history )
+    subroutine sample4update_history_1( self, fromto, ucnt_history, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
-        real,                 intent(out)   :: update_frac
+        integer, optional,    intent(in)    :: ucnt_history
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        integer, optional,    intent(in)    :: ucnt_history
         integer, allocatable :: states(:), counts(:)
-        integer :: i, cnt, nptcls, cnt_max, cnt_lb, uucnt_history
-        uucnt_history = 0
-        if( present(ucnt_history) ) uucnt_history = ucnt_history
+        integer :: i, cnt, nptcls, cnt_max, cnt_lb
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), counts(nptcls), source=0)
@@ -1371,15 +1371,37 @@ contains
         counts       = pack(counts, mask=states > 0)
         cnt_max      = maxval(counts)
         if( cnt_max == 0 ) THROW_HARD('requires past search history')
-        cnt_lb       = max(1,cnt_max - uucnt_history)
+        cnt_lb       = max(1,cnt_max - ucnt_history)
         nsamples     = count(counts >= cnt_lb)
-        update_frac  = real(nsamples) / real(nptcls)
         inds         = pack(inds, mask=counts >= cnt_lb)
         mask = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
-    end subroutine sample4update_history
+    end subroutine sample4update_history_1
+
+    subroutine sample4update_history_2( self, ucnt_history, nsamples )
+        class(oris),          intent(inout) :: self
+        integer, optional,    intent(in)    :: ucnt_history
+        integer,              intent(inout) :: nsamples
+        integer, allocatable :: states(:), counts(:)
+        integer :: i, cnt_max, cnt_lb, nptcls
+        allocate(states(self%n), counts(self%n), source=0)
+        do i = 1,self%n
+            states(i) = self%o(i)%get_state()
+            if( self%o(i)%isthere('updatecnt') )then
+                counts(i) = nint(self%o(i)%get('updatecnt'))
+            else
+                counts(i) = 0
+            endif
+        end do
+        nptcls       = count(states > 0)
+        counts       = pack(counts, mask=states > 0)
+        cnt_max      = maxval(counts)
+        if( cnt_max == 0 ) THROW_HARD('requires past search history')
+        cnt_lb       = max(1,cnt_max - ucnt_history)
+        nsamples     = count(counts >= cnt_lb)
+    end subroutine sample4update_history_2
 
     subroutine find_opt_updatecnt_history( self, nsamples_target, ucnt_history )
         class(oris), intent(inout) :: self
@@ -1459,6 +1481,18 @@ contains
             call self%o(i)%delete_entry('sampled')
         enddo
     end subroutine clean_updatecnt_sampled
+
+    logical function updatecnt_has_been_incr( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        updatecnt_has_been_incr =.false.
+        do i = 1,self%n
+            if( nint(self%o(i)%get('updatecnt')) > 0 )then
+                updatecnt_has_been_incr = .true.
+                exit
+            endif
+        end do
+    end function updatecnt_has_been_incr
 
     logical function has_been_sampled( self )
         class(oris), intent(inout) :: self

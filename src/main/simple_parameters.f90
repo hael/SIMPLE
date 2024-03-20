@@ -54,6 +54,7 @@ type :: parameters
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
+    character(len=3)          :: mov_avg_vol='no'     !< volume is a moving average (add particles on top of current)
     character(len=3)          :: needs_sigma='no'     !<
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: noise_norm ='no'
@@ -241,6 +242,7 @@ type :: parameters
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: iptcl=1
+    integer :: it_history=0        !< iteration history for sampling particles for 3D reconstruction
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
     integer :: ldim(3)=0
@@ -424,6 +426,7 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_stoch_update = .false.
+    logical :: l_mov_avg_vol  = .false.
     logical :: l_graphene     = .false.
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
@@ -540,6 +543,7 @@ contains
         call check_carg('ml_reg',         self%ml_reg)
         call check_carg('ml_reg_chunk',   self%ml_reg_chunk)
         call check_carg('ml_reg_pool',    self%ml_reg_pool)
+        call check_carg('mov_avg_vol',    self%mov_avg_vol)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('multi_moldiams', self%multi_moldiams)
@@ -678,6 +682,7 @@ contains
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
+        call check_iarg('it_history',     self%it_history)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
@@ -1187,8 +1192,31 @@ contains
             self%update_frac   = 1.0
             self%l_frac_update = .false.
         endif
+        ! iteration history for sampling particles for 3D reconstruction
+        if( self%l_frac_update )then
+            if( cline%defined('it_history') )then
+                if( self%it_history > 3 .or. self%it_history < 1 ) THROW_HARD('it_history out of range, select within [0,3]')
+            else
+                self%it_history = 1
+            endif
+        else
+            self%it_history = 0
+        endif
         ! set stochastic update flag
-        self%l_stoch_update = self%stoch_update .ne. 'no'
+        self%l_stoch_update = trim(self%stoch_update) .ne. 'no'
+        ! trailing volume
+        if( self%l_stoch_update )then
+            if( cline%defined('mov_avg_vol') )then
+                self%l_mov_avg_vol = trim(self%mov_avg_vol) .ne. 'no'
+            else
+                select case(trim(self%refine))
+                    case('prob')
+                        self%l_mov_avg_vol = .false.
+                    case DEFAULT
+                        self%l_mov_avg_vol = .true.
+                end select
+            endif
+        endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions
             self%ncunits = self%nparts

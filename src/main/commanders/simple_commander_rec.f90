@@ -141,6 +141,7 @@ contains
         integer,          allocatable :: pinds(:)
         logical,          allocatable :: ptcl_mask(:)
         integer :: nptcls2update
+        logical :: l_did_sample
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( .not. cline%defined('nparts') )then ! shared-memory implementation
@@ -158,10 +159,19 @@ contains
         endif
         allocate(ptcl_mask(params%fromp:params%top))
         if( params%l_frac_update )then
-            if( build%spproj_field%has_been_sampled() )then
-                call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
-            else
-                call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls2update, pinds, ptcl_mask)
+            l_did_sample = .false.
+            if( params%it_history > 0 )then
+                if( build%spproj_field%updatecnt_has_been_incr() )then
+                    call build%spproj_field%sample4update_history([params%fromp,params%top], params%it_history, nptcls2update, pinds, ptcl_mask)
+                    l_did_sample = .true.
+                endif
+            endif
+            if( .not. l_did_sample )then
+                if( build%spproj_field%has_been_sampled() )then
+                    call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)
+                else
+                    call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls2update, pinds, ptcl_mask)
+                endif
             endif
         else
             call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls2update, pinds, ptcl_mask)

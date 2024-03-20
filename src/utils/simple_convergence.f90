@@ -71,9 +71,9 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:), states(:), scores(:), pws(:), sampled(:)
         logical, allocatable :: mask(:)
-        integer :: n
+        integer :: nsamples, n, nptcls
         real    :: overlap_lim, fracsrch_lim, percen_nonzero_pw
-        real    :: percen_sampled, percen_updated
+        real    :: percen_sampled, percen_updated, percen_avg
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -82,10 +82,15 @@ contains
         updatecnts     = os%get_all('updatecnt')
         sampled        = os%get_all('sampled')
         n              = size(states)
-        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / count(states > 0.5)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / count(states > 0.5)) * 100.
+        nptcls         = count(states > 0.5)
+        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
         if( params_glob%l_frac_update )then
             allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
+            if( params_glob%it_history > 0 )then
+                call os%sample4update_history(params_glob%it_history, nsamples)
+                percen_avg = (real(nsamples) / real(nptcls)) * 100.  
+            endif
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
@@ -101,6 +106,7 @@ contains
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION      ', percen_sampled
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR              ', percen_updated
+        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING          ', percen_avg
         ! dists and % search space
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
@@ -180,6 +186,7 @@ contains
         call self%ostats%set(1,'CLASS_OVERLAP',self%mi_class)
         call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
+        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED', percen_avg)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'SCORE',self%score%avg)
@@ -196,9 +203,9 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, percen_nonzero_pw, overlap_lim, fracsrch_lim
-        real    :: percen_sampled, percen_updated
+        real    :: percen_sampled, percen_updated, percen_avg
         logical :: converged
-        integer :: iptcl, istate, n
+        integer :: iptcl, istate, n, nptcls, nsamples
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         states         = build_glob%spproj_field%get_all('state')
@@ -206,10 +213,15 @@ contains
         updatecnts     = build_glob%spproj_field%get_all('updatecnt')
         sampled        = build_glob%spproj_field%get_all('sampled')
         n              = size(states)
-        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / count(states > 0.5)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / count(states > 0.5)) * 100.
+        nptcls         = count(states > 0.5)
+        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
         if( params_glob%l_frac_update )then
             allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
+             if( params_glob%it_history > 0 )then
+                call build_glob%spproj_field%sample4update_history(params_glob%it_history, nsamples)
+                percen_avg = (real(nsamples) / real(nptcls)) * 100.  
+            endif
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
@@ -230,6 +242,7 @@ contains
         endif
         write(logfhandle,601) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
+        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
@@ -310,6 +323,7 @@ contains
         if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
         call self%ostats%set(1,'PERCEN_PARTICLES_SAMPLED', percen_sampled)
         call self%ostats%set(1,'PERCEN_PARTICLES_UPDATED', percen_updated)
+        call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED', percen_avg)
         call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
         call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
