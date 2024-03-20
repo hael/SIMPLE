@@ -121,11 +121,11 @@ contains
                                          &nptcls2update, pinds, ptcl_mask)
             else                                                 ! we generate a random subset
                 call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+                &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
         else                                                     ! we sample all state > 0
             call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                         &nptcls2update, pinds, ptcl_mask)
+                                         &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
         ! increment update counter
         call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)

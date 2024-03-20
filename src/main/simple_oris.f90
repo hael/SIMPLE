@@ -88,12 +88,9 @@ type :: oris
     procedure, private :: sample4update_history_1
     procedure, private :: sample4update_history_2
     generic            :: sample4update_history => sample4update_history_1, sample4update_history_2
-    procedure          :: find_opt_updatecnt_history
     procedure          :: incr_updatecnt
-    procedure          :: clean_sampled
     procedure          :: clean_updatecnt
     procedure          :: clean_updatecnt_sampled
-    procedure          :: updatecnt_has_been_incr
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
@@ -407,12 +404,14 @@ contains
         character(len=*),  intent(in) :: key
         real, allocatable :: arr(:), sampled(:)
         integer :: i
+        real    :: lb
         allocate(arr(self%n), sampled(self%n), source=0.)
         do i=1,self%n
             arr(i)     = self%o(i)%get(key)
             sampled(i) = self%o(i)%get('sampled')
         enddo
-        arr = pack(arr, mask=sampled > 0.5)
+        lb  = maxval(sampled) - 0.5
+        arr = pack(arr, mask=sampled > lb)
     end function get_all_sampled
 
     !>  \brief  is for getting the i:th rotation matrix
@@ -1251,56 +1250,68 @@ contains
         end do
     end subroutine print_matrices
 
-    subroutine sample4update_all( self, fromto, nsamples, inds, mask )
+    subroutine sample4update_all( self, fromto, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        integer, allocatable :: states(:)
-        integer :: i, cnt, nptcls
+        logical,              intent(in)    :: incr_sampled
+        integer, allocatable :: states(:), sampled(:)
+        integer :: i, cnt, nptcls, sample_ind
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
-        allocate(states(nptcls), inds(nptcls), source=0)
+        allocate(states(nptcls), sampled(nptcls), inds(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
-            call self%o(i)%set('sampled', 0.0)
-            cnt         = cnt + 1
-            states(cnt) = self%o(i)%get_state()
-            inds(cnt)   = i
+            cnt          = cnt + 1
+            states(cnt)  = self%o(i)%get_state()
+            sampled(cnt) = self%o(i)%get_sampled()
+            inds(cnt)    = i
         end do
-        nsamples = count(states > 0)
-        inds     = pack(inds, mask=states > 0)
-        mask     = .false.
+        if( incr_sampled )then
+            sample_ind = maxval(sampled, mask=states > 0) + 1
+        else
+            sample_ind = maxval(sampled, mask=states > 0)
+        endif
+        nsamples   = count(states > 0)
+        inds       = pack(inds, mask=states > 0)
+        mask       = .false.
         do i = 1, nsamples
-            call self%o(inds(i))%set('sampled', 1.0)
+            call self%o(inds(i))%set('sampled', real(sample_ind))
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_all
 
-    subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, mask )
+    subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical,              intent(in)    :: incr_sampled
         type(ran_tabu) :: rt
-        integer, allocatable :: states(:)
-        integer :: i, cnt, nptcls
+        integer, allocatable :: states(:), sampled(:)
+        integer :: i, cnt, nptcls, sample_ind
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
-        allocate(states(nptcls), inds(nptcls), source=0)
+        allocate(states(nptcls), inds(nptcls), sampled(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
-            call self%o(i)%set('sampled', 0.0)
-            cnt         = cnt + 1
-            states(cnt) = self%o(i)%get_state()
-            inds(cnt)   = i
+            cnt          = cnt + 1
+            states(cnt)  = self%o(i)%get_state()
+            sampled(cnt) = self%o(i)%get_sampled()
+            inds(cnt)    = i
         end do
-        nptcls   = count(states > 0)
-        inds     = pack(inds,   mask=states > 0)
-        nsamples = min(nptcls, nint(update_frac * real(nptcls)))
+        if( incr_sampled )then
+            sample_ind = maxval(sampled, mask=states > 0) + 1
+        else
+            sample_ind = maxval(sampled, mask=states > 0)
+        endif
+        nptcls     = count(states > 0)
+        inds       = pack(inds,   mask=states > 0)
+        nsamples   = min(nptcls, nint(update_frac * real(nptcls)))
         rt = ran_tabu(nptcls)
         call rt%shuffle(inds)
         call rt%kill
@@ -1308,7 +1319,7 @@ contains
         call hpsort(inds)
         mask = .false.
         do i = 1, nsamples
-            call self%o(inds(i))%set('sampled', 1.0)
+            call self%o(inds(i))%set('sampled', real(sample_ind))
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_rnd
@@ -1320,128 +1331,70 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
         integer, allocatable :: sampled(:)
-        integer :: i, cnt, nptcls
+        integer :: i, cnt, nptcls, sample_ind
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
-            cnt         = cnt + 1
-            inds(cnt)   = i
-            if( self%o(i)%isthere('sampled') )then
-                sampled(cnt) = nint(self%o(i)%get('sampled'))
-            else
-                sampled(cnt) = 0
-            endif
+            cnt          = cnt + 1
+            inds(cnt)    = i
+            sampled(cnt) = self%o(i)%get_sampled()
         end do
-        nsamples = count(sampled == 1)
-        if( nsamples  == 0 ) THROW_HARD('requires previous sampling')
-        inds     = pack(inds, mask=sampled == 1)
-        mask     = .false.
+        sample_ind = maxval(sampled)
+        if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
+        nsamples   = count(sampled == sample_ind)
+        inds       = pack(inds, mask=sampled == sample_ind)
+        mask       = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_reprod
 
-    subroutine sample4update_history_1( self, fromto, ucnt_history, nsamples, inds, mask )
+    subroutine sample4update_history_1( self, fromto, it_history, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
-        integer, optional,    intent(in)    :: ucnt_history
+        integer, optional,    intent(in)    :: it_history
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(inout) :: mask(fromto(1):fromto(2))
-        integer, allocatable :: states(:), counts(:)
-        integer :: i, cnt, nptcls, cnt_max, cnt_lb
+        integer, allocatable :: sampled(:)
+        integer :: i, cnt, nptcls, sample_ind, sample_ind_lb
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
-        allocate(states(nptcls), inds(nptcls), counts(nptcls), source=0)
+        allocate(inds(nptcls), sampled(nptcls), source=0)
         cnt = 0
         do i = fromto(1), fromto(2)
-            cnt         = cnt + 1
-            states(cnt) = self%o(i)%get_state()
-            inds(cnt)   = i
-            if( self%o(i)%isthere('updatecnt') )then
-                counts(cnt) = nint(self%o(i)%get('updatecnt'))
-            else
-                counts(cnt) = 0
-            endif
+            cnt          = cnt + 1
+            inds(cnt)    = i
+            sampled(cnt) = self%o(i)%get_sampled()
         end do
-        nptcls       = count(states > 0)
-        inds         = pack(inds,   mask=states > 0)
-        counts       = pack(counts, mask=states > 0)
-        cnt_max      = maxval(counts)
-        if( cnt_max == 0 ) THROW_HARD('requires past search history')
-        cnt_lb       = max(1,cnt_max - ucnt_history)
-        nsamples     = count(counts >= cnt_lb)
-        inds         = pack(inds, mask=counts >= cnt_lb)
-        mask = .false.
+        sample_ind    = maxval(sampled)
+        if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
+        sample_ind_lb = max(1,sample_ind - it_history)
+        nsamples      = count(sampled >= sample_ind_lb)
+        inds          = pack(inds, mask=sampled >= sample_ind_lb)
+        mask          = .false.
         do i = 1, nsamples
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_history_1
 
-    subroutine sample4update_history_2( self, ucnt_history, nsamples )
+    subroutine sample4update_history_2( self, it_history, nsamples )
         class(oris),          intent(inout) :: self
-        integer, optional,    intent(in)    :: ucnt_history
+        integer, optional,    intent(in)    :: it_history
         integer,              intent(inout) :: nsamples
-        integer, allocatable :: states(:), counts(:)
-        integer :: i, cnt_max, cnt_lb, nptcls
-        allocate(states(self%n), counts(self%n), source=0)
+        integer, allocatable :: sampled(:)
+        integer :: i, nptcls, sample_ind, sample_ind_lb
+        allocate(sampled(self%n), source=0)
         do i = 1,self%n
-            states(i) = self%o(i)%get_state()
-            if( self%o(i)%isthere('updatecnt') )then
-                counts(i) = nint(self%o(i)%get('updatecnt'))
-            else
-                counts(i) = 0
-            endif
+            sampled(i) = self%o(i)%get_sampled()
         end do
-        nptcls       = count(states > 0)
-        counts       = pack(counts, mask=states > 0)
-        cnt_max      = maxval(counts)
-        if( cnt_max == 0 ) THROW_HARD('requires past search history')
-        cnt_lb       = max(1,cnt_max - ucnt_history)
-        nsamples     = count(counts >= cnt_lb)
+        sample_ind    = maxval(sampled)
+        if( sample_ind  == 0 ) THROW_HARD('requires previous sampling')
+        sample_ind_lb = max(1,sample_ind - it_history)
+        nsamples      = count(sampled >= sample_ind_lb)
     end subroutine sample4update_history_2
-
-    subroutine find_opt_updatecnt_history( self, nsamples_target, ucnt_history )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: nsamples_target
-        integer,     intent(out)   :: ucnt_history
-        integer, allocatable :: states(:), counts(:), inds(:)
-        integer :: i, nptcls, cnt_lb, dist, dist_opt, cnt_lb_opt, nsamples, cnt_min, cnt_max
-        real    :: eff_udfrac
-        nptcls = self%n
-        allocate(states(nptcls), inds(nptcls), counts(nptcls))
-        do i = 1,nptcls
-            states(i) = self%o(i)%get_state()
-            inds(i)   = i
-            if( self%o(i)%isthere('updatecnt') )then
-                counts(i) = nint(self%o(i)%get('updatecnt'))
-            else
-                counts(i) = 0
-            endif
-        end do
-        nptcls  = count(states > 0)
-        inds    = pack(inds,   mask=states > 0)
-        counts  = pack(counts, mask=states > 0)
-        cnt_max = maxval(counts)
-        if( cnt_max == 0 ) THROW_HARD('requires past search history')
-        cnt_min = minval(counts, mask=counts > 0)
-        dist_opt = nptcls
-        do cnt_lb = cnt_min,cnt_max
-            nsamples   = count(counts >= cnt_lb)
-            eff_udfrac = real(nsamples) / real(nptcls)
-            dist       = abs(nsamples_target - nsamples)
-            if( dist < dist_opt )then
-                dist_opt   = dist
-                cnt_lb_opt = cnt_lb
-            endif
-            print *, 'cnt_lb, nsamples, eff_udfrac ', cnt_lb, nsamples, eff_udfrac
-        end do
-        print *, 'found optimal cnt_lb       ', cnt_lb_opt
-        ucnt_history = cnt_max - cnt_lb_opt
-        print *, 'found optimal ucnt_history ', ucnt_history
-    end subroutine find_opt_updatecnt_history
 
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self
@@ -1456,14 +1409,6 @@ contains
             endif
         end do
     end subroutine incr_updatecnt
-
-    subroutine clean_sampled( self )
-        class(oris), intent(inout) :: self
-        integer :: i
-        do i = 1,self%n
-            call self%o(i)%delete_entry('sampled')
-        enddo
-    end subroutine clean_sampled
 
     subroutine clean_updatecnt( self )
         class(oris), intent(inout) :: self
@@ -1482,24 +1427,12 @@ contains
         enddo
     end subroutine clean_updatecnt_sampled
 
-    logical function updatecnt_has_been_incr( self )
-        class(oris), intent(inout) :: self
-        integer :: i
-        updatecnt_has_been_incr =.false.
-        do i = 1,self%n
-            if( nint(self%o(i)%get('updatecnt')) > 0 )then
-                updatecnt_has_been_incr = .true.
-                exit
-            endif
-        end do
-    end function updatecnt_has_been_incr
-
     logical function has_been_sampled( self )
         class(oris), intent(inout) :: self
         integer :: i
         has_been_sampled =.false.
         do i = 1,self%n
-            if( nint(self%o(i)%get('sampled')) == 1 )then
+            if( nint(self%o(i)%get('sampled')) > 0 )then
                 has_been_sampled = .true.
                 exit
             endif
