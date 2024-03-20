@@ -108,16 +108,21 @@ contains
             &nptcls2update, pinds, ptcl_mask )
         else
             if( params_glob%l_frac_update )then
-                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                             &nptcls2update, pinds, ptcl_mask)
-                else                                                 ! we generate a random subset
+                if( params_glob%l_stoch_update )then
                     call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
-                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+                        &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                else
+                    if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
+                        call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                                                 &nptcls2update, pinds, ptcl_mask)
+                    else                                                 ! we generate a random subset
+                        call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                        &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                    endif
                 endif
             else                                                     ! we sample all state > 0
                 call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                             &nptcls2update, pinds, ptcl_mask)
+                                             &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
             ! increment update counter
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
@@ -356,11 +361,9 @@ contains
                 if( L_BENCH_GLOB ) t_rec = tic()
                 if( params_glob%l_frac_update )then
                     if( params_glob%it_history > 0 )then
-                        if( build_glob%spproj_field%updatecnt_has_been_incr() )then
-                            ! re-sample indices
-                            call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
-                            params_glob%it_history, nptcls2update, pinds, ptcl_mask)
-                        endif
+                        ! re-sample indices
+                        call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
+                        params_glob%it_history, nptcls2update, pinds, ptcl_mask)
                     endif
                 endif
                 call calc_3Drec( cline, nptcls2update, pinds, which_iter )

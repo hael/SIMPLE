@@ -73,7 +73,7 @@ contains
         logical, allocatable :: mask(:)
         integer :: nsamples, n, nptcls
         real    :: overlap_lim, fracsrch_lim, percen_nonzero_pw
-        real    :: percen_sampled, percen_updated, percen_avg
+        real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -83,8 +83,10 @@ contains
         sampled        = os%get_all('sampled')
         n              = size(states)
         nptcls         = count(states > 0.5)
-        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
+        sampled_lb     = maxval(sampled) - 0.5
+        percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_avg     = percen_sampled
         if( params_glob%l_frac_update )then
             allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
             if( params_glob%it_history > 0 )then
@@ -203,7 +205,7 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, percen_nonzero_pw, overlap_lim, fracsrch_lim
-        real    :: percen_sampled, percen_updated, percen_avg
+        real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsamples
         601 format(A,1X,F12.3)
@@ -214,8 +216,10 @@ contains
         sampled        = build_glob%spproj_field%get_all('sampled')
         n              = size(states)
         nptcls         = count(states > 0.5)
-        percen_sampled = (real(count(sampled    > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
-        percen_updated = (real(count(updatecnts > 0.5 .and. states > 0.5)) / real(nptcls)) * 100.
+        sampled_lb     = maxval(sampled) - 0.5
+        percen_sampled = (real(count(sampled    > sampled_lb .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
+        percen_avg     = percen_sampled
         if( params_glob%l_frac_update )then
             allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
              if( params_glob%it_history > 0 )then

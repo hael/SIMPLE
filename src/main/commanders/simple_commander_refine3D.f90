@@ -708,8 +708,7 @@ contains
             case('prob')
                 ! random sampling and updatecnt dealt with in prob_align
             case DEFAULT
-                if( startit == 1          ) call build%spproj_field%clean_updatecnt_sampled
-                if( params%l_stoch_update ) call build%spproj_field%clean_sampled
+                if( startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
         end select
         if( params%l_distr_exec )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -963,7 +962,8 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params%fromp:params%top))
-        call build_glob%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+        call build_glob%spproj_field%sample4update_all([params%fromp,params%top],&
+        &nptcls, pinds, ptcl_mask, .false.) ! no increment of sampled
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
         call pftcc%reallocate_ptcls(nptcls, pinds)
         call eulprob_obj%new(pinds)
@@ -1141,12 +1141,15 @@ contains
         allocate(ptcl_mask(params%fromp:params%top))
         if( params%l_frac_update )then
             if( build%spproj_field%has_been_sampled() )then
-                call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+                call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
+                &nptcls, pinds, ptcl_mask)
             else
-                call build%spproj_field%sample4update_rnd([params%fromp,params%top], params%update_frac, nptcls, pinds, ptcl_mask)
+                call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
+                &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
             endif
         else
-            call build%spproj_field%sample4update_all([params%fromp,params%top], nptcls, pinds, ptcl_mask)
+            call build%spproj_field%sample4update_all([params%fromp,params%top],&
+            &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
         endif
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
@@ -1242,17 +1245,23 @@ contains
         integer :: nptcls, ipart
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        if( params%startit == 1   ) call build%spproj_field%clean_updatecnt_sampled
-        if( params%l_stoch_update ) call build%spproj_field%clean_sampled
+        if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
         allocate(ptcl_mask(1:params%nptcls))
         if( params%l_frac_update )then
-            if( build%spproj_field%has_been_sampled() )then ! we have a random subset
-                call build%spproj_field%sample4update_reprod([1,params%nptcls], nptcls, pinds, ptcl_mask)
-            else                                            ! we generate a random subset
-                call build%spproj_field%sample4update_rnd([1,params%nptcls], params%update_frac, nptcls, pinds, ptcl_mask)
-            endif
-        else                                                ! we sample all state > 0
-            call build%spproj_field%sample4update_all([1,params%nptcls], nptcls, pinds, ptcl_mask)
+            if( params%l_stoch_update )then
+                call build%spproj_field%sample4update_rnd([1,params%nptcls],&
+                &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+            else
+                if( build%spproj_field%has_been_sampled() )then ! we have a random subset
+                    call build%spproj_field%sample4update_reprod([1,params%nptcls], nptcls, pinds, ptcl_mask)
+                else                                            ! we generate a random subset
+                    call build%spproj_field%sample4update_rnd([1,params%nptcls],&
+                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+                endif
+            endif            
+        else                                                    ! we sample all state > 0
+            call build%spproj_field%sample4update_all([1,params%nptcls],&
+            &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
         ! increment update counter
         call build%spproj_field%incr_updatecnt([1,params%nptcls], ptcl_mask)
