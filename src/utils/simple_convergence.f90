@@ -88,7 +88,7 @@ contains
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
         if( params_glob%l_frac_update )then
-            allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
+            allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
             if( params_glob%it_history > 0 )then
                 call os%sample4update_history(params_glob%it_history, nsamples)
                 percen_avg = (real(nsamples) / real(nptcls)) * 100.  
@@ -221,7 +221,7 @@ contains
         percen_updated = (real(count(updatecnts > 0.5        .and. states > 0.5)) / real(nptcls)) * 100.
         percen_avg     = percen_sampled
         if( params_glob%l_frac_update )then
-            allocate(mask(n), source=sampled    > 0.5 .and. states > 0.5)
+            allocate(mask(n), source=sampled    > sampled_lb .and. states > 0.5)
              if( params_glob%it_history > 0 )then
                 call build_glob%spproj_field%sample4update_history(params_glob%it_history, nsamples)
                 percen_avg = (real(nsamples) / real(nptcls)) * 100.  
