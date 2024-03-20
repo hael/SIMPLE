@@ -11,7 +11,7 @@ use simple_qsys_env,                       only: qsys_env
 use simple_stack_io,                       only: stack_io
 use simple_starproject,                    only: starproject
 use simple_guistats,                       only: guistats
-use simple_commander_cluster2D_stream_dev
+use simple_commander_cluster2D_stream
 use simple_qsys_funs
 use simple_commander_preprocess
 use simple_progress

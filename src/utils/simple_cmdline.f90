@@ -637,7 +637,7 @@ contains
         if( present(prg) ) call hash%set('prg', trim(prg))
     end subroutine gen_job_descr
 
-    subroutine kill( self )
+    elemental subroutine kill( self )
         class(cmdline), intent(inout) :: self
         integer :: icmd
         do icmd=1,MAX_CMDARGS

@@ -12,13 +12,20 @@ use simple_commander_cluster2D
 use simple_timer
 implicit none
 
-public :: stream_chunk
+public :: stream_chunk, micproj_record
 
 private
 #include "simple_local_flags.inc"
 
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 logical,               parameter   :: DEBUG_HERE          = .false.
+
+! convenience type
+type micproj_record
+    character(len=:), allocatable :: projname   ! project file name
+    integer                       :: micind     ! index of micrograph in project
+    integer                       :: nptcls
+end type micproj_record
 
 type stream_chunk
     type(sp_project)                       :: spproj

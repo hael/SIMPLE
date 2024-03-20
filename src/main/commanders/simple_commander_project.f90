@@ -24,7 +24,6 @@ public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
 public :: selection_commander
-public :: merge_stream_projects_commander
 public :: replace_project_field_commander
 public :: scale_project_commander_distr
 public :: projops_commander
@@ -87,11 +86,6 @@ type, extends(commander_base) :: selection_commander
   contains
     procedure :: execute      => exec_selection
 end type selection_commander
-
-type, extends(commander_base) :: merge_stream_projects_commander
-  contains
-    procedure :: execute      => exec_merge_stream_projects
-end type merge_stream_projects_commander
 
 type, extends(commander_base) :: replace_project_field_commander
   contains
@@ -880,21 +874,6 @@ contains
         call spproj%write(params%projfile)
         call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection
-
-    subroutine exec_merge_stream_projects( self, cline )
-        class(merge_stream_projects_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj, spproj2merge
-        call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        ! projfile <- projfile_target
-        call spproj%read(params%projfile)
-        call spproj2merge%read(params%projfile_target)
-        call spproj%merge_stream_projects(spproj2merge)
-        call spproj%kill
-        call simple_end('**** MERGE_STREAMS_PROJECTS NORMAL STOP ****')
-    end subroutine exec_merge_stream_projects
 
     subroutine exec_replace_project_field( self, cline )
         class(replace_project_field_commander), intent(inout) :: self
