@@ -1995,19 +1995,18 @@ contains
         class(ppca_denoise_classes_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         integer,          parameter   :: MAXPCAITS = 15
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(ppca_inmem)              :: prob_pca
         type(image),      allocatable :: imgs(:)
         type(image)                   :: cavg
-        type(oris),       pointer     :: spproj_field => null()
         type(oris)                    :: os
-        type(ori)                     :: o
         type(sp_project), target      :: spproj
         character(len=:), allocatable :: label, fname, fname_denoised, fname_cavgs, fname_cavgs_denoised, fname_oris
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:)
-        real,             allocatable :: avg(:), gen(:), pcavecs(:,:)
-        type(parameters) :: params
-        type(builder)    :: build
-        type(ppca_inmem) :: prob_pca
-        integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2
+        real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
+        real             :: std
+        integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2, n1, n2
         logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
@@ -2016,12 +2015,10 @@ contains
         call spproj%read(params%projfile)
         select case(trim(params%oritype))
             case('ptcl2D')
-                spproj_field => spproj%os_ptcl2D
-                label        =  'class'
+                label = 'class'
             case('ptcl3D')
-                spproj_field => spproj%os_ptcl3D
-                label        =  'proj'
-                call spproj_field%proj2class
+                label = 'proj'
+                call build%spproj_field%proj2class
             case DEFAULT
                 THROW_HARD('ORITYPE not supported!')
         end select
@@ -2038,7 +2035,7 @@ contains
             case DEFAULT
                 THROW_HARD('UNSUPPORTED CTF FLAG')
         end select
-        cls_inds = spproj_field%get_label_inds(label)
+        cls_inds = build%spproj_field%get_label_inds(label)
         ncls     = size(cls_inds)
         if( cline%defined('ncls') )then
             ncls     = params%ncls
@@ -2046,7 +2043,7 @@ contains
         endif
         allocate(cls_pops(ncls), source=0)
         do i = 1, ncls
-            call spproj_field%get_pinds(cls_inds(i), label, pinds)
+            call build%spproj_field%get_pinds(cls_inds(i), label, pinds)
             if( allocated(pinds) )then
                 cls_pops(i) = size(pinds)
                 nptcls = nptcls + cls_pops(i)
@@ -2057,6 +2054,7 @@ contains
         nptcls   = sum(cls_pops,  mask=cls_pops > 2)
         ncls     = size(cls_inds)
         call os%new(nptcls, is_ptcl=.true.)
+        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%set_all2single('specscore',-1.)
         fname                = 'ptcls.mrcs'
         fname_denoised       = 'ptcls_denoised.mrcs'
         fname_cavgs          = 'cavgs.mrcs'
@@ -2075,42 +2073,64 @@ contains
             endif
             do j = 1, nptcls
                 cnt1 = cnt1 + 1
-                ! call imgs(j)%write(fname, pinds(j))
                 call imgs(j)%write(fname, cnt1)
             end do
             call cavg%write(fname_cavgs, i)
+            ! performs ppca
+            if( trim(params%projstats).eq.'yes' )then
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca, avg_pix=avg_pix)
+            else
+                call make_pcavecs(imgs, npix, avg, pcavecs, transp=l_transp_pca)
+            endif
+            if( allocated(tmpvec) ) deallocate(tmpvec)
             if( l_transp_pca )then
-                call make_pcavecs(imgs, npix, avg, pcavecs, transp=.true.)
                 call prob_pca%new(npix, nptcls, params%neigs)
                 call prob_pca%master(pcavecs, MAXPCAITS)
+                allocate(tmpvec(nptcls))
+                !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, npix
-                    pcavecs(j,:) = prob_pca%generate(j, avg)
+                    call prob_pca%generate(j, avg, tmpvec)
+                    pcavecs(j,:) = tmpvec
                 end do
+                !$omp end parallel do
                 pcavecs = transpose(pcavecs)
             else
-                call make_pcavecs(imgs, npix, avg, pcavecs, transp=.false.)
                 call prob_pca%new(nptcls, npix, params%neigs)
                 call prob_pca%master(pcavecs, MAXPCAITS)
+                allocate(tmpvec(npix))
+                !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, nptcls
-                    pcavecs(j,:) = prob_pca%generate(j, avg)
+                    call prob_pca%generate(j, avg, tmpvec)
+                    pcavecs(j,:) = tmpvec
                 end do
+                !$omp end parallel do
             endif
+            if( trim(params%projstats).eq.'yes' )then
+                call cavg%unserialize(avg_pix)
+                call cavg%write('cavgs_unserialized.mrcs', i)
+                !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
+                do j = 1,nptcls
+                    std = sqrt(sum((pcavecs(j,:)-avg_pix)**2) / real(npix))
+                    call build%spproj_field%set(pinds(j), 'specscore', std)
+                enddo
+                !$omp end parallel do
+            endif
+            ! output
             call cavg%zero_and_unflag_ft
             do j = 1, nptcls
                 cnt2 = cnt2 + 1
                 call imgs(j)%unserialize(pcavecs(j,:))
                 call cavg%add(imgs(j))
-                call spproj_field%get_ori(pinds(j), o)
-                call os%set_ori(cnt2, o)
-                ! call imgs(j)%write(fname_denoised, pinds(j))
+                call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                 call imgs(j)%write(fname_denoised, cnt2)
                 call imgs(j)%kill
             end do
-            call os%zero_inpl
-            call os%write(fname_oris)
             call cavg%div(real(nptcls))
             call cavg%write(fname_cavgs_denoised, i)
         end do
+        call os%zero_inpl
+        call os%write(fname_oris)
+        if( trim(params%projstats).eq.'yes' ) call build%spproj_field%write('ptcl_field.txt')
         ! cleanup
         deallocate(imgs)
         call build%kill_general_tbox

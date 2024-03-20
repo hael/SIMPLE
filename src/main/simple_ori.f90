@@ -199,27 +199,34 @@ contains
         character(len=KEYLEN)      :: key
         type(str4arr), allocatable :: keys(:)
         integer :: sz, i, ind
-        self_out%pparms = self_in%pparms
-        self_out%htab   = self_in%htab
-        self_out%chtab  = self_in%chtab
-        if( self_out%is_ptcl.neqv.self_in%is_ptcl )then
-            if( self_in%is_ptcl )then
-                do i=1,N_PTCL_ORIPARAMS
-                    if( oriparam_isthere(i, self_in%pparms(i)) )then
-                        key = get_oriparam_flag(i)
-                        call self_out%set(trim(key), self_in%pparms(i))
-                    endif
-                end do
-            else ! self_out is ptcl, self_in is not
-                sz   = self_in%htab%size_of()
-                keys = self_in%htab%get_keys()
-                do i=1,sz
-                    ind = get_oriparam_ind(trim(keys(i)%str))
-                    if( ind /= 0 )then
-                        self_out%pparms(ind) = self_in%get(trim(keys(i)%str))
-                    endif
-                end do
+        if( self_out%existence )then
+            self_out%pparms = self_in%pparms
+            self_out%htab   = self_in%htab
+            self_out%chtab  = self_in%chtab
+            if( self_out%is_ptcl.neqv.self_in%is_ptcl )then
+                if( self_in%is_ptcl )then
+                    do i=1,N_PTCL_ORIPARAMS
+                        if( oriparam_isthere(i, self_in%pparms(i)) )then
+                            key = get_oriparam_flag(i)
+                            call self_out%set(trim(key), self_in%pparms(i))
+                        endif
+                    end do
+                else ! self_out is ptcl, self_in is not
+                    sz   = self_in%htab%size_of()
+                    keys = self_in%htab%get_keys()
+                    do i=1,sz
+                        ind = get_oriparam_ind(trim(keys(i)%str))
+                        if( ind /= 0 )then
+                            self_out%pparms(ind) = self_in%get(trim(keys(i)%str))
+                        endif
+                    end do
+                endif
             endif
+        else
+            call self_out%new_ori(is_ptcl=self_in%is_ptcl)
+            self_out%pparms = self_in%pparms
+            self_out%htab   = self_in%htab
+            self_out%chtab  = self_in%chtab
         endif
     end subroutine copy
 

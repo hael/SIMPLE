@@ -34,7 +34,8 @@ type ppca_inmem
     procedure          :: get_Q
     procedure          :: get_feat
     procedure          :: get_feats_ptr
-    procedure          :: generate
+    procedure, private :: generate_1, generate_2
+    generic            :: generate => generate_1, generate_2
     ! CALCULATORS
     procedure          :: master
     procedure, private :: init
@@ -115,6 +116,26 @@ contains
         allocate(dat(self%D), source=tmp(:,1))
         dat = dat + avg
     end function generate
+
+    !>  \brief  is for sampling the generative model at a given image index
+    subroutine generate_1( self, i, avg, dat )
+        class(ppca_inmem), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: avg(self%D)
+        real,        intent(inout) :: dat(self%D)
+        dat = avg + [matmul(self%W,self%E_zn(i,:,:))]
+    end subroutine generate_1
+
+    !>  \brief  is for sampling the generative model at a given image index
+    subroutine generate_2( self, i, avg, dat, var )
+        class(ppca_inmem), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: avg(self%D)
+        real,        intent(inout) :: dat(self%D), var
+        dat = [matmul(self%W,self%E_zn(i,:,:))]
+        var = sum(dat**2) / real(self%D)
+        dat = dat + avg
+    end subroutine generate_2
 
     ! CALCULATORS
 

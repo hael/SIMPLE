@@ -11,13 +11,14 @@ private
 
 contains
 
-    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp )
-        class(image),      intent(in)    :: imgs(:)       !< images to serialize
-        integer,           intent(out)   :: D             !< vector dimension
-        real, allocatable, intent(inout) :: avg(:)        !< average of pcavecs 
-        real, allocatable, intent(inout) :: pcavecs(:,:)  !< PCA vectors
-        logical, optional, intent(in)    :: l_mask(:,:,:) !< true for pixels to extract
-        logical, optional, intent(in)    :: transp        !< pixel-wise learning
+    subroutine make_pcavecs( imgs, D, avg, pcavecs, l_mask, transp, avg_pix )
+        class(image),                intent(in)    :: imgs(:)       !< images to serialize
+        integer,                     intent(out)   :: D             !< vector dimension
+        real, allocatable,           intent(inout) :: avg(:)        !< average of pcavecs
+        real, allocatable,           intent(inout) :: pcavecs(:,:)  !< PCA vectors
+        logical,           optional, intent(in)    :: l_mask(:,:,:) !< true for pixels to extract
+        logical,           optional, intent(in)    :: transp        !< pixel-wise learning
+        real, allocatable, optional, intent(inout) :: avg_pix(:)    !< pixel average
         type(image)          :: img
         logical, allocatable :: ll_mask(:,:,:)
         logical              :: ttransp
@@ -50,21 +51,15 @@ contains
             pcavecs(i,:) = imgs(i)%serialize(ll_mask)
         end do
         if( ttransp )then
+            if( present(avg_pix) ) avg_pix = sum(pcavecs, dim=1) / real(n)
             pcavecs = transpose(pcavecs)
-            allocate(avg(n), source=0.)
-            do i = 1, D
-                avg(:) = avg(:) + pcavecs(i,:)
-            end do
-            avg = avg / real(D)
+            avg = sum(pcavecs, dim=1) / real(D)
             do i = 1, D
                 pcavecs(i,:) = pcavecs(i,:) - avg
             end do
         else
-            allocate(avg(D), source=0.)
-            do i = 1, n
-                avg(:) = avg(:) + pcavecs(i,:)
-            end do
-            avg = avg / real(n)
+            avg = sum(pcavecs, dim=1) / real(n)
+            if( present(avg_pix) ) avg_pix = avg
             do i = 1, n
                 pcavecs(i,:) = pcavecs(i,:) - avg(:)
             end do

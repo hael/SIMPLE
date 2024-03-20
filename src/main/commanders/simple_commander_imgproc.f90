@@ -498,8 +498,9 @@ contains
         call make_pcavecs(imgs, npix, avg, pcavecs)
         call prob_pca%new(params%nptcls, npix, params%neigs)
         call prob_pca%master(pcavecs, MAXPCAITS)
+        allocate(gen(npix))
         do iptcl = 1, params%nptcls
-            gen = prob_pca%generate(iptcl, avg)
+            call prob_pca%generate(iptcl, avg, gen)
             call imgs(iptcl)%unserialize(gen)
             call imgs(iptcl)%write(params%outstk, iptcl)
             call imgs(iptcl)%kill
