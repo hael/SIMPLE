@@ -90,7 +90,6 @@ type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
-type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: comparemc
@@ -122,7 +121,6 @@ type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: map_cavgs_states
 type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
-type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: multipick_cluster2D
 type(simple_program), target :: new_project
@@ -373,7 +371,6 @@ contains
         call new_center2D_nano
         call new_cluster2D
         call new_cluster2D_nano
-        call new_cluster2D_stream
         call new_cluster2D_subsets
         call new_cluster_cavgs
         call new_comparemc
@@ -404,7 +401,6 @@ contains
         call new_map_cavgs_selection
         call new_map_cavgs_states
         call new_mask
-        call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
         call new_multipick_cluster2D
@@ -491,7 +487,6 @@ contains
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
-        call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(comparemc)
@@ -633,8 +628,6 @@ contains
                 ptr2prg => cluster2D
             case('cluster2D_nano')
                 ptr2prg => cluster2D_nano
-            case('cluster2D_stream')
-                ptr2prg => cluster2D_stream
             case('cluster2D_subsets')
                 ptr2prg => cluster2D_subsets
             case('cluster_cavgs')
@@ -693,8 +686,6 @@ contains
                 ptr2prg => map_cavgs_states
             case('mask')
                 ptr2prg => mask
-            case('merge_stream_projects')
-                ptr2prg => merge_stream_projects
             case('mkdir')
                 ptr2prg => mkdir_
             case('motion_correct')
@@ -843,7 +834,6 @@ contains
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
-        write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster2D_subsets%name
         write(logfhandle,'(A)') comparemc%name
         write(logfhandle,'(A)') convert%name
@@ -870,7 +860,6 @@ contains
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') map_cavgs_states%name
         write(logfhandle,'(A)') mask%name
-        write(logfhandle,'(A)') merge_stream_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') new_project%name
@@ -1760,54 +1749,6 @@ contains
         call cluster2D_nano%set_input('comp_ctrls', 2, nthr)
         call cluster2D_nano%set_input('comp_ctrls', 3, script)
     end subroutine new_cluster2D_nano
-
-    subroutine new_cluster2D_stream
-        ! PROGRAM SPECIFICATION
-        call cluster2D_stream%new(&
-        &'cluster2D_stream',&                                                                     ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
-        &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
-        &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 5, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cluster2D_stream%set_input('srch_ctrls', 1, ncls_start)
-        call cluster2D_stream%set_input('srch_ctrls', 2, nptcls_per_cls)
-        cluster2D_stream%srch_ctrls(2)%required = .true.
-        cluster2D_stream%srch_ctrls(2)%rval_default = 300.
-        call cluster2D_stream%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false., 'yes')
-        call cluster2D_stream%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call cluster2D_stream%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2D_stream%set_input('srch_ctrls', 6, lpthres)
-        call cluster2D_stream%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
-        ! filter controls
-        call cluster2D_stream%set_input('filt_ctrls', 1, hp)
-        call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
-        call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5, lplim_crit)
-        ! mask controls
-        call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call cluster2D_stream%set_input('comp_ctrls', 1, nchunks)
-        call cluster2D_stream%set_input('comp_ctrls', 2, nparts_chunk)
-        call cluster2D_stream%set_input('comp_ctrls', 3, nparts)
-        call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
-        call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
-    end subroutine new_cluster2D_stream
 
     subroutine new_cluster2D_subsets
         ! PROGRAM SPECIFICATION
@@ -2869,32 +2810,6 @@ contains
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
-
-    subroutine new_merge_stream_projects
-        ! PROGRAM SPECIFICATION
-        call merge_stream_projects%new(&
-        &'merge_stream_projects',&                   ! name
-        &'merge stream two projects',&               ! descr_short
-        &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
-        &'simple_exec',&                             ! executable
-        &0, 2, 0, 0, 0, 0, 0, .false.)               ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call merge_stream_projects%set_input('parm_ios', 1, projfile)
-        call merge_stream_projects%set_input('parm_ios', 2, projfile_target)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_merge_stream_projects
 
     subroutine new_mkdir_
         ! PROGRAM SPECIFICATION

@@ -14,10 +14,8 @@ use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_preprocess_stream
-use simple_commander_stream
 use simple_commander_cluster2D
 use simple_commander_cluster2D_stream
-use simple_commander_cluster2D_stream_dev
 use simple_commander_abinitio
 use simple_commander_refine3D
 use simple_commander_rec
@@ -38,7 +36,6 @@ type(import_movies_commander)               :: ximport_movies
 type(import_boxes_commander)                :: ximport_boxes
 type(import_particles_commander)            :: ximport_particles
 type(import_cavgs_commander)                :: ximport_cavgs
-type(merge_stream_projects_commander)       :: xmerge_stream_projects
 type(replace_project_field_commander)       :: xreplace_project_field
 type(selection_commander)                   :: xselection
 type(export_relion_commander)               :: xexport_relion
@@ -59,7 +56,6 @@ type(pick_commander_distr)                  :: xpick_distr
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
-type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
@@ -188,8 +184,6 @@ select case(trim(prg))
         call ximport_particles%execute(cline)
     case( 'import_cavgs' )
         call ximport_cavgs%execute(cline)
-    case( 'merge_stream_projects' )
-        call xmerge_stream_projects%execute(cline)
     case( 'replace_project_field' )
         call xreplace_project_field%execute(cline)
     case( 'selection', 'report_selection' )
@@ -228,8 +222,6 @@ select case(trim(prg))
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
         call xcluster2D_hlev%execute(cline)
-    case( 'cluster2D_stream' )
-        call xcluster2D_stream%execute(cline)
     case( 'cluster2D_subsets' )
         call xcluster2D_subsets%execute(cline)
 
@@ -388,7 +380,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('1e20638a')
+call simple_print_git_version('48b3cd3b')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
