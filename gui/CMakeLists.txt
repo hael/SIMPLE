@@ -24,8 +24,8 @@ if(${GUI})
 
 		ExternalProject_Add(
                         nodejs_apple
-                        URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-darwin-x64.tar.gz
-                        URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6 
+                        URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-darwin-arm64.tar.gz
+                        URL_MD5 5e85b7df5071ad757f773f94dc886d68 
                         DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
                         SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
                         CONFIGURE_COMMAND ""
