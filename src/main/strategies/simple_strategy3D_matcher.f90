@@ -183,7 +183,7 @@ contains
         call build_glob%vol2%kill
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
-        call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
+        call prep_strategy3D ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         allocate(strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))

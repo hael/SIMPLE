@@ -159,18 +159,18 @@ contains
         integer,           intent(in) :: thres
         integer, optional, intent(in) :: thres_safe
         real,    allocatable :: pvec_sorted(:)
-        integer, allocatable :: inds(:)
+        integer, allocatable :: sorted_inds(:)
         integer :: which, n
         n = size(pvec)
-        allocate(pvec_sorted(n),inds(n))
-        which = greedy_sampling_2(pvec, pvec_sorted, inds, thres, thres_safe)
+        allocate(pvec_sorted(n),sorted_inds(n))
+        which = greedy_sampling_2(pvec, pvec_sorted, sorted_inds, thres, thres_safe)
     end function greedy_sampling_1
 
-    function greedy_sampling_2( pvec, pvec_sorted, inds, thres, thres_safe_in ) result( which )
+    function greedy_sampling_2( pvec, pvec_sorted, sorted_inds, thres, thres_safe_in ) result( which )
         use simple_math, only: hpsort
         real,              intent(in)    :: pvec(:)        !< probabilities
         real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer,           intent(inout) :: inds(:)
+        integer,           intent(inout) :: sorted_inds(:)
         integer,           intent(in)    :: thres
         integer, optional, intent(in)    :: thres_safe_in
         integer :: which, i, thres_safe
@@ -178,9 +178,9 @@ contains
         thres_safe  = 1
         if( present(thres_safe_in) ) thres_safe = thres_safe_in
         pvec_sorted = pvec
+        sorted_inds = (/(i,i=1,size(pvec))/)
         rnd         = ran3()
-        inds        = (/(i,i=1,size(pvec))/)
-        call hpsort(pvec_sorted, inds)
+        call hpsort(pvec_sorted, sorted_inds)
         sum_pvec = sum(pvec_sorted(1:thres))
         if( sum_pvec < TINY )then
             ! uniform sampling
@@ -190,10 +190,10 @@ contains
             ! doing probabilistic greedy assignment
             if( rnd > sum(pvec_sorted(1:thres_safe)) )then
                 ! uniform sampling within the safe neighborhood (exploration)
-                which = inds(1 + floor(real(thres_safe) * ran3()))
+                which = sorted_inds(1 + floor(real(thres_safe) * ran3()))
             else
                 ! push to the boundary of the sample space (exploitation)
-                which = inds(thres)
+                which = sorted_inds(thres)
             endif
         endif
     end function greedy_sampling_2
@@ -201,9 +201,9 @@ contains
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
     function gasdev_1( ) result( harvest )
-        real                   :: v1=0., v2=0., r, fac, harvest
-        real,save              :: gset
-        integer,save           :: iset=0
+        real         :: v1=0., v2=0., r, fac, harvest
+        real,   save :: gset
+        integer,save :: iset=0
         if( idum < 0 ) iset = 0
         if( iset == 0 )then ! reinitialize
             r = 99.
@@ -285,7 +285,7 @@ contains
 
     !>  \brief  generates a normally distributed random integer [_1_,_NP_]
     function irnd_gasdev( mean, stdev, NP )result( irnd )
-        real, intent(in)    :: mean, stdev
+        real,    intent(in) :: mean, stdev
         integer, intent(in) :: NP
         integer             :: irnd
         real                :: limits(2)
@@ -322,9 +322,9 @@ contains
 
     !>  \brief  pick a random improving correlation, given the previous
     function shcloc( ncorrs, corrs, corr_prev ) result( this )
-        integer, intent(in)  :: ncorrs
-        real, intent(in)     :: corrs(ncorrs)
-        real, intent(in)     :: corr_prev
+        integer, intent(in) :: ncorrs
+        real,    intent(in) :: corrs(ncorrs)
+        real,    intent(in) :: corr_prev
         real    :: diffs(ncorrs)
         logical :: avail(ncorrs)
         integer :: this
@@ -355,7 +355,7 @@ contains
     !!          Output, real X(M), the points.
     function mnorm_smp( cov, m, means ) result( x )
         integer, intent(in) :: m
-        real, intent(in)    :: cov(m,m), means(m)
+        real,    intent(in) :: cov(m,m), means(m)
         integer             :: info, i
         real                :: r(m,m), x(m), xtmp(1,m)
         ! Compute the upper triangular Cholesky factor R of the variance-covariance matrix.
@@ -391,11 +391,11 @@ contains
     !!          Reference: Jack Dongarra, Jim Bunch, Cleve Moler, Pete Stewart,
     !!          LINPACK User's Guide, SIAM, 1979, ISBN13: 978-0-898711-72-1, LC: QA214.L56.
     subroutine r8po_fa( n, a, info )
-       integer, intent(in)  :: n
-       real, intent(inout)  :: a(n,n)
-       integer, intent(out) :: info
+       integer, intent(in)    :: n
+       real,    intent(inout) :: a(n,n)
+       integer, intent(out)   :: info
        integer :: i, j, k
-       real :: s
+       real    :: s
        do j = 1, n
            do k = 1, j - 1
                a(k,j) = ( a(k,j) - sum ( a(1:k-1,k) * a(1:k-1,j) ) ) / a(k,k)
