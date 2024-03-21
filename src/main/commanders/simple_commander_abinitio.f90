@@ -896,6 +896,7 @@ contains
             call cline_refine3D%set('lp_iters',  MAXITS1)
             call cline_refine3D%set('nspace',    NSPACE1)
             call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
+            call cline_refine3D%set('it_history', 1)   ! particles sampled in most recent past iteration also included in rec
             call exec_refine3D(iter)
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
@@ -906,6 +907,7 @@ contains
             call cline_refine3D%set('lp_iters', MAXITS2)
             call cline_refine3D%set('nspace',   NSPACE2)
             call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
+            call cline_refine3D%set('it_history', 2)   ! particles sampled in two most recent past iterations also included in rec
             call cline_refine3D%set('startit',  iter+1)
             if( l_shmem )then
                 call cline_refine3D%set('continue', 'yes')
@@ -989,7 +991,8 @@ contains
                     call cline_refine3D%set('nspace', NSPACE2)
                     call cline_refine3D%set('trs',    trslim)
                 end if
-                call cline_refine3D%set('ml_reg', 'no') ! since ml_reg seems to interfer with finding a good lowres shape
+                call cline_refine3D%set('ml_reg',    'no')       ! since ml_reg seems to interfer with finding a good lowres shape
+                call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
                 ! shared memory section
                 if( l_shmem )then
                     call cline_refine3D%delete('continue')
@@ -1067,13 +1070,15 @@ contains
         endif
         ! Final step
         call cline_refine3D%set('prob_init', 'no')
-        call cline_refine3D%set('box_crop', params%box_crop)
-        call cline_refine3D%set('lp',       params%lpstop)
-        call cline_refine3D%set('trs',      trslim)
-        call cline_refine3D%set('startit',  iter+1)
-        call cline_refine3D%set('maxits',   MAXITS2)
-        call cline_refine3D%set('lp_iters', MAXITS2)
-        call cline_refine3D%set('nspace',   NSPACE3)
+        call cline_refine3D%set('box_crop',   params%box_crop)
+        call cline_refine3D%set('lp',         params%lpstop)
+        call cline_refine3D%set('trs',        trslim)
+        call cline_refine3D%set('startit',    iter+1)
+        call cline_refine3D%set('maxits',     MAXITS2)
+        call cline_refine3D%set('lp_iters',   MAXITS2)
+        call cline_refine3D%set('nspace',     NSPACE3)
+        call cline_refine3D%set('it_history',       3) ! particles sampled in three most recent past iterations also included in rec
+        call cline_refine3D%set('mov_avg_vol',  'yes') 
         ! execution
         call exec_refine3D(iter)
         ! for visualization

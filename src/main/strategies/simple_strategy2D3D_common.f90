@@ -497,7 +497,7 @@ contains
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            params_glob%l_filemsk )then ! .or. params_glob%l_frac_update
+            params_glob%l_filemsk .or. params_glob%l_mov_avg_vol )then
             do_center = .false.
             xyz       = 0.
             return
