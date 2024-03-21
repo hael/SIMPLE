@@ -66,11 +66,11 @@ contains
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! motion correction
+        call cline%set('groupframes', 'no')
         if( .not. cline%defined('trs')              ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')             ) call cline%set('bfac',             50.)
-        call cline%set('groupframes',     'no')
         if( .not. cline%defined('mcconvention')     ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_upsampling')   ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('algorithm')        ) call cline%set('algorithm',    'patch')
@@ -79,6 +79,7 @@ contains
         if( .not. cline%defined('tilt_thres')       ) call cline%set('tilt_thres',      0.05)
         if( .not. cline%defined('beamtilt')         ) call cline%set('beamtilt',        'no')
         ! ctf estimation
+        call cline%set('reject_mics', 'yes')
         if( .not. cline%defined('pspecsz')          ) call cline%set('pspecsz',          512.)
         if( .not. cline%defined('hp_ctf_estimate')  ) call cline%set('hp_ctf_estimate',  HP_CTF_ESTIMATE)
         if( .not. cline%defined('lp_ctf_estimate')  ) call cline%set('lp_ctf_estimate',  LP_CTF_ESTIMATE)

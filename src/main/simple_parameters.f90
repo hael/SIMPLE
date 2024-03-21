@@ -77,7 +77,8 @@ type :: parameters
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
     character(len=3)          :: prob_init='no'       !< randomized oris and zero shifts in the prob scheme (yes|no){no}
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
-    character(len=3)          :: reject_cls='no'
+    character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
+    character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: transp_pca='no'
@@ -581,6 +582,7 @@ contains
         call check_carg('rnd_cls_init',   self%rnd_cls_init)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('reject_cls',     self%reject_cls)
+        call check_carg('reject_mics',    self%reject_mics)
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
         call check_carg('prob_init',      self%prob_init)

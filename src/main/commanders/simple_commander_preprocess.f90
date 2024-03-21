@@ -369,15 +369,15 @@ contains
             endif
             ! optional rejection
             l_skip_pick = .false.
-            if( trim(params%stream).eq.'yes' )then
+            if( trim(params%stream).eq.'yes' .and. trim(params%reject_mics).eq.'yes' )then
                 ! based on CTFRES
                 if( l_pick .and. o_mov%isthere('ctfres') )then
-                    l_skip_pick = o_mov%get('ctfres') > (params_glob%ctfresthreshold-0.001)
+                    l_skip_pick = o_mov%get('ctfres') > (params%ctfresthreshold-0.001)
                     if( l_skip_pick ) call o_mov%set('nptcls',0.)
                 end if
                 ! based on ice fraction
                 if( l_pick .and. .not.l_skip_pick .and. o_mov%isthere('icefrac') )then
-                    l_skip_pick = o_mov%get('icefrac') > (params_glob%icefracthreshold-0.001)
+                    l_skip_pick = o_mov%get('icefrac') > (params%icefracthreshold-0.001)
                     if( l_skip_pick ) call o_mov%set('nptcls',0.)
                 endif
             endif
@@ -2112,7 +2112,6 @@ contains
         ntot = fromto(2) - fromto(1) + 1
         ! main loop
         do imic = fromto(1),fromto(2)
-            print *,imic
             ! fetch movie orientation
             call spproj%os_mic%get_ori(imic, o_mic)
             ! sanity check
@@ -2125,7 +2124,6 @@ contains
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
             call piter%iterate(cline, params_glob%smpd, micname, output_dir_picker, boxfile, nptcls_out)
-            print *,nptcls_out
             call o_mic%set('nptcls', real(nptcls_out))
             if( nptcls_out > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
