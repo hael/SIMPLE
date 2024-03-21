@@ -17,15 +17,15 @@ public :: stream_chunk, micproj_record
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
-logical,               parameter   :: DEBUG_HERE          = .false.
-
-! convenience type
+! public convenience type
 type micproj_record
     character(len=:), allocatable :: projname   ! project file name
     integer                       :: micind     ! index of micrograph in project
     integer                       :: nptcls
 end type micproj_record
+
+character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
+logical,               parameter   :: DEBUG_HERE          = .false.
 
 type stream_chunk
     type(sp_project)                       :: spproj
@@ -40,18 +40,19 @@ type stream_chunk
     logical                                :: autoscale = .false.
     logical                                :: available = .true.
 contains
-    procedure :: init
-    procedure :: generate
-    procedure :: exec_classify
-    procedure :: read
-    procedure :: split_sigmas_into
-    procedure :: remove_folder
-    procedure :: display_iter
-    procedure :: reject
-    procedure :: has_converged
-    procedure :: print_info
-    procedure :: terminate
-    procedure :: kill
+    procedure          :: init
+    procedure, private :: generate_1, generate_2
+    generic            :: generate => generate_1, generate_2
+    procedure          :: exec_classify
+    procedure          :: read
+    procedure          :: split_sigmas_into
+    procedure          :: remove_folder
+    procedure          :: display_iter
+    procedure          :: reject
+    procedure          :: has_converged
+    procedure          :: print_info
+    procedure          :: terminate
+    procedure          :: kill
 end type stream_chunk
 
 contains
@@ -76,7 +77,7 @@ contains
         call self%spproj%kill
         self%id        = id
         self%it        = 0
-        self%nmics     = 0
+        self%nmics     = 0 ! # of micrographs & stacks in chunk
         self%nptcls    = 0
         self%path      = './chunk_'//int2str(id)//'/'
         self%projfile_out = ''
@@ -98,7 +99,7 @@ contains
         call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
-    subroutine generate( self, fnames, nptcls, ind_glob )
+    subroutine generate_1( self, fnames, nptcls, ind_glob )
         class(stream_chunk),       intent(inout) :: self
         character(len=LONGSTRLEN), intent(in)    :: fnames(:)
         integer,                   intent(in)    :: nptcls, ind_glob
@@ -157,7 +158,64 @@ contains
         call spproj%kill
         self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
         call debug_print('end chunk%generate '//int2str(self%id))
-    end subroutine generate
+    end subroutine generate_1
+
+    ! Do we really need to read and store micrograph info?
+    subroutine generate_2( self, micproj_records )
+        class(stream_chunk),            intent(inout) :: self
+        type(micproj_record), allocatable, intent(in) :: micproj_records(:)
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: stack_name, prev_projname
+        integer :: iproj, iptcl, fromp, ifromp, itop, imic, n_in, nptcls, jptcl, micind
+        if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
+        n_in = size(micproj_records(:))
+        if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
+        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(nptcls)//' '//int2str(n_in))
+        self%nmics  = n_in
+        self%nptcls = sum(micproj_records(1:n_in)%nptcls)
+        call self%spproj%os_mic%new(self%nmics, is_ptcl=.false.)
+        call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
+        call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
+        allocate(self%orig_stks(self%nmics))
+        jptcl         = 0
+        fromp         = 1
+        prev_projname = ''
+        do imic = 1,n_in
+            if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
+                call spproj%kill
+                call spproj%read_mic_stk_ptcl2D_segments(micproj_records(imic)%projname)
+                prev_projname = trim(micproj_records(imic)%projname)
+            endif
+            micind = micproj_records(imic)%micind
+            call self%spproj%os_mic%transfer_ori(imic, spproj%os_mic, micind)
+            call self%spproj%os_stk%transfer_ori(imic, spproj%os_stk, micind)
+            ! update to stored stack file name because we are in the root folder
+            stack_name = trim(spproj%get_stkname(micind))
+            if( .not.file_exists(stack_name) )then
+                ! for cluster2D_stream, 4 is for '../'
+                self%orig_stks(imic) = simple_abspath(trim(stack_name(4:)))
+            else
+                ! for cluster2d_subsets
+                self%orig_stks(imic) = simple_abspath(trim(stack_name))
+            endif
+            call self%spproj%os_stk%set(imic, 'stk', self%orig_stks(imic))
+            ! particles
+            nptcls = micproj_records(imic)%nptcls
+            ifromp = nint(self%spproj%os_stk%get(imic,'fromp'))
+            itop   = nint(self%spproj%os_stk%get(imic,'top'))
+            do iptcl = ifromp,itop
+                jptcl = jptcl+1
+                call self%spproj%os_ptcl2D%transfer_ori(jptcl, spproj%os_ptcl2D, iptcl)
+                call self%spproj%os_ptcl2D%set_stkind(jptcl, imic)
+            enddo
+            call self%spproj%os_stk%set(imic, 'fromp', real(fromp))
+            call self%spproj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+            fromp = fromp + nptcls
+        enddo
+        call spproj%kill
+        self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
+        call debug_print('end chunk%generate_2 '//int2str(self%id))
+    end subroutine generate_2
 
     subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box, calc_pspec )
         class(stream_chunk), intent(inout) :: self
