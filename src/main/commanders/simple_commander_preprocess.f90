@@ -1258,16 +1258,16 @@ contains
     subroutine exec_extract( self, cline )
         use simple_ctf,                 only: ctf
         use simple_ctf_estimate_fit,    only: ctf_estimate_fit
-        use simple_strategy2D3D_common, only: prepimgbatch, killimgbatch
         use simple_particle_extractor,  only: ptcl_extractor
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
-        type(builder)                           :: build
+        type(image),                allocatable :: imgs(:)
         type(parameters)                        :: params
         type(ptcl_extractor)                    :: extractor
         type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
         type(image)                             :: micrograph, micrograph_pad
+        type(oris)                              :: os_mic
         type(ori)                               :: o_mic, o_tmp
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
@@ -1281,7 +1281,7 @@ contains
         character(len=STDLEN)     :: ext
         real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
         integer                   :: ldim(3), lfoo(3), fromto(2)
-        integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, box_first, i, iptcl_g
+        integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
         integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
         logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
         call cline%set('oritype', 'mic')
@@ -1315,7 +1315,7 @@ contains
             call spproj%read_non_data_segments(params%projfile)
             call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))
             call spproj%projinfo%set(1,'projfile', params%outfile)
-            params%projfile = trim(params%outfile) ! for builder later
+            params%projfile = trim(params%outfile)
             call spproj%os_mic%new(nmics_here, is_ptcl=.false.)
             cnt = 0
             do imic = fromto(1),fromto(2)
@@ -1358,7 +1358,7 @@ contains
             if( cline%defined('dir_box') )then
                 box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
                 if( .not.file_exists(box_fname) )cycle
-                call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name)
+                call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name, checkexists=.false.)
                 call spproj%os_mic%set_boxfile(imic, boxfile_name)
             else
                 boxfile_name = trim(o_mic%get_static('boxfile'))
@@ -1387,32 +1387,25 @@ contains
                 params%box = nint(boxdata(3,1))
             endif
         enddo
-        call spproj%write
-        call spproj%kill
-        params_glob%box = params%box ! for prepimgbatch
         ! actual extraction
         if( nmics == 0 )then
             ! done
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
             ! init
-            call build%build_spproj(params, cline)
-            call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
             if( trim(params%extractfrommov).ne.'yes' ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
-            box_first = 0
             ! main loop
             iptcl_glob = 0 ! extracted particle index among ALL stacks
             prog = 0.0
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )then
-                    call build%spproj_field%set(imic, 'nptcls', 0.)
-                    call build%spproj_field%set(imic, 'state', 0.)
+                    call spproj%os_mic%set(imic, 'nptcls', 0.)
+                    call spproj%os_mic%set_state(imic, 0)
                     cycle
                 endif
                 ! fetch micrograph
-                call build%spproj_field%get_ori(imic, o_mic)
-                call o_mic%getter('imgkind', imgkind)
+                call spproj%os_mic%get_ori(imic, o_mic)
                 boxfile_name = trim(o_mic%get_static('boxfile'))
                 ! box file
                 nptcls = 0
@@ -1445,7 +1438,7 @@ contains
                 end do
                 ! update micrograph field
                 nptcls2extract = count(oris_mask)
-                call build%spproj_field%set(imic, 'nptcls', real(nptcls2extract))
+                call spproj%os_mic%set(imic, 'nptcls', real(nptcls2extract))
                 if( nptcls2extract == 0 )then
                     ! no particles to extract
                     mics_mask(imic) = .false.
@@ -1468,7 +1461,7 @@ contains
                         THROW_HARD('input lacks at least cs, kv or fraca; exec_extract')
                     endif
                 endif
-                ! output stack
+                ! output stack name
                 call o_mic%getter('intg', mic_name)
                 ext   = fname2ext(trim(basename(mic_name)))
                 stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
@@ -1480,7 +1473,7 @@ contains
                         THROW_HARD('extractfrommov=yes does not support ctf=flip yet')
                     endif
                     call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
-                    call extractor%extract_particles(ptcl_inds, nint(boxdata), build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
+                    call extractor%extract_particles(ptcl_inds, nint(boxdata), imgs, stk_min,stk_max,stk_mean,stk_sdev)
                 else
                     ! extraction from micrograph
                     call micrograph%read(mic_name, 1)
@@ -1498,19 +1491,19 @@ contains
                         endif
                     endif
                     ! extraction
-                    call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), build%imgbatch,&
+                    call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), imgs,&
                         &stk_min,stk_max,stk_mean,stk_sdev)
                 endif
                 ! write stack
                 call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
                 do i = 1,nptcls2extract
-                    call stkio_w%write(i, build%imgbatch(i))
+                    call stkio_w%write(i, imgs(i))
                 enddo
                 call stkio_w%close
                 ! update stack stats
-                call build%img%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
+                call imgs(1)%update_header_stats(trim(adjustl(stack)), [stk_min, stk_max, stk_mean, stk_sdev])
                 ! IMPORT INTO PROJECT
-                call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
+                call spproj%add_stk(trim(adjustl(stack)), ctfparms)
                 ! add box coordinates to ptcl2D field only & updates patch-based defocus
                 l_ctfpatch = .false.
                 if( o_mic%isthere('ctfdoc') )then
@@ -1529,25 +1522,25 @@ contains
                     iptcl_g  = iptcl_glob + i
                     ptcl_pos = boxdata(1:2,iptcl)
                     ! updates particle position
-                    call build%spproj%set_boxcoords(iptcl_g, nint(ptcl_pos))
+                    call spproj%set_boxcoords(iptcl_g, nint(ptcl_pos))
                     ! updates particle defocus
                     if( l_ctfpatch )then
                         ptcl_pos = ptcl_pos+1.+real(params%box/2) !  center
                         call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
-                        call build%spproj%os_ptcl2D%set_dfx(iptcl_g,dfx)
-                        call build%spproj%os_ptcl2D%set_dfy(iptcl_g,dfy)
-                        call build%spproj%os_ptcl3D%set_dfx(iptcl_g,dfx)
-                        call build%spproj%os_ptcl3D%set_dfy(iptcl_g,dfy)
+                        call spproj%os_ptcl2D%set_dfx(iptcl_g,dfx)
+                        call spproj%os_ptcl2D%set_dfy(iptcl_g,dfy)
+                        call spproj%os_ptcl3D%set_dfx(iptcl_g,dfx)
+                        call spproj%os_ptcl3D%set_dfy(iptcl_g,dfy)
                     endif
                     ! update particle optics group id
                     if( l_ogid_present )then
-                        call build%spproj%os_ptcl2D%set(iptcl_g,'ogid',o_mic%get('ogid'))
-                        call build%spproj%os_ptcl3D%set(iptcl_g,'ogid',o_mic%get('ogid'))
+                        call spproj%os_ptcl2D%set(iptcl_g,'ogid',o_mic%get('ogid'))
+                        call spproj%os_ptcl3D%set(iptcl_g,'ogid',o_mic%get('ogid'))
                     endif
                     ! update particle group id
                     if( l_gid_present )then
-                        call build%spproj%os_ptcl2D%set(iptcl_g,'gid',o_mic%get('gid'))
-                        call build%spproj%os_ptcl3D%set(iptcl_g,'gid',o_mic%get('gid'))
+                        call spproj%os_ptcl2D%set(iptcl_g,'gid',o_mic%get('gid'))
+                        call spproj%os_ptcl3D%set(iptcl_g,'gid',o_mic%get('gid'))
                     endif
                 end do
                 !$omp end parallel do
@@ -1569,18 +1562,70 @@ contains
                 endif
             enddo
             call killimgbatch
-            ! write
-            call build%spproj%write
         endif
+        ! write
+        if( trim(params%stream).eq.'yes' )then
+            if( nmics_here > 1 )then
+                ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
+                ! can be assumed associated with particles in streaming
+                nmics = count(mics_mask)
+                if( nmics < nmics_here )then
+                    call os_mic%new(nmics, is_ptcl=.false.)
+                    cnt = 0
+                    do imic = 1, nmics_here
+                        if( mics_mask(imic) )then
+                            cnt = cnt+1
+                            call os_mic%transfer_ori(cnt, spproj%os_mic, imic)
+                        endif
+                    enddo
+                    spproj%os_mic = os_mic
+                endif
+            endif
+        endif
+        call spproj%write(params%projfile)
         ! end gracefully
         call extractor%kill
         call micrograph%kill
         call micrograph_pad%kill
         call o_mic%kill
         call o_tmp%kill
+        call os_mic%kill
         if( prog_write ) call progressfile_update(1.0)
         call qsys_job_finished('simple_commander_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
+        contains
+
+            subroutine prepimgbatch( batchsz )
+                integer,           intent(in) :: batchsz
+                integer :: i
+                logical :: doprep
+                doprep = .false.
+                if( .not. allocated(imgs) )then
+                    doprep = .true.
+                else
+                    if( batchsz > size(imgs) ) doprep = .true.
+                    if( doprep ) call killimgbatch
+                endif
+                if( doprep )then
+                    allocate(imgs(batchsz))
+                    !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                    do i = 1,batchsz
+                        call imgs(i)%new([params%box, params%box, 1], params%smpd, wthreads=.false.)
+                    end do
+                    !$omp end parallel do
+                endif
+            end subroutine prepimgbatch
+
+            subroutine killimgbatch
+                integer :: i
+                if( allocated(imgs) )then
+                    do i = 1,size(imgs)
+                        call imgs(i)%kill
+                    end do
+                    deallocate(imgs)
+                endif
+            end subroutine killimgbatch
+
     end subroutine exec_extract
 
     subroutine exec_reextract_distr( self, cline )
