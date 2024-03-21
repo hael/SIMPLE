@@ -439,6 +439,7 @@ contains
         call cmd_dict%push('recvol_sigma',  'noise(sigma)-weighted volume reconstruction strategy(yes|no){no}')
         call cmd_dict%push('refine',        'refinement mode(shc|neigh|cluster|clustersym){shc}')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
+        call cmd_dict%push('reject_mics',   'Whether to reject micrographs based on CTFres and IceFrac(yes|no){yes}')
         call cmd_dict%push('remap_cls',     'remove empty and renumber and/or expand # clusters(yes|no){no}')
         call cmd_dict%push('rnd',           'random(yes|no){no}')
         call cmd_dict%push('rrate',         'randomization rate{0.8}')
