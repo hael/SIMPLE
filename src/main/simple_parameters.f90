@@ -919,7 +919,12 @@ contains
                 if( trim(self%prg) .eq. 'mkdir' )then
                     self%exec_dir = int2str(idir)//'_'//trim(self%dir)
                 else if( cline%defined('dir_exec') )then
-                    self%exec_dir = int2str(idir)//'_'//trim(self%dir_exec)
+                    if( trim(self%executable).eq.'simple_stream' )then
+                        ! to allow for specific restart strategy
+                        self%exec_dir = trim(self%dir_exec)
+                    else
+                        self%exec_dir = int2str(idir)//'_'//trim(self%dir_exec)
+                    endif
                 else
                     self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 endif
