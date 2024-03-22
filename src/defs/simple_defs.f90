@@ -175,7 +175,7 @@ real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling dista
 real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
 real, parameter    :: CLS_REJECT_STD       = 2.5       !< # deviations for 2D class selection/rejection
 real, parameter    :: ANGLE_SAFE           = 1.        !< safe angular error, used in angle_sampling (in degree)
-real, parameter    :: SH_SAFE              = .1        !< safe shift error, used in shift_sampling (in Angstroms)
+real, parameter    :: SH_SAFE              = .5        !< safe shift error, used in shift_sampling (in Angstroms)
 
 ! preprocessing constants
 real, parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0 !< EER target fraction dose in e/A2
