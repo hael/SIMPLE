@@ -243,6 +243,7 @@ type :: parameters
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: iptcl=1
+    integer :: istart=0
     integer :: it_history=0        !< iteration history for sampling particles for 3D reconstruction
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: kfromto(2)
