@@ -202,23 +202,29 @@ contains
             if( .not. finished_job )then
                 mat4compare = ccimage_unordered%bimat
                 diff = 0
-                !$omp parallel do default(shared) private(i,j,k,neigh_8_pixs,nsz) schedule(static) proc_bind(close) reduction(+:diff) collapse(3)
-                do i = 1, self%bldim(1)
-                    do j = 1, self%bldim(2)
-                        do k = 1, self%bldim(3)
-                            if( self%bimat(i,j,k) > 0) then ! not background
-                                if(self%bldim(3) > 1) then
+                if( self%bldim(3) > 1 ) then
+                    do i = 1, self%bldim(1)
+                        do j = 1, self%bldim(2)
+                            do k = 1, self%bldim(3)
+                                if( self%bimat(i,j,k) > 0) then ! not background
                                     call neigh_8_3D(ccimage_unordered%bldim, ccimage_unordered%bimat, [i,j,k], neigh_8_pixs, nsz)
-                                else
-                                    call neigh_8   (ccimage_unordered%bldim, ccimage_unordered%bimat, [i,j,1], neigh_8_pixs, nsz)
+                                    ccimage_unordered%bimat(i,j,k) = minval(neigh_8_pixs(:nsz), neigh_8_pixs(:nsz) > 0)
+                                    diff = diff + abs(mat4compare(i,j,k) - ccimage_unordered%bimat(i,j,k))
                                 endif
-                                ccimage_unordered%bimat(i,j,k) = minval(neigh_8_pixs(:nsz), neigh_8_pixs(:nsz) > 0)
-                                diff = diff + abs(mat4compare(i,j,k) - ccimage_unordered%bimat(i,j,k))
+                            enddo
+                        enddo
+                    enddo
+                else
+                    do i = 1, self%bldim(1)
+                        do j = 1, self%bldim(2)
+                            if( self%bimat(i,j,1) > 0) then ! not background
+                                call neigh_8(ccimage_unordered%bldim, ccimage_unordered%bimat, [i,j,1], neigh_8_pixs, nsz)
+                                ccimage_unordered%bimat(i,j,1) = minval(neigh_8_pixs(:nsz), neigh_8_pixs(:nsz) > 0)
+                                diff = diff + abs(mat4compare(i,j,1) - ccimage_unordered%bimat(i,j,1))
                             endif
                         enddo
                     enddo
-                enddo
-                !$omp end parallel do
+                endif
                 if( diff <= 0 ) finished_job = .true.
             endif
         enddo

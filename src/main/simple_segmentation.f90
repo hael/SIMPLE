@@ -316,17 +316,18 @@ contains
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
-    subroutine otsu_img( img, thresh, mskrad, positive )
+    subroutine otsu_img( img, thresh, mskrad, positive, tight )
         class(image),      intent(inout) :: img
         real,    optional, intent(inout) :: thresh
         real,    optional, intent(in)    :: mskrad
         logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
+        logical, optional, intent(in)    :: tight    ! for generating a tighter mask in automasking
         real,    pointer     :: rmat(:,:,:)
         real,    allocatable :: x(:)
         logical, allocatable :: lmsk(:,:,:)
         type(image) :: tmpimg
         integer     :: ldim(3)
-        logical     :: ppositive
+        logical     :: ppositive, ttight
         real        :: selected_t
         ldim = img%get_ldim()
         if( present(mskrad) )then
@@ -335,6 +336,8 @@ contains
         endif
         ppositive = .false.
         if( present(positive) ) ppositive = positive
+        ttight = .false.
+        if( present(tight) ) ttight = tight
         call img%get_rmat_ptr(rmat)
         if( ppositive ) then
             if( allocated(lmsk) )then
@@ -351,6 +354,11 @@ contains
         endif
         call otsu(size(x), x, selected_t)
         if(present(thresh)) thresh= selected_t
+        if( ttight )then
+            x = pack(x, x > selected_t)
+            call otsu(size(x), x, selected_t)
+            if(present(thresh)) thresh= selected_t
+        endif
         deallocate(x)
         where(rmat(1:ldim(1),1:ldim(2),1:ldim(3))>=selected_t)
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 1.

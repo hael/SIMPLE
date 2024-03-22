@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_parameters,   only: params_glob
 use simple_image,        only: image
 use simple_tvfilter,     only: tvfilter
-use simple_segmentation, only: otsu_robust_fast, otsu_img
+use simple_segmentation, only: otsu_img
 use simple_binimage,     only: binimage
 implicit none
 
@@ -101,7 +101,7 @@ contains
         ! identify connected components
         call self%mic_shrink%find_ccs(self%img_cc)
         if( L_WRITE ) call self%img_cc%write_bimg('mic_shrink_lp_tv_bin_erode_cc.mrc')
-        call self%img_cc%get_nccs(self%nboxes)  
+        call self%img_cc%get_nccs(self%nboxes)
         ! eliminate connected components that are too large or too small
         sz = self%img_cc%size_ccs()
         call calc_stats(real(sz), self%sz_stats)
