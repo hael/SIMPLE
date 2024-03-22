@@ -2068,6 +2068,9 @@ contains
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nintgs() == 0 ) THROW_HARD('no micrograph to process!')
+        params%smpd      = spproj%os_mic%get(1,'smpd')
+        params_glob%smpd = params%smpd
+        call cline%set('smpd',params%smpd)
         ! output directories
         output_dir_picker  = trim(DIR_PICKER)
         output_dir_extract = trim(DIR_EXTRACT)
@@ -2123,7 +2126,7 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params_glob%smpd, micname, output_dir_picker, boxfile, nptcls_out)
+            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls_out)
             call o_mic%set('nptcls', real(nptcls_out))
             if( nptcls_out > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
@@ -2191,7 +2194,6 @@ contains
             xyz(1) = shifts(icavg,1)
             xyz(2) = shifts(icavg,2)
             xyz(3) = 0.
-            print *, xyz(:2)
             call projs(icavg)%shift(xyz)
         end do
         ! estimate new box size and clip

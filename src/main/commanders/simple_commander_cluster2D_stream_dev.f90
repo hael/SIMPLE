@@ -21,7 +21,7 @@ implicit none
 public :: init_cluster2D_stream_dev, update_projects_mask_dev, write_project_stream2D_dev, terminate_stream2D_dev
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev, classify_pool_dev
 public :: update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev, is_pool_available_dev
-public :: update_user_params_dev, update_path_dev, check_params_for_cluster2D_dev, get_pool_iter_dev
+public :: update_user_params_dev, update_path_dev, get_pool_iter_dev
 public :: read_pool_xml_beamtilts_dev, assign_pool_optics_dev
 private
 #include "simple_local_flags.inc"
@@ -100,18 +100,18 @@ contains
         endif
     end subroutine check_params_for_cluster2D_dev
 
-    subroutine init_cluster2D_stream_dev( cline, spproj, box_in, projfilegui, do2D )
+    subroutine init_cluster2D_stream_dev( cline, spproj, box_in, projfilegui )
         class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         integer,           intent(in)    :: box_in
         character(len=*),  intent(in)    :: projfilegui
-        logical,           intent(inout) :: do2D
         character(len=:), allocatable :: carg
+        logical :: do2D
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         integer :: ichunk
         ! check on strictly required parameters
-        if( .not.cline%defined('nthr2D') )then
-            THROW_HARD('Missing required argument NTHR2D')
+        if( .not.cline%defined('nthr') )then
+            THROW_HARD('Missing required argument NTHR')
         endif
         call check_params_for_cluster2D_dev(cline, do2D)
         if( .not.do2D ) return
@@ -119,7 +119,7 @@ contains
         ! general parameters
         mskdiam             = cline%get_rarg('mskdiam')
         call mskdiam2lplimits(mskdiam, lpstart, lpstop, lpcen)
-        if( cline%defined('lp2D') ) lpstart = params_glob%lp2D
+        if( cline%defined('lp') ) lpstart = params_glob%lp
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
         l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
         max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
@@ -1141,23 +1141,11 @@ contains
     end subroutine classify_pool_dev
 
     !> produces consolidated project at original scale
-    subroutine write_project_stream2D_dev( snapshot )
-        logical,           intent(in) :: snapshot
+    subroutine write_project_stream2D_dev( )
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup3
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
-        logical :: do_write
-        do_write = .not.snapshot
-        if( snapshot )then
-            ! writes snapshot every ORIGPROJ_WRITEFREQ seconds
-            if( .not.pool_available )return
-            if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1 )then
-                do_write      = .true.
-                origproj_time = simple_gettime()
-            endif
-        endif
-        if( .not.do_write ) return
         ! file naming
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
@@ -1167,7 +1155,7 @@ contains
         call pool_proj%projinfo%set(1,'projfile', projfile)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-        if( snapshot .and. l_scaling )then
+        if( l_scaling )then
             cavgsfname = trim(SNAPSHOT_DIR)//trim(cavgsfname)
             frcsfname  = trim(SNAPSHOT_DIR)//trim(frcsfname)
             if( (trim(prev_snapshot_cavgs) /= '') )then
@@ -1188,7 +1176,7 @@ contains
                 endif
             endif
         endif
-        write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
+        write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
         if( l_scaling )then
             os_backup3 = pool_proj%os_cls2D
@@ -1229,10 +1217,6 @@ contains
             ! write
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
-            if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
-                ! automatic pruning performed upon final writing
-                call pool_proj%prune_particles
-            endif
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
         else
@@ -1247,15 +1231,7 @@ contains
             pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
             call pool_proj%os_ptcl3D%delete_2Dclustering
             call pool_proj%write(projfile)
-            if( .not.snapshot .and. trim(params_glob%prune).eq.'yes')then
-                ! automatic pruning performed upon final writing
-                call pool_proj%prune_particles
-            endif
             call pool_proj%os_ptcl3D%kill
-        endif
-        if( snapshot )then
-            prev_snapshot_frcs  = trim(frcsfname)
-            prev_snapshot_cavgs = trim(cavgsfname)
         endif
         ! classes export
         call starproj%export_cls2D(pool_proj)
@@ -1280,7 +1256,7 @@ contains
         endif
         if( pool_iter >= 1 .and. write_project )then
             ! updates project
-            call write_project_stream2D_dev(.false.)
+            call write_project_stream2D_dev
             ! ranking
             call rank_cavgs
         endif

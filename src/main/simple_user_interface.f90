@@ -130,7 +130,7 @@ type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pick
-type(simple_program), target :: pick_extract_cluster2D
+type(simple_program), target :: pick_extract
 type(simple_program), target :: postprocess
 type(simple_program), target :: ppca_denoise
 type(simple_program), target :: ppca_denoise_classes
@@ -411,7 +411,7 @@ contains
         call new_orisops
         call new_oristats
         call new_pick
-        call new_pick_extract_cluster2D
+        call new_pick_extract
         call new_postprocess
         call new_ppca_denoise
         call new_ppca_denoise_classes
@@ -526,7 +526,7 @@ contains
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
         call push2prg_ptr_array(pick)
-        call push2prg_ptr_array(pick_extract_cluster2D)
+        call push2prg_ptr_array(pick_extract)
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(ppca_denoise)
         call push2prg_ptr_array(ppca_denoise_classes)
@@ -706,8 +706,8 @@ contains
                 ptr2prg => oristats
             case('pick')
                 ptr2prg => pick
-            case('pick_extract_cluster2D')
-                ptr2prg => pick_extract_cluster2D
+            case('pick_extract')
+                ptr2prg => pick_extract
             case('postprocess')
                 ptr2prg => postprocess
             case('ppca_denoise')
@@ -914,7 +914,7 @@ contains
     subroutine list_stream_prgs_in_ui
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') multipick_cluster2D%name
-        write(logfhandle,'(A)') pick_extract_cluster2D%name
+        write(logfhandle,'(A)') pick_extract%name
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
@@ -3144,125 +3144,76 @@ contains
         call pick%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
     end subroutine new_pick
 
-    subroutine new_pick_extract_cluster2D
+    subroutine new_pick_extract
         ! PROGRAM SPECIFICATION
-        call pick_extract_cluster2D%new(&
-        &'pick_extract_cluster2D', &                                                        ! name
-        &'Preprocessing in streaming mode',&                                                ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        call pick_extract%new(&
+        &'pick_extract', &                                                               ! name
+        &'Preprocessing in streaming mode',&                                             ! descr_short
+        &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
-        &'simple_stream',&                                                                  ! executable
-        &2, 6, 0, 13, 5, 1, 9, .true.)                                                     ! # entries in each group, requires sp_project
-        pick_extract_cluster2D%gui_submenu_list = "data,CTF estimation, picking,cluster 2D,compute"
-        pick_extract_cluster2D%advanced = .false.
+        &'simple_stream',&                                                               ! executable
+        &2, 6, 0, 3, 3, 1, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        pick_extract%gui_submenu_list = "data,picking,compute"
+        pick_extract%advanced = .false.
         ! image input/output
-        call pick_extract_cluster2D%set_input('img_ios', 1, pickrefs)
-        call pick_extract_cluster2D%set_gui_params('img_ios', 1, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
-        call pick_extract_cluster2D%set_input('img_ios', 2, 'dir_prev', 'file', 'Previous run directory',&
-            &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preproc', .false., '')
-        call pick_extract_cluster2D%set_gui_params('img_ios', 2, submenu="data")
+        call pick_extract%set_input('img_ios', 1, pickrefs)
+        call pick_extract%set_gui_params('img_ios', 1, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
+        call pick_extract%set_input('img_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
+            &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .true., '')
+        call pick_extract%set_gui_params('img_ios', 2, submenu="data")
+        pick_extract%img_ios(2)%required = .false.
         ! parameter input/output
-        call pick_extract_cluster2D%set_input('parm_ios', 1, pcontrast)
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 1, submenu="picking")
-        call pick_extract_cluster2D%set_input('parm_ios', 2, box_extract)
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 2, submenu="picking")
-        call pick_extract_cluster2D%set_input('parm_ios', 3, pspecsz)
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 3, submenu="picking")
-        call pick_extract_cluster2D%set_input('parm_ios', 4, moldiam)
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 4, submenu="picking")
-        call pick_extract_cluster2D%set_input('parm_ios', 5, picker)
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 5, submenu="picking")
-        call pick_extract_cluster2D%set_input('parm_ios', 6, 'dir_target', 'file', 'Target directory',&
+        call pick_extract%set_input('parm_ios', 1, pcontrast)
+        call pick_extract%set_gui_params('parm_ios', 1, submenu="picking")
+        call pick_extract%set_input('parm_ios', 2, box_extract)
+        call pick_extract%set_gui_params('parm_ios', 2, submenu="picking")
+        call pick_extract%set_input('parm_ios', 3, pspecsz)
+        call pick_extract%set_gui_params('parm_ios', 3, submenu="picking")
+        call pick_extract%set_input('parm_ios', 4, moldiam)
+        call pick_extract%set_gui_params('parm_ios', 4, submenu="picking")
+        call pick_extract%set_input('parm_ios', 5, picker)
+        call pick_extract%set_gui_params('parm_ios', 5, submenu="picking")
+        call pick_extract%set_input('parm_ios', 6, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
-        call pick_extract_cluster2D%set_gui_params('parm_ios', 6, submenu="data")
+        call pick_extract%set_gui_params('parm_ios', 6, submenu="data")
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick_extract_cluster2D%set_input('srch_ctrls', 1, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
-        call pick_extract_cluster2D%set_input('srch_ctrls', 2, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
-        call pick_extract_cluster2D%set_input('srch_ctrls', 3, pgrp)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
-        pick_extract_cluster2D%srch_ctrls(3)%required = .false.
-        call pick_extract_cluster2D%set_input('srch_ctrls', 4, ncls_start)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 4, submenu="cluster 2D", advanced=.false.)
-        pick_extract_cluster2D%srch_ctrls(4)%required = .false.
-        call pick_extract_cluster2D%set_input('srch_ctrls', 5, nptcls_per_cls)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 5, submenu="cluster 2D", advanced=.false.)
-        pick_extract_cluster2D%srch_ctrls(5)%rval_default = 300.
-        call pick_extract_cluster2D%set_input('srch_ctrls', 6, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 6, submenu="cluster 2D")
-        call pick_extract_cluster2D%set_input('srch_ctrls', 7, 'ncls', 'num', 'Maximum number of 2D clusters*',&
-        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 7, submenu="cluster 2D", advanced=.false.)
-        call pick_extract_cluster2D%set_input('srch_ctrls', 8, lpthres)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 8, submenu="cluster 2D", online=.true.)
-        call pick_extract_cluster2D%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls', 9, submenu="cluster 2D")
-        call pick_extract_cluster2D%set_input('srch_ctrls',10, objfun)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls',10, submenu="cluster 2D")
-        call pick_extract_cluster2D%set_input('srch_ctrls',11, maxnchunks)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls',11, submenu="cluster 2D", online=.true.)
-        call pick_extract_cluster2D%set_input('srch_ctrls',12, pick_roi)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls',12, submenu="cluster 2D", online=.true.)
-        call pick_extract_cluster2D%set_input('srch_ctrls',13, backgr_subtr)
-        call pick_extract_cluster2D%set_gui_params('srch_ctrls',13, submenu="cluster 2D", online=.true.)
+        call pick_extract%set_input('srch_ctrls', 1, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call pick_extract%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
+        call pick_extract%set_input('srch_ctrls', 2, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call pick_extract%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
+        call pick_extract%set_input('srch_ctrls', 3, pgrp)
+        call pick_extract%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
+        pick_extract%srch_ctrls(3)%required = .false.
         ! filter controls
-        call pick_extract_cluster2D%set_input('filt_ctrls', 1, lp_pick)
-        call pick_extract_cluster2D%set_gui_params('filt_ctrls', 1, submenu="picking")
-        call pick_extract_cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call pick_extract_cluster2D%set_gui_params('filt_ctrls', 2, submenu="cluster 2D")
-        call pick_extract_cluster2D%set_input('filt_ctrls', 3, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
-        &'low-pass limit in Angstroms', .false., 15.)
-        call pick_extract_cluster2D%set_gui_params('filt_ctrls', 3, submenu="cluster 2D")
-        call pick_extract_cluster2D%set_input('filt_ctrls', 4, ctfresthreshold)
-        pick_extract_cluster2D%filt_ctrls(4)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        pick_extract_cluster2D%filt_ctrls(4)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        pick_extract_cluster2D%filt_ctrls(4)%rval_default      = CTFRES_THRESHOLD_STREAM
-        call pick_extract_cluster2D%set_gui_params('filt_ctrls', 4, submenu="CTF estimation")
-        call pick_extract_cluster2D%set_input('filt_ctrls', 5, icefracthreshold)
-        pick_extract_cluster2D%filt_ctrls(5)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        pick_extract_cluster2D%filt_ctrls(5)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        pick_extract_cluster2D%filt_ctrls(5)%rval_default      = ICEFRAC_THRESHOLD_STREAM
-        call pick_extract_cluster2D%set_gui_params('filt_ctrls', 5, submenu="CTF estimation")
+        call pick_extract%set_input('filt_ctrls', 1, lp_pick)
+        call pick_extract%set_gui_params('filt_ctrls', 1, submenu="picking")
+        call pick_extract%set_input('filt_ctrls', 2, ctfresthreshold)
+        pick_extract%filt_ctrls(2)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
+        pick_extract%filt_ctrls(2)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
+        pick_extract%filt_ctrls(2)%rval_default      = CTFRES_THRESHOLD_STREAM
+        call pick_extract%set_gui_params('filt_ctrls', 2, submenu="CTF estimation")
+        call pick_extract%set_input('filt_ctrls', 3, icefracthreshold)
+        pick_extract%filt_ctrls(3)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
+        pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
+        pick_extract%filt_ctrls(3)%rval_default      = ICEFRAC_THRESHOLD_STREAM
+        call pick_extract%set_gui_params('filt_ctrls', 3, submenu="CTF estimation")
         ! mask controls
-        call pick_extract_cluster2D%set_input('mask_ctrls', 1, mskdiam)
-        call pick_extract_cluster2D%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
-        pick_extract_cluster2D%mask_ctrls(1)%required    = .false.
-        pick_extract_cluster2D%mask_ctrls(1)%descr_short = 'Mask Diameter'
+        call pick_extract%set_input('mask_ctrls', 1, mskdiam)
+        pick_extract%mask_ctrls(1)%required = .false.
         ! computer controls
-        call pick_extract_cluster2D%set_input('comp_ctrls', 1, nchunks)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        pick_extract_cluster2D%comp_ctrls(1)%required = .false.
-        call pick_extract_cluster2D%set_input('comp_ctrls', 2, nparts_chunk)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
-        call pick_extract_cluster2D%set_input('comp_ctrls', 3, nparts_pool)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 3, submenu="compute", advanced=.false.)
-        call pick_extract_cluster2D%set_input('comp_ctrls', 4, nparts)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 4, submenu="compute", advanced=.false.)
-        pick_extract_cluster2D%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
-        call pick_extract_cluster2D%set_input('comp_ctrls', 5, nthr)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 5, submenu="compute", advanced=.false.)
-        pick_extract_cluster2D%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
-        pick_extract_cluster2D%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
-        call pick_extract_cluster2D%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
-        &'# of threads for per', .true., 1.)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 6, submenu="compute")
-        call pick_extract_cluster2D%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call pick_extract%set_input('comp_ctrls', 1, nparts)
+        call pick_extract%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        pick_extract%comp_ctrls(1)%descr_short = 'Number of computing nodes allocated to preprocessing'
+        call pick_extract%set_input('comp_ctrls', 2, nthr)
+        call pick_extract%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+        pick_extract%comp_ctrls(2)%descr_short = 'Number of threads/node for preprocessing'
+        pick_extract%comp_ctrls(2)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
+        call pick_extract%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 7, submenu="compute")
-        call pick_extract_cluster2D%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node',&
-        &'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000.)
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 8, submenu="compute")
-        call pick_extract_cluster2D%set_input('comp_ctrls', 9, 'qsys_partition2D','str', 'Name of SLURM/PBS partition for 2D classification',&
-        &'Name of target partition of distributed computer system (SLURM/PBS) dedicated to 2D classification', 'parttion name', .false., '')
-        call pick_extract_cluster2D%set_gui_params('comp_ctrls', 9, submenu="compute")
-    end subroutine new_pick_extract_cluster2D
-
+        call pick_extract%set_gui_params('comp_ctrls', 3, submenu="compute")
+    end subroutine new_pick_extract
 
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
