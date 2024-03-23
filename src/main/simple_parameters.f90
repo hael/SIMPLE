@@ -6,6 +6,7 @@ include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
 use simple_atoms,          only: atoms
+use simple_dyn_ufrac
 implicit none
 
 public :: parameters, params_glob
@@ -250,6 +251,7 @@ type :: parameters
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=100          !< maximum # iterations
+    integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxnchunks=0
     integer :: maxpop=0            !< max population of an optics group
@@ -689,6 +691,7 @@ contains
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
+        call check_iarg('maxits_glob',    self%maxits_glob)
         call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxnchunks',     self%maxnchunks)
         call check_iarg('maxpop',         self%maxpop)
@@ -1200,6 +1203,17 @@ contains
             self%update_frac   = 1.0
             self%l_frac_update = .false.
         endif
+        ! set stochastic update flag
+        self%l_stoch_update = trim(self%stoch_update) .ne. 'no'
+        if( self%l_stoch_update )then
+            self%l_frac_update = .true. ! update_frac set dynamically (see below)
+            if( cline%defined('maxits_glob') )then
+                self%update_frac   = real(inv_nsampl_decay(self%which_iter, self%maxits_glob, self%nptcls)) / real(self%nptcls)
+            else
+                self%update_frac   = real(inv_nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
+            endif
+            call cline%set('update_frac', self%update_frac)
+        endif
         ! iteration history for sampling particles for 3D reconstruction
         if( self%l_frac_update )then
             if( cline%defined('it_history') )then
@@ -1210,8 +1224,6 @@ contains
         else
             self%it_history = 0
         endif
-        ! set stochastic update flag
-        self%l_stoch_update = trim(self%stoch_update) .ne. 'no'
         ! trailing volume
         if( self%l_stoch_update )then
             if( cline%defined('mov_avg_vol') )then

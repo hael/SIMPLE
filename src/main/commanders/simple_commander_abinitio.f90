@@ -680,6 +680,8 @@ contains
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
+        integer, parameter :: MAXITS_GLOB_LP_SET = MAXITS1 + MAXITS2 * 2
+        integer, parameter :: MAXITS_GLOB = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
         ! commanders
@@ -890,26 +892,27 @@ contains
             endif
             it = 1
             if( l_shmem ) call rec_shmem
-            call cline_refine3D%set('box_crop',  params%box_crop)
-            call cline_refine3D%set('trs',       0.)
-            call cline_refine3D%set('lp',        params%lp)
-            call cline_refine3D%set('maxits',    MAXITS1)
-            call cline_refine3D%set('lp_iters',  MAXITS1)
-            call cline_refine3D%set('nspace',    NSPACE1)
-            call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
-            call cline_refine3D%set('it_history', 1)   ! particles sampled in most recent past iteration also included in rec
+            call cline_refine3D%set('box_crop',    params%box_crop)
+            call cline_refine3D%set('trs',         0.)
+            call cline_refine3D%set('lp',          params%lp)
+            call cline_refine3D%set('maxits',      MAXITS1)
+            call cline_refine3D%set('maxits_glob', MAXITS_GLOB_LP_SET)
+            call cline_refine3D%set('lp_iters',    MAXITS1)
+            call cline_refine3D%set('nspace',      NSPACE1)
+            call cline_refine3D%set('ml_reg',      'no') ! since ml_reg seems to interfer with finding a good lowres shape
+            call cline_refine3D%set('it_history',   1)   ! particles sampled in most recent past iteration also included in rec
             call exec_refine3D(iter)
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
             it = 2
             call cline_refine3D%set('prob_init', 'no')
-            call cline_refine3D%set('trs',      trslim)
-            call cline_refine3D%set('maxits',   MAXITS2)
-            call cline_refine3D%set('lp_iters', MAXITS2)
-            call cline_refine3D%set('nspace',   NSPACE2)
-            call cline_refine3D%set('ml_reg',    'no') ! since ml_reg seems to interfer with finding a good lowres shape
-            call cline_refine3D%set('it_history', 2)   ! particles sampled in two most recent past iterations also included in rec
-            call cline_refine3D%set('startit',  iter+1)
+            call cline_refine3D%set('trs',         trslim)
+            call cline_refine3D%set('maxits',      MAXITS2)
+            call cline_refine3D%set('lp_iters',    MAXITS2)
+            call cline_refine3D%set('nspace',      NSPACE2)
+            call cline_refine3D%set('ml_reg',      'no') ! since ml_reg seems to interfer with finding a good lowres shape
+            call cline_refine3D%set('it_history',   2)   ! particles sampled in two most recent past iterations also included in rec
+            call cline_refine3D%set('startit',     iter+1)
             if( l_shmem )then
                 call cline_refine3D%set('continue', 'yes')
             else
@@ -982,8 +985,9 @@ contains
                 ! # of iterations
                 maxits = MAXITS_SHORT1
                 if( it >= NSTAGES-1 ) maxits = MAXITS_SHORT2
-                call cline_refine3D%set('maxits',   maxits)
-                call cline_refine3D%set('lp_iters', maxits)
+                call cline_refine3D%set('maxits',      maxits)
+                call cline_refine3D%set('maxits_glob', MAXITS_GLOB)
+                call cline_refine3D%set('lp_iters',    maxits)
                 ! projection directions & shift
                 if( it < NSTAGES )then
                     call cline_refine3D%set('nspace', NSPACE1)
