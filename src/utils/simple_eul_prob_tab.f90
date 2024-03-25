@@ -233,10 +233,9 @@ contains
     end subroutine write_tab
 
     ! read the partition-wise dist value binary file to global reg object's dist value table
-    subroutine read_tab_to_glob( self, binfname, nptcls_glob )
+    subroutine read_tab_to_glob( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
-        integer,             intent(in)    :: nptcls_glob
         type(ptcl_ref),      allocatable   :: mat_loc(:,:)
         integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob
         if( file_exists(trim(binfname)) )then
@@ -257,7 +256,7 @@ contains
         call fclose(funit)
         !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
         do i_loc = 1, nptcls_loc
-            do i_glob = 1, nptcls_glob
+            do i_glob = 1, self%nptcls
                 if( mat_loc(1,i_loc)%pind == self%loc_tab(1,i_glob)%pind ) self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
             end do
         end do
