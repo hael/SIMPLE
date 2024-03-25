@@ -60,7 +60,7 @@ contains
 
     ! I/O
 
-    ! read in all dists value from file, dists shape is larger than self%fromp, self%to
+    ! read in all dists value from partition file, writing to global mat
     subroutine read_to_glob( self, nptcls_glob, mat_glob )
         class(dist_binfile), intent(inout) :: self
         integer,             intent(in)    :: nptcls_glob
