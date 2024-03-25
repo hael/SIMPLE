@@ -22,14 +22,15 @@ type :: eul_prob_tab
   contains
     ! CONSTRUCTOR
     procedure :: new
-    ! PROCEDURES
+    ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
     procedure :: fill_tab
+    procedure :: write_tab
+    procedure :: read_assignment
+    ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
+    procedure :: read_tab_to_glob
     procedure :: tab_normalize
     procedure :: tab_align
-    procedure :: write_tab
-    procedure :: read_tab_to_glob
     procedure :: write_assignment
-    procedure :: read_assignment
     ! DESTRUCTOR
     procedure :: kill
 end type eul_prob_tab
