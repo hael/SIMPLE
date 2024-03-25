@@ -18,8 +18,10 @@ real, parameter :: MINSHIFT            = 5.0
 real, parameter :: MAXSHIFT            = 6.0
 real, parameter :: AHELIX_WIDTH        = 12.0 ! alphha-helix width in A
 ! stochastic particle sampling
-integer, parameter :: NSAMPL_LB        = 50000
-integer, parameter :: NSAMPL_UB        = 200000
-real,    parameter :: UPDATE_FRAC_LB   = 0.3
-real,    parameter :: UPDATE_FRAC_UB   = 0.5
+integer, parameter :: NSAMPL_LB            = 50000
+integer, parameter :: NSAMPL_UB            = 200000
+real,    parameter :: UPDATE_FRAC_LB       = 0.3
+real,    parameter :: UPDATE_FRAC_UB       = 0.5
+real,    parameter :: UPDATE_FRAC_LB_SMALL = 0.5
+real,    parameter :: UPDATE_FRAC_UB_SMALL = 0.8
 end module simple_defs_conv

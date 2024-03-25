@@ -1001,7 +1001,7 @@ contains
                     call cline_refine3D%set('angle_smpl', 'no')
                     call cline_refine3D%set('sh_smpl',    params%sh_smpl)
                 end if
-                call cline_refine3D%set('ml_reg',    'no')       ! since ml_reg seems to interfer with finding a good lowres shape
+                call cline_refine3D%set('ml_reg',    'no')       ! since ml_reg seems to interfer with finding a good lowres shape            
                 call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
                 ! shared memory section
                 if( l_shmem )then
@@ -1088,7 +1088,6 @@ contains
         call cline_refine3D%set('lp_iters',   MAXITS2)
         call cline_refine3D%set('nspace',     NSPACE3)
         call cline_refine3D%set('it_history',       3) ! particles sampled in three most recent past iterations also included in rec
-        call cline_refine3D%set('mov_avg_vol',  'yes')
         ! extreme greedy sampling in inpl, and shifts (because of stable volume)
         call cline_refine3D%set('angle_smpl', 'no')
         call cline_refine3D%set('sh_smpl',    'no')
@@ -1110,6 +1109,13 @@ contains
         call cline_rec_shmem%set('ml_reg',      'no')
         call cline_rec_shmem%set('needs_sigma', 'no')
         call cline_rec_shmem%set('objfun',      'cc')
+        ! no fractional or stochastic updates
+        call cline_reconstruct3D%delete('update_frac')
+        call cline_reconstruct3D%delete('stoch_update')
+        call cline_reconstruct3D%delete('it_history')
+        call cline_rec_shmem%delete('update_frac')
+        call cline_rec_shmem%delete('stoch_update')
+        call cline_rec_shmem%delete('it_history')
         ! reconstruction
         if( l_autoscale )then
             write(logfhandle,'(A)') '>>>'
