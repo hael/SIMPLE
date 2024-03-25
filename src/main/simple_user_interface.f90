@@ -84,7 +84,6 @@ type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: cavg_filter2D
 type(simple_program), target :: cavgsproc_nano
-type(simple_program), target :: check_align
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
@@ -365,7 +364,6 @@ contains
         call new_calc_pspec
         call new_cavg_filter2D
         call new_cavgsproc_nano
-        call new_check_align
         call new_center
         call new_cleanup2D
         call new_center2D_nano
@@ -481,7 +479,6 @@ contains
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(cavg_filter2D)
         call push2prg_ptr_array(cavgsproc_nano)
-        call push2prg_ptr_array(check_align)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
@@ -616,8 +613,6 @@ contains
                 ptr2prg => cavg_filter2D
             case('cavgsproc_nano')
                 ptr2prg => cavgsproc_nano
-            case('check_align')
-                ptr2prg => check_align
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -829,7 +824,6 @@ contains
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') cavg_filter2D%name
-        write(logfhandle,'(A)') check_align%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
@@ -1473,31 +1467,6 @@ contains
         call cavgsproc_nano%set_input('comp_ctrls', 1, nthr)
         call cavgsproc_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_cavgsproc_nano
-
-    subroutine new_check_align
-        ! PROGRAM SPECIFICATION
-        call check_align%new(&
-        &'check_align',&                                                    ! name
-        &'Alignment check of class averages vs reprojection',&              ! descr_short
-        &'is a program to check the alignment to form class averages vs the reprojection',& ! descr_long
-        &'simple_exec',&                                                    ! executable
-        &1, 1, 0, 0, 1, 0, 1, .true.)                                      ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call check_align%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
-        ! parameter input/output
-        call check_align%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call check_align%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .true., 3.)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call check_align%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_check_align
 
     subroutine new_center
         ! PROGRAM SPECIFICATION
