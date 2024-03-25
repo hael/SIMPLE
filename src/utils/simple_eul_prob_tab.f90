@@ -3,9 +3,8 @@ module simple_eul_prob_tab
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_parameters,   only: params_glob
-use simple_dist_binfile, only: dist_binfile
-use simple_builder,      only: build_glob
+use simple_parameters, only: params_glob
+use simple_builder,    only: build_glob
 implicit none
 
 public :: eul_prob_tab
@@ -222,26 +221,46 @@ contains
     subroutine write_tab( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         character(len=*),    intent(in) :: binfname
-        type(dist_binfile) :: binfile
-        call binfile%new(binfname, params_glob%nspace, self%nptcls)
-        call binfile%write(self%loc_tab)
-        call binfile%kill
+        integer :: funit, addr, io_stat, file_header(2)
+        file_header(1) = params_glob%nspace
+        file_header(2) = self%nptcls
+        call fopen(funit,trim(binfname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
+        write(unit=funit,pos=1) file_header
+        addr = sizeof(file_header) + 1
+        write(funit,pos=addr) self%loc_tab
+        call fclose(funit)
     end subroutine write_tab
 
     ! read the partition-wise dist value binary file to global reg object's dist value table
-    ! [fromp, top]: global partition particle index range
     subroutine read_tab_to_glob( self, binfname, nptcls_glob )
         class(eul_prob_tab), intent(inout) :: self
         character(len=*),    intent(in)    :: binfname
         integer,             intent(in)    :: nptcls_glob
-        type(dist_binfile) :: binfile
-        if( file_exists(binfname) )then
-            call binfile%new_from_file(binfname)
+        type(ptcl_ref),      allocatable   :: mat_loc(:,:)
+        integer :: funit, addr, io_stat, file_header(2), nptcls_loc, nrefs_loc, i_loc, i_glob
+        if( file_exists(trim(binfname)) )then
+            call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
+            call fileiochk('simple_eul_prob_tab; read_tab_to_glob; file: '//trim(binfname), io_stat)
         else
             THROW_HARD( 'corr/rot files of partitions should be ready! ' )
         endif
-        call binfile%read_to_glob(nptcls_glob, self%loc_tab)
-        call binfile%kill
+        ! reading header and the nrefs/nptcls in this partition file
+        read(unit=funit,pos=1) file_header
+        nrefs_loc  = file_header(1)
+        nptcls_loc = file_header(2)
+        allocate(mat_loc(nrefs_loc, nptcls_loc))
+        if( nrefs_loc .ne. params_glob%nspace ) THROW_HARD( 'npsace should be the same as nrefs in this partition file!' )
+        ! read partition information
+        addr = sizeof(file_header) + 1
+        read(unit=funit,pos=addr) mat_loc
+        call fclose(funit)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(i_loc,i_glob)
+        do i_loc = 1, nptcls_loc
+            do i_glob = 1, nptcls_glob
+                if( mat_loc(1,i_loc)%pind == self%loc_tab(1,i_glob)%pind ) self%loc_tab(:,i_glob) = mat_loc(:,i_loc)
+            end do
+        end do
+        !$omp end parallel do
     end subroutine read_tab_to_glob
 
     ! write a global assignment map to binary file
@@ -274,7 +293,7 @@ contains
         else
             call fopen(funit,trim(binfname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
         end if
-        call fileiochk('dist_binfile; read_header; file: '//trim(binfname), io_stat)
+        call fileiochk('read_tab_to_glob; read_assignment; file: '//trim(binfname), io_stat)
         read(unit=funit,pos=1) nptcls_glob
         allocate(assgn_glob(nptcls_glob))
         read(unit=funit,pos=headsz + 1) assgn_glob
