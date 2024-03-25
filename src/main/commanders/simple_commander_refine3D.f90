@@ -940,7 +940,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(eul_prob_tab)            :: eulprob_obj
+        type(eul_prob_tab)            :: eulprob_obj_loc
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
@@ -962,7 +962,7 @@ contains
         endif
         ! more prep
         call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
-        call eulprob_obj%new(pinds)
+        call eulprob_obj_loc%new(pinds)
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -1023,10 +1023,10 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj%fill_tab(pftcc)
+        call eulprob_obj_loc%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob_obj%write_tab(fname)
-        call eulprob_obj%kill
+        call eulprob_obj_loc%write_tab(fname)
+        call eulprob_obj_loc%kill
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox
@@ -1047,7 +1047,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(prob_tab_commander)      :: xprob_tab
-        type(eul_prob_tab)            :: eulprob_obj
+        type(eul_prob_tab)            :: eulprob_obj_glob
         type(cmdline)                 :: cline_prob_tab
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
@@ -1077,7 +1077,7 @@ contains
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)        
         ! more prep
-        call eulprob_obj%new(pinds)
+        call eulprob_obj_glob%new(pinds)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -1094,15 +1094,15 @@ contains
         ! reading corrs from all parts
         do ipart = 1, params%nparts
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call eulprob_obj%read_tab_to_glob(fname, nptcls)
+            call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
-        call eulprob_obj%tab_normalize
-        call eulprob_obj%tab_align
+        call eulprob_obj_glob%tab_normalize
+        call eulprob_obj_glob%tab_align
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj%write_assignment(fname)
+        call eulprob_obj_glob%write_assignment(fname)
         ! cleanup
-        call eulprob_obj%kill
+        call eulprob_obj_glob%kill
         ! call build%kill_general_tbox
         call cline_prob_tab%kill
         call qenv%kill

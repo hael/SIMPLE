@@ -48,9 +48,9 @@ contains
             self%s%nrefs_eval = self%s%nrefs
             iptcl     = self%s%iptcl
             iptcl_map = self%s%iptcl_map
-            iref      =                     self%spec%eulprob_obj%assgn_map(iptcl_map)%iref
-            corr      = eulprob_corr_switch(self%spec%eulprob_obj%assgn_map(iptcl_map)%dist)
-            irot      =                     self%spec%eulprob_obj%assgn_map(iptcl_map)%inpl
+            iref      =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%iref
+            corr      = eulprob_corr_switch(self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%dist)
+            irot      =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%inpl
             if( self%s%doshift )then
                 call self%s%inpl_srch(ref=iref)
                 ! checking if shift search is good

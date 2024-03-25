@@ -17,7 +17,7 @@ private
 
 type strategy3D_spec
     integer,            pointer :: symmat(:,:) => null()
-    type(eul_prob_tab), pointer :: eulprob_obj
+    type(eul_prob_tab), pointer :: eulprob_obj_loc
     integer :: iptcl=0, iptcl_map=0, szsn=0
     logical :: do_extr=.false.
     real    :: extr_score_thresh=0.
