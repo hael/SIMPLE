@@ -33,8 +33,13 @@ contains
     function calc_nsampl_fromto( nptcls ) result( nsampl_fromto )
         integer, intent(in)  :: nptcls
         integer :: nsampl_fromto(2)
-        nsampl_fromto(1) = min(NSAMPL_LB, nint(UPDATE_FRAC_LB * real(nptcls)))
-        nsampl_fromto(2) = min(NSAMPL_UB, nint(UPDATE_FRAC_UB * real(nptcls))) 
+        if( nptcls < NSAMPL_LB )then
+            nsampl_fromto(1) = min(NSAMPL_LB, nint(UPDATE_FRAC_LB_SMALL * real(nptcls)))
+            nsampl_fromto(2) = min(NSAMPL_UB, nint(UPDATE_FRAC_UB_SMALL * real(nptcls))) 
+        else
+            nsampl_fromto(1) = min(NSAMPL_LB, nint(UPDATE_FRAC_LB * real(nptcls)))
+            nsampl_fromto(2) = min(NSAMPL_UB, nint(UPDATE_FRAC_UB * real(nptcls))) 
+        endif
     end function calc_nsampl_fromto
 
 end module simple_dyn_ufrac
