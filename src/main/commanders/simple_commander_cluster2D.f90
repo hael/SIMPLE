@@ -399,7 +399,7 @@ contains
         ! down-scaling for fast execution, greedy optimisation
         call cline_cluster2D2%set('prg', 'cluster2D')
         call cline_cluster2D2%set('autoscale',  'no')
-        call cline_cluster2D2%set('trs',    MINSHIFT/scale_factor)
+        call cline_cluster2D2%set('trs',    MINSHIFT)
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
@@ -532,8 +532,9 @@ contains
         class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! constants
-        integer,               parameter :: MAXITS_STAGE1      = 10
-        integer,               parameter :: MAXITS_STAGE1_EXTR = 15
+        integer, parameter :: MAXITS_STAGE1      = 10
+        integer, parameter :: MAXITS_STAGE1_EXTR = 15
+        integer, parameter :: MINBOX             = 88
         ! commanders
         type(make_cavgs_commander_distr)    :: xmake_cavgs_distr
         type(make_cavgs_commander)          :: xmake_cavgs
@@ -607,7 +608,7 @@ contains
         params%box_crop  = params%box
         params%msk_crop  = params%msk
         if( params%l_autoscale )then
-            call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale)
+            call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale, minbox=MINBOX)
             l_scaling = params%box_crop < params%box
             if( l_scaling )then
                 params%msk_crop = round2even(params%msk * scale)
@@ -658,14 +659,29 @@ contains
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         call cline_cluster2D_stage1%set('nonuniform', 'no')
         if( params%l_frac_update )then
-            call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
-            call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
-            if( l_euclid )then
-                if( l_cc_iters )then
-                    params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
-                    call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
-                else
-                    call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+            if( params%l_stoch_update )then
+                call cline_cluster2D_stage1%set('it_history',  1)
+                call cline_cluster2D_stage1%set('maxits_glob', MAX_EXTRLIM2D)
+                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+                call cline_cluster2D_stage1%delete('update_frac') ! will be calculated later
+                if( l_euclid )then
+                    if( l_cc_iters )then
+                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1)
+                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    else
+                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    endif
+                endif
+            else
+                call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
+                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+                if( l_euclid )then
+                    if( l_cc_iters )then
+                        params%cc_iters = min(params%cc_iters,MAXITS_STAGE1_EXTR)
+                        call cline_cluster2D_stage1%set('cc_iters', real(params%cc_iters))
+                    else
+                        call cline_cluster2D_stage1%set('cc_iters', real(MAXITS_STAGE1))
+                    endif
                 endif
             endif
         else
@@ -694,15 +710,23 @@ contains
         ! Stage 2: refinement stage, little extremal updates, optional incremental
         !          learning for acceleration
         call cline_cluster2D_stage2%delete('cc_iters')
-        call cline_cluster2D_stage2%set('refs', cavgs)
-        call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
-        if( cline%defined('update_frac') ) call cline_cluster2D_stage2%set('update_frac', params%update_frac)
+        call cline_cluster2D_stage2%set('refs',       cavgs)
+        call cline_cluster2D_stage2%set('startit',    last_iter_stage1+1)
+        if( params%l_frac_update )then
+            if( params%l_stoch_update )then
+                call cline_cluster2D_stage2%set('it_history',  2)
+                call cline_cluster2D_stage2%set('maxits_glob', MAX_EXTRLIM2D)
+                call cline_cluster2D_stage2%delete('update_frac')
+            else
+                call cline_cluster2D_stage2%set('update_frac', params%update_frac)
+            endif
+        endif
         if( l_euclid )then
             call cline_cluster2D_stage2%set('objfun',   trim(cline%get_carg('objfun')))
             call cline_cluster2D_stage2%set('cc_iters', 0.)
         endif
         trs_stage2 = MSK_FRAC * params%mskdiam / (2. * params%smpd_targets2D(2))
-        trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2)) / scale
+        trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
         call cline_cluster2D_stage2%set('trs', trs_stage2)
         ! optional non-uniform filtering
         if( params%l_nonuniform ) call cline_cluster2D_stage2%set('smooth_ext', real(ceiling(params%smooth_ext * scale)))
@@ -2005,7 +2029,7 @@ contains
         integer,          allocatable :: cls_inds(:), pinds(:), cls_pops(:)
         real,             allocatable :: avg(:), avg_pix(:), pcavecs(:,:), tmpvec(:)
         real             :: std
-        integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2, n1, n2
+        integer          :: npix, i, j, ncls, nptcls, cnt1, cnt2
         logical          :: l_phflip, l_transp_pca, l_pre_norm ! pixel-wise learning
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')

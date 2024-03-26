@@ -14,8 +14,9 @@ use simple_convergence,         only: convergence
 use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch, killimgbatch
 use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
 use simple_strategy2D_srch,     only: strategy2D_spec
-use simple_strategy2D_alloc!,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
+use simple_strategy2D_alloc
 use simple_strategy2D_greedy,   only: strategy2D_greedy
+use simple_strategy2D_greedy_smpl, only: strategy2D_greedy_smpl
 use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_snhc_smpl,only: strategy2D_snhc_smpl
@@ -51,15 +52,16 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        integer,                   allocatable :: pinds(:), batches(:,:)
+        integer,                   allocatable :: pinds(:), pinds2restore(:), batches(:,:)
         real,                      allocatable :: states(:)
+        logical,                   allocatable :: ptcl_mask2restore(:)
         type(convergence) :: conv
         type(ori)         :: orientation
         real    :: frac_srch_space, neigh_frac
-        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update
+        integer :: iptcl, ithr, fnr, updatecnt, iptcl_map, nptcls2update, nptcls2restore
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_frac_update, have_frcs
-        logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl
+        logical :: l_snhc, l_greedy, l_np_cls_defined, l_snhc_smpl, l_greedy_smpl
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -72,12 +74,14 @@ contains
         l_partial_sums     = .false.
         l_snhc             = .false.
         l_greedy           = .false.
+        l_greedy_smpl      = .false.
         l_snhc_smpl        = .false.
         l_frac_update      = .false.
         l_stream           = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
             l_greedy = .true.
+            l_greedy_smpl = trim(params_glob%refine).eq.'yes'
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! no fractional update
             select case(trim(params_glob%refine))
@@ -87,18 +91,26 @@ contains
                 l_snhc_smpl = .true.
             case('greedy')
                 l_greedy    = .true.
+            case('greedy_smpl')
+                l_greedy_smpl = .true.
             end select
         else
             ! optional fractional update and shc optimization (=snhc with all classes)
-            l_partial_sums = params_glob%l_frac_update
             l_frac_update  = params_glob%l_frac_update
-            l_greedy       = trim(params_glob%refine).eq.'greedy'
-            l_snhc_smpl    = trim(params_glob%refine).eq.'snhc_smpl'
+            l_partial_sums = params_glob%l_frac_update
+            if( params_glob%l_stoch_update )then
+                params_glob%it_history = 3
+                l_partial_sums         = .true.
+            endif
+            l_greedy    = trim(params_glob%refine).eq.'greedy'
+            l_greedy_smpl = trim(params_glob%refine).eq.'yes'
+            l_snhc_smpl = trim(params_glob%refine).eq.'snhc_smpl'
         endif
         if( l_stream )then
-            l_frac_update             = .false.
-            l_partial_sums            = .false.
-            params_glob%l_frac_update = .false.
+            l_frac_update              = .false.
+            l_partial_sums             = .false.
+            params_glob%l_frac_update  = .false.
+            params_glob%l_stoch_update = .false.
             if( which_iter > 1 )then
                 if( params_glob%update_frac < 0.99 )then
                     l_partial_sums            = .true.
@@ -115,20 +127,37 @@ contains
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        if( l_frac_update )then
-            if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
-                call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
-                                         &nptcls2update, pinds, ptcl_mask)
-            else                                                 ! we generate a random subset
-                call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+        if( params_glob%l_stoch_update )then
+            call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
                 &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+        else
+            if( l_frac_update )then
+                if( build_glob%spproj_field%has_been_sampled() )then ! we have a random subset
+                    call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
+                                            &nptcls2update, pinds, ptcl_mask)
+                else                                                 ! we generate a random subset
+                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                    &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
+                endif
+            else                                                     ! we sample all state > 0
+                call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
+                                            &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
             endif
-        else                                                     ! we sample all state > 0
-            call build_glob%spproj_field%sample4update_all([params_glob%fromp,params_glob%top],&
-                                         &nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
         endif
         ! increment update counter
         call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
+        ! particles used for class averages restoration
+        if( allocated(pinds2restore) )     deallocate(pinds2restore)
+        if( allocated(ptcl_mask2restore) ) deallocate(ptcl_mask2restore)
+        if( params_glob%l_stoch_update .and. params_glob%it_history > 0)then
+            allocate(ptcl_mask2restore(params_glob%fromp:params_glob%top))
+            call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
+            params_glob%it_history, nptcls2restore, pinds2restore, ptcl_mask2restore)
+        else
+            ptcl_mask2restore = ptcl_mask
+            pinds2restore     = pinds
+            nptcls2restore    = nptcls2update
+        endif
 
         ! SNHC LOGICS
         neigh_frac = 0.
@@ -155,7 +184,7 @@ contains
         endif
 
         ! PREP REFERENCES
-        call cavger_new(ptcl_mask)
+        call cavger_new(ptcl_mask2restore)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
             call build_glob%spproj_field%partition_eo
@@ -251,20 +280,25 @@ contains
                     endif
                 else
                     ! offline mode, based on iteration
-                    if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
+                    if( l_greedy .or. l_greedy_smpl .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)&
+                        &.or. updatecnt==1) )then
                         if( trim(params_glob%tseries).eq.'yes' )then
                             if( l_np_cls_defined )then
-                                allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy2D_tseries     :: strategy2Dsrch(iptcl_batch)%ptr)
                             else
-                                allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                             endif
                         else
-                            allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                            if( l_greedy_smpl )then
+                                allocate(strategy2D_greedy_smpl :: strategy2Dsrch(iptcl_batch)%ptr)
+                            else
+                                allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
+                            endif
                         endif
                     else if( l_snhc_smpl )then
-                        allocate(strategy2D_snhc_smpl       :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc_smpl           :: strategy2Dsrch(iptcl_batch)%ptr)
                     else
-                        allocate(strategy2D_snhc            :: strategy2Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy2D_snhc                :: strategy2Dsrch(iptcl_batch)%ptr)
                     endif
                 endif
                 ! Search specification & object

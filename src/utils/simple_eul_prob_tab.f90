@@ -8,7 +8,7 @@ use simple_builder,    only: build_glob
 implicit none
 
 public :: eul_prob_tab
-public :: calc_num2sample, calc_athres, calc_numinpl2sample2D, eulprob_dist_switch, eulprob_corr_switch, shift_sampling
+public :: calc_num2sample, calc_athres, eulprob_dist_switch, eulprob_corr_switch, shift_sampling, angle_sampling
 private
 #include "simple_local_flags.inc"
 
@@ -350,29 +350,6 @@ contains
         athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
     end function calc_athres
-
-    subroutine calc_numinpl2sample2D( num_all, num_smpl )
-
-        !!!!!!!!!!!!!! NEEDS TO CHANGE, SEE ABOVE
-
-        use simple_builder, only: build_glob
-        integer, intent(in)  :: num_all
-        integer, intent(out) :: num_smpl
-        real,    allocatable :: vals(:)
-        logical, allocatable :: ptcl_mask(:)
-        real    :: athres, dist_thres
-        integer :: n
-        ptcl_mask  = nint(build_glob%spproj_field%get_all('state')) == 1
-        ptcl_mask  = ptcl_mask .and. (nint(build_glob%spproj_field%get_all('mi_class')) == 1)
-        n          = count(ptcl_mask)
-        athres     = params_glob%prob_athres
-        if( n > 0 )then
-            vals       = build_glob%spproj_field%get_all(trim('dist_inpl'))
-            dist_thres = sum(vals, mask=ptcl_mask) / real(n)
-            if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        endif
-        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
-    end subroutine calc_numinpl2sample2D
 
     ! switch corr in [0,1] to [0, infinity) to do greedy_sampling
     elemental function eulprob_dist_switch( corr ) result(dist)

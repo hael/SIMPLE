@@ -30,7 +30,7 @@ contains
     end subroutine new_snhc_smpl
 
     subroutine srch_snhc_smpl( self )
-        use simple_eul_prob_tab, only: eulprob_dist_switch
+        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_snhc_smpl), intent(inout) :: self
         integer :: inds(self%s%nrots), iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound, nrefs
         real    :: inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots), inpl_corr, cc_glob
@@ -53,8 +53,7 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! multinomal in-plane update
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                inpl_ind  = greedy_sampling(eulprob_dist_switch(inpl_corrs),&
-                            &sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                inpl_ind  = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
                 inpl_corr = inpl_corrs(inpl_ind)
                 ! keep track of global best
                 if( inpl_corr > cc_glob )then
@@ -82,8 +81,7 @@ contains
                     call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, inpl_corrs, kweight=.true.)
                     self%s%prev_corr = inpl_corrs(self%s%prev_rot) ! updated threshold
                     call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, inpl_corrs, kweight=.true.)
-                    inpl_ind  = greedy_sampling(eulprob_dist_switch(inpl_corrs),&
-                                & sorted_inpl_corrs, inds, s2D%smpl_inpl_ns)
+                    inpl_ind  = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
                     inpl_corr = inpl_corrs(inpl_ind)
                     if( inpl_corr > self%s%prev_corr )then
                         ! improvement found
