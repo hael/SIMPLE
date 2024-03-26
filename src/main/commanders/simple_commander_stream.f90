@@ -1398,14 +1398,6 @@ contains
                     call update_user_params(cline)
                     nmic_star = n_imported
                 endif
-                ! init cluster2D, only need to be done once
-                if( size(micproj_records(:)) > 0 )then
-                    call tmp_spproj%read_segment('stk',micproj_records(1)%projname)
-                    params%box = nint(tmp_spproj%os_stk%get(micproj_records(1)%micind,'box'))
-                    call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
-                    call cline%delete('ncls')
-                    call tmp_spproj%kill
-                endif
             else
                 if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                     call update_user_params_dev(cline)
@@ -1481,6 +1473,15 @@ contains
                     call spprojs(iproj)%read_segment('mic', trim(projectnames(iproj)))
                     nmics = nmics + spprojs(iproj)%os_mic%get_noris()
                 enddo
+                ! Updates global parameters once and init 2D
+                if( n_old == 0 )then
+                    params%smpd      = spprojs(1)%os_mic%get(1,'smpd')
+                    params_glob%smpd = params%smpd
+                    call spprojs(1)%read_segment('stk', trim(projectnames(1)))
+                    params%box = nint(spprojs(1)%os_stk%get(1,'box'))
+                    call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
+                    call cline%delete('ncls')
+                endif
                 ! import micrographs
                 n_completed = n_old + nmics
                 n_imported  = nmics
