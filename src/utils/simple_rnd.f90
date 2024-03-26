@@ -184,7 +184,7 @@ contains
         sum_pvec = sum(pvec_sorted(1:thres))
         if( sum_pvec < TINY )then
             ! uniform sampling
-            which = 1 + floor(real(thres) * rnd)
+            which = sorted_inds(1 + floor(real(thres) * rnd))
         else
             pvec_sorted = pvec_sorted/sum_pvec
             ! doing probabilistic greedy assignment
