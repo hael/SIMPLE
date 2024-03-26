@@ -7,11 +7,11 @@ private
 
 contains
 
-    function inv_nsampl_decay( i, maxits, nptcls ) result( nsampl )
-        integer, intent(in) :: i, maxits, nptcls
+    function inv_nsampl_decay( it, maxits, nptcls ) result( nsampl )
+        integer, intent(in) :: it, maxits, nptcls
         integer :: nsampl, nsampl_fromto(2)
         nsampl_fromto = calc_nsampl_fromto(nptcls)
-        nsampl = nint(inv_cos_decay(i, maxits, real(nsampl_fromto)))
+        nsampl = nint(inv_cos_decay(min(it,maxits), maxits, real(nsampl_fromto)))
     end function inv_nsampl_decay
 
     function cos_decay( i, maxits, eps_fromto ) result( eps )
