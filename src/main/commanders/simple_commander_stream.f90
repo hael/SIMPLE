@@ -2,13 +2,13 @@
 module simple_commander_stream
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_cmdline,        only: cmdline
-use simple_parameters,     only: parameters, params_glob
-use simple_commander_base, only: commander_base
-use simple_sp_project,     only: sp_project
-use simple_qsys_env,       only: qsys_env
-use simple_starproject,    only: starproject
-use simple_guistats,       only: guistats
+use simple_cmdline,            only: cmdline
+use simple_parameters,         only: parameters, params_glob
+use simple_commander_base,     only: commander_base
+use simple_sp_project,         only: sp_project
+use simple_qsys_env,           only: qsys_env
+use simple_starproject_stream, only: starproject_stream
+use simple_guistats,           only: guistats
 use simple_qsys_funs
 use simple_commander_preprocess
 use simple_progress
@@ -16,6 +16,7 @@ implicit none
 
 public :: commander_stream_preprocess
 public :: commander_stream_pick_extract
+public :: commander_stream_assign_optics
 public :: commander_multipick_cluster2D
 public :: commander_stream_cluster2D
 
@@ -31,6 +32,11 @@ type, extends(commander_base) :: commander_stream_pick_extract
   contains
     procedure :: execute => exec_stream_pick_extract
 end type commander_stream_pick_extract
+
+type, extends(commander_base) :: commander_stream_assign_optics
+  contains
+    procedure :: execute => exec_stream_assign_optics
+end type commander_stream_assign_optics
 
 type, extends(commander_base) :: commander_multipick_cluster2D
   contains
@@ -65,7 +71,7 @@ contains
         type(qsys_env)                         :: qenv
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj_glob    ! global project
-        type(starproject)                      :: starproj
+        type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
         integer                                :: movies_set_counter
@@ -256,8 +262,6 @@ contains
                     endif
                 endif
             endif
-            ! read beamtilts
-            if( cline%defined('dir_meta')) call read_xml_beamtilts(spproj_glob)
             ! guistats
             call gui_stats%write_json
         end do
@@ -290,21 +294,14 @@ contains
             !>  write starfile snapshot
             subroutine write_migrographs_starfile
                 integer(timer_int_kind)      :: ms0
-                real(timer_int_kind)         :: ms_assign, ms_export
+                real(timer_int_kind)         :: ms_export
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj%assign_optics(cline, spproj_glob)
-                    if( DEBUG_HERE )then
-                        ms_assign = toc(ms0)
-                        print *,'ms_assign  : ', ms_assign; call flush(6)
-                    endif
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call starproj%export_mics(cline, spproj_glob)
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
                     endif
-                    if(allocated(starproj%tiltinfo)) deallocate(starproj%tiltinfo)
                 end if
             end subroutine write_migrographs_starfile
 
@@ -390,7 +387,7 @@ contains
                 character(len=*), intent(in) :: movie_names(NMOVS_SET)
                 type(sp_project)             :: spproj_here
                 type(ctfparams)              :: ctfvars
-                character(len=LONGSTRLEN)    :: projname, projfile,xmlfile,xmldir
+                character(len=LONGSTRLEN)    :: projname, projfile, xmlfile, xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
                 integer :: imovie
                 cwd_old = trim(cwd_glob)
@@ -414,18 +411,20 @@ contains
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_movies(movie_names(1:NMOVS_SET), ctfvars, verbose = .false.)
-                if(cline%defined('dir_meta')) then
-                    xmldir = cline%get_carg('dir_meta')
-                    do imovie = 1,NMOVS_SET
+                do imovie = 1,NMOVS_SET
+                    call spproj_here%os_mic%set(imovie, "tiltgrp", 0.0)
+                    call spproj_here%os_mic%set(imovie, "shiftx",  0.0)
+                    call spproj_here%os_mic%set(imovie, "shifty",  0.0)
+                    call spproj_here%os_mic%set(imovie, "flsht",   0.0)
+                    if(cline%defined('dir_meta')) then
+                        xmldir = cline%get_carg('dir_meta')
                         xmlfile = basename(trim(movie_names(imovie)))
                         if(index(xmlfile, '_fractions') > 0) xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
                         if(index(xmlfile, '_EER') > 0)       xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
                         xmlfile = trim(adjustl(xmldir))//'/'//trim(adjustl(xmlfile))//'.xml'
                         call spproj_here%os_mic%set(imovie, "meta", trim(adjustl(xmlfile)))
-                        call spproj_here%os_mic%set(imovie, "tiltx", 0.0)
-                        call spproj_here%os_mic%set(imovie, "tilty", 0.0)
-                    enddo
-                end if
+                    end if
+                enddo
                 call spproj_here%write
                 call chdir(cwd_old)
                 cwd_glob = trim(cwd_old)
@@ -518,7 +517,7 @@ contains
         type(cmdline)                          :: cline_make_pickrefs, cline_pick_extract
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob, stream_spproj
-        type(starproject)                      :: starproj
+        type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job
@@ -530,10 +529,12 @@ contains
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
+
         call cline%set('oritype',   'mic')
         call cline%set('mkdir',     'yes')
-        if( .not.cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
-        if( .not. cline%defined('walltime')  ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('outdir')     ) call cline%set('outdir',            '')
+        if( .not. cline%defined('walltime')   ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! micrograph selection
         if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
@@ -774,8 +775,6 @@ contains
                     endif
                 endif
             endif
-            ! read beamtilts
-            if( cline%defined('dir_meta')) call read_xml_beamtilts(spproj_glob) ! to update??
             ! multi-picking
             if( l_multipick )then
                 if( nptcls_glob > nptcls_limit_for_references )then
@@ -806,21 +805,14 @@ contains
             !>  write starfile snapshot
             subroutine write_migrographs_starfile
                 integer(timer_int_kind)      :: ms0
-                real(timer_int_kind)         :: ms_assign, ms_export
+                real(timer_int_kind)         :: ms_export
                 if (spproj_glob%os_mic%get_noris() > 0) then
                     if( DEBUG_HERE ) ms0 = tic()
-                    call starproj%assign_optics(cline, spproj_glob)
-                    if( DEBUG_HERE )then
-                        ms_assign = toc(ms0)
-                        print *,'ms_assign  : ', ms_assign; call flush(6)
-                    endif
-                    if( DEBUG_HERE ) ms0 = tic()
-                    call starproj%export_mics(cline, spproj_glob)
+                    call starproj_stream%stream_export_micrographs(spproj_glob, params%outdir)
                     if( DEBUG_HERE )then
                         ms_export = toc(ms0)
                         print *,'ms_export  : ', ms_export; call flush(6)
                     endif
-                    if(allocated(starproj%tiltinfo)) deallocate(starproj%tiltinfo)
                 end if
             end subroutine write_migrographs_starfile
 
@@ -1148,6 +1140,87 @@ contains
             end subroutine update_path
 
     end subroutine exec_stream_pick_extract
+
+    subroutine exec_stream_assign_optics( self, cline )
+        use simple_moviewatcher, only: moviewatcher
+        use simple_timer
+        class(commander_stream_assign_optics), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters)                       :: params
+        type(guistats)                         :: gui_stats
+        type(moviewatcher)                     :: project_buff
+        type(sp_project)                       :: spproj, spproj_part
+        type(starproject_stream)               :: starproj_stream
+        character(len=LONGSTRLEN), allocatable :: projects(:)
+        integer                                :: nprojects, iproj, iori, new_oris, nimported
+        integer(timer_int_kind) :: t0
+        real(timer_int_kind)    :: rt_write
+        call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
+        ! write cmdline for GUI
+        call cline%writeline(".cline")
+        ! sanity check for restart
+        if( cline%defined('dir_exec') )then
+            if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))
+            endif
+        endif
+        ! master parameters
+        call params%new(cline)
+        ! master project file
+        call spproj%read( params%projfile )
+        call spproj%update_projinfo(cline)
+        if( spproj%os_mic%get_noris() /= 0 ) call spproj%os_mic%new(0, .false.)
+        ! movie watcher init
+        project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        ! initialise progress monitor
+        call progressfile_init()
+        ! guistats init
+        call gui_stats%init
+        ! Infinite loop
+        nimported = 0
+        do
+            if( file_exists(trim(TERM_STREAM)) )then
+                ! termination
+                write(logfhandle,'(A)')'>>> TERMINATING STREAM ASSIGN OPTICS'
+                exit
+            endif
+            ! detection of new projects
+            call project_buff%watch( nprojects, projects, max_nmovies=50 )
+            ! append projects to processing stack
+            if( nprojects > 0 )then
+                nimported = spproj%os_mic%get_noris()
+                if(nimported > 0) then
+                    new_oris  =  nimported + nprojects * NMOVS_SET
+                    call spproj%os_mic%reallocate(new_oris)
+                else
+                    new_oris = nprojects * NMOVS_SET
+                    call spproj%os_mic%new(new_oris, .false.)
+                end if
+                do iproj = 1, nprojects
+                    call project_buff%add2history(projects(iproj))
+                    call spproj_part%read(trim(projects(iproj)))
+                    do iori = 1, NMOVS_SET
+                        nimported = nimported + 1
+                        call spproj%os_mic%copy_single(spproj_part%os_mic, nimported, iori)
+                    end do
+                    call spproj_part%kill()
+                enddo
+                write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
+                call starproj_stream%stream_export_optics(spproj, params%outdir)
+            else
+                call sleep(WAITTIME) ! may want to increase as 3s default
+            endif
+        end do
+        if(allocated(projects)) deallocate(projects)
+        call gui_stats%write_json
+        call gui_stats%kill
+        ! cleanup
+        call spproj%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_STREAM_ASSIGN_OPTICS NORMAL STOP ****')
+    end subroutine exec_stream_assign_optics
 
     subroutine exec_multipick_cluster2D( self, cline )
         use simple_commander_preprocess, only: pick_commander_distr
@@ -1560,27 +1633,6 @@ contains
     end subroutine exec_stream_cluster2D
 
     ! PRIVATE UTILITIES
-
-    subroutine read_xml_beamtilts( spproj )
-        use FoX_dom
-        type(sp_project), intent(inout) :: spproj
-        type(Node), pointer :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
-        integer :: i
-        do i = 1, spproj%os_mic%get_noris()
-            if ( is_equal(spproj%os_mic%get(i, "tiltx"), 0.) .and. is_equal(spproj%os_mic%get(i, "tilty"), 0.0)) then
-                if(file_exists(spproj%os_mic%get_static(i, "meta"))) then
-                    write(logfhandle, *) "stream reading " // trim(adjustl(spproj%os_mic%get_static(i,"meta")))
-                    xmldoc => parseFile(trim(adjustl(spproj%os_mic%get_static(i,"meta"))))
-                    beamtiltnode  => item(getElementsByTagname(xmldoc, "BeamShift"),0)
-                    beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                    beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                    call spproj%os_mic%set(i, "tiltx", str2real(getTextContent(beamtiltnodex)))
-                    call spproj%os_mic%set(i, "tilty", str2real(getTextContent(beamtiltnodey)))
-                    call destroy(xmldoc)
-                endif
-            endif
-        end do
-    end subroutine read_xml_beamtilts
 
     !> updates current parameters with user input
     subroutine update_user_params( cline_here )

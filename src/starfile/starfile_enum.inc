@@ -378,9 +378,21 @@
         enumerator :: EMDL_ORIENT_ORIGIN_Z_ANGSTROM                    = 356
         enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 357
         enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 358
+        enumerator :: EMDL_CTF_PSPEC                                   = 359
+        enumerator :: EMDL_MICROGRAPH_COORDINATES                      = 360
 
-        enumerator :: SMPL_MOVIE_FRAME_WEIGHT                          = 359
-        enumerator :: SMPL_MOVIE_FRAME_ALIGN                           = 360
+        enumerator :: SMPL_MOVIE_FRAME_WEIGHT                          = 361
+        enumerator :: SMPL_MOVIE_FRAME_ALIGN                           = 362
+        enumerator :: SMPL_OPTICS_POPULATION                           = 363
+        enumerator :: SMPL_ICE_FRAC                                    = 364
+        enumerator :: SMPL_N_MICS                                      = 365
+        enumerator :: SMPL_N_PTCLS                                     = 366
+        enumerator :: SMPL_MIC_ID                                      = 367
+        enumerator :: SMPL_ASTIGMATISM                                 = 368
+        enumerator :: SMPL_OPTICS_CENTROIDX                            = 369
+        enumerator :: SMPL_OPTICS_CENTROIDY                            = 370
+        enumerator :: SMPL_OPTICS_SHIFTX                               = 371
+        enumerator :: SMPL_OPTICS_SHIFTY                               = 372
 
-        enumerator :: EMDL_LAST_LABEL                                  = 361 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 373 ! **** NOTE ****: Do keep this label always at the end
     end enum
