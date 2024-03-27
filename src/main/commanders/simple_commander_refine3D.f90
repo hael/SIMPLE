@@ -93,6 +93,7 @@ contains
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
         type(cmdline)    :: cline_prob_align
+        type(cmdline)    :: cline_tmp
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -107,14 +108,14 @@ contains
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:)
         real,                      allocatable :: res(:), fsc(:)
-        character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ, orig_objfun
+        character(len=LONGSTRLEN) :: vol, vol_iter, str, str_iter, fsc_templ
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
-        logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates
-        logical :: l_combine_eo, l_lpset, l_griddingset ! l_ptclw,
+        logical :: err, vol_defined, have_oris, converged, fall_over
+        logical :: l_projmatch, l_switch2eo, l_continue, l_multistates
+        logical :: l_combine_eo, l_lpset, l_griddingset
         real    :: corr, corr_prev, smpd
-        integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
+        integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo
         integer :: fnr
         if( .not. cline%defined('nparts') )then
             call xrefine3D_shmem%execute(cline)
@@ -128,19 +129,6 @@ contains
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('lp_iters')) call cline%set('lp_iters',      1.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! objfun=euclid logics, part 1
-        l_switch2euclid = .false.
-        if( cline%defined('objfun') )then
-            l_continue  = .false.
-            orig_objfun = trim(cline%get_carg('objfun'))
-            if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
-            if( trim(cline%get_carg('objfun')).eq.'euclid' .and. .not.l_continue )then
-                l_switch2euclid = .true.
-                call cline%set('objfun','cc')
-                ! l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
-                ! call cline%set('ptclw', 'no')
-            endif
-        endif
         ! init
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%update_projinfo(cline)
@@ -187,7 +175,6 @@ contains
         call cline_prob_align%set(          'prg', 'prob_align' )        ! required for distributed call
         call cline_postprocess%set(         'prg', 'postprocess' )       ! required for local call
         call cline_calc_sigma%set(          'prg', 'calc_group_sigmas' ) ! required for local call
-        if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
         call cline_postprocess%set('imgkind', 'vol')
@@ -203,7 +190,7 @@ contains
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        if( l_switch2euclid ) call cline_volassemble%set('needs_sigma','yes')
+        if( trim(params%objfun).eq.'euclid' ) call cline_volassemble%set('needs_sigma','yes')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -216,13 +203,6 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
             endif
         endif
-        ! GENERATE INITIAL NOISE POWER ESTIMATES
-        if( l_switch2euclid .and. params%continue.ne.'yes' )then
-            call build%spproj_field%set_all2single('w', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
-            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-        endif
-        ! GENERATE STARTING MODELS & ORIENTATIONS
         if( params%continue .eq. 'yes' )then
             ! we are continuing from a previous refinement round,
             ! i.e. projfile is fetched from a X_refine3D dir
@@ -246,7 +226,7 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//trim(fsc_file))
                 end do
-                if( params%l_frac_update )then
+                if( params%l_mov_avg_vol )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
@@ -271,12 +251,8 @@ contains
                     fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
                 end do
-                ! one FRC file for all states
-                if( file_exists(trim(prev_refine_path)//trim(FRCS_FILE)) )then
-                    call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
-                endif
-                ! if we are doing fractional volume update, partial reconstructions need to be carried over
-                if( params%l_frac_update )then
+                ! if we are doing moving average volume update, partial reconstructions need to be carried over
+                if( params%l_mov_avg_vol )then
                     call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
@@ -303,47 +279,57 @@ contains
                     deallocate(list)
                 endif
             endif
-        endif
-        vol_defined = .false.
-        do state = 1,params%nstates
-            vol = 'vol' // int2str(state)
-            if( cline%defined(trim(vol)) )then
-                vol_defined = .true.
-                call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
-                if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
-                    THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
-                endif
-            endif
-        enddo
-        have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
-        do_abinitio = .not. have_oris .and. .not. vol_defined
-        if( params%l_prob_init ) do_abinitio = .true. ! overrides automatic decision
-        if( do_abinitio )then
-            call build%spproj_field%rnd_oris
-            have_oris = .true.
+        else
+            ! generate initial noise power estimates
+            call build%spproj_field%set_all2single('w', 1.0)
             call build%spproj%write_segment_inside(params%oritype)
-        endif
-        l_projmatch = .false.
-        if( have_oris .and. .not. vol_defined )then
-            ! reconstructions needed
-            call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
+            call xcalc_pspec_distr%execute(cline_calc_pspec_distr)
+            ! check if we have input volume(s) and/or 3D orientations
+            vol_defined = .false.
             do state = 1,params%nstates
-                ! rename volumes and update cline
-                str_state = int2str_pad(state,2)
-                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
-                str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
-                call      simple_rename( trim(vol), trim(str) )
-                params%vols(state) = trim(str)
-                vol       = 'vol'//trim(int2str(state))
-                call      cline%set( trim(vol), trim(str) )
-                vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
-                call      simple_rename( trim(vol_even), trim(str) )
-                vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
-                call      simple_rename( trim(vol_odd), trim(str) )
+                vol = 'vol' // int2str(state)
+                if( cline%defined(trim(vol)) )then
+                    vol_defined = .true.
+                    call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
+                    if( (ldim(1) /= params%box_crop) .and.  (ldim(1) /= params%box) )then
+                        THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
+                    endif
+                endif
             enddo
-            if( l_switch2euclid )then
+            have_oris = .not. build%spproj%is_virgin_field(params%oritype)
+            if( .not. have_oris )then
+                call build%spproj_field%rnd_oris
+                have_oris = .true.
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
+            if( .not. vol_defined )then
+                ! reconstructions needed
+                cline_tmp = cline_reconstruct3D_distr
+                call cline_tmp%delete('objfun')
+                call cline_tmp%delete('needs_sigma')
+                call cline_tmp%delete('sigma_est')
+                call cline_tmp%set('objfun', 'cc') ! ugly, but this is how it works in parameters 
+                call xreconstruct3D_distr%execute( cline_tmp )
+                do state = 1,params%nstates
+                    ! rename volumes and update cline
+                    str_state = int2str_pad(state,2)
+                    vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                    str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
+                    call      simple_rename( trim(vol), trim(str) )
+                    params%vols(state) = trim(str)
+                    vol       = 'vol'//trim(int2str(state))
+                    call      cline%set( trim(vol), trim(str) )
+                    vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
+                    call      simple_rename( trim(vol_even), trim(str) )
+                    vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                    str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
+                    call      simple_rename( trim(vol_odd), trim(str) )
+                enddo
+                vol_defined = .true.
+            endif
+            ! at this stage, we have both volume and 3D orientations (either random or previously estimated)
+            if( trim(params%objfun).eq.'euclid' )then
                 ! first, estimate group sigmas
                 call cline_calc_sigma%set('which_iter', params%startit)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
@@ -355,37 +341,14 @@ contains
                 call cline%set('needs_sigma','yes')
                 call cline_volassemble%set('needs_sigma','yes')
                 call cline_reconstruct3D_distr%set('needs_sigma','yes')
-                call cline%set('objfun', orig_objfun)
-                params%objfun   = trim(orig_objfun)
-                l_switch2euclid = .false.
-            endif
-        else if( vol_defined .and. params%continue .ne. 'yes' )then
-            ! projection matching
-            l_projmatch = .true.
-            if( .not.l_lpset )then
-                THROW_HARD('LP needs be defined for the first step of projection matching!')
-                call cline%delete('update_frac')
-            endif
-            if( (.not.str_has_substr(params%refine, 'neigh')) )then
-                ! this forces the first round of alignment on the starting model(s)
-                ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
-                call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
-                call build%spproj%write_segment_inside(params%oritype)
             endif
         endif
+
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then
             params%extr_iter = params%extr_iter - 1
         else
             params%extr_iter = params%startit - 1
-        endif
-        ! objfun=euclid logics, part 2
-        iter_switch2euclid = -1
-        if( l_switch2euclid )then
-            iter_switch2euclid = 1
-            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
-            if( l_projmatch .and. l_switch2eo ) iter_switch2euclid = params%lp_iters
-            call cline%set('needs_sigma','yes')
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
@@ -405,7 +368,7 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
-            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
+            if( trim(params%objfun).eq.'euclid' )then
                 call cline_calc_sigma%set('which_iter', iter)
                 call qenv%exec_simple_prg_in_queue(cline_calc_sigma, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -426,7 +389,7 @@ contains
                 ! generate all corrs
                 call cline_prob_align%set('which_iter', params%which_iter)
                 call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
-                call cline_prob_align%set('objfun',     orig_objfun)
+                ! call cline_prob_align%set('objfun',     orig_objfun)
                 call cline_prob_align%set('startit',    iter)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
@@ -609,67 +572,11 @@ contains
                 ! e/o projection matching
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
-                l_projmatch = .false.
                 call cline%delete('lp')
                 call job_descr%delete('lp')
                 call cline_postprocess%delete('lp')
                 call cline%delete('lp_iters')
                 call job_descr%delete('lp_iters')
-            endif
-            if( l_projmatch )then
-                if( params%l_frac_update )then
-                    call job_descr%set('update_frac', real2str(params%update_frac))
-                    call cline%set('update_frac', params%update_frac)
-                    call cline_check_3Dconv%set('update_frac', params%update_frac)
-                    call cline_volassemble%set('update_frac', params%update_frac)
-                endif
-            endif
-            ! objfun=euclid, part 3: actual switch
-            if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
-                write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A,A)')'>>> SWITCHING TO OBJFUN=',trim(orig_objfun)
-                call cline%set('objfun', orig_objfun)
-                if(.not.l_griddingset )then
-                    call cline%set('gridding',     'yes')
-                    call job_descr%set('gridding', 'yes')
-                endif
-                call job_descr%set('objfun', orig_objfun)
-                call cline_volassemble%set('objfun', orig_objfun)
-                if( l_switch2eo )then
-                    ! delete resolution limit
-                    call cline%delete('lp')
-                    call job_descr%delete('lp')
-                    call cline_postprocess%delete('lp')
-                endif
-                ! if( l_ptclw )then
-                !     call cline%set('ptclw',    'yes')
-                !     call job_descr%set('ptclw','yes')
-                ! endif
-                params%objfun = trim(orig_objfun)
-                if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
-                l_switch2euclid = .false.
-            endif
-            ! write per iteration star file
-            call starproj%export_iter3D(build%spproj, params%nstates,  params%which_iter)
-            if( L_BENCH_GLOB )then
-                rt_tot  = toc(t_init)
-                benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
-                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
-                write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', rt_scheduled
-                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', rt_merge_algndocs
-                write(fnr,'(a,1x,f9.2)') 'volassemble     : ', rt_volassemble
-                write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
-                write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot)           * 100.
-                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', (rt_scheduled/rt_tot)      * 100.
-                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', (rt_merge_algndocs/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'volassemble     : ', (rt_volassemble/rt_tot)    * 100.
-                write(fnr,'(a,1x,f9.2)') '% accounted for : ',&
-                    &((rt_init+rt_scheduled+rt_merge_algndocs+rt_volassemble)/rt_tot) * 100.
-                call fclose(fnr)
             endif
         end do
         call qsys_cleanup
@@ -714,7 +621,7 @@ contains
             orig_objfun     = trim(params%objfun)
             l_sigma         = .false.
             l_switch2euclid = .false.
-            if( orig_objfun == 'euclid' )then
+            if( trim(params%objfun) == 'euclid' )then
                 l_sigma = .true.
                 call cline%set('needs_sigma','yes')
                 params%l_needs_sigma = .true.

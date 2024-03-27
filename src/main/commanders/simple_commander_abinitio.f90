@@ -713,7 +713,6 @@ contains
         if( .not. cline%defined('ptclw')      ) call cline%set('ptclw',         'no')
         if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('prob_init')  ) call cline%set('prob_init',     'no')
         if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',       'no')
         if( .not. cline%defined('prob_athres')) call cline%set('prob_athres',    10.)
         if( .not. cline%defined('sh_smpl')    ) call cline%set('sh_smpl',       'no')
@@ -907,7 +906,6 @@ contains
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A)')'>>> SECOND STAGE'
             it = 2
-            call cline_refine3D%set('prob_init', 'no')
             call cline_refine3D%set('trs',         trslim)
             call cline_refine3D%set('maxits',      MAXITS2)
             call cline_refine3D%set('lp_iters',    MAXITS2)
@@ -963,7 +961,6 @@ contains
                 endif
                 if( it > 1 )then
                     call cline_refine3D%set('center', params%center)
-                    call cline_refine3D%set('prob_init', 'no')
                     if( prev_box_crop == params%box_crop )then
                         call cline_refine3D%set('continue',  'yes')
                     else
@@ -1081,7 +1078,6 @@ contains
             endif
         endif
         ! Final step
-        call cline_refine3D%set('prob_init', 'no')
         call cline_refine3D%set('box_crop',   params%box_crop)
         call cline_refine3D%set('lp',         params%lpstop)
         call cline_refine3D%set('trs',        trslim)
