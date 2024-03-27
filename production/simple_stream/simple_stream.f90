@@ -13,6 +13,7 @@ implicit none
 type(commander_stream_preprocess)           :: xpreprocess
 type(commander_multipick_cluster2D)         :: xmultipick_cluster2D
 type(commander_stream_pick_extract)         :: xpick_extract
+type(commander_stream_assign_optics)        :: xassign_optics
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)                       :: xarg, prg, entire_line
@@ -47,7 +48,8 @@ select case(trim(prg))
         call xmultipick_cluster2D%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
-
+    case( 'assign_optics' )
+        call xassign_optics%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

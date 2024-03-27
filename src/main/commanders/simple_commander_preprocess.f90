@@ -229,6 +229,7 @@ contains
     end subroutine exec_preprocess_distr
 
     subroutine exec_preprocess( self, cline )
+        use FoX_dom
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
@@ -244,9 +245,10 @@ contains
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
+        type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
         character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
-        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
+        character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, micname_intg
         character(len=LONGSTRLEN)     :: boxfile
         real    :: smpd_pick
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
@@ -381,6 +383,25 @@ contains
                     if( l_skip_pick ) call o_mov%set('nptcls',0.)
                 endif
             endif
+            ! read xml
+            if(o_mov%isthere('meta') .and. file_exists(trim(o_mov%get_static('meta')))) then
+                xmldoc => parseFile(trim(o_mov%get_static("meta")))
+                beamshiftnode  => item(getElementsByTagname(xmldoc, "BeamShift"),   0)
+                beamshiftnodex => item(getElementsByTagname(beamshiftnode, "a:_x"), 0)
+                beamshiftnodey => item(getElementsByTagname(beamshiftnode, "a:_y"), 0)
+                call o_mov%set("shiftx", str2real(getTextContent(beamshiftnodex)))
+                call o_mov%set("shifty", str2real(getTextContent(beamshiftnodey)))
+                call destroy(xmldoc)
+            end if
+            ! assign beamtilt if EPU
+            if(o_mov%isthere('intg')) then
+                call o_mov%getter('intg', micname_intg)
+                micname_intg = trim(basename(micname_intg))
+                if(micname_intg(:8) == 'FoilHole') then
+                    ! EPU filename
+                    call o_mov%set("tiltgrp", str2real(micname_intg(24:31)))
+                end if
+            end if
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! pick

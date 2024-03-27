@@ -57,6 +57,7 @@ type star_file
     integer, allocatable      :: stkmap(:,:) ! (stkid : z)
     integer, allocatable      :: stkstates(:)
     integer                   :: stkptclcount
+    integer                   :: fd
     logical                   :: initialised = .false.
 end type star_file
 

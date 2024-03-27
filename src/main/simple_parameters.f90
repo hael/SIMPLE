@@ -130,6 +130,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
+    character(len=LONGSTRLEN) :: outdir=''            !< manually set output directory name
     character(len=LONGSTRLEN) :: outfile=''           !< output document
     character(len=LONGSTRLEN) :: outstk=''            !< output image stack
     character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
@@ -561,6 +562,7 @@ contains
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
         call check_carg('oritype',        self%oritype)
+        call check_carg('outdir',         self%outdir)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
         call check_carg('pcontrast',      self%pcontrast)
@@ -923,14 +925,19 @@ contains
                 if( trim(self%prg) .eq. 'mkdir' )then
                     self%exec_dir = int2str(idir)//'_'//trim(self%dir)
                 else if( cline%defined('dir_exec') )then
-                    if( trim(self%executable).eq.'simple_stream' )then
+                    if( trim(basename(self%executable)).eq.'simple_stream' )then
                         ! to allow for specific restart strategy
                         self%exec_dir = trim(self%dir_exec)
                     else
                         self%exec_dir = int2str(idir)//'_'//trim(self%dir_exec)
                     endif
                 else
-                    self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+                    if(self%outdir .eq. '') then
+                        self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+                    else
+                        ! To allow manual selection of output directory name
+                        self%exec_dir = trim(adjustl(self%outdir))
+                    end if
                 endif
                 ! make execution directory
                 call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")

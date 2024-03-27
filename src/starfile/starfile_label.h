@@ -433,9 +433,21 @@ enum EMDLabel
     EMDL_ORIENT_ORIGIN_Z_ANGSTROM,
     EMDL_MICROGRAPH_PIXEL_SIZE,
     EMDL_POSTPROCESS_FSC_PART_FRACMASK,
+    EMDL_CTF_PSPEC,
+    EMDL_MICROGRAPH_COORDINATES,
 
     SMPL_MOVIE_FRAME_WEIGHT,
     SMPL_MOVIE_FRAME_ALIGN,
+    SMPL_OPTICS_POPULATION,
+    SMPL_ICE_FRAC,
+    SMPL_N_MICS,
+    SMPL_N_PTCLS,
+    SMPL_MIC_ID,
+    SMPL_ASTIGMATISM,
+    SMPL_OPTICS_CENTROIDX,
+    SMPL_OPTICS_CENTROIDY,
+    SMPL_OPTICS_SHIFTX,
+    SMPL_OPTICS_SHIFTY,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -888,10 +900,23 @@ private:
 		EMDL::addLabel(EMDL_ORIENT_ORIGIN_Z_ANGSTROM, EMDL_DOUBLE, "rlnOriginZAngst", "Z-coordinate (in Angstrom) for the origin of rotation");
 		EMDL::addLabel(EMDL_MICROGRAPH_PIXEL_SIZE, EMDL_DOUBLE, "rlnMicrographPixelSize", "Pixel size of (averaged) micrographs after binning in Angstrom/pixel.");
 		EMDL::addLabel(EMDL_POSTPROCESS_FSC_PART_FRACMASK, EMDL_DOUBLE, "rlnFourierShellCorrelationParticleMaskFraction", "CisTEM-like correction of unmasked FSCs, based on fraction of white pixels in solvent mask");
+        EMDL::addLabel(EMDL_CTF_PSPEC, EMDL_STRING, "rlnCtfPowerSpectrum", "Power spectrum with CTF fit");
+        EMDL::addLabel(EMDL_MICROGRAPH_COORDINATES, EMDL_STRING, "rlnMicrographCoordinates", "Boxfile containing particle coordinates");
 
         // Custom SIMPLE entries
 		EMDL::addLabel(SMPL_MOVIE_FRAME_WEIGHT, EMDL_DOUBLE, "splMovieFrameWeight", "Movie frame weight");
 		EMDL::addLabel(SMPL_MOVIE_FRAME_ALIGN,  EMDL_INT,    "splMovieFrameAlign",  "Movie frame alignment");
+        EMDL::addLabel(SMPL_OPTICS_POPULATION,  EMDL_INT,    "splPopulation",       "Number of exposures in an optics group");
+        EMDL::addLabel(SMPL_ICE_FRAC,           EMDL_DOUBLE, "splIceFrac",          "Ice fraction");
+        EMDL::addLabel(SMPL_N_MICS,             EMDL_INT,    "splNMics",            "Number micrographs");
+        EMDL::addLabel(SMPL_N_PTCLS,            EMDL_INT,    "splNumberParticles",  "Number particles");
+        EMDL::addLabel(SMPL_MIC_ID,             EMDL_INT,    "splMicId",            "Micrograph id");
+        EMDL::addLabel(SMPL_ASTIGMATISM,        EMDL_DOUBLE, "splAstigmatism",      "Astigmatism");
+        EMDL::addLabel(SMPL_OPTICS_CENTROIDX,   EMDL_DOUBLE, "splCentroidX",        "Optics group shift centroid x");
+        EMDL::addLabel(SMPL_OPTICS_CENTROIDY,   EMDL_DOUBLE, "splCentroidY",        "Optics group shift centroid y");
+        EMDL::addLabel(SMPL_OPTICS_SHIFTX,      EMDL_DOUBLE, "splBeamshiftX",       "Beam shift x");
+        EMDL::addLabel(SMPL_OPTICS_SHIFTY,      EMDL_DOUBLE, "splBeamshiftY",       "Beamshift y");
+
     }
 
     ~StaticInitialization()

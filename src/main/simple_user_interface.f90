@@ -76,6 +76,7 @@ end type simple_program
 
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
+type(simple_program), target :: assign_optics
 type(simple_program), target :: automask
 type(simple_program), target :: automask2D
 type(simple_program), target :: autoclean_nano
@@ -278,6 +279,7 @@ type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
 type(simple_input_param) :: oritype
+type(simple_input_param) :: outdir
 type(simple_input_param) :: outfile
 type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
@@ -355,6 +357,7 @@ contains
         call set_prg_ptr_array
         call new_abinitio_3Dmodel
         call new_analysis2D_nano
+        call new_assign_optics
         call new_assign_optics_groups
         call new_automask
         call new_automask2D
@@ -595,6 +598,8 @@ contains
                 ptr2prg => abinitio_3Dmodel
             case('analysis2D_nano')
                 ptr2prg => analysis2D_nano
+            case('assign_optics')
+                ptr2prg => assign_optics   
             case('assign_optics_groups')
                 ptr2prg => assign_optics_groups
             case('automask')
@@ -909,6 +914,7 @@ contains
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') multipick_cluster2D%name
         write(logfhandle,'(A)') pick_extract%name
+        write(logfhandle,'(A)') assign_optics%name
     end subroutine list_stream_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
@@ -1194,6 +1200,30 @@ contains
         call analysis2D_nano%set_input('comp_ctrls', 2, nthr)
         call analysis2D_nano%set_input('comp_ctrls', 3, script)
     end subroutine new_analysis2D_nano
+
+    subroutine new_assign_optics
+        ! PROGRAM SPECIFICATION
+        call assign_optics%new(&
+        &'assign_optics', &                                              ! name
+        &'Assign optics groups',&                                        ! descr_short
+        &'is a program to assign optics groups during streaming',&       ! descr long
+        &'simple_stream',&                                               ! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call assign_optics%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_assign_optics
 
     subroutine new_assign_optics_groups
         ! PROGRAM SPECIFICATION
