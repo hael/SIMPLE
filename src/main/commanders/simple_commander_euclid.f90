@@ -478,7 +478,7 @@ contains
         call cline_first_sigmas%set('refine', 'sigma')
         call cline_first_sigmas%delete('update_frac') ! all particles neeed to contribute
         call cline_first_sigmas%delete('hp')
-        call cline_first_sigmas%delete('lp')
+        ! call cline_first_sigmas%delete('lp')
         call cline_first_sigmas%delete('lpstop')
         call cline_first_sigmas%set('mkdir', 'no')    ! generate the sigma files in the root refine3D dir
         ! init

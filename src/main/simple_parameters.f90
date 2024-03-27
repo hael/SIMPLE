@@ -78,7 +78,6 @@ type :: parameters
     character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion
     character(len=3)          :: rnd_cls_init='no'    !< whether 2D classification is initiated from random classes or raw images
-    character(len=3)          :: prob_init='no'       !< randomized oris and zero shifts in the prob scheme (yes|no){no}
     character(len=3)          :: prob_sh='no'         !< shift information in the prob tab (yes|no){no}
     character(len=3)          :: reject_cls='no'      !< whether to reject poor classes
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
@@ -444,7 +443,6 @@ type :: parameters
     logical :: l_neigh        = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_prob_init    = .false.
     logical :: l_prob_sh      = .false.
     logical :: l_sh_smpl      = .false.
     logical :: l_angle_smpl   = .false.
@@ -591,7 +589,6 @@ contains
         call check_carg('reject_mics',    self%reject_mics)
         call check_carg('refine',         self%refine)
         call check_carg('randomise',      self%randomise)
-        call check_carg('prob_init',      self%prob_init)
         call check_carg('prob_sh',        self%prob_sh)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('roavg',          self%roavg)
@@ -1515,7 +1512,6 @@ contains
                 THROW_HARD('INVALID KWEIGHT_POOL ARGUMENT')
         end select
         ! reg options
-        self%l_prob_init    = trim(self%prob_init   ).eq.'yes'
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
         self%l_sh_smpl      = trim(self%sh_smpl     ).eq.'yes'

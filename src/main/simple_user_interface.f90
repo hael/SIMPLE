@@ -2375,7 +2375,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 1, 0, 5, 6, 1, 2, .true.)
+        &0, 1, 0, 4, 6, 1, 2, .true.)
         abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2394,13 +2394,10 @@ contains
         call abinitio_3Dmodel%set_input('srch_ctrls', 2, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         call abinitio_3Dmodel%set_gui_params('srch_ctrls', 2, submenu="model")
-        call abinitio_3Dmodel%set_input('srch_ctrls', 3, 'prob_init', 'binary', 'Zero shift offsets', 'Zero particles initial shift offsets(yes|no){no}',&
-            &'(yes|no){no}', .false., '{no}')
-        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="search")
-        call abinitio_3Dmodel%set_input('srch_ctrls', 4, pgrp)
-        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model", advanced=.false.)
-        call abinitio_3Dmodel%set_input('srch_ctrls', 5, pgrp_start)
-        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 5, submenu="model")
+        call abinitio_3Dmodel%set_input('srch_ctrls', 3, pgrp)
+        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 3, submenu="model", advanced=.false.)
+        call abinitio_3Dmodel%set_input('srch_ctrls', 4, pgrp_start)
+        call abinitio_3Dmodel%set_gui_params('srch_ctrls', 4, submenu="model")
         ! filter controls
         call abinitio_3Dmodel%set_input('filt_ctrls', 1, hp)
         call abinitio_3Dmodel%set_gui_params('filt_ctrls', 1, submenu="filter")
