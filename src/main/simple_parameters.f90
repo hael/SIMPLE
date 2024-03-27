@@ -36,6 +36,7 @@ type :: parameters
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
+    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -519,6 +520,7 @@ contains
         call check_carg('element',        self%element)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
+        call check_carg('extract',        self%extract)
         call check_carg('extractfrommov', self%extractfrommov)
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
@@ -859,11 +861,11 @@ contains
         l_distr_exec_glob = self%l_distr_exec
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
-        ! look for the last previous execution directory and get next directory number
-        if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
-        idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         ! look for a project file
         if( .not.cline%defined('projfile') )then
+            ! look for the last previous execution directory and get next directory number
+            if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
+            idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
             if( allocated(self%last_prev_dir) )then
                 call simple_list_files(self%last_prev_dir//'/*.simple', sp_files)
             else

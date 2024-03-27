@@ -2052,6 +2052,7 @@ contains
         class(pick_extract_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)              :: params
+        type(oris)                    :: os_mic
         type(ori)                     :: o_mic
         type(picker_iter)             :: piter
         type(extract_commander)       :: xextract
@@ -2059,12 +2060,15 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out, state
+        integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
+        logical :: l_extract, l_multipick
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
         call params%new(cline)
         if( params%stream.ne.'yes' ) THROW_HARD('streaming only application')
+        l_extract   = trim(params%extract).eq.'yes'
+        l_multipick = cline%defined('multi_moldiams')
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nintgs() == 0 ) THROW_HARD('no micrograph to process!')
@@ -2073,34 +2077,40 @@ contains
         call cline%set('smpd',params%smpd)
         ! output directories
         output_dir_picker  = trim(DIR_PICKER)
-        output_dir_extract = trim(DIR_EXTRACT)
+        if( l_extract ) output_dir_extract = trim(DIR_EXTRACT)
         if( cline%defined('dir') )then
             output_dir_picker  = filepath(params%dir,output_dir_picker)//'/'
-            output_dir_extract = filepath(params%dir,output_dir_extract)//'/'
+            if( l_extract) output_dir_extract = filepath(params%dir,output_dir_extract)//'/'
         endif
         call simple_mkdir(output_dir_picker, errmsg="commander_pick_extract; ")
-        call simple_mkdir(output_dir_extract,errmsg="commander_pick_extract; ")
+        if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_pick_extract; ")
         ! picker specs
-        select case(trim(params%picker))
-            case('old')
-                if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
-            case('new')
-                if(cline%defined('pickrefs'))then
-                else
-                    if( .not.cline%defined('moldiam') )then
-                        THROW_HARD('MOLDIAM required for picker=new')
+        if( l_multipick )then
+            ! nothing to do
+        else
+            select case(trim(params%picker))
+                case('old')
+                    if(.not.cline%defined('pickrefs')) THROW_HARD('PICKREFS required for picker=old')
+                case('new')
+                    if(cline%defined('pickrefs'))then
+                    else
+                        if( .not.cline%defined('moldiam') )then
+                            THROW_HARD('MOLDIAM required for picker=new')
+                        endif
                     endif
-                endif
-            case DEFAULT
-                THROW_HARD('Unsupported PICKER: '//trim(params%picker))
-        end select
+                case DEFAULT
+                    THROW_HARD('Unsupported PICKER: '//trim(params%picker))
+            end select
+        endif
         ! command lines
-        cline_extract = cline
-        call cline_extract%set('dir', trim(output_dir_extract))
-        call cline_extract%set('pcontrast', params%pcontrast)
-        if( cline%defined('box_extract') ) call cline_extract%set('box', real(params%box_extract))
-        call cline%delete('box')
-        call cline_extract%delete('box_extract')
+        if( l_extract )then
+            cline_extract = cline
+            call cline_extract%set('dir', trim(output_dir_extract))
+            call cline_extract%set('pcontrast', params%pcontrast)
+            if( cline%defined('box_extract') ) call cline_extract%set('box', real(params%box_extract))
+            call cline%delete('box')
+            call cline_extract%delete('box_extract')
+        endif
         ! file name
         if( cline%defined('fbody') )then
             fbody = trim(params%fbody)
@@ -2112,7 +2122,8 @@ contains
         if( cline%defined('fromp') .and. cline%defined('top') )then
             fromto(:) = [params%fromp, params%top]
         endif
-        ntot = fromto(2) - fromto(1) + 1
+        ntot   = fromto(2) - fromto(1) + 1
+        nvalid = 0
         ! main loop
         do imic = fromto(1),fromto(2)
             ! fetch movie orientation
@@ -2126,20 +2137,41 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls_out)
-            call o_mic%set('nptcls', real(nptcls_out))
-            if( nptcls_out > 0 )then
+            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls)
+            call o_mic%set('nptcls', real(nptcls))
+            if( nptcls > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
             else
-                call o_mic%set('state', 0.)
+                call o_mic%set_state(0)
             endif
             ! update project
             call spproj%os_mic%set_ori(imic, o_mic)
+            nvalid = nvalid+1
         enddo
-        call spproj%write_segment_inside(params%oritype, params%projfile)
         ! extract particles
-        call xextract%execute(cline_extract)
-        ! nothing to write, extract did it
+        if( l_extract )then
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            call xextract%execute(cline_extract)
+            ! nothing to write, extract did it
+        else
+            if( ntot > 1 )then
+                ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)
+                ! can be assumed valid
+                call os_mic%new(nvalid, is_ptcl=.false.)
+                i = 0
+                do imic = fromto(1),fromto(2)
+                    state  = spproj%os_mic%get_state(imic)
+                    nptcls = nint(spproj%os_mic%get(imic,'nptcls'))
+                    if( (state == 1) .and. (nptcls > 0) )then
+                        i = i+1
+                        call os_mic%transfer_ori(i, spproj%os_mic, imic)
+                    endif
+                enddo
+                spproj%os_mic = os_mic
+                call os_mic%kill
+            endif
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
         call o_mic%kill

@@ -30,9 +30,7 @@ contains
         real,             optional, intent(out)   :: moldiam_opt
         type(pickgau)             :: gaup, gaup_refine
         real,         allocatable :: moldiams(:)
-        integer,      allocatable :: pos(:,:)
         character(len=LONGSTRLEN) :: boxfile
-        character(len=STDLEN)   :: multi_moldiams
         character(len=4), allocatable :: moldiams_str(:)
         real    :: maxdiam, mmoldiam_opt
         integer :: box, istr, num_entries, idiam, num_moldiams
@@ -115,7 +113,6 @@ contains
         character(len=LONGSTRLEN),  intent(out)   :: boxfile_out
         integer,                    intent(out)   :: nptcls
         character(len=*), optional, intent(in)    :: dir_out
-        integer,      allocatable :: pos(:,:)
         character(len=LONGSTRLEN) :: boxfile
         type(pickseg) :: picker
         boxfile = basename(fname_new_ext(trim(micname),'box'))

@@ -507,9 +507,10 @@ contains
         use simple_timer
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        type(make_pickrefs_commander)          :: xmake_pickrefs
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
-        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
+        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time triggers writing of project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(micproj_record),      allocatable :: micproj_records(:)
@@ -521,11 +522,12 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job
-        integer                                :: pick_extract_set_counter
+        integer                                :: nptcls_limit_for_references ! Limit to # of particles picked, not extracted, to generate refrences
+        integer                                :: pick_extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj
         integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, nmic_star
-        logical                                :: l_templates_provided, l_projects_left, l_haschanged
+        logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype',   'mic')
@@ -562,28 +564,45 @@ contains
         params_glob%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
+        ! picking
+        l_multipick = cline%defined('nmoldiams') .or. cline%defined('multi_moldiams')
+        if( l_multipick )then
+            l_extract            = .false.
+            l_templates_provided = .false.
+            if( .not.cline%defined('multi_moldiams') )then
+                THROW_HARD('Only MULTI_MOLDIAMS is supported with muti-diameter picking')
+            endif
+            call cline%set('picker','new')
+            write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
+        else
+            l_extract            = .true.
+            l_templates_provided = cline%defined('pickrefs')
+            if( cline%defined('picker') )then
+                select case(trim(params%picker))
+                case('old')
+                    if( .not.l_templates_provided ) THROW_HARD('PICKREFS required for picker=old')
+                    write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
+                case('new')
+                    if( l_templates_provided )then
+                        if( .not. cline%defined('mskdiam') )then
+                            THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
+                            write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
+                        endif
+                    else if( .not.cline%defined('moldiam') )then
+                        THROW_HARD('MOLDIAM required for picker=new reference-free picking')
+                        write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
+                    endif
+                case('seg')
+                    THROW_HARD('SEG picker not supported yet')
+                case DEFAULT
+                    THROW_HARD('Unsupported picker')
+                end select
+            endif
+        endif
         ! master project file
         call spproj_glob%read( params%projfile )
         call spproj_glob%update_projinfo(cline)
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
-        ! picking
-        l_templates_provided = cline%defined('pickrefs')
-        if( cline%defined('picker') )then
-            select case(trim(params%picker))
-            case('old')
-                if( .not.l_templates_provided ) THROW_HARD('PICKREFS required for picker=old')
-            case('new')
-                if( l_templates_provided )then
-                    if( .not. cline%defined('mskdiam') )then
-                        THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
-                    endif
-                else if( .not.cline%defined('moldiam') )then
-                    THROW_HARD('MOLDIAM required for picker=new reference-free picking')
-                endif
-            case DEFAULT
-                THROW_HARD('Unsupported picker')
-            end select
-        endif
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
         ! restart
@@ -603,9 +622,9 @@ contains
         call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
         output_dir_picker  = filepath(trim(PATH_HERE), trim(DIR_PICKER))
-        output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
+        if( l_extract ) output_dir_extract = filepath(trim(PATH_HERE), trim(DIR_EXTRACT))
         call simple_mkdir(output_dir_picker, errmsg="commander_stream :: exec_stream_pick_extract;  ")
-        call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pcik_extract;  ")
+        if( l_extract ) call simple_mkdir(output_dir_extract,errmsg="commander_stream :: exec_stream_pick_extract;  ")
         ! initialise progress monitor
         call progressfile_init()
         ! setup the environment for distributed execution
@@ -613,17 +632,25 @@ contains
         ! prepares picking references
         if( l_templates_provided )then
             if( trim(params%picker).eq.'old' )then
-                ! TODO in shared memory
                 cline_make_pickrefs = cline
                 call cline_make_pickrefs%set('prg','make_pickrefs')
                 call cline_make_pickrefs%set('stream','no')
                 call cline_make_pickrefs%delete('ncls')
                 call cline_make_pickrefs%delete('mskdiam')
-                call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+                call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
                 call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
                 write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
                 call qsys_cleanup
             endif
+        endif
+        ! command line for execution
+        cline_pick_extract = cline
+        call cline_pick_extract%set('prg', 'pick_extract')
+        call cline_pick_extract%set('dir','../')
+        if( l_extract )then
+            call cline_pick_extract%set('extract','yes')
+        else
+            call cline_pick_extract%set('extract','no')
         endif
         ! Infinite loop
         last_injection        = simple_gettime()
@@ -634,9 +661,7 @@ contains
         n_added               = 0   ! global number of micrographs added to processing stack
         l_projects_left       = .false.
         l_haschanged          = .false.
-        cline_pick_extract    = cline
-        call cline_pick_extract%set('prg', 'pick_extract')
-        call cline_pick_extract%set('dir','../')
+        nptcls_limit_for_references = 20000 ! obviously will have to be an input
         ! guistats init
         call gui_stats%init
         do
@@ -675,7 +700,8 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz
+                ! TODO: that is not the right number
+                write(logfhandle,'(A,I6)')'>>> MICROGRAPHS TO PROCESS:                ', stacksz*NMOVS_SET
                 ! guistats
                 call gui_stats%set('micrographs', 'movies', int2str(spproj_glob%os_mic%get_noris())&
                     &// '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
@@ -701,8 +727,12 @@ contains
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MOVIES PROCESSED & IMPORTED       : ',n_imported
-                write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
+                if( l_extract )then
+                    write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                else
+                    write(logfhandle,'(A,I8)')       '>>> # PARTICLES PICKED                  : ',nptcls_glob
+                endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
@@ -733,7 +763,7 @@ contains
                     nmic_star = n_imported
                 endif
             else
-                ! wait & write snapshot
+                ! write snapshot
                 if( .not.l_projects_left )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive
@@ -745,7 +775,15 @@ contains
                 endif
             endif
             ! read beamtilts
-            if( cline%defined('dir_meta')) call read_xml_beamtilts(spproj_glob) !!! to update
+            if( cline%defined('dir_meta')) call read_xml_beamtilts(spproj_glob) ! to update??
+            ! multi-picking
+            if( l_multipick )then
+                if( nptcls_glob > nptcls_limit_for_references )then
+                    !!!!!!
+                    ! diameter estimation, single picking & clustering happens here
+                    !!!!!!
+                endif
+            endif
             ! guistats
             call gui_stats%write_json
             call sleep(WAITTIME)
@@ -791,60 +829,62 @@ contains
                 integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind
                 character(len=:), allocatable :: prev_projname
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
+                if( DEBUG_HERE ) t0 = tic()
                 ! micrographs
                 nmics = spproj_glob%os_mic%get_noris()
                 call spproj_glob%write_segment_inside('mic', params%projfile)
-                if( DEBUG_HERE ) t0 = tic()
-                ! stacks
-                allocate(fromps(nmics), source=0)
-                call spproj_glob%os_stk%new(nmics, is_ptcl=.false.)
-                nptcls        = 0
-                fromp         = 0
-                top           = 0
-                prev_projname = ''
-                do imic = 1,nmics
-                    if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
-                        call stream_spproj%kill
-                        call stream_spproj%read_segment('stk', micproj_records(imic)%projname)
-                        prev_projname = trim(micproj_records(imic)%projname)
-                    endif
-                    micind = micproj_records(imic)%micind
-                    fromps(imic) = nint(stream_spproj%os_stk%get(micind,'fromp')) ! fromp from individual project
-                    fromp        = nptcls + 1
-                    nptcls       = nptcls + micproj_records(imic)%nptcls
-                    top          = nptcls
-                    call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
-                    call spproj_glob%os_stk%set(imic, 'fromp',real(fromp))
-                    call spproj_glob%os_stk%set(imic, 'top',  real(top))
-                enddo
-                call spproj_glob%write_segment_inside('stk', params%projfile)
-                call spproj_glob%os_stk%kill
-                ! particles
-                call spproj_glob%os_ptcl2D%new(nptcls, is_ptcl=.true.)
-                iptcl         = 0
-                prev_projname = ''
-                do imic = 1,nmics
-                    if( trim(micproj_records(imic)%projname) /= prev_projname )then
-                        call stream_spproj%kill
-                        call stream_spproj%read_segment('ptcl2D', micproj_records(imic)%projname)
-                        prev_projname = trim(micproj_records(imic)%projname)
-                    endif
-                    fromp = fromps(imic)
-                    top   = fromp + micproj_records(imic)%nptcls - 1
-                    do i = fromp,top
-                        iptcl = iptcl + 1
-                        call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
-                        call spproj_glob%os_ptcl2D%set_stkind(iptcl, imic)
+                if( l_extract )then
+                    ! stacks
+                    allocate(fromps(nmics), source=0)
+                    call spproj_glob%os_stk%new(nmics, is_ptcl=.false.)
+                    nptcls        = 0
+                    fromp         = 0
+                    top           = 0
+                    prev_projname = ''
+                    do imic = 1,nmics
+                        if( trim(micproj_records(imic)%projname) /= trim(prev_projname) )then
+                            call stream_spproj%kill
+                            call stream_spproj%read_segment('stk', micproj_records(imic)%projname)
+                            prev_projname = trim(micproj_records(imic)%projname)
+                        endif
+                        micind = micproj_records(imic)%micind
+                        fromps(imic) = nint(stream_spproj%os_stk%get(micind,'fromp')) ! fromp from individual project
+                        fromp        = nptcls + 1
+                        nptcls       = nptcls + micproj_records(imic)%nptcls
+                        top          = nptcls
+                        call spproj_glob%os_stk%transfer_ori(imic, stream_spproj%os_stk, micind)
+                        call spproj_glob%os_stk%set(imic, 'fromp',real(fromp))
+                        call spproj_glob%os_stk%set(imic, 'top',  real(top))
                     enddo
-                enddo
-                call stream_spproj%kill
-                write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj_glob%os_ptcl2D%get_noris()
-                call spproj_glob%write_segment_inside('ptcl2D', params%projfile)
-                spproj_glob%os_ptcl3D = spproj_glob%os_ptcl2D
-                call spproj_glob%os_ptcl2D%kill
-                call spproj_glob%os_ptcl3D%delete_2Dclustering
-                call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
-                call spproj_glob%os_ptcl3D%kill
+                    call spproj_glob%write_segment_inside('stk', params%projfile)
+                    call spproj_glob%os_stk%kill
+                    ! particles
+                    call spproj_glob%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+                    iptcl         = 0
+                    prev_projname = ''
+                    do imic = 1,nmics
+                        if( trim(micproj_records(imic)%projname) /= prev_projname )then
+                            call stream_spproj%kill
+                            call stream_spproj%read_segment('ptcl2D', micproj_records(imic)%projname)
+                            prev_projname = trim(micproj_records(imic)%projname)
+                        endif
+                        fromp = fromps(imic)
+                        top   = fromp + micproj_records(imic)%nptcls - 1
+                        do i = fromp,top
+                            iptcl = iptcl + 1
+                            call spproj_glob%os_ptcl2D%transfer_ori(iptcl, stream_spproj%os_ptcl2D, i)
+                            call spproj_glob%os_ptcl2D%set_stkind(iptcl, imic)
+                        enddo
+                    enddo
+                    call stream_spproj%kill
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',spproj_glob%os_ptcl2D%get_noris()
+                    call spproj_glob%write_segment_inside('ptcl2D', params%projfile)
+                    spproj_glob%os_ptcl3D = spproj_glob%os_ptcl2D
+                    call spproj_glob%os_ptcl2D%kill
+                    call spproj_glob%os_ptcl3D%delete_2Dclustering
+                    call spproj_glob%write_segment_inside('ptcl3D', params%projfile)
+                    call spproj_glob%os_ptcl3D%kill
+                endif
                 call spproj_glob%write_non_data_segments(params%projfile)
                 ! benchmark
                 if( DEBUG_HERE )then
@@ -853,7 +893,7 @@ contains
                 endif
             end subroutine write_project
 
-            ! updates global project, returns list of processed micrographs
+            ! updates global project, returns records of processed micrographs
             subroutine update_projects_list( records, nimported )
                 type(micproj_record), allocatable, intent(inout) :: records(:)
                 integer,                           intent(inout) :: nimported
@@ -1272,7 +1312,7 @@ contains
         logical,                   parameter   :: DEBUG_HERE      = .false.
         type(micproj_record),      allocatable :: micproj_records(:)
         type(moviewatcher)                     :: project_buff
-        type(sp_project)                       :: spproj_glob, tmp_spproj
+        type(sp_project)                       :: spproj_glob
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
         integer                                :: nmics_rejected_glob
