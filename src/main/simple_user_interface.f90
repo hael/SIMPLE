@@ -3121,7 +3121,7 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &2, 6, 0, 3, 3, 1, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        &2, 7, 0, 3, 3, 1, 2, .true.)                                                    ! # entries in each group, requires sp_project
         pick_extract%gui_submenu_list = "data,picking,compute"
         pick_extract%advanced = .false.
         ! image input/output
@@ -3145,6 +3145,9 @@ contains
         call pick_extract%set_input('parm_ios', 6, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
         call pick_extract%set_gui_params('parm_ios', 6, submenu="data")
+        call pick_extract%set_input('parm_ios', 7, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
+        call pick_extract%set_gui_params('parm_ios', 7, submenu="picking")
+        pick_extract%parm_ios(7)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3172,16 +3175,11 @@ contains
         call pick_extract%set_input('mask_ctrls', 1, mskdiam)
         pick_extract%mask_ctrls(1)%required = .false.
         ! computer controls
-        call pick_extract%set_input('comp_ctrls', 1, nparts)
+        call pick_extract%set_input('comp_ctrls', 1, nthr)
         call pick_extract%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        pick_extract%comp_ctrls(1)%descr_short = 'Number of computing nodes allocated to preprocessing'
-        call pick_extract%set_input('comp_ctrls', 2, nthr)
-        call pick_extract%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
-        pick_extract%comp_ctrls(2)%descr_short = 'Number of threads/node for preprocessing'
-        pick_extract%comp_ctrls(2)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
-        call pick_extract%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call pick_extract%set_input('comp_ctrls', 2, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
-        call pick_extract%set_gui_params('comp_ctrls', 3, submenu="compute")
+        call pick_extract%set_gui_params('comp_ctrls', 2, submenu="compute")
     end subroutine new_pick_extract
 
     subroutine new_postprocess

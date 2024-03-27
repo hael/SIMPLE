@@ -245,7 +245,6 @@ contains
         logical, optional, intent(in)    :: roi
         character(len=:), allocatable   :: numstr
         integer     :: box_max
-        type(image) :: gauimg
         real        :: scale, maxdiam_max, lp
         if( self%exists ) call self%kill
         self%smpd_shrink = smpd_shrink
@@ -360,7 +359,6 @@ contains
     subroutine set_refs( self, imgs )
         class(pickgau), intent(inout) :: self
         class(image),   intent(inout) :: imgs(:)
-        type(image) :: img_ref
         integer     :: ldim(3), iref
         ldim       = imgs(1)%get_ldim()
         if( ldim(3) /= 1 ) THROW_HARD('box references must be 2D')
@@ -422,7 +420,7 @@ contains
             call self%boxrefs(idiam)%prenorm4real_corr(sxx)
             call self%boxrefs(idiam)%prenorm4real_corr(self%l_err_refs(idiam))
             numstr = int2str(nint(moldiams(idiam)))
-            call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
+            if( L_WRITE ) call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
         end do
         self%refpick = .true.
     end subroutine set_gaurefs
