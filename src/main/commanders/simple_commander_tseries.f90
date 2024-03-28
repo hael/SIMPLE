@@ -635,7 +635,6 @@ contains
         integer :: last_iter_stage2, nptcls
         logical :: l_shmem
         call cline%set('dir_exec', 'center2D_nano')
-        call cline%set('ptclw',               'no')
         call cline%set('center',             'yes')
         call cline%set('autoscale',           'no')
         call cline%set('refine',          'greedy')
@@ -728,7 +727,6 @@ contains
         ! static parameters
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
-        call cline%set('ptclw',                'no')
         call cline%set('center',              'yes')
         call cline%set('autoscale',            'no')
         call cline%set('tseries',             'yes')
@@ -936,7 +934,6 @@ contains
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
         if( .not. cline%defined('nonuniform')     ) call cline%set('nonuniform',     'no') ! nonuniform filtering does not work for this kind of data
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
-        if( .not. cline%defined('ptclw')          ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun for this kind of data
         if( .not. cline%defined('kweight')        ) call cline%set('kweight',   'default') ! best resolution weighting scheme for this kind of data
@@ -1574,7 +1571,6 @@ contains
         integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
         logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
         if( .not. cline%defined('objfun')  ) call cline%set('objfun',      'cc') ! best objfun
@@ -1767,7 +1763,6 @@ contains
         call cline%set('pgrp',    'c1')
         call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('ptclw')  ) call cline%set('ptclw', 'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 300.)
         if( .not. cline%defined('athres') ) call cline%set('athres', 10.)
         call build%init_params_and_build_strategy3D_tbox(cline, params)

@@ -162,9 +162,9 @@ contains
             cnt = cnt + 1
             ! exclusion
             precs(cnt)%pind = 0
-            if( spproj_field%get_state(iptcl) == 0 ) cycle
+            if( spproj_field%get_state(iptcl) == 0  ) cycle
             if( spproj_field%get(iptcl,'w') < SMALL ) cycle
-            if( .not.pptcl_mask(iptcl)                 ) cycle
+            if( .not.pptcl_mask(iptcl)              ) cycle
             precs(cnt)%pind = iptcl
         enddo
         ! fetch data from project

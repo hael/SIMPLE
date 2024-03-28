@@ -176,7 +176,6 @@ type :: oris
     procedure          :: fill_empty_classes
     procedure          :: remap_cls
     procedure          :: merge_classes
-    procedure          :: set_weights
     procedure          :: round_shifts
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
@@ -2066,66 +2065,6 @@ contains
             if(clsnr == class) call self%set(i, 'class', real(class_merged))
         end do
     end subroutine merge_classes
-
-    !>  \brief  
-    subroutine set_weights( self, frac )
-        class(oris),      intent(inout) :: self
-        real,             intent(in)    :: frac
-        real,    allocatable :: scores(:)
-        integer, allocatable :: order(:), pinds(:), pops(:), cls(:), del_pops(:)
-        logical, allocatable :: mask(:)
-        real    :: frac_srch, frac_avg, frac_sdev
-        integer :: i, j, ncls, iptcl, icls, n, m, iter, ncls_eff
-        logical :: found
-        allocate(mask(self%n))
-        do i = 1,self%n
-            mask(i) = self%get_state(i) > 0
-        enddo
-        n = count(mask)
-        allocate(scores(n),order(n),cls(n),pinds(n))
-        j = 0
-        do i = 1,self%n
-            if( mask(i) )then
-                j = j+1
-                pinds(j)  = i
-                scores(j) = self%get(i,'corr')
-                ! scores(j) = self%get(i,'specscore')
-                order(j)  = j
-                cls(j)    = self%get_class(i)
-            endif
-        enddo
-        ncls = maxval(cls)
-        call hpsort(scores, order)
-        allocate(pops(ncls),del_pops(ncls),source=0)
-        do icls = 1,ncls
-            pops(icls) = count(cls == icls)
-        enddo
-        ncls_eff  = count(pops > 0)
-        frac_srch = frac / 5.
-        found     = .false.
-        do iter = 1,10
-            m = ceiling(real(iter)*frac_srch*real(n))
-            del_pops = 0
-            do i = 1,m
-                j    = order(i)
-                icls = cls(j)
-                del_pops(icls) = del_pops(icls) + 1
-            enddo
-            frac_avg  = sum(real(del_pops)/real(pops), mask=(pops>0)) / real(ncls_eff)
-            frac_sdev = sqrt(sum((real(del_pops)/real(pops))**2, mask=(pops>0)) / real(ncls_eff))
-            print *, 'set_weights ', iter, frac_avg, frac, frac_sdev, sum(del_pops), m
-            if( frac_avg > frac ) exit
-            found = .true.
-        enddo
-        if( found )then
-            m = ceiling(real(iter-1)*frac_srch*real(n))
-            do i = 1,m
-                j     = order(i)
-                iptcl = pinds(j)
-                call self%set_state(iptcl, 0)
-            enddo
-        endif
-    end subroutine set_weights
 
     !>  \brief  for extending algndoc according to nr of symmetry ops
     subroutine symmetrize( self, nsym )

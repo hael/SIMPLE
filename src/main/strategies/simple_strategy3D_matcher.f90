@@ -313,12 +313,7 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! CALCULATE PARTICLE WEIGHTS
-        select case(trim(params_glob%ptclw))
-            case('yes')
-                ! weights are set at search time, so nothing to do here.
-            case DEFAULT
-                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        end select
+        call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton

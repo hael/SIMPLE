@@ -450,7 +450,6 @@ contains
         call cmd_dict%push('single',        'simulate a single image(yes|no){no}')
         call cmd_dict%push('smpd',          'sampling distance, same as EMANs apix(in A)')
         call cmd_dict%push('snr',           'signal-to-noise ratio')
-        call cmd_dict%push('ptclw',         'soft particle weights(yes|no){yes}')
         call cmd_dict%push('speckind',      'power spectrum kind(real|power|sqrt|log|phase){sqrt}')
         call cmd_dict%push('startit',       'start iterating from here')
         call cmd_dict%push('starfile',      'STAR-formatted project file')

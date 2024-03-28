@@ -221,7 +221,7 @@ contains
         endif
         call preppftcc4align( which_iter )
 
-        ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights & after pftcc initialization
+        ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
         call prep_strategy2D_glob
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 

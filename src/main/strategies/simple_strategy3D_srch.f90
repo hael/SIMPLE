@@ -58,7 +58,6 @@ type strategy3D_srch
     real                    :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                 :: l_neigh       = .false.   !< neighbourhood refinement flag
     logical                 :: l_greedy      = .false.   !< greedy        refinement flag
-    logical                 :: l_ptclw       = .false.   !< whether to calculate particle weight
     logical                 :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                 :: exists        = .false.   !< 2 indicate existence
   contains
@@ -101,7 +100,6 @@ contains
         self%l_neigh       = params_glob%l_neigh
         self%refine        = trim(params_glob%refine)
         self%l_greedy      = str_has_substr(params_glob%refine, 'greedy')
-        self%l_ptclw       = trim(params_glob%ptclw).eq.'yes'
         lims(:,1)          = -params_glob%trs
         lims(:,2)          =  params_glob%trs
         lims_init(:,1)     = -SHC_INPL_TRSHWDTH
@@ -239,18 +237,15 @@ contains
         endif
     end subroutine inpl_srch_peaks
 
-    subroutine store_solution( self, ref, inpl_ind, corr, sh, w )
+    subroutine store_solution( self, ref, inpl_ind, corr, sh )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
         real,       optional,   intent(in)    :: sh(2)
-        real,       optional,   intent(in)    :: w
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
-        if( present(w) )  s3D%proj_space_w(      ref,self%ithr) = w
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
         s3D%proj_space_euls(  3,ref,self%ithr) = 360. - pftcc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(   ref,self%ithr) = corr
-        s3D%proj_space_mask(    ref,self%ithr) = .true.
     end subroutine store_solution
 
     subroutine kill( self )

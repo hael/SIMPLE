@@ -18,9 +18,6 @@ type strategy2D_alloc
     ! per particle
     integer, allocatable :: srch_order(:,:)
     logical, allocatable :: do_inplsrch(:)
-    ! per thread
-    real,    allocatable :: cls_corrs(:,:)
-    logical, allocatable :: cls_searched(:,:)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -33,18 +30,12 @@ contains
         ! per particle
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
         if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
-        ! per thread
-        if( allocated(s2D%cls_corrs))    deallocate(s2D%cls_corrs)
-        if( allocated(s2D%cls_searched)) deallocate(s2D%cls_searched)
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob()
         use simple_eul_prob_tab, only: calc_athres
         logical :: zero_oris, ncls_diff
-        ! per-thread allocations
-        allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
-        allocate(s2D%cls_searched(params_glob%ncls,nthr_glob),source=.false.)
         ! gather class populations
         zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
         ncls_diff = build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls

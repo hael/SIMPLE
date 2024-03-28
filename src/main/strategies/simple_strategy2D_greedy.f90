@@ -49,11 +49,6 @@ contains
                     self%s%best_corr  = inpl_corr
                     self%s%best_rot   = inpl_ind
                 endif
-                ! keep track of visited classes
-                if( self%s%l_ptclw )then
-                    s2D%cls_searched(iref,self%s%ithr)  = .true.
-                    s2D%cls_corrs(iref,self%s%ithr) = inpl_corr
-                endif
             end do
             if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
                 ! back-calculating in-plane angle with k-weighing

@@ -184,7 +184,6 @@ contains
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
         call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
-        call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
@@ -216,7 +215,6 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('ptclw',     'no')
         call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
@@ -1616,7 +1614,6 @@ contains
         integer :: maxits, pool_nstks, iptcl, jptcl, jstk, nchunks_imported, tot_nchunks_imported
         integer :: minits, nsplit
         logical :: all_chunks_submitted, all_chunks_imported, l_once, l_converged
-        call cline%set('ptclw',  'no')
         call cline%set('wiener', 'full')
         call cline%set('nthr2D', cline%get_rarg('nthr'))
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
@@ -1708,7 +1705,6 @@ contains
             ! defaults to yes
         endif
         call cline_cluster2D_chunk%set('autoscale', 'no')
-        call cline_cluster2D_chunk%set('ptclw',     'no')
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
@@ -1738,7 +1734,6 @@ contains
         call cline_cluster2D_pool%set('trs',       MINSHIFT)
         call cline_cluster2D_pool%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_cluster2D_pool%set('ptclw',     'no')
         call cline_cluster2D_pool%set('extr_iter', 100.)
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination

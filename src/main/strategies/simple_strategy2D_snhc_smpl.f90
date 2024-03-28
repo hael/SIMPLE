@@ -63,11 +63,6 @@ contains
                 endif
                 ! improvement found (hill climbing over classes)
                 if( inpl_corr > self%s%prev_corr ) found_better = .true.
-                ! keep track of visited classes
-                if( self%s%l_ptclw )then
-                    s2D%cls_searched(iref,self%s%ithr) = .true.
-                    s2D%cls_corrs(iref,self%s%ithr)    = inpl_corr
-                endif
                 ! first improvement heuristic
                 if( found_better ) exit
             end do

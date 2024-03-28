@@ -15,8 +15,6 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: MIN_2DWEIGHT = 0.001
-
 type strategy2D_spec
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
@@ -25,6 +23,7 @@ end type strategy2D_spec
 
 type strategy2D_srch
     type(pftcc_shsrch_grad) :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
+    type(pftcc_shsrch_grad) :: grad_shsrch_obj2     !< origin shift search object, L-BFGS with gradient, no call back
     integer                 :: nrefs         =  0   !< number of references
     integer                 :: nrots         =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval    =  0   !< nr of references evaluated
@@ -41,13 +40,11 @@ type strategy2D_srch
     real                    :: best_corr     = -1.  !< best corr found by search
     real                    :: specscore     =  0.  !< spectral score
     real                    :: trs           =  0.  !< shift boundary
-    logical                 :: l_ptclw       = .false.
   contains
     procedure          :: new
     procedure          :: prep4srch
     procedure          :: inpl_srch
     procedure          :: store_solution
-    procedure, private :: calc_weight
     procedure          :: kill
 end type strategy2D_srch
 
@@ -77,8 +74,7 @@ contains
         else
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
         endif
-        ! particle weights
-        self%l_ptclw = trim(params_glob%ptclw).eq.'yes'
+        call self%grad_shsrch_obj2%new(lims, lims_init=lims_init, maxits=MAXITS, opt_angle=.false.)
     end subroutine new
 
     subroutine prep4srch( self )
@@ -87,9 +83,6 @@ contains
         integer :: prev_roind
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
-        ! init thread objects
-        s2D%cls_corrs(:,self%ithr)    = 0.0
-        s2D%cls_searched(:,self%ithr) = .false.
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
@@ -153,7 +146,7 @@ contains
         class(strategy2D_srch), intent(in) :: self
         integer,      optional, intent(in) :: nrefs
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, frac, w
+        real :: e3, mi_class, frac
         ! get in-plane angle
         e3   = 360. - pftcc_glob%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
@@ -173,8 +166,6 @@ contains
         else
             frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
         endif
-        ! particle weight
-        call self%calc_weight(w)
         ! update parameters
         call build_glob%spproj_field%e3set(self%iptcl,e3)
         call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
@@ -186,38 +177,13 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
-        call build_glob%spproj_field%set(self%iptcl, 'w',          w)
+        call build_glob%spproj_field%set(self%iptcl, 'w',          1.)
     end subroutine store_solution
-
-    subroutine calc_weight( self, w )
-        class(strategy2D_srch), intent(in)  :: self
-        real,                   intent(out) :: w
-        logical :: err
-        if( self%l_ptclw )then
-            ! w = 1 - exp( -(cc-ccmean)/ccsdev )
-            if( self%nrefs_eval == 1 )then
-                w = MIN_2DWEIGHT
-            else
-                if( s2D%cls_corrs(self%best_class,self%ithr) < 0.0 )then
-                    w = MIN_2DWEIGHT
-                else
-                    call normalize(s2D%cls_corrs(:,self%ithr), err, s2D%cls_searched(:,self%ithr))
-                    if( err )then
-                        w = MIN_2DWEIGHT
-                    else
-                        w = 1.0 - exp(-s2D%cls_corrs(self%best_class,self%ithr))
-                    endif
-                endif
-            endif
-        else
-            w = 1.0
-        endif
-    end subroutine calc_weight
 
     subroutine kill( self )
         class(strategy2D_srch),  intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        self%l_ptclw = .false.
+        call self%grad_shsrch_obj2%kill
     end subroutine kill
 
 end module simple_strategy2D_srch

@@ -18,7 +18,6 @@ type convergence
     type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
     type(stats_struct) :: frac_sh    !< fraction of search space scanned stats, shifts
     type(stats_struct) :: shincarg   !< shift increment
-    type(stats_struct) :: pw         !< particle weight stats
     type(stats_struct) :: nevals     !< # cost function evaluations
     type(stats_struct) :: ngevals    !< # gradient evaluations
     type(stats_struct) :: better     !< improvement statistics
@@ -54,7 +53,6 @@ contains
             self%mi_proj       = ostats%get(1,'ORIENTATION_OVERLAP')
             self%mi_state      = nint(ostats%get(1,'STATE_OVERLAP'))
             self%dist%avg      = ostats%get(1,'DIST_BTW_BEST_ORIS')
-            self%pw%avg        = ostats%get(1,'PARTICLE_WEIGHT')
             self%dist_inpl%avg = ostats%get(1,'IN-PLANE_DIST')
             self%shincarg%avg  = ostats%get(1,'SHIFT_INCR_ARG')
         else
@@ -69,10 +67,10 @@ contains
         class(oris),        intent(inout) :: os
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), states(:), scores(:), pws(:), sampled(:)
+        real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: nsamples, n, nptcls
-        real    :: overlap_lim, fracsrch_lim, percen_nonzero_pw
+        real    :: overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv
         601 format(A,1X,F12.3)
@@ -96,13 +94,10 @@ contains
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
-        pws               = os%get_all('w')
-        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call os%stats('corr',      self%score,     mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
-        call os%stats('w',         self%pw,        mask=mask)
         self%mi_class = os%get_avg('mi_class',     mask=mask)
         ! overlaps and particle updates
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
@@ -113,10 +108,8 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        ! score & particle weights
+        ! score
         write(logfhandle,604) '>>> SCORE [0,1]            AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
-        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT         ', percen_nonzero_pw
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -198,7 +191,7 @@ contains
         call self%ostats%set(1,'SCORE',self%score%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, states, scores, pws, sampled)
+        deallocate(mask, updatecnts, states, scores, sampled)
         call self%ostats%kill
     end function check_conv2D
 
@@ -206,9 +199,9 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:), states(:), scores(:), sampled(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, percen_nonzero_pw, overlap_lim, fracsrch_lim
+        real    :: min_state_mi_joint, overlap_lim, fracsrch_lim
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged
         integer :: iptcl, istate, n, nptcls, nsamples
@@ -233,13 +226,10 @@ contains
         else
             allocate(mask(n), source=updatecnts > 0.5 .and. states > 0.5)
         endif
-        pws = build_glob%spproj_field%get_all('w')
-        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',       self%score,      mask=mask)
         call build_glob%spproj_field%stats('dist',       self%dist,       mask=mask)
         call build_glob%spproj_field%stats('dist_inpl',  self%dist_inpl,  mask=mask)
         call build_glob%spproj_field%stats('frac',       self%frac_srch,  mask=mask)
-        call build_glob%spproj_field%stats('w',          self%pw,         mask=mask)
         call build_glob%spproj_field%stats('shincarg',   self%shincarg,   mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
@@ -256,10 +246,8 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        ! score & particle weights
+        ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:', self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
-        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
@@ -334,7 +322,6 @@ contains
         call self%ostats%set(1,'PERCEN_PARTICLES_AVERAGED', percen_avg)
         call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
-        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'SCORE',self%score%avg)
         call self%ostats%set(1,'SHIFT_INCR_ARG',self%shincarg%avg)
@@ -342,7 +329,7 @@ contains
         call self%append_stats
         call self%plot_projdirs(mask)
         ! destruct
-        deallocate(mask, updatecnts, pws, states, scores, sampled)
+        deallocate(mask, updatecnts, states, scores, sampled)
         call self%ostats%kill
     end function check_conv3D
 
