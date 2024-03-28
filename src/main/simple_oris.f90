@@ -101,7 +101,6 @@ type :: oris
     ! SETTERS
     procedure          :: append
     procedure          :: copy
-    procedure          :: copy_single
     procedure          :: reject
     generic            :: delete_entry => delete_entry_1, delete_entry_2
     procedure          :: delete_entry_1
@@ -1513,13 +1512,6 @@ contains
             self_out%o(i) = self_in%o(i)
         end do
     end subroutine copy
- 
-    subroutine copy_single( self_out, self_in, i_out, i_in)
-        class(oris),       intent(inout) :: self_out
-        class(oris),       intent(in)    :: self_in
-        integer,           intent(in)    :: i_out, i_in
-        self_out%o(i_out) = self_in%o(i_in)
-    end subroutine copy_single
 
     subroutine reject( self, i )
         class(oris), intent(inout) :: self

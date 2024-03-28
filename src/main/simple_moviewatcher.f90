@@ -163,7 +163,7 @@ contains
         integer :: i
         if( allocated(list) )then
             do i=1,size(list)
-                call self%add2history_2(trim(list(i)))
+                call self%add2history_2(list(i))
             enddo
         endif
     end subroutine add2history_1

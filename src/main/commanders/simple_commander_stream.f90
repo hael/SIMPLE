@@ -53,7 +53,7 @@ character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spp
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
 character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here? - left in for now
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once (>1)
-integer,               parameter :: LONGTIME        = 120                                        ! time lag after which a movie/project is processed
+integer,               parameter :: LONGTIME        = 60                                        ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
 
 contains
@@ -1153,8 +1153,6 @@ contains
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: projects(:)
         integer                                :: nprojects, iproj, iori, new_oris, nimported
-        integer(timer_int_kind) :: t0
-        real(timer_int_kind)    :: rt_write
         call cline%set('mkdir', 'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir', '')
@@ -1203,7 +1201,7 @@ contains
                     call spproj_part%read(trim(projects(iproj)))
                     do iori = 1, NMOVS_SET
                         nimported = nimported + 1
-                        call spproj%os_mic%copy_single(spproj_part%os_mic, nimported, iori)
+                        call spproj%os_mic%transfer_ori(iori, spproj_part%os_mic, nimported)
                     end do
                     call spproj_part%kill()
                 enddo
@@ -1371,6 +1369,9 @@ contains
         call simple_end('**** SIMPLE_MULTIPICK_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_multipick_cluster2D
 
+    ! TODO
+    ! path to all files (absolute path at the moment)
+    ! restart
     subroutine exec_stream_cluster2D( self, cline )
         use simple_moviewatcher, only: moviewatcher
         use simple_stream_chunk, only: micproj_record
@@ -1389,30 +1390,27 @@ contains
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=LONGSTRLEN)              :: cwd_job
         integer                                :: nmics_rejected_glob
-        integer                                :: nchunks_imported_glob, nchunks_imported, n_ptcls
-        integer                                :: nprojects, stacksz, prev_stacksz, iter, last_injection, iproj
+        integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter, last_injection
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
         logical                                :: l_haschanged, l_nchunks_maxed
-        call cline%set('oritype',     'mic')
-        call cline%set('mkdir',       'yes')
-        call cline%set('autoscale',   'yes')
-        call cline%set('reject_mics', 'no')
+        call cline%set('oritype',      'mic')
+        call cline%set('mkdir',        'yes')
+        call cline%set('autoscale',    'yes')
+        call cline%set('reject_mics',  'no')
+        call cline%set('kweight_chunk','default')
+        call cline%set('kweight_pool', 'default')
+        call cline%set('prune',        'no')
+        call cline%set('nonuniform',   'no')
         if( .not.cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         call cline%set('wiener', 'full')
         if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',       30.0)
         if( .not. cline%defined('ndev')        ) call cline%set('ndev', CLS_REJECT_STD)
-        if( .not. cline%defined('nonuniform')  ) call cline%set('nonuniform',    'no')
-        if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
-        if( .not. cline%defined('nchunks')     ) call cline%set('nchunks',        2.0)
-        if( .not. cline%defined('prune')       ) call cline%set('prune',         'no')
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init',  'no')
         if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
-        if( .not. cline%defined('kweight_chunk'))call cline%set('kweight_chunk','default')
-        if( .not. cline%defined('kweight_pool') )call cline%set('kweight_pool', 'default')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ncls_in = 0
@@ -1425,22 +1423,19 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         call params%new(cline)
-        params_glob%split_mode = 'stream'
-        params_glob%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))
         if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
             THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
         endif
-        if( .not.cline%defined('nparts_pool') )then
-            params_glob%nparts_pool = params_glob%nparts
-            call cline%set('nparts_pool', real(params_glob%nparts_pool))
-        endif
         if( .not. cline%defined('maxnchunks') .or. params_glob%maxnchunks < 1 )then
             params_glob%maxnchunks = huge(params_glob%maxnchunks)
         endif
         call cline%delete('maxnchunks')
+        ! Only required for compatibility with old version (chunk)
+        params%nthr2D      = params%nthr
+        params_glob%nthr2D = params%nthr
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -1449,12 +1444,12 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
-        ! import previous runs
+        ! restart
         nptcls_glob = 0             ! global number of particles
-        ! Infinitie loop
+        ! call here
+        ! Infinite loop
         nchunks_imported_glob = 0
         last_injection        = simple_gettime()
-        prev_stacksz          = 0
         nprojects             = 0
         iter                  = 0
         n_imported            = 0   ! global number of imported processed micrographs
@@ -1477,34 +1472,33 @@ contains
                 call project_buff%kill
                 nprojects = 0
             else
+                ! watch & update global records
                 call project_buff%watch(nprojects, projects, max_nmovies=5*params%nparts)
             endif
             ! update global records
             if( nprojects > 0 )then
-                call update_records_with_project(projects, n_imported, n_ptcls)
-                do iproj = 1, nprojects
-                    call project_buff%add2history(projects(iproj))
-                enddo
+                call update_records_with_project(projects, n_imported )
+                call project_buff%add2history(projects)
             endif
             ! project update
             if( nprojects > 0 )then
-                n_imported = spproj_glob%os_mic%get_noris()
-                write(logfhandle,'(A,I8)')       '>>> # MOVIES PROCESSED & IMPORTED       : ',n_imported
-                write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                n_imported = size(micproj_records)
+                write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS IMPORTED : ',n_imported
+                write(logfhandle,'(A,I8)')       '>>> # PARTICLES IMPORTED   : ',nptcls_glob
                 ! guistats
-                call gui_stats%set('micrographs', 'movies', int2str(n_imported) // '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
+                ! call gui_stats%set('micrographs', 'movies', int2str(n_imported) // '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
                 call gui_stats%set('micrographs', 'ptcls', nptcls_glob, primary=.true.)
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
                 last_injection = simple_gettime()
                 ! guistats
-                call gui_stats%set_now('micrographs', 'last_new_movie')
-                if(spproj_glob%os_mic%isthere('thumb')) then
-                    call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(cwd_job)) // '/' // trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'thumb'))), thumbnail=.true.)
-                end if
+                ! call gui_stats%set_now('micrographs', 'last_new_movie')
+                ! if(spproj_glob%os_mic%isthere('thumb')) then
+                !     call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(cwd_job)) // '/' // trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'thumb'))), thumbnail=.true.)
+                ! end if
                 l_haschanged = .true.
-                ! TODO remove this?
+                ! remove this?
                 if( n_imported < 1000 .and. l_haschanged )then
                     call update_user_params(cline)
                 else if( n_imported > nmic_star + 100 .and. l_haschanged )then
@@ -1524,16 +1518,16 @@ contains
             call update_pool_dev
             call update_user_params_dev(cline)
             call reject_from_pool_dev
-            call read_pool_xml_beamtilts_dev()
-            call assign_pool_optics_dev(cline, propagate = .false.)
+            call read_pool_xml_beamtilts_dev()                      !?
+            call assign_pool_optics_dev(cline, propagate = .false.) !?
             call reject_from_pool_user_dev
             if( .not.l_nchunks_maxed )then
                 call import_chunks_into_pool_dev(.false., nchunks_imported)
                 nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                 l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
                 call classify_pool_dev
-                call update_projects_mask_dev(micproj_records)    ! merge these
-                call classify_new_chunks_dev(micproj_records)     ! two ?
+                call update_projects_mask_dev(micproj_records)
+                call classify_new_chunks_dev(micproj_records)
             else
                 ! # of chunks is above desired threshold
                 if( is_pool_available_dev() ) exit
@@ -1544,8 +1538,8 @@ contains
             call gui_stats%write_json
         end do
         ! termination
-        call read_pool_xml_beamtilts_dev()
-        call assign_pool_optics_dev(cline, propagate = .true.)
+        call read_pool_xml_beamtilts_dev()                      !?
+        call assign_pool_optics_dev(cline, propagate = .true.)  !?
         call terminate_stream2D_dev(.true.)
         if( get_pool_iter_dev() == 0 )then
             ! iteration one was never completed so imported particles & micrographs need be written
@@ -1565,15 +1559,16 @@ contains
         contains
 
             ! updates global records
-            subroutine update_records_with_project( projectnames, n_imported, n_ptcls )
+            subroutine update_records_with_project( projectnames, n_imported )
                 character(len=LONGSTRLEN), allocatable, intent(in)  :: projectnames(:)
-                integer,                                intent(out) :: n_imported, n_ptcls
+                integer,                                intent(out) :: n_imported
                 type(sp_project),     allocatable :: spprojs(:)
                 type(micproj_record), allocatable :: old_records(:)
                 character(len=:),     allocatable :: fname, abs_fname
-                integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic
+                integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls
                 n_imported = 0
                 n_ptcls    = 0
+                if( .not.allocated(projectnames) ) return
                 n_spprojs  = size(projectnames)
                 if( n_spprojs == 0 )return
                 n_old = 0 ! on first import
@@ -1591,7 +1586,8 @@ contains
                     params%smpd      = spprojs(1)%os_mic%get(1,'smpd')
                     params_glob%smpd = params%smpd
                     call spprojs(1)%read_segment('stk', trim(projectnames(1)))
-                    params%box = nint(spprojs(1)%os_stk%get(1,'box'))
+                    params%box      = nint(spprojs(1)%os_stk%get(1,'box'))
+                    params_glob%box = params%box
                     call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
                     call cline%delete('ncls')
                 endif
@@ -1604,7 +1600,7 @@ contains
                 else
                     call move_alloc(micproj_records, old_records)
                     allocate(micproj_records(n_completed))
-                    if( n_old > 0 ) micproj_records(1:n_old) = old_records(:)
+                    micproj_records(1:n_old) = old_records(:)
                     deallocate(old_records)
                 endif
                 ! update global records and some global variables
@@ -1622,7 +1618,6 @@ contains
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
-                ! now what TODO with file locations for final project?
                 ! cleanup
                 do iproj = 1,n_spprojs
                     call spprojs(iproj)%kill
