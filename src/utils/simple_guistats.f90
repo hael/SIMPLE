@@ -277,7 +277,7 @@ contains
                         call self%ensure_section(trim(adjustl(tmporis%get_static(i, 'sect'))))
                         if(tmporis%isthere(i, "key")) then
                             keyline = self%get_keyline(trim(adjustl(tmporis%get_static(i, 'sect'))), trim(adjustl(tmporis%get_static(i, 'key'))))
-                            call self%stats%copy_single(tmporis, keyline, i)
+                            call self%stats%transfer_ori(i, tmporis, keyline)
                          endif
                     endif
                 enddo

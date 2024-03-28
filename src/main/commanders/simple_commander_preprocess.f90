@@ -1303,7 +1303,7 @@ contains
         real                      :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
         integer                   :: ldim(3), lfoo(3), fromto(2)
         integer                   :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
-        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
+        integer                   :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract, istk
         logical                   :: l_ctfpatch, l_gid_present, l_ogid_present,prog_write,prog_part
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
@@ -1601,6 +1601,18 @@ contains
                     enddo
                     spproj%os_mic = os_mic
                 endif
+                ! update to boxfile path
+                do imic = 1,nmics
+                    boxfile_name = trim(spproj%os_mic%get_static(imic, 'boxfile'))
+                    boxfile_name = trim(simple_abspath(boxfile_name, check_exists=.false.))
+                    call spproj%os_mic%set(imic, 'boxfile', boxfile_name)
+                enddo
+                ! and update to stack path
+                do istk = 1,spproj%os_stk%get_noris(),1
+                    stack = trim(spproj%os_stk%get_static(istk, 'stk'))
+                    stack = trim(simple_abspath(stack, check_exists=.false.))
+                    call spproj%os_stk%set(istk, 'stk', stack)
+                enddo
             endif
         endif
         call spproj%write(params%projfile)
@@ -2173,7 +2185,7 @@ contains
         if( l_extract )then
             call spproj%write_segment_inside(params%oritype, params%projfile)
             call xextract%execute(cline_extract)
-            ! nothing to write, extract did it
+            ! nothing to write, done by extract
         else
             if( ntot > 1 )then
                 ! purging state=0 and nptcls=0 mics such that all mics (nmics>1)

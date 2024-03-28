@@ -7,7 +7,7 @@ use simple_parameters,       only: parameters, params_glob
 use simple_sp_project,       only: sp_project
 use simple_qsys_env,         only: qsys_env
 use simple_image,            only: image
-use simple_stream_chunk, only: stream_chunk, micproj_record
+use simple_stream_chunk,     only: stream_chunk, micproj_record
 use simple_class_frcs,       only: class_frcs
 use simple_stack_io,         only: stack_io
 use simple_starproject,      only: starproject
@@ -21,26 +21,22 @@ implicit none
 public :: init_cluster2D_stream_dev, update_projects_mask_dev, write_project_stream2D_dev, terminate_stream2D_dev
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev, classify_pool_dev
 public :: update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev, is_pool_available_dev
-public :: update_user_params_dev, update_path_dev, get_pool_iter_dev
+public :: update_user_params_dev, get_pool_iter_dev
 public :: read_pool_xml_beamtilts_dev, assign_pool_optics_dev
 private
 #include "simple_local_flags.inc"
 
 
-integer,               parameter   :: MINBOXSZ             = 128    ! minimum boxsize for scaling
-real,                  parameter   :: CHUNK_MINITS         = 6.0
-real,                  parameter   :: CHUNK_MAXITS         = 12.0
-real,                  parameter   :: CHUNK_MINITS_TEST    = 13.0
-real,                  parameter   :: CHUNK_MAXITS_TEST    = CHUNK_MINITS_TEST + 1.0
-real,                  parameter   :: CHUNK_CC_ITERS_TEST  = 8.0
-real,                  parameter   :: CHUNK_EXTR_ITER_TEST = 3.0
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
+integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
+integer,               parameter   :: CHUNK_MINITS        = 13
+integer,               parameter   :: CHUNK_MAXITS        = CHUNK_MINITS + 2
+integer,               parameter   :: CHUNK_CC_ITERS      = 8
+integer,               parameter   :: CHUNK_EXTR_ITER     = 3
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
-character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/'
+character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/' ! TODO: remove
 character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
@@ -73,52 +69,24 @@ integer                                :: numlen
 character(len=:),          allocatable :: projfile4gui
 ! other
 character(len=STDLEN) :: refs_glob
-real                  :: orig_smpd, smpd, scale_factor, mskdiam     ! dimensions
-integer               :: orig_box, box, boxpd
-real                  :: lpstart, lpstop, lpcen                     ! resolution limits
-integer               :: max_ncls, nptcls_per_chunk, ncls_glob, nmics_last
+real                  :: smpd, scale_factor, lpstart, lpstop, lpcen
+integer               :: box, boxpd, max_ncls, nptcls_per_chunk, ncls_glob, nmics_last
 logical               :: l_wfilt, l_scaling
 logical               :: l_update_sigmas = .false.
 
 contains
 
-    ! check whether 2D classification will be performed based on 4 strictly required parameters
-    subroutine check_params_for_cluster2D_dev( cline, do2d )
-        class(cmdline), intent(in)  :: cline
-        logical,        intent(out) :: do2D
-        integer :: maybe2D
-        maybe2D = merge(1,0,cline%defined('ncls'))
-        maybe2D = maybe2D + merge(1,0,cline%defined('nptcls_per_cls'))
-        maybe2D = maybe2D + merge(1,0,cline%defined('ncls_start'))
-        maybe2D = maybe2D + merge(1,0,cline%defined('mskdiam'))
-        if( maybe2D == 4 )then
-            do2D = .true.
-        else if( maybe2D > 0 )then
-            THROW_HARD('Missing arguments for 2D classification')
-        else
-            do2D = .false.
-        endif
-    end subroutine check_params_for_cluster2D_dev
-
     subroutine init_cluster2D_stream_dev( cline, spproj, box_in, projfilegui )
         class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         integer,           intent(in)    :: box_in
-        character(len=*),  intent(in)    :: projfilegui
+        character(len=*),  intent(in)    :: projfilegui ! to go?
         character(len=:), allocatable :: carg
-        logical :: do2D
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         integer :: ichunk
-        ! check on strictly required parameters
-        if( .not.cline%defined('nthr') )then
-            THROW_HARD('Missing required argument NTHR')
-        endif
-        call check_params_for_cluster2D_dev(cline, do2D)
-        if( .not.do2D ) return
         call seed_rnd
         ! general parameters
-        mskdiam             = cline%get_rarg('mskdiam')
-        call mskdiam2lplimits(mskdiam, lpstart, lpstop, lpcen)
+        call mskdiam2lplimits(params_glob%mskdiam, lpstart, lpstop, lpcen)
         if( cline%defined('lp') ) lpstart = params_glob%lp
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
         l_scaling           = trim(params_glob%autoscale) .eq. 'yes'
@@ -129,19 +97,8 @@ contains
         prev_snapshot_cavgs = ''
         orig_projfile       = trim(params_glob%projfile)
         projfile4gui        = trim(projfilegui)
-        orig_box            = box_in
         l_update_sigmas     = params_glob%l_needs_sigma
         nmics_last          = 0
-        ! pixel size after motion correction
-        if( cline%defined('eer_upsampling') )then
-            orig_smpd = params_glob%smpd / real(params_glob%eer_upsampling)
-        else
-            orig_smpd = params_glob%smpd
-        endif
-        orig_smpd = orig_smpd / params_glob%scale
-        call debug_print('cluster2D_stream orig_box: '//int2str(orig_box))
-        call debug_print('cluster2D_stream orig_smpd: '//real2str(orig_smpd))
-        call debug_print('cluster2D_stream mskdiam: '//real2str(mskdiam))
         ! bookkeeping & directory structure
         numlen         = len(int2str(params_glob%nparts_pool))
         refs_glob      = 'start_cavgs'//params_glob%ext
@@ -158,12 +115,6 @@ contains
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
         ! update to computational parameters to pool, will be transferred to chunks upon init
-        if( cline%defined('job_memory_per_task2D') )then
-            call pool_proj%compenv%set(1,'job_memory_per_task', real(params_glob%job_memory_per_task2D))
-        endif
-        if( cline%defined('qsys_partition2D') )then
-            call pool_proj%compenv%set(1,'qsys_partition', params_glob%qsys_partition2D)
-        endif
         if( cline%defined('walltime') )then
             call pool_proj%compenv%set(1,'walltime', real(params_glob%walltime))
         endif
@@ -182,16 +133,18 @@ contains
         call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
-        call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
+        call cline_cluster2D_chunk%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr2D))
+        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr))
         call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_chunk%set('lpstart_nonuni', real(params_glob%lpstart_nonuni))
         call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS)
+        call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
+        call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER)
+        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_CC_ITERS)
         call cline_cluster2D_chunk%set('kweight',   params_glob%kweight_chunk)
-        if( l_update_sigmas ) call cline_cluster2D_chunk%set('cc_iters', CHUNK_MINITS-1.0)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         if( cline%defined('rnd_cls_init') )then
             call cline_cluster2D_chunk%set('rnd_cls_init', params_glob%rnd_cls_init)
@@ -225,10 +178,10 @@ contains
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%set('extr_iter', 100.)
         call cline_cluster2D_pool%set('mkdir',     'no')
-        call cline_cluster2D_pool%set('mskdiam',   mskdiam)
+        call cline_cluster2D_pool%set('mskdiam',   params_glob%mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
-        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr2D))
+        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr))
         call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
         if( l_update_sigmas ) call cline_cluster2D_pool%set('cc_iters', 0.0)
         call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
@@ -246,36 +199,36 @@ contains
             call cline_cluster2D_pool%set('ml_reg', 'no')
         endif
         ! auto-scaling
-        if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
+        if( params_glob%box == 0 ) THROW_HARD('FATAL ERROR')
         ! scaling (fourier cropping)
         scale_factor          = 1.0
-        params_glob%smpd_crop = orig_smpd
-        params_glob%box_crop  = orig_box
-        params_glob%msk_crop  = mskdiam / orig_smpd / 2.
-        if( l_scaling .and. orig_box >= MINBOXSZ )then
-            call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
-            l_scaling = box < orig_box
+        params_glob%smpd_crop = params_glob%smpd
+        params_glob%box_crop  = params_glob%box
+        params_glob%msk_crop  = params_glob%mskdiam / params_glob%smpd / 2.
+        if( l_scaling .and. params_glob%box >= MINBOXSZ )then
+            call autoscale(params_glob%box, params_glob%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=MINBOXSZ)
+            l_scaling = box < params_glob%box
             if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',orig_box,'/',box
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params_glob%box,'/',box
                 params_glob%smpd_crop = smpd
                 params_glob%box_crop  = box
             endif
         endif
         smpd = params_glob%smpd_crop
         box  = params_glob%box_crop
-        params_glob%msk_crop = round2even(mskdiam / smpd / 2.)
+        params_glob%msk_crop = round2even(params_glob%mskdiam / smpd / 2.)
         boxpd = 2 * round2even(params_glob%alpha * real(params_glob%box_crop/2)) ! logics from parameters
-        ! Crooping-related command lines update
+        ! Cropping-related command lines update
         call cline_cluster2D_chunk%set('smpd_crop', smpd)
         call cline_cluster2D_chunk%set('box_crop',  real(box))
         call cline_cluster2D_chunk%set('msk_crop',  params_glob%msk_crop)
-        call cline_cluster2D_chunk%set('box',       real(orig_box))
-        call cline_cluster2D_chunk%set('smpd',      orig_smpd)
+        call cline_cluster2D_chunk%set('box',       real(params_glob%box))
+        call cline_cluster2D_chunk%set('smpd',      params_glob%smpd)
         call cline_cluster2D_pool%set('smpd_crop',  smpd)
         call cline_cluster2D_pool%set('box_crop',   real(box))
         call cline_cluster2D_pool%set('msk_crop',   params_glob%msk_crop)
-        call cline_cluster2D_pool%set('box',        real(orig_box))
-        call cline_cluster2D_pool%set('smpd',       orig_smpd)
+        call cline_cluster2D_pool%set('box',        real(params_glob%box))
+        call cline_cluster2D_pool%set('smpd',       params_glob%smpd)
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
         ! module variables
@@ -322,7 +275,7 @@ contains
                 call chunks(ichunk)%display_iter
                 ! rejection
                 if( trim(params_glob%reject_cls).eq.'yes' )then
-                    call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev2D, box)
+                    call chunks(ichunk)%reject(params_glob%lpthres, params_glob%ndev, box)
                 endif
                 ! updates list of chunks to import
                 if( allocated(converged_chunks) )then
@@ -341,7 +294,7 @@ contains
         type(micproj_record), allocatable, intent(in) :: micproj_records(:)
         type(micproj_record), allocatable :: records_for_chunk(:)
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
-        integer :: first2import, last2import, n2import, cnt
+        integer :: first2import, last2import, n2import
         n_avail_chunks = count(chunks(:)%available)
         ! cannot import yet
         if( n_avail_chunks == 0 ) return
@@ -385,12 +338,12 @@ contains
             if( nptcls > nptcls_per_chunk )then
                 records_for_chunk = micproj_records(first2import:last2import)
                 spprojs_mask_glob(first2import:last2import) = .true.
-                ! call chunks(ichunk)%generate(records_for_chunk)
+                call chunks(ichunk)%generate(records_for_chunk)
                 deallocate(records_for_chunk)
                 ! execution
-                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd,&
-                    &orig_box, box, l_update_sigmas)
-                first2import = last2import + 1 ! to avoid cycling through all projectss
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, params_glob%smpd,&
+                    &params_glob%box, box, l_update_sigmas)
+                first2import = last2import + 1 ! to avoid cycling through all projects
             endif
         enddo
     end subroutine classify_new_chunks_dev
@@ -742,7 +695,7 @@ contains
             call pool_proj%os_cls2D%class_corres_rejection(ndev_here, corres_mask)
         endif
         ! correlation & resolution
-        ndev_here = 1.25*params_glob%ndev2D ! less stringent rejection than chunk
+        ndev_here = 1.25*params_glob%ndev ! less stringent rejection than chunk
         call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthres,corres_mask,ndev_here)
         ! overall class rejection
         cls_mask = moments_mask .and. corres_mask
@@ -874,7 +827,7 @@ contains
     subroutine update_user_params_dev( cline_here )
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
-        real       :: lpthres, ndev, tilt_thres
+        real       :: lpthres, ndev
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -889,29 +842,15 @@ contains
                     endif
                 endif
             endif
-            if( os%isthere(1,'ndev2D') )then
+            if( os%isthere(1,'ndev2D') )then ! to drop '2D', see with joe
                 ndev = os%get(1,'ndev2D')
-                if( abs(ndev-params_glob%ndev2D) > 0.001 )then
+                if( abs(ndev-params_glob%ndev) > 0.001 )then
                     if( ndev < 0.1 )then
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D TOO LOW: ',ndev
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV TOO LOW: ',ndev
                     else
-                        params_glob%ndev2D = ndev
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D   UPDATED TO: ',params_glob%ndev2D
+                        params_glob%ndev = ndev
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV   UPDATED TO: ',params_glob%ndev
                     endif
-                endif
-            endif
-            if( os%isthere(1,'tilt_thres') ) then
-                tilt_thres = os%get(1,'tilt_thres')
-                if( abs(tilt_thres-params_glob%tilt_thres) > 0.001) then
-                     if(tilt_thres < 0.01)then
-                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO LOW: ',tilt_thres
-                     else if(tilt_thres > 1) then
-                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO HIGH: ',tilt_thres
-                     else
-                         params_glob%tilt_thres = tilt_thres
-                         call cline_here%set('tilt_thres', params_glob%tilt_thres)
-                         write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES UPDATED TO: ',tilt_thres
-                     endif
                 endif
             endif
             call del_file(USER_PARAMS)
@@ -1141,7 +1080,7 @@ contains
     !> produces consolidated project at original scale
     subroutine write_project_stream2D_dev( )
         type(class_frcs)              :: frcs, frcs_sc
-        type(oris)                    :: os_backup3
+        type(oris)                    :: os_backup
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
         ! file naming
@@ -1177,7 +1116,7 @@ contains
         write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
         if( l_scaling )then
-            os_backup3 = pool_proj%os_cls2D
+            os_backup = pool_proj%os_cls2D
             ! rescale classes
             if( l_wfilt )then
                 src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
@@ -1198,16 +1137,16 @@ contains
             dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
             call rescale_cavgs(src, dest)
             call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
             if( l_wfilt )then
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
             endif
-            pool_proj%os_cls2D = os_backup3
-            call os_backup3%kill
+            pool_proj%os_cls2D = os_backup
+            call os_backup%kill
             ! rescale frcs
             call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%upsample(orig_smpd, orig_box, frcs)
+            call frcs_sc%upsample(params_glob%smpd, params_glob%box, frcs)
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill
@@ -1219,10 +1158,10 @@ contains
             call pool_proj%os_ptcl3D%kill
         else
             call pool_proj%os_out%kill
-            call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+            call pool_proj%add_cavgs2os_out(cavgsfname, params_glob%smpd, 'cavg')
             if( l_wfilt )then
                 src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
-                call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+                call pool_proj%add_cavgs2os_out(src, params_glob%smpd, 'cavg'//trim(WFILT_SUFFIX))
             endif
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
             ! write
@@ -1237,7 +1176,7 @@ contains
     end subroutine write_project_stream2D_dev
 
     subroutine terminate_stream2D_dev( write_project )
-        logical,        intent(in) :: write_project
+        logical, intent(in) :: write_project
         integer :: ichunk, ipart
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%terminate
@@ -1460,12 +1399,12 @@ contains
             dest_here = trim(dest)
         endif
         call img%new([box,box,1],smpd)
-        call img_pad%new([orig_box,orig_box,1],orig_smpd)
+        call img_pad%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
         call find_ldim_nptcls(src,ldim,ncls_here)
         call stkio_r%open(trim(src), smpd, 'read', bufsz=ncls_here)
         call stkio_r%read_whole
-        call stkio_w%open(dest_here, orig_smpd, 'write', box=orig_box, bufsz=ncls_here)
+        call stkio_w%open(dest_here, params_glob%smpd, 'write', box=params_glob%box, bufsz=ncls_here)
         do icls = 1,ncls_here
             if( cls_pop(icls) > 0 )then
                 call img%zero_and_unflag_ft
@@ -1503,30 +1442,17 @@ contains
     subroutine set_resolution_limits( master_cline )
         type(cmdline), intent(in) :: master_cline
         lpstart = max(lpstart, 2.0*smpd)
-        if( master_cline%defined('lpstop2D') )then
-            params_glob%lpstop2D = max(2.0*smpd,params_glob%lpstop2D)
+        if( master_cline%defined('lpstop') )then
+            params_glob%lpstop = max(2.0*smpd,params_glob%lpstop)
         else
-            params_glob%lpstop2D = 2.0*smpd
+            params_glob%lpstop = 2.0*smpd
         endif
-        call cline_cluster2D_pool%set('lpstart', lpstart)
-        call cline_cluster2D_pool%set('lpstop',  params_glob%lpstop2D)
-        call cline_cluster2D_chunk%delete('algorithm')
-        call cline_cluster2D_pool%delete('algorithm')
-        if( trim(params_glob%algorithm).eq.'old' )then
-            ! previous behaviour
-            call cline_cluster2D_chunk%set('lp',        lpstart)
-            call cline_cluster2D_chunk%set('refine',    'snhc')
-            call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
-            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS)
-        else
-            call cline_cluster2D_chunk%delete('lp')
-            call cline_cluster2D_chunk%set('lpstart',   lpstart)
-            call cline_cluster2D_chunk%set('lpstop',    lpstart)
-            call cline_cluster2D_chunk%set('refine',    'snhc')
-            call cline_cluster2D_chunk%set('extr_iter', CHUNK_EXTR_ITER_TEST)
-            call cline_cluster2D_chunk%set('maxits',    CHUNK_MAXITS_TEST)
-            call cline_cluster2D_chunk%set('minits',    CHUNK_MINITS_TEST)
-        endif
+        call cline_cluster2D_chunk%delete('lp')
+        call cline_cluster2D_pool%set('lpstart',  lpstart)
+        call cline_cluster2D_pool%set('lpstop',   params_glob%lpstop)
+        call cline_cluster2D_chunk%set('lpstart', lpstart)
+        call cline_cluster2D_chunk%set('lpstop',  lpstart)
+        call cline_cluster2D_chunk%set('refine',  'snhc')
         if( .not.master_cline%defined('cenlp') )then
             call cline_cluster2D_chunk%set('cenlp', lpcen)
             call cline_cluster2D_pool%set( 'cenlp', lpcen)
@@ -1535,7 +1461,7 @@ contains
             call cline_cluster2D_pool%set( 'cenlp', params_glob%cenlp)
         endif
         write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A): ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params_glob%lpstop2D
+        write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params_glob%lpstop
         write(logfhandle,'(A,F5.1)') '>>> CENTERING     LOW-PASS LIMIT (IN A): ', lpcen
     end subroutine set_resolution_limits
 

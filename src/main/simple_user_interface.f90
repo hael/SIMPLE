@@ -91,6 +91,7 @@ type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
+type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: comparemc
 type(simple_program), target :: convert
@@ -372,6 +373,7 @@ contains
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_subsets
+        call new_cluster2D_stream
         call new_cluster_cavgs
         call new_comparemc
         call new_convert
@@ -487,6 +489,7 @@ contains
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_subsets)
+        call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster_cavgs)
         call push2prg_ptr_array(comparemc)
         call push2prg_ptr_array(convert)
@@ -629,6 +632,8 @@ contains
                 ptr2prg => cluster2D_nano
             case('cluster2D_subsets')
                 ptr2prg => cluster2D_subsets
+            case('cluster2D_stream')
+                ptr2prg => cluster2D_stream
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
             case('comparemc')
@@ -910,6 +915,7 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_stream_prgs_in_ui
+        write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') preproc%name
         write(logfhandle,'(A)') multipick_cluster2D%name
         write(logfhandle,'(A)') pick_extract%name
@@ -1831,6 +1837,70 @@ contains
         call cluster2D_subsets%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
         call cluster2D_subsets%set_gui_params('comp_ctrls', 5, submenu="compute")
     end subroutine new_cluster2D_subsets
+
+    subroutine new_cluster2D_stream
+        ! PROGRAM SPECIFICATION
+        call cluster2D_stream%new(&
+        &'cluster2D_stream', &                                                         ! name
+        &'2D Classification in streaming mode',&                                       ! descr_short
+        &'is a distributed workflow that executes 2D classification'//&                ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_stream',&                                                             ! executable
+        &0, 1, 0, 7, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
+        cluster2D_stream%gui_submenu_list = "data,cluster 2D,compute"
+        cluster2D_stream%advanced = .false.
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '')
+        call cluster2D_stream%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster2D_stream%set_input('srch_ctrls', 1, ncls_start)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 1, submenu="cluster 2D", advanced=.false.)
+        call cluster2D_stream%set_input('srch_ctrls', 2, nptcls_per_cls)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 2, submenu="cluster 2D", advanced=.false.)
+        cluster2D_stream%srch_ctrls(2)%required = .true.
+        call cluster2D_stream%set_input('srch_ctrls', 3, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster2D_stream%set_gui_params('srch_ctrls',  3, submenu="cluster 2D")
+        call cluster2D_stream%set_input('srch_ctrls', 4, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 4, submenu="cluster 2D", advanced=.false.)
+        call cluster2D_stream%set_input('srch_ctrls', 5, lpthres)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 5, submenu="cluster 2D", online=.true.)
+        call cluster2D_stream%set_input('srch_ctrls', 6, objfun)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 6, submenu="cluster 2D")
+        call cluster2D_stream%set_input('srch_ctrls', 7, maxnchunks)
+        call cluster2D_stream%set_gui_params('srch_ctrls', 7, submenu="cluster 2D", online=.true.)
+        ! filter controls
+        call cluster2D_stream%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call cluster2D_stream%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
+        call cluster2D_stream%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
+        &'low-pass limit in Angstroms', .false., 15.)
+        call cluster2D_stream%set_gui_params('filt_ctrls', 2, submenu="cluster 2D")
+        ! mask controls
+        call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_stream%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
+        ! computer controls
+        call cluster2D_stream%set_input('comp_ctrls', 1, nchunks)
+        call cluster2D_stream%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
+        call cluster2D_stream%set_input('comp_ctrls', 2, nparts_chunk)
+        call cluster2D_stream%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+        cluster2D_stream%comp_ctrls(2)%required = .true.
+        call cluster2D_stream%set_input('comp_ctrls', 3, nparts_pool)
+        call cluster2D_stream%set_gui_params('comp_ctrls', 3, submenu="compute", advanced=.false.)
+        cluster2D_stream%comp_ctrls(3)%required = .true.
+        call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
+        call cluster2D_stream%set_gui_params('comp_ctrls', 4, submenu="compute", advanced=.false.)
+        call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740.)
+        call cluster2D_stream%set_gui_params('comp_ctrls', 5, submenu="compute")
+    end subroutine new_cluster2D_stream
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION
@@ -3489,9 +3559,9 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls',25, maxnchunks)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 25, submenu="cluster 2D", online=.true.)
         call preprocess_stream_dev%set_input('srch_ctrls',26, pick_roi)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 26, submenu="cluster 2D", online=.true.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 26, submenu="picking", online=.true.)
         call preprocess_stream_dev%set_input('srch_ctrls',27, backgr_subtr)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 27, submenu="cluster 2D", online=.true.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 27, submenu="picking", online=.true.)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
