@@ -126,7 +126,6 @@ contains
         l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
-        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('lp_iters')) call cline%set('lp_iters',      1.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! init

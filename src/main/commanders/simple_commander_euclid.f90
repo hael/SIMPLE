@@ -470,7 +470,6 @@ contains
         call cline_first_sigmas%set('prg', 'refine3D')
         call cline_first_sigmas%set('center',    'no')
         call cline_first_sigmas%set('continue',  'no')
-        call cline_first_sigmas%set('ptclw',     'no')
         call cline_first_sigmas%delete('lp_iters')
         call cline_first_sigmas%set('maxits',     1.0)
         call cline_first_sigmas%set('which_iter', 1.0)

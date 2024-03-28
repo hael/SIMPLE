@@ -100,7 +100,6 @@ contains
         type(chash)      :: job_descr
         call cline%set('wiener', 'full')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no')
         if( (.not.cline%defined('ncls')) .and. (.not.cline%defined('nspace')) )then
             THROW_HARD('NCLS or NSPACE need be defined!')
@@ -204,11 +203,7 @@ contains
             endif
         endif
         ! setup weights
-        if( (trim(params%ptclw).eq.'yes') )then
-            ! weights are set at search time, so nothing to do here.
-        else
-            call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
-        endif
+        call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
@@ -298,7 +293,6 @@ contains
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',  'euclid')
         if( .not. cline%defined('ml_reg')    ) call cline%set('ml_reg',      'no')
         if( .not. cline%defined('nonuniform')) call cline%set('nonuniform',  'no')
@@ -389,7 +383,6 @@ contains
         call cline_cluster2D1%set('minits',   MINITS)
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
-        call cline_cluster2D1%set('ptclw',      'no')
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('nonuniform', 'no')
         call cline_cluster2D1%set('ml_reg','no')
@@ -655,7 +648,6 @@ contains
             call cline_cluster2D_stage1%set('objfun', 'cc') ! cc-based search in first phase
         endif
         call cline_cluster2D_stage1%set('lpstop',     params%lpstart)
-        call cline_cluster2D_stage1%set('ptclw',      'no')
         call cline_cluster2D_stage1%set('ml_reg',     'no')
         call cline_cluster2D_stage1%set('nonuniform', 'no')
         if( params%l_frac_update )then
@@ -825,7 +817,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr, iter_switch2euclid
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical                   :: l_stream, l_switch2euclid, l_ptclw, l_griddingset, l_converged, l_ml_reg
+        logical                   :: l_stream, l_switch2euclid, l_griddingset, l_converged, l_ml_reg
         call cline%set('prg','cluster2D')
         call set_cluster2D_defaults( cline )
         ! streaming
@@ -840,7 +832,6 @@ contains
         if( cline%defined('objfun') )then
             if( trim(cline%get_carg('objfun')).eq.'euclid' )then
                 orig_objfun     = trim(cline%get_carg('objfun'))
-                l_ptclw         = trim(cline%get_carg('ptclw')).eq.'yes'
                 l_switch2euclid = .true.
             endif
         endif
@@ -1087,10 +1078,6 @@ contains
                 endif
                 call job_descr%set('objfun', orig_objfun)
                 call cline_cavgassemble%set('objfun', orig_objfun)
-                if( l_ptclw )then
-                    call cline%set('ptclw',    'yes')
-                    call job_descr%set('ptclw','yes')
-                endif
                 params%objfun = trim(orig_objfun)
                 if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid = .false.

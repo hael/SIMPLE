@@ -200,7 +200,6 @@ type :: parameters
     character(len=STDLEN)     :: picker='old'         !< which picker to use (old|new){old}
     character(len=STDLEN)     :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN)     :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN)     :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN)     :: real_filter=''
@@ -581,7 +580,6 @@ contains
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
         call check_carg('prune',          self%prune)
-        call check_carg('ptclw',          self%ptclw)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('remove_chunks',  self%remove_chunks)

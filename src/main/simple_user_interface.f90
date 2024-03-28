@@ -295,7 +295,6 @@ type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
 type(simple_input_param) :: prune
 type(simple_input_param) :: pspecsz
-type(simple_input_param) :: ptclw
 type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
@@ -1111,7 +1110,6 @@ contains
         call set_param(star_ptcl,      'star_ptcl',    'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
         call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1){1.}', '{1.}', .false., 1.0)
-        call set_param(ptclw,          'ptclw',        'binary', 'Particle weights', 'Particle weights(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
@@ -3974,7 +3972,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_exec',&                                                 ! executable
-        &0, 0, 0, 2, 3, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 2, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3986,9 +3984,8 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
         ! filter controls
-        call reconstruct3D%set_input('filt_ctrls', 1, ptclw)
-        call reconstruct3D%set_input('filt_ctrls', 2, envfsc)
-        call reconstruct3D%set_input('filt_ctrls', 3, wiener)
+        call reconstruct3D%set_input('filt_ctrls', 1, envfsc)
+        call reconstruct3D%set_input('filt_ctrls', 2, wiener)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -4005,9 +4002,9 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 13, 13, 4, 2, .true.)   
+        &1, 0, 0, 13, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         refine3D%gui_submenu_list = "search,filter,mask,compute"
-        refine3D%advanced = .false.                                                          ! # entries in each group, requires sp_project
+        refine3D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -4062,21 +4059,19 @@ contains
         call refine3D%set_gui_params('filt_ctrls', 5, submenu="filter")
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
         call refine3D%set_gui_params('filt_ctrls', 6, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 7, ptclw)
+        call refine3D%set_input('filt_ctrls', 7, envfsc)
         call refine3D%set_gui_params('filt_ctrls', 7, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 8, envfsc)
+        call refine3D%set_input('filt_ctrls', 8, nonuniform)
         call refine3D%set_gui_params('filt_ctrls', 8, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 9, nonuniform)
-        call refine3D%set_gui_params('filt_ctrls', 9, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        call refine3D%set_input('filt_ctrls', 9, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
+        call refine3D%set_gui_params('filt_ctrls', 9, submenu="filter")
+        call refine3D%set_input('filt_ctrls', 10, wiener)
         call refine3D%set_gui_params('filt_ctrls', 10, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 11, wiener)
+        call refine3D%set_input('filt_ctrls', 11, ml_reg)
         call refine3D%set_gui_params('filt_ctrls', 11, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 12, ml_reg)
+        call refine3D%set_input('filt_ctrls', 12, combine_eo)
         call refine3D%set_gui_params('filt_ctrls', 12, submenu="filter")
-        call refine3D%set_input('filt_ctrls', 13, combine_eo)
-        call refine3D%set_gui_params('filt_ctrls', 13, submenu="filter")
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
@@ -4101,7 +4096,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &3, 0, 0, 8, 4, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &3, 0, 0, 8, 3, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -4128,7 +4123,6 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
-        call refine3D_nano%set_input('filt_ctrls', 4, ptclw)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)

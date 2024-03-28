@@ -86,7 +86,6 @@ contains
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      15.)
         if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',    0.98)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',   0.95)
         if( .not. cline%defined('objfun')    ) call cline%set('objfun',     'cc')
@@ -256,7 +255,6 @@ contains
         call cline_refine3D_snhc%set('lp',         lplims(1))
         call cline_refine3D_snhc%set('nspace',     real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',     real(MAXITS_SNHC))
-        call cline_refine3D_snhc%set('ptclw',      'no')               ! no soft particle weights in first phase
         call cline_refine3D_snhc%set('silence_fsc','yes')              ! no FSC plot printing in snhc phase
         call cline_refine3D_snhc%set('lp_iters',    0.)                ! low-pass limited resolution, no e/o
         call cline_refine3D_snhc%delete('frac')                        ! no rejections in first phase
@@ -272,7 +270,6 @@ contains
             call cline_refine3D_init%set('nspace',real(NSPACE_INIT))
         endif
         call cline_refine3D_init%set('maxits',     real(MAXITS_INIT))
-        call cline_refine3D_init%set('ptclw',      'no')   ! no soft particle weights in init phase
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
         call cline_refine3D_init%set('vol1',       trim(SNHCVOL)//trim(str_state)//ext)
         call cline_refine3D_init%delete('frac')
@@ -710,7 +707,6 @@ contains
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
         if( .not. cline%defined('refine')     ) call cline%set('refine',      'prob')
         if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('ptclw')      ) call cline%set('ptclw',         'no')
         if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',       'no')
