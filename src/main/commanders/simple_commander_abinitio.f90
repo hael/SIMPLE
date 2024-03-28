@@ -977,6 +977,7 @@ contains
         call cline_refine3D%set('lp_iters',   MAXITS2)
         call cline_refine3D%set('nspace',     NSPACE3)
         call cline_refine3D%set('it_history',       3) ! particles sampled in three most recent past iterations also included in rec
+        call cline_refine3D%set('mov_avg_vol',  'yes')
         ! extreme greedy sampling in inpl, and shifts (because of stable volume)
         call cline_refine3D%set('angle_smpl', 'no')
         call cline_refine3D%set('sh_smpl',    'no')
