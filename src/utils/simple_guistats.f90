@@ -185,13 +185,13 @@ contains
         self%updated = .true.
     end subroutine set_2
 
-    subroutine set_3( self, section, key, val, primary, alert, alerttext, thumbnail)
+    subroutine set_3( self, section, key, val, primary, alert, alerttext, thumbnail, boxfile)
         class(guistats),  intent(inout)        :: self
         character(len=*), intent(in)           :: section
         character(len=*), intent(in)           :: key
         character(len=*), intent(in)           :: val
         logical, optional, intent(in)          :: primary, alert, thumbnail
-        character(len=*), optional, intent(in) :: alerttext
+        character(len=*), optional, intent(in) :: alerttext, boxfile
         integer                                :: line
         logical                                :: primary_l = .false. , alert_l = .false.
         if(present(primary)) then
@@ -207,6 +207,9 @@ contains
         call self%stats%set(line, 'sect', section)
         if(present(thumbnail) .and. thumbnail) then
             call self%stats%set(line, 'type', 'thumbnail')
+            if(present(boxfile)) then
+                call self%stats%set(line, 'boxfile', trim(boxfile))
+            end if
         else
             call self%stats%set(line, 'type', 'string')
         end if 
@@ -372,6 +375,9 @@ contains
                             end if
                             if(self%stats%isthere(i, 'alerttext')) then
                                 call json%add(keydata, 'alert', trim(adjustl(self%stats%get_static(i, 'alerttext'))))
+                            end if
+                            if(self%stats%isthere(i, 'boxfile')) then
+                                call json%add(keydata, 'boxfile', trim(adjustl(self%stats%get_static(i, 'boxfile'))))
                             end if
                             call json%add(section, keydata)
                         end if
