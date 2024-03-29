@@ -1285,7 +1285,7 @@ contains
         call automask%set_input('mask_ctrls', 1, 'binwidth', 'num', 'Envelope binary layers width',&
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call automask%set_input('mask_ctrls', 2, 'thres', 'num', 'Volume threshold',&
-        &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
+        &'Volume threshold for enevlope mask generation', 'Volume threshold', .false., 0.)
         call automask%set_input('mask_ctrls', 3, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         call automask%set_input('mask_ctrls', 4, automsk)
