@@ -1066,15 +1066,19 @@ contains
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
                 endif
-                ! smpd_crop/box_crop
-                if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
-                if( .not.cline%defined('smpd_crop') )then
-                    if( cline%defined('box_crop') )then
-                        self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
-                    else
-                        self%smpd_crop = self%smpd
-                    endif
-                endif
+
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                ! ! smpd_crop/box_crop
+                ! if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
+                ! if( .not.cline%defined('smpd_crop') )then
+                !     if( cline%defined('box_crop') )then
+                !         self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
+                !     else
+                !         self%smpd_crop = self%smpd
+                !     endif
+                ! endif
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
             else
                 ! nothing to do for streaming, values set at runtime
             endif
@@ -1136,13 +1140,26 @@ contains
                 ! we don't check for existence of refs as they can be output as well as input (cavgassemble)
             endif
         endif
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! smpd_crop/box_crop
+        if( .not.cline%defined('box_crop') ) self%box_crop  = self%box
+        if( .not.cline%defined('smpd_crop') )then
+            if( cline%defined('box_crop') )then
+                self%smpd_crop = real(self%box)/real(self%box_crop) * self%smpd
+            else
+                self%smpd_crop = self%smpd
+            endif
+        endif
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         ! check file formats
         call check_file_formats
         call double_check_file_formats
         ! make file names
         call mkfnames
         ! check box, box_crop
-        if( self%box > 0 .and. self%box < 26 )           THROW_HARD('box needs to be larger than 26')
+        if( self%box      > 0 .and. self%box      < 26 ) THROW_HARD('box needs to be larger than 26')
         if( self%box_crop > 0 .and. self%box_crop < 26 ) THROW_HARD('box_crop needs to be larger than 26')
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then

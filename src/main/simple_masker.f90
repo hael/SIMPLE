@@ -14,19 +14,20 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG   = .false.
-logical, parameter :: L_WRITE = .false.
+logical, parameter :: L_WRITE = .true.
 
 type, extends(binimage) :: masker
     private
     real    :: msk       = 0.   !< maximum circular mask
     real    :: amsklp    = 0.   !< low-pass limit
     real    :: pix_thres = 0.   !< binarisation threshold
-    integer :: edge      = 3    !< edge width
+    integer :: edge      = 6    !< edge width
     integer :: binwidth  = 1    !< additional layers to grow
     integer :: idim(3)   = 0    !< image dimension
   contains
     procedure          :: automask3D
     procedure          :: automask3D_otsu
+    procedure, private :: automask3D_otsu_priv
     procedure          :: mask_from_pdb
     procedure, private :: env_rproject
 end type masker
@@ -38,10 +39,8 @@ contains
     subroutine automask3D( self, vol_inout )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
-        integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
         logical        :: was_ft
-        integer        :: imax, sz, ldim(3), loc(1)
-        type(binimage) :: ccimage, msk_prelim
+        type(binimage) :: msk_prelim
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%amsklp    = params_glob%amsklp
         self%binwidth  = params_glob%binwidth
@@ -61,47 +60,19 @@ contains
         if( L_WRITE ) call msk_prelim%write('msk_prelim.mrc')
         call self%mul(msk_prelim)
         if( L_WRITE ) call self%write('pre-masked.mrc')
-        ! low-pass filter
-        call self%bp(0., self%amsklp)
-        if( L_WRITE ) call self%write('lped.mrc')
-        ! binarize again
-        call otsu_img(self)
-        if( L_WRITE ) call self%write('binarized.mrc')
-        ! identify connected components
-        call self%find_ccs(ccimage, update_imat=.true.)
-        ! extract all cc sizes (in # pixels)
-        ccsizes = ccimage%size_ccs()
-        sz      = size(ccsizes)
-        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz,   ' CONNECTED COMPONENT(S)'
-        if( sz > 1 )then
-            loc = maxloc(ccsizes)
-            call ccimage%cc2bin(loc(1))
-        else
-            call ccimage%cc2bin(1)
-        endif
-        call self%copy_bimg(ccimage)
-        ! add layers
-        call self%grow_bins(self%binwidth)
-        ! add volume soft edge
-        call self%cos_edge(self%edge)
+        call self%automask3D_otsu_priv(l_tight=.false.)
         ! apply mask to volume
         call vol_inout%zero_background()
         call vol_inout%mul(self)
-        ! the end
-        if( was_ft )call vol_inout%fft()
-        ! destruct
-        call ccimage%kill_bimg
         call msk_prelim%kill_bimg
+        if( was_ft ) call vol_inout%fft()
     end subroutine automask3D
 
     subroutine automask3D_otsu( self, vol_inout, do_apply )
         class(masker),     intent(inout) :: self
         class(image),      intent(inout) :: vol_inout
         logical, optional, intent(in)    :: do_apply
-        integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
-        logical        :: was_ft, ddo_apply
-        integer        :: imax, sz, nccs, loc(1)
-        type(binimage) :: ccimage
+        logical :: was_ft, ddo_apply
         ddo_apply = .true.
         if( present(do_apply) ) ddo_apply = do_apply
         if( vol_inout%is_2d() )THROW_HARD('automask3D_otsu is intended for volumes only; automask3D')
@@ -115,11 +86,27 @@ contains
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
+        call self%automask3D_otsu_priv(trim(params_glob%automsk).eq.'tight')
+        if( ddo_apply )then
+            ! apply mask to volume
+            call vol_inout%zero_background()
+            call vol_inout%mul(self)
+        endif
+        if( was_ft ) call vol_inout%fft()
+    end subroutine automask3D_otsu
+
+    subroutine automask3D_otsu_priv( self, l_tight )
+        class(masker), intent(inout) :: self
+        logical,       intent(in)    :: l_tight
+        real,    allocatable :: ccsizes(:)
+        integer, allocatable :: imat_cc(:,:,:)
+        type(binimage)       :: ccimage
+        integer              :: loc(1), imax, sz, nccs
         ! low-pass filter volume
         call self%bp(0., self%amsklp)
+        if( L_WRITE ) call self%write('lped.mrc')
         ! binarize volume
-        call otsu_img(self, tight=trim(params_glob%automsk).eq.'tight')
-        call otsu_img(self)
+        call otsu_img(self, tight=l_tight)
         call self%set_imat
         if( L_WRITE ) call self%write('binarized.mrc')
         ! identify connected components
@@ -140,16 +127,9 @@ contains
         call self%grow_bins(self%binwidth)
         ! add volume soft edge
         call self%cos_edge(self%edge)
-        if( ddo_apply )then
-            ! apply mask to volume
-            call vol_inout%zero_background()
-            call vol_inout%mul(self)
-        endif
-        ! the end
-        if( was_ft )call vol_inout%fft()
         ! destruct
         call ccimage%kill_bimg
-    end subroutine automask3D_otsu
+    end subroutine automask3D_otsu_priv
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
         use simple_atoms, only: atoms
