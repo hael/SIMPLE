@@ -112,7 +112,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over
-        logical :: l_projmatch, l_switch2eo, l_continue, l_multistates
+        logical :: l_switch2eo, l_continue, l_multistates
         logical :: l_combine_eo, l_lpset, l_griddingset
         real    :: corr, corr_prev, smpd
         integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo
@@ -591,16 +591,17 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(calc_group_sigmas_commander) :: xcalc_group_sigmas
-        type(calc_pspec_commander_distr)  :: xcalc_pspec_distr
-        type(prob_align_commander)        :: xprob_align
-        type(parameters)                  :: params
-        type(builder)                     :: build
-        type(cmdline)                     :: cline_calc_sigma, cline_calc_pspec_distr, cline_prob_align
-        character(len=STDLEN)             :: str_state, fsc_file, vol, vol_iter, orig_objfun
-        integer                           :: startit, i, state
-        real                              :: corr, corr_prev
-        logical                           :: converged, l_sigma, l_switch2euclid
+        type(estimate_first_sigmas_commander) :: xfirst_sigmas
+        type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
+        type(calc_pspec_commander)            :: xcalc_pspec
+        type(prob_align_commander)            :: xprob_align
+        type(parameters)                      :: params
+        type(builder)                         :: build
+        type(cmdline)                         :: cline_calc_sigma, cline_prob_align
+        character(len=STDLEN)                 :: str_state, fsc_file, vol, vol_iter
+        integer                               :: startit, i, state
+        real                                  :: corr, corr_prev
+        logical                               :: converged, l_sigma
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -617,9 +618,7 @@ contains
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
             ! objfun=euclid
-            orig_objfun     = trim(params%objfun)
-            l_sigma         = .false.
-            l_switch2euclid = .false.
+            l_sigma = .false.
             if( trim(params%objfun) == 'euclid' )then
                 l_sigma = .true.
                 call cline%set('needs_sigma','yes')
@@ -630,23 +629,23 @@ contains
                 else
                     ! sigma2 not provided & are calculated
                     if( build%spproj_field%get_nevenodd() == 0 )then
-                        ! make sure we have e/o partitioning prior to calc_pspec_distr
+                        ! make sure we have e/o partitioning prior to calc_pspec
                         call build%spproj_field%partition_eo
                         call build%spproj%write_segment_inside(params%oritype)
                     endif
-                    params%objfun    = 'cc'
-                    params%cc_objfun = OBJFUN_CC
-                    cline_calc_pspec_distr = cline
-                    call cline_calc_pspec_distr%set('prg', 'calc_pspec' )
-                    call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
-                    l_switch2euclid = .true.
+                    call xcalc_pspec%execute( cline )
+                    call cline_calc_sigma%set('which_iter', startit)
+                    call xcalc_group_sigmas%execute(cline_calc_sigma)
+                    if( .not.cline%defined('nspace') ) call cline%set('nspace', real(params%nspace))
+                    if( .not.cline%defined('athres') ) call cline%set('athres', real(params%athres))
+                    call xfirst_sigmas%execute(cline)
                 endif
             endif
-            params%startit     = startit
-            params%which_iter  = params%startit
-            params%outfile     = 'algndoc'//METADATA_EXT
-            params%extr_iter   = params%startit - 1
-            corr               = -1.
+            params%startit    = startit
+            params%which_iter = params%startit
+            params%outfile    = 'algndoc'//METADATA_EXT
+            params%extr_iter  = params%startit - 1
+            corr              = -1.
             do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
@@ -668,7 +667,6 @@ contains
                     call cline_prob_align%set('prg',        'prob_align')
                     call cline_prob_align%set('which_iter', params%which_iter)
                     call cline_prob_align%set('vol1',       params%vols(1))
-                    call cline_prob_align%set('objfun',     orig_objfun)
                     call cline_prob_align%set('nparts',     1)
                     if( params%l_lpset ) call cline_prob_align%set('lp', params%lp)
                     call xprob_align%execute_shmem( cline_prob_align )
@@ -705,16 +703,6 @@ contains
                 endif
                 ! update iteration counter
                 params%which_iter = params%which_iter + 1
-                ! whether to switch objective function
-                if( l_switch2euclid )then
-                    params%objfun = trim(orig_objfun)
-                    if( params%objfun == 'euclid' ) params%cc_objfun = OBJFUN_EUCLID
-                    if( .not.cline%defined('gridding') )then
-                        call cline%set('gridding', 'yes')
-                        params%gridding = 'yes'
-                    endif
-                    l_switch2euclid = .false.
-                endif
             end do
         endif
         ! end gracefully
