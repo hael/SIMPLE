@@ -13,8 +13,8 @@ public :: masker, automask2D
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG   = .false.
-logical, parameter :: L_WRITE = .true.
+logical, parameter :: DEBUG         = .false.
+logical, parameter :: L_WRITE       = .true.
 
 type, extends(binimage) :: masker
     private
@@ -52,7 +52,7 @@ contains
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        ! make preliminary mask
+        ! preliminary masking
         call msk_prelim%copy(self)
         call msk_prelim%binarize(self%pix_thres)
         call msk_prelim%grow_bins(self%binwidth)
@@ -60,7 +60,8 @@ contains
         if( L_WRITE ) call msk_prelim%write('msk_prelim.mrc')
         call self%mul(msk_prelim)
         if( L_WRITE ) call self%write('pre-masked.mrc')
-        call self%automask3D_otsu_priv(l_tight=.false.)
+        ! automasking
+        call self%automask3D_otsu_priv(l_tight=.false., amsklp=self%amsklp)
         ! apply mask to volume
         call vol_inout%zero_background()
         call vol_inout%mul(self)
@@ -72,7 +73,8 @@ contains
         class(masker),     intent(inout) :: self
         class(image),      intent(inout) :: vol_inout
         logical, optional, intent(in)    :: do_apply
-        logical :: was_ft, ddo_apply
+        type(masker) :: msk_prelim
+        logical      :: was_ft, ddo_apply
         ddo_apply = .true.
         if( present(do_apply) ) ddo_apply = do_apply
         if( vol_inout%is_2d() )THROW_HARD('automask3D_otsu is intended for volumes only; automask3D')
@@ -80,30 +82,38 @@ contains
         self%binwidth  = params_glob%binwidth
         self%edge      = params_glob%edge
         self%pix_thres = params_glob%thres
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK FIRST  LOW-PASS:    ', AMSKLP_PRELIM, ' ANGSTROMS'
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK SECOND LOW-PASS:    ', self%amsklp,   ' ANGSTROMS'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,     ' PIXEL(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth, ' PIXEL(S)'
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        call self%automask3D_otsu_priv(trim(params_glob%automsk).eq.'tight')
+        ! preliminary masking
+        call msk_prelim%transfer2bimg(vol_inout)
+        call msk_prelim%automask3D_otsu_priv(l_tight=.true., amsklp=AMSKLP_PRELIM)
+        call self%mul(msk_prelim)
+        ! automasking
+        call self%automask3D_otsu_priv(l_tight=.false., amsklp=self%amsklp)
         if( ddo_apply )then
             ! apply mask to volume
             call vol_inout%zero_background()
             call vol_inout%mul(self)
         endif
+        call msk_prelim%kill_bimg
         if( was_ft ) call vol_inout%fft()
     end subroutine automask3D_otsu
 
-    subroutine automask3D_otsu_priv( self, l_tight )
-        class(masker), intent(inout) :: self
-        logical,       intent(in)    :: l_tight
+    subroutine automask3D_otsu_priv( self, l_tight, amsklp )
+        class(masker),  intent(inout) :: self
+        logical,        intent(in)    :: l_tight
+        real,           intent(in)    :: amsklp
         real,    allocatable :: ccsizes(:)
         integer, allocatable :: imat_cc(:,:,:)
         type(binimage)       :: ccimage
         integer              :: loc(1), imax, sz, nccs
         ! low-pass filter volume
-        call self%bp(0., self%amsklp)
+        call self%bp(0., amsklp)
         if( L_WRITE ) call self%write('lped.mrc')
         ! binarize volume
         call otsu_img(self, tight=l_tight)

@@ -212,6 +212,9 @@ integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after 
 ! weighting scheme
 real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights
 
+! automasking
+real, parameter :: AMSKLP_PRELIM = 8.0
+
 ! Graphene
 real, parameter :: GRAPHENE_BAND1 = 2.14        !< graphene band 1 for omission in score function
 real, parameter :: GRAPHENE_BAND2 = 1.23        !< graphene band 2 for omission in score function
