@@ -1282,13 +1282,13 @@ contains
         call automask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         ! mask controls
-        call automask%set_input('mask_ctrls', 1, mskdiam)
-        call automask%set_input('mask_ctrls', 2, 'binwidth', 'num', 'Envelope binary layers width',&
+        call automask%set_input('mask_ctrls', 1, 'binwidth', 'num', 'Envelope binary layers width',&
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
-        call automask%set_input('mask_ctrls', 3, 'thres', 'num', 'Volume threshold',&
+        call automask%set_input('mask_ctrls', 2, 'thres', 'num', 'Volume threshold',&
         &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
-        call automask%set_input('mask_ctrls', 4, 'edge', 'num', 'Envelope mask soft edge',&
+        call automask%set_input('mask_ctrls', 3, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
+        call automask%set_input('mask_ctrls', 4, automsk)
         ! computer controls
         call automask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask
