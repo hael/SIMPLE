@@ -520,7 +520,7 @@ contains
         type(starproject_stream)               :: starproj_stream
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
-        character(len=LONGSTRLEN)              :: cwd_job
+        character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
         integer                                :: nptcls_limit_for_references ! Limit to # of particles picked, not extracted, to generate refrences
         integer                                :: pick_extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
@@ -750,8 +750,9 @@ contains
                 last_injection = simple_gettime()
                 ! guistats
                 call gui_stats%set_now('micrographs', 'last_new_movie')
-                if(spproj_glob%os_mic%isthere('thumb')) then
-                    call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(cwd_job)) // '/' // trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'thumb'))), thumbnail=.true.)
+                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('micrographs', 'latest_micrograph', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
                 end if
                 l_haschanged = .true.
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
@@ -1201,7 +1202,7 @@ contains
                     call spproj_part%read(trim(projects(iproj)))
                     do iori = 1, NMOVS_SET
                         nimported = nimported + 1
-                        call spproj%os_mic%transfer_ori(iori, spproj_part%os_mic, nimported)
+                        call spproj%os_mic%transfer_ori(nimported, spproj_part%os_mic, iori)
                     end do
                     call spproj_part%kill()
                 enddo
