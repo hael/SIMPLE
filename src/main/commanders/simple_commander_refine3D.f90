@@ -9,6 +9,7 @@ use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_qsys_env,         only: qsys_env
 use simple_cluster_seed,     only: gen_labelling
 use simple_commander_volops, only: postprocess_commander
+use simple_commander_mask,   only: automask_commander
 use simple_starproject,      only: starproject
 use simple_commander_euclid
 use simple_qsys_funs
@@ -85,15 +86,17 @@ contains
         type(refine3D_commander)              :: xrefine3D_shmem
         type(estimate_first_sigmas_commander) :: xfirst_sigmas
         type(prob_align_commander)            :: xprob_align
+        type(automask_commander)              :: xautomask
         ! command lines
-        type(cmdline)    :: cline_reconstruct3D_distr
-        type(cmdline)    :: cline_calc_pspec_distr
-        type(cmdline)    :: cline_calc_sigma
-        type(cmdline)    :: cline_check_3Dconv
-        type(cmdline)    :: cline_volassemble
-        type(cmdline)    :: cline_postprocess
-        type(cmdline)    :: cline_prob_align
-        type(cmdline)    :: cline_tmp
+        type(cmdline) :: cline_reconstruct3D_distr
+        type(cmdline) :: cline_calc_pspec_distr
+        type(cmdline) :: cline_calc_sigma
+        type(cmdline) :: cline_check_3Dconv
+        type(cmdline) :: cline_volassemble
+        type(cmdline) :: cline_postprocess
+        type(cmdline) :: cline_prob_align
+        type(cmdline) :: cline_tmp
+        type(cmdline) :: cline_automask
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -103,7 +106,7 @@ contains
         type(qsys_env)      :: qenv
         type(chash)         :: job_descr
         type(starproject)   :: starproj
-        character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name
+        character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name, fname_automasked
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:)
@@ -112,8 +115,8 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, converged, fall_over
-        logical :: l_switch2eo, l_continue, l_multistates
-        logical :: l_combine_eo, l_lpset, l_griddingset
+        logical :: l_switch2eo, l_continue, l_multistates, l_automsk
+        logical :: l_combine_eo, l_lpset, l_griddingset, do_automsk
         real    :: corr, corr_prev, smpd
         integer :: ldim(3), i, state, iter, box, nfiles, niters, ifoo
         integer :: fnr
@@ -154,6 +157,8 @@ contains
             call cline%set('combine_eo','no')
             params%combine_eo = 'no'
         endif
+        ! automasking
+        l_automsk = trim(params%automsk).ne.'no'
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -503,10 +508,30 @@ contains
                         call cline_postprocess%set('state', real(state))
                         if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
                         call xpostprocess%execute(cline_postprocess)
-                        ! for gui visualization
                         if( params%refine .ne. 'snhc' )then
                             volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
                             vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
+                            if( l_automsk.and.mod(iter,AMSK_FREQ)==0 )then
+                                if( niters == 1 .and. .not.params%l_filemsk )then
+                                    do_automsk = .true.
+                                else if( mod(iter,AMSK_FREQ)==0 )then
+                                    do_automsk = .true.
+                                else 
+                                    do_automsk = .false. 
+                                endif
+                                if( do_automsk )then
+                                    cline_automask = cline
+                                    call cline_automask%set('vol1', trim(vollp))
+                                    call cline%set('smpd', params%smpd_crop)
+                                    call xautomask%execute(cline_automask)
+                                    params%mskfile   = 'automask'//params%ext
+                                    params%l_filemsk = .true.
+                                    call cline%set('mskfile', trim(params%mskfile))
+                                    call job_descr%set('mskfile', trim(params%mskfile))
+                                    fname_automasked = basename(add2fbody(trim(vollp), params%ext, '_automsk'))
+                                    call del_file(fname_automasked)
+                                endif
+                            endif
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
                             call simple_copy_file(volpproc, vol_iter)
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
