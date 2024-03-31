@@ -87,8 +87,6 @@ type :: parameters
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)          :: sh_smpl='no'         !< do shift sampling (in Angstrom unit) (yes|no){no}
-    character(len=3)          :: angle_smpl='no'      !< do greedy sampling in the angular threshold (in degree) (yes|no){no}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
     character(len=3)          :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -444,8 +442,6 @@ type :: parameters
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_prob_sh      = .false.
-    logical :: l_sh_smpl      = .false.
-    logical :: l_angle_smpl   = .false.
     logical :: l_sigma_glob   = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_use_denoised = .false.
@@ -595,7 +591,6 @@ contains
         call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('script',         self%script)
         call check_carg('shbarrier',      self%shbarrier)
-        call check_carg('sh_smpl',        self%sh_smpl)
         call check_carg('sigma_est',      self%sigma_est)
         call check_carg('speckind',       self%speckind)
         call check_carg('split_mode',     self%split_mode)
@@ -1536,8 +1531,6 @@ contains
         ! reg options
         self%l_prob_sh      = trim(self%prob_sh     ).eq.'yes'
         self%l_use_denoised = trim(self%use_denoised).eq.'yes'
-        self%l_sh_smpl      = trim(self%sh_smpl     ).eq.'yes'
-        self%l_angle_smpl   = trim(self%angle_smpl  ).eq.'yes'
         ! ML regularization
         self%l_ml_reg = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg )then
