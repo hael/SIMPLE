@@ -4267,7 +4267,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 3, 2, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 3, 4, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4279,6 +4279,8 @@ contains
         call selection%set_input('alt_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
         call selection%set_input('alt_ios', 2, nran)
+        call selection%set_input('alt_ios', 3, ctfresthreshold)
+        call selection%set_input('alt_ios', 4, icefracthreshold)
         ! <empty>
         ! search controls
         ! <empty>

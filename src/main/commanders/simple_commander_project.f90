@@ -773,6 +773,7 @@ contains
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks,noris_in_state
         real                            :: state
+        logical                         :: l_ctfres, l_icefrac
         class(oris), pointer :: pos => NULL()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune') ) call cline%set('prune', 'no')
@@ -803,6 +804,31 @@ contains
             do i=1,params%nran
                 states(ptcls_rnd(i)) = 1
             end do
+        else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
+            l_ctfres  = cline%defined('ctfresthreshold')
+            l_icefrac = cline%defined('icefracthreshold')
+            if( iseg /= MIC_SEG )then
+                THROW_HARD('Incorrect oritype for micrographs selection')
+            endif
+            allocate(states(noris), source=nint(pos%get_all('state')))
+            if( l_ctfres )then
+                do i = 1,noris
+                    if( states(i) > 0 )then
+                        if( pos%isthere(i, 'ctfres') )then
+                            if( pos%get(i,'ctfres') > params%ctfresthreshold ) states(i) = 0
+                        endif
+                    endif
+                enddo
+            endif
+            if( l_icefrac )then
+                do i = 1,noris
+                    if( states(i) > 0 )then
+                        if( pos%isthere(i, 'icefrac') )then
+                            if( pos%get(i,'icefrac') > params%icefracthreshold ) states(i) = 0
+                        endif
+                    endif
+                enddo
+            endif
         else
             ! selection based on text file input
             ! sanity check
