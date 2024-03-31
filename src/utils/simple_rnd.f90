@@ -153,47 +153,47 @@ contains
     end function multinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
-    function greedy_sampling_1( pvec, thres, thres_safe ) result( which )
+    function greedy_sampling_1( pvec, nsmpl_ub, nsmpl_lb ) result( which )
         use simple_math, only: hpsort
         real,              intent(in) :: pvec(:) !< probabilities
-        integer,           intent(in) :: thres
-        integer, optional, intent(in) :: thres_safe
+        integer,           intent(in) :: nsmpl_ub
+        integer, optional, intent(in) :: nsmpl_lb
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: sorted_inds(:)
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),sorted_inds(n))
-        which = greedy_sampling_2(pvec, pvec_sorted, sorted_inds, thres, thres_safe)
+        which = greedy_sampling_2(pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb)
     end function greedy_sampling_1
 
-    function greedy_sampling_2( pvec, pvec_sorted, sorted_inds, thres, thres_safe_in ) result( which )
+    function greedy_sampling_2( pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb_in ) result( which )
         use simple_math, only: hpsort
         real,              intent(in)    :: pvec(:)        !< probabilities
         real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
         integer,           intent(inout) :: sorted_inds(:)
-        integer,           intent(in)    :: thres
-        integer, optional, intent(in)    :: thres_safe_in
-        integer :: which, i, thres_safe
+        integer,           intent(in)    :: nsmpl_ub
+        integer, optional, intent(in)    :: nsmpl_lb_in
+        integer :: which, i, nsmpl_lb
         real    :: sum_pvec, rnd
-        thres_safe  = 1
-        if( present(thres_safe_in) ) thres_safe = thres_safe_in
+        nsmpl_lb = 1
+        if( present(nsmpl_lb_in) ) nsmpl_lb = nsmpl_lb_in
         pvec_sorted = pvec
         sorted_inds = (/(i,i=1,size(pvec))/)
         rnd         = ran3()
         call hpsort(pvec_sorted, sorted_inds)
-        sum_pvec = sum(pvec_sorted(1:thres))
+        sum_pvec = sum(pvec_sorted(1:nsmpl_ub))
         if( sum_pvec < TINY )then
             ! uniform sampling
-            which = sorted_inds(1 + floor(real(thres) * rnd))
+            which = sorted_inds(1 + floor(real(nsmpl_ub) * rnd))
         else
             pvec_sorted = pvec_sorted/sum_pvec
             ! doing probabilistic greedy assignment
-            if( rnd > sum(pvec_sorted(1:thres_safe)) )then
-                ! uniform sampling within the safe neighborhood (exploration)
-                which = sorted_inds(1 + floor(real(thres_safe) * ran3()))
+            if( rnd > sum(pvec_sorted(1:nsmpl_lb)) )then
+                ! choosing the best one within the nsmpl_lb prob
+                which = sorted_inds(1)
             else
                 ! push to the boundary of the sample space (exploitation)
-                which = sorted_inds(thres)
+                which = sorted_inds(nsmpl_ub)
             endif
         endif
     end function greedy_sampling_2

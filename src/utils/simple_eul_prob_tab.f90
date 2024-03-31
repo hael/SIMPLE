@@ -8,7 +8,7 @@ use simple_builder,    only: build_glob
 implicit none
 
 public :: eul_prob_tab
-public :: calc_num2sample, calc_athres, eulprob_dist_switch, eulprob_corr_switch, shift_sampling, angle_sampling
+public :: calc_num2sample, calc_athres, eulprob_dist_switch, eulprob_corr_switch, angle_sampling
 private
 #include "simple_local_flags.inc"
 
@@ -79,12 +79,14 @@ contains
         integer,    allocatable :: locn(:)
         type(pftcc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         integer :: i, j, iref, iptcl, refs_ns, ithr, irot, inds_sorted(pftcc%nrots,nthr_glob)
+        logical :: l_doshift
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
         real    :: dists_refs(pftcc%nrefs,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
         call seed_rnd
+        l_doshift   = params_glob%l_prob_sh .and. params_glob%l_doshift
         inpl_athres = calc_athres('dist_inpl')
         call calc_num2sample(params_glob%nspace, 'dist', refs_ns)
-        if( params_glob%l_prob_sh )then
+        if( l_doshift )then
             allocate(locn(refs_ns), source=0)
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
@@ -108,28 +110,26 @@ contains
                     dists_refs(iref,ithr)     = dists_inpl(irot,ithr)
                 enddo
                 locn = minnloc(dists_refs(:,ithr), refs_ns)
-                if( params_glob%l_doshift )then
-                    do j = 1,refs_ns
-                        iref = locn(j)
-                        ! BFGS over shifts
-                        call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                        irot = self%loc_tab(iref,i)%inpl
-                        cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
-                            self%loc_tab(iref,i)%dist = eulprob_dist_switch(cxy(1))
-                        endif
-                    end do
-                endif
+                do j = 1,refs_ns
+                    iref = locn(j)
+                    ! BFGS over shifts
+                    call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
+                    irot = self%loc_tab(iref,i)%inpl
+                    cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
+                        self%loc_tab(iref,i)%dist = eulprob_dist_switch(cxy(1))
+                    endif
+                end do
             enddo
             !$omp end parallel do
         else
             ! fill the table
-            !$omp parallel do collapse(2) default(shared) private(i,ithr,iref,iptcl,irot) proc_bind(close) schedule(static)
-            do iref = 1, params_glob%nspace
-                do i = 1, self%nptcls
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
+            !$omp parallel do default(shared) private(i,iptcl,ithr,iref,irot) proc_bind(close) schedule(static)
+            do i = 1, self%nptcls
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                do iref = 1, params_glob%nspace
                     call pftcc%gencorrs(iref, iptcl, dists_inpl(:,ithr))
                     dists_inpl(:,ithr) = eulprob_dist_switch(dists_inpl(:,ithr))
                     irot = angle_sampling(dists_inpl(:,ithr), dists_inpl_sorted(:,ithr), inds_sorted(:,ithr), inpl_athres)
@@ -202,10 +202,8 @@ contains
             ! sampling the ref distribution to choose next iref to assign
             assigned_iref = angle_sampling(ref_dist, dists_sorted, inds_sorted, refs_athres)
             assigned_ptcl = stab_inds(ref_dist_inds(assigned_iref), assigned_iref)
-            ptcl_avail(assigned_ptcl)          = .false.
-            self%assgn_map(assigned_ptcl)%iref = assigned_iref
-            self%assgn_map(assigned_ptcl)%dist = self%loc_tab(assigned_iref,assigned_ptcl)%dist
-            self%assgn_map(assigned_ptcl)%inpl = self%loc_tab(assigned_iref,assigned_ptcl)%inpl
+            ptcl_avail(assigned_ptcl)     = .false.
+            self%assgn_map(assigned_ptcl) = self%loc_tab(assigned_iref,assigned_ptcl)
             ! update the ref_dist and ref_dist_inds
             do iref = 1, params_glob%nspace
                 do while( ref_dist_inds(iref) < self%nptcls .and. .not.(ptcl_avail(stab_inds(ref_dist_inds(iref), iref))))
@@ -331,13 +329,9 @@ contains
         integer,          intent(in)  :: num_all
         character(len=*), intent(in)  :: field_str
         integer,          intent(out) :: num_smpl
-        real, allocatable :: vals(:)
-        real :: athres, dist_thres
-        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str))
-        dist_thres = sum(vals) / real(size(vals))
-        athres     = params_glob%prob_athres
-        if( dist_thres > TINY ) athres = min(athres, dist_thres)
-        num_smpl   = min(num_all,max(1,int(athres * real(num_all) / 180.)))
+        real :: athres
+        athres   = calc_athres( field_str )
+        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 
     function calc_athres( field_str ) result( athres )
@@ -384,59 +378,18 @@ contains
         end select
     end function eulprob_corr_switch
 
-    function angle_sampling( pvec, pvec_sorted, sorted_inds, thres_bound ) result( which )
+    function angle_sampling( pvec, pvec_sorted, sorted_inds, athres_ub_in ) result( which )
         real,    intent(in)    :: pvec(:)             !< probabilities
         real,    intent(inout) :: pvec_sorted(:)      !< sorted probabilities
         integer, intent(inout) :: sorted_inds(:)
-        real,    intent(in)    :: thres_bound
-        integer :: which, num_safe, num_smpl, n
-        real    :: athres
-        n        = size(pvec)
-        athres   = min(params_glob%prob_athres, thres_bound)
-        num_smpl = min(n,max(1,int(athres * real(n) / 180.)))
-        num_safe = 1
-        if( params_glob%l_angle_smpl .and. thres_bound > ANGLE_SAFE ) num_safe = 1 + floor(ANGLE_SAFE / athres * num_smpl)
-        which    = greedy_sampling( pvec, pvec_sorted, sorted_inds, num_smpl, num_safe )
+        real,    intent(in)    :: athres_ub_in
+        integer :: which, num_lb, num_ub, n
+        real    :: athres_ub, athres_lb
+        n         = size(pvec)
+        athres_ub = min(params_glob%prob_athres, athres_ub_in)
+        athres_lb = min(athres_ub / 10., 1.)    ! athres lower bound is 1/10 of athres upper bound, max at 1 degree
+        num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
+        num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
+        which     = greedy_sampling( pvec, pvec_sorted, sorted_inds, num_ub, num_lb )
     end function angle_sampling
-
-    ! shift multinomal sampling within a threshold, units are in Ang
-    function shift_sampling( cur_sh, thres_bound ) result(sh)
-        real,              intent(in) :: cur_sh(2)
-        real,    optional, intent(in) :: thres_bound
-        integer, parameter   :: N_SMPL  = 100
-        real,    allocatable :: vals(:)
-        integer :: i, sh_signs(2), which, dim, n_safe
-        real    :: sh(2)
-        real    :: d_sh, gauss_sh(N_SMPL), sh_vals(N_SMPL), sig2, d_thres, thres
-        if( present(thres_bound) )then
-            thres = thres_bound
-        else
-            vals  = build_glob%spproj_field%get_all_sampled(trim('shincarg'))
-            thres = sum(vals) / real(size(vals))
-            thres = thres / 2.
-        endif
-        sh = cur_sh
-        if( thres < TINY ) return
-        ! randomly pick the plus/minus for each x,y dimensions
-        sh_signs = 1
-        if( ran3() < 0.5 ) sh_signs(1) = -1
-        if( ran3() < 0.5 ) sh_signs(2) = -1
-        ! sampling for x
-        d_sh   = thres / real(N_SMPL-1)
-        n_safe = 1
-        if( thres > SH_SAFE ) n_safe = 1 + floor(SH_SAFE / d_sh)
-        sig2   = thres**2.
-        do dim = 1, 2
-            do i = 1, N_SMPL
-                d_thres     = d_sh * real(i - 1)
-                gauss_sh(i) = gaussian1D(d_thres, avg=0., sigma_sq=sig2)
-                sh_vals(i)  = d_thres
-            enddo
-            gauss_sh = (1. - gauss_sh)
-            gauss_sh = gauss_sh / sum(gauss_sh)
-            which    = greedy_sampling( gauss_sh, N_SMPL, n_safe )
-            sh(dim)  = cur_sh(dim) + real(sh_signs(dim)) * sh_vals(which)
-        enddo
-    end function shift_sampling
-
 end module simple_eul_prob_tab

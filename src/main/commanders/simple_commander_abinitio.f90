@@ -711,8 +711,6 @@ contains
         if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',       'no')
         if( .not. cline%defined('prob_athres')) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('sh_smpl')    ) call cline%set('sh_smpl',       'no')
-        if( .not. cline%defined('angle_smpl') ) call cline%set('angle_smpl',    'no')
         if( .not. cline%defined('center')     ) call cline%set('center',        'no')
         if( .not. cline%defined('objfun')     ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('oritype')    ) call cline%set('oritype',   'ptcl3D')
@@ -919,14 +917,9 @@ contains
             if( it < NSTAGES )then
                 call cline_refine3D%set('nspace', NSPACE1)
                 call cline_refine3D%set('trs',      0.)
-                ! angle sampling in inpl (if set) (because of not-very-stable volume)
-                call cline_refine3D%set('angle_smpl', params%angle_smpl)
             else
                 call cline_refine3D%set('nspace', NSPACE2)
                 call cline_refine3D%set('trs',    trslim)
-                ! extreme greedy sampling in inpl, sh_smpl in shift (if set) (because of more-stable volume)
-                call cline_refine3D%set('angle_smpl', 'no')
-                call cline_refine3D%set('sh_smpl',    params%sh_smpl)
             end if
             call cline_refine3D%set('ml_reg',    'no')       ! since ml_reg seems to interfer with finding a good lowres shape            
             call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
@@ -978,9 +971,6 @@ contains
         call cline_refine3D%set('nspace',     NSPACE3)
         call cline_refine3D%set('it_history',       3) ! particles sampled in three most recent past iterations also included in rec
         call cline_refine3D%set('mov_avg_vol',  'yes')
-        ! extreme greedy sampling in inpl, and shifts (because of stable volume)
-        call cline_refine3D%set('angle_smpl', 'no')
-        call cline_refine3D%set('sh_smpl',    'no')
         ! execution
         call exec_refine3D(iter)
         ! for visualization
