@@ -244,6 +244,7 @@ contains
         call del_file(USER_PARAMS)
         call del_file(PROJFILE_POOL)
         call del_file(DISTR_EXEC_FNAME)
+        call del_file(TERM_STREAM)
         call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.dat$|\.bin$', files)
         if( allocated(files) )then
             do i = 1,size(files)
