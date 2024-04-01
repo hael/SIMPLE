@@ -681,6 +681,7 @@ contains
         integer, parameter :: MAXITS_GLOB = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
+        integer, parameter :: MLREG_ITER     = 3 ! in [2;6]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -921,14 +922,22 @@ contains
                 call cline_refine3D%set('nspace', NSPACE2)
                 call cline_refine3D%set('trs',    trslim)
             end if
-            call cline_refine3D%set('ml_reg',    'no')       ! since ml_reg seems to interfer with finding a good lowres shape            
             call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
+            ! optional ML volume regularization
+            if( params%l_ml_reg .and. it == MLREG_ITER )then
+                call cline_refine3D%set('ml_reg', 'yes')
+                call cline_refine3D%delete('continue')
+                call cline_refine3D%delete('vol1')
+            else
+                call cline_refine3D%set('ml_reg', 'no')
+            endif
             ! execution
             call exec_refine3D(iter)
             ! symmetrization
             if( it == SYMSEARCH_ITER ) call symmetrize
         enddo
         ! Final stage
+        it = NSTAGES+1
         write(logfhandle,'(A)')'>>>'
         write(logfhandle,'(A,F6.2)')'>>> FINAL STAGE WITH LP=',params%lpstop
         prev_box_crop = params%box_crop
@@ -946,7 +955,7 @@ contains
             write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
         endif
         ! Dealing with reconstruction
-        if( params%l_ml_reg )then
+        if( params%l_ml_reg .and. it == MLREG_ITER )then
             ! need to reconstruct
             call cline_refine3D%set('ml_reg', 'yes')
             call cline_refine3D%delete('continue')
