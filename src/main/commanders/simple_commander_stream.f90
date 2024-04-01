@@ -529,7 +529,6 @@ contains
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
-
         call cline%set('oritype',   'mic')
         call cline%set('mkdir',     'yes')
         if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
@@ -1372,14 +1371,13 @@ contains
 
     ! TODO
     ! path to all files (absolute path at the moment)
-    ! restart
     subroutine exec_stream_cluster2D( self, cline )
         use simple_moviewatcher, only: moviewatcher
         use simple_stream_chunk, only: micproj_record
         use simple_commander_cluster2D_stream_dev
         use simple_timer
         class(commander_stream_cluster2D), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         type(parameters)                       :: params
         type(guistats)                         :: gui_stats
@@ -1414,6 +1412,12 @@ contains
         if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
         ! write cmdline for GUI
         call cline%writeline(".cline")
+        ! sanity check for restart
+        if( cline%defined('dir_exec') )then
+            if( .not.file_exists(cline%get_carg('dir_exec')) )then
+                THROW_HARD('Previous directory does not exists: '//trim(cline%get_carg('dir_exec')))
+            endif
+        endif
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency, restored after params%new
@@ -1427,13 +1431,17 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))
-        if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
-            THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
-        endif
+        ! limit to # of chunks
         if( .not. cline%defined('maxnchunks') .or. params_glob%maxnchunks < 1 )then
             params_glob%maxnchunks = huge(params_glob%maxnchunks)
         endif
         call cline%delete('maxnchunks')
+        ! restart
+        if( cline%defined('dir_exec') )then
+            call cline%delete('dir_exec')
+            call del_file(micspproj_fname)
+            call cleanup_root_folder
+        endif
         ! Only required for compatibility with old version (chunk)
         params%nthr2D      = params%nthr
         params_glob%nthr2D = params%nthr
@@ -1445,11 +1453,9 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
-        ! restart
-        nptcls_glob = 0             ! global number of particles
-        ! call here
         ! Infinite loop
-        nchunks_imported_glob = 0
+        nptcls_glob           = 0   ! global number of particles
+        nchunks_imported_glob = 0   ! global number of completed chunks
         last_injection        = simple_gettime()
         nprojects             = 0
         iter                  = 0
@@ -1522,16 +1528,16 @@ contains
             call read_pool_xml_beamtilts_dev()                      !?
             call assign_pool_optics_dev(cline, propagate = .false.) !?
             call reject_from_pool_user_dev
-            if( .not.l_nchunks_maxed )then
+            if( l_nchunks_maxed )then
+                ! # of chunks is above desired threshold
+                if( is_pool_available_dev() ) exit
+            else
                 call import_chunks_into_pool_dev(.false., nchunks_imported)
                 nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                 l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
                 call classify_pool_dev
                 call update_projects_mask_dev(micproj_records)
                 call classify_new_chunks_dev(micproj_records)
-            else
-                ! # of chunks is above desired threshold
-                if( is_pool_available_dev() ) exit
             endif
             call sleep(WAITTIME)
             ! guistats

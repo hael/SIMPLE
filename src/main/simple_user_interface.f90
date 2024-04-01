@@ -1846,7 +1846,7 @@ contains
         &'is a distributed workflow that executes 2D classification'//&                ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                             ! executable
-        &0, 1, 0, 7, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 2, 0, 7, 2, 1, 5, .true.)                                                 ! # entries in each group, requires sp_project
         cluster2D_stream%gui_submenu_list = "data,cluster 2D,compute"
         cluster2D_stream%advanced = .false.
         ! image input/output
@@ -1855,6 +1855,9 @@ contains
         call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '')
         call cluster2D_stream%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
+        call cluster2D_stream%set_input('parm_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
+        &'Directory where previous 2D classification took place', 'e.g. 3_cluster2D_stream', .false., '')
+        call cluster2D_stream%set_gui_params('parm_ios', 2, submenu="data")
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3223,9 +3226,8 @@ contains
         call pick_extract%set_input('img_ios', 1, pickrefs)
         call pick_extract%set_gui_params('img_ios', 1, submenu="picking", advanced=.false., exclusive_group="pickrefs" )
         call pick_extract%set_input('img_ios', 2, 'dir_exec', 'file', 'Previous run directory',&
-            &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .true., '')
+            &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '')
         call pick_extract%set_gui_params('img_ios', 2, submenu="data")
-        pick_extract%img_ios(2)%required = .false.
         ! parameter input/output
         call pick_extract%set_input('parm_ios', 1, pcontrast)
         call pick_extract%set_gui_params('parm_ios', 1, submenu="picking")

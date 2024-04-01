@@ -7,7 +7,7 @@ use simple_parameters,       only: parameters, params_glob
 use simple_sp_project,       only: sp_project
 use simple_qsys_env,         only: qsys_env
 use simple_image,            only: image
-use simple_stream_chunk,     only: stream_chunk, micproj_record
+use simple_stream_chunk,     only: stream_chunk, micproj_record, DIR_CHUNK
 use simple_class_frcs,       only: class_frcs
 use simple_stack_io,         only: stack_io
 use simple_starproject,      only: starproject
@@ -18,7 +18,7 @@ use simple_commander_cluster2D
 use FoX_dom
 implicit none
 
-public :: init_cluster2D_stream_dev, update_projects_mask_dev, terminate_stream2D_dev
+public :: init_cluster2D_stream_dev, update_projects_mask_dev, terminate_stream2D_dev, cleanup_root_folder
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev, classify_pool_dev
 public :: update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev, is_pool_available_dev
 public :: update_user_params_dev
@@ -233,6 +233,30 @@ contains
         origproj_time  = simple_gettime()
         initiated      = .true.
     end subroutine init_cluster2D_stream_dev
+
+    ! remove previous files from folder to restart
+    subroutine cleanup_root_folder
+        character(len=LONGSTRLEN), allocatable :: files(:)
+        character(len=STDLEN),     allocatable :: folders(:)
+        integer :: i
+        call qsys_cleanup
+        call simple_rmdir(SIGMAS_DIR)
+        call del_file(USER_PARAMS)
+        call del_file(PROJFILE_POOL)
+        call del_file(DISTR_EXEC_FNAME)
+        call simple_list_files_regexp('.', '\.mrc$|\.mrcs$|\.txt$|\.star$|\.eps$|\.jpeg$|\.dat$|\.bin$', files)
+        if( allocated(files) )then
+            do i = 1,size(files)
+                call del_file(files(i))
+            enddo
+        endif
+        folders = simple_list_dirs('.')
+        if( allocated(folders) )then
+            do i = 1,size(folders)
+                if( str_has_substr(folders(i),trim(DIR_CHUNK)) ) call simple_rmdir(folders(i))
+            enddo
+        endif
+    end subroutine cleanup_root_folder
 
     ! updates mask  of project to process
     subroutine update_projects_mask_dev( micproj_records )
