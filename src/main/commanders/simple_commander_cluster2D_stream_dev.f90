@@ -18,10 +18,10 @@ use simple_commander_cluster2D
 use FoX_dom
 implicit none
 
-public :: init_cluster2D_stream_dev, update_projects_mask_dev, write_project_stream2D_dev, terminate_stream2D_dev
+public :: init_cluster2D_stream_dev, update_projects_mask_dev, terminate_stream2D_dev
 public :: update_pool_status_dev, update_pool_dev, reject_from_pool_dev, reject_from_pool_user_dev, classify_pool_dev
 public :: update_chunks_dev, classify_new_chunks_dev, import_chunks_into_pool_dev, is_pool_available_dev
-public :: update_user_params_dev, get_pool_iter_dev
+public :: update_user_params_dev
 public :: read_pool_xml_beamtilts_dev, assign_pool_optics_dev
 private
 #include "simple_local_flags.inc"
@@ -36,7 +36,6 @@ integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
-character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/' ! TODO: remove
 character(len=STDLEN), parameter   :: SIGMAS_DIR          = './sigma2/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
@@ -57,7 +56,6 @@ integer                                :: glob_chunk_id
 ! Book-keeping
 logical,                   allocatable :: spprojs_mask_glob(:) ! micrographs from preprocess to import
 character(len=LONGSTRLEN), allocatable :: imported_stks(:)
-character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
 integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
@@ -94,7 +92,6 @@ contains
         nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start         ! # of particles in each chunk
         ncls_glob           = 0
         ncls_rejected_glob  = 0
-        prev_snapshot_cavgs = ''
         orig_projfile       = trim(params_glob%projfile)
         projfile4gui        = trim(projfilegui)
         l_update_sigmas     = params_glob%l_needs_sigma
@@ -106,7 +103,6 @@ contains
         pool_iter      = 0
         call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
-        call simple_mkdir(trim(SNAPSHOT_DIR))
         if( l_update_sigmas ) call simple_mkdir(SIGMAS_DIR)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
@@ -1092,27 +1088,6 @@ contains
         call pool_proj%projinfo%set(1,'projfile', projfile)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-        if( l_scaling )then
-            cavgsfname = trim(SNAPSHOT_DIR)//trim(cavgsfname)
-            frcsfname  = trim(SNAPSHOT_DIR)//trim(frcsfname)
-            if( (trim(prev_snapshot_cavgs) /= '') )then
-                ! removing previous snapshot
-                call del_file(prev_snapshot_frcs)
-                call del_file(prev_snapshot_cavgs)
-                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
-                call del_file(src)
-                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
-                call del_file(src)
-                if( l_wfilt )then
-                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX))
-                    call del_file(src)
-                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_even')
-                    call del_file(src)
-                    src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_odd')
-                    call del_file(src)
-                endif
-            endif
-        endif
         write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
         if( l_scaling )then
@@ -1175,8 +1150,7 @@ contains
         call pool_proj%os_cls2D%delete_entry('stk')
     end subroutine write_project_stream2D_dev
 
-    subroutine terminate_stream2D_dev( write_project )
-        logical, intent(in) :: write_project
+    subroutine terminate_stream2D_dev
         integer :: ichunk, ipart
         do ichunk = 1,params_glob%nchunks
             call chunks(ichunk)%terminate
@@ -1191,12 +1165,8 @@ contains
             enddo
             call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
         endif
-        if( pool_iter >= 1 .and. write_project )then
-            ! updates project
-            call write_project_stream2D_dev
-            ! ranking
-            call rank_cavgs
-        endif
+        call write_project_stream2D_dev
+        if( pool_iter >= 1 ) call rank_cavgs
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
         if( .not.debug_here )then
@@ -1263,11 +1233,6 @@ contains
     logical function is_pool_available_dev()
         is_pool_available_dev = pool_available
     end function is_pool_available_dev
-
-    integer function get_pool_iter_dev()
-        get_pool_iter_dev = pool_iter
-    end function get_pool_iter_dev
-
 
     !>  Convenience function
     subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout, self_transfer )
@@ -1410,7 +1375,7 @@ contains
                 call img%zero_and_unflag_ft
                 call stkio_r%get_image(icls, img)
                 call img%fft
-                call img%pad(img_pad, backgr=0.)
+                call img%pad(img_pad, backgr=0., antialiasing=.false.)
                 call img_pad%ifft
             else
                 img_pad = 0.

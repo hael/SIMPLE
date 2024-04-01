@@ -700,9 +700,9 @@ contains
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
-                prev_stacksz = stacksz
-                ! TODO: that is not the right number
-                write(logfhandle,'(A,I6)')'>>> MICROGRAPHS TO PROCESS:                ', stacksz*NMOVS_SET
+                prev_stacksz = stacksz                          ! # of projects
+                stacksz      = qenv%qscripts%get_stack_range()  ! # of micrographs
+                write(logfhandle,'(A,I6)')'>>> MICROGRAPHS TO PROCESS:                 ', stacksz
                 ! guistats
                 call gui_stats%set('micrographs', 'movies', int2str(spproj_glob%os_mic%get_noris())&
                     &// '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
@@ -730,9 +730,9 @@ contains
                 n_imported = spproj_glob%os_mic%get_noris()
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
                 if( l_extract )then
-                    write(logfhandle,'(A,I8)')       '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                    write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
                 else
-                    write(logfhandle,'(A,I8)')       '>>> # PARTICLES PICKED                  : ',nptcls_glob
+                    write(logfhandle,'(A,I8)')   '>>> # PARTICLES PICKED                  : ',nptcls_glob
                 endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
@@ -1402,14 +1402,14 @@ contains
         call cline%set('kweight_pool', 'default')
         call cline%set('prune',        'no')
         call cline%set('nonuniform',   'no')
+        call cline%set('ml_reg',       'no')
+        call cline%set('wiener',       'full')
         if( .not.cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('walltime')) call cline%set('walltime',   29.0*60.0) ! 29 minutes
-        call cline%set('wiener', 'full')
         if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',       30.0)
         if( .not. cline%defined('ndev')        ) call cline%set('ndev', CLS_REJECT_STD)
         if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
         if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init',  'no')
         if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
         ! write cmdline for GUI
@@ -1541,11 +1541,7 @@ contains
         ! termination
         call read_pool_xml_beamtilts_dev()                      !?
         call assign_pool_optics_dev(cline, propagate = .true.)  !?
-        call terminate_stream2D_dev(.true.)
-        if( get_pool_iter_dev() == 0 )then
-            ! iteration one was never completed so imported particles & micrographs need be written
-            call write_project_stream2D_dev
-        endif
+        call terminate_stream2D_dev
         call update_user_params(cline)
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)

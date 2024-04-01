@@ -26,7 +26,6 @@ type qsys_ctrl
     class(cmdline),    allocatable :: stream_cline_submitted(:)     !< stack of submitted command lines, for streaming only
     class(cmdline),    allocatable :: stream_cline_done_stack(:)    !< stack of completed command lines, for streaming only
     class(cmdline),    allocatable :: stream_cline_fail_stack(:)    !< stack of failed command lines, for streaming only
-    integer(kind=8),   allocatable :: stream_submit_time(:)         !< records submission time
     logical,           allocatable :: jobs_done(:)                  !< to indicate completion of distributed scripts
     logical,           allocatable :: jobs_submitted(:)             !< to indicate which jobs have been submitted
     integer                        :: fromto_part(2)         = 0    !< defines the range of partitions controlled by this instance
@@ -68,7 +67,7 @@ type qsys_ctrl
     procedure, private :: add_to_stream_stack
     procedure          :: get_stream_done_stack
     procedure          :: get_stream_fail_stack
-    procedure          :: get_stacksz
+    procedure          :: get_stacksz, get_stack_range
     procedure          :: get_done_stacksz
     procedure          :: get_failed_stacksz
     procedure          :: get_ncomputing_units_avail
@@ -132,7 +131,6 @@ contains
         if( self%stream )then
             self%jobs_done  = .true.
             allocate(self%stream_cline_submitted(fromto_part(1):fromto_part(2)))
-            allocate(self%stream_submit_time(fromto_part(1):fromto_part(2)),source=int(0,kind=8))
         else
             self%jobs_done  = .false.
         endif
@@ -665,7 +663,6 @@ contains
         class(qsys_ctrl),            intent(inout) :: self
         class(chash),                intent(in)    :: q_descr
         character(len=*),  optional, intent(in)    :: path
-        type(cmdline)              :: cline
         type(chash)                :: job_descr
         character(len=XLONGSTRLEN) :: cwd, cwd_old
         integer                    :: ipart
@@ -681,11 +678,10 @@ contains
                 do ipart = 1, self%ncomputing_units
                     if( self%cline_stacksz .eq. 0 )exit
                     if( self%jobs_done(ipart) )then
-                        cline = self%stream_cline_stack(1)
+                        self%stream_cline_submitted(ipart) = self%stream_cline_stack(1)
                         call updatestack
-                        call cline%set('part', real(ipart))        ! computing unit allocation
-                        self%stream_cline_submitted(ipart) = cline ! stash
-                        call cline%gen_job_descr(job_descr)
+                        call self%stream_cline_submitted(ipart)%set('part', real(ipart)) ! computing unit allocation
+                        call self%stream_cline_submitted(ipart)%gen_job_descr(job_descr)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
                         call del_file(self%jobs_done_fnames(ipart))
@@ -693,7 +689,6 @@ contains
                         call self%generate_script_2(job_descr, q_descr, self%exec_binary, self%script_names(ipart),&
                         &exit_code_fname=self%jobs_exit_code_fnames(ipart) )
                         call self%submit_script( self%script_names(ipart) )
-                        self%stream_submit_time(ipart) = time8()
                     endif
                 enddo
             endif
@@ -702,19 +697,15 @@ contains
             call chdir(cwd_old)
             cwd_glob = trim(cwd_old)
         endif
+        call job_descr%kill
         contains
 
             ! move everything up so '1' is index for next job to be run
             subroutine updatestack
                 class(cmdline), allocatable :: tmp_stack(:)
-                integer :: i
                 if( self%cline_stacksz > 1 )then
-                    allocate(tmp_stack(self%cline_stacksz-1))
-                    call self%stream_cline_stack(1)%kill
-                    do i = 1, self%cline_stacksz-1
-                        tmp_stack(i) = self%stream_cline_stack(i+1)
-                        call self%stream_cline_stack(i+1)%kill
-                    enddo
+                    allocate(tmp_stack(self%cline_stacksz-1),source=self%stream_cline_stack(2:self%cline_stacksz))
+                    call self%stream_cline_stack(:)%kill
                     deallocate(self%stream_cline_stack)
                     self%cline_stacksz = self%cline_stacksz-1
                     call move_alloc(tmp_stack,self%stream_cline_stack)
@@ -731,22 +722,18 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         class(cmdline),   intent(in)    :: cline
         class(cmdline), allocatable :: tmp_stack(:)
-        integer :: i
         if( .not. allocated(self%stream_cline_stack) )then
             ! empty stack
-            allocate( self%stream_cline_stack(1))
-            self%stream_cline_stack(1) = cline
+            allocate( self%stream_cline_stack(1), source=cline)
             self%cline_stacksz = 1
         else
             ! append
             call move_alloc(self%stream_cline_stack, tmp_stack)
             self%cline_stacksz = self%cline_stacksz + 1
-            allocate( self%stream_cline_stack(self%cline_stacksz) )
-            do i = 1, self%cline_stacksz-1
-                self%stream_cline_stack(i) = tmp_stack(i)
-                call tmp_stack(i)%kill
-            enddo
-            self%stream_cline_stack(self%cline_stacksz) = cline
+            allocate(self%stream_cline_stack(self%cline_stacksz))
+            self%stream_cline_stack(1:self%cline_stacksz-1) = tmp_stack(1:self%cline_stacksz-1)
+            self%stream_cline_stack(self%cline_stacksz)     = cline
+            call tmp_stack(:)%kill
             deallocate(tmp_stack)
         endif
     end subroutine add_to_streaming
@@ -757,22 +744,20 @@ contains
         class(cmdline),              intent(in)    :: cline
         class(cmdline), allocatable, intent(inout) :: stack(:)
         class(cmdline), allocatable :: tmp_stack(:)
-        integer :: i, stacksz
+        integer :: stacksz
         if( .not.cline%defined('prg') )return
         if( .not. allocated(stack) )then
             ! empty stack
-            allocate( stack(1), source=cline)
+            allocate(stack(1), source=cline)
         else
             ! append
             stacksz = size(stack)
             call move_alloc(stack, tmp_stack)
             stacksz = stacksz + 1
-            allocate( stack(stacksz) )
-            do i = 1, stacksz-1
-                stack(i) = tmp_stack(i)
-                call tmp_stack(i)%kill
-            enddo
-            stack(stacksz) = cline
+            allocate(stack(stacksz))
+            stack(1:stacksz-1) = tmp_stack(1:stacksz-1)
+            stack(stacksz)     = cline
+            call tmp_stack(:)%kill
             deallocate(tmp_stack)
         endif
     end subroutine add_to_stream_stack
@@ -802,6 +787,18 @@ contains
         class(qsys_ctrl), intent(in) :: self
         get_stacksz = self%cline_stacksz
     end function get_stacksz
+
+    !>  \brief  returns number micrographs in streaming jobs stack
+    integer function get_stack_range( self )
+        class(qsys_ctrl), intent(in) :: self
+        if( self%cline_stacksz == 0 )then
+            get_stack_range = 0
+        else
+            get_stack_range =                   sum(nint(self%stream_cline_stack(:)%get_rarg('top')))
+            get_stack_range = get_stack_range - sum(nint(self%stream_cline_stack(:)%get_rarg('fromp')))
+            get_stack_range = get_stack_range + self%cline_stacksz
+        endif
+    end function get_stack_range
 
     !>  \brief  returns streaming jobs done stack size
     integer function get_done_stacksz( self )
@@ -848,7 +845,6 @@ contains
             if(allocated(self%stream_cline_submitted)) deallocate(self%stream_cline_submitted)
             if(allocated(self%stream_cline_done_stack))deallocate(self%stream_cline_done_stack)
             if(allocated(self%stream_cline_fail_stack))deallocate(self%stream_cline_fail_stack)
-            if(allocated(self%stream_submit_time))     deallocate(self%stream_submit_time)
             self%existence = .false.
         endif
     end subroutine kill
