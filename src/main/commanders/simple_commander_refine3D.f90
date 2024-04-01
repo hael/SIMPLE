@@ -511,7 +511,7 @@ contains
                         if( params%refine .ne. 'snhc' )then
                             volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
                             vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
-                            if( l_automsk.and.mod(iter,AMSK_FREQ)==0 )then
+                            if( l_automsk )then
                                 if( niters == 1 .and. .not.params%l_filemsk )then
                                     do_automsk = .true.
                                 else if( mod(iter,AMSK_FREQ)==0 )then
