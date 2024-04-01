@@ -508,7 +508,7 @@ contains
                 do icls = 1,params%ncls
                     call img%read(cavgs,icls)
                     call img%fft
-                    call img%pad(img_pad, backgr=0.)
+                    call img%pad(img_pad, backgr=0., antialiasing=.false.)
                     call img_pad%ifft
                     call stkio_w%write(icls, img_pad)
                 enddo

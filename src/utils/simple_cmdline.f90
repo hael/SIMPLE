@@ -64,8 +64,8 @@ contains
     end function constructor
 
     subroutine new( self, key, carg, rarg )
-        class(cmdarg) :: self
-        character(len=*),  intent(in) :: key
+        class(cmdarg),     intent(inout)        :: self
+        character(len=*),  intent(in)           :: key
         character(len=*),  intent(in), optional :: carg
         real,              intent(in), optional :: rarg
         allocate(self%key, source=key)
@@ -336,7 +336,7 @@ contains
         endif
     end subroutine parse_command_line_value
 
-    subroutine copy( self, self2copy )
+    elemental subroutine copy( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in) :: self2copy
         integer :: icmd
@@ -363,7 +363,7 @@ contains
     end subroutine copy
 
     !>  \brief  polymorphic assignment (=)
-    subroutine assign( self, self2copy )
+    elemental subroutine assign( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in) :: self2copy
         call self%copy(self2copy)
@@ -586,7 +586,7 @@ contains
     end function get_keys
 
     !> \brief for getting real args
-    pure function get_rarg( self, key ) result( rval )
+    elemental function get_rarg( self, key ) result( rval )
         class(cmdline),   intent(in) :: self
         character(len=*), intent(in) :: key
         real :: rval
