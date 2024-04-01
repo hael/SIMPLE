@@ -12,7 +12,7 @@ use simple_commander_cluster2D
 use simple_timer
 implicit none
 
-public :: stream_chunk, micproj_record
+public :: stream_chunk, micproj_record, DIR_CHUNK
 
 private
 #include "simple_local_flags.inc"
@@ -24,6 +24,7 @@ type micproj_record
     integer                       :: nptcls
 end type micproj_record
 
+character(len=STDLEN), parameter   :: DIR_CHUNK           = 'chunk_'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 logical,               parameter   :: DEBUG_HERE          = .false.
 
@@ -79,7 +80,7 @@ contains
         self%it        = 0
         self%nmics     = 0 ! # of micrographs & stacks in chunk
         self%nptcls    = 0
-        self%path      = './chunk_'//int2str(id)//'/'
+        self%path      = './'//trim(DIR_CHUNK)//int2str(id)//'/'
         self%projfile_out = ''
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
