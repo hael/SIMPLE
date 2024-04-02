@@ -46,22 +46,22 @@ contains
         D = count(ll_mask)
         if( allocated(pcavecs) ) deallocate(pcavecs)
         if( allocated(avg)     ) deallocate(avg)
-        allocate(pcavecs(n,D), source=0.)
+        allocate(pcavecs(D,n), source=0.)
         do i = 1, n
-            pcavecs(i,:) = imgs(i)%serialize(ll_mask)
+            pcavecs(:,i) = imgs(i)%serialize(ll_mask)
         end do
         if( ttransp )then
-            if( present(avg_pix) ) avg_pix = sum(pcavecs, dim=1) / real(n)
+            if( present(avg_pix) ) avg_pix = sum(pcavecs, dim=2) / real(n)
             pcavecs = transpose(pcavecs)
-            avg = sum(pcavecs, dim=1) / real(D)
+            avg = sum(pcavecs, dim=2) / real(D)
             do i = 1, D
-                pcavecs(i,:) = pcavecs(i,:) - avg
+                pcavecs(:,i) = pcavecs(:,i) - avg
             end do
         else
-            avg = sum(pcavecs, dim=1) / real(n)
+            avg = sum(pcavecs, dim=2) / real(n)
             if( present(avg_pix) ) avg_pix = avg
             do i = 1, n
-                pcavecs(i,:) = pcavecs(i,:) - avg(:)
+                pcavecs(:,i) = pcavecs(:,i) - avg(:)
             end do
         endif
     end subroutine make_pcavecs

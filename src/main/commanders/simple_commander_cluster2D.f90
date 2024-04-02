@@ -2100,7 +2100,7 @@ contains
                 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, npix
                     call prob_pca%generate(j, avg, tmpvec)
-                    pcavecs(j,:) = tmpvec
+                    pcavecs(:,j) = tmpvec
                 end do
                 !$omp end parallel do
                 pcavecs = transpose(pcavecs)
@@ -2111,7 +2111,7 @@ contains
                 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, nptcls
                     call prob_pca%generate(j, avg, tmpvec)
-                    pcavecs(j,:) = tmpvec
+                    pcavecs(:,j) = tmpvec
                 end do
                 !$omp end parallel do
             endif
@@ -2120,7 +2120,7 @@ contains
                 call cavg%write('cavgs_unserialized.mrcs', i)
                 !$omp parallel do private(j,std) default(shared) proc_bind(close) schedule(static)
                 do j = 1,nptcls
-                    std = sqrt(sum((pcavecs(j,:)-avg_pix)**2) / real(npix))
+                    std = sqrt(sum((pcavecs(:,j)-avg_pix)**2) / real(npix))
                     call build%spproj_field%set(pinds(j), 'specscore', std)
                 enddo
                 !$omp end parallel do
@@ -2129,7 +2129,7 @@ contains
             call cavg%zero_and_unflag_ft
             do j = 1, nptcls
                 cnt2 = cnt2 + 1
-                call imgs(j)%unserialize(pcavecs(j,:))
+                call imgs(j)%unserialize(pcavecs(:,j))
                 call cavg%add(imgs(j))
                 call os%transfer_ori(cnt2, build%spproj_field, pinds(j))
                 call imgs(j)%write(fname_denoised, cnt2)
