@@ -53,6 +53,10 @@ contains
                 endif
             endif
             s2D%cls_pops = nint(build_glob%spproj%os_cls2D%get_all('pop'))
+            where(s2D%cls_pops < 2 )
+                ! ignoring classes with one particle
+                s2D%cls_pops = 0
+            end where
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
