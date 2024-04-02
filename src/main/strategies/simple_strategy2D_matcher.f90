@@ -343,6 +343,10 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH_GLOB ) t_cavg = tic()
+        if( params_glob%l_stoch_update .and. l_partial_sums )then
+            ! such that the previous sums have a weight of 1.0
+            params_glob%update_frac = 0.
+        endif
         call cavger_transf_oridat( build_glob%spproj )
         call cavger_assemble_sums( l_partial_sums )
         if( l_distr_exec_glob )then
