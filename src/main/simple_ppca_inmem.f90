@@ -32,6 +32,8 @@ type ppca_inmem
     procedure          :: get_N
     procedure          :: get_D
     procedure          :: get_Q
+    procedure          :: get_W
+    procedure          :: get_E_zn
     procedure          :: get_feat
     procedure          :: get_feats_ptr
     procedure, private :: generate_1, generate_2
@@ -90,6 +92,18 @@ contains
         get_Q = self%Q
     end function get_Q
 
+    subroutine get_W( self, W )
+        class(ppca_inmem), intent(in)  :: self
+        real,              intent(out) :: W(self%D,self%Q)
+        W = self%W
+    end subroutine get_W
+
+    subroutine get_E_zn( self, E_zn )
+        class(ppca_inmem), intent(in)  :: self
+        real,              intent(out) :: E_zn(self%Q,self%N)
+        E_zn = self%E_zn(1,:,:)
+    end subroutine get_E_zn
+
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
         class(ppca_inmem), intent(inout) :: self
@@ -104,18 +118,6 @@ contains
         real, pointer :: ptr(:,:)
         ptr => self%E_zn(1,:,:)
     end function get_feats_ptr
-
-    !>  \brief  is for sampling the generative model at a given image index
-    function generate( self, i, avg ) result( dat )
-        class(ppca_inmem), intent(inout) :: self
-        integer,           intent(in)    :: i
-        real,              intent(in)    :: avg(self%D)
-        real, allocatable :: dat(:)
-        real              :: tmp(self%D,1)
-        tmp = matmul(self%W,transpose(self%E_zn(:,:,i)))
-        allocate(dat(self%D), source=tmp(:,1))
-        dat = dat + avg
-    end function generate
 
     !>  \brief  is for sampling the generative model at a given image index
     subroutine generate_1( self, i, avg, dat )
