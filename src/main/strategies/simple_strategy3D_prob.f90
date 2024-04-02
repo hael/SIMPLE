@@ -52,14 +52,20 @@ contains
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%dist)
             irot      =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%inpl
             if( self%s%doshift )then
-                call self%s%inpl_srch(ref=iref)
-                ! checking if shift search is good
-                if( s3D%proj_space_inplinds(iref, self%s%ithr) < 1 )then
-                    call assign_ori(self%s, iref, irot, corr, [0.,0.])
+                if( params_glob%l_prob_sh )then
+                    call assign_ori(self%s, iref, irot, corr,&
+                    &[self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%x,&
+                    & self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%y])
                 else
-                    irot = s3D%proj_space_inplinds(iref, self%s%ithr)
-                    corr = s3D%proj_space_corrs(   iref, self%s%ithr)
-                    call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
+                    call self%s%inpl_srch(ref=iref)
+                    ! checking if shift search is good
+                    if( s3D%proj_space_inplinds(iref, self%s%ithr) < 1 )then
+                        call assign_ori(self%s, iref, irot, corr, [0.,0.])
+                    else
+                        irot = s3D%proj_space_inplinds(iref, self%s%ithr)
+                        corr = s3D%proj_space_corrs(   iref, self%s%ithr)
+                        call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,self%s%ithr))
+                    endif
                 endif
             else
                 call assign_ori(self%s, iref, irot, corr, [0.,0.])

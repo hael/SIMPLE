@@ -59,11 +59,15 @@ contains
             self%assgn_map(i)%iref = 0
             self%assgn_map(i)%inpl = 0
             self%assgn_map(i)%dist = huge(x)
+            self%assgn_map(i)%x    = 0.
+            self%assgn_map(i)%y    = 0.
             do iref = 1,params_glob%nspace
                 self%loc_tab(iref,i)%pind = iptcl
                 self%loc_tab(iref,i)%iref = iref
                 self%loc_tab(iref,i)%inpl = 0
                 self%loc_tab(iref,i)%dist = huge(x)
+                self%loc_tab(iref,i)%x    = 0.
+                self%loc_tab(iref,i)%y    = 0.
             end do
         end do
         !$omp end parallel do 
@@ -117,8 +121,10 @@ contains
                     irot = self%loc_tab(iref,i)%inpl
                     cxy  = grad_shsrch_obj(ithr)%minimize(irot=irot)
                     if( irot > 0 )then
-                        ! no storing of shifts for now, re-search with in-plane jiggle in strategy3D_prob
+                        self%loc_tab(iref,i)%inpl = irot
                         self%loc_tab(iref,i)%dist = eulprob_dist_switch(cxy(1))
+                        self%loc_tab(iref,i)%x    = cxy(2)
+                        self%loc_tab(iref,i)%y    = cxy(3)
                     endif
                 end do
             enddo
@@ -276,6 +282,8 @@ contains
             print *, 'pinds = ', self%assgn_map(:)%pind
             print *, 'irefs = ', self%assgn_map(:)%iref
             print *, 'inpls = ', self%assgn_map(:)%inpl
+            print *, 'xs    = ', self%assgn_map(:)%x
+            print *, 'ys    = ', self%assgn_map(:)%y
         endif
     end subroutine write_assignment
 
@@ -310,6 +318,8 @@ contains
             print *, 'pinds = ', self%assgn_map(:)%pind
             print *, 'irefs = ', self%assgn_map(:)%iref
             print *, 'inpls = ', self%assgn_map(:)%inpl
+            print *, 'xs    = ', self%assgn_map(:)%x
+            print *, 'ys    = ', self%assgn_map(:)%y
         endif
     end subroutine read_assignment
 
@@ -379,17 +389,18 @@ contains
     end function eulprob_corr_switch
 
     function angle_sampling( pvec, pvec_sorted, sorted_inds, athres_ub_in ) result( which )
-        real,    intent(in)    :: pvec(:)             !< probabilities
-        real,    intent(inout) :: pvec_sorted(:)      !< sorted probabilities
+        real,    intent(in)    :: pvec(:)        !< probabilities
+        real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
         integer, intent(inout) :: sorted_inds(:)
         real,    intent(in)    :: athres_ub_in
         integer :: which, num_lb, num_ub, n
         real    :: athres_ub, athres_lb
         n         = size(pvec)
         athres_ub = min(params_glob%prob_athres, athres_ub_in)
-        athres_lb = min(athres_ub / 10., 1.)    ! athres lower bound is 1/10 of athres upper bound, max at 1 degree
+        athres_lb = min(athres_ub / 10., 1.) ! athres lower bound is 1/10 of athres upper bound, max at 1 degree
         num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
-        which     = greedy_sampling( pvec, pvec_sorted, sorted_inds, num_ub, num_lb )
+        which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
     end function angle_sampling
+
 end module simple_eul_prob_tab
