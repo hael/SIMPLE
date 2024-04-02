@@ -32,8 +32,7 @@ type ppca_inmem
     procedure          :: get_N
     procedure          :: get_D
     procedure          :: get_Q
-    procedure          :: get_W
-    procedure          :: get_E_zn
+    procedure          :: get_var
     procedure          :: get_feat
     procedure          :: get_feats_ptr
     procedure, private :: generate_1, generate_2
@@ -92,17 +91,11 @@ contains
         get_Q = self%Q
     end function get_Q
 
-    subroutine get_W( self, W )
-        class(ppca_inmem), intent(in)  :: self
-        real,              intent(out) :: W(self%D,self%Q)
-        W = self%W
-    end subroutine get_W
-
-    subroutine get_E_zn( self, E_zn )
-        class(ppca_inmem), intent(in)  :: self
-        real,              intent(out) :: E_zn(self%Q,self%N)
-        E_zn = self%E_zn(1,:,:)
-    end subroutine get_E_zn
+    pure real function get_var( self, j )
+        class(ppca_inmem), intent(in) :: self
+        integer,           intent(in) :: j
+        get_var = sum((self%E_zn(1,j,:) - sum(self%E_zn(1,j,:))/real(self%Q))**2)
+    end function get_var
 
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
