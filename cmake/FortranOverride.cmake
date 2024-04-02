@@ -10,9 +10,9 @@
 if(NOT $ENV{FC} STREQUAL "")
   set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 else()
-  set(CMAKE_Fortran_COMPILER_NAMES gfortran mpif90 mpifort)
-  # set(ENV{FC} "gfortran")
+  set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
 endif()
+
 # Override preprocessor in CMakeDetermineCompiler default cpp
 
 if(NOT $ENV{CPP} STREQUAL "")
