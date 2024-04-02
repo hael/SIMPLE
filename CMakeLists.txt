@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
-project(SIMPLE Fortran)
 
-set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
+project(SIMPLE LANGUAGES Fortran C CXX)
 
-# VERSION
-set(SIMPLE_VERSION_MAJOR 3)
-set(SIMPLE_VERSION_MINOR 0)
-set(SIMPLE_VERSION_PATCH 0)
-set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}.${SIMPLE_VERSION_PATCH}")
+project(SIMPLE
+        VERSION 3.0.0
+        DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)"
+        HOMEPAGE_URL "https://simplecryoem.com"
+        LANGUAGES Fortran C CXX)
 
 # OPTIONS
 option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
@@ -22,7 +21,6 @@ option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (de
 option(GUI                         "Install the GUI." ON)
 option(BUILD_GUI                   "Build single user GUI from source." OFF)
 option(NICE                        "Install NICE." OFF)
-# We probably don't want these to run on every build.
 option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
 OPTION(USE_PROFILING               "Enable symbol generation without debug support." OFF)
