@@ -100,8 +100,8 @@ contains
     !>  \brief  is for getting a feature vector
     function get_feat( self, i ) result( feat )
         class(ppca_inmem), intent(inout) :: self
-        integer, intent(in)        :: i
-        real, allocatable          :: feat(:)
+        integer,           intent(in)    :: i
+        real,              allocatable   :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(1,:,i))
     end function get_feat
 
