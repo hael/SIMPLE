@@ -66,8 +66,10 @@ if(${GUI})
 
 		ExternalProject_Add(
 			nodejs_unix
-    			URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-linux-x64.tar.gz
-			URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6
+    			URL https://nodejs.org/dist/v16.13.0/node-v16.13.0-linux-x64.tar.gz
+			URL_MD5 bb20c3f845896272f18bd8c91d1c9b07
+    			#URL https://nodejs.org/dist/v21.7.1/node-v21.7.1-linux-x64.tar.gz
+			#URL_MD5 8ca721fd7d5dd835a9e64b11f35bdad6
 			DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/external/tarballs
 			SOURCE_DIR ${CMAKE_BINARY_DIR}/bin/nodejs
 			CONFIGURE_COMMAND ""
