@@ -55,19 +55,21 @@ contains
         !$omp parallel do default(shared) private(i,iptcl,iref) proc_bind(close) schedule(static)
         do i = 1,self%nptcls
             iptcl = self%pinds(i)
-            self%assgn_map(i)%pind = iptcl
-            self%assgn_map(i)%iref = 0
-            self%assgn_map(i)%inpl = 0
-            self%assgn_map(i)%dist = huge(x)
-            self%assgn_map(i)%x    = 0.
-            self%assgn_map(i)%y    = 0.
+            self%assgn_map(i)%pind   = iptcl
+            self%assgn_map(i)%iref   = 0
+            self%assgn_map(i)%inpl   = 0
+            self%assgn_map(i)%dist   = huge(x)
+            self%assgn_map(i)%x      = 0.
+            self%assgn_map(i)%y      = 0.
+            self%assgn_map(i)%has_sh = .false.
             do iref = 1,params_glob%nspace
-                self%loc_tab(iref,i)%pind = iptcl
-                self%loc_tab(iref,i)%iref = iref
-                self%loc_tab(iref,i)%inpl = 0
-                self%loc_tab(iref,i)%dist = huge(x)
-                self%loc_tab(iref,i)%x    = 0.
-                self%loc_tab(iref,i)%y    = 0.
+                self%loc_tab(iref,i)%pind   = iptcl
+                self%loc_tab(iref,i)%iref   = iref
+                self%loc_tab(iref,i)%inpl   = 0
+                self%loc_tab(iref,i)%dist   = huge(x)
+                self%loc_tab(iref,i)%x      = 0.
+                self%loc_tab(iref,i)%y      = 0.
+                self%loc_tab(iref,i)%has_sh = .false.
             end do
         end do
         !$omp end parallel do 
@@ -126,6 +128,7 @@ contains
                         self%loc_tab(iref,i)%x    = cxy(2)
                         self%loc_tab(iref,i)%y    = cxy(3)
                     endif
+                    self%loc_tab(iref,i)%has_sh = .true.
                 end do
             enddo
             !$omp end parallel do
