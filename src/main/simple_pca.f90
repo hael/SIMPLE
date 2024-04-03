@@ -135,7 +135,7 @@ contains
     subroutine kill( self )
         class(pca), intent(inout) :: self
         if( self%existence )then
-            deallocate( self%E_zn )
+            deallocate( self%E_zn, self%data )
             self%existence = .false.
         endif
     end subroutine kill
