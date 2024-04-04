@@ -319,6 +319,7 @@ contains
     procedure          :: img2ft
     procedure          :: cure_outliers
     procedure          :: zero_below
+    procedure          :: div_below
     procedure          :: ellipse
     procedure          :: flipY
     ! FFTs
@@ -7617,12 +7618,20 @@ contains
         endif
     end subroutine cure_outliers
 
-    !>  \brief  zero pixels below thres
+    !>  \brief  zero pixels below threshold
     subroutine zero_below( self, thres )
         class(image), intent(inout) :: self
         real,         intent(in)    :: thres
         where( self%rmat < thres ) self%rmat = 0.
     end subroutine zero_below
+
+    !>  \brief  divides below threshold
+    subroutine div_below( self, thres, val )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: thres, val
+        if( is_equal(val,0.) ) return
+        where( self%rmat < thres ) self%rmat = self%rmat / val
+    end subroutine div_below
 
     !>  \brief ellipse constructs an ellipse of given axes.
     !    optional parameter 'hole' (yes|no) allows the user to choose

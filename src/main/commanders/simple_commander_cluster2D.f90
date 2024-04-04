@@ -270,24 +270,20 @@ contains
         type(cmdline)                       :: cline_rank_cavgs, cline_scalerefs
         type(cmdline)                       :: cline_calc_pspec_distr
         ! other variables
-        class(parameters), pointer          :: params_ptr => null()
         type(parameters)                    :: params
         type(sp_project)                    :: spproj
         type(class_frcs)                    :: frcs, frcs_sc
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real                                :: scale_factor, lp1, lp2
+        real                                :: scale_factor, lp1, lp2, cenlp, smpd_target
         integer                             :: last_iter
         logical                             :: l_scaling, l_shmem, l_euclid
         ! parameters
         integer, parameter    :: MINBOX      = 128
-        real,    parameter    :: TARGET_LP   = 15.
-        real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.
-        real,    parameter    :: MAXITS      = 15., MAXITS_FAST = 18.
-        real                  :: SMPD_TARGET = 4.
+        real,    parameter    :: MINITS      = 5.
+        real,    parameter    :: MAXITS      = 15.
+        real                  :: SMPD_TARGET_DEFAULT = 3.
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',           15.)
         if( .not. cline%defined('ncls')      ) call cline%set('ncls',        200.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',        20.)
         if( .not. cline%defined('center')    ) call cline%set('center',      'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
@@ -316,7 +312,9 @@ contains
             call cline%set('maxits', MAXITS)
         endif
         if( .not. cline%defined('mskdiam') )then
-            call cline%set('mskdiam', (real(params%box) * 0.8) * params%smpd)
+            params%mskdiam = (real(params%box) * 0.8) * params%smpd
+            call cline%set('mskdiam', params%mskdiam)
+            write(logfhandle,'(A,F6.1)')'>>> MASK DIAMETER (Angstroms): ',params%mskdiam
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -338,6 +336,16 @@ contains
             call spproj%os_ptcl2D%partition_eo
             call spproj%write_segment_inside(params%oritype,params%projfile)
         endif
+        ! resolutions limits
+        call mskdiam2lplimits(params%mskdiam, params%lpstart, params%lpstop, cenlp)
+        if( cline%defined('lp') )then
+            lp1 = max(params%lp, params%lpstart)
+            lp2 = params%lp
+        else
+            lp1 = params%lpstart
+            lp2 = (params%lpstart+params%lpstop)/2.
+        endif
+        smpd_target = min(lp2/2. * (2./3.), SMPD_TARGET_DEFAULT)
         ! Cropped dimensions
         scale_factor     = 1.0
         params%smpd_crop = params%smpd
@@ -345,7 +353,7 @@ contains
         params%msk_crop  = params%msk
         l_scaling        = .false.
         if( params%l_autoscale .and. params%box >= MINBOX )then
-            call autoscale(params%box, params%smpd, SMPD_TARGET, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
+            call autoscale(params%box, params%smpd, smpd_target, params%box_crop, params%smpd_crop, scale_factor, minbox=MINBOX)
             l_scaling       = params%box_crop < params%box
             if( l_scaling )then
                 params%msk_crop = round2even(params%msk * scale_factor)
@@ -371,11 +379,13 @@ contains
         call cline_cluster2D1%set('box_crop',  real(params%box_crop))
         call cline_cluster2D2%set('smpd_crop', params%smpd_crop)
         call cline_cluster2D2%set('box_crop',  real(params%box_crop))
-        ! resolutions limits
-        lp1 = max(2.*params%smpd_crop, max(params%lp,TARGET_LP))
-        lp2 = max(2.*params%smpd_crop, params%lp)
-        call cline_cluster2D1%set('lp',   lp1)
-        call cline_cluster2D2%set('lp',   lp2)
+        ! resolution limits
+        call cline_cluster2D1%set('lp', lp1)
+        call cline_cluster2D2%set('lp', lp2)
+        if( .not.cline%defined('cenlp') )then
+            call cline_cluster2D1%set('cenlp', cenlp)
+            call cline_cluster2D2%set('cenlp', cenlp)
+        endif
         ! first stage
         ! down-scaling for fast execution, greedy optimisation, no incremental learning, no centering
         call cline_cluster2D1%set('prg', 'cluster2D')
@@ -396,6 +406,11 @@ contains
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif
+        call cline_cluster2D2%set('minits', min(MINITS+3,MAXITS))
+        ! if( l_shmem )then
+        !     call cline_cluster2D2%set('minits', 3)
+        !     call cline_cluster2D2%set('minits', MAXITS-MINITS)
+        ! endif
         if( l_euclid )then
             call cline_cluster2D2%set('objfun',   trim(cline%get_carg('objfun')))
             call cline_cluster2D2%set('cc_iters', 0.)
@@ -424,11 +439,7 @@ contains
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
         write(logfhandle,'(A)') '>>>'
         if( l_shmem )then
-            params_ptr  => params_glob
-            params_glob => null()
-            call xcluster2D%execute(cline_cluster2D1)
-            params_glob => params_ptr
-            params_ptr  => null()
+            call xcluster2D%execute_shmem(cline_cluster2D1)
         else
             call xcluster2D_distr%execute(cline_cluster2D1)
         endif
@@ -444,11 +455,7 @@ contains
                 call cline_cluster2D2%set('startit',  real(last_iter+1))
                 call cline_cluster2D2%set('refs',     trim(finalcavgs))
                 if( l_shmem )then
-                    params_ptr  => params_glob
-                    params_glob => null()
-                    call xcluster2D%execute(cline_cluster2D2)
-                    params_glob => params_ptr
-                    params_ptr  => null()
+                    call xcluster2D%execute_shmem(cline_cluster2D2)
                 else
                     call xcluster2D_distr%execute(cline_cluster2D2)
                 endif
@@ -1247,12 +1254,7 @@ contains
                 params%extr_iter = params%startit
             endif
             ! objective functions
-            select case(params%cc_objfun)
-                case(OBJFUN_EUCLID)
-                    l_switch2euclid = .true.
-                case DEFAULT
-                    l_switch2euclid = .false.
-            end select
+            l_switch2euclid = params%cc_objfun==OBJFUN_EUCLID
             orig_objfun     = trim(cline%get_carg('objfun'))
             l_griddingset   = cline%defined('gridding')
             l_ml_reg        = params%l_ml_reg
@@ -1326,8 +1328,8 @@ contains
                 ! write cavgs starfile for iteration
                 call starproj%export_cls2D(build%spproj, params%which_iter)
                 ! exit condition
-                converged = converged .and. (i >= params%minits)
-                if( converged .or. i >= params%maxits )then
+                converged = converged .and. (params%which_iter >= params%minits)
+                if( converged .or. params%which_iter >= params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
                     call cline%set('endit', real(params%startit))

@@ -266,7 +266,7 @@ contains
         logical, optional, intent(in)    :: write2disk
         type(binimage),    allocatable   :: img_bin(:), cc_img(:)
         real,              allocatable   :: ccsizes(:)
-        integer :: i, n, loc(1), ldim(3)
+        integer :: i, n, loc, ldim(3)
         real    :: smpd, xyz(3)
         logical :: l_write
         n = size(imgs)
@@ -293,11 +293,13 @@ contains
         !$omp parallel do default(shared) private(i,ccsizes,loc,xyz) schedule(static) proc_bind(close)
         do i = 1,n
             call img_bin(i)%zero_edgeavg
+            ! dampens below zero (object positive in class averages/reprojs)
+            call img_bin(i)%div_below(0.,10.)
             ! low-pass filter
             call img_bin(i)%bp(0., params_glob%amsklp)
             ! filter with non-local means
             call img_bin(i)%NLmean
-            ! call img_bin(i)%write('NLmean_filtered.mrc', i)
+            ! if( l_write ) call img_bin(i)%write('NLmean_filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
             call img_bin(i)%masscen(xyz)
@@ -310,22 +312,30 @@ contains
             ! find the largest connected component
             call img_bin(i)%find_ccs(cc_img(i))
             ccsizes = cc_img(i)%size_ccs()
-            loc     = maxloc(ccsizes)
+            loc     = maxloc(ccsizes,dim=1)
             ! estimate its diameter
-            call cc_img(i)%diameter_cc(loc(1), diams(i))
-            ! turn it into a binary image for mask creation
-            call cc_img(i)%cc2bin(loc(1))
-            call cc_img(i)%masscen(xyz)
-            shifts(i,:) = xyz(:2)
-            ! median filter to smoothen
-            if( winsz > 0 )then
-                call cc_img(i)%real_space_filter(winsz, 'median')
+            call cc_img(i)%diameter_cc(loc, diams(i))
+            if( diams(i) > 2.*params_glob%msk )then
+                ! incorrect component was chosen, fall back on spherical mask
+                diams(i)    = 2.*(params_glob%msk-edge-COSMSKHALFWIDTH)
+                shifts(i,:) = 0.
+                call cc_img(i)%disc(ldim, smpd, diams(i)/2.)
                 call cc_img(i)%set_imat
-                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
+            else
+                ! turn it into a binary image for mask creation
+                call cc_img(i)%cc2bin(loc)
+                call cc_img(i)%masscen(xyz)
+                shifts(i,:) = xyz(:2)
+                ! median filter to smoothen
+                if( winsz > 0 )then
+                    call cc_img(i)%real_space_filter(winsz, 'median')
+                    call cc_img(i)%set_imat
+                    ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
+                endif
+                ! fill-in holes
+                call cc_img(i)%fill_holes
+                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
             endif
-            ! fill-in holes
-            call cc_img(i)%fill_holes
-            ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)
             call imgs(i)%zero_and_unflag_ft
             call cc_img(i)%cos_edge(edge,imgs(i))
