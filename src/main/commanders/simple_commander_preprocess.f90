@@ -911,7 +911,9 @@ contains
         type(chash)      :: job_descr
         character(len=:), allocatable :: which_picker
         real,             allocatable :: moldiams(:), dists(:), moldiams_prob(:), moldiams_ref(:)
-        integer :: nmics, loc(1), i, j, n
+        logical,          allocatable :: mask(:)
+        real    :: moldiam_est
+        integer :: nmics, loc, i, j, n
         logical :: templates_provided
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')   ) call cline%set('pcontrast', 'black')
@@ -948,15 +950,25 @@ contains
         endif
         templates_provided = cline%defined('pickrefs')
         select case(trim(params%picker))
-            case('old')
-                if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
-            case('new')
-                if( templates_provided )then
-                else if( cline%defined('moldiam') .or. cline%defined('multi_moldiams') )then
-                    ! at least moldiam is required
+        case('old')
+            if( .not.templates_provided ) THROW_HARD('Old picker requires pickrefs (2D picking references) input')
+        case('new')
+            if( templates_provided )then
+                ! reference-based picking
+            else if( cline%defined('moldiam') )then
+                if( cline%defined('moldiam_max') .and. cline%defined('nmoldiams') )then
+                    ! multipick with nmoldiams diameters ranging from moldiam to moldiam_max
+                    ! output is determined diameter moldiam_opt
+                else if( cline%defined('moldiam_max') .or. cline%defined('nmoldiams') )then
+                    THROW_HARD('MOLDIAM, MOLDIAM_MAX & NMOLDIAMS must be provided for determination of optimal diameter!')
                 else
-                    THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
+                    ! reference-free single diameter picking
                 endif
+            elseif( cline%defined('multi_moldiams') )then
+                ! reference-free picking with inputted diameters
+            else
+                THROW_HARD('Unsupported new picker mode')
+            endif
         end select
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -982,21 +994,22 @@ contains
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         if( cline%defined('nmoldiams') )then
             n            = spproj%os_mic%get_noris()
+            mask         = spproj%os_mic%get_all('state') > 0.5
             moldiams     = spproj%os_mic%get_all('moldiam')
             moldiams_ref = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
             allocate(dists(params%nmoldiams), moldiams_prob(params%nmoldiams), source=0.)
             do i = 1, n
-                do j = 1, params%nmoldiams
-                    dists(j) = abs(moldiams(i) - moldiams_ref(j))
-                end do
-                loc = minloc(dists)
-                moldiams_prob(loc(1)) = moldiams_prob(loc(1)) + 1.
+                if( .not.mask(i) ) cycle
+                dists = abs(moldiams(i) - moldiams_ref)
+                loc   = minloc(dists, dim=1)
+                moldiams_prob(loc) = moldiams_prob(loc) + 1.
             end do
-            moldiams_prob = moldiams_prob / real(n)
+            moldiams_prob = moldiams_prob / real(count(mask))
+            moldiam_est   = sum(moldiams_ref * moldiams_prob)
             do j = 1, params%nmoldiams
-                write(logfhandle,'(a,1x,f7.2,1x,a,1x,f7.2)') 'molecular diameter:', moldiams_ref(j), 'probability:', moldiams_prob(j)
+                write(logfhandle,'(a,1x,f6.1,1x,a,1x,f7.2)') 'Molecular diameter:', moldiams_ref(j), 'probability:', moldiams_prob(j)
             end do
-            write(logfhandle,'(a,1x,f7.2)') 'Suggested single molecular diameter:', sum(moldiams_ref * moldiams_prob)
+            write(logfhandle,'(a,1x,f7.2)') 'Suggested single molecular diameter:', moldiam_est
         endif
         ! cleanup
         call qsys_cleanup
@@ -2220,13 +2233,13 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters)         :: params
         type(stack_io)           :: stkio_r
-        type(image)              :: ref2D
+        type(image)              :: ref2D, ref2D_clip
         type(image), allocatable :: projs(:), masks(:)
         real,        allocatable :: diams(:), shifts(:,:)
         real,    parameter :: MSKDIAM2LP = 0.15, lP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS=100
         real    :: ang, rot, smpd_here, xyz(3), lp, diam_max
-        integer :: nrots, iref, irot, ldim(3), ldim_here(3), ncavgs, icavg
+        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ncavgs, icavg
         integer :: cnt, norefs, new_box
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
@@ -2240,21 +2253,22 @@ contains
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
         ! read selected cavgs
-        call find_ldim_nptcls(params%pickrefs, ldim_here, ncavgs, smpd=smpd_here)
+        call find_ldim_nptcls(params%pickrefs, ldim, ncavgs, smpd=smpd_here)
         if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
-        ldim_here(3) = 1
+        ldim(3) = 1
         allocate( projs(ncavgs), masks(ncavgs) )
         call stkio_r%open(params%pickrefs, params%smpd, 'read', bufsz=ncavgs)
         do icavg=1,ncavgs
-            call projs(icavg)%new(ldim_here, smpd_here)
+            call projs(icavg)%new(ldim, smpd_here)
             call stkio_r%read(icavg, projs(icavg))
             call masks(icavg)%copy(projs(icavg))
         end do
         call stkio_r%close
-        ! set mask radius in pixels before atomasking
-        params%msk = ldim_here(1)/2 - nint(COSMSKHALFWIDTH) 
+        ! set mask radius in pixels before automasking
+        params%msk = ldim(1)/2 - nint(COSMSKHALFWIDTH)
         call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams, shifts)
         do icavg=1,ncavgs
+            call projs(icavg)%div_below(0.,10.)
             call projs(icavg)%mul(masks(icavg))
             xyz(1) = shifts(icavg,1)
             xyz(2) = shifts(icavg,2)
@@ -2266,16 +2280,16 @@ contains
         lp       = min(max(LP_LB,MSKDIAM2LP * diam_max),LP_UB)
         new_box = round2even(diam_max / smpd_here + 2. * COSMSKHALFWIDTH)
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIXE: ', new_box
-        ldim_here(1) = new_box
-        ldim_here(2) = new_box
-        ldim_here(3) = 1
+        ldim_clip(1) = new_box
+        ldim_clip(2) = new_box
+        ldim_clip(3) = 1
         do icavg=1,ncavgs
             call projs(icavg)%bp(0.,lp)
-            call projs(icavg)%clip_inplace(ldim_here)
         end do
-        ! expand in in-plane rotation and write to file
+        ! expand in in-plane rotation, clip and write to file
         nrots  = nint( real(NREFS)/real(ncavgs) )
         norefs = ncavgs
+        call ref2D_clip%new([ldim_clip(1),ldim_clip(2),1], params%smpd)
         if( nrots > 1 )then
             call ref2D%new([ldim(1),ldim(2),1], params%smpd)
             ang = 360./real(nrots)
@@ -2285,59 +2299,23 @@ contains
                 do irot=1,nrots
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
-                    if( params%neg .eq. 'yes' ) call ref2D%neg
-                    call ref2D%write(trim(PICKREFS_FBODY)//params%ext, cnt)
+                    call ref2D%clip(ref2D_clip)
+                    if( params%neg .eq. 'yes' ) call ref2D_clip%neg
+                    call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, cnt)
                     rot = rot + ang
                 end do
             end do
         else
             ! should never happen
             do iref=1,norefs
-                if( params%neg .eq. 'yes' ) call ref2D%neg
-                call projs(iref)%write(trim(PICKREFS_FBODY)//params%ext, iref)
+                call projs(iref)%clip(ref2D_clip)
+                if( params%neg .eq. 'yes' ) call ref2D_clip%neg
+                call ref2D_clip%write(trim(PICKREFS_FBODY)//params%ext, iref)
             end do
         endif
         ! end gracefully
         call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
-
-        contains
-
-            subroutine scale_ref(refimg, smpd_target)
-                class(image), intent(inout) :: refimg
-                real,         intent(in)    :: smpd_target
-                type(image) :: targetimg
-                integer     :: ldim_ref(3), ldim_target(3)
-                real        :: smpd_ref, scale
-                smpd_ref = refimg%get_smpd()
-                scale    = smpd_target / smpd_ref / params%scale
-                if( is_equal(scale,1.) )then
-                    ldim = ldim_here
-                    return
-                endif
-                ldim_ref       = refimg%get_ldim()
-                ldim_target(1) = round2even(real(ldim_ref(1))/scale)
-                ldim_target(2) = ldim_target(1)
-                ldim_target(3) = 1
-                if( refimg%is_3d() )ldim_target(3) = ldim_target(1)
-                call refimg%norm
-                if( scale > 1. )then
-                    ! downscaling
-                    call refimg%fft
-                    call refimg%clip_inplace(ldim_target)
-                    call refimg%ifft
-                else
-                    call targetimg%new(ldim_target, smpd_target)
-                    call refimg%fft
-                    call refimg%pad(targetimg, backgr=0.)
-                    call targetimg%ifft
-                    refimg = targetimg
-                    call targetimg%kill
-                endif
-                ! updates dimensions
-                ldim = ldim_target
-            end subroutine
-
     end subroutine exec_make_pickrefs
 
     ! UTILITIES

@@ -130,6 +130,11 @@ contains
                 endif
             end do
         end do
+        ! cleanup
+        call picker_merged%kill
+        do ipick = 1,npickers
+            call pickers(ipick)%kill
+        end do
         deallocate(pickers)
     end subroutine gaupick_multi
 
