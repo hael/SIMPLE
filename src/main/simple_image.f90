@@ -4978,6 +4978,24 @@ contains
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
     end subroutine prenorm4real_corr_2
 
+    !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
+    !>  The image is centered and standardized
+    subroutine prenorm4real_corr_3( self, err )
+        class(image), intent(inout) :: self
+        logical,      intent(out)   :: err
+        real :: npix, ave, var
+        npix      = real(product(self%ldim))
+        ave       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        self%rmat = self%rmat - ave
+        var       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( var > TINY )then
+            self%rmat = self%rmat / sqrt(var)
+            err = .false.
+        else
+            err = .true.
+        endif
+    end subroutine prenorm4real_corr_3
+
     !> \brief standardize image within logical mask
     subroutine norm_within( self, mask )
         class(image), intent(inout) :: self
@@ -5005,24 +5023,6 @@ contains
         if( self%is_ft() ) THROW_HARD('Real space only!')
         kurt = kurtosis(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
     end function kurt
-
-    !> \brief prenorm4real_corr_3 pre-normalises the reference in preparation for real_corr_prenorm_3
-    !>  The image is centered and standardized
-    subroutine prenorm4real_corr_3( self, err )
-        class(image), intent(inout) :: self
-        logical,      intent(out)   :: err
-        real :: npix, ave, var
-        npix      = real(product(self%ldim))
-        ave       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        self%rmat = self%rmat - ave
-        var       = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        if( var > TINY )then
-            self%rmat = self%rmat / sqrt(var)
-            err = .false.
-        else
-            err = .true.
-        endif
-    end subroutine prenorm4real_corr_3
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
     function real_corr_prenorm_1( self_ref, self_ptcl, sxx_ref ) result( r )
