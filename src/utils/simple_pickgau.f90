@@ -160,6 +160,10 @@ contains
             call self%gaumatch_boximgs
         endif
         call self%detect_peaks
+        if( self%npeaks == 0 )then
+            if( present(self_refine) ) self_refine%npeaks = 0
+            return
+        endif
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_detect_peaks.box')
         call self%distance_filter
         ! if( L_WRITE ) call self%write_boxfile('pickgau_after_distance_filter.box')
@@ -402,7 +406,7 @@ contains
         class(pickgau), intent(inout) :: self
         real,           intent(in)    :: moldiams(:)
         integer                       :: nmoldiams, idiam, iimg
-        real                          :: maxdiam, sig, sxx, moldiam_max
+        real                          :: maxdiam, sig, moldiam_max
         character(len=:), allocatable :: numstr
         nmoldiams = size(moldiams)
         self%nrefs = nmoldiams ! one ref per moldiam
@@ -422,10 +426,11 @@ contains
             ! create new gaussian reference image for each molecular diameter 
             call self%boxrefs(idiam)%new(self%ldim_box, self%smpd_shrink)
             call self%boxrefs(idiam)%gauimg2D(sig,sig)
-            call self%boxrefs(idiam)%prenorm4real_corr(sxx)
             call self%boxrefs(idiam)%prenorm4real_corr(self%l_err_refs(idiam))
-            numstr = int2str(nint(moldiams(idiam)))
-            if( L_WRITE ) call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
+            if( L_WRITE )then
+                numstr = int2str(nint(moldiams(idiam)))
+                call self%boxrefs(idiam)%write('gauref_moldiam'//numstr//'.mrc')
+            endif
         end do
         self%refpick = .true.
     end subroutine set_gaurefs
@@ -985,11 +990,11 @@ contains
                             self%loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
                             call boximgs_heap(ithr)%prenorm4real_corr(l_err)
                             if( l_err )then
-                                self%box_scores(ioff,joff) = 0.
+                                self%box_scores(ioff,joff) = -1.
                             else
                                 do iref = 1,self%nrefs
                                     if( self%l_err_refs(iref) )then
-                                        scores(iref) = 0.
+                                        scores(iref) = -1.
                                     else
                                         scores(iref) = self%boxrefs(iref)%real_corr_prenorm(boximgs_heap(ithr))
                                     endif
@@ -1022,8 +1027,14 @@ contains
     subroutine detect_peaks( self )
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
+        integer :: n
         tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
-        call detect_peak_thres(size(tmp), self%nboxes_ub, self%peak_thres_level, tmp, self%t)
+        n   = size(tmp)
+        if( n == 0 )then
+            self%npeaks = 0
+            return
+        endif
+        call detect_peak_thres(n, self%nboxes_ub, self%peak_thres_level, tmp, self%t)
         deallocate(tmp)
         self%t = max(0.,self%t)
         where( self%box_scores >= self%t )
@@ -1098,7 +1109,7 @@ contains
     subroutine remove_outliers( self )
         class(pickgau), intent(inout) :: self
         real, allocatable :: tmp(:)
-        integer     :: ithr, npeaks, ioff, joff
+        integer     :: npeaks
         real        :: avg, sdev, t
         tmp = pack(self%loc_sdevs, mask=self%box_scores >= self%t .and. self%loc_sdevs > 0.)
         call avg_sdev(tmp, avg, sdev)
@@ -1106,19 +1117,12 @@ contains
         npeaks = count(tmp < t)
         write(logfhandle,'(a,1x,I5)') '# positions after  outlier    removal: ', npeaks
         ! update box_scores
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
-                if( self%loc_sdevs(ioff,joff) < t )then
-                    ! it is a peak
-                else
-                    ! it is not a peak, update box_scores
-                    self%box_scores(ioff,joff) = -1.
-                endif
-            end do
-        end do
-        !$omp end parallel do
+        !$omp parallel workshare proc_bind(close)
+        where( self%loc_sdevs >= t )
+            ! not a peak, update box_scores
+            self%box_scores = -1.
+        end where
+        !$omp end parallel workshare
         self%npeaks = count(self%box_scores >= self%t)
         if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
     end subroutine remove_outliers
