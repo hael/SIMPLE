@@ -1015,8 +1015,8 @@ contains
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
-        call eulprob_obj_glob%tab_normalize
-        call eulprob_obj_glob%tab_align
+        call eulprob_obj_glob%ref_normalize
+        call eulprob_obj_glob%ref_assign
         ! write the iptcl->iref assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)

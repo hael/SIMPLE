@@ -28,8 +28,8 @@ type :: eul_prob_tab
     procedure :: read_assignment
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: read_tab_to_glob
-    procedure :: tab_normalize
-    procedure :: tab_align
+    procedure :: ref_normalize
+    procedure :: ref_assign
     procedure :: write_assignment
     ! DESTRUCTOR
     procedure :: kill
@@ -153,7 +153,7 @@ contains
     ! reference normalization (same energy) of the global dist value table
     ! [0,1] normalization of the whole table
     ! used in the global prob_align commander, in 'exec_prob_align'
-    subroutine tab_normalize( self )
+    subroutine ref_normalize( self )
         class(eul_prob_tab), intent(inout) :: self
         real    :: sum_dist_all, min_dist, max_dist
         integer :: i
@@ -183,11 +183,11 @@ contains
         else
             self%loc_tab%dist = (self%loc_tab%dist - min_dist) / (max_dist - min_dist)
         endif
-    end subroutine tab_normalize
+    end subroutine ref_normalize
 
     ! ptcl -> ref assignment using the global normalized dist value table
     ! used in the global prob_align commander, in 'exec_prob_align'
-    subroutine tab_align( self )
+    subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer :: i, iref, assigned_iref, assigned_ptcl, ref_dist_inds(params_glob%nspace),&
                    &stab_inds(self%nptcls, params_glob%nspace), inds_sorted(params_glob%nspace)
@@ -221,7 +221,7 @@ contains
                 enddo
             enddo
         enddo
-    end subroutine tab_align
+    end subroutine ref_assign
 
     ! FILE IO
 
