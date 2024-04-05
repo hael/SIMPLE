@@ -11,7 +11,6 @@ implicit none
 
 ! PROGRAMS
 type(commander_stream_preprocess)           :: xpreprocess
-type(commander_multipick_cluster2D)         :: xmultipick_cluster2D
 type(commander_stream_pick_extract)         :: xpick_extract
 type(commander_stream_assign_optics)        :: xassign_optics
 type(commander_stream_cluster2D)            :: xcluster2D_stream
@@ -45,8 +44,6 @@ call script_exec(cline, trim(prg), 'simple_stream')
 select case(trim(prg))
     case( 'preproc' )
         call xpreprocess%execute(cline)
-    case( 'multipick_cluster2D' )
-        call xmultipick_cluster2D%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
     case( 'assign_optics' )

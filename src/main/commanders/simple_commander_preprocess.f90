@@ -31,6 +31,7 @@ public :: extract_commander
 public :: reextract_commander_distr
 public :: reextract_commander
 public :: pick_extract_commander
+public :: multipick_cleanup2D_commander_distr
 public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
@@ -119,6 +120,11 @@ type, extends(commander_base) :: pick_extract_commander
   contains
     procedure :: execute      => exec_pick_extract
 end type pick_extract_commander
+
+type, extends(commander_base) :: multipick_cleanup2D_commander_distr
+  contains
+    procedure :: execute => exec_multipick_cleanup2D_distr
+end type multipick_cleanup2D_commander_distr
 
 type, extends(commander_base) :: make_pickrefs_commander
   contains
@@ -1010,6 +1016,7 @@ contains
                 write(logfhandle,'(a,1x,f6.1,1x,a,1x,f7.2)') 'Molecular diameter:', moldiams_ref(j), 'probability:', moldiams_prob(j)
             end do
             write(logfhandle,'(a,1x,f7.2)') 'Suggested single molecular diameter:', moldiam_est
+            call cline%set('moldiam', moldiam_est)
         endif
         ! cleanup
         call qsys_cleanup
@@ -2224,6 +2231,137 @@ contains
         call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
+
+    subroutine exec_multipick_cleanup2D_distr( self, cline )
+        use simple_commander_cluster2D,  only: cleanup2D_commander_hlev
+        class(multipick_cleanup2D_commander_distr), intent(inout) :: self
+        class(cmdline),                             intent(inout) :: cline
+        integer, parameter :: NPTCLS_PER_CLS = 1500
+        type(pick_commander_distr)     :: xpick
+        type(extract_commander_distr)  :: xextract
+        type(cleanup2D_commander_hlev) :: xcleanup2D
+        type(parameters) :: params
+        type(sp_project) :: spproj_glob
+        type(oris)       :: os_mic
+        type(cmdline)    :: cline_multipick, cline_pick, cline_extract, cline_cleanup2D
+        type(ran_tabu)   :: rt
+        integer,          allocatable :: states(:), vec(:)
+        integer :: nmics, ncls, cnt, nmics_sel, imic
+        call cline%set('picker',  'new')
+        call cline%set('oritype', 'mic')
+        call cline%set('stream', 'no')
+        call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',     'no')
+        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr', 'no')
+        if( .not. cline%defined('crowded')     ) call cline%set('crowded',     'yes')
+        call params%new(cline)
+        ! sanity check
+        call spproj_glob%read(params%projfile)
+        nmics = spproj_glob%get_nintgs()
+        if( nmics == 0 ) THROW_HARD('No micrograph to process! exec_multipick_cleanup_distr')
+        call spproj_glob%update_projinfo(cline)
+        call spproj_glob%write_segment_inside('projinfo')
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        if( cline%defined('nparts') )then
+            params%nparts = min(params%nparts, nmics)
+            call cline%set('nparts', params%nparts)
+        endif
+        params%numlen = len(int2str(params%nparts))
+        call cline%set('numlen', real(params%numlen))
+        ! more sanity checks
+        if( trim(params%pick_roi).eq.'yes' )then
+            params%backgr_subtr = 'yes'
+            call cline%set('backgr_subtr', params%backgr_subtr)
+        endif
+        ! Command lines
+        cline_multipick = cline
+        cline_pick      = cline
+        cline_extract   = cline
+        cline_cleanup2D = cline
+        call cline_multipick%set('prg','pick')
+        call cline_pick%set('prg',     'pick')
+        call cline_extract%set('prg',  'extract')
+        call cline_cleanup2D%set('prg','cleanup2D')
+        call cline_cleanup2D%set('oritype', 'ptcl2D')
+        call cline_pick%delete('nmoldiams')
+        call cline_pick%delete('moldiam_max')
+        call cline_extract%delete('ctfresthreshold')
+        call cline_extract%delete('icefracthreshold')
+        ! Micrographs rejection
+        nmics  = spproj_glob%os_mic%get_noris()
+        write(logfhandle,'(A,I6)')'>>> # OF MICROGRAPHS                : ',nmics
+        states = nint(spproj_glob%os_mic%get_all('state'))
+        if( cline%defined('ctfresthreshold') )then
+            do imic = 1, nmics
+                if( states(imic) == 1 .and. spproj_glob%os_mic%isthere(imic,'ctfres') )then
+                    if(spproj_glob%os_mic%get(imic,'ctfres') > params%ctfresthreshold) states(imic) = 0
+                endif
+            enddo
+        endif
+        if( cline%defined('icefracthreshold') )then
+            do imic = 1, nmics
+                if( states(imic) == 1 .and. spproj_glob%os_mic%isthere(imic,'icefrac') )then
+                    if(spproj_glob%os_mic%get(imic,'icefrac') > params%icefracthreshold) states(imic) = 0
+                endif
+            enddo
+        endif
+        nmics_sel = count(states == 1)
+        if( nmics_sel < params%nran )then
+            THROW_HARD('Insufficient number of micrographs!')
+        endif
+        write(logfhandle,'(A,I6)')'>>> # OF MICROGRAPHS AFTER SELECTION: ',nmics_sel
+        ! random selection
+        allocate(vec(nmics_sel),source=0)
+        cnt = 0
+        do imic = 1, nmics
+            if( states(imic) == 1 )then
+                cnt      = cnt + 1
+                vec(cnt) = imic
+            endif
+        enddo
+        rt = ran_tabu(nmics_sel)
+        call rt%shuffle(vec)
+        call os_mic%new(params%nran, is_ptcl=.false.)
+        do imic = 1,params%nran
+            call os_mic%transfer_ori(imic, spproj_glob%os_mic, vec(imic))
+        enddo
+        spproj_glob%os_mic = os_mic
+        call spproj_glob%write_segment_inside('mic',params%projfile)
+        call rt%kill
+        call os_mic%kill
+        deallocate(vec,states)
+        write(logfhandle,'(A,I6)')'>>> RANDOMLY SELECTED MICROGRAPHS:    ',params%nran
+        ! multi pick
+        write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
+        call xpick%execute_shmem(cline_multipick)
+        call qsys_cleanup
+        params%moldiam = cline_multipick%get_rarg('moldiam')
+        write(logfhandle,'(A,F6.1)')'>>> ESTIMATED MOLECULAR DIAMETER: ',params%moldiam
+        ! single pick
+        write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
+        call cline_pick%set('moldiam', params%moldiam)
+        call xpick%execute_shmem(cline_pick)
+        call qsys_cleanup
+        ! extraction
+        write(logfhandle,'(A)')'>>> PERFORMING EXTRACTION'
+        call cline_extract%set('prg', 'extract')
+        call xextract%execute_shmem(cline_extract)
+        call qsys_cleanup
+        call spproj_glob%read(params%projfile)
+        params%nptcls = spproj_glob%get_nptcls()
+        write(logfhandle,'(A,I6)')'>>> PARTICLES EXTRACTED ',params%nptcls
+        ! 2D classification
+        params%ncls = min(30,max(15,ceiling(real(params%nptcls)/real(NPTCLS_PER_CLS))))
+        write(logfhandle,'(A,I3,A)')'>>> PERFORMING 2D CLASSIFICATION WITH ',params%ncls,' CLASSES'
+        call cline_cleanup2D%set('ncls', params%ncls)
+        call xcleanup2D%execute_shmem(cline_cleanup2D)
+        call qsys_cleanup
+        ! cleanup
+        call spproj_glob%kill
+        call simple_end('**** SIMPLE_multipick_cleanup2D NORMAL STOP ****')
+    end subroutine exec_multipick_cleanup2D_distr
 
     subroutine exec_make_pickrefs( self, cline )
         use simple_masker,   only: automask2D
