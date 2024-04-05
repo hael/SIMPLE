@@ -52,6 +52,7 @@ type(motion_correct_commander_distr)        :: xmotion_correct_distr
 type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
 type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
 type(pick_commander_distr)                  :: xpick_distr
+type(multipick_cleanup2D_commander_distr)   :: xmultipick_cleanup2D_distr
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
@@ -213,6 +214,8 @@ select case(trim(prg))
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
         call xpick_distr%execute(cline)
+    case( 'multipick_cleanup2D' )
+        call xmultipick_cleanup2D_distr%execute(cline)
 
     ! CLUSTER2D WORKFLOWS
     case( 'make_cavgs' )
@@ -377,7 +380,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('ca92a1c0')
+call simple_print_git_version('cf94cc7d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
