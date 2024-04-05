@@ -1,4 +1,4 @@
-program simple_test_tab_align
+program simple_test_ref_assign
 include 'simple_lib.f08'
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
@@ -12,7 +12,7 @@ integer :: stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt, cur_map(N_P), imp_map(N
 logical :: ptcl_avail(N_P)
 real    :: tab(N_P, N_R), ref_dist(N_R), sorted_dist(N_R), sorted_tab(N_P, N_R), rnd_list(N_P), sorted_vec(N_P)
 if( command_argument_count() < 2 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_tab_align smpd=xx nthr=yy'
+    write(logfhandle,'(a)') 'Usage: simple_test_ref_assign smpd=xx nthr=yy'
     stop
 else
     call cline%parse_oldschool
@@ -167,4 +167,4 @@ contains
         endif
     end function ref_multinomal2
 
-end program simple_test_tab_align
+end program simple_test_ref_assign
