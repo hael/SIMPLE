@@ -100,7 +100,6 @@ contains
             str_state = int2str_pad(state,2)
             volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             call cline_volassemble%set( 'state', real(state) )
-            if( params%nstates>1 )call cline_volassemble%set('part', real(params%part))
             call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
             'simple_script_state'//trim(str_state), trim(volassemble_output))
         end do
