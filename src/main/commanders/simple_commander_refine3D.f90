@@ -392,8 +392,10 @@ contains
             if( str_has_substr(params%refine, 'prob') )then
                 ! generate all corrs
                 call cline_prob_align%set('which_iter', params%which_iter)
-                call cline_prob_align%set('vol1',       cline%get_carg('vol1')) ! multi-states not supported
-                ! call cline_prob_align%set('objfun',     orig_objfun)
+                do state = 1,params%nstates
+                    vol = 'vol'//trim(int2str(state))
+                    call cline_prob_align%set(vol, cline%get_carg(vol))
+                enddo
                 call cline_prob_align%set('startit',    iter)
                 if( cline%defined('lp') ) call cline_prob_align%set('lp',params%lp)
                 ! reading corrs from all parts into one table
@@ -880,7 +882,7 @@ contains
             &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
         endif
         ! more prep
-        call pftcc%new(params%nspace, [1,nptcls], params%kfromto)
+        call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
         call eulprob_obj_loc%new(pinds)
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
@@ -1015,9 +1017,8 @@ contains
             fname = trim(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
-        call eulprob_obj_glob%ref_normalize
-        call eulprob_obj_glob%ref_assign
-        ! write the iptcl->iref assignment
+        call eulprob_obj_glob%prob_assign
+        ! write the iptcl->(iref,istate) assignment
         fname = trim(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
         ! cleanup

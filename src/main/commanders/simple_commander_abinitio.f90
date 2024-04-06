@@ -701,8 +701,9 @@ contains
         logical,          allocatable :: mask(:)
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
+        character(len=LONGSTRLEN)     :: vol_str
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, auto_lpstart, auto_lpstop
-        integer :: iter, it, prev_box_crop, maxits, noris, nsamples
+        integer :: iter, it, prev_box_crop, maxits, noris, nsamples, state
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
         logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
@@ -737,7 +738,6 @@ contains
         call cline%delete('lpstart')
         call cline%delete('lpstop')
         call cline%delete('lp')
-        str_state = int2str_pad(1,2)
         if( l_lpset )then
             params%lpstop  = params%lp
             params%lpstart = params%lp
@@ -893,13 +893,19 @@ contains
                 else
                     ! allows reconstruction to correct dimension
                     call cline_refine3D%delete('continue')
-                    call cline_refine3D%delete('vol1')
+                    do state = 1,params%nstates
+                        vol_str = 'vol'//trim(int2str(state))
+                        call cline_refine3D%delete(vol_str)
+                    enddo
                 endif
             endif
             if( it == SYMSEARCH_ITER+1 .and. (l_srch4symaxis .or. l_symran) )then
                 ! allows reconstruction to desired point-group
                 call cline_refine3D%delete('continue')
-                call cline_refine3D%delete('vol1')
+                do state = 1,params%nstates
+                    vol_str = 'vol'//trim(int2str(state))
+                    call cline_refine3D%delete(vol_str)
+                enddo
                 call cline_refine3D%set('pgrp', params%pgrp)
                 l_srch4symaxis = .false.
                 l_symran       = .false.
@@ -928,7 +934,10 @@ contains
                 call cline_refine3D%set('ml_reg', 'yes')
                 if( it == MLREG_ITER )then
                     call cline_refine3D%delete('continue')
-                    call cline_refine3D%delete('vol1')
+                    do state = 1,params%nstates
+                        vol_str = 'vol'//trim(int2str(state))
+                        call cline_refine3D%delete(vol_str)
+                    enddo
                 endif
             else
                 call cline_refine3D%set('ml_reg', 'no')
@@ -962,13 +971,19 @@ contains
         else
             ! allows reconstruction to correct dimension
             call cline_refine3D%delete('continue')
-            call cline_refine3D%delete('vol1')
+            do state = 1,params%nstates
+                vol_str = 'vol'//trim(int2str(state))
+                call cline_refine3D%delete(vol_str)
+            enddo
         endif
         if( params%l_ml_reg .and. it >= MLREG_ITER )then
             call cline_refine3D%set('ml_reg', 'yes')
             if( it == MLREG_ITER )then
                 call cline_refine3D%delete('continue')
-                call cline_refine3D%delete('vol1')
+                do state = 1,params%nstates
+                    vol_str = 'vol'//trim(int2str(state))
+                    call cline_refine3D%delete(vol_str)
+                enddo
             endif
         else
             call cline_refine3D%set('ml_reg', 'no')
@@ -986,50 +1001,64 @@ contains
         ! execution
         call exec_refine3D(iter)
         ! for visualization
-        call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
-        call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
-        call final_vol%generate_orthogonal_reprojs(reprojs)
-        call reprojs%write_jpg('orthogonal_reprojs.jpg')
-        call final_vol%kill
-        call reprojs%kill
+        do state = 1, params%nstates
+            str_state = int2str_pad(state,2)
+            call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+            call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+            call final_vol%generate_orthogonal_reprojs(reprojs)
+            call reprojs%write_jpg('orthogonal_reprojs.jpg')
+            call final_vol%kill
+            call reprojs%kill
+        enddo
         ! Final reconstruction at original scale
-        vol = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-        ! no ML-filtering
-        call cline_reconstruct3D%set('ml_reg',      'no')
-        call cline_reconstruct3D%set('needs_sigma', 'no')
-        call cline_reconstruct3D%set('objfun',      'cc')
-        ! no fractional or stochastic updates
-        call cline_reconstruct3D%delete('update_frac')
-        call cline_reconstruct3D%delete('stoch_update')
-        call cline_reconstruct3D%delete('it_history')
-        ! reconstruction
         if( l_autoscale )then
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
             params%box_crop = params%box
+            ! no ML-filtering
+            call cline_reconstruct3D%set('ml_reg',      'no')
+            call cline_reconstruct3D%set('needs_sigma', 'no')
+            call cline_reconstruct3D%set('objfun',      'cc')
+            ! no fractional or stochastic updates
+            call cline_reconstruct3D%delete('update_frac')
+            call cline_reconstruct3D%delete('stoch_update')
+            call cline_reconstruct3D%delete('it_history')
             call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
-            call spproj%read_segment('out',params%projfile)
-            call spproj%add_vol2os_out(vol, params%smpd, 1, vol_type)
-            if( trim(params%oritype).eq.'ptcl3D' )then
-                call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, params%box)
-            endif
+            do state = 1, params%nstates
+                str_state = int2str_pad(state,2)
+                vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                ! reconstruction
+                call spproj%read_segment('out',params%projfile)
+                call spproj%add_vol2os_out(vol, params%smpd, state, vol_type)
+                if( trim(params%oritype).eq.'ptcl3D' )then
+                    call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), state, params%box)
+                endif
+            enddo
             call spproj%write_segment_inside('out',params%projfile)
             ! post-processing
             call cline_postprocess%set('lp', params%lpstop)
             call xpostprocess%execute(cline_postprocess)
         else
-            call final_vol%new([params%box,params%box,params%box],params%smpd)
-            call final_vol%read(vol)
-            call final_vol%mirror('x')
-            call final_vol%write(add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
-            call final_vol%kill
+            do state = 1, params%nstates
+                str_state = int2str_pad(state,2)
+                vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                call final_vol%new([params%box,params%box,params%box],params%smpd)
+                call final_vol%read(vol)
+                call final_vol%mirror('x')
+                call final_vol%write(add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
+                call final_vol%kill
+            enddo
         endif
-        vol_pproc      = add2fbody(vol,params%ext,PPROC_SUFFIX)
-        vol_pproc_mirr = add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-        if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)//trim(params%ext))
-        if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)//trim(params%ext))
-        if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(params%ext))
+        do state = 1, params%nstates
+            str_state      = int2str_pad(state,2)
+            vol            = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            vol_pproc      = add2fbody(vol,params%ext,PPROC_SUFFIX)
+            vol_pproc_mirr = add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
+            if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)           //trim(params%ext))
+            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(params%ext))
+            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(params%ext))
+        enddo
         ! transfer cls3D parameters to particles
         if( trim(params%oritype) .eq. 'cls3D' )then
             call spproj%read_segment('cls3D', params%projfile)
@@ -1058,10 +1087,13 @@ contains
                 call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
                 if( it <= NSTAGES )then
                     stage = '_stage_'//int2str(it)
-                    vol   = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                    vol_pproc = add2fbody(vol,params%ext,PPROC_SUFFIX)
-                    if( file_exists(vol)      ) call simple_copy_file(vol,       add2fbody(vol,params%ext,stage))
-                    if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                        vol_pproc = add2fbody(vol,params%ext,PPROC_SUFFIX)
+                        if( file_exists(vol)      ) call simple_copy_file(vol,       add2fbody(vol,      params%ext,stage))
+                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                    enddo
                 endif
             end subroutine exec_refine3D
 
@@ -1083,7 +1115,11 @@ contains
                     symlp = max(symlp, params%lp)
                     call cline_symsrch%set('lp',       symlp)
                     call cline_symsrch%set('box_crop', params%box_crop)
-                    call cline_symsrch%set('vol1',     trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+                    do state = 1,params%nstates
+                        vol_str   = 'vol'//trim(int2str(state))
+                        str_state = int2str_pad(state,2)
+                        call cline_symsrch%set(vol_str, trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+                    enddo
                     call xsymsrch%execute_shmem(cline_symsrch)
                     call del_file('SYMAXIS_SEARCH_FINISHED')
                 endif

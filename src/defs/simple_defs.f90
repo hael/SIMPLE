@@ -101,7 +101,7 @@ end type stats_struct
 
 ! type for particle reference relation in eul_prob_tab
 type ptcl_ref
-    integer :: pind = 0, iref = 0, inpl = 0
+    integer :: pind = 0, iref = 0, inpl = 0, istate=0
     real    :: dist = 0., x = 0., y = 0.
     logical :: has_sh = .false.
 end type ptcl_ref

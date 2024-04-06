@@ -13,14 +13,15 @@ private
 
 contains
 
-    subroutine assign_ori( s, ref, inpl, corr, sh )
+    subroutine assign_ori( s, ref, inpl, corr, sh, istate )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl
         real,                   intent(in)    :: corr
         real,                   intent(in)    :: sh(2)
+        integer,      optional, intent(in)    :: istate
         type(ori) :: osym, o_prev, o_new
         integer   :: state, neff_states, nrefs_eval, nrefs_tot
-        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac, pw
+        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
         logical   :: l_multistates
         s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
         ! stash previous ori
@@ -47,6 +48,7 @@ contains
         l_multistates = s%nstates > 1
         if( l_multistates )then
             state = s3D%proj_space_state(ref)
+            if( present(istate) ) state = istate
             if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; assign_ori')
         endif
         mi_state = 0.
