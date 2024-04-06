@@ -687,7 +687,6 @@ contains
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         type(postprocess_commander)         :: xpostprocess
         type(symaxis_search_commander)      :: xsymsrch
-        type(reconstruct3D_commander)       :: xreconstruct3D
         ! command lines
         type(cmdline)                 :: cline_refine3D, cline_reconstruct3D
         type(cmdline)                 :: cline_postprocess, cline_symsrch
@@ -696,14 +695,11 @@ contains
         type(sp_project)              :: spproj
         type(convergence)             :: conv
         type(sym)                     :: se1, se2
-        type(class_frcs)              :: clsfrcs 
         type(image)                   :: final_vol, reprojs
-        logical,          allocatable :: mask(:)
-        integer,          allocatable :: pinds(:)
-        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr, frcs_fname
+        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
         character(len=LONGSTRLEN)     :: vol_str
-        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy, auto_lpstart, auto_lpstop
-        integer :: iter, it, prev_box_crop, maxits, noris, nsamples, state
+        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
+        integer :: iter, it, prev_box_crop, maxits, state
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
         logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
@@ -1015,7 +1011,6 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
-            params%box_crop = params%box
             ! no ML-filtering
             call cline_reconstruct3D%set('ml_reg',      'no')
             call cline_reconstruct3D%set('needs_sigma', 'no')
@@ -1024,12 +1019,12 @@ contains
             call cline_reconstruct3D%delete('update_frac')
             call cline_reconstruct3D%delete('stoch_update')
             call cline_reconstruct3D%delete('it_history')
+            ! reconstruction
             call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+            call spproj%read_segment('out',params%projfile)
             do state = 1, params%nstates
                 str_state = int2str_pad(state,2)
                 vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
-                ! reconstruction
-                call spproj%read_segment('out',params%projfile)
                 call spproj%add_vol2os_out(vol, params%smpd, state, vol_type)
                 if( trim(params%oritype).eq.'ptcl3D' )then
                     call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), state, params%box)
@@ -1058,9 +1053,9 @@ contains
             vol            = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
             vol_pproc      = add2fbody(vol,params%ext,PPROC_SUFFIX)
             vol_pproc_mirr = add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-            if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)           //trim(params%ext))
-            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(params%ext))
-            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(params%ext))
+            if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)           //trim(str_state)//trim(params%ext))
+            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
+            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
         enddo
         ! transfer cls3D parameters to particles
         if( trim(params%oritype) .eq. 'cls3D' )then
