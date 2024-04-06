@@ -1037,8 +1037,11 @@ contains
             enddo
             call spproj%write_segment_inside('out',params%projfile)
             ! post-processing
-            call cline_postprocess%set('lp', params%lpstop)
-            call xpostprocess%execute(cline_postprocess)
+            do state = 1, params%nstates
+                call cline_postprocess%set('lp',    params%lpstop)
+                call cline_postprocess%set('state', real(state))
+                call xpostprocess%execute(cline_postprocess)
+            enddo
         else
             do state = 1, params%nstates
                 str_state = int2str_pad(state,2)
