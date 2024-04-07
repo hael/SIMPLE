@@ -58,7 +58,7 @@ contains
                     &[self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%y], istate)
                 else
-                    pftcc_iref = (istate-1) * params_glob%nspace
+                    pftcc_iref = (istate-1) * params_glob%nspace + iref
                     call self%s%inpl_srch(ref=pftcc_iref)
                     ! checking if shift search is good
                     if( s3D%proj_space_inplinds(pftcc_iref, ithr) < 1 )then
