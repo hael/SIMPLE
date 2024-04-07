@@ -38,7 +38,7 @@ contains
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, iptcl, iptcl_map, irot, istate
+        integer :: iref, iptcl, iptcl_map, irot, istate, pftcc_iref
         real    :: corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -58,14 +58,15 @@ contains
                     &[self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%y], istate)
                 else
-                    call self%s%inpl_srch(ref=iref)
+                    pftcc_iref = (istate-1) * params_glob%nspace
+                    call self%s%inpl_srch(ref=pftcc_iref)
                     ! checking if shift search is good
-                    if( s3D%proj_space_inplinds(iref, ithr) < 1 )then
+                    if( s3D%proj_space_inplinds(pftcc_iref, ithr) < 1 )then
                         call assign_ori(self%s, iref, irot, corr, [0.,0.], istate)
                     else
-                        irot = s3D%proj_space_inplinds(iref, ithr)
-                        corr = s3D%proj_space_corrs(   iref, ithr)
-                        call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,ithr), istate)
+                        irot = s3D%proj_space_inplinds(pftcc_iref, ithr)
+                        corr = s3D%proj_space_corrs(   pftcc_iref, ithr)
+                        call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,pftcc_iref,ithr), istate)
                     endif
                 endif
             else
