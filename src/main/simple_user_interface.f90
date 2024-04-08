@@ -1760,7 +1760,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 11, 9, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 10, 5, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         cluster2D_subsets%gui_submenu_list = "cluster 2D,compute"
         cluster2D_subsets%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1797,9 +1797,6 @@ contains
         call cluster2D_subsets%set_gui_params('srch_ctrls', 9, submenu="cluster2D")
         call cluster2D_subsets%set_input('srch_ctrls', 10, remove_chunks)
         call cluster2D_subsets%set_gui_params('srch_ctrls', 10, submenu="cluster2D")
-        call cluster2D_subsets%set_input('srch_ctrls', 11, cc_iters)
-        cluster2D_subsets%srch_ctrls(11)%rval_default = 5.
-        call cluster2D_subsets%set_gui_params('srch_ctrls', 11, submenu="cluster2D")
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 1, submenu="cluster 2D")
@@ -1813,14 +1810,6 @@ contains
         call cluster2D_subsets%set_gui_params('filt_ctrls', 4, submenu="cluster 2D")
         call cluster2D_subsets%set_input('filt_ctrls', 5,  reject_cls)
         call cluster2D_subsets%set_gui_params('filt_ctrls', 5, submenu="cluster 2D", online=.true.)
-        call cluster2D_subsets%set_input('filt_ctrls', 6, kweight_chunk)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 6, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 7, kweight_pool)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 8, ml_reg_chunk)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
-        call cluster2D_subsets%set_input('filt_ctrls', 9, ml_reg_pool)
-        call cluster2D_subsets%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D_subsets%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)

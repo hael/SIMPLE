@@ -19,9 +19,11 @@ private
 
 ! public convenience type
 type micproj_record
-    character(len=:), allocatable :: projname   ! project file name
-    integer                       :: micind     ! index of micrograph in project
-    integer                       :: nptcls
+    character(len=:), allocatable :: projname           ! project file name
+    integer                       :: micind     = 0     ! index of micrograph in project
+    integer                       :: nptcls     = 0     ! # of particles
+    integer                       :: nptcls_sel = 0     ! # of particles (state=1)
+    logical                       :: included   = .false.
 end type micproj_record
 
 character(len=STDLEN), parameter   :: DIR_CHUNK           = 'chunk_'
@@ -163,11 +165,11 @@ contains
 
     ! Do we really need to read and store micrograph info?
     subroutine generate_2( self, micproj_records )
-        class(stream_chunk),            intent(inout) :: self
-        type(micproj_record), allocatable, intent(in) :: micproj_records(:)
+        class(stream_chunk),  intent(inout) :: self
+        type(micproj_record), intent(in)    :: micproj_records(:)
         type(sp_project)              :: spproj
         character(len=:), allocatable :: stack_name, prev_projname
-        integer :: iproj, iptcl, fromp, ifromp, itop, imic, n_in, nptcls, jptcl, micind
+        integer :: iptcl, fromp, ifromp, itop, imic, n_in, nptcls, jptcl, micind
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         n_in = size(micproj_records(:))
         if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')

@@ -1381,7 +1381,6 @@ contains
                 nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                 l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
                 call classify_pool_dev
-                call update_projects_mask_dev(micproj_records)
                 call classify_new_chunks_dev(micproj_records)
             endif
             call sleep(WAITTIME)
@@ -1460,9 +1459,11 @@ contains
                         n_ptcls   = n_ptcls + nptcls ! global update
                         fname     = trim(projectnames(iproj))
                         abs_fname = simple_abspath(fname, errmsg='stream_cluster2D :: update_projects_list 1')
-                        micproj_records(irec)%projname = trim(abs_fname)
-                        micproj_records(irec)%micind   = imic
-                        micproj_records(irec)%nptcls   = nptcls
+                        micproj_records(irec)%projname   = trim(abs_fname)
+                        micproj_records(irec)%micind     = imic
+                        micproj_records(irec)%nptcls     = nptcls
+                        micproj_records(irec)%nptcls_sel = nptcls
+                        micproj_records(irec)%included   = .false.
                     enddo
                 enddo
                 nptcls_glob = nptcls_glob + n_ptcls ! global update
