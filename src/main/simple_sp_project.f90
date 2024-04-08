@@ -1311,7 +1311,7 @@ contains
         type(ori)                     :: orig_stk
         type(stack_io)                :: stkio_w
         type(dstack_io)               :: dstkio_r
-        character(len=:), allocatable :: stk, tmp_dir, stkpart
+        character(len=:), allocatable :: stk, tmp_dir, stkpart, stkkind
         character(len=:), allocatable :: dest_stkpart, stk_den_name
         character(len=LONGSTRLEN) :: stk_relpath, cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
@@ -1326,6 +1326,8 @@ contains
         else if( n_os_stk > 1 )then ! re-splitting not supported
             return
         endif
+        call self%os_stk%getter(1, 'stkkind', stkkind)
+        if( trim(stkkind) == 'split' ) return
         ! get original simple_parameters
         call self%os_stk%get_ori(1, orig_stk)
         ! copy prep

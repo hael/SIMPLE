@@ -15,7 +15,7 @@ use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_preprocess_stream
 use simple_commander_cluster2D
-use simple_commander_cluster2D_stream
+use simple_commander_cluster2D_stream_dev
 use simple_commander_abinitio
 use simple_commander_refine3D
 use simple_commander_rec
@@ -380,7 +380,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('8e593e56')
+call simple_print_git_version('2cc0a873')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)
