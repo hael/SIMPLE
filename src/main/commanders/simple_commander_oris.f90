@@ -73,6 +73,7 @@ contains
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
+                call spiral%new(params%ndiscrete, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(spiral)
             endif
             call build%spproj_field%rnd_inpls(params%sherr)
@@ -85,6 +86,12 @@ contains
             if( params%doprint .eq. 'yes' )then
                 call build%spproj_field%print_matrices
             endif
+        endif
+        if( cline%defined('defocus') )then
+            call build%spproj_field%rnd_ctf(0., 0., 0., params%defocus, params%dferr, params%astigerr)
+            call build%spproj_field%delete_entry('cs')
+            call build%spproj_field%delete_entry('kv')
+            call build%spproj_field%delete_entry('fraca')
         endif
         if( params%nstates > 1 )then
             call build%spproj_field%rnd_states(params%nstates)
