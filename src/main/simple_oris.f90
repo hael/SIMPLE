@@ -397,19 +397,25 @@ contains
     end function get_all
 
     !>  \brief  is for getting an array of 'key' values
-    function get_all_sampled( self, key ) result( arr )
+    function get_all_sampled( self, key, state ) result( arr )
         class(oris),       intent(in) :: self
         character(len=*),  intent(in) :: key
-        real, allocatable :: arr(:), sampled(:)
+        integer, optional, intent(in) :: state
+        real, allocatable :: arr(:), sampled(:), states(:)
         integer :: i
         real    :: lb
         allocate(arr(self%n), sampled(self%n), source=0.)
+        if( present(state) ) states = self%get_all('state')
         do i=1,self%n
             arr(i)     = self%o(i)%get(key)
             sampled(i) = self%o(i)%get('sampled')
         enddo
         lb  = maxval(sampled) - 0.5
-        arr = pack(arr, mask=sampled > lb)
+        if( present(state) )then
+            arr = pack(arr, mask=(sampled > lb .and. states == state))
+        else
+            arr = pack(arr, mask=sampled > lb)
+        endif
     end function get_all_sampled
 
     !>  \brief  is for getting the i:th rotation matrix
