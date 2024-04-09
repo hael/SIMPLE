@@ -109,9 +109,7 @@ contains
         real    :: dists_inpl(pftcc%nrots,nthr_glob), dists_inpl_sorted(pftcc%nrots,nthr_glob)
         real    :: dists_projs(params_glob%nspace,nthr_glob), lims(2,2), lims_init(2,2), cxy(3), inpl_athres
         call seed_rnd
-        l_doshift   = params_glob%l_prob_sh .and. params_glob%l_doshift
-        inpl_athres = calc_athres('dist_inpl')
-        call calc_num2sample(params_glob%nspace, 'dist', projs_ns)
+        l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
         if( l_doshift )then
             allocate(locn(projs_ns), source=0)
             ! make shift search objects
@@ -124,7 +122,9 @@ contains
             end do
             ! fill the table
             do istate = 1, self%nstates
-                iref = (istate-1)*params_glob%nspace
+                iref        = (istate-1)*params_glob%nspace
+                inpl_athres = calc_athres('dist_inpl', state=istate)
+                call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
                 !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
@@ -158,7 +158,8 @@ contains
         else
             ! fill the table
             do istate = 1, self%nstates
-                iref = (istate-1)*params_glob%nspace
+                iref        = (istate-1)*params_glob%nspace
+                inpl_athres = calc_athres('dist_inpl', state=istate)
                 !$omp parallel do default(shared) private(i,iptcl,ithr,iproj,irot) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
@@ -235,7 +236,7 @@ contains
         logical :: ptcl_avail(self%nptcls)
         do istate = 1, self%nstates
             ! sorting each columns
-            projs_athres = calc_athres('dist')
+            projs_athres = calc_athres('dist', state=istate)
             sorted_tab   = transpose(self%loc_tab(:,:,istate)%dist)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iproj,i)
             do iproj = 1, params_glob%nspace
@@ -450,22 +451,24 @@ contains
 
     ! PUBLIC UTILITITES
 
-    subroutine calc_num2sample( num_all, field_str, num_smpl)
+    subroutine calc_num2sample( num_all, field_str, num_smpl, state)
         use simple_builder, only: build_glob
-        integer,          intent(in)  :: num_all
-        character(len=*), intent(in)  :: field_str
-        integer,          intent(out) :: num_smpl
+        integer,           intent(in)  :: num_all
+        character(len=*),  intent(in)  :: field_str
+        integer,           intent(out) :: num_smpl
+        integer, optional, intent(in)  :: state
         real :: athres
-        athres   = calc_athres( field_str )
+        athres   = calc_athres( field_str, state )
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 
-    function calc_athres( field_str ) result( athres )
+    function calc_athres( field_str, state ) result( athres )
         use simple_builder, only: build_glob
-        character(len=*), intent(in) :: field_str
+        character(len=*),  intent(in) :: field_str
+        integer, optional, intent(in) :: state
         real, allocatable :: vals(:)
         real :: athres, dist_thres
-        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str))
+        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str), state)
         dist_thres = sum(vals) / real(size(vals))
         athres     = params_glob%prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
