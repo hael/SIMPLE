@@ -30,7 +30,7 @@ contains
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
         if( iref_offset < 1 .or. iref_offset > s%nrefs ) THROW_HARD('ref index: '//int2str(iref_offset)//' out of bound; assign_ori')
-        call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
+        call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(iref_offset)))
         ! in-plane (inpl)
         call build_glob%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
