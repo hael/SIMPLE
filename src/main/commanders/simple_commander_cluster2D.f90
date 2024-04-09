@@ -476,7 +476,7 @@ contains
             call spproj%read_segment('cls3D', params%projfile)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             call frcs_sc%read(FRCS_FILE)
-            call frcs_sc%upsample(params%smpd, params%box, frcs)
+            call frcs_sc%pad(params%smpd, params%box, frcs)
             call frcs%write(FRCS_FILE)
             call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
             call frcs%kill

@@ -1234,7 +1234,7 @@ contains
             call os_backup3%kill
             ! rescale frcs
             call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%upsample(orig_smpd, orig_box, frcs)
+            call frcs_sc%pad(orig_smpd, orig_box, frcs)
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill

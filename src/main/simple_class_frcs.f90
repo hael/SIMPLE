@@ -38,7 +38,7 @@ contains
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
-    procedure          :: upsample
+    procedure          :: pad
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -266,16 +266,24 @@ contains
         lp = median(lp3)
     end function estimate_lp_for_align
 
-    subroutine upsample( self, newsmpd, newbox, self_out )
+    subroutine pad( self, newsmpd, newbox, self_out )
         class(class_frcs), intent(in)  :: self
         real,              intent(in)  :: newsmpd
         integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out
-        if( newbox <= self%box4frc_calc ) THROW_HARD('New <= old filter size; downsample')
-        call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
-        self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
-        if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
-    end subroutine upsample
+        if( newbox < self%box4frc_calc )then
+            THROW_HARD('New <= old filter size; downsample')
+        else if( newbox == self%box4frc_calc )then
+            ! copy
+            call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
+            self_out%frcs(:,:,:) = self%frcs(:,:,:)
+        else
+            ! zero padding
+            call self_out%new(self%nprojs, newbox, newsmpd, self%nstates)
+            self_out%frcs(:,:,:self%filtsz) = self%frcs(:,:,:)
+            if( self_out%filtsz > self%filtsz ) self_out%frcs(:,:,self%filtsz+1:) = 0.0
+        endif
+    end subroutine pad
 
     ! I/O
 
