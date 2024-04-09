@@ -20,19 +20,21 @@ contains
         real,                   intent(in)    :: sh(2)
         integer,      optional, intent(in)    :: istate
         type(ori) :: osym, o_prev, o_new
-        integer   :: state, neff_states, nrefs_eval, nrefs_tot
+        integer   :: state, neff_states, nrefs_eval, nrefs_tot, iref_offset
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
         logical   :: l_multistates
-        s3D%proj_space_euls(3,ref,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
+        iref_offset = ref
+        if( present(istate) ) iref_offset = (istate-1) * params_glob%nspace + ref
+        s3D%proj_space_euls(3,iref_offset,s%ithr) = 360. - pftcc_glob%get_rot(inpl)
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
-        if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; assign_ori')
+        if( iref_offset < 1 .or. iref_offset > s%nrefs ) THROW_HARD('ref index: '//int2str(iref_offset)//' out of bound; assign_ori')
         call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
         ! in-plane (inpl)
         call build_glob%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
-        call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
+        call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,iref_offset,s%ithr))
         ! shift
         shvec      = s%prev_shvec
         shvec_incr = 0.
@@ -47,7 +49,7 @@ contains
         state = 1
         l_multistates = s%nstates > 1
         if( l_multistates )then
-            state = s3D%proj_space_state(ref)
+            state = s3D%proj_space_state(iref_offset)
             if( present(istate) ) state = istate
             if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; assign_ori')
         endif
