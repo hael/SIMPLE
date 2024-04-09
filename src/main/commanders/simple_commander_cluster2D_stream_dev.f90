@@ -1115,7 +1115,7 @@ contains
             call os_backup%kill
             ! rescale frcs
             call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%upsample(params_glob%smpd, params_glob%box, frcs)
+            call frcs_sc%pad(params_glob%smpd, params_glob%box, frcs)
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill
@@ -1453,8 +1453,6 @@ contains
                 call sleep(WAITTIME)
             endif
         end do
-        ! Termination
-        call terminate_stream2D_dev
         deallocate(stk_all_nptcls,stk_nptcls,chunks_map)
         ! maps stacks & gathering particles parameters
         ! only 2D parameters are transferred, everything else untouched
@@ -1505,12 +1503,12 @@ contains
             endif
             ! frcs
             call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
-            call frcs_sc%upsample(params%smpd, params%box, frcs)
+            call frcs_sc%pad(params%smpd, params%box, frcs)
             call frcs%write(frcsfname)
             call frcs%kill
             call frcs_sc%kill
         endif
-        ! call spproj_glob%os_out%kill
+        call spproj_glob%os_out%kill
         call spproj_glob%add_cavgs2os_out(refs_glob, params%smpd, 'cavg')
         if( l_wfilt )then
             src = add2fbody(refs_glob,params%ext,trim(WFILT_SUFFIX))
@@ -1532,6 +1530,7 @@ contains
         call simple_rmdir(STDERROUT_DIR)
         call simple_rmdir(DIR_PROJS)
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        call simple_rmdir(SIGMAS_DIR)
         call qsys_cleanup
         ! graceful end
         call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
