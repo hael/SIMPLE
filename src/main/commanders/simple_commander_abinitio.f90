@@ -695,6 +695,7 @@ contains
         type(sp_project)              :: spproj
         type(convergence)             :: conv
         type(sym)                     :: se1, se2
+        type(class_frcs)              :: clsfrcs
         type(image)                   :: final_vol, reprojs
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
         character(len=LONGSTRLEN)     :: vol_str
@@ -702,18 +703,19 @@ contains
         integer :: iter, it, prev_box_crop, maxits, state
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
         logical :: l_lpstart_set
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',        'yes')
-        if( .not. cline%defined('refine')     ) call cline%set('refine',      'prob')
-        if( .not. cline%defined('autoscale')  ) call cline%set('autoscale',    'yes')
-        if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'no')
-        if( .not. cline%defined('sigma_est')  ) call cline%set('sigma_est', 'global')
-        if( .not. cline%defined('prob_sh')    ) call cline%set('prob_sh',      'yes')
-        if( .not. cline%defined('prob_athres')) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('center')     ) call cline%set('center',        'no')
-        if( .not. cline%defined('objfun')     ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('oritype')    ) call cline%set('oritype',   'ptcl3D')
-        if( .not. cline%defined('pgrp')       ) call cline%set('pgrp',          'c1')
-        if( .not. cline%defined('pgrp_start') ) call cline%set('pgrp_start',    'c1')
+        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
+        if( .not. cline%defined('refine')       ) call cline%set('refine',      'prob')
+        if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',    'yes')
+        if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
+        if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
+        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
+        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
+        if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes')
+        if( .not. cline%defined('center')       ) call cline%set('center',        'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
+        if( .not. cline%defined('oritype')      ) call cline%set('oritype',   'ptcl3D')
+        if( .not. cline%defined('pgrp')         ) call cline%set('pgrp',          'c1')
+        if( .not. cline%defined('pgrp_start')   ) call cline%set('pgrp_start',    'c1')
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
