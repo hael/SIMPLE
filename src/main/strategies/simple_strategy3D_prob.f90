@@ -38,7 +38,7 @@ contains
         use simple_eul_prob_tab, only: eulprob_corr_switch
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: ithr
-        integer :: iref, iptcl, iptcl_map, irot, istate, iref_offset
+        integer :: iproj, iptcl, iptcl_map, irot, istate, iref
         real    :: corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -46,31 +46,31 @@ contains
             ! prep
             call self%s%prep4srch
             self%s%nrefs_eval = self%s%nrefs
-            iptcl       = self%s%iptcl
-            iptcl_map   = self%s%iptcl_map
-            istate      =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%istate
-            iref        =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%iref
-            corr        = eulprob_corr_switch(self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%dist)
-            irot        =                     self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%inpl
-            iref_offset = (istate-1) * params_glob%nspace + iref
+            iptcl     = self%s%iptcl
+            iptcl_map = self%s%iptcl_map
+            istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
+            iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
+            corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist)
+            irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
+            iref      = (istate-1)*params_glob%nspace + iproj
             if( self%s%doshift )then
-                if( params_glob%l_prob_sh .and. self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%has_sh )then
-                    call assign_ori(self%s, iref_offset, irot, corr,&
-                    &[self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%x,&
-                    & self%spec%eulprob_obj_loc%assgn_map(iptcl_map)%y], istate)
+                if( params_glob%l_prob_sh .and. self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
+                    call assign_ori(self%s, iref, irot, corr,&
+                    &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
+                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y])
                 else
-                    call self%s%inpl_srch(ref=iref_offset)
+                    call self%s%inpl_srch(ref=iref)
                     ! checking if shift search is good
-                    if( s3D%proj_space_inplinds(iref_offset, ithr) < 1 )then
-                        call assign_ori(self%s, iref_offset, irot, corr, [0.,0.], istate)
+                    if( s3D%proj_space_inplinds(iref, ithr) < 1 )then
+                        call assign_ori(self%s, iref, irot, corr, [0.,0.])
                     else
-                        irot = s3D%proj_space_inplinds(iref_offset, ithr)
-                        corr = s3D%proj_space_corrs(   iref_offset, ithr)
-                        call assign_ori(self%s, iref_offset, irot, corr, s3D%proj_space_shift(:,iref_offset,ithr), istate)
+                        irot = s3D%proj_space_inplinds(iref, ithr)
+                        corr = s3D%proj_space_corrs(   iref, ithr)
+                        call assign_ori(self%s, iref, irot, corr, s3D%proj_space_shift(:,iref,ithr))
                     endif
                 endif
             else
-                call assign_ori(self%s, iref_offset, irot, corr, [0.,0.], istate)
+                call assign_ori(self%s, iref, irot, corr, [0.,0.])
             endif
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

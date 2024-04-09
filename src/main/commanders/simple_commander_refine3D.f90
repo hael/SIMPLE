@@ -861,7 +861,7 @@ contains
         type(builder)                 :: build
         type(parameters)              :: params
         type(ori)                     :: o_tmp
-        type(eul_prob_tab)            :: eulprob_obj_loc
+        type(eul_prob_tab)            :: eulprob_obj_part
         type(euclid_sigma2)           :: eucl_sigma
         integer  :: nptcls, iptcl, s, ithr, iref, i
         logical  :: l_ctf, do_center
@@ -883,7 +883,7 @@ contains
         endif
         ! more prep
         call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
-        call eulprob_obj_loc%new(pinds)
+        call eulprob_obj_part%new(pinds)
         call prepimgbatch(nptcls)
         call discrete_read_imgbatch( nptcls, pinds, [1,nptcls] )
         call pftcc%reallocate_ptcls(nptcls, pinds)
@@ -944,10 +944,10 @@ contains
         ! make CTFs
         if( l_ctf ) call pftcc%create_polar_absctfmats(build%spproj, params%oritype)
         call pftcc%memoize_ptcls
-        call eulprob_obj_loc%fill_tab(pftcc)
+        call eulprob_obj_part%fill_tab(pftcc)
         fname = trim(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
-        call eulprob_obj_loc%write_tab(fname)
-        call eulprob_obj_loc%kill
+        call eulprob_obj_part%write_tab(fname)
+        call eulprob_obj_part%kill
         call killimgbatch
         call pftcc%kill
         call build%kill_general_tbox

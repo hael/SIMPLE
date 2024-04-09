@@ -38,7 +38,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
-type(eul_prob_tab),     target :: eulprob_obj_loc
+type(eul_prob_tab),     target :: eulprob_obj_part
 type(cartft_corrcalc),  target :: cftcc
 type(image),       allocatable :: ptcl_match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
@@ -207,8 +207,8 @@ contains
 
         ! ref regularization
         if( str_has_substr(params_glob%refine, 'prob') .and. .not.(trim(params_glob%refine) .eq. 'sigma') )then
-            call eulprob_obj_loc%new(pinds)
-            call eulprob_obj_loc%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
+            call eulprob_obj_part%new(pinds)
+            call eulprob_obj_part%read_assignment(trim(ASSIGNMENT_FBODY)//'.dat')
         endif
 
         ! Batch loop
@@ -274,7 +274,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 strategy3Dspecs(iptcl_batch)%szsn      = params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
-                if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_loc => eulprob_obj_loc
+                if( str_has_substr(params_glob%refine, 'prob') ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
@@ -318,7 +318,7 @@ contains
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
-        if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj_loc%kill
+        if( str_has_substr(params_glob%refine, 'prob') ) call eulprob_obj_part%kill
         call build_glob%vol%kill
         call orientation%kill
         if( allocated(symmat)   ) deallocate(symmat)
