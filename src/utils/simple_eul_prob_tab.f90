@@ -111,7 +111,6 @@ contains
         call seed_rnd
         l_doshift = params_glob%l_prob_sh .and. params_glob%l_doshift
         if( l_doshift )then
-            allocate(locn(projs_ns), source=0)
             ! make shift search objects
             lims(:,1)      = -params_glob%trs
             lims(:,2)      =  params_glob%trs
@@ -125,6 +124,8 @@ contains
                 iref        = (istate-1)*params_glob%nspace
                 inpl_athres = calc_athres('dist_inpl', state=istate)
                 call calc_num2sample(params_glob%nspace, 'dist', projs_ns, state=istate)
+                if( allocated(locn) ) deallocate(locn)
+                allocate(locn(projs_ns), source=0)
                 !$omp parallel do default(shared) private(i,j,iptcl,ithr,iproj,irot,cxy,locn) proc_bind(close) schedule(static)
                 do i = 1, self%nptcls
                     iptcl = self%pinds(i)
