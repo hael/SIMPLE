@@ -546,30 +546,27 @@ contains
         type(builder)             :: build
         type(oris)                :: o_truth
         real,    allocatable :: states(:), truth_states(:)
-        integer, allocatable :: truth_nptcls(:), correct_states(:)
+        integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:)
         integer              :: nptcls, nstates, iptcl, istate
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         nptcls  = build%spproj_field%get_noris()
         allocate(states(nptcls), truth_states(nptcls), source=0.)
         nstates = build%spproj_field%get_n(  'state')
         states  = build%spproj_field%get_all('state')
-        allocate(truth_nptcls(nstates), correct_states(nstates), source=0)
+        allocate(truth_nptcls(nstates), correct_states(nstates), state_order(nstates), source=0)
         call o_truth%new(nptcls, .true.)
         call o_truth%read(params%oritab, [1, nptcls])
         truth_states = o_truth%get_all('state')
         do istate = 1, nstates
-            !$omp parallel do default(shared) private(iptcl) proc_bind(close) schedule(static)
             do iptcl = 1, nptcls
                 if( int(truth_states(iptcl)) == istate ) truth_nptcls(istate) = truth_nptcls(istate) + 1
             enddo
-            !$omp end parallel do
         enddo
-        !$omp parallel do default(shared) private(iptcl,istate) proc_bind(close) schedule(static)
+        call read_state_order(params%infile, state_order)
         do iptcl = 1, nptcls
             istate = int(truth_states(iptcl))
-            if( int(states(iptcl)) == istate ) correct_states(istate) = correct_states(istate) + 1
+            if( state_order(int(states(iptcl))) == istate ) correct_states(istate) = correct_states(istate) + 1
         enddo
-        !$omp end parallel do
         do istate = 1, nstates
             print *, '% correct for state ', int2str(istate), ' is : ', correct_states(istate) * 100. / real(truth_nptcls(istate)), ' %'
         enddo
@@ -577,6 +574,28 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_ORIS NORMAL STOP ****')
+      contains
+        subroutine read_state_order( fname, order )
+            character(len=*), intent(in)  :: fname
+            integer,          intent(out) :: order(nstates)
+            character(len=100)  :: io_message
+            character(len=2048) :: line
+            integer :: file_stat, fnr, i, io_stat
+            if( .not. file_exists(fname) )then
+                THROW_HARD("the file you are trying to read: "//trim(fname)//' does not exist in cwd' )
+            endif
+            if( trim(fname2ext(fname)) == 'bin' )then
+                THROW_HARD('this method does not support binary files; read')
+            endif
+            io_message='No error'
+            call fopen(fnr, FILE=fname, STATUS='OLD', action='READ', iostat=file_stat, iomsg=io_message)
+            call fileiochk("read_state_order ; read ,Error when opening file for reading: "//trim(fname)//':'//trim(io_message), file_stat)
+            do i = 1, nstates
+                read(fnr, fmt='(A)') line
+                call str2int( trim(line), io_stat, order(i) )
+            enddo
+            call fclose(fnr)
+        end subroutine read_state_order
     end subroutine check_oris
 
 end module simple_commander_oris
