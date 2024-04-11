@@ -18,12 +18,13 @@ logical, parameter :: L_WRITE       = .true.
 
 type, extends(binimage) :: masker
     private
-    real    :: msk       = 0.   !< maximum circular mask
-    real    :: amsklp    = 0.   !< low-pass limit
-    real    :: pix_thres = 0.   !< binarisation threshold
-    integer :: edge      = 6    !< edge width
-    integer :: binwidth  = 1    !< additional layers to grow
-    integer :: idim(3)   = 0    !< image dimension
+    real    :: msk           = 0.   !< maximum circular mask
+    real    :: amsklp        = 0.   !< low-pass limit
+    real    :: amsklp_prelim = 0.   !< low-pass limit
+    real    :: pix_thres     = 0.   !< binarisation threshold
+    integer :: edge          = 6    !< edge width
+    integer :: binwidth      = 1    !< additional layers to grow
+    integer :: idim(3)       = 0    !< image dimension
   contains
     procedure          :: automask3D
     procedure          :: automask3D_otsu
@@ -42,10 +43,11 @@ contains
         logical        :: was_ft
         type(binimage) :: msk_prelim
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
-        self%amsklp    = params_glob%amsklp
-        self%binwidth  = params_glob%binwidth
-        self%edge      = params_glob%edge
-        self%pix_thres = params_glob%thres
+        self%amsklp_prelim = params_glob%amsklp_prelim
+        self%amsklp        = params_glob%amsklp
+        self%binwidth      = params_glob%binwidth
+        self%edge          = params_glob%edge
+        self%pix_thres     = params_glob%thres
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
@@ -78,20 +80,21 @@ contains
         ddo_apply = .true.
         if( present(do_apply) ) ddo_apply = do_apply
         if( vol_inout%is_2d() )THROW_HARD('automask3D_otsu is intended for volumes only; automask3D')
-        self%amsklp    = params_glob%amsklp
-        self%binwidth  = params_glob%binwidth
-        self%edge      = params_glob%edge
-        self%pix_thres = params_glob%thres
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK FIRST  LOW-PASS:    ', AMSKLP_PRELIM, ' ANGSTROMS'
-        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK SECOND LOW-PASS:    ', self%amsklp,   ' ANGSTROMS'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,     ' PIXEL(S)'
-        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth, ' PIXEL(S)'
+        self%amsklp_prelim = params_glob%amsklp_prelim
+        self%amsklp        = params_glob%amsklp
+        self%binwidth      = params_glob%binwidth
+        self%edge          = params_glob%edge
+        self%pix_thres     = params_glob%thres
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK FIRST  LOW-PASS:    ', self%amsklp_prelim, ' ANGSTROMS'
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK SECOND LOW-PASS:    ', self%amsklp,        ' ANGSTROMS'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,          ' PIXEL(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,      ' PIXEL(S)'
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
         ! preliminary masking
         call msk_prelim%transfer2bimg(vol_inout)
-        call msk_prelim%automask3D_otsu_priv(l_tight=.true., amsklp=AMSKLP_PRELIM)
+        call msk_prelim%automask3D_otsu_priv(l_tight=.true., amsklp=self%amsklp_prelim)
         call self%mul(msk_prelim)
         ! automasking
         call self%automask3D_otsu_priv(l_tight=.false., amsklp=self%amsklp)

@@ -317,6 +317,7 @@ type :: parameters
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
     real    :: alpha=KBALPHA
+    real    :: amsklp_prelim=8.    !< preliminary low-pass limit for envelope mask generation(in A)
     real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
@@ -747,6 +748,7 @@ contains
         ! Float args
         call check_rarg('alpha',          self%alpha)
         call check_rarg('amsklp',         self%amsklp)
+        call check_rarg('amsklp_prelim',  self%amsklp_prelim)
         call check_rarg('angerr',         self%angerr)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)

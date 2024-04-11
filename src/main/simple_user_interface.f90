@@ -1268,7 +1268,7 @@ contains
         &'envelope masking',&                            ! descr_short
         &'is a program for automated envelope masking',& ! descr_long
         &'simple_exec',&                                 ! executable
-        &1, 1, 0, 0, 1, 4, 1, .false.)                   ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 2, 4, 1, .false.)                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .true., '')
@@ -1281,6 +1281,8 @@ contains
         ! filter controls
         call automask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
+        call automask%set_input('filt_ctrls', 2, 'amsklp_prelim', 'num', 'Preliminary low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 8.)
         ! mask controls
         call automask%set_input('mask_ctrls', 1, 'binwidth', 'num', 'Envelope binary layers width',&
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
