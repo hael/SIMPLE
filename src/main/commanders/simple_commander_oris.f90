@@ -546,14 +546,14 @@ contains
         type(builder)             :: build
         type(oris)                :: o_truth
         real,    allocatable :: states(:), truth_states(:)
-        integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:)
-        integer              :: nptcls, nstates, iptcl, istate
+        integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:), cur_perm(:), all_perms(:,:)
+        integer              :: nptcls, nstates, iptcl, istate, perm_cnt, max_sum, max_perm, cur_sum, iperm
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         nptcls  = build%spproj_field%get_noris()
         allocate(states(nptcls), truth_states(nptcls), source=0.)
         nstates = build%spproj_field%get_n(  'state')
         states  = build%spproj_field%get_all('state')
-        allocate(truth_nptcls(nstates), correct_states(nstates), state_order(nstates), source=0)
+        allocate(truth_nptcls(nstates), correct_states(nstates), state_order(nstates), cur_perm(nstates), all_perms(nstates, 2**nstates), source=0)
         call o_truth%new(nptcls, .true.)
         call o_truth%read(params%oritab, [1, nptcls])
         truth_states = o_truth%get_all('state')
@@ -562,11 +562,37 @@ contains
                 if( int(truth_states(iptcl)) == istate ) truth_nptcls(istate) = truth_nptcls(istate) + 1
             enddo
         enddo
-        call read_state_order(params%infile, state_order)
+        if( cline%defined('infile') )then
+            call read_state_order(params%infile, state_order)
+        else
+            perm_cnt = 0
+            call generate_perm(1)
+            max_sum = 0
+            do iperm = 1, perm_cnt
+                state_order    = all_perms(:, iperm)
+                correct_states = 0
+                do iptcl = 1, nptcls
+                    istate = int(truth_states(iptcl))
+                    if( state_order(int(states(iptcl))) == istate ) correct_states(istate) = correct_states(istate) + 1
+                enddo
+                cur_sum = sum(correct_states)
+                if( cur_sum > max_sum )then
+                    max_perm = iperm
+                    max_sum  = cur_sum
+                endif
+            enddo
+            state_order = all_perms(:, max_perm)
+            print *, 'STATE PERMUTATION:'
+            do istate = 1, nstates
+                print *, 'Truth state ', int2str(istate), ' -> : ', state_order(istate)
+            enddo
+        endif
+        correct_states = 0
         do iptcl = 1, nptcls
             istate = int(truth_states(iptcl))
             if( state_order(int(states(iptcl))) == istate ) correct_states(istate) = correct_states(istate) + 1
         enddo
+        print *, 'CORRECT DISTRIBUTION %:'
         do istate = 1, nstates
             print *, '% correct for state ', int2str(istate), ' is : ', correct_states(istate) * 100. / real(truth_nptcls(istate)), ' %'
         enddo
@@ -596,6 +622,24 @@ contains
             enddo
             call fclose(fnr)
         end subroutine read_state_order
+
+        ! generate all permutations of states
+        recursive subroutine generate_perm( position )
+            integer, intent(in) :: position
+            integer :: value
+            if( position > nstates )then
+                perm_cnt              = perm_cnt + 1
+                all_perms(:,perm_cnt) = cur_perm
+            else
+                do value = 1, nstates
+                    if( .not. any(cur_perm(:position-1) == value) )then
+                        cur_perm(position) = value
+                        call generate_perm(position + 1)
+                    endif
+                enddo
+            endif
+        end subroutine generate_perm
+
     end subroutine check_oris
 
 end module simple_commander_oris
