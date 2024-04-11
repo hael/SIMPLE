@@ -573,7 +573,7 @@ contains
                 correct_states = 0
                 do iptcl = 1, nptcls
                     istate = int(truth_states(iptcl))
-                    if( state_order(int(states(iptcl))) == istate ) correct_states(istate) = correct_states(istate) + 1
+                    if( int(states(iptcl)) == state_order(istate) ) correct_states(istate) = correct_states(istate) + 1
                 enddo
                 cur_sum = sum(correct_states)
                 if( cur_sum > max_sum )then
@@ -584,13 +584,13 @@ contains
             state_order = all_perms(:, max_perm)
             print *, 'STATE PERMUTATION:'
             do istate = 1, nstates
-                print *, 'Truth state ', int2str(istate), ' -> : ', state_order(istate)
+                print *, 'Truth state ', int2str(istate), ' -> ', state_order(istate)
             enddo
         endif
         correct_states = 0
         do iptcl = 1, nptcls
             istate = int(truth_states(iptcl))
-            if( state_order(int(states(iptcl))) == istate ) correct_states(istate) = correct_states(istate) + 1
+            if( int(states(iptcl)) == state_order(istate) ) correct_states(istate) = correct_states(istate) + 1
         enddo
         print *, 'CORRECT DISTRIBUTION %:'
         do istate = 1, nstates
