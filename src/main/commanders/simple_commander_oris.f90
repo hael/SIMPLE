@@ -9,6 +9,7 @@ use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 implicit none
 
+public :: check_oris_commander
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
@@ -41,6 +42,11 @@ type, extends(commander_base) :: vizoris_commander
   contains
     procedure :: execute      => exec_vizoris
 end type vizoris_commander
+
+type, extends(commander_base) :: check_oris_commander
+  contains
+    procedure :: execute      => check_oris
+end type check_oris_commander
 
 contains
 
@@ -532,5 +538,45 @@ contains
         call o_prev%kill
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
+
+    subroutine check_oris( self, cline )
+        class(check_oris_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)          :: params
+        type(builder)             :: build
+        type(oris)                :: o_truth
+        real,    allocatable :: states(:), truth_states(:)
+        integer, allocatable :: truth_nptcls(:), correct_states(:)
+        integer              :: nptcls, nstates, iptcl, istate
+        call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
+        nptcls  = build%spproj_field%get_noris()
+        allocate(states(nptcls), truth_states(nptcls), source=0.)
+        nstates = build%spproj_field%get_n(  'state')
+        states  = build%spproj_field%get_all('state')
+        allocate(truth_nptcls(nstates), correct_states(nstates), source=0)
+        call o_truth%new(nptcls, .true.)
+        call o_truth%read(params%oritab, [1, nptcls])
+        truth_states = o_truth%get_all('state')
+        do istate = 1, nstates
+            !$omp parallel do default(shared) private(iptcl) proc_bind(close) schedule(static)
+            do iptcl = 1, nptcls
+                if( int(truth_states(iptcl)) == istate ) truth_nptcls(istate) = truth_nptcls(istate) + 1
+            enddo
+            !$omp end parallel do
+        enddo
+        !$omp parallel do default(shared) private(iptcl,istate) proc_bind(close) schedule(static)
+        do iptcl = 1, nptcls
+            istate = int(truth_states(iptcl))
+            if( int(states(iptcl)) == istate ) correct_states(istate) = correct_states(istate) + 1
+        enddo
+        !$omp end parallel do
+        do istate = 1, nstates
+            print *, '% correct for state ', int2str(istate), ' is : ', correct_states(istate) * 100. / real(truth_nptcls(istate)), ' %'
+        enddo
+        ! cleanup
+        call build%kill_general_tbox
+        ! end gracefully
+        call simple_end('**** SIMPLE_CHECK_ORIS NORMAL STOP ****')
+    end subroutine check_oris
 
 end module simple_commander_oris
