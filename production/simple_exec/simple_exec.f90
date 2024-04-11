@@ -110,6 +110,7 @@ type(uniform_filter3D_commander)            :: xuniform_filter3D
 type(make_pickrefs_commander)               :: xmake_pickrefs
 
 ! ORIENTATION PROCESSING PROGRAMS
+type(check_oris_commander)                  :: xcheck_oris
 type(make_oris_commander)                   :: xmake_oris
 type(orisops_commander)                     :: xorisops
 type(oristats_commander)                    :: xoristats
@@ -326,6 +327,8 @@ select case(trim(prg))
         call xmake_pickrefs%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
+    case( 'check_oris' )
+        call xcheck_oris%execute(cline)
     case( 'make_oris' )
         call xmake_oris%execute(cline)
     case( 'orisops' )
