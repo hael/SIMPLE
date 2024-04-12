@@ -32,34 +32,57 @@ contains
     subroutine srch_greedy_smpl( self )
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_greedy_smpl), intent(inout) :: self
-        integer :: inds(self%s%nrots),loc(1),iref,inpl_ind
-        real    :: corrs(self%s%nrots),sorted_corrs(self%s%nrots),inpl_corr,corr
+        integer :: refs_inds(self%s%nrefs), refs_inplinds(self%s%nrefs), inds(self%s%nrots)
+        integer :: iref, inpl_ind, isample
+        real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots), cxy(3)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            corr = -huge(corr)
-            do iref=1,self%s%nrefs
-                if( s2D%cls_pops(iref) == 0 )cycle
-                ! class best
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
-                inpl_ind  = angle_sampling(eulprob_dist_switch(corrs), sorted_corrs, inds, s2D%smpl_inpl_athres)
-                inpl_corr = corrs(inpl_ind)
-                ! updates global best
-                if( inpl_corr >= corr )then
-                    corr              = inpl_corr
-                    self%s%best_class = iref
-                    self%s%best_corr  = inpl_corr
-                    self%s%best_rot   = inpl_ind
+            do iref = 1,self%s%nrefs
+                refs_inds(iref) = iref
+                if( s2D%cls_pops(iref) == 0 )then
+                    refs_corrs(iref)    = -1.
+                    refs_inplinds(iref) = 0
+                else
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                    inpl_ind = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
+                    refs_inplinds(iref) = inpl_ind
+                    refs_corrs(iref)    = inpl_corrs(inpl_ind)
                 endif
-            end do
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
-                ! back-calculating in-plane angle with k-weighing
-                call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, corrs, kweight=.true.)
-                self%s%best_rot = angle_sampling(eulprob_dist_switch(corrs), sorted_corrs, inds, s2D%smpl_inpl_athres)
-                ! self%s%best_rot  = greedy_sampling(eulprob_dist_switch(corrs), sorted_corrs, inds, s2D%smpl_inpl_ns)
-                self%s%best_corr = corrs(inpl_ind)
+            enddo
+            self%s%best_class = maxloc(refs_corrs,dim=1)
+            self%s%best_corr  = refs_corrs(self%s%best_class)
+            self%s%best_rot   = refs_inplinds(self%s%best_class)
+            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+                call hpsort(refs_corrs, refs_inds)
+                self%s%best_corr = -1.
+                do isample = self%s%nrefs-s2D%smpl_nrefs_bound+1,self%s%nrefs
+                    iref = refs_inds(isample)
+                    if( s2D%cls_pops(iref) == 0 ) cycle
+                    call self%s%grad_shsrch_obj%set_indices(iref, self%s%iptcl)
+                    if( self%s%grad_shsrch_obj%does_opt_angle() )then
+                        cxy = self%s%grad_shsrch_obj%minimize(irot=inpl_ind)
+                        if( inpl_ind == 0 )then
+                            inpl_ind = refs_inplinds(iref)
+                            cxy      = [refs_corrs(isample), 0., 0.]
+                        endif
+                    else
+                        inpl_ind = refs_inplinds(iref)
+                        cxy      = self%s%grad_shsrch_obj%minimize(irot=inpl_ind)
+                        if( inpl_ind == 0 )then
+                            inpl_ind = refs_inplinds(iref)
+                            cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], inpl_ind))
+                            cxy(2:3) = [0., 0.]
+                        endif
+                    endif
+                    if( cxy(1) > self%s%best_corr )then
+                        self%s%best_class = iref
+                        self%s%best_corr  = cxy(1)
+                        self%s%best_rot   = inpl_ind
+                        self%s%best_shvec = cxy(2:3)
+                    endif
+                enddo
             endif
             self%s%nrefs_eval = self%s%nrefs
-            call self%s%inpl_srch
             call self%s%store_solution
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

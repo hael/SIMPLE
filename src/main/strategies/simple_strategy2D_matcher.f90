@@ -81,7 +81,7 @@ contains
         if( params_glob%extr_iter == 1 )then
             ! greedy start
             l_greedy = .true.
-            l_greedy_smpl = trim(params_glob%refine).eq.'yes'
+            l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! no fractional update
             select case(trim(params_glob%refine))
@@ -102,9 +102,9 @@ contains
                 params_glob%it_history = 3
                 l_partial_sums         = .true.
             endif
-            l_greedy    = trim(params_glob%refine).eq.'greedy'
-            l_greedy_smpl = trim(params_glob%refine).eq.'yes'
-            l_snhc_smpl = trim(params_glob%refine).eq.'snhc_smpl'
+            l_greedy      = trim(params_glob%refine).eq.'greedy'
+            l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
+            l_snhc_smpl   = trim(params_glob%refine).eq.'snhc_smpl'
         endif
         if( l_stream )then
             l_frac_update              = .false.
@@ -222,7 +222,7 @@ contains
         call preppftcc4align( which_iter )
 
         ! ARRAY ALLOCATION FOR STRATEGY2D after pftcc initialization
-        call prep_strategy2D_glob
+        call prep_strategy2D_glob( neigh_frac )
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
