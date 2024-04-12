@@ -244,61 +244,6 @@ contains
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
 
-    ! for testing
-    ! subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
-    !     class(cmdline), intent(inout) :: cline
-    !     integer,        intent(in)    :: which_iter
-    !     real,           intent(in)    :: frac_srch_space
-    !     real    :: lplim
-    !     integer :: lpstart_find
-    !     params_glob%kfromto(1) = max(2,calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
-    !     if( .not.params_glob%l_distr_exec )then
-    !         ! needs to be reset in shared memory execution
-    !         params_glob%l_lpset =  cline%defined('lp')
-    !     endif
-    !     if( params_glob%l_lpset )then
-    !         lplim = params_glob%lp
-    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
-    !     else
-    !         if( trim(params_glob%stream).eq.'yes' )then
-    !             if( file_exists(params_glob%frcs) )then
-    !                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
-    !             else
-    !                 lplim = params_glob%lplims2D(3)
-    !             endif
-    !             if( cline%defined('lpstop') ) lplim = max(lplim, params_glob%lpstop)
-    !         else
-    !             ! proposed edits, requires cluster2D_autoscale L657 to be deleted
-    !             if( which_iter <= LPLIM3ITERBOUND )then
-    !                 params_glob%l_lpset = .true.
-    !                 if( which_iter < LPLIM1ITERBOUND )then
-    !                     lplim = params_glob%lpstart
-    !                 else
-    !                     lplim = (params_glob%lpstart+params_glob%lpstop) / 2.
-    !                 endif
-    !             else
-    !                 params_glob%l_lpset = .false.
-    !                 if( file_exists(params_glob%frcs) )then
-    !                     lplim = build_glob%clsfrcs%estimate_lp_for_align()
-    !                 else
-    !                     if( frac_srch_space >= FRAC_SH_LIM )then
-    !                         lplim = params_glob%lpstop
-    !                     else
-    !                         lplim = (params_glob%lpstart+params_glob%lpstop) / 2.
-    !                     endif
-    !                 endif
-    !             endif
-    !         endif
-    !         params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box_crop, params_glob%smpd_crop)
-    !         ! to avoid pathological cases, fall-back on lpstart
-    !         lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box_crop, params_glob%smpd_crop)
-    !         if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-    !         lplim = calc_lowpass_lim(params_glob%kfromto(2), params_glob%box_crop, params_glob%smpd_crop)
-    !     endif
-    !     ! update low-pas limit in project
-    !     call build_glob%spproj_field%set_all2single('lp',lplim)
-    ! end subroutine set_bp_range2D
-
     subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter

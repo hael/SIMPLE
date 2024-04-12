@@ -13,6 +13,7 @@ private
 type strategy2D_alloc
     ! global parameters
     real                 :: smpl_inpl_athres = 0.    !< for refine smpl
+    integer              :: smpl_nrefs_bound = 0
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -33,8 +34,12 @@ contains
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
-    subroutine prep_strategy2D_glob()
+    subroutine prep_strategy2D_glob( neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
+        real,    intent(in)  :: neigh_frac
+        real,    allocatable :: states(:)
+        logical, allocatable :: msk(:)
+        real    :: ov
         logical :: zero_oris, ncls_diff
         ! gather class populations
         zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
@@ -61,7 +66,14 @@ contains
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
-        if( str_has_substr(params_glob%refine,'smpl') ) s2D%smpl_inpl_athres = calc_athres('dist_inpl')
+        if( str_has_substr(params_glob%refine,'smpl') )then
+            states = build_glob%spproj_field%get_all('state')
+            msk    = states > 0.5
+            ov     = sum(build_glob%spproj_field%get_all('mi_class'),mask=msk) / real(count(msk))
+            s2D%smpl_inpl_athres = calc_athres('dist_inpl')*(1.-ov)
+            s2D%smpl_nrefs_bound = ceiling(real(params_glob%ncls) * (1.-ov)**2)
+            s2D%smpl_nrefs_bound = max(1,min(s2D%smpl_nrefs_bound, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
+        endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
     end subroutine prep_strategy2D_glob
 
