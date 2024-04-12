@@ -206,13 +206,16 @@ contains
         call self%starfile_deinit()
     end subroutine stream_export_micrographs
  
-    subroutine stream_export_optics( self, spproj, outdir, beamtilt)
+    subroutine stream_export_optics( self, spproj, outdir)
         class(starproject_stream),            intent(inout) :: self
         class(sp_project),                    intent(inout) :: spproj
         character(len=LONGSTRLEN),            intent(in)    :: outdir
-        logical,                    optional, intent(in)    :: beamtilt
         integer                                             :: ioptics
-        if(present(beamtilt)) self%use_beamtilt = beamtilt
+        if(params_glob%beamtilt .eq. 'yes') then
+            self%use_beamtilt = .true.
+        else
+            self%use_beamtilt = .false.
+        end if
         call self%assign_optics(spproj)
         call self%starfile_init('optics.star', outdir)
         call self%starfile_set_optics_table(spproj)
@@ -256,6 +259,7 @@ contains
         type(ori)                                 :: template_ori
         real                                      :: grp_info(10000, 3) ! max 10000 optics groups ! 1: centroid x, 2: centroid y, 3: population
         integer                                   :: i, ntilt, nshift
+        self%shift_threshold = params_glob%tilt_thres
         call assign_tiltgroups()
         call assign_shiftgroups()
         do i=1, spproj%os_mic%get_noris()
@@ -294,12 +298,12 @@ contains
                     ntilt = size(tiltuniq)
                     do itilt=1, ntilt 
                         do imic=1, spproj%os_mic%get_noris()
-                            if(spproj%os_mic%get(imic, 'tiltgrp') == tiltuniq(itilt)) call spproj%os_mic%set(imic, 'tiltgrp', real(itilt))
+                            if(spproj%os_mic%get(imic, 'tiltgrp') == tiltuniq(itilt)) call spproj%os_mic%set(imic, 'tmpgrp', real(itilt))
                         end do
                     end do
                 else
                     ntilt = 1
-                    call spproj%os_mic%set_all2single('tiltgrp', 1.0)
+                    call spproj%os_mic%set_all2single('tmpgrp', 1.0)
                 end if
                 if(allocated(tiltuniq)) deallocate(tiltuniq)
                 write(logfhandle,'(A,I8)') '>>> # TILT GROUPS ASSIGNED : ', ntilt
@@ -311,7 +315,7 @@ contains
                 integer, allocatable :: populations(:), labels(:), indices(:)
                 integer              :: itilt, imic, ishift, tiltgrppop
                 write(logfhandle,'(A,F8.2)') '>>> CLUSTERING TILT GROUPS USING SHIFTS AND THRESHOLD : ', self%shift_threshold
-                tiltgrps = spproj%os_mic%get_all('tiltgrp')
+                tiltgrps = spproj%os_mic%get_all('tmpgrp')
                 shiftxs  = spproj%os_mic%get_all('shiftx')
                 shiftys  = spproj%os_mic%get_all('shifty')
                 nshift   = 0
@@ -343,6 +347,7 @@ contains
                     deallocate(shifts, labels, indices)
                     write(logfhandle,'(A,I8)') '        # SHIFT GROUPS ASSIGNED : ', size(populations)
                 end do
+                call spproj%os_mic%delete_entry('tmpgrp')
                 if(allocated(populations)) deallocate(populations)
                 if(allocated(labels))      deallocate(labels)
                 if(allocated(indices))     deallocate(indices)

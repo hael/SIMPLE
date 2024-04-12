@@ -19,7 +19,7 @@ type moviewatcher
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: regexp         = ''    !< movies extensions
-    integer                            :: n_history      = 0     !< history of movies detected
+    integer, public                    :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch

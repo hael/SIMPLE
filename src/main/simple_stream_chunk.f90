@@ -196,7 +196,12 @@ contains
             stack_name = trim(spproj%get_stkname(micind))
             if( .not.file_exists(stack_name) )then
                 ! for cluster2D_stream, 4 is for '../'
-                self%orig_stks(imic) = simple_abspath(trim(stack_name(4:)))
+                ! hacky fix for path issue
+                if(params_glob%dir_target .ne. '') then
+                    self%orig_stks(imic) = simple_abspath(trim(params_glob%dir_target) // '/' // trim(stack_name(4:))) 
+                else
+                    self%orig_stks(imic) = simple_abspath(trim(stack_name(4:)))
+                endif
             else
                 ! for cluster2d_subsets
                 self%orig_stks(imic) = simple_abspath(trim(stack_name))

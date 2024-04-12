@@ -22,7 +22,7 @@ type :: parameters
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
-    character(len=3)          :: beamtilt='yes'       !< use beamtilt values when generating optics groups
+    character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
@@ -94,6 +94,7 @@ type :: parameters
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
+    character(len=3)          :: updated='no'         !< Whether parameters has been updated
     character(len=3)          :: use_denoised='no'    !< use denoised particle representations for alignment (not 3D rec)
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
