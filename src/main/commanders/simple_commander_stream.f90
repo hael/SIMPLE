@@ -45,7 +45,7 @@ end type commander_stream_cluster2D
 ! module constants
 character(len=STDLEN), parameter :: DIR_STREAM           = trim(PATH_HERE)//'spprojs/'           ! location for projects to be processed
 character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spprojs_completed/' ! location for projects processed
-character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   ! really necessary here? - left in for now
+character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once (>1)
 integer,               parameter :: LONGTIME        = 60                                        ! time lag after which a movie/project is processed
 integer,               parameter :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
@@ -72,6 +72,7 @@ contains
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
         logical                                :: l_movies_left, l_haschanged
+        real                                   :: avg_tmp
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
@@ -118,6 +119,13 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME, params%dir_movies)
+        ! guistats init
+        call gui_stats%init
+        call gui_stats%set('movies',      'movies_imported',      int2str(0), primary=.true.)
+        call gui_stats%set('movies',      'movies_processed',     int2str(0), primary=.true.)
+        call gui_stats%set('micrographs', 'micrographs',          int2str(0), primary=.true.)
+        call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
+        call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! restart
         movies_set_counter = 0  ! global number of movies set
         nmic_star          = 0
@@ -126,6 +134,41 @@ contains
             call import_previous_projects
             nmic_star = spproj_glob%os_mic%get_noris()
             call write_mic_star_and_field(write_field=.true.)
+            ! guistats
+            call gui_stats%set('movies',      'movies_imported',      int2str(nmic_star),              primary=.true.)
+            call gui_stats%set('movies',      'movies_processed',     int2str(nmic_star) // ' (100%)', primary=.true.)
+            call gui_stats%set('micrographs', 'micrographs',          int2str(nmic_star),              primary=.true.)
+            if(spproj_glob%os_mic%isthere("ctfres")) then
+                avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
+                if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 7.0) then
+                    call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.true., alerttext='average CTF resolution &
+                        &lower than expected for high resolution structure determination', notify=.false.)
+                else
+                    call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                end if
+            end if
+            if(spproj_glob%os_mic%isthere("icefrac")) then
+                avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
+                if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 1.0) then
+                    call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.true., alerttext='average ice score &
+                        &greater than expected for high resolution structure determination', notify=.false.)
+                else
+                    call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                end if
+            end if
+            if(spproj_glob%os_mic%isthere("astig")) then
+                avg_tmp = spproj_glob%os_mic%get_avg("astig")
+                if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 0.1) then
+                    call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.true., alerttext='average astigmatism &
+                        &greater than expected for high resolution structure determination', notify=.false.)
+                else
+                    call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                end if
+            end if
+            if(spproj_glob%os_mic%isthere('thumb')) then
+                call gui_stats%set('latest', '', trim(adjustl(CWD_GLOB))//'/'//&
+                    &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
+            end if
         endif
         ! output directories
         call simple_mkdir(trim(PATH_HERE)//trim(DIR_STREAM_COMPLETED))
@@ -153,8 +196,6 @@ contains
         cline_exec     = cline
         call cline_exec%set('fromp',1)
         call cline_exec%set('top',  NMOVS_SET)
-        ! guistats init
-        call gui_stats%init
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -179,17 +220,20 @@ contains
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',cnt,' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
                 l_movies_left = cnt .ne. nmovies
+                ! guistats
+                call gui_stats%set('movies', 'movies_imported', int2str(movie_buff%n_history), primary=.true.)
+                call gui_stats%set_now('movies', 'last_movie_imported')
             else
                 l_movies_left = .false.
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
             stacksz = qenv%qscripts%get_stacksz()
+            ! guistats
+            call gui_stats%set('compute', 'compute_in_use', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
                 write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz*NMOVS_SET
-                ! guistats
-                call gui_stats%set('micrographs', 'movies', int2str(spproj_glob%os_mic%get_noris()) // '/' // int2str(stacksz*NMOVS_SET + spproj_glob%os_mic%get_noris()), primary=.true.)
             endif
             ! fetch completed jobs list
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -216,21 +260,43 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)')                   '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set('micrographs', 'movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
-                call gui_stats%set('micrographs', 'compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
-                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'rejected', n_failed_jobs, primary=.true.)
+                call gui_stats%set('movies',      'movies_processed', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(movie_buff%n_history))) // '%)', primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs',      int2str(n_imported), primary=.true.)
+                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
                 if(spproj_glob%os_mic%isthere("ctfres")) then
-                    call gui_stats%set('micrographs', 'avg_ctf_res', spproj_glob%os_mic%get_avg("ctfres"), primary=.true.)
+                    avg_tmp = spproj_glob%os_mic%get_avg("ctfres")
+                    if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 7.0) then
+                        call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.true., alerttext='average CTF resolution &
+                            &lower than expected for high resolution structure determination', notify=.false.)
+                    else
+                        call gui_stats%set('micrographs', 'avg_ctf_resolution', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                    end if
+                end if
+                if(spproj_glob%os_mic%isthere("icefrac")) then
+                    avg_tmp = spproj_glob%os_mic%get_avg("icefrac")
+                    if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 1.0) then
+                        call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.true., alerttext='average ice score &
+                            &greater than expected for high resolution structure determination', notify=.false.)
+                    else
+                        call gui_stats%set('micrographs', 'avg_ice_score', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                    end if
+                end if
+                if(spproj_glob%os_mic%isthere("astig")) then
+                    avg_tmp = spproj_glob%os_mic%get_avg("astig")
+                    if(spproj_glob%os_mic%get_noris() > 50 .and. avg_tmp > 0.1) then
+                        call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.true., alerttext='average astigmatism &
+                            &greater than expected for high resolution structure determination', notify=.false.)
+                    else
+                        call gui_stats%set('micrographs', 'avg_astigmatism', avg_tmp, primary=.true., alert=.false., notify=.true., notifytext='tick')
+                    end if
+                end if
+                if(spproj_glob%os_mic%isthere('thumb')) then
+                    call gui_stats%set('latest', '', trim(adjustl(CWD_GLOB))//'/'//&
+                        &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 last_injection = simple_gettime()
-                ! guistats
-                call gui_stats%set_now('micrographs', 'last_new_movie')
-                if(spproj_glob%os_mic%isthere('thumb')) then
-                    call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(CWD_GLOB))//'/'//&
-                        &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
-                end if
                 l_haschanged = .true.
                 n_imported   = spproj_glob%os_mic%get_noris()
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
@@ -263,7 +329,7 @@ contains
         call update_user_params(cline)
         call write_mic_star_and_field(write_field=.true.)
         ! final stats
-        call gui_stats%hide('micrographs', 'compute')
+        call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
@@ -599,6 +665,12 @@ contains
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
         ! movie watcher init
         project_buff = moviewatcher(LONGTIME, trim(params%dir_target)//'/'//trim(DIR_STREAM_COMPLETED), spproj=.true.)
+        ! guistats init
+        call gui_stats%init
+        call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
+        call gui_stats%set('micrographs', 'micrographs_rejected', int2str(0), primary=.true.)
+        call gui_stats%set('micrographs', 'micrographs_picked',   int2str(0), primary=.true.)
+        call gui_stats%set('compute',     'compute_in_use',       int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         ! restart
         pick_extract_set_counter = 0
         nptcls_glob              = 0     ! global number of particles
@@ -609,6 +681,16 @@ contains
             call import_previous_mics( micproj_records )
             nptcls_glob = sum(micproj_records(:)%nptcls)
             nmic_star   = spproj_glob%os_mic%get_noris()
+            call gui_stats%set('micrographs', 'micrographs_imported', int2str(nmic_star),              primary=.true.)
+            call gui_stats%set('micrographs', 'micrographs_picked',   int2str(nmic_star) // ' (100%)', primary=.true.)
+            if(spproj_glob%os_mic%isthere("nptcls")) then
+                call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
+            end if
+            call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+            if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+            end if
         endif
         ! output directories
         output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
@@ -656,8 +738,6 @@ contains
         l_projects_left       = .false.
         l_haschanged          = .false.
         nptcls_limit_for_references = 20000 ! obviously will have to be an input
-        ! guistats init
-        call gui_stats%init
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -686,19 +766,21 @@ contains
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
                 l_projects_left = cnt .ne. nprojects
+                ! guistats
+                call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
+                call gui_stats%set_now('micrographs', 'last_micrograph_imported')
             else
                 l_projects_left = .false.
             endif
             ! submit jobs
             call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
             stacksz = qenv%qscripts%get_stacksz()
+            ! guistats
+            call gui_stats%set('compute', 'compute_in_use', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz                          ! # of projects
                 stacksz      = qenv%qscripts%get_stack_range()  ! # of micrographs
                 write(logfhandle,'(A,I6)')'>>> MICROGRAPHS TO PROCESS:                 ', stacksz
-                ! guistats
-                call gui_stats%set('micrographs', 'movies', int2str(spproj_glob%os_mic%get_noris())&
-                    &// '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
             endif
             ! fetch completed jobs list & updates
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -730,23 +812,20 @@ contains
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
                 ! guistats
-                call gui_stats%set('micrographs', 'movies',  int2str(n_imported) // '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
-                call gui_stats%set('micrographs', 'compute', int2str(qenv%get_navail_computing_units()) // '/' // int2str(params%nparts))
-                call gui_stats%set('micrographs', 'ptcls', nptcls_glob, primary=.true.)
-                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'rejected', n_failed_jobs, primary=.true.)
-                if(spproj_glob%os_mic%isthere("ctfres")) then
-                    call gui_stats%set('micrographs', 'avg_ctf_res', spproj_glob%os_mic%get_avg("ctfres"), primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_picked', int2str(n_imported) // ' (' // int2str(ceiling(100.0 * real(n_imported) / real(project_buff%n_history * NMOVS_SET))) // '%)', primary=.true.)
+                if( n_failed_jobs > 0 ) call gui_stats%set('micrographs', 'micrographs_rejected', n_failed_jobs, primary=.true.)
+                if(spproj_glob%os_mic%isthere("nptcls")) then
+                    call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
+                end if
+                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
                 last_injection = simple_gettime()
-                ! guistats
-                call gui_stats%set_now('micrographs', 'last_new_movie')
-                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('micrographs', 'latest_micrograph', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
-                end if
                 l_haschanged = .true.
                 ! always write micrographs snapshot if less than 1000 mics, else every 100
                 if( n_imported < 1000 .and. l_haschanged )then
@@ -786,7 +865,7 @@ contains
         call update_user_params(cline)
         call write_migrographs_starfile
         ! final stats
-        call gui_stats%hide('micrographs', 'compute')
+        call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup
@@ -1170,6 +1249,8 @@ contains
         call progressfile_init()
         ! guistats init
         call gui_stats%init
+        call gui_stats%set('micrographs', 'micrographs_imported',  int2str(0), primary=.true.)
+        call gui_stats%set('groups',      'optics_group_assigned', int2str(0), primary=.true.)
         ! Infinite loop
         nimported = 0
         do
@@ -1201,9 +1282,20 @@ contains
                 enddo
                 write(logfhandle,'(A,I4,A,A)')'>>> ' , nprojects * NMOVS_SET, ' NEW MICROGRAPHS IMPORTED; ',cast_time_char(simple_gettime())
                 call starproj_stream%stream_export_optics(spproj, params%outdir)
+                ! guistats
+                call gui_stats%set('micrographs', 'micrographs_imported', int2str(0), primary=.true.)
+                call gui_stats%set('groups', 'optics_group_assigned', spproj%os_optics%get_noris(), primary=.true.)
             else
                 call sleep(WAITTIME) ! may want to increase as 3s default
             endif
+            call update_user_params(cline)
+            if(params_glob%updated .eq. 'yes') then
+                call starproj_stream%stream_export_optics(spproj, params%outdir)
+                ! guistats
+                call gui_stats%set('groups', 'optics_group_assigned', spproj%os_optics%get_noris(), primary=.true.)
+                params_glob%updated = 'no'
+            end if
+            call gui_stats%write_json
         end do
         if(allocated(projects)) deallocate(projects)
         call gui_stats%write_json
@@ -1370,8 +1462,6 @@ contains
             call update_pool_dev
             call update_user_params_dev(cline)
             call reject_from_pool_dev
-            call read_pool_xml_beamtilts_dev()                      !?
-            call assign_pool_optics_dev(cline, propagate = .false.) !?
             call reject_from_pool_user_dev
             if( l_nchunks_maxed )then
                 ! # of chunks is above desired threshold
@@ -1389,8 +1479,6 @@ contains
             call gui_stats%write_json
         end do
         ! termination
-        call read_pool_xml_beamtilts_dev()                      !?
-        call assign_pool_optics_dev(cline, propagate = .true.)  !?
         call terminate_stream2D_dev
         call update_user_params(cline)
         ! final stats
@@ -1482,9 +1570,10 @@ contains
     subroutine update_user_params( cline_here )
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
-        real       :: tilt_thres
+        real       :: tilt_thres, beamtilt
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
+            call os%read(USER_PARAMS)
             if( os%isthere(1,'tilt_thres') ) then
                 tilt_thres = os%get(1,'tilt_thres')
                 if( abs(tilt_thres-params_glob%tilt_thres) > 0.001) then
@@ -1494,9 +1583,26 @@ contains
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES TOO HIGH: ',tilt_thres
                      else
                          params_glob%tilt_thres = tilt_thres
+                         params_glob%updated    = 'yes'
                          call cline_here%set('tilt_thres', params_glob%tilt_thres)
                          write(logfhandle,'(A,F8.2)')'>>> OPTICS TILT_THRES UPDATED TO: ',tilt_thres
                      endif
+                endif
+            endif
+            if( os%isthere(1,'beamtilt') ) then
+                beamtilt = os%get(1,'beamtilt')
+                if( beamtilt .eq. 1.0 ) then
+                    params_glob%beamtilt = 'yes'
+                    params_glob%updated  = 'yes'
+                    call cline_here%set('beamtilt', params_glob%beamtilt)
+                    write(logfhandle,'(A)')'>>> OPTICS ASSIGNMENT UDPATED TO USE BEAMTILT'
+                else if( beamtilt .eq. 0.0 ) then
+                    params_glob%beamtilt = 'no'
+                    params_glob%updated  = 'yes'
+                    call cline_here%set('beamtilt', params_glob%beamtilt)
+                    write(logfhandle,'(A)')'>>> OPTICS ASSIGNMENT UDPATED TO IGNORE BEAMTILT'   
+                else
+                    write(logfhandle,'(A,F8.2)')'>>> OPTICS UPDATE INVALID BEAMTILT VALUE: ',beamtilt
                 endif
             endif
             call del_file(USER_PARAMS)

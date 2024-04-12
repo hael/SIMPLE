@@ -110,13 +110,13 @@ contains
         end if
     end function get_keyline
 
-    subroutine set_1( self, section, key, val, primary, alert, alerttext )
+    subroutine set_1( self, section, key, val, primary, alert, alerttext, notify, notifytext )
         class(guistats),   intent(inout)       :: self
         character(len=*),  intent(in)          :: section
         character(len=*),  intent(in)          :: key
         integer,           intent(in)          :: val
-        logical, optional, intent(in)          :: primary, alert
-        character(len=*), optional, intent(in) :: alerttext
+        logical, optional, intent(in)          :: primary, alert, notify
+        character(len=*), optional, intent(in) :: alerttext, notifytext
         integer                                :: line
         call self%ensure_section(section)
         line = self%get_keyline(section, key)
@@ -134,31 +134,36 @@ contains
         if(present(alert)) then
             if(alert) then
                 call self%stats%set(line, 'alert', 1.0)
+                if(present(alerttext)) then
+                    call self%stats%set(line, 'alerttext', alerttext)
+                end if
             else
                 call self%stats%set(line, 'alert', 0.0)
+                call self%stats%delete_entry(line, 'alerttext')
             end if
         end if 
-        if(present(alerttext)) then
-            call self%stats%set(line, 'alerttext', alerttext)
-        end if
+        if(present(notify)) then
+            if(notify) then
+                call self%stats%set(line, 'notify', 1.0)
+                if(present(notifytext)) then
+                    call self%stats%set(line, 'notifytext', notifytext)
+                end if
+            else
+                call self%stats%set(line, 'notify', 0.0)
+                call self%stats%delete_entry(line, 'notifytext')
+            end if
+        end if 
         self%updated = .true.
     end subroutine set_1
  
-    subroutine set_2( self, section, key, val, primary, alert, alerttext )
+    subroutine set_2( self, section, key, val, primary, alert, alerttext, notify, notifytext )
         class(guistats),  intent(inout)        :: self
         character(len=*), intent(in)           :: section
         character(len=*), intent(in)           :: key
         real,             intent(in)           :: val
-        logical, optional, intent(in)          :: primary, alert
-        character(len=*), optional, intent(in) :: alerttext
+        logical, optional, intent(in)          :: primary, alert, notify
+        character(len=*), optional, intent(in) :: alerttext, notifytext
         integer                                :: line
-        logical                                :: primary_l = .false. , alert_l = .false.
-        if(present(primary)) then
-            primary_l = primary
-        end if
-        if(present(alert)) then
-            alert_l = alert
-        end if 
         call self%ensure_section(section)
         line = self%get_keyline(section, key)
         call self%stats%set(line, 'key', key)
@@ -175,31 +180,36 @@ contains
         if(present(alert)) then
             if(alert) then
                 call self%stats%set(line, 'alert', 1.0)
+                if(present(alerttext)) then
+                    call self%stats%set(line, 'alerttext', alerttext)
+                end if
             else
                 call self%stats%set(line, 'alert', 0.0)
+                call self%stats%delete_entry(line, 'alerttext')
+            end if
+        end if  
+        if(present(notify)) then
+            if(notify) then
+                call self%stats%set(line, 'notify', 1.0)
+                if(present(notifytext)) then
+                    call self%stats%set(line, 'notifytext', notifytext)
+                end if
+            else
+                call self%stats%set(line, 'notify', 0.0)
+                call self%stats%delete_entry(line, 'notifytext')
             end if
         end if 
-        if(present(alerttext)) then
-            call self%stats%set(line, 'alerttext', alerttext)
-        end if
         self%updated = .true.
     end subroutine set_2
 
-    subroutine set_3( self, section, key, val, primary, alert, alerttext, thumbnail, boxfile)
+    subroutine set_3( self, section, key, val, primary, alert, alerttext, notify, notifytext, thumbnail, boxfile)
         class(guistats),  intent(inout)        :: self
         character(len=*), intent(in)           :: section
         character(len=*), intent(in)           :: key
         character(len=*), intent(in)           :: val
-        logical, optional, intent(in)          :: primary, alert, thumbnail
-        character(len=*), optional, intent(in) :: alerttext, boxfile
+        logical, optional, intent(in)          :: primary, alert, thumbnail, notify
+        character(len=*), optional, intent(in) :: alerttext, notifytext, boxfile
         integer                                :: line
-        logical                                :: primary_l = .false. , alert_l = .false.
-        if(present(primary)) then
-            primary_l = primary
-        end if
-        if(present(alert)) then
-            alert_l = alert
-        end if 
         call self%ensure_section(section)
         line = self%get_keyline(section, key)
         call self%stats%set(line, 'key', key)
@@ -213,18 +223,34 @@ contains
         else
             call self%stats%set(line, 'type', 'string')
         end if 
-        if(present(primary) .and. primary) then
-            call self%stats%set(line, 'primary', 1.0)
-        else
-            call self%stats%set(line, 'primary', 0.0)
+        if(present(primary)) then
+            if(primary) then
+                call self%stats%set(line, 'primary', 1.0)
+            else
+                call self%stats%set(line, 'primary', 0.0)
+            end if
         end if 
-        if(present(alert) .and. alert) then
-            call self%stats%set(line, 'alert', 1.0)
-        else
-            call self%stats%set(line, 'alert', 0.0)
+        if(present(alert)) then
+            if(alert) then
+                call self%stats%set(line, 'alert', 1.0)
+                if(present(alerttext)) then
+                    call self%stats%set(line, 'alerttext', alerttext)
+                end if
+            else
+                call self%stats%set(line, 'alert', 0.0)
+                call self%stats%delete_entry(line, 'alerttext')
+            end if
         end if 
-        if(present(alerttext)) then
-            call self%stats%set(line, 'alerttext', alerttext)
+        if(present(notify)) then
+            if(notify) then
+                call self%stats%set(line, 'notify', 1.0)
+                if(present(alerttext)) then
+                    call self%stats%set(line, 'notifytext', alerttext)
+                end if
+            else
+                call self%stats%set(line, 'notify', 0.0)
+                call self%stats%delete_entry(line, 'notifytext')
+            end if
         end if
         self%updated = .true.
     end subroutine set_3
@@ -374,7 +400,15 @@ contains
                                 call json%add(keydata, 'alert', .false.)
                             end if
                             if(self%stats%isthere(i, 'alerttext')) then
-                                call json%add(keydata, 'alert', trim(adjustl(self%stats%get_static(i, 'alerttext'))))
+                                call json%add(keydata, 'alerttext', trim(adjustl(self%stats%get_static(i, 'alerttext'))))
+                            end if
+                            if(self%stats%isthere(i, 'notify') .and. self%stats%get(i, 'notify') .gt. 0.0) then
+                                call json%add(keydata, 'notify', .true.)
+                            else
+                                call json%add(keydata, 'notify', .false.)
+                            end if
+                            if(self%stats%isthere(i, 'notifytext')) then
+                                call json%add(keydata, 'notifytext', trim(adjustl(self%stats%get_static(i, 'notifytext'))))
                             end if
                             if(self%stats%isthere(i, 'boxfile')) then
                                 call json%add(keydata, 'boxfile', trim(adjustl(self%stats%get_static(i, 'boxfile'))))
