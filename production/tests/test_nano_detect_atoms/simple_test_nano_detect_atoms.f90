@@ -118,6 +118,7 @@ module nano_detect_atoms
     use simple_nanoparticle_utils
     use simple_defs_atoms
     use simple_stat
+    use simple_aff_prop
 
     implicit none
     
@@ -125,11 +126,11 @@ module nano_detect_atoms
         private
         character(len=2)   :: element
         integer :: boxsize, ldim(3), nxyz_offset(3), offset, peak_thres_level
-        integer, allocatable :: positions(:,:), inds_offset(:,:,:)
+        integer, allocatable :: inds_offset(:,:,:)
         type(image) :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
         real :: smpd, thres
-        real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:)
+        real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:)
 
     contains
         procedure :: new
@@ -140,8 +141,10 @@ module nano_detect_atoms
         procedure :: center_filter
         procedure :: distance_filter
         procedure :: cluster_filter
+        procedure :: aff_prop_filter
         procedure :: remove_outliers
         procedure :: find_centers
+        procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: compare_pick
         procedure :: kill
@@ -211,7 +214,7 @@ module nano_detect_atoms
             end do
         end do
         ! set up positions and inds_offset
-        allocate(self%positions(nboxes,3), source = 0)
+        allocate(self%positions(nboxes,3), source = 0.)
         allocate(self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)), source=0)
         self%nxyz_offset = 0
         nboxes = 0
@@ -224,7 +227,7 @@ module nano_detect_atoms
                 do zind = 0, nxyz(3), self%offset
                     self%nxyz_offset(3) = self%nxyz_offset(3) + 1
                     nboxes = nboxes + 1
-                    self%positions(nboxes,:) = [xind,yind,zind]
+                    self%positions(nboxes,:) = [real(xind),real(yind),real(zind)]
                     self%inds_offset(self%nxyz_offset(1),self%nxyz_offset(2),self%nxyz_offset(3)) = nboxes
                 end do
             end do
@@ -391,8 +394,8 @@ module nano_detect_atoms
     subroutine cluster_filter(self,dist_thres)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: dist_thres
-        real, allocatable    :: deltas(:), pos_scores(:), upper_half_deltas(:), lower_half_deltas(:)
-        real                 :: dist, min_dist, median_d, Q3_d, Q1_d, IQR_d, max_box_score, score
+        real, allocatable    :: deltas(:), pos_scores(:)
+        real                 :: dist, min_dist, max_box_score, score, avg_d, sdev_d
         integer, allocatable :: pos_inds(:), rhos_higher_inds(:), rhos(:), cluster_inds(:), clusters(:), this_clusters_boxes(:)
         integer              :: nbox, ibox, jbox, n_rhos_higher, xoff, yoff, zoff
         integer              :: ipeak, npeaks, nclusters, icluster, box_cluster, box_index(3), this_clusters_size, box_id(1)
@@ -427,15 +430,9 @@ module nano_detect_atoms
             deallocate(rhos_higher_inds)
         end do
         ! the boxes with high delta values are centers of clusters
-        median_d = median(deltas)
-        upper_half_deltas = pack(deltas, mask=deltas(:) > median_d)
-        lower_half_deltas = pack(deltas, mask=deltas(:) < median_d)
-        Q3_d = median(upper_half_deltas)
-        Q1_d = median(lower_half_deltas)
-        IQR_d = Q3_d - Q1_d
-        deallocate(upper_half_deltas, lower_half_deltas)
+        call avg_sdev(deltas, avg_d, sdev_d)
         ! find positions with outlier delta scores - these are cluster centers
-        cluster_inds = pack(pos_inds, mask= deltas(:) >= Q3_d + (1.5*IQR_d))
+        cluster_inds = pack(pos_inds, mask= deltas(:) >= avg_d + 2*sdev_d)
         nclusters = size(cluster_inds)
         print *, 'NPEAKS AFTER CLUSTER FILTER = ', nclusters
         ! assign all boxes to a cluster
@@ -492,6 +489,78 @@ module nano_detect_atoms
         !$omp end parallel do  
     end subroutine cluster_filter
 
+    subroutine aff_prop_filter(self)
+        class(nano_picker), intent(inout) :: self
+        type(aff_prop) :: apcls
+        integer, allocatable :: pos_inds(:), centers(:), labels(:), this_clusters_boxes(:)
+        integer :: nbox, ibox, jbox, ncls, icluster, this_clusters_size, box_index(3), box_id(1)
+        integer :: xoff, yoff, zoff, npeaks, ipeak
+        real, allocatable :: coords(:,:), simmat(:,:)
+        real :: simsum, score, max_box_score
+        logical, allocatable :: mask(:)
+        logical :: is_peak
+        ! find coordinates
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds, dim=1)
+        print *, 'NPEAKS BEFORE AFF_PROP FILTER = ', nbox
+        allocate(coords(nbox,3))
+        allocate(simmat(nbox,nbox))
+        do ibox = 1, nbox
+            coords(ibox,:) = self%positions(pos_inds(ibox),:)
+        end do
+        ! build similarity matrix
+        do ibox = 1, nbox-1
+            do jbox = ibox+1, nbox
+                simmat(ibox,jbox) = -euclid(coords(ibox,:),coords(jbox,:))
+                simmat(jbox,ibox) = simmat(ibox,jbox)
+            end do
+        end do
+        call apcls%new(nbox, simmat)
+        call apcls%propagate(centers, labels, simsum)
+        ncls = size(centers)
+        print *, 'NPEAKS AFTER AFF_PROP FILTER = ', ncls
+        ! after assigning each box to a cluster, iterate through all clusters and find box with highest box score in cluster
+        allocate(mask(nbox)) 
+        mask = .false.
+        do icluster = 1, ncls
+            this_clusters_boxes = pack(pos_inds, mask=labels(:) == icluster)
+            this_clusters_size = size(this_clusters_boxes)
+            max_box_score = 0
+            do ibox = 1, this_clusters_size
+                box_index = findloc(array=self%inds_offset, value=this_clusters_boxes(ibox))
+                score = self%box_scores(box_index(1), box_index(2), box_index(3))
+                if (score > max_box_score) then
+                    max_box_score = score
+                    ! find position in mask
+                    box_id = findloc(pos_inds, this_clusters_boxes(ibox))
+                end if
+            end do
+            mask(box_id(1)) = .true.
+            deallocate(this_clusters_boxes)
+        end do
+        ! update box scores
+        npeaks = count(mask)
+        pos_inds = pack(pos_inds, mask=mask)
+        !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
+        do xoff = 1, self%nxyz_offset(1)
+            do yoff = 1, self%nxyz_offset(2)
+                do zoff = 1, self%nxyz_offset(3)
+                    is_peak = .false.
+                    do ipeak = 1,npeaks
+                        if( pos_inds(ipeak) == self%inds_offset(xoff,yoff,zoff) )then
+                            is_peak = .true.
+                            exit
+                        endif
+                    end do
+                    if( .not. is_peak ) self%box_scores(xoff,yoff,zoff) = -1.
+                end do
+            end do
+        end do
+        !$omp end parallel do 
+        deallocate(mask)
+        deallocate(coords)
+    end subroutine aff_prop_filter
+
     subroutine remove_outliers(self, ndev)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: ndev
@@ -519,10 +588,10 @@ module nano_detect_atoms
         !$omp end parallel do
     end subroutine remove_outliers
 
-    ! input filename with no extension
-    subroutine find_centers(self,filename)
-        class(nano_picker),         intent(inout) :: self
-        character(len=*), optional, intent(in)    :: filename
+    ! changing self%positions
+    ! no longer writes the file
+    subroutine find_centers(self)
+        class(nano_picker), intent(inout) :: self
         integer,     allocatable :: pos_inds(:)
         real,        allocatable :: coords(:,:)
         type(image), allocatable :: atms_array(:)
@@ -547,17 +616,38 @@ module nano_detect_atoms
             call self%convolved_atoms(iimg)%norm_minmax
             call self%convolved_atoms(iimg)%masscen(coords(iimg,:)) 
             coords(iimg,:) = coords(iimg,:) + real(self%convolved_atoms(iimg)%get_ldim())/2. + pos !adjust center by size and position of box
+            ! update positions for chosen boxes
+            self%positions(pos_inds(iimg),:) = coords(iimg,:)
         end do
         call self%simulated_atom%ifft()
+        deallocate(atms_array)
+        deallocate(coords)
+        deallocate(pos_inds)
+    end subroutine find_centers
+
+    ! input filename with no extension
+    subroutine write_pdb(self,filename)
+        class(nano_picker),         intent(inout) :: self
+        character(len=*), optional, intent(in)    :: filename
+        integer, allocatable :: pos_inds(:)
+        real,    allocatable :: coords(:,:)
+        integer :: nbox, iimg, pos(3)
+        ! make array of images containing the images of identified atoms and extract coordinates of peaks
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds, dim=1)
+        allocate(coords(nbox,3))
+        do iimg = 1, nbox
+            pos = self%positions(pos_inds(iimg),:)
+            coords(iimg,:) = pos
+        end do
         if (present(filename)) then
             call write_centers(filename,coords,self%smpd)
         else
             call write_centers('test_atomic_centers',coords,self%smpd)
         end if
-        deallocate(atms_array)
         deallocate(coords)
         deallocate(pos_inds)
-    end subroutine find_centers
+    end subroutine write_pdb
 
     subroutine write_boximgs(self, foldername)
         class(nano_picker),          intent(inout) :: self
@@ -590,9 +680,11 @@ module nano_detect_atoms
             open(unit = 40, file='test_atomic_centers.pdb', iostat=iostat)
             if (iostat /= 0) then
                 print *, 'compare_pick: test_atomic_centers.pdb does not exist, please enter valid filename for pdbfile_exp'
+                close(40)
                 return
             end if
             call read_pdb2matrix('test_atomic_centers.pdb',pdb_exp_coords)
+            close(40)
         end if
         allocate(distances(max(size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2))))
         call find_closest(pdb_ref_coords,pdb_exp_coords,size(pdb_ref_coords,dim=2),size(pdb_exp_coords,dim=2),distances)
@@ -616,14 +708,15 @@ program simple_test_nano_detect_atoms
     use simple_image
     use simple_parameters
 
-    type(nano_picker) :: test_sim, test_exp
+    type(nano_picker) :: test_sim, test_sim2, test_sim3
+    type(nano_picker) :: test_exp, test_exp2, test_exp3, test_exp4
     type(nanoparticle) :: nano
     real :: smpd, dist_thres
     character(len=2) :: element
     character(len=100) :: filename_exp, filename_sim, pdbfile_ref
     character(STDLEN) :: timestr
     type(image) :: simulated_NP
-    integer :: offset, peak_thres_level, startTime, stopTime
+    integer :: offset, peak_thres_level, startTime, stopTime, subStart, subStop
     type(parameters), target :: params
 
     ! keeping track of how long program takes
@@ -639,7 +732,7 @@ program simple_test_nano_detect_atoms
     smpd = 0.358
     offset = 2
     peak_thres_level = 2
-    dist_thres = 3.
+    dist_thres = 2.
     
     ! simulate nanoparticle
     ! params_glob has to be set because of the way simple_nanoparticle is set up
@@ -652,39 +745,120 @@ program simple_test_nano_detect_atoms
     call simulated_NP%write(trim(filename_sim))
 
     print *, 'SIMULATED DATA'
+    print *, 'affinity propagation: '
     !run picker workflow for simulated NP
+    subStart = real(time())
     call test_sim%new(smpd, element, filename_sim, peak_thres_level)
     call test_sim%simulate_atom
     call test_sim%setup_iterators(offset)
     call test_sim%match_boxes
     call test_sim%identify_threshold
-    !call test_sim%center_filter
-    !call test_sim%distance_filter(dist_thres)
-    !call test_sim%remove_outliers(2.5)
-    call test_sim%cluster_filter(dist_thres)
-    call test_sim%find_centers('simulated_centers')
+    call test_sim%find_centers
+    call test_sim%aff_prop_filter
+    call test_sim%write_pdb('simulated_centers')
     call test_sim%compare_pick(trim(pdbfile_ref),'simulated_centers.pdb')
+    subStop = real(time())
+    print *, 'TEST 1 RUNTIME = ', (subStop - subStart), ' s'
 
-    ! print *, ' '
+    print *, '-----'
+
+    print *, 'density peak clustering: '
+    subStart = real(time())
+    call test_sim2%new(smpd, element, filename_sim, peak_thres_level)
+    call test_sim2%simulate_atom
+    call test_sim2%setup_iterators(offset)
+    call test_sim2%match_boxes
+    call test_sim2%identify_threshold
+    call test_sim2%find_centers
+    call test_sim2%cluster_filter(dist_thres)
+    call test_sim2%write_pdb('simulated_centers_2')
+    call test_sim2%compare_pick(trim(pdbfile_ref),'simulated_centers_2.pdb')
+    subStop = real(time())
+    print *, 'TEST 2 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, '-----'
+
+    print *, 'distance filter: '
+    subStart = real(time())
+    call test_sim3%new(smpd, element, filename_sim, peak_thres_level)
+    call test_sim3%simulate_atom
+    call test_sim3%setup_iterators(offset)
+    call test_sim3%match_boxes
+    call test_sim3%identify_threshold
+    call test_sim3%find_centers
+    call test_sim3%distance_filter(dist_thres)
+    call test_sim3%write_pdb('simulated_centers_3')
+    call test_sim3%compare_pick(trim(pdbfile_ref),'simulated_centers_3.pdb')
+    subStop = real(time())
+    print *, 'TEST 3 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, ' '
 
     print *, 'EXPERIMENTAL DATA'
+    print *, 'affinity propagation: '
     ! run picker workflow for experimental data
+    subStart = real(time())
     call test_exp%new(smpd, element, filename_exp, peak_thres_level)
     call test_exp%simulate_atom
     call test_exp%setup_iterators(offset)
     call test_exp%match_boxes
     call test_exp%identify_threshold
-    !call test_exp%identify_threshold(0.155)
-    !call test_exp%center_filter
-    call test_exp%cluster_filter(dist_thres)
-    !call test_exp%distance_filter(dist_thres)
-    call test_exp%remove_outliers(3.)
-    !call test_exp%cluster_filter(dist_thres)
-    call test_exp%find_centers('experimental_centers')
-    call test_exp%write_boximgs('exp_boximgs')
+    call test_exp%find_centers
+    call test_exp%aff_prop_filter
+    call test_exp%write_pdb('experimental_centers')
     call test_exp%compare_pick(trim(pdbfile_ref),'experimental_centers.pdb')
+    subStop = real(time())
+    print *, 'TEST 4 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, '-----'
+
+    print *, 'density peak clustering: '
+    subStart = real(time())
+    call test_exp2%new(smpd, element, filename_exp, peak_thres_level)
+    call test_exp2%simulate_atom
+    call test_exp2%setup_iterators(offset)
+    call test_exp2%match_boxes
+    call test_exp2%identify_threshold
+    call test_exp2%find_centers
+    call test_exp2%cluster_filter(dist_thres)
+    call test_exp2%write_pdb('experimental_centers_2')
+    call test_exp2%compare_pick(trim(pdbfile_ref),'experimental_centers_2.pdb')
+    subStop = real(time())
+    print *, 'TEST 5 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, '-----'
+
+    print *, 'distance filter: '
+    subStart = real(time())
+    call test_exp3%new(smpd, element, filename_exp, peak_thres_level)
+    call test_exp3%simulate_atom
+    call test_exp3%setup_iterators(offset)
+    call test_exp3%match_boxes
+    call test_exp3%identify_threshold
+    call test_exp3%find_centers
+    call test_exp3%distance_filter(dist_thres)
+    call test_exp3%write_pdb('experimental_centers_3')
+    call test_exp3%compare_pick(trim(pdbfile_ref),'experimental_centers_3.pdb')
+    subStop = real(time())
+    print *, 'TEST 6 RUNTIME = ', (subStop - subStart), ' s'
+
+    print *, '-----'
+
+    print *, 'distance filter with adjusted threshold: '
+    subStart = real(time())
+    call test_exp4%new(smpd, element, filename_exp, peak_thres_level)
+    call test_exp4%simulate_atom
+    call test_exp4%setup_iterators(offset)
+    call test_exp4%match_boxes
+    call test_exp4%identify_threshold(0.155)
+    call test_exp4%find_centers
+    call test_exp4%distance_filter(dist_thres)
+    call test_exp4%write_pdb('experimental_centers_4')
+    call test_exp4%compare_pick(trim(pdbfile_ref),'experimental_centers_4.pdb')
+    subStop = real(time())
+    print *, 'TEST 7 RUNTIME = ', (subStop - subStart), ' s'
 
     stopTime = time()
-    print *, 'RUNTIME = ', (stopTime - startTime), ' s'
+    print *, 'TOTAL RUNTIME = ', (stopTime - startTime), ' s'
     
 end program simple_test_nano_detect_atoms
