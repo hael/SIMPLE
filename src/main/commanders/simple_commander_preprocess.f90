@@ -2099,6 +2099,7 @@ contains
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
     end subroutine exec_reextract
 
+    ! Stream only application
     subroutine exec_pick_extract( self, cline )
         use simple_sp_project,  only: sp_project
         use simple_picker_iter, only: picker_iter

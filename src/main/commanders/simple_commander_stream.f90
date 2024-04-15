@@ -130,6 +130,7 @@ contains
         movies_set_counter = 0  ! global number of movies set
         nmic_star          = 0
         if( cline%defined('dir_exec') )then
+            call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
             call import_previous_projects
             nmic_star = spproj_glob%os_mic%get_noris()
@@ -368,7 +369,7 @@ contains
             ! returns list of completed jobs
             subroutine update_projects_list( nimported )
                 integer,                   intent(out) :: nimported
-                type(sp_project), allocatable          :: streamspprojs(:)
+                type(sp_project),          allocatable :: streamspprojs(:)
                 character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
                 character(len=:),          allocatable :: fname, abs_fname
                 logical,                   allocatable :: mics_mask(:)
@@ -385,7 +386,7 @@ contains
                     fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                     abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
                     completed_fnames(iproj) = trim(abs_fname)
-                    call streamspprojs(iproj)%read_segment('mic', abs_fname)
+                    call streamspprojs(iproj)%read_segment('mic', completed_fnames(iproj))
                     cnt = 0
                     do imic = (iproj-1)*NMOVS_SET+1, iproj*NMOVS_SET
                         cnt = cnt + 1
@@ -412,18 +413,18 @@ contains
                             imic = imic+1
                             if( mics_mask(imic) )then
                                 j   = j + 1
+                                ! From now on all MC/CTF metadata use absolute path
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'mc_starfile')
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'intg')
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'thumb')
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'mceps')
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'ctfdoc')
+                                call update_relative_path_to_absolute(streamspprojs(iproj)%os_mic, i, 'ctfjpg')
                                 ! transfer info
                                 call spproj_glob%os_mic%transfer_ori(j, streamspprojs(iproj)%os_mic, i)
-                                ! update paths such that relative paths are with respect to root folder
-                                call update_path(spproj_glob%os_mic, j, 'mc_starfile')
-                                call update_path(spproj_glob%os_mic, j, 'intg')
-                                call update_path(spproj_glob%os_mic, j, 'forctf')
-                                call update_path(spproj_glob%os_mic, j, 'thumb')
-                                call update_path(spproj_glob%os_mic, j, 'mceps')
-                                call update_path(spproj_glob%os_mic, j, 'ctfdoc')
-                                call update_path(spproj_glob%os_mic, j, 'ctfjpg')
                             endif
                         enddo
+                        call streamspprojs(iproj)%write_segment_inside('mic', completed_fnames(iproj))
                         call streamspprojs(iproj)%kill
                     enddo
                 endif
@@ -436,12 +437,28 @@ contains
                     endif
                 enddo
                 ! cleanup
-                do iproj = 1,n_spprojs
-                    call completed_jobs_clines(iproj)%kill
-                enddo
-                deallocate(completed_jobs_clines)
-                deallocate(streamspprojs,mics_mask,completed_fnames)
+                call completed_jobs_clines(:)%kill
+                deallocate(completed_jobs_clines,streamspprojs,mics_mask,completed_fnames)
             end subroutine update_projects_list
+
+            subroutine update_relative_path_to_absolute(os, i, key)
+                class(oris),      intent(inout) :: os
+                integer,          intent(in)    :: i
+                character(len=*), intent(in)    :: key
+                character(len=:), allocatable :: fname
+                character(len=LONGSTRLEN)     :: newfname
+                if( os%isthere(i,key) )then
+                    call os%getter(i,key,fname)
+                    if( fname(1:1) == '/' )then
+                        ! already absolute path
+                        call os%set(i,key,fname)
+                    else
+                        ! is relative to ./spprojs
+                        newfname = simple_abspath(fname(4:len_trim(fname)))
+                        call os%set(i,key,newfname)
+                    endif
+                endif
+            end subroutine update_relative_path_to_absolute
 
             subroutine create_movies_set_project( movie_names )
                 character(len=*), intent(in) :: movie_names(NMOVS_SET)
@@ -591,7 +608,6 @@ contains
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype',   'mic')
         call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir',            '')
         if( .not. cline%defined('walltime')   ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! micrograph selection
@@ -625,13 +641,10 @@ contains
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! picking
-        l_multipick = cline%defined('nmoldiams') .or. cline%defined('multi_moldiams')
+        l_multipick = cline%defined('nmoldiams')
         if( l_multipick )then
             l_extract            = .false.
             l_templates_provided = .false.
-            if( .not.cline%defined('multi_moldiams') )then
-                THROW_HARD('Only MULTI_MOLDIAMS is supported with muti-diameter picking')
-            endif
             call cline%set('picker','new')
             write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
         else
@@ -677,6 +690,7 @@ contains
         nmics_rejected_glob      = 0     ! global number of micrographs rejected
         nmic_star                = 0
         if( cline%defined('dir_exec') )then
+            call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
             call import_previous_mics( micproj_records )
             nptcls_glob = sum(micproj_records(:)%nptcls)
@@ -1008,7 +1022,7 @@ contains
                         fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                         new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                         call simple_rename(fname, new_fname)
-                        abs_fname  = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
+                        abs_fname = simple_abspath(new_fname, errmsg='stream pick_extract :: update_projects_list 1')
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
@@ -1040,7 +1054,7 @@ contains
                 nselected = 0
                 nrejected = 0
                 call tmp_proj%read_segment('mic', project_fname)
-                states    = nint(tmp_proj%os_mic%get_all('state'))
+                allocate(states(tmp_proj%os_mic%get_noris()), source=nint(tmp_proj%os_mic%get_all('state')))
                 nmics     = count(states==1)
                 nselected = nmics
                 nrejected = tmp_proj%os_mic%get_noris() - nselected
@@ -1086,13 +1100,6 @@ contains
                 do imic = 1,tmp_proj%os_mic%get_noris()
                     if( states(imic) == 0 ) cycle
                     cnt = cnt+1
-                    call update_path(tmp_proj%os_mic, imic, 'mc_starfile')
-                    call update_path(tmp_proj%os_mic, imic, 'intg')
-                    call update_path(tmp_proj%os_mic, imic, 'forctf')
-                    call update_path(tmp_proj%os_mic, imic, 'thumb')
-                    call update_path(tmp_proj%os_mic, imic, 'mceps')
-                    call update_path(tmp_proj%os_mic, imic, 'ctfdoc')
-                    call update_path(tmp_proj%os_mic, imic, 'ctfjpg')
                     call spproj_here%os_mic%transfer_ori(cnt, tmp_proj%os_mic, imic)
                 enddo
                 nselected = cnt
@@ -1196,22 +1203,6 @@ contains
                 write(logfhandle,'(A,I6,A)')'>>> IMPORTED ',nsel_mics,' PREVIOUSLY PROCESSED MICROGRAPHS'
             end subroutine import_previous_mics
 
-            subroutine update_path(os, i, key)
-                class(oris),      intent(inout) :: os
-                integer,          intent(in)    :: i
-                character(len=*), intent(in)    :: key
-                character(len=:), allocatable :: fname
-                character(len=LONGSTRLEN)     :: newfname
-                if( os%isthere(i,key) )then
-                    call os%getter(i,key,fname)
-                    if( len_trim(fname) > 3 )then
-                        if( fname(1:3) == '../' ) fname = trim(params%dir_target)//'/'//trim(fname(4:))
-                    endif
-                    call make_relativepath(trim(CWD_GLOB)//'/'//trim(DIR_STREAM), fname, newfname)
-                    call os%set(i, key, newfname)
-                endif
-            end subroutine update_path
-
     end subroutine exec_stream_pick_extract
 
     subroutine exec_stream_assign_optics( self, cline )
@@ -1236,6 +1227,7 @@ contains
             if( .not.file_exists(cline%get_carg('dir_exec')) )then
                 THROW_HARD('Previous directory does not exist: '//trim(cline%get_carg('dir_exec')))
             endif
+            call del_file(TERM_STREAM)
         endif
         ! master parameters
         call params%new(cline)
@@ -1467,7 +1459,7 @@ contains
                 ! # of chunks is above desired threshold
                 if( is_pool_available_dev() ) exit
             else
-                call import_chunks_into_pool_dev(.false., nchunks_imported)
+                call import_chunks_into_pool_dev(nchunks_imported)
                 nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
                 l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
                 call classify_pool_dev
@@ -1609,23 +1601,5 @@ contains
         endif
         call os%kill
     end subroutine update_user_params
-
-    ! Common utility functions
-
-    subroutine update_path(os, i, key)
-        class(oris),      intent(inout) :: os
-        integer,          intent(in)    :: i
-        character(len=*), intent(in)    :: key
-        character(len=:), allocatable :: fname
-        character(len=LONGSTRLEN)     :: newfname
-        if( os%isthere(i,key) )then
-            call os%getter(i,key,fname)
-            if( len_trim(fname) > 3 )then
-                if( fname(1:3) == '../' ) fname = trim(fname(4:))
-            endif
-            call make_relativepath(CWD_GLOB, fname, newfname)
-            call os%set(i, key, newfname)
-        endif
-    end subroutine update_path
 
 end module simple_commander_stream
