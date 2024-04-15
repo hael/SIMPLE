@@ -194,17 +194,14 @@ contains
             call self%spproj%os_stk%transfer_ori(imic, spproj%os_stk, micind)
             ! update to stored stack file name because we are in the root folder
             stack_name = trim(spproj%get_stkname(micind))
-            if( .not.file_exists(stack_name) )then
-                ! for cluster2D_stream, 4 is for '../'
-                ! hacky fix for path issue
-                if(params_glob%dir_target .ne. '') then
-                    self%orig_stks(imic) = simple_abspath(trim(params_glob%dir_target) // '/' // trim(stack_name(4:))) 
-                else
-                    self%orig_stks(imic) = simple_abspath(trim(stack_name(4:)))
-                endif
-            else
-                ! for cluster2d_subsets
+            if( stack_name(1:1) == '/' )then
+                ! already absolute path
+                self%orig_stks(imic) = trim(stack_name)
+            else if( stack_name(1:3) == '../' )then
+                ! need to be absolute path
                 self%orig_stks(imic) = simple_abspath(trim(stack_name))
+            else
+                THROW_HARD('Unexpected file path format for: '//trim(stack_name))
             endif
             call self%spproj%os_stk%set(imic, 'stk', self%orig_stks(imic))
             ! particles

@@ -58,7 +58,6 @@ type(stream_chunk),        allocatable :: chunks(:), converged_chunks(:)
 type(cmdline)                          :: cline_cluster2D_chunk
 integer                                :: glob_chunk_id
 ! Book-keeping
-character(len=LONGSTRLEN), allocatable :: imported_stks(:)
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
 integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
@@ -338,14 +337,12 @@ contains
         enddo
     end subroutine classify_new_chunks_dev
 
-    subroutine import_chunks_into_pool_dev( ignore_mic, nchunks_imported )
-        logical, intent(in)  :: ignore_mic
+    subroutine import_chunks_into_pool_dev( nchunks_imported )
         integer, intent(out) :: nchunks_imported
         type(class_frcs)                   :: frcs_glob, frcs_chunk, frcs_prev
         character(LONGSTRLEN), allocatable :: tmp(:)
         character(len=:),      allocatable :: cavgs_chunk, dir_chunk
         integer,               allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
-        character(len=LONGSTRLEN) :: stk_relpath
         real    :: smpd_here
         integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
         integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop, nptcls_sel
@@ -371,17 +368,12 @@ contains
             call pool_proj%os_mic%new(nmics2import, is_ptcl=.false.)
             call pool_proj%os_stk%new(nmics2import, is_ptcl=.false.)
             call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
-            allocate(imported_stks(nmics2import))
             fromp = 1
         else
             call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
             call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
             fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
-            call move_alloc(imported_stks, tmp)
-            allocate(imported_stks(nmics_imported+nmics2import))
-            imported_stks(1:nmics_imported) = tmp(:)
-            deallocate(tmp)
         endif
         imic  = nmics_imported
         iptcl = nptcls_imported
@@ -395,23 +387,11 @@ contains
                 imic  = imic+1
                 ! micrographs & update paths so they are relative to root folder
                 call pool_proj%os_mic%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_mic, iproj)
-                if( .not.ignore_mic )then
-                    call update_path_dev(pool_proj%os_mic, imic, 'mc_starfile')
-                    call update_path_dev(pool_proj%os_mic, imic, 'intg')
-                    call update_path_dev(pool_proj%os_mic, imic, 'forctf')
-                    call update_path_dev(pool_proj%os_mic, imic, 'thumb')
-                    call update_path_dev(pool_proj%os_mic, imic, 'mceps')
-                    call update_path_dev(pool_proj%os_mic, imic, 'ctfdoc')
-                    call update_path_dev(pool_proj%os_mic, imic, 'ctfjpg')
-                    call update_path_dev(pool_proj%os_mic, imic, 'boxfile')
-                endif
                 ! so stacks are relative to root folder
                 call pool_proj%os_stk%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_stk, iproj)
                 nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
                 call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
                 call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
-                call make_relativepath(cwd_glob, converged_chunks(ichunk)%orig_stks(iproj), stk_relpath)
-                imported_stks(imic) = trim(stk_relpath)
                 ! particles
                 do i = 1,nptcls
                     iptcl = iptcl + 1
@@ -1445,7 +1425,7 @@ contains
                         l_converged = l_converged .or. (pool_iter >= maxits)
                     endif
                 else
-                    call import_chunks_into_pool_dev(.true., nchunks_imported)
+                    call import_chunks_into_pool_dev(nchunks_imported)
                     tot_nchunks_imported = tot_nchunks_imported + nchunks_imported
                     all_chunks_imported  = tot_nchunks_imported == ntot_chunks
                 endif
@@ -1634,22 +1614,6 @@ contains
         call xrank_cavgs%execute(cline_rank_cavgs)
         call cline_rank_cavgs%kill
     end subroutine rank_cavgs
-
-    subroutine update_path_dev(os, i, key)
-        class(oris),      intent(inout) :: os
-        integer,          intent(in)    :: i
-        character(len=*), intent(in)    :: key
-        character(len=:), allocatable :: fname
-        character(len=LONGSTRLEN)     :: newfname
-        if( os%isthere(i,key) )then
-            call os%getter(i,key,fname)
-            if( len_trim(fname) > 3 )then
-                if( fname(1:3) == '../' ) fname = trim(fname(4:))
-            endif
-            call make_relativepath(CWD_GLOB, fname, newfname)
-            call os%set(i, key, newfname)
-        endif
-    end subroutine update_path_dev
 
     !>  Updates the project watched by the gui for display
     subroutine update_pool_for_gui_dev
