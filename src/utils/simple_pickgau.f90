@@ -18,7 +18,7 @@ logical, parameter :: L_WRITE  = .false.
 logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
-integer                       :: ldim_raw(3), ldim_raw_box(3)
+integer                       :: ldim_raw(3)
 real                          :: smpd_raw
 type(image)                   :: mic_raw
 character(len=:), allocatable :: fbody
@@ -27,9 +27,9 @@ character(len=:), allocatable :: fbody
 type pickgau
     private
     ! control parameters
-    real                     :: smpd_shrink = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
+    real                     :: smpd_shrink = 0., moldiam = 0., maxdiam = 0., sig = 0., sxx = 0., t = 0., ndev = 0.
     real                     :: dist_thres  = 0., refine_dist_thres = 0.
-    integer                  :: ldim(3), ldim_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
+    integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     integer                  :: peak_thres_level
     ! peak stats
@@ -66,7 +66,11 @@ contains
     procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
     procedure          :: get_positions
+    procedure          :: get_loc_sdevs
+    procedure          :: get_scores
     procedure          :: get_nboxes
+    procedure          :: get_box
+    procedure          :: get_moldiam
     procedure, private :: write_boxfile
     procedure          :: report_boxfile
     procedure, private :: refine_upscaled
@@ -75,9 +79,10 @@ end type
 
 contains
 
-    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, offset, ndev, moldiam_opt )
+    subroutine gaupick_multi( pcontrast, smpd_shrink, moldiams, boxfile_multi, offset, ndev, moldiam_opt )
         character(len=*),  intent(in)  :: pcontrast
         real,              intent(in)  :: smpd_shrink, moldiams(:)
+        character(len=*),  intent(in)  :: boxfile_multi
         integer, optional, intent(in)  :: offset
         real,    optional, intent(in)  :: ndev
         real,    optional, intent(out) :: moldiam_opt
@@ -87,6 +92,7 @@ contains
         type(pickgau) :: picker_merged
         integer :: npickers, ipick, ioff, joff, loc(1)
         real    :: moldiam_max
+        logical :: l_merge
         npickers    = size(moldiams)
         moldiam_max = maxval(moldiams)
         allocate(pickers(npickers), smds_corr(npickers))
@@ -97,41 +103,47 @@ contains
             smds_corr(ipick) = pickers(ipick)%smd_corr
             call pickers(ipick)%mic_shrink%kill
         end do
+        call report_multipick( npickers, pickers, boxfile_multi)
         ! return molecular diameter based on maximizing standard mean distance between peak- and
         ! non-peak distributions of corr
         loc = maxloc(smds_corr)
         moldiam_opt = moldiams(loc(1))
         write(logfhandle,'(a,1x,f7.2)') 'optimal molecular diameter identified:', moldiam_opt
-        ! merged pick
-        call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
-        call picker_merged%setup_iterators
-        allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
-        picker_merged%box_scores = -1.
-        do ioff = 1,picker_merged%nx_offset
-            do joff = 1,picker_merged%ny_offset
-                do ipick = 1,npickers
-                    if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
-                        if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
-                            picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
-                            picker_map(ioff,joff) = ipick
+        ! Is the following necessary since nothing is done with output?
+        l_merge = .false.
+        if( l_merge )then
+            ! merged pick
+            call picker_merged%new_gaupicker(pcontrast, smpd_shrink, moldiam_max, moldiam_max, offset, ndev)
+            call picker_merged%setup_iterators
+            allocate(picker_map(picker_merged%nx_offset,picker_merged%ny_offset), source=0)
+            picker_merged%box_scores = -1.
+            do ioff = 1,picker_merged%nx_offset
+                do joff = 1,picker_merged%ny_offset
+                    do ipick = 1,npickers
+                        if( pickers(ipick)%box_scores(ioff,joff) > -1. + TINY )then
+                            if( pickers(ipick)%box_scores(ioff,joff) > picker_merged%box_scores(ioff,joff) )then
+                                picker_merged%box_scores(ioff,joff) = pickers(ipick)%box_scores(ioff,joff)
+                                picker_map(ioff,joff) = ipick
+                            endif
                         endif
+                    end do
+                end do
+            end do
+            picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
+            ! apply distance filter to merged
+            call picker_merged%distance_filter
+            ! update picker_map
+            do ioff = 1,picker_merged%nx_offset
+                do joff = 1,picker_merged%ny_offset
+                    if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
+                        picker_map(ioff,joff) = 0
                     endif
                 end do
             end do
-        end do
-        picker_merged%t = minval(picker_merged%box_scores, mask=picker_merged%box_scores >= 0.)
-        ! apply distance filter to merged
-        call picker_merged%distance_filter
-        ! update picker_map
-        do ioff = 1,picker_merged%nx_offset
-            do joff = 1,picker_merged%ny_offset
-                if( picker_merged%box_scores(ioff,joff) < picker_merged%t )then
-                    picker_map(ioff,joff) = 0
-                endif
-            end do
-        end do
+            ! cleanup
+            call picker_merged%kill
+        endif
         ! cleanup
-        call picker_merged%kill
         do ipick = 1,npickers
             call pickers(ipick)%kill
         end do
@@ -274,26 +286,25 @@ contains
         self%ldim(2)     = round2even(real(ldim_raw(2)) * scale)
         self%ldim(3)     = 1
         ! set logical dimensions of boxes
+        self%moldiam = moldiam
         if( present(box) )then ! reference-based picking
-            self%maxdiam     = smpd_raw * real(box)
-            ldim_raw_box(1)  = box
-            ldim_raw_box(2)  = ldim_raw_box(1)
-            ldim_raw_box(3)  = 1
-            self%ldim_box(1) = round2even(real(box) * scale)
-            self%ldim_box(2) = self%ldim_box(1)
-            self%ldim_box(3) = 1
-            maxdiam_max      = self%maxdiam     ! only one box size considered
-            box_max          = self%ldim_box(1) ! only one box size considered
+            self%maxdiam      = smpd_raw * real(box)
+            self%ldim_raw_box = [box,box,1]
+            self%ldim_box(1)  = round2even(real(box) * scale)
+            self%ldim_box(2)  = self%ldim_box(1)
+            self%ldim_box(3)  = 1
+            maxdiam_max       = self%maxdiam     ! only one box size considered
+            box_max           = self%ldim_box(1) ! only one box size considered
         else
-            self%maxdiam     = moldiam + moldiam * BOX_EXP_FAC
-            ldim_raw_box(1)  = round2even(self%maxdiam / smpd_raw)
-            ldim_raw_box(2)  = ldim_raw_box(1)
-            ldim_raw_box(3)  = 1
-            self%ldim_box(1) = round2even(self%maxdiam / self%smpd_shrink)
-            self%ldim_box(2) = self%ldim_box(1)
-            self%ldim_box(3) = 1
-            maxdiam_max      = moldiam_max + moldiam_max * BOX_EXP_FAC    ! iteration bounds based on maximum box size
-            box_max          = round2even(maxdiam_max / self%smpd_shrink) ! iteration bounds based on maximum box size
+            self%maxdiam         = self%moldiam + self%moldiam * BOX_EXP_FAC
+            self%ldim_raw_box(1) = round2even(self%maxdiam / smpd_raw)
+            self%ldim_raw_box(2) = self%ldim_raw_box(1)
+            self%ldim_raw_box(3) = 1
+            self%ldim_box(1)     = round2even(self%maxdiam / self%smpd_shrink)
+            self%ldim_box(2)     = self%ldim_box(1)
+            self%ldim_box(3)     = 1
+            maxdiam_max          = moldiam_max + moldiam_max * BOX_EXP_FAC    ! iteration bounds based on maximum box size
+            box_max              = round2even(maxdiam_max / self%smpd_shrink) ! iteration bounds based on maximum box size
         endif
         self%nx = self%ldim(1) - box_max
         self%ny = self%ldim(2) - box_max
@@ -340,7 +351,7 @@ contains
                 call self%mic_shrink%write('mic_shrink.mrc')
                 call self%gauref%write('gauref.mrc')
             else
-                numstr = int2str(nint(moldiam))
+                numstr = int2str(nint(self%moldiam))
                 call self%mic_shrink%write('mic_shrink_moldiam'//numstr//'.mrc')
                 call self%gauref%write('gauref_moldiam'//numstr//'.mrc')
             endif
@@ -406,7 +417,7 @@ contains
         class(pickgau), intent(inout) :: self
         real,           intent(in)    :: moldiams(:)
         integer                       :: nmoldiams, idiam, iimg
-        real                          :: maxdiam, sig, moldiam_max
+        real                          :: maxdiam, sig
         character(len=:), allocatable :: numstr
         nmoldiams = size(moldiams)
         self%nrefs = nmoldiams ! one ref per moldiam
@@ -1130,7 +1141,6 @@ contains
     subroutine peak_vs_nonpeak_stats( self )
         class(pickgau), intent(inout) :: self
         real,    allocatable :: corrs_peak(:), corrs_nonpeak(:)
-        real,    allocatable :: loc_sdevs_peak(:), loc_sdevs_nonpeak(:)
         integer, allocatable :: pos(:,:)
         real    :: pixrad_shrink, rpos(2)
         integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
@@ -1205,6 +1215,30 @@ contains
         end do
     end subroutine get_positions
 
+    subroutine get_loc_sdevs( self, loc_sdevs )
+        class(pickgau),       intent(in)    :: self
+        real,    allocatable, intent(inout) :: loc_sdevs(:)
+        if( allocated(loc_sdevs) ) deallocate(loc_sdevs)
+        loc_sdevs = pack(self%loc_sdevs(:,:), mask=self%box_scores(:,:) >= self%t)
+    end subroutine get_loc_sdevs
+
+    subroutine get_scores( self, scores )
+        class(pickgau),       intent(in)    :: self
+        real,    allocatable, intent(inout) :: scores(:)
+        if( allocated(scores) ) deallocate(scores)
+        scores = pack(self%box_scores(:,:), mask=self%box_scores(:,:) >= self%t)
+    end subroutine get_scores
+
+    integer function get_box( self )
+        class(pickgau), intent(in) :: self
+        get_box = self%ldim_raw_box(1)
+    end function get_box
+
+    real function get_moldiam( self )
+        class(pickgau), intent(in) :: self
+        get_moldiam = self%moldiam
+    end function get_moldiam
+
     pure function get_nboxes( self ) result( nboxes )
         class(pickgau), intent(in) :: self
         integer :: nboxes
@@ -1240,20 +1274,20 @@ contains
         nptcls  = self%npeaks
         if( nptcls == 0 ) return
         call self%get_positions(pos, smpd_new=smpd)
-        if( box == ldim_raw_box(1) )then
+        if( box == self%ldim_raw_box(1) )then
             ! nothing to adjust
             updated_pos = pos
         else
             ! transform
-            updated_pos = nint(real(pos) - real(box-ldim_raw_box(1))/2.)
+            updated_pos = nint(real(pos) - real(box-self%ldim_raw_box(1))/2.)
             ! to remove positions outside micrograph
             if( l_write_outside )then
                 ! flag positions
                 allocate(mask(nptcls),source=.true.)
                 do i = 1,nptcls
                     if( any(updated_pos(i,:) < 0) ) mask(i) = .false.
-                    if( updated_pos(i,1)+ldim_raw_box(1)-1 >= ldim_raw(1)) mask(i) = .false.
-                    if( updated_pos(i,2)+ldim_raw_box(2)-1 >= ldim_raw(2)) mask(i) = .false.
+                    if( updated_pos(i,1)+self%ldim_raw_box(1)-1 >= ldim_raw(1)) mask(i) = .false.
+                    if( updated_pos(i,2)+self%ldim_raw_box(2)-1 >= ldim_raw(2)) mask(i) = .false.
                 enddo
                 ninside = count(mask)
                 if( ninside == 0 )then
@@ -1282,7 +1316,7 @@ contains
             return
         else
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
-            call fileiochk('simple_pickgau; write_boxfile ', iostat)
+            call fileiochk('simple_pickgau; report_boxfile ', iostat)
             do i = 1,nptcls
                 write(funit,'(I7,I7,I7,I7,I7)')updated_pos(i,1),updated_pos(i,2),box,box,-3
             end do
@@ -1415,5 +1449,34 @@ contains
             self%exists  = .false.
         endif
     end subroutine kill
+
+    !
+    ! Private module utilities
+    !
+
+    subroutine report_multipick( npick, picker, fname )
+        integer,                   intent(in)  :: npick
+        class(pickgau),            intent(in)  :: picker(npick)
+        character(len=*), intent(in)  :: fname
+        integer, allocatable :: pos(:,:)
+        real,    allocatable :: scores(:), loc_sdevs(:)
+        real    :: moldiam
+        integer :: i,j, funit, iostat, npos, box
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(fname)), iostat=iostat)
+        call fileiochk('simple_pickgau; report_multipick ', iostat)
+        do i = 1,npick
+            npos = picker(i)%get_nboxes()
+            if( npos == 0 ) cycle
+            call picker(i)%get_positions(pos)
+            call picker(i)%get_scores(scores)
+            call picker(i)%get_loc_sdevs(loc_sdevs)
+            box     = picker(i)%get_box()
+            moldiam = picker(i)%get_moldiam()
+            do j = 1,npos
+                write(funit,'(I7,I7,I7,F8.1,F8.3,F12.3)') pos(j,1),pos(j,2),box,moldiam,scores(j),loc_sdevs(j)
+            enddo
+        enddo
+        call fclose(funit)
+    end subroutine report_multipick
 
 end module simple_pickgau

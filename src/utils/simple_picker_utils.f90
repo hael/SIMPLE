@@ -42,9 +42,10 @@ contains
         call read_mic_raw(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( params_glob%nmoldiams > 1 )then
             moldiams = equispaced_vals(params_glob%moldiam, params_glob%moldiam_max, params_glob%nmoldiams)
-            call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, offset=OFFSET, moldiam_opt=mmoldiam_opt)
+            call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt)
             if( present(moldiam_opt) ) moldiam_opt = mmoldiam_opt
             deallocate(moldiams)
+            boxfile_out = trim(boxfile)
         else if( .not. (params_glob%multi_moldiams  .eq. '') )then
             ! multiple moldiam pick that uses multiple gaussians, generates .box file outputs
             istr        = 1
