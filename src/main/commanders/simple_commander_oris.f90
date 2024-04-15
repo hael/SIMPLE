@@ -9,7 +9,7 @@ use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 implicit none
 
-public :: check_oris_commander
+public :: check_states_commander
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
@@ -43,10 +43,10 @@ type, extends(commander_base) :: vizoris_commander
     procedure :: execute      => exec_vizoris
 end type vizoris_commander
 
-type, extends(commander_base) :: check_oris_commander
+type, extends(commander_base) :: check_states_commander
   contains
-    procedure :: execute      => check_oris
-end type check_oris_commander
+    procedure :: execute      => check_states
+end type check_states_commander
 
 contains
 
@@ -539,21 +539,22 @@ contains
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
 
-    subroutine check_oris( self, cline )
-        class(check_oris_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(parameters)          :: params
-        type(builder)             :: build
-        type(oris)                :: o_truth
-        real,    allocatable :: states(:), truth_states(:)
-        integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:), cur_perm(:), all_perms(:,:)
-        integer              :: nptcls, nstates, iptcl, istate, perm_cnt, max_sum, max_perm, cur_sum, iperm
+    subroutine check_states( self, cline )
+        class(check_states_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(parameters)     :: params
+        type(builder)        :: build
+        type(oris)           :: o_truth
+        real,    allocatable :: states(:), truth_states(:), diluted(:,:)
+        integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:), cur_perm(:), all_perms(:,:), est_states(:)
+        integer              :: nptcls, nstates, iptcl, istate, perm_cnt, max_sum, max_perm, cur_sum, iperm, truth_state, est_state
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         nptcls  = build%spproj_field%get_noris()
-        allocate(states(nptcls), truth_states(nptcls), source=0.)
-        nstates = build%spproj_field%get_n(  'state')
-        states  = build%spproj_field%get_all('state')
-        allocate(truth_nptcls(nstates), correct_states(nstates), state_order(nstates), cur_perm(nstates), all_perms(nstates, 2**nstates), source=0)
+        nstates = build%spproj_field%get_n('state')
+        allocate(states(nptcls), truth_states(nptcls), diluted(nstates, nstates), source=0.)
+        allocate(truth_nptcls(nstates), correct_states(nstates), state_order(nstates), cur_perm(nstates),&
+                &all_perms(nstates, 2**nstates), est_states(nstates), source=0)
+        states = build%spproj_field%get_all('state')
         call o_truth%new(nptcls, .true.)
         call o_truth%read(params%oritab, [1, nptcls])
         truth_states = o_truth%get_all('state')
@@ -596,11 +597,33 @@ contains
         do istate = 1, nstates
             print *, '% correct for state ', int2str(istate), ' is : ', correct_states(istate) * 100. / real(truth_nptcls(istate)), ' %'
         enddo
+        ! counting est_states
+        est_states = 0
+        diluted    = 0.
+        do istate = 1, nstates
+            est_state = state_order(istate)
+            do iptcl = 1, nptcls
+                if( int(states(iptcl)) == est_state )then
+                    est_states(istate) = est_states(istate) + 1
+                    truth_state = int(truth_states(iptcl))
+                    diluted(truth_state, est_state) = diluted(truth_state, est_state) + 1
+                endif
+            enddo
+        enddo
+        do istate = 1, nstates
+            diluted(istate,:) = diluted(istate,:) * 100. / real(truth_nptcls(istate))
+        enddo
+        print *, 'DILUTION TABLE: '
+        do istate = 1, nstates
+            print *, diluted(:, state_order(istate))
+        enddo
         ! cleanup
         call build%kill_general_tbox
         ! end gracefully
-        call simple_end('**** SIMPLE_CHECK_ORIS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CHECK_STATES NORMAL STOP ****')
+
       contains
+
         subroutine read_state_order( fname, order )
             character(len=*), intent(in)  :: fname
             integer,          intent(out) :: order(nstates)
@@ -640,6 +663,6 @@ contains
             endif
         end subroutine generate_perm
 
-    end subroutine check_oris
+    end subroutine check_states
 
 end module simple_commander_oris

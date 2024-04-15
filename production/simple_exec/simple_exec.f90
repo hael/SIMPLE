@@ -110,7 +110,7 @@ type(uniform_filter3D_commander)            :: xuniform_filter3D
 type(make_pickrefs_commander)               :: xmake_pickrefs
 
 ! ORIENTATION PROCESSING PROGRAMS
-type(check_oris_commander)                  :: xcheck_oris
+type(check_states_commander)                :: xcheck_states
 type(make_oris_commander)                   :: xmake_oris
 type(orisops_commander)                     :: xorisops
 type(oristats_commander)                    :: xoristats
@@ -327,8 +327,8 @@ select case(trim(prg))
         call xmake_pickrefs%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
-    case( 'check_oris' )
-        call xcheck_oris%execute(cline)
+    case( 'check_states' )
+        call xcheck_states%execute(cline)
     case( 'make_oris' )
         call xmake_oris%execute(cline)
     case( 'orisops' )
@@ -383,7 +383,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('8a7042b7')
+call simple_print_git_version('da2e72dc')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

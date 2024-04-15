@@ -88,7 +88,7 @@ type(simple_program), target :: cavgsproc_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
-type(simple_program), target :: check_oris
+type(simple_program), target :: check_states
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_subsets
@@ -371,7 +371,7 @@ contains
         call new_center
         call new_cleanup2D
         call new_center2D_nano
-        call new_check_oris
+        call new_check_states
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_subsets
@@ -488,7 +488,7 @@ contains
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
-        call push2prg_ptr_array(check_oris)
+        call push2prg_ptr_array(check_states)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_subsets)
@@ -629,8 +629,8 @@ contains
                 ptr2prg => cleanup2D
             case('center2D_nano')
                 ptr2prg => center2D_nano
-            case('check_oris')
-                ptr2prg => check_oris
+            case('check_states')
+                ptr2prg => check_states
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_nano')
@@ -839,7 +839,7 @@ contains
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') cavg_filter2D%name
         write(logfhandle,'(A)') center%name
-        write(logfhandle,'(A)') check_oris%name
+        write(logfhandle,'(A)') check_states%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
@@ -1637,10 +1637,10 @@ contains
         call center2D_nano%set_input('comp_ctrls', 3, script)
     end subroutine new_center2D_nano
 
-    subroutine new_check_oris
+    subroutine new_check_states
         ! PROGRAM SPECIFICATION
-        call check_oris%new(&
-        &'check_oris',&                                         ! name
+        call check_states%new(&
+        &'check_states',&                                       ! name
         &'Checking current oris against the ground truth',&     ! descr_short
         &'Checking current oris against the ground truth',&     ! descr_long
         &'simple_exec',&                                        ! executable
@@ -1659,8 +1659,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call check_oris%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_check_oris
+        call check_states%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_check_states
 
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
