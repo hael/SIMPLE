@@ -25,6 +25,7 @@ type moviewatcher
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
+    integer                            :: len_ext        = 0
 contains
     ! doers
     procedure          :: watch
@@ -68,7 +69,7 @@ contains
             else
                 write(logfhandle,'(A,A)')'>>> MOVIES WILL BE DETECTED FROM DIRECTORY: ',trim(self%watch_dir)
             endif
-            self%ext         = trim(adjustl(params_glob%ext))
+            self%ext    = trim(adjustl(params_glob%ext))
             self%regexp = '\.mrc$|\.mrcs$'
 #ifdef USING_TIFF
             self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$|\.eer$'
@@ -83,6 +84,7 @@ contains
             self%ext         = trim(adjustl(METADATA_EXT))
             self%regexp = '\.simple$'
         endif
+        self%len_ext = len_trim(self%ext)
     end function constructor
 
     !>  \brief  is the watching procedure
@@ -316,6 +318,7 @@ contains
         self%lastreporttime = 0
         self%n_watch        = 0
         self%n_history      = 0
+        self%len_ext        = 0
     end subroutine kill
 
 end module simple_moviewatcher

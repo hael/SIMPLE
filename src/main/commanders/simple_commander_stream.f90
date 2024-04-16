@@ -69,16 +69,16 @@ contains
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
         integer                                :: movies_set_counter
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
         logical                                :: l_movies_left, l_haschanged
         real                                   :: avg_tmp
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
+        call cline%set('groupframes', 'no')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! motion correction
-        call cline%set('groupframes', 'no')
         if( .not. cline%defined('trs')              ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',            5.)
@@ -208,8 +208,9 @@ contains
             call movie_buff%watch( nmovies, movies, max_nmovies=params%nparts*NMOVS_SET )
             ! append movies to processing stack
             if( nmovies >= NMOVS_SET )then
-                cnt = 0
-                do iset = 1,nmovies,NMOVS_SET
+                nsets = floor(real(nmovies) / real(NMOVS_SET))
+                cnt   = 0
+                do iset = 1,nsets
                     call create_movies_set_project(movies(iset:iset+NMOVS_SET-1))
                     call qenv%qscripts%add_to_streaming( cline_exec )
                     do imovie = 1,NMOVS_SET
@@ -1298,8 +1299,6 @@ contains
         call simple_end('**** SIMPLE_STREAM_ASSIGN_OPTICS NORMAL STOP ****')
     end subroutine exec_stream_assign_optics
 
-    ! TODO
-    ! path to all files (absolute path at the moment)
     subroutine exec_stream_cluster2D( self, cline )
         use simple_moviewatcher, only: moviewatcher
         use simple_stream_chunk, only: micproj_record
@@ -1331,14 +1330,14 @@ contains
         call cline%set('nonuniform',   'no')
         call cline%set('ml_reg',       'no')
         call cline%set('wiener',       'full')
-        if( .not.cline%defined('dir_target') ) THROW_HARD('DIR_TARGET must be defined!')
-        if( .not. cline%defined('walltime')) call cline%set('walltime',   29.0*60.0) ! 29 minutes
-        if( .not. cline%defined('lpthres')     ) call cline%set('lpthres',       30.0)
-        if( .not. cline%defined('ndev')        ) call cline%set('ndev', CLS_REJECT_STD)
-        if( .not. cline%defined('reject_cls')  ) call cline%set('reject_cls',   'yes')
-        if( .not. cline%defined('objfun')      ) call cline%set('objfun',    'euclid')
-        if( .not. cline%defined('rnd_cls_init')) call cline%set('rnd_cls_init',  'no')
-        if( .not. cline%defined('remove_chunks'))call cline%set('remove_chunks','yes')
+        if( .not. cline%defined('dir_target')   ) THROW_HARD('DIR_TARGET must be defined!')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('lpthres')      ) call cline%set('lpthres',       30.0)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev', CLS_REJECT_STD)
+        if( .not. cline%defined('reject_cls')   ) call cline%set('reject_cls',   'yes')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
+        if( .not. cline%defined('rnd_cls_init') ) call cline%set('rnd_cls_init',  'no')
+        if( .not. cline%defined('remove_chunks')) call cline%set('remove_chunks','yes')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
