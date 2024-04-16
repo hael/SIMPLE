@@ -4421,7 +4421,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                           ! executable
-        &4, 11, 0, 13, 6, 0, 3, .true.)                                              ! # entries in each group, requires sp_project
+        &4, 11, 0, 13, 4, 0, 3, .true.)                                              ! # entries in each group, requires sp_project
         preproc%gui_submenu_list = "data,motion correction,CTF estimation"
         preproc%advanced = .false.
         ! image input/output
@@ -4508,16 +4508,6 @@ contains
         call preproc%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
         call preproc%set_gui_params('filt_ctrls', 4, submenu="CTF estimation")
-        call preproc%set_input('filt_ctrls', 5, ctfresthreshold)
-        preproc%filt_ctrls(5)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
-        preproc%filt_ctrls(5)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
-        preproc%filt_ctrls(5)%rval_default      = CTFRES_THRESHOLD_STREAM
-        call preproc%set_gui_params('filt_ctrls', 5, submenu="CTF estimation")
-        call preproc%set_input('filt_ctrls', 6, icefracthreshold)
-        preproc%filt_ctrls(6)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
-        preproc%filt_ctrls(6)%descr_placeholder = 'Ice fraction threshold{1.0}'
-        preproc%filt_ctrls(6)%rval_default      = ICEFRAC_THRESHOLD_STREAM
-        call preproc%set_gui_params('filt_ctrls', 6, submenu="CTF estimation")
         ! mask controls
         ! <empty>
         ! computer controls
