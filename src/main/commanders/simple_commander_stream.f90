@@ -69,7 +69,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_motion_correct
         integer                                :: movies_set_counter
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nsets, i,j
         integer                                :: cnt, n_imported, n_added, n_failed_jobs, n_fail_iter, nmic_star, iset
         logical                                :: l_movies_left, l_haschanged
         real                                   :: avg_tmp
@@ -211,10 +211,12 @@ contains
                 nsets = floor(real(nmovies) / real(NMOVS_SET))
                 cnt   = 0
                 do iset = 1,nsets
-                    call create_movies_set_project(movies(iset:iset+NMOVS_SET-1))
+                    i = (iset-1)*NMOVS_SET+1
+                    j = iset*NMOVS_SET
+                    call create_movies_set_project(movies(i:j))
                     call qenv%qscripts%add_to_streaming( cline_exec )
-                    do imovie = 1,NMOVS_SET
-                        call movie_buff%add2history( movies(iset+imovie-1) )
+                    do imovie = i,j
+                        call movie_buff%add2history( movies(imovie) )
                         cnt     = cnt     + 1
                         n_added = n_added + 1 ! global number of movie sets
                     enddo
