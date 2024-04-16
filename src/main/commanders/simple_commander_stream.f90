@@ -461,12 +461,12 @@ contains
             end subroutine update_relative_path_to_absolute
 
             subroutine create_movies_set_project( movie_names )
-                character(len=*), intent(in) :: movie_names(NMOVS_SET)
+                character(len=LONGSTRLEN), intent(in) :: movie_names(NMOVS_SET)
                 type(sp_project)             :: spproj_here
                 type(ctfparams)              :: ctfvars
                 character(len=LONGSTRLEN)    :: projname, projfile, xmlfile, xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
-                integer :: imovie
+                integer :: imov
                 cwd_old = trim(cwd_glob)
                 call chdir(output_dir)
                 call simple_getcwd(cwd)
@@ -488,18 +488,18 @@ contains
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_movies(movie_names(1:NMOVS_SET), ctfvars, verbose = .false.)
-                do imovie = 1,NMOVS_SET
-                    call spproj_here%os_mic%set(imovie, "tiltgrp", 0.0)
-                    call spproj_here%os_mic%set(imovie, "shiftx",  0.0)
-                    call spproj_here%os_mic%set(imovie, "shifty",  0.0)
-                    call spproj_here%os_mic%set(imovie, "flsht",   0.0)
+                do imov = 1,NMOVS_SET
+                    call spproj_here%os_mic%set(imov, "tiltgrp", 0.0)
+                    call spproj_here%os_mic%set(imov, "shiftx",  0.0)
+                    call spproj_here%os_mic%set(imov, "shifty",  0.0)
+                    call spproj_here%os_mic%set(imov, "flsht",   0.0)
                     if(cline%defined('dir_meta')) then
                         xmldir = cline%get_carg('dir_meta')
-                        xmlfile = basename(trim(movie_names(imovie)))
+                        xmlfile = basename(trim(movie_names(imov)))
                         if(index(xmlfile, '_fractions') > 0) xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
                         if(index(xmlfile, '_EER') > 0)       xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
                         xmlfile = trim(adjustl(xmldir))//'/'//trim(adjustl(xmlfile))//'.xml'
-                        call spproj_here%os_mic%set(imovie, "meta", trim(adjustl(xmlfile)))
+                        call spproj_here%os_mic%set(imov, "meta", trim(adjustl(xmlfile)))
                     end if
                 enddo
                 call spproj_here%write
