@@ -17,6 +17,8 @@ logical, parameter :: DEBUG = .false.
 interface angle_sampling
     module procedure angle_sampling_1
     module procedure angle_sampling_2
+    module procedure angle_sampling_3
+    module procedure angle_sampling_4
 end interface
 
 type :: eul_prob_tab
@@ -538,5 +540,37 @@ contains
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
         which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
     end function angle_sampling_2
+
+    function angle_sampling_3( pvec, field_str, state ) result( which )
+        use simple_builder, only: build_glob
+        real,              intent(in) :: pvec(:)        !< probabilities
+        character(len=*),  intent(in) :: field_str
+        integer, optional, intent(in) :: state
+        real, allocatable :: vals(:)
+        integer :: which
+        real    :: athres, dist_thres
+        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str), state)
+        dist_thres = sum(vals) / real(size(vals))
+        athres     = params_glob%prob_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        which = angle_sampling_1(pvec, athres)
+    end function angle_sampling_3
+
+    function angle_sampling_4( pvec, pvec_sorted, sorted_inds, field_str, state ) result( which )
+        real,              intent(in)    :: pvec(:)        !< probabilities
+        real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
+        integer,           intent(inout) :: sorted_inds(:)
+        character(len=*),  intent(in)    :: field_str
+        integer, optional, intent(in)    :: state
+        real, allocatable :: vals(:)
+        integer :: which, num_lb, num_ub, n
+        real    :: athres_ub, athres_lb, athres, dist_thres
+        vals       = build_glob%spproj_field%get_all_sampled(trim(field_str), state)
+        dist_thres = sum(vals) / real(size(vals))
+        athres     = params_glob%prob_athres
+        if( dist_thres > TINY ) athres = min(athres, dist_thres)
+        n     = size(pvec)
+        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres)
+    end function angle_sampling_4
 
 end module simple_eul_prob_tab
