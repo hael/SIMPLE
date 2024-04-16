@@ -53,7 +53,7 @@ contains
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, 'dist_inpl', state=s3D%proj_space_state(iref))
+                    loc = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
