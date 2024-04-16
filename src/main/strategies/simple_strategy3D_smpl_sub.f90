@@ -74,7 +74,7 @@ contains
                 if( .not. lnns(iproj) ) cycle
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres)
+                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, 'dist_inpl', state=s3D%proj_space_state(iref))
                     call self%s%store_solution(iref, irot, inpl_corrs(irot))
                 endif
             enddo
