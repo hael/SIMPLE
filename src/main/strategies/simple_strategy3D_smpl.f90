@@ -49,7 +49,7 @@ contains
             do iref=1,self%s%nrefs
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, 'dist_inpl', state=s3D%proj_space_state(iref))
+                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres(s3D%proj_space_state(iref)))
                     locs(iref)      = irot
                     ref_corrs(iref) = inpl_corrs(irot)
                 endif

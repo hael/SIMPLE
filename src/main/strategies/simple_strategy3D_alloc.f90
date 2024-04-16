@@ -11,6 +11,8 @@ private
 
 type strategy3D_alloc
     ! global parameters
+    real,           allocatable :: smpl_refs_athres(:)      !< refine=smpl; angular threshold of projections directions
+    real,           allocatable :: smpl_inpl_athres(:)      !< refine=smpl; angular threshold of in-plane rotations
     ! integer,        allocatable :: proj_space_nnmat(:,:)  !< 3 nearest neighbours per reference + self
     ! per-ptcl/ref allocation
     integer,        allocatable :: proj_space_state(:)      !< states
@@ -92,6 +94,13 @@ contains
         end select
         ! precalculate nearest neighbour matrix
         ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
+        if( str_has_substr(params_glob%refine,'smpl') )then
+            allocate(s3D%smpl_refs_athres(params_glob%nstates), s3D%smpl_inpl_athres(params_glob%nstates))
+            do istate = 1, params_glob%nstates
+                s3D%smpl_refs_athres(istate) = calc_athres('dist',      state=istate)
+                s3D%smpl_inpl_athres(istate) = calc_athres('dist_inpl', state=istate)
+            enddo
+        endif
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays
