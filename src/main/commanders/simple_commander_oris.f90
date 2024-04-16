@@ -547,7 +547,8 @@ contains
         type(oris)           :: o_truth
         real,    allocatable :: states(:), truth_states(:), diluted(:,:)
         integer, allocatable :: truth_nptcls(:), correct_states(:), state_order(:), cur_perm(:), all_perms(:,:), est_states(:)
-        integer              :: nptcls, nstates, iptcl, istate, perm_cnt, max_sum, max_perm, cur_sum, iperm, truth_state, est_state
+        integer              :: nptcls, nstates, iptcl, istate, perm_cnt, max_perm, iperm, truth_state, est_state
+        real                 :: cur_sum, max_sum
         call build%init_params_and_build_general_tbox(cline, params, do3d=(trim(params%oritype) .eq. 'ptcl3D'))
         nptcls  = build%spproj_field%get_noris()
         nstates = build%spproj_field%get_n('state')
@@ -568,7 +569,7 @@ contains
         else
             perm_cnt = 0
             call generate_perm(1)
-            max_sum = 0
+            max_sum = 0.
             do iperm = 1, perm_cnt
                 state_order    = all_perms(:, iperm)
                 correct_states = 0
@@ -576,27 +577,18 @@ contains
                     istate = int(truth_states(iptcl))
                     if( int(states(iptcl)) == state_order(istate) ) correct_states(istate) = correct_states(istate) + 1
                 enddo
-                cur_sum = sum(correct_states)
+                cur_sum = sum(correct_states * 100. / real(truth_nptcls))
                 if( cur_sum > max_sum )then
                     max_perm = iperm
                     max_sum  = cur_sum
                 endif
             enddo
             state_order = all_perms(:, max_perm)
-            print *, 'STATE PERMUTATION:'
+            print *, 'BEST STATE PERMUTATION:'
             do istate = 1, nstates
-                print *, 'Truth state ', int2str(istate), ' -> ', state_order(istate)
+                print *, 'Reconstructed vol ', int2str(state_order(istate)), ' looks mostly like Truth volume ', int2str(istate)
             enddo
         endif
-        correct_states = 0
-        do iptcl = 1, nptcls
-            istate = int(truth_states(iptcl))
-            if( int(states(iptcl)) == state_order(istate) ) correct_states(istate) = correct_states(istate) + 1
-        enddo
-        print *, 'CORRECT DISTRIBUTION %:'
-        do istate = 1, nstates
-            print *, '% correct for state ', int2str(istate), ' is : ', correct_states(istate) * 100. / real(truth_nptcls(istate)), ' %'
-        enddo
         ! counting est_states
         est_states = 0
         diluted    = 0.
@@ -613,9 +605,9 @@ contains
         do istate = 1, nstates
             diluted(istate,:) = diluted(istate,:) * 100. / real(truth_nptcls(istate))
         enddo
-        print *, 'DILUTION TABLE: '
+        print *, 'TRUTH COMPOSITION TABLE: (from Truth vol 1 to Truth vol ', int2str(nstates), ') '
         do istate = 1, nstates
-            print *, diluted(:, state_order(istate))
+            print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', diluted(:, state_order(istate))
         enddo
         ! cleanup
         call build%kill_general_tbox
