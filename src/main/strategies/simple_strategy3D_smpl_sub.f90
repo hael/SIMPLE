@@ -8,7 +8,7 @@ use simple_builder,          only: build_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
-use simple_eul_prob_tab,     only: eulprob_dist_switch
+use simple_eul_prob_tab,     only: eulprob_dist_switch, angle_sampling
 implicit none
 
 public :: strategy3D_smpl_sub
@@ -74,7 +74,7 @@ contains
                 if( .not. lnns(iproj) ) cycle
                 if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    irot = greedy_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_ns)
+                    irot = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_corrs, inds, s3D%smpl_inpl_athres)
                     call self%s%store_solution(iref, irot, inpl_corrs(irot))
                 endif
             enddo

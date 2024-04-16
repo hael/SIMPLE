@@ -14,6 +14,11 @@ private
 
 logical, parameter :: DEBUG = .false.
 
+interface angle_sampling
+    module procedure angle_sampling_1
+    module procedure angle_sampling_2
+end interface
+
 type :: eul_prob_tab
     type(ptcl_ref), allocatable :: loc_tab(:,:,:) !< 3D search table (nspace,  nptcls, nstates)
     type(ptcl_ref), allocatable :: state_tab(:,:) !< 2D search table (nstates, nptcls)
@@ -508,7 +513,18 @@ contains
         end select
     end function eulprob_corr_switch
 
-    function angle_sampling( pvec, pvec_sorted, sorted_inds, athres_ub_in ) result( which )
+    function angle_sampling_1( pvec, athres_ub_in ) result( which )
+        real,    intent(in)  :: pvec(:)        !< probabilities
+        real,    intent(in)  :: athres_ub_in
+        real,    allocatable :: pvec_sorted(:)
+        integer, allocatable :: sorted_inds(:)
+        integer :: which, n
+        n = size(pvec)
+        allocate(pvec_sorted(n),sorted_inds(n))
+        which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in)
+    end function angle_sampling_1
+
+    function angle_sampling_2( pvec, pvec_sorted, sorted_inds, athres_ub_in ) result( which )
         real,    intent(in)    :: pvec(:)        !< probabilities
         real,    intent(inout) :: pvec_sorted(:) !< sorted probabilities
         integer, intent(inout) :: sorted_inds(:)
@@ -521,6 +537,6 @@ contains
         num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
         which     = greedy_sampling(pvec, pvec_sorted, sorted_inds, num_ub, num_lb)
-    end function angle_sampling
+    end function angle_sampling_2
 
 end module simple_eul_prob_tab

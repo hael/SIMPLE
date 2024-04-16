@@ -11,9 +11,9 @@ private
 
 type strategy3D_alloc
     ! global parameters
-    integer                      :: smpl_refs_ns            !< refine=smpl; # of projections directions
-    integer                      :: smpl_inpl_ns            !< refine=smpl; # of in-plane rotations
-    ! integer,        allocatable :: proj_space_nnmat(:,:)    !< 3 nearest neighbours per reference + self
+    real                        :: smpl_refs_athres         !< refine=smpl; angular threshold of projections directions
+    real                        :: smpl_inpl_athres         !< refine=smpl; angular threshold of in-plane rotations
+    ! integer,        allocatable :: proj_space_nnmat(:,:)  !< 3 nearest neighbours per reference + self
     ! per-ptcl/ref allocation
     integer,        allocatable :: proj_space_state(:)      !< states
     integer,        allocatable :: proj_space_proj(:)       !< projection directions (1 state assumed)
@@ -38,7 +38,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( )
-        use simple_eul_prob_tab, only: calc_num2sample
+        use simple_eul_prob_tab, only: calc_athres
         integer :: istate, iproj, ithr, cnt, nrefs, nrefs_sub
         real    :: areal
         ! clean all class arrays & types
@@ -95,8 +95,8 @@ contains
         ! precalculate nearest neighbour matrix
         ! call build_glob%eulspace%nearest_proj_neighbors(4, s3D%proj_space_nnmat) ! 4 because self is included
         if( str_has_substr(params_glob%refine,'smpl') )then
-            call calc_num2sample(nrefs,                  'dist',      s3D%smpl_refs_ns)
-            call calc_num2sample(pftcc_glob%get_nrots(), 'dist_inpl', s3D%smpl_inpl_ns)
+            s3D%smpl_refs_athres = calc_athres('dist')
+            s3D%smpl_inpl_athres = calc_athres('dist_inpl')
         endif
     end subroutine prep_strategy3D
 
