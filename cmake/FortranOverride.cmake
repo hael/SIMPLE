@@ -18,7 +18,7 @@ endif()
 if(NOT $ENV{CPP} STREQUAL "")
   set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 else()
-  find_file (CMAKE_CPP_COMPILER_NAMES
+  find_file(CMAKE_CPP_COMPILER_NAMES
     NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
     PATHS /sw/bin /usr/local/bin /opt/local/bin /usr/bin
     #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
@@ -169,7 +169,6 @@ end program test_iso_support
 endif()
 
 
-
 # Test Fortran preprocessor support for variadic macros
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
   message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports variadic macros")
@@ -204,9 +203,6 @@ end program dummyprog
 endif()
 
 
-
-
-
 # If user specifies the build type, use theirs, otherwise use release
 if (NOT DEFINED CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING "")
@@ -238,11 +234,11 @@ if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 endif()
 # There is some bug where -march=native doesn't work on Mac
-IF(APPLE)
-  SET(GNUNATIVE "-mtune=native")
-ELSE()
-  SET(GNUNATIVE "-march=native")
-ENDIF(APPLE)
+if(APPLE)
+  set(GNUNATIVE "-mtune=native")
+else()
+  set(GNUNATIVE "-march=native")
+endif(APPLE)
 
 # include(CheckCXXCompilerFlag)
 
@@ -272,7 +268,7 @@ endif()
 #include(PlatformDefines)
 
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
-if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
   set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none  -fno-second-underscore")  # language style
@@ -288,9 +284,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   else()
     set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
   endif()
-
   set(common   "${preproc} ${dialect} ${target} ${warn}")
-
   set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value -Wno-surprising")     # extra warning flag
   set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
@@ -298,10 +292,8 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   #
   set(cstd   "-std=${C_DIALECT}11" )
   set(cppstd "-std=${C_DIALECT}++14" )
-
   option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
-
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
   set(USE_CUDA ON)
@@ -322,7 +314,6 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   option(PGI_CUDA_IOMUTEX "Use mutex for IO calls (-Miomutex)" ON)
   option(PGI_CHECKING "Use extra checks in commandline " OFF)
   option(PGI_EXTRA_FAST "Use extra compile options to speed up code e.g. -Munroll -Mvect" OFF)
-  #
   option(USE_OPENACC_ONLY "Enable OpenACC without OpenMP (OpenMP on by default)" OFF)
   message(STATUS "In PGI: FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
   if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
@@ -334,18 +325,14 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   else()
     set(FFTWDIR "/usr/local/pgi/src/fftw/")
   endif()
-
   set(cstd   "-c1x" )
   set(cppstd "--c++14")
-
-elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # ifort
   # set(FC "ifx" CACHE PATH "IntelLLVM Fortran compiler")
   set(preproc  "-fpp -D IFX")
-
   set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
   set(checks   "-check bounds -check uninit")
-
   set(warn     "-warn all")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
   #set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
@@ -357,7 +344,6 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   else()
     set(target "${target} -std03")
   endif()
-
   set(common   "${preproc} ${dialect} ${checks} ${target}")
   # else()
   #   message(" Fortran compiler not supported. Set FC environment variable")
@@ -373,7 +359,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   else()
     message( "INTEL_DIR must be set using INTEL compilervars ")
   endif()
-  if (CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
+  if(CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
     if(NOT "$ENV{I_MPI_ROOT}" STREQUAL "")
       set(I_MPI_ROOT $ENV{I_MPI_ROOT})
     else()
@@ -383,8 +369,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   option(INTEL_OMP_OVERRIDE "Allow intel compiler to override limits when compiling OpenMP" OFF)
   set(cstd "-std=c11" )
   set(cppstd "-std=c++14" )
-endif ()
-
+endif()
 
 option(LARGE_FILE_SUPPORT  "GNU -- Link with library directory for large file support (-mcmodel=large)" ON)
 
@@ -409,8 +394,8 @@ message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE
 message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
 #
 # Make recent cmake not spam about stuff
-if(POLICY CMP0063)
-  cmake_policy(SET CMP0063 OLD)
+if(POLICY CMP0077)
+  cmake_policy(SET CMP0077 OLD)
 endif()
 # if(POLICY CMP0004)
 #   cmake_policy(SET CMP0004 OLD)
@@ -431,31 +416,30 @@ set(ENV{PATH} "${TMPPATH}")
 #message(STATUS " FortranOverride After TO_CMAKE_PATH: $ENV{PATH} ")
 
 
-
-if (NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
-  file(TO_CMAKE_PATH   "$ENV{LD_LIBRARY_PATH}" TMPPATH)
-  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
+if(NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
+  file(TO_CMAKE_PATH  "$ENV{LD_LIBRARY_PATH}" TMPPATH)
+  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{LD_LIBRARY_PATH} ${TMPPATH})
 elseif(NOT "$ENV{DYLD_LIBRARY_PATH}" STREQUAL "")
   file(TO_CMAKE_PATH "$ENV{DYLD_LIBRARY_PATH}" TMPPATH)
-  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
+  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{DYLD_LIBRARY_PATH} ${TMPPATH})
 endif()
-if (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
-  file(TO_CMAKE_PATH  "$ENV{FFTW_ROOT}" TMPPATH)
-  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
+if(NOT "$ENV{FFTW_ROOT}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{FFTW_ROOT}" TMPPATH)
+  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{FFTW_ROOT} ${TMPPATH})
-elseif (NOT "$ENV{FFTW_DIR}" STREQUAL "")
-  file(TO_CMAKE_PATH  "$ENV{FFTW_DIR}" TMPPATH)
-  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
+elseif(NOT "$ENV{FFTW_DIR}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{FFTW_DIR}" TMPPATH)
+  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{FFTW_DIR} ${TMPPATH})
-elseif (NOT "$ENV{FFTW_ROOT}" STREQUAL "")
+elseif(NOT "$ENV{FFTW_ROOT}" STREQUAL "")
   file(TO_CMAKE_PATH "$ENV{FFTWDIR}" TMPPATH)
-  string(REGEX REPLACE  "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
+  string(REGEX REPLACE "[^:]\+(eman|EMAN)[2]*[^:]\+" "" TMPPATH "${TMPPATH}")
   file(TO_CMAKE_PATH "${TMPPATH}" TMPPATH)
   set(ENV{FFTWDIR} ${TMPPATH})
 endif()
@@ -467,7 +451,6 @@ endif()
 #   ERROR_VARIABLE GFC_VERSION_ERROR
 #   RESULT_VARIABLE GFC_VERSION_RESULT)
 # message(STATUS " whichFO ${CMAKE_Fortran_COMPILER}  :res ${GFC_VERSION_RESULT} :err ${GFC_VERSION_ERROR} :out ${GFC_VERSION}")
-
 
 # Make sure the build type is uppercase
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
@@ -488,15 +471,15 @@ if(BT STREQUAL "RELEASE")
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
 elseif(BT STREQUAL "DEBUG")
-  set (CMAKE_BUILD_TYPE DEBUG CACHE STRING
+  set(CMAKE_BUILD_TYPE DEBUG CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
 elseif(BT STREQUAL "RELWITHDEBINFO")
-  set (CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
+  set(CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
     FORCE)
 elseif(BT STREQUAL "TESTING")
-  set (CMAKE_BUILD_TYPE TESTING CACHE STRING
+  set(CMAKE_BUILD_TYPE TESTING CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
     FORCE)
 elseif(NOT BT)
@@ -508,7 +491,6 @@ else()
   message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
 endif(BT STREQUAL "RELEASE")
 
-
-IF (LINUX)
+if(LINUX)
   option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
-ENDIF()
+endif()
