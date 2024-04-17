@@ -8001,8 +8001,10 @@ contains
             call fftwf_free(self%p)
             self%rmat=>null()
             self%cmat=>null()
+            !$omp critical
             call fftwf_destroy_plan(self%plan_fwd)
             call fftwf_destroy_plan(self%plan_bwd)
+            !$omp end critical
             self%existence = .false.
         endif
     end subroutine kill

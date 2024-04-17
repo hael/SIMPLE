@@ -3244,8 +3244,8 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &2, 7, 0, 3, 3, 1, 2, .true.)                                                    ! # entries in each group, requires sp_project
-        pick_extract%gui_submenu_list = "data,picking,compute"
+        &2, 5, 0, 1, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        pick_extract%gui_submenu_list = "data,picking,extract,compute"
         pick_extract%advanced = .false.
         ! image input/output
         call pick_extract%set_input('img_ios', 1, pickrefs)
@@ -3257,29 +3257,21 @@ contains
         call pick_extract%set_input('parm_ios', 1, pcontrast)
         call pick_extract%set_gui_params('parm_ios', 1, submenu="picking")
         call pick_extract%set_input('parm_ios', 2, box_extract)
-        call pick_extract%set_gui_params('parm_ios', 2, submenu="picking")
-        call pick_extract%set_input('parm_ios', 3, pspecsz)
+        call pick_extract%set_gui_params('parm_ios', 2, submenu="extract")
+        call pick_extract%set_input('parm_ios', 3, moldiam)
         call pick_extract%set_gui_params('parm_ios', 3, submenu="picking")
-        call pick_extract%set_input('parm_ios', 4, moldiam)
-        call pick_extract%set_gui_params('parm_ios', 4, submenu="picking")
-        call pick_extract%set_input('parm_ios', 5, picker)
-        call pick_extract%set_gui_params('parm_ios', 5, submenu="picking")
-        call pick_extract%set_input('parm_ios', 6, 'dir_target', 'file', 'Target directory',&
+        call pick_extract%set_input('parm_ios', 4, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
-        call pick_extract%set_gui_params('parm_ios', 6, submenu="data")
-        call pick_extract%set_input('parm_ios', 7, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
-        call pick_extract%set_gui_params('parm_ios', 7, submenu="picking")
-        pick_extract%parm_ios(7)%required = .false.
+        call pick_extract%set_gui_params('parm_ios', 4, submenu="data")
+        call pick_extract%set_input('parm_ios', 5, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
+        call pick_extract%set_gui_params('parm_ios', 5, submenu="picking")
+        pick_extract%parm_ios(5)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick_extract%set_input('srch_ctrls', 1, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call pick_extract%set_input('srch_ctrls', 1, pgrp)
         call pick_extract%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
-        call pick_extract%set_input('srch_ctrls', 2, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call pick_extract%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
-        call pick_extract%set_input('srch_ctrls', 3, pgrp)
-        call pick_extract%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
-        pick_extract%srch_ctrls(3)%required = .false.
+        pick_extract%srch_ctrls(1)%required = .false.
         ! filter controls
         call pick_extract%set_input('filt_ctrls', 1, lp_pick)
         call pick_extract%set_gui_params('filt_ctrls', 1, submenu="picking")
@@ -3287,21 +3279,22 @@ contains
         pick_extract%filt_ctrls(2)%descr_long        = 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{10}'
         pick_extract%filt_ctrls(2)%descr_placeholder = 'CTF resolution threshold(in Angstroms){10.}'
         pick_extract%filt_ctrls(2)%rval_default      = CTFRES_THRESHOLD_STREAM
-        call pick_extract%set_gui_params('filt_ctrls', 2, submenu="CTF estimation")
+        call pick_extract%set_gui_params('filt_ctrls', 2, submenu="data")
         call pick_extract%set_input('filt_ctrls', 3, icefracthreshold)
         pick_extract%filt_ctrls(3)%descr_long        = 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}'
         pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
         pick_extract%filt_ctrls(3)%rval_default      = ICEFRAC_THRESHOLD_STREAM
-        call pick_extract%set_gui_params('filt_ctrls', 3, submenu="CTF estimation")
+        call pick_extract%set_gui_params('filt_ctrls', 3, submenu="data")
         ! mask controls
-        call pick_extract%set_input('mask_ctrls', 1, mskdiam)
-        pick_extract%mask_ctrls(1)%required = .false.
+        ! <empty>
         ! computer controls
         call pick_extract%set_input('comp_ctrls', 1, nthr)
         call pick_extract%set_gui_params('comp_ctrls', 1, submenu="compute", advanced=.false.)
-        call pick_extract%set_input('comp_ctrls', 2, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call pick_extract%set_input('comp_ctrls', 2, nparts)
+        call pick_extract%set_gui_params('comp_ctrls', 2, submenu="compute", advanced=.false.)
+        call pick_extract%set_input('comp_ctrls', 3, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
-        call pick_extract%set_gui_params('comp_ctrls', 2, submenu="compute")
+        call pick_extract%set_gui_params('comp_ctrls', 3, submenu="compute")
     end subroutine new_pick_extract
 
     subroutine new_postprocess

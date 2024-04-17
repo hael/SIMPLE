@@ -611,6 +611,7 @@ contains
         real(timer_int_kind)    :: rt_write
         call cline%set('oritype',   'mic')
         call cline%set('mkdir',     'yes')
+        call cline%set('picker',    'new')
         if( .not. cline%defined('outdir')     ) call cline%set('outdir',            '')
         if( .not. cline%defined('walltime')   ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! micrograph selection
@@ -618,10 +619,7 @@ contains
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
-        if( .not. cline%defined('picker')      ) call cline%set('picker',         'new')
         if( .not. cline%defined('lp_pick')     ) call cline%set('lp_pick',         PICK_LP_DEFAULT)
-        if( .not. cline%defined('ndev')        ) call cline%set('ndev',              2.)
-        if( .not. cline%defined('thres')       ) call cline%set('thres',            24.)
         if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',        'no')
         if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr',    'no')
         ! extraction
@@ -653,27 +651,13 @@ contains
         else
             l_extract            = .true.
             l_templates_provided = cline%defined('pickrefs')
-            if( cline%defined('picker') )then
-                select case(trim(params%picker))
-                case('old')
-                    if( .not.l_templates_provided ) THROW_HARD('PICKREFS required for picker=old')
-                    write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
-                case('new')
-                    if( l_templates_provided )then
-                        if( .not. cline%defined('mskdiam') )then
-                            THROW_HARD('New picker requires mask diameter (in A) in conjunction with pickrefs')
-                            write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
-                        endif
-                    else if( .not.cline%defined('moldiam') )then
-                        THROW_HARD('MOLDIAM required for picker=new reference-free picking')
-                        write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
-                    endif
-                case('seg')
-                    THROW_HARD('SEG picker not supported yet')
-                case DEFAULT
-                    THROW_HARD('Unsupported picker')
-                end select
+            if( l_templates_provided )then
+                write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
+            else if( .not.cline%defined('moldiam') )then
+                THROW_HARD('MOLDIAM required for picker=new reference-free picking')
+                write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
             endif
+
         endif
         ! master project file
         call spproj_glob%read( params%projfile )
