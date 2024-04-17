@@ -8,7 +8,7 @@
 include(SetCompileFlag)
 include(ZSetParallelLibrary)
 
-## Double check cpp is not Clang
+# Double check cpp is not Clang
 if(NOT CMAKE_CPP_COMPILER)
   if(NOT $ENV{CPP} STREQUAL "")
     set(TMP_CPP_COMPILER $ENV{CPP})
@@ -23,15 +23,15 @@ else()
   set(TMP_CPP_COMPILER ${CMAKE_CPP_COMPILER})
 endif()
 
-set (CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang Preprocessor.
-Set FC,CC, and CPP environment variables to GNU compilers, e.g. using Fink in bash :
+set(CLANG_FAIL_MSG  "FATAL ERROR: SIMPLE cannot support Clang Preprocessor.
+Set FC, CC, and CPP environment variables to GNU compilers, e.g. using Fink in bash :
 export FC=/sw/bin/gfortran
 export CC=/sw/bin/gcc
 export CXX=/sw/bin/g++
 export CPP=/sw/bin/cpp-5
 
 Clang has overridden Gfortran links /usr/bin/gfortran GRRR!
-Make sure you prepend  /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or /sw/bin (FINK) to PATH.
+Make sure you prepend /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or /sw/bin (FINK) to PATH.
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
@@ -56,27 +56,28 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
     message(STATUS "GFORTRAN version: ${ACTUAL_FC_TARGET}")
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
-    find_file (
+    find_file(
       CMAKE_Fortran_COMPILER
       NAMES gfortran- gfortran-15 gfortran-14 gfortran-13 gfortran-12 gfortran-11 gfotran-10 gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran13 gfortran12 gfortran11 gfortran10 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
       PATHS /usr/local/bin /opt/local/bin /sw/bin /opt/homebrew/bin /usr/bin
-      #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+      # [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
       )
     if(NOT EXISTS "${CMAKE_Fortran_COMPILER}")
-      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} --
-${CLANG_FATAL_MSG}")
+      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- ${CLANG_FATAL_MSG}")
     endif()
     message(STATUS "GFORTRAN replaced with ${CMAKE_Fortran_COMPILER")
-
   endif()
 endif()
 get_filename_component(GFORTRAN_ABSPATH ${CMAKE_Fortran_COMPILER} REALPATH)
 message(STATUS "FORTRAN ABSPATH ${GFORTRAN_ABSPATH}")
 get_filename_component(FORTRAN_PARENT_DIR ${GFORTRAN_ABSPATH} DIRECTORY)
 message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
-
 message(STATUS "Making sure your C compiler points to the correct binary")
+execute_process(COMMAND ${CMAKE_C_COMPILER} --version
+  OUTPUT_VARIABLE ACTUAL_C_TARGET
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+message(STATUS "GCC version: ${ACTUAL_C_TARGET}")
 
   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_C_TARGET
@@ -95,14 +96,13 @@ message(STATUS "Making sure your C compiler points to the correct binary")
       NO_CMAKE_PATH NO_DEFAULT_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
 )
     message (STATUS " Found ${CMAKE_C_COMPILER_NEW}")
-    if(EXISTS "${CMAKE_C_COMPILER_NEW}")
+  if(EXISTS "${CMAKE_C_COMPILER_NEW}")
     set(CMAKE_C_COMPILER "${CMAKE_C_COMPILER_NEW}" CACHE FILEPATH "GNU gcc compiler " FORCE)
     message(STATUS "C compiler points to ${CMAKE_C_COMPILER}")
-else()
-      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER_NEW} --
-${CLANG_FATAL_MSG}")
-    endif()
+  else()
+    message( FATAL_ERROR  "Cannot find GNU ${CMAKE_C_COMPILER_NEW} -- ${CLANG_FATAL_MSG}")
   endif()
+endif()
 
 message(STATUS "Making sure your C++ compiler points to the correct binary")
 
@@ -122,33 +122,37 @@ NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PA
     if(EXISTS "${CMAKE_CXX_COMPILER_NEW}")
     set(CMAKE_CXX_COMPILER "${CMAKE_CXX_COMPILER_NEW}" CACHE FILEPATH "GNU C++ COMPILER" FORCE)
     message(STATUS "C++ compiler points to ${CMAKE_CXX_COMPILER}")
-else()
-      message( FATAL_ERROR  "Cannot find GNU ${CMAKE_CXX_COMPILER} --
-${CLANG_FATAL_MSG}")
-    endif()
+  else()
+    message( FATAL_ERROR  "Cannot find GNU ${CMAKE_CXX_COMPILER} -- ${CLANG_FATAL_MSG}")
   endif()
+endif()
 
 message(STATUS "Making sure your preprocessor points to the correct binary")
 if(TMP_CPP_COMPILER MATCHES "cpp*")
   execute_process(COMMAND "${TMP_CPP_COMPILER}" --version
-  OUTPUT_VARIABLE ACTUAL_FC_TARGET
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+    OUTPUT_VARIABLE ACTUAL_FC_TARGET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     message(STATUS "Found cpp is actually Clang -- Trying other paths")
     find_file (
+<<<<<<< HEAD
       CPP_COMPILER_NEW
       NAMES  cpp-15 cpp-14 cpp-13 cpp-12 cpp-11 cpp-10 cpp-9 cpp-8 cpp-7 cpp-6 cpp-5 cpp-4.9 cpp10 cpp9 cpp8 cpp7 cpp6 cpp5 cpp4.9
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /opt/homebrew/bin /usr/bin
+=======
+      TMP_CPP_COMPILER cpp-
+      NAMES  cpp-10 cpp-9 cpp-8 cpp-7 cpp-6 cpp-5 cpp-4.9 cpp10 cpp9 cpp8 cpp7 cpp6 cpp5 cpp4.9 cpp
+      PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
+      #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+>>>>>>> 8fce6ca4 (new branch to revamp cmake files)
       DOC "Searching for GNU cpp preprocessor "
-    )
-    if(NOT EXISTS "${CPP_COMPILER_NEW}")
+      )
+    if(NOT EXISTS "${TMP_CPP_COMPILER}")
       message( FATAL_ERROR  "Cannot find GNU cpp compiler -- ${CLANG_FATAL_MSG}")
     endif()
-    set(TMP_CPP_COMPILER ${CPP_COMPILER_NEW})
   endif()
 endif()
 set(CMAKE_CPP_COMPILER ${TMP_CPP_COMPILER})
-message(STATUS "C Preprocessor points to ${CMAKE_CPP_COMPILER}")
 
 set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS} "f03;F03;f08;F08")
 
@@ -160,7 +164,7 @@ endif()
 option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
 mark_as_advanced(UPDATE_GIT_VERSION_INFO)
 if(UPDATE_GIT_VERSION_INFO)
-	include(GitInfo)
+  include(GitInfo)
 endif()
 
 #################################################################
@@ -173,10 +177,9 @@ message(STATUS "Fortran compiler: ${Fortran_COMPILER_NAME}")
 # FFLAGS depend on the compiler and the build type
 #################################################################
 # set(EXTRA_FLAGS "${EXTRA_FLAGS} -fPIC")
-include(ProcessorCount)
-ProcessorCount(NUM_JOBS)
-
-
+#include(ProcessorCount)
+#ProcessorCount(NUM_JOBS)
+cmake_host_system_information(RESULT NUM_JOBS QUERY NUMBER_OF_PHYSICAL_CORES)
 
 ##############################################
 # Linker            (FROM FACEBOOK HHVM)
@@ -198,7 +201,7 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 message(STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
 
 ################################################################
-# Json-fortran definitions
+# Json-Fortran definitions
 ################################################################
 #add_definitions("-DJF_REAL32=4")
 #add_definitions("-DJF_INT32=4")
@@ -220,7 +223,6 @@ endif()
 # Generic Flags
 ################################################################
 
-
 # Optimize for the host's architecture
 # message(STATUS "Testing flag host arch")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
@@ -237,7 +239,6 @@ if(NOT BUILD_SHARED_LIBS)
   add_definitions("-fPIE -fPIC")
 endif()
 
-
 #####################
 ### RELEASE FLAGS ###
 #####################
@@ -245,20 +246,20 @@ endif()
 # Unroll loops
 #message(STATUS "Testing flags unroll")
 if(USE_AGGRESSIVE_OPTIMISATION)
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  #"-unroll-aggressive"                        # IntelLLVM
-  "-funroll-all-loops"                         # GNU, Intel, Clang
-  "/unroll"                                    # Intel Windows
-  "-Munroll "                                  # Portland Group
-  )
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  "-inline-level=2"                            # IntelLLVM
-  "-finline-functions"                         # GNU, IntelLLVM, Clang
-  "/unroll"                                    # Intel Windows
-  "-Minline=maxsize=100,reshape,smallsize=10"  # Portland Group
-  )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    #"-unroll-aggressive"                        # IntelLLVM
+    "-funroll-all-loops"                         # GNU, Intel, Clang
+    "/unroll"                                    # Intel Windows
+    "-Munroll "                                  # Portland Group
+    )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-inline-level=2"                            # IntelLLVM
+    "-finline-functions"                         # GNU, IntelLLVM, Clang
+    "/unroll"                                    # Intel Windows
+    "-Minline=maxsize=100,reshape,smallsize=10"  # Portland Group
+    )
 endif()
 if(USE_LINK_TIME_OPTIMISATION)
   # Interprocedural (link-time) optimizations
@@ -293,9 +294,8 @@ endif(USE_LINK_TIME_OPTIMISATION)
 #     )
 # endif()
 
-
 # # Vectorize code
-if (USE_FAST_MATH_OPTIMISATION)
+if(USE_FAST_MATH_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-fast"                       # IntelLLVM, PGI
@@ -316,9 +316,9 @@ if (USE_FAST_MATH_OPTIMISATION)
     )   # PGI
 endif(USE_FAST_MATH_OPTIMISATION)
 
-if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # Auto parallelize
-  if (USE_AUTO_PARALLELISE)
+  if(USE_AUTO_PARALLELISE)
     SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
       Fortran
       "-parallel -opt-report-phase=par -opt-report:5"            # IntelLLVM (Linux)
@@ -331,7 +331,7 @@ endif()
 # Auto parallelize with OpenACC
 #if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
 #else()
-if (USE_OPENACC)
+if(USE_OPENACC)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran REQUIRED
     "-fopenacc"            # GNU
@@ -343,9 +343,8 @@ endif()
 #endif()
 #include(FindOpenMP_Fortran)
 
-
-if (USE_OPENMP)
- # message(STATUS "in USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
+if(USE_OPENMP)
+  # message(STATUS "in USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
   # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   #      Fortran REQUIRED
   #      "-fopenmp"            # GNU
@@ -354,13 +353,12 @@ if (USE_OPENMP)
   #      "/mp"
   #      )
   #    message(STATUS "leaving USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
-#   endif()
-# endif()
+  #   endif()
+  # endif()
 
-#  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP ")
+  # set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP ")
   add_definitions("-DOPENMP")  ## FIXME above
 endif()
-
 
 # # Instrumentation
 # if (USE_INSTRUMENTATION)
@@ -382,15 +380,13 @@ if(USE_PROFILE_OPTIMISATION)
     )
 endif()
 
-
-
 if(USE_MPI)
   find_package(MPI REQUIRED)
- # if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
- #     if(MPI_Fortran_FOUND)
-        # do something different for IntelLLVM MPI
+  # if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
+  #     if(MPI_Fortran_FOUND)
+         # do something different for IntelLLVM MPI
 
- #     else()
+  #     else()
 
   if(MPI_Fortran_FOUND)
     message(STATUS "MPI found -- ${MPI_COMPILE_FLAGS}")
@@ -442,7 +438,7 @@ if(USE_MPI)
       endif()
     endforeach()
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}  ${MPI_LINK_FLAGS}")
-   # set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${MPI_LINK_FLAGS}")
+    #set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${MPI_LINK_FLAGS}")
     add_definitions("-DUSING_MPI")
   else(MPI_Fortran_FOUND)
     message(FATAL_ERROR "Unable to find MPI -- mpif90 and libraries were not found in system paths")
@@ -452,7 +448,7 @@ endif(USE_MPI)
 
 
 if(USE_CUDA)
-  if (APPLE)
+  if(APPLE)
     message(STATUS "Apple MacOSX CUDA unsupported")
     set(USE_CUDA OFF)
     #     set(CUDA_PROPAGATE_HOST_FLAGS OFF)
@@ -462,15 +458,16 @@ if(USE_CUDA)
   else()
     find_package(Threads)
     find_package(CUDA)
-
     if(CUDA_FOUND)
       message(STATUS "CUDA Found ")
       set(EXTRA_LIBS ${EXTRA_LIBS}  ${CUDA_LIBRARIES})
       include_directories( ${CUDA_INCLUDE_DIRS} )
       add_definitions("-DUSING_CUDA")
+
       if(NOT BUILD_SHARED_LIBS)
         set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
       endif()
+
       set(CUDA_PROPAGATE_HOST_FLAGS OFF)
       CUDA_INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/cuda/kernels)
       set(CUDA_HOST_COMPILER /usr/bin/gcc )
@@ -498,7 +495,7 @@ endif(USE_CUDA)
 ################################################################
 # FFTW  -- MKL core already inlcuded in IntelLLVM config
 ################################################################
-if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
   # Append MKL FFTW interface libs
   # https://software.intel.com/en-us/articles/intel-mkl-main-libraries-contain-fftw3-interfaces
   # https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
@@ -521,11 +518,11 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
     message( FATAL_ERROR "MKLROOT undefined. Set Intel MKL environment variables by sourcing the relevant shell script (typically in /opt/intel/bin), for example: source /opt/intel/bin/compilervars.sh intel64 lp64; source /opt/intel/bin/compilervars.sh intel64 lp64")
   endif()
 else()
-  if (FFTW_DIR)
+  if(FFTW_DIR)
     set(FFTW_ROOT ${FFTW_DIR})
   endif()
   find_package(FFTW QUIET)
-  if (NOT FFTW_FOUND)
+  if(NOT FFTW_FOUND)
     message(FATAL_ERROR "Unable to find FFTW")
   else()
     message(STATUS "fftw3 found")
@@ -559,18 +556,18 @@ if(USE_LIBTIFF)
     # JBIG
     find_library(JBIG_LIBRARY jbig)
     message("-- JBIG_LIBRARY: ${JBIG_LIBRARY}")
-    if( JBIG_LIBRARY STREQUAL "JBIG_LIBRARY-NOTFOUND" )
+    if(JBIG_LIBRARY STREQUAL "JBIG_LIBRARY-NOTFOUND" )
       set(TIFFLIBS "0")
     else()
       set(EXTRA_LIBS ${EXTRA_LIBS} ${JBIG_LIBRARY} )
     endif()
     # JPEG
-    find_library(JPEG_LIBRARY jpeg)
+    find_library( JPEG_LIBRARY jpeg )
     message("-- JPEG_LIBRARY: ${JPEG_LIBRARY}")
     if( JPEG_LIBRARY STREQUAL "JPEG_LIBRARY-NOTFOUND" )
-      set(TIFFLIBS "0")
+      set( TIFFLIBS "0")
     else()
-      set(EXTRA_LIBS ${EXTRA_LIBS} ${JPEG_LIBRARY} )
+      set( EXTRA_LIBS ${EXTRA_LIBS} ${JPEG_LIBRARY} )
     endif()
     # LZMA
     find_library(LZMA_LIBRARY lzma HINTS /opt/homebrew/lib)
@@ -578,7 +575,7 @@ if(USE_LIBTIFF)
     if( LZMA_LIBRARY STREQUAL "LZMA_LIBRARY-NOTFOUND" )
       set(TIFFLIBS "0")
     else()
-      set(EXTRA_LIBS ${EXTRA_LIBS} ${LZMA_LIBRARY} )
+      set( EXTRA_LIBS ${EXTRA_LIBS} ${LZMA_LIBRARY} )
     endif()
     # ZLIB
     find_library(Z_LIBRARY z HINTS /opt/homebrew/opt/zlib/lib)
@@ -644,7 +641,7 @@ if(USE_LIBTIFF)
       endif()
     endif()
   endif()
-  if( TIFFLIBS STREQUAL "1")
+  if( TIFFLIBS STREQUAL "1" )
     add_definitions("-DUSING_TIFF=1")
     include_directories(${TIFF_INCLUDE_DIR})
     set(EXTRA_LIBS ${EXTRA_LIBS} -lm)
@@ -658,7 +655,7 @@ endif()
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
-if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES "gfortran*" ) #OR Fortran_COMPILER_NAME MATCHES "mpif(90|ort)")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES "gfortran*" ) #OR Fortran_COMPILER_NAME MATCHES "mpif(90|ort)")
   #############################################
   #
   ## GNU fortran
@@ -671,13 +668,13 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
     OUTPUT_VARIABLE GFC_VERSION
     ERROR_VARIABLE GFC_VERSION_STDERR
     RESULT_VARIABLE GFC_VERSION_RESULT)
- # message(STATUS "${CMAKE_Fortran_COMPILER} -dumpversion :  ${GFC_VERSION} : ${GFC_VERSION_RESULT} : ${GFC_VERSION_STDERR}")
+  # message(STATUS "${CMAKE_Fortran_COMPILER} -dumpversion :  ${GFC_VERSION} : ${GFC_VERSION_RESULT} : ${GFC_VERSION_STDERR}")
   if( RESULT_VARIABLE EQUAL 1 )
     message(FATAL_ERROR "${PROJECT_NAME} requires ${CMAKE_Fortran_COMPILER} to compile")
   endif()
-  if (NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
+  if(NOT (GFC_VERSION VERSION_GREATER 4.9 OR GFC_VERSION VERSION_EQUAL 4.9))
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
-  endif ()
+  endif()
   set(EXTRA_FLAGS "${EXTRA_FLAGS}")
   # -fopenmp-simd -mfma -mfma4 -faggressive-function-elimination")
   # -Wimplicit-interface -Wunderflow -fbounds-check -fimplicit-none
@@ -729,13 +726,13 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
   #if(BUILD_SHARED_LIBS STREQUAL "OFF")
   #  set(CMAKE_EXE_LINKER_FLAGS   "${CMAKE_EXE_LINKER_FLAGS} -static ")
   #  set(CMAKE_Fortran_FLAGS   "${CMAKE_Fortran_FLAGS} -Wl,static-libgfortran")
- #   set(LARGE_FILE_SUPPORT OFF)
- # endif()
+  #   set(LARGE_FILE_SUPPORT OFF)
+  # endif()
   if(LARGE_FILE_SUPPORT)
     set(CMAKE_Fortran_FLAGS             "${CMAKE_Fortran_FLAGS} -mcmodel=small")
   endif()
 
-elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NAME MATCHES "ifx*" OR Fortran_COMPILER_NAME MATCHES "mpiifx*")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NAME MATCHES "ifx*" OR Fortran_COMPILER_NAME MATCHES "mpiifx*")
   #############################################
   #
   ## INTEL fortran
@@ -744,7 +741,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NA
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${MKLROOT}/include/intel64/lp64 -I${MKLROOT}/include/  -assume source_include -diag-enable=openmp,vec,par,error   -I${INTEL_DIR}/include/${INTEL_TARGET_ARCH}")
   if(INTEL_OMP_OVERRIDE)
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -sox -qoverride-limits  -diag-disable=warn")
-endif()
+  endif()
   # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
@@ -762,7 +759,6 @@ endif()
   #   set(CMAKE_SHARED_LINKER_FLAGS  "${CMAKE_SHARED_LINKER_FLAGS} -ip -ipo-separate -ipo-jobs=${NUM_JOBS}")
   #   set(CMAKE_STATIC_LINKER_FLAGS  "${CMAKE_STATIC_LINKER_FLAGS} -ip -ipo")
   # endif(LINK_TIME_OPTIMISATION)
-
   set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE_INIT}")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE_INIT}")
   if(NOT BUILD_SHARED_LIBS)
@@ -794,24 +790,24 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(PGICOMPILER ON)
   set(USE_LINK_TIME_OPTIMISATION ON)
   if(PGI_CHECKING)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS}")
+    set (EXTRA_FLAGS "${EXTRA_FLAGS}")
   endif()
-  if (USE_OPENACC_ONLY)
+  if(USE_OPENACC_ONLY)
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -acc")
     add_definitions(" -DUSE_OPENACC ")
-   else()
+  else()
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -mp")
   endif()
- if(PGI_EXTRA_FAST)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
+  if(PGI_EXTRA_FAST)
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   endif()
 
   if(PGI_CUDA_IOMUTEX)
-     set(CMAKE_Fortran_FLAGS  " ${CMAKE_Fortran_FLAGS} -Miomutex")
+    set(CMAKE_Fortran_FLAGS  " ${CMAKE_Fortran_FLAGS} -Miomutex")
   endif()
   set(CMAKE_Fortran_FLAGS  " ${CMAKE_Fortran_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
-#  set(CMAKE_AR                           "pgfortran")
+  #  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "pgcc -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS}")
@@ -832,19 +828,19 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   ## PGI 16.10 does not have the OpenMP proc_bind option
   # add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in PGI  OMP
 
-  if (PGI_LARGE_FILE_SUPPORT)
+  if(PGI_LARGE_FILE_SUPPORT)
     set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
   endif()
 
-#  if (PGI_EXTRACT_ALL)
-#    set(CMAKE_Fortran_FLAGS           " -Minline ${CMAKE_Fortran_FLAGS}")
-#  endif()
-   if (PGI_CUDA_MANAGED_MEMORY)
+  #  if (PGI_EXTRACT_ALL)
+  #    set(CMAKE_Fortran_FLAGS           " -Minline ${CMAKE_Fortran_FLAGS}")
+  #  endif()
+  if(PGI_CUDA_MANAGED_MEMORY)
      set(CMAKE_Fortran_FLAGS           "-ta=nvidia:managed ${CMAKE_Fortran_FLAGS}")
-   endif()
-   if (PGI_CUDA_PINNED_MEMORY)
-     set(CMAKE_Fortran_FLAGS           "-ta=nvidia:pinned ${CMAKE_Fortran_FLAGS}")
-   endif()
+  endif()
+  if(PGI_CUDA_PINNED_MEMORY)
+    set(CMAKE_Fortran_FLAGS           "-ta=nvidia:pinned ${CMAKE_Fortran_FLAGS}")
+  endif()
   # #  add_definitions("-module ${CMAKE_Fortran_MODULE_DIRECTORY}") # pgc++ doesn't have -module
   #   set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
@@ -856,13 +852,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #     set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -Mipa=fast")
   #   endif(LINK_TIME_OPTIMISATION)
 
-
-elseif ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Clang")
+elseif("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Clang")
 
   #############################################
   ## APPLE Clang
   #############################################
-  message ("Clang is not supported.  Please use GNU toolchain with either Homebrew, MacPorts or Fink.")
+  message("Clang is not supported.  Please use GNU toolchain with either Homebrew, MacPorts or Fink.")
   # find_package(LLVM REQUIRED CONFIG)
   # set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT} -Wno-mismatched-tags -Qunused-arguments")
   # if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -871,18 +866,18 @@ elseif ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "Clang")
   #   set(CMAKE_EXE_LINKER_FLAGS           "-stdlib=libc++")
   # endif()
 
-else ()
+else()
   #############################################
   ## UNKNOWN fortran
   #############################################
-  message (STATUS " Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER_ID}")
-  message (STATUS " Set environment variable FC to fortran compiler and rebuild cache.")
-  set (CMAKE_Fortran_FLAGS_RELEASE "-O2")
-  set (CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g")
-endif () # COMPILER_ID
+  message(STATUS " Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER_ID}")
+  message(STATUS " Set environment variable FC to fortran compiler and rebuild cache.")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O2")
+  set(CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g")
+endif() # COMPILER_ID
 
 
-if (IMAGE_TYPE_DOUBLE)
+if(IMAGE_TYPE_DOUBLE)
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DIMAGETYPEDOUBLE" )
 endif()
 
@@ -902,23 +897,22 @@ endif()
 
 # Override Fortran preprocessor
 # block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )
- if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-
- set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
- else()
-   # #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-    set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} $ENV{FFLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
-    # uncomment below to show compilation times
-    #set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
- endif()
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+else()
+  # #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} $ENV{FFLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> $ENV{FFLAGS} <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> ")
+  # uncomment below to show compilation times
+  #set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) ||(TIME='PTIME %C %E' time <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT> 2>&1 | awk '/PTIME/ {cmd=\"basename -- \" \$\$\(NF-1\)\;cmd|getline out\;print \$\$\(NF-1\),\$\$NF\;close(cmd)\;}')")
+endif()
 
 
 if(USE_PROFILING)
-  SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fno-omit-frame-pointer")
-  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-omit-frame-pointer")
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -fno-omit-frame-pointer")
-  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-      string(REGEX REPLACE "-f[pP][iI][cC]" " " CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fno-omit-frame-pointer")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-omit-frame-pointer")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -fno-omit-frame-pointer")
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+    string(REGEX REPLACE "-f[pP][iI][cC]" " " CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}")
   endif()
 endif()
 
@@ -926,73 +920,71 @@ endif()
 # Option for code coverage
 #if(VERBOSE OR ${BUILD_WITH_COVERAGE})
 #  option(USE_CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
-if (COVERALLS)
-    include(Coveralls)
-    set(USE_CODE_COVERAGE ON)
+if(COVERALLS)
+  include(Coveralls)
+  set(USE_CODE_COVERAGE ON)
 endif()
 if(USE_CODE_COVERAGE)
-  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
     set(CMAKE_Fortran_FLAGS   "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
     set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS}       -g -Og -pg -fprofile-arcs -ftest-coverage")
     set(CMAKE_CXX_FLAGS       "${CMAKE_CXX_FLAGS}     -g -Og -pg -fprofile-arcs -ftest-coverage")
     # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
     SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage -lgcov --coverage")
-
     SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -Og -g -pg -fprofile-arcs -ftest-coverage")
     # Ensure that CDash targets are always enabled if coverage is enabled.
-    if (NOT CDASH_SUPPORT)
+    if(NOT CDASH_SUPPORT)
       get_property(HELP_STRING CACHE CDASH_SUPPORT PROPERTY HELPSTRING)
       set(CDASH_SUPPORT ON CACHE BOOL "${HELP_STRING}" FORCE)
       message(STATUS "Enabling CDash targets as coverage has been enabled.")
     endif()
   endif()
 endif()
-#endif()
 
 
 set(CMAKE_INSTALL_DO_STRIP FALSE)
 if(APPLE)
   #https://cmake.org/Wiki/CMake_RPATH_handling
   # use, i.e. don't skip the full RPATH for the build tree
-  SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+  set(CMAKE_SKIP_BUILD_RPATH  FALSE)
 
   # when building, don't use the install RPATH
   # (but later on when installing)
-  SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 
-  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
   # add the automatically determined parts of the RPATH
   # which point to directories outside the build tree to the install RPATH
-  SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
   # the RPATH to be used when installing, but only if it's not a system directory
-  LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
-  IF("${isSystemDir}" STREQUAL "-1")
-    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-  ENDIF("${isSystemDir}" STREQUAL "-1")
+  list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+  if("${isSystemDir}" STREQUAL "-1")
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  endif("${isSystemDir}" STREQUAL "-1")
 
 elseif(UNIX)
   set(CMAKE_INSTALL_DO_STRIP FALSE)
-  SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
   # add the automatically determined parts of the RPATH
   # which point to directories outside the build tree to the install RPATH
-  SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 endif()
 
 
-set (GRAPHVIZ_GRAPH_TYPE "digraph")
-set (GRAPHVIZ_GRAPH_NAME "GG")
-set (GRAPHVIZ_GRAPH_HEADER "node [n fontsize = \"8.0\"];")
-set (GRAPHVIZ_NODE_PREFIX  "n")
-set (GRAPHVIZ_EXECUTABLES TRUE)
-set (GRAPHVIZ_STATIC_LIBS TRUE)
-set (GRAPHVIZ_SHARED_LIBS TRUE)
-set (GRAPHVIZ_MODULE_LIBS TRUE)
-set (GRAPHVIZ_EXTERNAL_LIBS FALSE )
-set (GRAPHVIZ_IGNORE_TARGETS ".*(.build|.required|.proxy)")
-set (GRAPHVIZ_GENERATE_PER_TARGET FALSE)
-set (GRAPHVIZ_GENERATE_DEPENDERS FALSE)
+set(GRAPHVIZ_GRAPH_TYPE "digraph")
+set(GRAPHVIZ_GRAPH_NAME "GG")
+set(GRAPHVIZ_GRAPH_HEADER "node [n fontsize = \"8.0\"];")
+set(GRAPHVIZ_NODE_PREFIX  "n")
+set(GRAPHVIZ_EXECUTABLES TRUE)
+set(GRAPHVIZ_STATIC_LIBS TRUE)
+set(GRAPHVIZ_SHARED_LIBS TRUE)
+set(GRAPHVIZ_MODULE_LIBS TRUE)
+set(GRAPHVIZ_EXTERNAL_LIBS FALSE )
+set(GRAPHVIZ_IGNORE_TARGETS ".*(.build|.required|.proxy)")
+set(GRAPHVIZ_GENERATE_PER_TARGET FALSE)
+set(GRAPHVIZ_GENERATE_DEPENDERS FALSE)
