@@ -257,7 +257,7 @@ contains
         character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract, micname_intg
-        character(len=LONGSTRLEN)     :: boxfile
+        character(len=LONGSTRLEN)     :: boxfile, eputiltgroup
         real    :: smpd_pick
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_pick, l_del_forctf, l_skip_pick
@@ -407,7 +407,11 @@ contains
                 micname_intg = trim(basename(micname_intg))
                 if(micname_intg(:8) == 'FoilHole') then
                     ! EPU filename
-                    call o_mov%set("tiltgrp", str2real(micname_intg(24:31)))
+                    eputiltgroup = micname_intg(index(micname_intg, 'Data_') + 5:)
+                    eputiltgroup = eputiltgroup(:index(eputiltgroup, '_') - 1)
+                    call o_mov%set("tiltgrp", str2real(eputiltgroup))
+                else
+                    call o_mov%set("tiltgrp", 0.0)
                 end if
             end if
             ! update project
