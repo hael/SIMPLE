@@ -1,6 +1,8 @@
-project(simple_gui)
+cmake_minimum_required(VERSION 3.12)
 
-cmake_minimum_required(VERSION 3.2)
+project(simple_gui
+        VERSION ${SIMPLE_VERSION}
+        )
 
 include(ExternalProject)
 
@@ -48,7 +50,7 @@ if(${GUI})
 	install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/simple_multiuser DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 		if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/precompiled/simple_gui.mac.tar.gz)
-			message("-- Located pre-built gui binary for mac")
+			message("-- Located pre-built gui binary for Mac")
 			add_custom_target(
 				gui_single_apple ALL
 				DEPENDS gui_core

@@ -1,35 +1,47 @@
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-include(FortranOverride)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(SIMPLE LANGUAGES Fortran C CXX)
+#lif(NOT $ENV{FC} STREQUAL "")
+ #l set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
+#else()
+  set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
+#endif()
 
 project(SIMPLE
         VERSION 3.0.0
         DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)"
         HOMEPAGE_URL "https://simplecryoem.com"
-        LANGUAGES Fortran C CXX)
+        LANGUAGES Fortran C CXX
+) 
 
-# OPTIONS
-option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
-option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
-option(USE_LIBTIFF                 "Use libtiff." ON)
-option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+include(FortranOverride)
+
+
+# Options 
 option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
-option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." OFF)
-option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
+option(USE_LIBTIFF                 "Use libtiff." ON)
+option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
 option(GUI                         "Install the GUI." ON)
 option(BUILD_GUI                   "Build single user GUI from source." OFF)
 option(NICE                        "Install NICE." OFF)
-option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
-OPTION(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
-OPTION(USE_PROFILING               "Enable symbol generation without debug support." OFF)
+option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
+option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
+option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." ON)
+option(USE_PROFILING               "Enable symbol generation without debug support." OFF)
 option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
+option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
+option(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
+option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
 
 set(EXTRA_LIBS "")
-set(NUM_JOBS 1)
-include(ProcessorCount)
-ProcessorCount(NUM_JOBS)
+
+# Cores available
+#set(NUM_JOBS 1)
+#include(ProcessorCount)
+#ProcessorCount(NUM_JOBS)
+#include(ProcessorCount)
+#ProcessorCount(NUM_JOBS)
+cmake_host_system_information(RESULT NUM_JOBS QUERY NUMBER_OF_PHYSICAL_CORES) 
 
 set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend. ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -55,7 +67,7 @@ include_directories(${CMAKE_BINARY_DIR}/lib/simple)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 # INCLUDES
-include(CheckIncludeFiles)
+#include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
 ############################################################
@@ -122,11 +134,11 @@ set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVers
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
 # modules / depends
-FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES
+file(GLOB_RECURSE SIMPLE_CMAKE_FILES
   LIST_DIRECTORIES false
   RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
 list(REMOVE_DUPLICATES SIMPLE_CMAKE_FILES)
-INSTALL(
+install(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
   CONFIGURATIONS DEBUG
@@ -157,7 +169,7 @@ if(${BUILD_DOCS})
   # Doxygen
   #
   option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation." ON)
-  if (ENABLE_DOXYGEN)
+  if(ENABLE_DOXYGEN)
     add_custom_target(doc
       ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -182,12 +194,11 @@ if(${BUILD_DOCS})
   endif()
 endif()
 
-
 if(VERBOSE) #only for the fool-hardy
-  OPTION(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
-  OPTION(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
-  OPTION(USE_AUTO_PARALLELISE        "Optimize code for parallel systems. [Intel and PGI only]." OFF)
-  OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
+  option(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
+  option(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
+  option(USE_AUTO_PARALLELISE        "Optimize code for parallel systems. [Intel and PGI only]." OFF)
+  option(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
   option(CPACK_GENERATOR             "Enable build of distribution packages using CPack." TGZ)
 
   #
@@ -204,6 +215,11 @@ enable_testing()
 # emulate GNU Autotools `make check`
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
+add_test(
+NAME somethingworks
+COMMAND /path/to/tool someArg more Arg
+)
+
 # ADD PRODUCTION EXECUTABLES
 # The source for the SIMPLE binary and have it placed in the bin folder
 add_subdirectory(production bin)
@@ -215,3 +231,4 @@ endif()
 
 # Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
+
