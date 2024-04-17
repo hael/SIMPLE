@@ -14,7 +14,7 @@ add_custom_target(simple_args
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/main
   USES_TERMINAL
-  )
+)
 add_custom_target(simple_git
   COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl
   DEPENDS "${CMAKE_SOURCE_DIR}/scripts/insert_git_commit_hash.pl"
@@ -25,24 +25,22 @@ file(GLOB DEFS_src   "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]"   PARENT_SCO
 file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
 list(APPEND FILEIO_src
   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_posix.c"
-  )
+)
 file(GLOB OPERATORS_src "${CMAKE_CURRENT_SOURCE_DIR}/ops/*.f90" PARENT_SCOPE)
 list(APPEND OPERATORS_src
   "${CMAKE_CURRENT_SOURCE_DIR}/ops/simple_kbinterpol_memo.c"
-  )
+)
 file(GLOB UTILS_src    "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" "${CMAKE_CURRENT_SOURCE_DIR}/utils/*/*.f90" PARENT_SCOPE)
-file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp"       PARENT_SCOPE)
-file(GLOB CPLOT2D_src  "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp"        PARENT_SCOPE)
-file(GLOB F90_src      "${CMAKE_CURRENT_SOURCE_DIR}/f90/*.f90"            PARENT_SCOPE)
-file(GLOB XML_src      "${CMAKE_CURRENT_SOURCE_DIR}/xml/*/*.[Ff]90"       PARENT_SCOPE)
-file(GLOB OPS_src      "${CMAKE_CURRENT_SOURCE_DIR}/ops/*/*.[Ff]90"       PARENT_SCOPE)
-file(GLOB UNIX_src     "${CMAKE_CURRENT_SOURCE_DIR}/unix/src/*.[Ff][90][08]" PARENT_SCOPE)
-file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.f[90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
-file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
-list(APPEND JPG_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
+file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp" PARENT_SCOPE)
+file(GLOB CPLOT2D_src  "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp"  PARENT_SCOPE)
+file(GLOB F90_src      "${CMAKE_CURRENT_SOURCE_DIR}/f90/*.f90"      PARENT_SCOPE)
+file(GLOB XML_src      "${CMAKE_CURRENT_SOURCE_DIR}/xml/*/*.[Ff]90" PARENT_SCOPE)
+file(GLOB OPS_src      "${CMAKE_CURRENT_SOURCE_DIR}/ops/*/*.[Ff]90" PARENT_SCOPE)
+file(GLOB MAIN_src     "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*(^commander)*.f[90][08]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
+file(GLOB JPG_src      "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
+list(APPEND JPG_src    "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
 if(USE_LIBTIFF)
-    list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/tiff/libtiff_funs.c")
+  list(APPEND JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/tiff/libtiff_funs.c")
 endif()
 file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*/*.f[09][0-9]" "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
 
@@ -59,34 +57,36 @@ add_custom_target(simple_modules
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   USES_TERMINAL
-  )
+)
 
-  if(BUILD_SHARED_LIBS)
-    add_library(${SIMPLELIB}  ${SIMPLECORELIB})
-  else()
-    add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
-  endif()
+if(BUILD_SHARED_LIBS)
+  add_library(${SIMPLELIB} ${SIMPLECORELIB})
+else()
+  add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB})
+endif()
 
 add_dependencies(${SIMPLELIB} simple_args simple_git simple_modules)
 set_target_properties(${SIMPLELIB}
   PROPERTIES
   LINKER_LANGUAGE Fortran
   SOVERSION ${${PROJECT_NAME}_VERSION}
-  VERSION ${${PROJECT_NAME}_VERSION}
+  #VERSION ${${PROJECT_NAME}_VERSION}
+  VERSION ${SIMPLE_VERSION}
   COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
   LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
   LINK_LIBRARIES "${EXTRA_LIBS}" 
   JOB_POOL_LINK NUM_JOBS
-  )
+)
 
 install(TARGETS ${SIMPLELIB}
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  )
+)
 #install varlist for testing in production
 install(FILES "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/")
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/"
+)
 # Make sure the compiler can find include files for our SIMPLE library
 # when other libraries or executables link to it
 target_include_directories (${SIMPLELIB} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
