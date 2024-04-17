@@ -109,11 +109,11 @@ if(PNG_FOUND)
         /sw/lib                      # Fink
         )
 
-   #  include(${CMAKE_ROOT}/Modules/SelectLibraryConfigurations.cmake)
-   #  select_library_configurations(GD)
-     mark_as_advanced(GD_LIBRARY)
+  #  include(${CMAKE_ROOT}/Modules/SelectLibraryConfigurations.cmake)
+  #  select_library_configurations(GD)
+  mark_as_advanced(GD_LIBRARY)
 
-   unset(GD_NAMES)
+  unset(GD_NAMES)
 
   # Set by select_library_configurations(), but we want the one from
   # find_package_handle_standard_args() below.
@@ -159,7 +159,7 @@ if(PNG_FOUND)
         #     IMPORTED_LOCATION_RELEASE "${GD_LIBRARY_RELEASE}")
         # endif()
       endif()
-  endif ()
+  endif()
 
 endif()
 

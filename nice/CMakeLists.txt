@@ -1,3 +1,9 @@
+cmake_minimum_required(VERSION 3.12)
+
+project(NICE
+        VERSION ${SIMPLE_VERSION}
+        )
+
 include(ExternalProject)
 
 if(${NICE})
