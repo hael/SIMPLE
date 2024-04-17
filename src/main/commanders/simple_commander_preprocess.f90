@@ -206,6 +206,8 @@ contains
                     call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
                     call cline%set('pickrefs', trim(PICKREFS_FBODY)//params%ext)
                     write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+                case('new')
+                    ! nothing to do
                 case DEFAULT
                     THROW_HARD('Picker not supported!')
             end select
