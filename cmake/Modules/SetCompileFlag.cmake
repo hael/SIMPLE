@@ -25,20 +25,20 @@
 # contents and assign new values to it from within a function.
 #############################################################################
 
-INCLUDE(${CMAKE_ROOT}/Modules/CheckCCompilerFlag.cmake)
-INCLUDE(${CMAKE_ROOT}/Modules/CheckCXXCompilerFlag.cmake)
+include(${CMAKE_ROOT}/Modules/CheckCCompilerFlag.cmake)
+include(${CMAKE_ROOT}/Modules/CheckCXXCompilerFlag.cmake)
 # CMakeCheckCompilerFlagCommonPatterns.cmake
 set(FC_flagcheck FALSE)
 if(EXISTS ${CMAKE_ROOT}/Modules/CheckFortranCompilerFlag.cmake)
-  INCLUDE(${CMAKE_ROOT}/Modules/CheckFortranCompilerFlag.cmake)
+  include(${CMAKE_ROOT}/Modules/CheckFortranCompilerFlag.cmake)
   set(FC_flagcheck TRUE)
 endif()
-FUNCTION(SET_COMPILE_FLAG FLAGVAR FLAGVAL LANG)
 
+function(SET_COMPILE_FLAG FLAGVAR FLAGVAL LANG)
   # Do some up front setup if Fortran
-  IF(LANG STREQUAL "Fortran")
+  if(LANG STREQUAL "Fortran")
     # Create a list of error messages from compilers
-    SET(FAIL_REGEX
+    set(FAIL_REGEX
       "ignoring unknown option"             # Intel
       "invalid argument"                    # Intel
       "unrecognized .*option"               # GNU
@@ -49,86 +49,86 @@ FUNCTION(SET_COMPILE_FLAG FLAGVAR FLAGVAL LANG)
       "[Ww]arning: [Oo]ption"               # SunPro
       "command option .* is not recognized" # XL
       )
-  ENDIF(LANG STREQUAL "Fortran")
+  endif(LANG STREQUAL "Fortran")
 
   # Make a variable holding the flags.  Filter out REQUIRED if it is there
-  SET(FLAG_REQUIRED FALSE)
-  SET(FLAG_FOUND FALSE)
-  UNSET(FLAGLIST)
-  FOREACH (var ${ARGN})
+  set(FLAG_REQUIRED FALSE)
+  set(FLAG_FOUND FALSE)
+  unset(FLAGLIST)
+  foreach(var ${ARGN})
     STRING(TOUPPER "${var}" UP)
-    IF(UP STREQUAL "REQUIRED")
-      SET(FLAG_REQUIRED TRUE)
-    ELSE()
-      SET(FLAGLIST ${FLAGLIST} "${var}")
-    ENDIF(UP STREQUAL "REQUIRED")
-  ENDFOREACH (var ${ARGN})
+    if(UP STREQUAL "REQUIRED")
+      set(FLAG_REQUIRED TRUE)
+    else()
+      set(FLAGLIST ${FLAGLIST} "${var}")
+    endif(UP STREQUAL "REQUIRED")
+  endforeach(var ${ARGN})
 
   # Now, loop over each flag
-  FOREACH(flag ${FLAGLIST})
+  foreach(flag ${FLAGLIST})
     list(FIND ${FLAGVAR} "${flag}" FLAG_EXISTS_ALREADY)
     if(NOT FLAG_EXISTS_ALREADY)
-      UNSET(FLAG_WORKS)
+      unset(FLAG_WORKS)
       # Check the flag for the given language
-      IF(LANG STREQUAL "C")
+      if(LANG STREQUAL "C")
         CHECK_C_COMPILER_FLAG("${flag}" FLAG_WORKS)
-      ELSEIF(LANG STREQUAL "CXX")
+      elseif(LANG STREQUAL "CXX")
         CHECK_CXX_COMPILER_FLAG("${flag}" FLAG_WORKS)
-      ELSEIF(LANG STREQUAL "Fortran")
-	      if(FC_flagcheck)
-  	      CHECK_Fortran_COMPILER_FLAG("${flag}" FLAG_WORKS)
-	      else()
-
+      elseif(LANG STREQUAL "Fortran")
+	if(FC_flagcheck)
+  	  CHECK_Fortran_COMPILER_FLAG("${flag}" FLAG_WORKS)
+	else()
           # There is no nice function to do this for FORTRAN, so we must manually
           # create a test program and check if it compiles with a given flag.
-          SET(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
-          SET(TESTFILE "${TESTFILE}/CMakeTmp/testFortranFlags.f90")
-          FILE(WRITE "${TESTFILE}"
+          set(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
+          set(TESTFILE "${TESTFILE}/CMakeTmp/testFortranFlags.f90")
+          file(WRITE "${TESTFILE}"
             "
-program dummyprog
-  i = 5
-end program dummyprog
-")
-          TRY_COMPILE(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
+            program dummyprog
+              i = 5
+            end program dummyprog
+            ")
+          try_compile(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
             COMPILE_DEFINITIONS "${flag}" OUTPUT_VARIABLE OUTPUT)
-
           # Check that the output message doesn't match any errors
-          FOREACH(rx ${FAIL_REGEX})
-            IF("${OUTPUT}" MATCHES "${rx}")
-              SET(FLAG_WORKS FALSE)
-            ENDIF("${OUTPUT}" MATCHES "${rx}")
-          ENDFOREACH(rx ${FAIL_REGEX})
+          foreach(rx ${FAIL_REGEX})
+            if("${OUTPUT}" MATCHES "${rx}")
+              set(FLAG_WORKS FALSE)
+            endif("${OUTPUT}" MATCHES "${rx}")
+          endforeach(rx ${FAIL_REGEX})
         endif(FC_flagcheck)
-      ELSE()
-        MESSAGE(FATAL_ERROR "Unknown language in SET_COMPILE_FLAGS: ${LANG}")
-      ENDIF(LANG STREQUAL "C")
+      else()
+        message(FATAL_ERROR "Unknown language in SET_COMPILE_FLAGS: ${LANG}")
+      endif(LANG STREQUAL "C")
 
       # If this worked, use these flags, otherwise use other flags
-      IF(FLAG_WORKS)
+      if(FLAG_WORKS)
         # Append this flag to the end of the list that already exists
-        SET(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
+        set(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
           "Set the ${FLAGVAR} flags" FORCE)
-        SET(FLAG_FOUND TRUE)
-        BREAK() # We found something that works, so exit
-      ENDIF(FLAG_WORKS)
+        set(FLAG_FOUND TRUE)
+        break() # We found something that works, so exit
+      endif(FLAG_WORKS)
+
     else()
-      SET(FLAG_FOUND TRUE)
-      BREAK()
+      set(FLAG_FOUND TRUE)
+      break()
     endif()
-  ENDFOREACH(flag ${FLAGLIST})
+  endforeach(flag ${FLAGLIST})
 
   # Raise an error if no flag was found
-  IF(FLAG_REQUIRED AND NOT FLAG_FOUND)
-    MESSAGE(FATAL_ERROR "No compile flags were found")
-  ENDIF(FLAG_REQUIRED AND NOT FLAG_FOUND)
+  if(FLAG_REQUIRED AND NOT FLAG_FOUND)
+    message(FATAL_ERROR "No compile flags were found")
+  endif(FLAG_REQUIRED AND NOT FLAG_FOUND)
 
-ENDFUNCTION()
-FUNCTION(SET_PREPROCESSOR_FLAG FLAGVAR FLAGVAL LANG)
+endfunction()
+
+function(SET_PREPROCESSOR_FLAG FLAGVAR FLAGVAL LANG)
 
   # Do some up front setup if Fortran
-  IF(LANG STREQUAL "Fortran")
+  if(LANG STREQUAL "Fortran")
     # Create a list of error messages from compilers
-    SET(FAIL_REGEX
+    set(FAIL_REGEX
       "ignoring unknown option"             # Intel
       "invalid argument"                    # Intel
       "unrecognized .*option"               # GNU
@@ -139,75 +139,74 @@ FUNCTION(SET_PREPROCESSOR_FLAG FLAGVAR FLAGVAL LANG)
       "[Ww]arning: [Oo]ption"               # SunPro
       "command option .* is not recognized" # XL
       )
-  ENDIF(LANG STREQUAL "Fortran")
+  endif(LANG STREQUAL "Fortran")
 
   # Make a variable holding the flags.  Filter out REQUIRED if it is there
-  SET(FLAG_REQUIRED FALSE)
-  SET(FLAG_FOUND FALSE)
-  UNSET(FLAGLIST)
-  FOREACH (var ${ARGN})
+  set(FLAG_REQUIRED FALSE)
+  set(FLAG_FOUND FALSE)
+  unset(FLAGLIST)
+  foreach(var ${ARGN})
     STRING(TOUPPER "${var}" UP)
-    IF(UP STREQUAL "REQUIRED")
-      SET(FLAG_REQUIRED TRUE)
-    ELSE()
-      SET(FLAGLIST ${FLAGLIST} "${var}")
-    ENDIF(UP STREQUAL "REQUIRED")
-  ENDFOREACH (var ${ARGN})
+    if(UP STREQUAL "REQUIRED")
+      set(FLAG_REQUIRED TRUE)
+    else()
+      set(FLAGLIST ${FLAGLIST} "${var}")
+    endif(UP STREQUAL "REQUIRED")
+  endforeach(var ${ARGN})
 
   # Now, loop over each flag
-  FOREACH(flag ${FLAGLIST})
+  foreach(flag ${FLAGLIST})
 
-    UNSET(FLAG_WORKS)
+    unset(FLAG_WORKS)
+
     # Check the flag for the given language
-    IF(LANG STREQUAL "C")
+    if(LANG STREQUAL "C")
       CHECK_C_COMPILER_FLAG("${flag}" FLAG_WORKS)
-    ELSEIF(LANG STREQUAL "CXX")
+    elseif(LANG STREQUAL "CXX")
       CHECK_CXX_COMPILER_FLAG("${flag}" FLAG_WORKS)
-    ELSEIF(LANG STREQUAL "Fortran")
+    elseif(LANG STREQUAL "Fortran")
       # There is no nice function to do this for FORTRAN, so we must manually
       # create a test program and check if it compiles with a given flag.
-      SET(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
-      SET(TESTFILE "${TESTFILE}/CMakeTmp/testFortranCPPFlags.F08")
-      FILE(WRITE "${TESTFILE}"
+      set(TESTFILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}")
+      set(TESTFILE "${TESTFILE}/CMakeTmp/testFortranCPPFlags.F08")
+      file(WRITE "${TESTFILE}"
         "
-#define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)/* */
-#define _c99_count1(...)  _c99_count2 (__VA_ARGS__,10,9,8,7,6,5,4,3,2,1,0)
-#define _c99_count2(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,n,...) n
-program dummyprog
- integer i
- integer,parameter :: nv=c99_count (__VA_ARGS__);
- character(255)::p_tokens= #__VA_ARGS__ ;
- i = 5
-end program dummyprog
-")
-      TRY_COMPILE(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
+        #define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)/* */
+        #define _c99_count1(...)  _c99_count2 (__VA_ARGS__,10,9,8,7,6,5,4,3,2,1,0)
+        #define _c99_count2(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,n,...) n
+        program dummyprog
+         integer i
+         integer,parameter :: nv=c99_count (__VA_ARGS__);
+         character(255)::p_tokens= #__VA_ARGS__ ;
+         i = 5
+        end program dummyprog
+        ")
+      try_compile(FLAG_WORKS ${CMAKE_BINARY_DIR} ${TESTFILE}
         COMPILE_DEFINITIONS "${flag}" OUTPUT_VARIABLE OUTPUT)
-
       # Check that the output message doesn't match any errors
-      FOREACH(rx ${FAIL_REGEX})
-        IF("${OUTPUT}" MATCHES "${rx}")
-          SET(FLAG_WORKS FALSE)
-        ENDIF("${OUTPUT}" MATCHES "${rx}")
-      ENDFOREACH(rx ${FAIL_REGEX})
-
-    ELSE()
-      MESSAGE(FATAL_ERROR "Unknown language in SET_PREPROCESSOR_FLAG: ${LANG}")
-    ENDIF(LANG STREQUAL "C")
+      foreach(rx ${FAIL_REGEX})
+        if("${OUTPUT}" MATCHES "${rx}")
+          set(FLAG_WORKS FALSE)
+        endif("${OUTPUT}" MATCHES "${rx}")
+      endforeach(rx ${FAIL_REGEX})
+    else()
+      message(FATAL_ERROR "Unknown language in SET_PREPROCESSOR_FLAG: ${LANG}")
+    endif(LANG STREQUAL "C")
 
     # If this worked, use these flags, otherwise use other flags
-    IF(FLAG_WORKS)
+    if(FLAG_WORKS)
       # Append this flag to the end of the list that already exists
-      SET(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
+      set(${FLAGVAR} "${FLAGVAL} ${flag}" CACHE STRING
         "Set the ${FLAGVAR} flags" FORCE)
-      SET(FLAG_FOUND TRUE)
-      BREAK() # We found something that works, so exit
-    ENDIF(FLAG_WORKS)
+      set(FLAG_FOUND TRUE)
+      break() # We found something that works, so exit
+    endif(FLAG_WORKS)
 
-  ENDFOREACH(flag ${FLAGLIST})
+  endforeach(flag ${FLAGLIST})
 
   # Raise an error if no flag was found
-  IF(FLAG_REQUIRED AND NOT FLAG_FOUND)
-    MESSAGE(FATAL_ERROR "No compile flags were found")
-  ENDIF(FLAG_REQUIRED AND NOT FLAG_FOUND)
+  if(FLAG_REQUIRED AND NOT FLAG_FOUND)
+    message(FATAL_ERROR "No compile flags were found")
+  endif(FLAG_REQUIRED AND NOT FLAG_FOUND)
 
-ENDFUNCTION()
+endfunction()
