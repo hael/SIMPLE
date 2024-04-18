@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 #lif(NOT $ENV{FC} STREQUAL "")
  #l set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 #else()
-  set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
+#  set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
 #endif()
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+include(FortranOverride)
 
 project(SIMPLE
         VERSION 3.0.0
@@ -12,18 +14,14 @@ project(SIMPLE
         HOMEPAGE_URL "https://github.com/hael/SIMPLE"
         LANGUAGES Fortran C CXX)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-include(FortranOverride)
-
-
 # Options 
 option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
-option(USE_LIBTIFF                 "Use libtiff." ON)
+option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
 option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
+option(USE_LIBTIFF                 "Use libtiff." ON)
 option(GUI                         "Install the GUI." ON)
 option(BUILD_GUI                   "Build single user GUI from source." OFF)
 option(NICE                        "Install NICE." OFF)
-option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
 option(USE_SYSTEM_JPEG_SQLite      "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
 option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." ON)
 option(NICE_FQDN                   "Set NICE server fqdn else fqdn of compiling node is used." OFF)
@@ -34,16 +32,16 @@ option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
 option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
 option(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
 option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
-
+# Extra libraries if needed it
 set(EXTRA_LIBS "")
 
-# Cores available
+# Number of Physical Cores available
+cmake_host_system_information(RESULT NUM_JOBS QUERY NUMBER_OF_PHYSICAL_CORES) 
 #set(NUM_JOBS 1)
 #include(ProcessorCount)
 #ProcessorCount(NUM_JOBS)
 #include(ProcessorCount)
 #ProcessorCount(NUM_JOBS)
-cmake_host_system_information(RESULT NUM_JOBS QUERY NUMBER_OF_PHYSICAL_CORES) 
 
 set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend. ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -61,7 +59,8 @@ set(SINGLE_EXE single_exec)
 set(STREAM_EXE simple_stream)
 set(SIMPLE_PRIVATE_EXE simple_private_exec)
 # Define the library name lib<name>.so
-set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
+#set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
+set(SIMPLELIB "${${PROJECT_NAME}_VERSION}")
 
 # Define some directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
@@ -72,6 +71,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
+# Configurations RELEASE, DEBUG 
 ############################################################
 #
 # Add definition macros unique to compilation
