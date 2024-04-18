@@ -35,7 +35,7 @@ Make sure you prepend /usr/local/bin (Homebrew) or /opt/local/bin (MacPorts) or 
 In LD_LIBRARY_PATH prepend the appropriate lib path.
     ")
 
-option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " OFF)
+#option(USE_GNU_EXTENSIONS "Enable GNU extensions in C " OFF)
 if(USE_GNU_EXTENSIONS)
   set(C_DIALECT gnu)
 else()
@@ -53,7 +53,8 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
   execute_process(COMMAND ${CMAKE_Fortran_COMPILER} --version
     OUTPUT_VARIABLE ACTUAL_FC_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(STATUS "GFORTRAN version: ${ACTUAL_FC_TARGET}")
+    message(STATUS "GFORTRAN version: ${ACTUAL_FC_TARGET}"
+  )
   if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file(
@@ -62,9 +63,9 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
       PATHS /usr/local/bin /opt/local/bin /sw/bin /opt/homebrew/bin /usr/bin
       # [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
-      )
+    )
     if(NOT EXISTS "${CMAKE_Fortran_COMPILER}")
-      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- ${CLANG_FATAL_MSG}")
+      message(FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- ${CLANG_FATAL_MSG}")
     endif()
     message(STATUS "GFORTRAN replaced with ${CMAKE_Fortran_COMPILER")
   endif()
@@ -76,7 +77,8 @@ message(STATUS "FORTRAN_PARENT_DIR ${FORTRAN_PARENT_DIR}")
 message(STATUS "Making sure your C compiler points to the correct binary")
 execute_process(COMMAND ${CMAKE_C_COMPILER} --version
   OUTPUT_VARIABLE ACTUAL_C_TARGET
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 message(STATUS "GCC version: ${ACTUAL_C_TARGET}")
 
   execute_process(COMMAND ${CMAKE_C_COMPILER} --version
@@ -146,7 +148,7 @@ if(TMP_CPP_COMPILER MATCHES "cpp*")
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
 >>>>>>> 8fce6ca4 (new branch to revamp cmake files)
       DOC "Searching for GNU cpp preprocessor "
-      )
+    )
     if(NOT EXISTS "${TMP_CPP_COMPILER}")
       message( FATAL_ERROR  "Cannot find GNU cpp compiler -- ${CLANG_FATAL_MSG}")
     endif()
@@ -161,7 +163,7 @@ if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
 endif()
 
 #figure out our git version
-option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
+#option(UPDATE_GIT_VERSION_INFO "update git version info in source tree" ON)
 mark_as_advanced(UPDATE_GIT_VERSION_INFO)
 if(UPDATE_GIT_VERSION_INFO)
   include(GitInfo)
@@ -252,14 +254,14 @@ if(USE_AGGRESSIVE_OPTIMISATION)
     "-funroll-all-loops"                         # GNU, Intel, Clang
     "/unroll"                                    # Intel Windows
     "-Munroll "                                  # Portland Group
-    )
+  )
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-inline-level=2"                            # IntelLLVM
     "-finline-functions"                         # GNU, IntelLLVM, Clang
     "/unroll"                                    # Intel Windows
     "-Minline=maxsize=100,reshape,smallsize=10"  # Portland Group
-    )
+  )
 endif()
 if(USE_LINK_TIME_OPTIMISATION)
   # Interprocedural (link-time) optimizations
@@ -271,8 +273,7 @@ if(USE_LINK_TIME_OPTIMISATION)
     "/Qipo-separate"                               # Intel Windows
     "-flto "                                       # GNU
     "-Mipa=fast,libinline,vestigial,reaggregation" # Portland Group
-    )
-
+  )
   #Profile optimizations
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
@@ -280,7 +281,7 @@ if(USE_LINK_TIME_OPTIMISATION)
     "/Qip-dir=_profiling"          # Intel Windows
     "-fprofile-dir=.profiling"     # GNU
     "-Mpfo "                       # PGI
-    )
+  )
 endif(USE_LINK_TIME_OPTIMISATION)
 
 #if(USE_AUTOMATIC_VECTORIZATION)
@@ -301,19 +302,19 @@ if(USE_FAST_MATH_OPTIMISATION)
     "-fast"                       # IntelLLVM, PGI
     "/Ofast"                      # Intel Windows
     "-Ofast"                      # GNU
-    )
+  )
   # Fast math code
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-fastmath"                   # IntelLLVM
     "-ffast-math"                 # GNU
     "-Mcuda=fastmath"             # Portland Group
-    )
+  )
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-ffp-contract=fast"          # GNU
     "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"  # Portland Group
-    )   # PGI
+  )   # PGI
 endif(USE_FAST_MATH_OPTIMISATION)
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
@@ -325,7 +326,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUA
       "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
       "-Mconcur=bind,allcores,cncall"                            # PGI
       "-floop-parallelize-all -ftree-parallelize-loops=4"        # GNU
-      )
+  )
   endif()
 endif()
 # Auto parallelize with OpenACC
@@ -337,7 +338,7 @@ if(USE_OPENACC)
     "-fopenacc"            # GNU
     "-acc"
     "/acc"
-    )
+  )
   add_definitions("-DOPENACC")  ## FIXME above
 endif()
 #endif()
@@ -377,7 +378,7 @@ if(USE_PROFILE_OPTIMISATION)
     "-fpfo "                  # GNU
     "-prof-gen"               # IntelLLVM (Linux, OS X)
     "/Qprof-gen"              # Intel (Windows)
-    )
+  )
 endif()
 
 if(USE_MPI)
@@ -416,8 +417,8 @@ if(USE_MPI)
     message(STATUS "MPI_INCLUDE_PATH ${MPI_INCLUDE_PATH}")
     message(STATUS "MPI_CXX_LINK_FLAGS ${MPI_LINK_FLAGS}")
 
-   # get_filename_component(mpi_f08_mod_path ${MPI_EXTRA_LIBRARY} DIRECTORY)
-   # include_directories(SYSTEM ${mpi_f08_mod_path})
+    # get_filename_component(mpi_f08_mod_path ${MPI_EXTRA_LIBRARY} DIRECTORY)
+    # include_directories(SYSTEM ${mpi_f08_mod_path})
 
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${MPI_Fortran_COMPILE_FLAGS}")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MPI_C_COMPILE_FLAGS}")
@@ -473,7 +474,7 @@ if(USE_CUDA)
       set(CUDA_HOST_COMPILER /usr/bin/gcc )
       CUDA_INCLUDE_DIRECTORIES(/usr/include)
 
-      if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+      if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
         set(CUDA_VERBOSE_BUILD ON)
         set(CUDA_NVCC_FLAGS -g ${CUDA_NVCC_FLAGS})
       endif()
@@ -484,10 +485,10 @@ if(USE_CUDA)
 
     else()
       set(USE_CUDA OFF)
-      unset (CUDA_INCLUDE_DIRS CACHE)
-      unset (CUDA_TOOLKIT_ROOT_DIR CACHE)
-      unset (CUDA_LIBRARIES CACHE)
-      #   message(FATAL_ERROR "Unable to find CUDA -- set CUDA_TOOLKIT_ROOT_DIR in shell environment")
+      unset(CUDA_INCLUDE_DIRS CACHE)
+      unset(CUDA_TOOLKIT_ROOT_DIR CACHE)
+      unset(CUDA_LIBRARIES CACHE)
+      # message(FATAL_ERROR "Unable to find CUDA -- set CUDA_TOOLKIT_ROOT_DIR in shell environment")
     endif()
   endif(APPLE)
 endif(USE_CUDA)
@@ -552,65 +553,65 @@ if(USE_LIBTIFF)
   endif()
   if(TIFF_FOUND)
     set(TIFFLIBS "1")
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY} )
+    set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY})
     # JBIG
     find_library(JBIG_LIBRARY jbig)
     message("-- JBIG_LIBRARY: ${JBIG_LIBRARY}")
-    if(JBIG_LIBRARY STREQUAL "JBIG_LIBRARY-NOTFOUND" )
+    if(JBIG_LIBRARY STREQUAL "JBIG_LIBRARY-NOTFOUND")
       set(TIFFLIBS "0")
     else()
-      set(EXTRA_LIBS ${EXTRA_LIBS} ${JBIG_LIBRARY} )
+      set(EXTRA_LIBS ${EXTRA_LIBS} ${JBIG_LIBRARY})
     endif()
     # JPEG
-    find_library( JPEG_LIBRARY jpeg )
+    find_library(JPEG_LIBRARY jpeg)
     message("-- JPEG_LIBRARY: ${JPEG_LIBRARY}")
-    if( JPEG_LIBRARY STREQUAL "JPEG_LIBRARY-NOTFOUND" )
-      set( TIFFLIBS "0")
+    if(JPEG_LIBRARY STREQUAL "JPEG_LIBRARY-NOTFOUND")
+      set(TIFFLIBS "0")
     else()
-      set( EXTRA_LIBS ${EXTRA_LIBS} ${JPEG_LIBRARY} )
+      set(EXTRA_LIBS ${EXTRA_LIBS} ${JPEG_LIBRARY})
     endif()
     # LZMA
     find_library(LZMA_LIBRARY lzma HINTS /opt/homebrew/lib)
     message("-- LZMA_LIBRARY: ${LZMA_LIBRARY}")
-    if( LZMA_LIBRARY STREQUAL "LZMA_LIBRARY-NOTFOUND" )
+    if(LZMA_LIBRARY STREQUAL "LZMA_LIBRARY-NOTFOUND")
       set(TIFFLIBS "0")
     else()
-      set( EXTRA_LIBS ${EXTRA_LIBS} ${LZMA_LIBRARY} )
+      set(EXTRA_LIBS ${EXTRA_LIBS} ${LZMA_LIBRARY})
     endif()
     # ZLIB
     find_library(Z_LIBRARY z HINTS /opt/homebrew/opt/zlib/lib)
     message("-- Z_LIBRARY: ${Z_LIBRARY}")
-    if( Z_LIBRARY STREQUAL "Z_LIBRARY-NOTFOUND" )
+    if(Z_LIBRARY STREQUAL "Z_LIBRARY-NOTFOUND")
       set(TIFFLIBS "0")
     else()
-      set(EXTRA_LIBS ${EXTRA_LIBS} ${Z_LIBRARY} )
+      set(EXTRA_LIBS ${EXTRA_LIBS} ${Z_LIBRARY})
     endif()
-    if( EXTRA_TIFF_DEPENDENCIES STREQUAL "1")
-      # ZSTDLIB
-      find_library(ZSTD_LIBRARY zstd)
-      message("-- ZSTD_LIBRARY: ${ZSTD_LIBRARY}")
-      if( ZSTD_LIBRARY STREQUAL "ZSTD_LIBRARY-NOTFOUND" )
-        set(TIFFLIBS "0")
-      else()
-        set(EXTRA_LIBS ${EXTRA_LIBS} ${ZSTD_LIBRARY} )
-      endif()
+    if(EXTRA_TIFF_DEPENDENCIES STREQUAL "1")
       if(APPLE)
         # Does not seem required for macos 10+
       else()
+        # ZSTDLIB
+        find_library(ZSTD_LIBRARY zstd)
+        message("-- ZSTD_LIBRARY: ${ZSTD_LIBRARY}")
+        if(ZSTD_LIBRARY STREQUAL "ZSTD_LIBRARY-NOTFOUND")
+          set(TIFFLIBS "0")
+        else()
+          set(EXTRA_LIBS ${EXTRA_LIBS} ${ZSTD_LIBRARY})
+        endif()
         # WEBP
         find_library(WEBP_LIBRARY webp)
         message("-- WEBP_LIBRARY: ${WEBP_LIBRARY}")
-        if( WEBP_LIBRARY STREQUAL "WEBP_LIBRARY-NOTFOUND" )
+        if(WEBP_LIBRARY STREQUAL "WEBP_LIBRARY-NOTFOUND")
           set(TIFFLIBS "0")
         else()
           set(EXTRA_LIBS ${EXTRA_LIBS} ${WEBP_LIBRARY} )
         endif()
         # Deflate
         find_package(TIFF 4.2.0 QUIET)
-        if( TIFF_FOUND )
+        if(TIFF_FOUND)
           find_library(Deflate_LIBRARY deflate)
           message("-- Deflate_LIBRARY: ${Deflate_LIBRARY}")
-          if( Deflate_LIBRARY STREQUAL "Deflate_LIBRARY-NOTFOUND" )
+          if(Deflate_LIBRARY STREQUAL "Deflate_LIBRARY-NOTFOUND")
             set(TIFFLIBS "0")
           else()
             set(EXTRA_LIBS ${EXTRA_LIBS} ${Deflate_LIBRARY} )
@@ -641,7 +642,7 @@ if(USE_LIBTIFF)
       endif()
     endif()
   endif()
-  if( TIFFLIBS STREQUAL "1" )
+  if(TIFFLIBS STREQUAL "1")
     add_definitions("-DUSING_TIFF=1")
     include_directories(${TIFF_INCLUDE_DIR})
     set(EXTRA_LIBS ${EXTRA_LIBS} -lm)
@@ -655,11 +656,9 @@ endif()
 #############################################
 ## COMPLER SPECIFIC SETTINGS
 #############################################
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES "gfortran*" ) #OR Fortran_COMPILER_NAME MATCHES "mpif(90|ort)")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES "gfortran*") #OR Fortran_COMPILER_NAME MATCHES "mpif(90|ort)")
   #############################################
-  #
   ## GNU fortran
-  #
   #############################################
 
   message(STATUS "Executing: ${CMAKE_Fortran_COMPILER} -dumpversion")
@@ -734,9 +733,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES 
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NAME MATCHES "ifx*" OR Fortran_COMPILER_NAME MATCHES "mpiifx*")
   #############################################
-  #
   ## INTEL fortran
-  #
   #############################################
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${MKLROOT}/include/intel64/lp64 -I${MKLROOT}/include/  -assume source_include -diag-enable=openmp,vec,par,error   -I${INTEL_DIR}/include/${INTEL_TARGET_ARCH}")
   if(INTEL_OMP_OVERRIDE)
@@ -781,10 +778,8 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR Fortran_COMPILER_NAM
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")
   #############################################
-  #
   ## Portland Group fortran
   ## NVIDIA PGI Linux compiler
-  #
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
