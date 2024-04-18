@@ -62,24 +62,24 @@ set(OpenMP_Fortran_FLAG_CANDIDATES
   )
 set(OMP_FLAG_GNU "-fopenmp")
 
-set(IFM3 $ENV{SLURM_CLUSTER_NAME})
-if("${IFM3} " STREQUAL "m3 ")
-  message(STATUS "Testing OpenMP on MASSIVE ")
-  message(STATUS "Warning: if cuda module loaded after gcc or openmpi, LDFLAGS will override libstdc++ location. ")
-
-  string(FIND "$ENV{LDFLAGS}" "-L/usr/lib64" OMP_ERROR )
-  if(NOT ${OMP_ERROR} EQUAL -1)
-    message(STATUS " Warning: /usr/lib64 in LDFLAGS ")
-	  message(STATUS " Warning: LDFLAGS=  $ENV{LDFLAGS}" )
-  endif()
-  #  message(STATUS " ${CMAKE_C_COMPILER} ${CMAKE_Fortran_COMPILER}")
-  #    find_package(OpenMP REQUIRED)
-  #    if(OPENMP_FOUND)
-  #    endif()
-  add_definitions("-DUSE_MPIF08_MODULE=0")
-else()
-  add_definitions("-DUSE_MPIF08_MODULE=1")
-endif() # building on MASSIVE
+#set(IFM3 $ENV{SLURM_CLUSTER_NAME})
+#if("${IFM3} " STREQUAL "m3 ")
+#  message(STATUS "Testing OpenMP on MASSIVE ")
+#  message(STATUS "Warning: if cuda module loaded after gcc or openmpi, LDFLAGS will override libstdc++ location. ")
+#
+#  string(FIND "$ENV{LDFLAGS}" "-L/usr/lib64" OMP_ERROR )
+#  if(NOT ${OMP_ERROR} EQUAL -1)
+#    message(STATUS " Warning: /usr/lib64 in LDFLAGS ")
+#	  message(STATUS " Warning: LDFLAGS=  $ENV{LDFLAGS}" )
+#  endif()
+#  #  message(STATUS " ${CMAKE_C_COMPILER} ${CMAKE_Fortran_COMPILER}")
+#  #    find_package(OpenMP REQUIRED)
+#  #    if(OPENMP_FOUND)
+#  #    endif()
+#  add_definitions("-DUSE_MPIF08_MODULE=0")
+#else()
+#  add_definitions("-DUSE_MPIF08_MODULE=1")
+#endif() # building on MASSIVE
 
 
 if(NOT OPENMP_FOUND)
