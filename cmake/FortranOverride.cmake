@@ -6,6 +6,8 @@
 # flags should be set in the CMakeList.txt by setting the CMAKE_Fortran_FLAGS_*
 # variables.
 
+#enable_language(Fortran C CXX)
+
 # Override CMakeDetermineFortranCompiler default fortran of f95
 if(NOT $ENV{FC} STREQUAL "")
   set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
@@ -14,7 +16,6 @@ else()
 endif()
 
 # Override preprocessor in CMakeDetermineCompiler default cpp
-
 if(NOT $ENV{CPP} STREQUAL "")
   set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
 else()
@@ -31,7 +32,7 @@ else()
     #  [CMAKE_FIND_ROOT_PATH_BOTH |
     #   ONLY_CMAKE_FIND_ROOT_PATH |
     #   NO_CMAKE_FIND_ROOT_PATH]
-    )
+  )
   if(NOT EXISTS ${CMAKE_CPP_COMPILER_NAMES})
     set(CMAKE_CPP_COMPILER_NAMES cpp-5)
   endif()
@@ -39,13 +40,13 @@ else()
 endif()
 
 enable_language(Fortran C CXX)
-include(CMakeDetermineFortranCompiler)
-include(CMakeDetermineCompiler)
+#include(CMakeDetermineFortranCompiler)
+#include(CMakeDetermineCompiler)
 # include(CMakeFortranInformation)
 
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
-include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)
-CMAKE_DETERMINE_COMPILER_ABI(Fortran ${CMAKE_ROOT}/Modules/CMakeFortranCompilerABI.F)
+#include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)
+#CMAKE_DETERMINE_COMPILER_ABI(Fortran ${CMAKE_ROOT}/Modules/CMakeFortranCompilerABI.F)
 
 # Test Fortran 2008 support by using a F2008 specific construct.
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08)
@@ -66,13 +67,15 @@ END PROGRAM
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 -- yes")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
       "Determining if the Fortran compiler supports Fortran 2008 passed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_F08 1)
   else()
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 -- no")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
       "Determining if the Fortran compiler supports Fortran 2008 failed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_F08 0)
   endif()
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_F08 CACHE)
@@ -95,22 +98,25 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
             write(error_unit,'(A)') 'JSON-Fortran may be configured to enable UCS4 support.'
             write(output_unit,'(A)') 'UCS4_SUPPORTED'
         end if
-    end program test_iso_10646_support
-")
+    end program test_iso_10646_support"
+  )
   try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 ${CMAKE_BINARY_DIR}
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90
-    OUTPUT_VARIABLE OUTPUT)
+    OUTPUT_VARIABLE OUTPUT
+  )
   if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Unicode 10646 -- yes")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
       "Determining if the Fortran compiler supports Fortran Unicode 10646 passed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 1)
   else()
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Unicode 10646 -- no")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
       "Determining if the Fortran compiler supports Fortran 2008 failed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 0)
   endif()
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 CACHE)
@@ -168,7 +174,6 @@ end program test_iso_support
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV CACHE)
 endif()
 
-
 # Test Fortran preprocessor support for variadic macros
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
   message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports variadic macros")
@@ -185,26 +190,28 @@ end program dummyprog
 ")
   try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC ${CMAKE_BINARY_DIR}
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCPPCompilerVariadic.f90
-    OUTPUT_VARIABLE OUTPUT)
+    OUTPUT_VARIABLE OUTPUT
+  )
   if(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports variadic macros -- yes")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
       "Determining if the Fortran compiler supports variadic macros passed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC 1)
   else()
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran variadic macros -- no")
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
       "Determining if the Fortran compiler supports variadic macros failed with "
-      "the following output:\n${OUTPUT}\n\n")
+      "the following output:\n${OUTPUT}\n\n"
+    )
     set(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC 0)
   endif()
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC CACHE)
 endif()
 
-
 # If user specifies the build type, use theirs, otherwise use release
-if (NOT DEFINED CMAKE_BUILD_TYPE)
+if(NOT DEFINED CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING "")
 endif()
 
@@ -212,10 +219,9 @@ endif()
 if(" ${CMAKE_SOURCE_DIR}" STREQUAL " ${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "
 FATAL: In-source builds are not allowed.
-       You should create separate directory for build files.
-")
+       You should create separate directory for build files."
+  )
 endif()
-
 
 # Look at system to see what if any options are available because
 # of build environment
@@ -267,19 +273,36 @@ endif()
 
 ###########  SETTING UP PROCESSING FLAGS ################
 #include(PlatformDefines)
-
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
+
+## GNU
+
+## Flang
+
+## LLMFlang
+
+## Intel
+
+## IntelLLVM
+
+## NVHPC
+
+## PGI
+
+
+## GNU
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  message(STATUS " GNU Compiler settings: default USE_CUDA=ON")
   # gfortran
-  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                # preprocessor flags
-  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none  -fno-second-underscore")  # language style
+  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                   # preprocessor flags
+  set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none  -fno-second-underscore")    # language style
   set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant ")
   #-Wconversion, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow -Wtarget-lifetime
   #-Wcompare-reals, -Wunused-parameter and -Wdo-subscript
   set(checks   "-frange-check -fstack-protector -fstack-check -fbounds-check -fcheck=all -fcheck=array-temps ")                # checks
-  set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                # optimisation
-  set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
-  set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
+  set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                   # optimization
+  set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                      # parallel flags
+  set(target   "${GNUNATIVE} -fPIC ")                                                              # target platform
   if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
       if( USE_AFM )
           set(target "${target} -std=gnu -fall-intrinsics -Wintrinsics-std")
@@ -297,13 +320,15 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   endif()
   set(common   "${preproc} ${dialect} ${target} ${warn}")
   set(warnDebug "-Wall -Wcompare-reals -Wtype-limits -Wuninitialized -Wunused-but-set-parameter -Wimplicit-interface -Wno-unused-dummy-argument -Wno-unused-value -Wno-surprising")     # extra warning flag
-  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}")    # debug flags
+  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ${checks}") # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
   set(cstd   "-std=${C_DIALECT}11" )
   set(cppstd "-std=${C_DIALECT}++14" )
   option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
+
+## PGI
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
@@ -469,34 +494,40 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
 #################################################################
 # CONFIGURATION TYPES & BUILD MODE
 #################################################################
-set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO )
+set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
     "Choose the type of build, options are: NONE DEBUG RELEASE RELWITHDEBINFO"
-    FORCE)
+    FORCE
+  )
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE RELWITHDEBINFO TESTING)
 endif(NOT CMAKE_BUILD_TYPE)
 
 if(BT STREQUAL "RELEASE")
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
+    FORCE
+  )
 elseif(BT STREQUAL "DEBUG")
   set(CMAKE_BUILD_TYPE DEBUG CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
+    FORCE
+  )
 elseif(BT STREQUAL "RELWITHDEBINFO")
   set(CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
-    FORCE)
+    FORCE
+  )
 elseif(BT STREQUAL "TESTING")
   set(CMAKE_BUILD_TYPE TESTING CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
+    FORCE
+  )
 elseif(NOT BT)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-    FORCE)
+    FORCE
+  )
   message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
 else()
   message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
