@@ -677,8 +677,6 @@ contains
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 5
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
-        integer, parameter :: MAXITS_GLOB_LP_SET = MAXITS1 + MAXITS2 * 2
-        integer, parameter :: MAXITS_GLOB = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
         integer, parameter :: MLREG_ITER     = 3 ! in [2;5]
@@ -700,7 +698,7 @@ contains
         character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
         character(len=LONGSTRLEN)     :: vol_str
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
-        integer :: iter, it, prev_box_crop, maxits, state
+        integer :: iter, it, prev_box_crop, maxits, state, frac_maxits_incr, maxits_glob
         logical :: l_autoscale, l_lpset, l_err, l_srch4symaxis, l_symran, l_sym, l_lpstop_set
         logical :: l_lpstart_set
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',        'yes')
@@ -730,12 +728,21 @@ contains
             if( .not.l_lpstop_set  ) call cline%set('lpstop', LPSTOP_DEFAULT)
         endif
         ! make master parameters
+        if( cline%defined('update_frac') ) call cline%delete('stoch_update')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call cline%delete('autoscale')
         call cline%delete('lpstart')
         call cline%delete('lpstop')
         call cline%delete('lp')
+        frac_maxits_incr = 0
+        maxits_glob      = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
+        if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
+            ! adjusting number ot iterations for frac_update alone
+            call cline%set('mov_avg_vol', 'yes')
+            frac_maxits_incr = max(2,min(10,nint(1./params%update_frac)))
+            maxits_glob      = maxits_glob + (NSTAGES+1)*frac_maxits_incr
+        endif
         if( l_lpset )then
             params%lpstop  = params%lp
             params%lpstart = params%lp
@@ -915,8 +922,9 @@ contains
             ! # of iterations
             maxits = MAXITS_SHORT1
             if( it >= NSTAGES-1 ) maxits = MAXITS_SHORT2
+            maxits = maxits + frac_maxits_incr
             call cline_refine3D%set('maxits',      maxits)
-            call cline_refine3D%set('maxits_glob', MAXITS_GLOB)
+            call cline_refine3D%set('maxits_glob', maxits_glob)
             call cline_refine3D%set('lp_iters',    maxits)
             ! projection directions & shift
             if( it < NSTAGES )then
@@ -926,7 +934,9 @@ contains
                 call cline_refine3D%set('nspace', NSPACE2)
                 call cline_refine3D%set('trs',    trslim)
             end if
-            call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
+            if( params%l_stoch_update )then
+                call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
+            endif
             ! ML volume regularization
             if( params%l_ml_reg .and. it >= MLREG_ITER )then
                 call cline_refine3D%set('ml_reg', 'yes')
@@ -991,10 +1001,12 @@ contains
         call cline_refine3D%set('lp',         params%lpstop)
         call cline_refine3D%set('trs',        trslim)
         call cline_refine3D%set('startit',    iter+1)
-        call cline_refine3D%set('maxits',     MAXITS2)
-        call cline_refine3D%set('lp_iters',   MAXITS2)
+        call cline_refine3D%set('maxits',     MAXITS2+frac_maxits_incr)
+        call cline_refine3D%set('lp_iters',   MAXITS2+frac_maxits_incr)
         call cline_refine3D%set('nspace',     NSPACE3)
-        call cline_refine3D%set('it_history',       3) ! particles sampled in three most recent past iterations also included in rec
+        if( params%l_stoch_update )then
+            call cline_refine3D%set('it_history', 3) ! particles sampled in three most recent past iterations also included in rec
+        endif
         call cline_refine3D%set('mov_avg_vol',  'yes')
         ! execution
         call exec_refine3D(iter)
@@ -1004,7 +1016,7 @@ contains
             call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
             call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
             call final_vol%generate_orthogonal_reprojs(reprojs)
-            call reprojs%write_jpg('orthogonal_reprojs.jpg')
+            call reprojs%write_jpg('orthogonal_reprojs_state'//trim(str_state)//'.jpg')
             call final_vol%kill
             call reprojs%kill
         enddo

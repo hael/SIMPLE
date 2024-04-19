@@ -116,7 +116,7 @@ contains
                         call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
                                                  &nptcls2update, pinds, ptcl_mask)
                     else                                                 ! we generate a random subset
-                        call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                        call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
                         &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
                     endif
                 endif
@@ -355,7 +355,7 @@ contains
             case DEFAULT
                 if( L_BENCH_GLOB ) t_rec = tic()
                 if( params_glob%l_frac_update )then
-                    if( params_glob%it_history > 0 )then
+                    if( params_glob%l_stoch_update .and. params_glob%it_history > 0 )then
                         ! re-sample indices
                         call build_glob%spproj_field%sample4update_history([params_glob%fromp,params_glob%top],&
                         params_glob%it_history, nptcls2update, pinds, ptcl_mask)

@@ -410,9 +410,15 @@ contains
                 call build_glob%eorecvols(istate)%reset_all
                 if( params_glob%l_mov_avg_vol )then
                     fbody = trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//part_str
-                    if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then  
+                    if( params_glob%l_frac_update .and. .not.params_glob%l_stoch_update )then
                         call build_glob%eorecvols(istate)%read_eos(fbody)
+                        call build_glob%eorecvols(istate)%apply_weight(1.-params_glob%update_frac)
                         call build_glob%eorecvols(istate)%expand_exp
+                    else
+                        if( build_glob%eorecvols(istate)%ldim_even_match(fbody) )then
+                            call build_glob%eorecvols(istate)%read_eos(fbody)
+                            call build_glob%eorecvols(istate)%expand_exp
+                        endif
                     endif
                 endif
             endif

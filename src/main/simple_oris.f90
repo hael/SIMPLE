@@ -83,7 +83,7 @@ type :: oris
     procedure          :: print_
     procedure          :: print_matrices
     procedure          :: sample4update_all
-    procedure          :: sample4update_rnd
+    procedure          :: sample4update_rnd, sample4update_rnd2
     procedure          :: sample4update_reprod
     procedure, private :: sample4update_history_1
     procedure, private :: sample4update_history_2
@@ -1287,6 +1287,73 @@ contains
         end do
     end subroutine sample4update_all
 
+    subroutine sample4update_rnd2( self, fromto, update_frac, nsamples, inds, mask, incr_sampled )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        real,                 intent(in)    :: update_frac
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
+        logical,              intent(in)    :: incr_sampled
+        type(ran_tabu)       :: rt
+        integer, allocatable :: sampled(:), vec(:)
+        logical, allocatable :: l_states(:)
+        integer :: i, cnt, nptcls, n_nonzero, s, n2sample, nsampled, mins, maxs, ns
+        nptcls = fromto(2) - fromto(1) + 1
+        if( allocated(inds) ) deallocate(inds)
+        allocate(inds(nptcls), sampled(nptcls), source=0)
+        allocate(l_states(nptcls))
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            cnt           = cnt + 1
+            l_states(cnt) = self%o(i)%get_state() > 0
+            sampled(cnt)  = self%o(i)%get_sampled()
+            inds(cnt)     = i
+        end do
+        mask      = .false.
+        n_nonzero = count(l_states)
+        n2sample  = max(1, min(n_nonzero, nint(update_frac*real(n_nonzero))))
+        mins      = minval(sampled, mask=l_states)
+        maxs      = maxval(sampled, mask=l_states)
+        do s = mins,maxs
+            nsampled = count(mask)                  ! sampled so far
+            n2sample = n2sample - nsampled          ! needed
+            if( n2sample < 1 ) exit
+            ns = count(sampled==s .and. l_states)   ! available to sample
+            if( ns <= n2sample )then
+                ! less particles available then needed: take all
+                do i = 1,nptcls
+                    if( .not.l_states(i) ) cycle
+                    if( sampled(inds(i))==s ) mask(inds(i)) = .true.
+                enddo
+            else
+                ! more particles than needed: select randomly
+                rt = ran_tabu(ns)
+                allocate(vec(ns),source=0)
+                cnt = 0
+                do i = 1,nptcls
+                    if( .not.l_states(i) ) cycle
+                    if( sampled(i)==s )then
+                        cnt      = cnt + 1
+                        vec(cnt) = i
+                    endif
+                enddo
+                call rt%shuffle(vec)
+                call rt%kill
+                mask(inds(vec(1:n2sample))) = .true.
+                deallocate(vec)
+            endif
+        enddo
+        inds = pack(inds,mask=l_states)
+        if( incr_sampled )then
+            do i = fromto(1), fromto(2)
+                if( mask(i) )then
+                    call self%o(i)%set('sampled', real(maxs+1))
+                endif
+            end do
+        endif
+    end subroutine sample4update_rnd2
+
     subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, mask, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1436,9 +1503,11 @@ contains
         integer :: i
         has_been_sampled =.false.
         do i = 1,self%n
-            if( nint(self%o(i)%get('sampled')) > 0 )then
-                has_been_sampled = .true.
-                exit
+            if( self%o(i)%get_state() > 0 )then
+                if( nint(self%o(i)%get('sampled')) > 0 )then
+                    has_been_sampled = .true.
+                    exit
+                endif
             endif
         end do
     end function has_been_sampled
