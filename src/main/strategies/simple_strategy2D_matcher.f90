@@ -104,7 +104,7 @@ contains
             endif
             l_greedy      = trim(params_glob%refine).eq.'greedy'
             l_greedy_smpl = trim(params_glob%refine).eq.'greedy_smpl'
-            l_snhc_smpl   = trim(params_glob%refine).eq.'snhc_smpl'
+            l_snhc_smpl   = .false. ! defaults to snhc
         endif
         if( l_stream )then
             l_frac_update              = .false.
@@ -136,7 +136,7 @@ contains
                     call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
                                             &nptcls2update, pinds, ptcl_mask)
                 else                                                 ! we generate a random subset
-                    call build_glob%spproj_field%sample4update_rnd([params_glob%fromp,params_glob%top],&
+                    call build_glob%spproj_field%sample4update_rnd2([params_glob%fromp,params_glob%top],&
                     &params_glob%update_frac, nptcls2update, pinds, ptcl_mask, .true.) ! sampled incremented
                 endif
             else                                                     ! we sample all state > 0

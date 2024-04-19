@@ -818,7 +818,7 @@ contains
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
         if( allocated(val) ) deallocate(val)
-        val = self%chtab%get(key)
+        allocate(val,source=trim(self%chtab%get(key)))
     end subroutine getter_1
 
     subroutine getter_2( self, key, val )

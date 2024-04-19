@@ -1216,9 +1216,7 @@ contains
                 self%update_frac = real(inv_nsampl_decay(self%which_iter, self%maxits,      self%nptcls)) / real(self%nptcls)
             endif
             call cline%set('update_frac', self%update_frac)
-        endif
-        ! iteration history for sampling particles for 3D reconstruction
-        if( self%l_frac_update )then
+            ! iteration history for sampling particles for 3D reconstruction
             if( cline%defined('it_history') )then
                 if( self%it_history > 3 .or. self%it_history < 1 ) THROW_HARD('it_history out of range, select within [0,3]')
             else
@@ -1238,6 +1236,10 @@ contains
                     case DEFAULT
                         self%l_mov_avg_vol = .true.
                 end select
+            endif
+        else
+            if( self%l_frac_update .and. cline%defined('mov_avg_vol') )then
+                self%l_mov_avg_vol = trim(self%mov_avg_vol) .ne. 'no'
             endif
         endif
         if( .not. cline%defined('ncunits') )then

@@ -982,12 +982,8 @@ contains
                 call build%spproj_field%sample4update_rnd([1,params%nptcls],&
                 &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
             else
-                if( build%spproj_field%has_been_sampled() )then ! we have a random subset
-                    call build%spproj_field%sample4update_reprod([1,params%nptcls], nptcls, pinds, ptcl_mask)
-                else                                            ! we generate a random subset
-                    call build%spproj_field%sample4update_rnd([1,params%nptcls],&
-                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-                endif
+                call build%spproj_field%sample4update_rnd2([1,params%nptcls],&
+                &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
             endif            
         else                                                    ! we sample all state > 0
             call build%spproj_field%sample4update_all([1,params%nptcls],&
