@@ -92,9 +92,7 @@ include(SimpleFortranOptions)
 
 # Configurations RELEASE, DEBUG 
 ############################################################
-#
 # Add definition macros unique to compilation
-#
 ############################################################
 add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
 add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
@@ -148,7 +146,7 @@ endif()
 # Add a distclean target to the Makefile
 add_custom_target(distclean
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/distclean.cmake
-  )
+)
 
 # here we save a version file
 set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVersion.cmake")
@@ -157,13 +155,15 @@ configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.
 # modules / depends
 file(GLOB_RECURSE SIMPLE_CMAKE_FILES
   LIST_DIRECTORIES false
-  RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
+  RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" 
+)
 list(REMOVE_DUPLICATES SIMPLE_CMAKE_FILES)
 install(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
   CONFIGURATIONS DEBUG
-  COMPONENT dev)
+  COMPONENT dev
+)
 
 message( STATUS "Set runtime variables. ")
 if(NOT BUILD_SHARED_LIBS)
@@ -177,7 +177,7 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   DESTINATION ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
   PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
-  )
+)
 
 if(${BUILD_DOCS})
 
