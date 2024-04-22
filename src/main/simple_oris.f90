@@ -401,11 +401,12 @@ contains
         class(oris),       intent(in) :: self
         character(len=*),  intent(in) :: key
         integer, optional, intent(in) :: state
-        real, allocatable :: arr(:), sampled(:), states(:)
+        real,    allocatable :: arr(:), sampled(:)
+        integer, allocatable :: states(:)
         integer :: i
         real    :: lb
         allocate(arr(self%n), sampled(self%n), source=0.)
-        if( present(state) ) states = self%get_all('state')
+        if( present(state) ) states = nint(self%get_all('state'))
         do i=1,self%n
             arr(i)     = self%o(i)%get(key)
             sampled(i) = self%o(i)%get('sampled')
@@ -1313,6 +1314,7 @@ contains
         mask      = .false.
         n_nonzero = count(l_states)
         n2sample  = max(1, min(n_nonzero, nint(update_frac*real(n_nonzero))))
+        nsamples  = n2sample
         mins      = minval(sampled, mask=l_states)
         maxs      = maxval(sampled, mask=l_states)
         do s = mins,maxs
@@ -1344,14 +1346,16 @@ contains
                 deallocate(vec)
             endif
         enddo
-        inds = pack(inds,mask=l_states)
-        if( incr_sampled )then
-            do i = fromto(1), fromto(2)
-                if( mask(i) )then
-                    call self%o(i)%set('sampled', real(maxs+1))
-                endif
-            end do
-        endif
+        deallocate(inds)
+        allocate(inds(nsamples))
+        cnt = 0
+        do i = fromto(1), fromto(2)
+            if( mask(i) )then
+                cnt = cnt+1
+                inds(cnt) = i
+                if( incr_sampled ) call self%o(i)%set('sampled', real(maxs+1))
+            endif
+        end do
     end subroutine sample4update_rnd2
 
     subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, mask, incr_sampled )
