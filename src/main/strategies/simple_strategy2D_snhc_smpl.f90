@@ -2,7 +2,7 @@ module simple_strategy2D_snhc_smpl
 include 'simple_lib.f08'
 use simple_strategy2D_alloc  ! singleton
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_strategy2D_srch,  only: strategy2D_spec, squared_sampling
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
@@ -30,71 +30,55 @@ contains
     end subroutine new_snhc_smpl
 
     subroutine srch_snhc_smpl( self )
-        use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_snhc_smpl), intent(inout) :: self
-        integer :: inds(self%s%nrots), iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound, nrefs
-        real    :: inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots), inpl_corr, cc_glob
-        logical :: found_better
+        real    :: inpl_corrs(self%s%nrots), sorted_cls_corrs(self%s%nrefs), cls_corrs(self%s%nrefs)
+        real    :: cxy(3), inpl_corr
+        integer :: cls_inpl_inds(self%s%nrefs), vec_nrots(self%s%nrots), sorted_cls_inds(self%s%nrefs)
+        integer :: iref, isample, inpl_ind, order_ind
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            cc_glob      = -huge(cc_glob)
-            found_better = .false.
-            nrefs        = self%s%nrefs
-            nrefs_bound  = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)))
-            nrefs_bound  = max(2, nrefs_bound)
-            do isample=1,self%s%nrefs
-                ! stochastic reference index
+            ! Class search
+            cls_corrs     = -1.
+            cls_inpl_inds = 0
+            do isample = 1,self%s%nrefs
                 iref = s2D%srch_order(self%s%iptcl_map, isample)
-                ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
-                ! neighbourhood size
-                if(self%s%nrefs_eval > nrefs_bound) exit
-                ! passes empty classes
+                if(self%s%nrefs_eval > s2D%snhc_nrefs_bound) exit
                 if( s2D%cls_pops(iref) == 0 )cycle
-                ! multinomal in-plane update
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                inpl_ind  = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
-                inpl_corr = inpl_corrs(inpl_ind)
-                ! keep track of global best
-                if( inpl_corr > cc_glob )then
-                    cc_glob       = inpl_corr
-                    class_glob    = iref
-                    inpl_glob     = inpl_ind
-                endif
-                ! improvement found (hill climbing over classes)
-                if( inpl_corr > self%s%prev_corr ) found_better = .true.
-                ! first improvement heuristic
-                if( found_better ) exit
+                call squared_sampling( self%s%nrots, inpl_corrs, vec_nrots,&
+                                        &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
+                cls_corrs(iref)     = inpl_corr
+                cls_inpl_inds(iref) = inpl_ind
             end do
-            ! updates solution
-            self%s%best_class = class_glob
-            self%s%best_corr  = cc_glob
-            self%s%best_rot   = inpl_glob
-            if( params_glob%cc_objfun == OBJFUN_CC .and. params_glob%l_kweight_rot )then
-                ! back-calculating in-plane angle with k-weighing
-                if( found_better )then
-                    call pftcc_glob%gencorrs(self%s%prev_class, self%s%iptcl, inpl_corrs, kweight=.true.)
-                    self%s%prev_corr = inpl_corrs(self%s%prev_rot) ! updated threshold
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, inpl_corrs, kweight=.true.)
-                    inpl_ind  = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
-                    inpl_corr = inpl_corrs(inpl_ind)
-                    if( inpl_corr > self%s%prev_corr )then
-                        ! improvement found
-                    else
-                        ! defaults to best
-                        inpl_ind = maxloc(inpl_corrs, dim=1)
+            if( s2D%do_inplsrch(self%s%iptcl_map) )then
+                sorted_cls_corrs = cls_corrs
+                sorted_cls_inds  = (/(iref,iref=1,self%s%nrefs)/)
+                call hpsort(sorted_cls_corrs, sorted_cls_inds)
+                cls_corrs = -1.
+                do isample = self%s%nrefs-s2D%snhc_smpl_ncls+1,self%s%nrefs
+                    iref = sorted_cls_inds(isample)
+                    if( s2D%cls_pops(iref) == 0 ) cycle
+                    call self%s%grad_shsrch_obj2%set_indices(iref, self%s%iptcl)
+                    inpl_ind = cls_inpl_inds(iref)
+                    cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
+                    if( inpl_ind == 0 )then
+                        inpl_ind = cls_inpl_inds(iref)
+                        cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], inpl_ind))
+                        cxy(2:3) = 0.
                     endif
-                    self%s%best_rot  = inpl_ind
-                    self%s%best_corr = inpl_corr
-                else
-                    call pftcc_glob%gencorrs(self%s%best_class, self%s%iptcl, inpl_corrs, kweight=.true.)
-                    self%s%best_rot  = maxloc(inpl_corrs, dim=1)
-                    self%s%best_corr = inpl_corrs(self%s%best_rot)
-                endif
+                    cls_corrs(iref) = cxy(1)
+                enddo
             endif
+            ! Class selection
+            call squared_sampling( self%s%nrefs, cls_corrs, sorted_cls_inds, s2D%snhc_smpl_ncls,&
+                                    &self%s%best_class, self%s%nrefs_eval, self%s%best_corr )
+            ! In-plane angle
+            self%s%best_rot = cls_inpl_inds(self%s%best_class)
+            ! In-plane search
             call self%s%inpl_srch
-            nrefs_bound = min(nrefs, nrefs_bound+1)
-            call self%s%store_solution(nrefs=nrefs_bound)
+            ! Updates solution
+            call self%s%store_solution
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

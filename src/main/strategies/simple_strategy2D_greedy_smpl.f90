@@ -2,7 +2,7 @@ module simple_strategy2D_greedy_smpl
 include 'simple_lib.f08'
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_spec
+use simple_strategy2D_srch,  only: strategy2D_spec, squared_sampling
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
@@ -33,8 +33,9 @@ contains
         use simple_eul_prob_tab, only: angle_sampling, eulprob_dist_switch
         class(strategy2D_greedy_smpl), intent(inout) :: self
         integer :: refs_inds(self%s%nrefs), refs_inplinds(self%s%nrefs), inds(self%s%nrots)
-        integer :: iref, inpl_ind, isample
-        real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), sorted_inpl_corrs(self%s%nrots), cxy(3)
+        integer :: iref, inpl_ind, isample, order_ind
+        real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), cxy(3)
+        real    :: inpl_corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             do iref = 1,self%s%nrefs
@@ -44,9 +45,10 @@ contains
                     refs_inplinds(iref) = 0
                 else
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    inpl_ind = angle_sampling(eulprob_dist_switch(inpl_corrs), sorted_inpl_corrs, inds, s2D%smpl_inpl_athres)
+                    call squared_sampling(self%s%nrots, inpl_corrs, inds,&
+                                        &s2D%smpl_ninpl, inpl_ind, order_ind, inpl_corr)
                     refs_inplinds(iref) = inpl_ind
-                    refs_corrs(iref)    = inpl_corrs(inpl_ind)
+                    refs_corrs(iref)    = inpl_corr
                 endif
             enddo
             self%s%best_class = maxloc(refs_corrs,dim=1)
@@ -55,19 +57,19 @@ contains
             if( s2D%do_inplsrch(self%s%iptcl_map) )then
                 call hpsort(refs_corrs, refs_inds)
                 self%s%best_corr = -1.
-                do isample = self%s%nrefs-s2D%smpl_nrefs_bound+1,self%s%nrefs
+                do isample = self%s%nrefs-s2D%smpl_ncls+1,self%s%nrefs
                     iref = refs_inds(isample)
                     if( s2D%cls_pops(iref) == 0 ) cycle
-                    call self%s%grad_shsrch_obj%set_indices(iref, self%s%iptcl)
-                    if( self%s%grad_shsrch_obj%does_opt_angle() )then
-                        cxy = self%s%grad_shsrch_obj%minimize(irot=inpl_ind)
+                    call self%s%grad_shsrch_obj2%set_indices(iref, self%s%iptcl)
+                    if( self%s%grad_shsrch_obj2%does_opt_angle() )then
+                        cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                         if( inpl_ind == 0 )then
                             inpl_ind = refs_inplinds(iref)
                             cxy      = [refs_corrs(isample), 0., 0.]
                         endif
                     else
                         inpl_ind = refs_inplinds(iref)
-                        cxy      = self%s%grad_shsrch_obj%minimize(irot=inpl_ind)
+                        cxy      = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
                         if( inpl_ind == 0 )then
                             inpl_ind = refs_inplinds(iref)
                             cxy(1)   = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], inpl_ind))
@@ -82,6 +84,7 @@ contains
                     endif
                 enddo
             endif
+            call self%s%inpl_srch
             self%s%nrefs_eval = self%s%nrefs
             call self%s%store_solution
         else

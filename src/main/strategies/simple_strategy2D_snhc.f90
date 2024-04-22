@@ -31,23 +31,20 @@ contains
 
     subroutine srch_snhc( self )
         class(strategy2D_snhc), intent(inout) :: self
-        integer :: iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound, nrefs
+        integer :: iref, isample, inpl_ind, class_glob, inpl_glob
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
         logical :: found_better
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             cc_glob      = -huge(cc_glob)
             found_better = .false.
-            nrefs        = self%s%nrefs
-            nrefs_bound  = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)))
-            nrefs_bound  = max(2, nrefs_bound)
             do isample=1,self%s%nrefs
                 ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_map, isample)
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! neighbourhood size
-                if(self%s%nrefs_eval > nrefs_bound) exit
+                if(self%s%nrefs_eval > s2D%snhc_nrefs_bound) exit
                 ! passes empty classes
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! shc update
@@ -105,8 +102,7 @@ contains
                 endif
             endif
             call self%s%inpl_srch
-            nrefs_bound = min(nrefs, nrefs_bound+1)
-            call self%s%store_solution(nrefs=nrefs_bound)
+            call self%s%store_solution(nrefs=min(self%s%nrefs, s2D%snhc_nrefs_bound+1))
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
