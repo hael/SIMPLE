@@ -2,7 +2,6 @@
 
 # /*C++ comment style not allowed*/
 
-
 # if you are building in-source, this is the same as CMAKE_SOURCE_DIR, otherwise
 # this is the top level directory of your build tree
 message( STATUS "CMAKE_BINARY_DIR:         " ${CMAKE_BINARY_DIR} )
@@ -60,23 +59,23 @@ message( STATUS "WIN32: " ${WIN32} )
 # is TRUE on Apple OS X
 message( STATUS "APPLE: " ${APPLE} )
 if(WIN32)
-  # is TRUE when using the MinGW compiler in Windows
-  message( STATUS "MINGW: " ${MINGW} )
-
-  # is TRUE on Windows when using the CygWin version of cmake
-  message( STATUS "CYGWIN: " ${CYGWIN} )
-
-  # is TRUE on Windows when using a Borland compiler
-  message( STATUS "BORLAND: " ${BORLAND} )
-
-  # Microsoft compiler
-  message( STATUS "MSVC: " ${MSVC} )
-  message( STATUS "MSVC_IDE: " ${MSVC_IDE} )
-  message( STATUS "MSVC60: " ${MSVC60} )
-  message( STATUS "MSVC70: " ${MSVC70} )
-  message( STATUS "MSVC71: " ${MSVC71} )
-  message( STATUS "MSVC80: " ${MSVC80} )
-  message( STATUS "CMAKE_COMPILER_2005: " ${CMAKE_COMPILER_2005} )
+    # is TRUE when using the MinGW compiler in Windows
+    message( STATUS "MINGW: " ${MINGW} )
+ 
+    # is TRUE on Windows when using the CygWin version of cmake
+    message( STATUS "CYGWIN: " ${CYGWIN} )
+ 
+    # is TRUE on Windows when using a Borland compiler
+    message( STATUS "BORLAND: " ${BORLAND} )
+ 
+    # Microsoft compiler
+    message( STATUS "MSVC: " ${MSVC} )
+    message( STATUS "MSVC_IDE: " ${MSVC_IDE} )
+    message( STATUS "MSVC60: " ${MSVC60} )
+    message( STATUS "MSVC70: " ${MSVC70} )
+    message( STATUS "MSVC71: " ${MSVC71} )
+    message( STATUS "MSVC80: " ${MSVC80} )
+    message( STATUS "CMAKE_COMPILER_2005: " ${CMAKE_COMPILER_2005} )
 endif()
 
 # set this to true if you don't want to rebuild the object files if the rules have changed,
@@ -131,7 +130,7 @@ message( STATUS "CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS} )
 message( STATUS "CMAKE_Fortran_COMPILER: " ${CMAKE_Fortran_COMPILER} )
 message( STATUS "CMAKE_Fortran_COMPILER_VERSION: " ${CMAKE_Fortran_COMPILER_VERSION} )
 
-# fortran flags
+# Fortran flags
 message( STATUS "CMAKE_Fortran_FLAGS_INIT: " ${CMAKE_Fortran_FLAGS_INIT})
 message( STATUS "CMAKE_Fortran_FLAGS: " ${CMAKE_Fortran_FLAGS})
 message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: " ${CMAKE_Fortran_FLAGS_RELEASE_INIT})
@@ -159,7 +158,5 @@ message( STATUS "EXTRA_LIBS: " ${EXTRA_LIBS})
 # this is the top level directory of your build tree
 message( STATUS "CMAKE_INSTALL_PREFIX:         " ${CMAKE_INSTALL_PREFIX} )
 
-#
 #MESSAGE( STATUS ": " ${} )
-
 # ------------------------- End of Generic CMake Variable Logging ------------------

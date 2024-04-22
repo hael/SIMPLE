@@ -1,25 +1,25 @@
 # - Find FFTW
 # Find the native FFTW includes and library
 #
-#  FFTW_INCLUDES    - where to find fftw3.h
+#  FFTW_INCLUDES    - Where to find fftw3.h
 #  FFTW_LIBRARIES   - List of libraries when using FFTW.
 #  FFTW_FOUND       - True if FFTW found.
 
-# if (FFTW_INCLUDES)
+# if(FFTW_INCLUDES)
 #   # Already in cache, be silent
 #   set (FFTW_FIND_QUIETLY TRUE)
-# endif (FFTW_INCLUDES)
+# endif(FFTW_INCLUDES)
 
-# find_path (FFTW_INCLUDES fftw3.h)
+# find_path(FFTW_INCLUDES fftw3.h)
 
-# find_library (FFTW_LIBRARIES NAMES fftw3)
+# find_library(FFTW_LIBRARIES NAMES fftw3)
 
 # # handle the QUIETLY and REQUIRED arguments and set FFTW_FOUND to TRUE if
 # # all listed variables are TRUE
-# include (FindPackageHandleStandardArgs)
-# find_package_handle_standard_args (FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDES)
+# include(FindPackageHandleStandardArgs)
+# find_package_handle_standard_args(FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDES)
 
-# mark_as_advanced (FFTW_LIBRARIES FFTW_INCLUDES)
+# mark_as_advanced(FFTW_LIBRARIES FFTW_INCLUDES)
 
 
 
@@ -92,9 +92,9 @@ find_path(FFTW_INCLUDE_DIRS
         /sw/include                 #Fink
         /usr/opt/local/include
 )
-mark_as_advanced( FFTW_INCLUDE_DIRS )
+mark_as_advanced(FFTW_INCLUDE_DIRS)
 
-find_library( FFTW_SINGLE_PRECISION_LIBRARIES
+find_library(FFTW_SINGLE_PRECISION_LIBRARIES
     NAMES fftw3f libfftw3f libfftw3f-3
     HINTS
         ${FFTW_ROOT}/lib
@@ -118,9 +118,9 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         /sw/lib                      # Fink
     DOC "FFTW dynamic library -- single precision, serial"
 )
-mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
+mark_as_advanced(FFTW_SINGLE_PRECISION_LIBRARIES)
 
-find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
+find_library(FFTW_DOUBLE_PRECISION_LIBRARIES
     NAMES fftw3 libfftw3 libfftw3-3
     HINTS
         ${FFTW_ROOT}/lib
@@ -135,7 +135,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ENV FFTWLIB
         $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
-         ${FFTWDIR}/lib
+        ${FFTWDIR}/lib
         /usr/lib
         /usr/lib/x86_64-linux-gnu
         /usr/local/lib
@@ -144,7 +144,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         ${FFTWDIR}/lib
     DOC "FFTW dynamic library - double precision serial"
 )
-mark_as_advanced( FFTW_DOUBLE_PRECISION_LIBRARIES )
+mark_as_advanced(FFTW_DOUBLE_PRECISION_LIBRARIES)
 
 find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
     NAMES fftw3f_threads libfftw3f_threads libfftw3f-3_threads
@@ -211,15 +211,15 @@ set(FFTW_LIBRARIES ${FFTW_SINGLE_PRECISION_LIBRARIES}
   ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}
   #${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}
   )
-mark_as_advanced( FFTW_LIBRARIES )
+mark_as_advanced(FFTW_LIBRARIES)
 
-include( FindPackageHandleStandardArgs )
+include(FindPackageHandleStandardArgs )
 FIND_PACKAGE_HANDLE_STANDARD_ARGS( FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDE_DIRS )
 
-if( NOT FFTW_FOUND )
-  message( STATUS "Error FFTW not found")
-  message( STATUS "FindFFTW looked for single precision libraries -- :  ${FFTW_SINGLE_PRECISION_LIBRARIES}" )
-  message( STATUS "FindFFTW looked for double precision libraries -- :  ${FFTW_DOUBLE_PRECISION_LIBRARIES}" )
-  message( STATUS "FindFFTW looked for single precision threaded libraries -- :  ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}" )
-  #message( STATUS "FindFFTW looked for double precision threaded libraries -- :  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}" )
+if(NOT FFTW_FOUND)
+    message( STATUS "Error FFTW not found")
+    message( STATUS "FindFFTW looked for single precision libraries -- :  ${FFTW_SINGLE_PRECISION_LIBRARIES}" )
+    message( STATUS "FindFFTW looked for double precision libraries -- :  ${FFTW_DOUBLE_PRECISION_LIBRARIES}" )
+    message( STATUS "FindFFTW looked for single precision threaded libraries -- :  ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}" )
+    #message( STATUS "FindFFTW looked for double precision threaded libraries -- :  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}" )
 endif()

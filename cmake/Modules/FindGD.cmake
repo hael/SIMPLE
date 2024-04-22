@@ -57,109 +57,110 @@
 #  License text for the above reference.)
 
 if(GD_FIND_QUIETLY)
-  set(_FIND_PNG_ARG QUIET)
+    set(_FIND_PNG_ARG QUIET)
 endif()
 find_package(PNG ${_FIND_PNG_ARG})
 
 if(PNG_FOUND)
-  find_path(GD_GD_INCLUDE_DIR gd.h
-    /usr/include
-    /usr/local/include             # OpenBSD
-    /opt/sw/include
+    find_path(GD_GD_INCLUDE_DIR gd.h
+        /usr/include
+        /usr/local/include             # OpenBSD
+        /opt/sw/include
     )
-  message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
-  find_path(GD_GD_STATIC_LIB_DIR libgd.a
-     /usr/lib
-        /usr/lib/x86_64-linux-gnu
-        /usr/local/lib               # Homebrew
-        /opt/local/lib               # Macports
-        /usr/opt/local/lib
-        /sw/lib                      # Fink
-        )
-  message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
-  list(APPEND GD_NAMES gd libgd)
-  # unset(GD_NAMES_DEBUG)
-  # set(_GD_VERSION_SUFFIXES 31 21 20)
-  # if (GD_FIND_VERSION MATCHES "^([0-9]+)\\.([0-9]+)(\\..*)?$")
-  #   set(_GD_VERSION_SUFFIX_MIN "${CMAKE_MATCH_1}${CMAKE_MATCH_2}")
-  #   if (GD_FIND_VERSION_EXACT)
-  #     set(_GD_VERSION_SUFFIXES ${_GD_VERSION_SUFFIX_MIN})
-  #   else ()
-  #     string(REGEX REPLACE
-  #         "${_GD_VERSION_SUFFIX_MIN}.*" "${_GD_VERSION_SUFFIX_MIN}"
-  #         _GD_VERSION_SUFFIXES "${_GD_VERSION_SUFFIXES}")
-  #   endif ()
-  #   unset(_GD_VERSION_SUFFIX_MIN)
-  # endif ()
-  # foreach(v IN LISTS _GD_VERSION_SUFFIXES)
-  #   list(APPEND GD_NAMES gd${v} libgd${v})
-  #   list(APPEND GD_NAMES_DEBUG gd${v}d libgd${v}d)
-  # endforeach()
-  # unset(_GD_VERSION_SUFFIXES)
-  # # For compatiblity with versions prior to this multi-config search, honor
-  # # any GD_LIBRARY that is already specified and skip the search.
-
-  find_library(GD_LIBRARY NAMES ${GD_NAMES}
-    PATHS
+    message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
+    find_path(GD_GD_STATIC_LIB_DIR libgd.a
         /usr/lib
         /usr/lib/x86_64-linux-gnu
         /usr/local/lib               # Homebrew
         /opt/local/lib               # Macports
         /usr/opt/local/lib
         /sw/lib                      # Fink
-        )
-
-  #  include(${CMAKE_ROOT}/Modules/SelectLibraryConfigurations.cmake)
-  #  select_library_configurations(GD)
-  mark_as_advanced(GD_LIBRARY)
-
-  unset(GD_NAMES)
-
-  # Set by select_library_configurations(), but we want the one from
-  # find_package_handle_standard_args() below.
-  unset(GD_FOUND)
-
-  if (GD_LIBRARY AND GD_GD_INCLUDE_DIR)
-      # gd.h includes png.h. Sigh.
-      set(GD_INCLUDE_DIRS ${GD_GD_INCLUDE_DIR} ${PNG_INCLUDE_DIR} )
-      set(GD_INCLUDE_DIR ${GD_INCLUDE_DIRS} ) # for backward compatiblity
-      set(GD_LIBRARIES ${GD_LIBRARY} ${PNG_LIBRARY} ${GD_GD_STATIC_LIB_DIR}/libgd.a)
-
-      # if (CYGWIN)
-      #   if(BUILD_SHARED_LIBS)
-      #      # No need to define GD_USE_DLL here, because it's default for Cygwin.
-      #   else()
-      #     set (GD_DEFINITIONS -DGD_STATIC)
-      #   endif()
-      # endif ()
-
-      if(NOT TARGET GD::GD)
-        add_library(GD::GD UNKNOWN IMPORTED)
-        set_target_properties(GD::GD PROPERTIES
-          INTERFACE_COMPILE_DEFINITIONS "${GD_DEFINITIONS}"
-          INTERFACE_INCLUDE_DIRECTORIES "${GD_INCLUDE_DIRS}"
-          INTERFACE_LINK_LIBRARIES PNG::PNG)
-        if(EXISTS "${GD_LIBRARY}")
-          set_target_properties(GD::GD PROPERTIES
-            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
-            IMPORTED_LOCATION "${GD_LIBRARY}")
+    )
+    message(STATUS "LibGD version path ${GD_GD_INCLUDE_DIR}")
+    list(APPEND GD_NAMES gd libgd)
+    # unset(GD_NAMES_DEBUG)
+    # set(_GD_VERSION_SUFFIXES 31 21 20)
+    # if (GD_FIND_VERSION MATCHES "^([0-9]+)\\.([0-9]+)(\\..*)?$")
+    #   set(_GD_VERSION_SUFFIX_MIN "${CMAKE_MATCH_1}${CMAKE_MATCH_2}")
+    #   if (GD_FIND_VERSION_EXACT)
+    #     set(_GD_VERSION_SUFFIXES ${_GD_VERSION_SUFFIX_MIN})
+    #   else ()
+    #     string(REGEX REPLACE
+    #         "${_GD_VERSION_SUFFIX_MIN}.*" "${_GD_VERSION_SUFFIX_MIN}"
+    #         _GD_VERSION_SUFFIXES "${_GD_VERSION_SUFFIXES}")
+    #   endif ()
+    #   unset(_GD_VERSION_SUFFIX_MIN)
+    # endif ()
+    # foreach(v IN LISTS _GD_VERSION_SUFFIXES)
+    #   list(APPEND GD_NAMES gd${v} libgd${v})
+    #   list(APPEND GD_NAMES_DEBUG gd${v}d libgd${v}d)
+    # endforeach()
+    # unset(_GD_VERSION_SUFFIXES)
+    # # For compatiblity with versions prior to this multi-config search, honor
+    # # any GD_LIBRARY that is already specified and skip the search.
+ 
+    find_library(GD_LIBRARY NAMES ${GD_NAMES}
+        PATHS
+            /usr/lib
+            /usr/lib/x86_64-linux-gnu
+            /usr/local/lib               # Homebrew
+            /opt/local/lib               # Macports
+            /usr/opt/local/lib
+            /sw/lib                      # Fink
+    )
+ 
+    #  include(${CMAKE_ROOT}/Modules/SelectLibraryConfigurations.cmake)
+    #  select_library_configurations(GD)
+    mark_as_advanced(GD_LIBRARY)
+ 
+    unset(GD_NAMES)
+ 
+    # Set by select_library_configurations(), but we want the one from
+    # find_package_handle_standard_args() below.
+    unset(GD_FOUND)
+ 
+    if(GD_LIBRARY AND GD_GD_INCLUDE_DIR)
+        # gd.h includes png.h. Sigh.
+        set(GD_INCLUDE_DIRS ${GD_GD_INCLUDE_DIR} ${PNG_INCLUDE_DIR} )
+        set(GD_INCLUDE_DIR ${GD_INCLUDE_DIRS} ) # for backward compatiblity
+        set(GD_LIBRARIES ${GD_LIBRARY} ${PNG_LIBRARY} ${GD_GD_STATIC_LIB_DIR}/libgd.a)
+ 
+        # if (CYGWIN)
+        #   if(BUILD_SHARED_LIBS)
+        #      # No need to define GD_USE_DLL here, because it's default for Cygwin.
+        #   else()
+        #     set (GD_DEFINITIONS -DGD_STATIC)
+        #   endif()
+        # endif ()
+ 
+        if(NOT TARGET GD::GD)
+            add_library(GD::GD UNKNOWN IMPORTED)
+            set_target_properties(GD::GD PROPERTIES
+                INTERFACE_COMPILE_DEFINITIONS "${GD_DEFINITIONS}"
+                INTERFACE_INCLUDE_DIRECTORIES "${GD_INCLUDE_DIRS}"
+                INTERFACE_LINK_LIBRARIES PNG::PNG)
+            if(EXISTS "${GD_LIBRARY}")
+                set_target_properties(GD::GD PROPERTIES
+                    IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+                    IMPORTED_LOCATION "${GD_LIBRARY}" 
+                )
+            endif()
+            # if(EXISTS "${GD_LIBRARY_DEBUG}")
+            #   set_property(TARGET GD::GD APPEND PROPERTY
+            #     IMPORTED_CONFIGURATIONS DEBUG)
+            #   set_target_properties(GD::GD PROPERTIES
+            #     IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C"
+            #     IMPORTED_LOCATION_DEBUG "${GD_LIBRARY_DEBUG}")
+            # endif()
+            # if(EXISTS "${GD_LIBRARY_RELEASE}")
+            #   set_property(TARGET GD::GD APPEND PROPERTY
+            #     IMPORTED_CONFIGURATIONS RELEASE)
+            #   set_target_properties(GD::GD PROPERTIES
+            #     IMPORTED_LINK_INTERFACE_LANGUAGES_RELEASE "C"
+            #     IMPORTED_LOCATION_RELEASE "${GD_LIBRARY_RELEASE}")
+            # endif()
         endif()
-        # if(EXISTS "${GD_LIBRARY_DEBUG}")
-        #   set_property(TARGET GD::GD APPEND PROPERTY
-        #     IMPORTED_CONFIGURATIONS DEBUG)
-        #   set_target_properties(GD::GD PROPERTIES
-        #     IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C"
-        #     IMPORTED_LOCATION_DEBUG "${GD_LIBRARY_DEBUG}")
-        # endif()
-        # if(EXISTS "${GD_LIBRARY_RELEASE}")
-        #   set_property(TARGET GD::GD APPEND PROPERTY
-        #     IMPORTED_CONFIGURATIONS RELEASE)
-        #   set_target_properties(GD::GD PROPERTIES
-        #     IMPORTED_LINK_INTERFACE_LANGUAGES_RELEASE "C"
-        #     IMPORTED_LOCATION_RELEASE "${GD_LIBRARY_RELEASE}")
-        # endif()
-      endif()
-  endif()
+    endif()
 
 endif()
 
@@ -167,7 +168,8 @@ endif()
 # all listed variables are TRUE
 include(${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
 find_package_handle_standard_args(GD
-                                  REQUIRED_VARS GD_LIBRARY GD_GD_INCLUDE_DIR )
+    REQUIRED_VARS GD_LIBRARY GD_GD_INCLUDE_DIR 
+)
 #                                  VERSION_VAR GD_VERSION_STRING)
 
 mark_as_advanced(GD_GD_INCLUDE_DIR GD_LIBRARY )
