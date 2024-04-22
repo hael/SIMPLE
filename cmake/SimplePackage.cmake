@@ -1,7 +1,27 @@
+# CPack Generator
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_VENDOR NCI)
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_VERBATIM_VARIABLES TRUE)
+include(CPack)
+if(WIN32)
+    set(CPACK_GENERATOR ZIP WIX)
+elseif(APPLE)
+    set(CPACK_GENERATOR TGZ productbuild)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR TGZ RPM)
+else()
+    set(CPACK_GENERATOR TGZ)
+endif()
+
+
+
+#--------------------------------
 if(CPACK_GENERATOR)
-  get_filename_component(cpack_build_dir "${CMAKE_BINARY_DIR}" ABSOLUTE)
-  get_filename_component(cpack_source_dir "${CMAKE_SOURCE_DIR}" ABSOLUTE)
-  # if("${cpack_build_dir}" STREQUAL "${cpack_source_dir}")
+    get_filename_component(cpack_build_dir "${CMAKE_BINARY_DIR}" ABSOLUTE)
+    get_filename_component(cpack_source_dir "${CMAKE_SOURCE_DIR}" ABSOLUTE)
+    # if("${cpack_build_dir}" STREQUAL "${cpack_source_dir}")
 endif()
 
 if(CPACK_GENERATOR)
