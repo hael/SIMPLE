@@ -10,7 +10,7 @@ use simple_builder,           only: build_glob
 use simple_strategy2D_alloc   ! s2D singleton
 implicit none
 
-public :: strategy2D_srch, strategy2D_spec
+public :: strategy2D_srch, strategy2D_spec, squared_sampling
 private
 
 #include "simple_local_flags.inc"
@@ -185,5 +185,47 @@ contains
         call self%grad_shsrch_obj%kill
         call self%grad_shsrch_obj2%kill
     end subroutine kill
+
+    subroutine squared_sampling( n, corrs, order, nb, ind, rank, cc )
+        integer, intent(in)    :: n, nb
+        real,    intent(inout) :: corrs(n), cc
+        integer, intent(inout) :: order(n), ind, rank
+        integer, parameter :: P=2
+        real    :: cdf(nb), r
+        integer :: i
+        if( nb == 1 )then
+            rank = n
+            ind  = maxloc(corrs,dim=1)
+            cc   = corrs(ind)
+            return
+        endif
+        order = (/(i,i=1,n)/)
+        call hpsort(corrs, order)
+        cdf = corrs(n-nb+1:n)
+        if( all(cdf<TINY) )then
+            rank = n
+            ind  = order(rank)
+            cc   = corrs(rank)
+            return
+        endif
+        where( cdf < TINY ) cdf = 0.
+        do i = 2,nb
+            cdf(i) = cdf(i) + cdf(i-1)
+        enddo
+        cdf = cdf / sum(cdf)
+        r   = ran3()
+        r   = 1.-r**P
+        rank = 0
+        do i = 1,nb
+            if( cdf(i) > r )then
+                rank = i
+                exit
+            endif
+        enddo
+        if( rank == 0 ) rank = nb
+        rank = n - nb + rank    ! rank of selected value
+        ind  = order(rank)      ! index
+        cc   = corrs(rank)      ! value
+    end subroutine squared_sampling
 
 end module simple_strategy2D_srch

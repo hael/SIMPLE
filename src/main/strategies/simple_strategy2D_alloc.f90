@@ -12,8 +12,11 @@ private
 
 type strategy2D_alloc
     ! global parameters
-    real                 :: smpl_inpl_athres = 0.    !< for refine smpl
-    integer              :: smpl_nrefs_bound = 0
+    integer              :: snhc_nrefs_bound = 0    ! refine=snhc
+    integer              :: snhc_smpl_ncls   = 0    !       =snhc_smpl
+    integer              :: snhc_smpl_ninpl  = 0    !       =snhc_smpl
+    integer              :: smpl_ninpl       = 0    !       =greedy_smpl
+    integer              :: smpl_ncls        = 0    !       =greedy_smpl
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -36,10 +39,8 @@ contains
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( neigh_frac )
         use simple_eul_prob_tab, only: calc_athres
-        real,    intent(in)  :: neigh_frac
-        real,    allocatable :: states(:)
-        logical, allocatable :: msk(:)
-        real    :: ov
+        real,    intent(in) :: neigh_frac
+        real    :: overlap, avg_dist_inpl
         logical :: zero_oris, ncls_diff
         ! gather class populations
         zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
@@ -66,15 +67,23 @@ contains
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
-        if( str_has_substr(params_glob%refine,'smpl') )then
-            states = build_glob%spproj_field%get_all('state')
-            msk    = states > 0.5
-            ov     = sum(build_glob%spproj_field%get_all('mi_class'),mask=msk) / real(count(msk))
-            s2D%smpl_inpl_athres = calc_athres('dist_inpl')*(1.-ov)
-            s2D%smpl_nrefs_bound = ceiling(real(params_glob%ncls) * (1.-ov)**2)
-            s2D%smpl_nrefs_bound = max(1,min(s2D%smpl_nrefs_bound, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
-        endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
+        ! snhc
+        s2D%snhc_nrefs_bound = min(params_glob%ncls, nint(real(params_glob%ncls)*(1.-neigh_frac)))
+        s2D%snhc_nrefs_bound = max(2, s2D%snhc_nrefs_bound)
+        ! snhc_smpl
+        s2D%snhc_smpl_ncls  = nint(real(params_glob%ncls)*(neigh_frac/3.))
+        s2D%snhc_smpl_ncls  = max(2,min(s2D%snhc_smpl_ncls,params_glob%ncls))
+        s2D%snhc_smpl_ninpl = nint(real(pftcc_glob%get_nrots())*(neigh_frac/3.))
+        s2D%snhc_smpl_ninpl = max(2,min(s2D%snhc_smpl_ninpl,pftcc_glob%get_nrots()))
+        if( trim(params_glob%refine).eq.'greedy_smpl' )then
+            overlap        = build_glob%spproj_field%get_avg('mi_class', state=1)
+            avg_dist_inpl  = calc_athres('dist_inpl', state=1)
+            avg_dist_inpl  = avg_dist_inpl * (1.-overlap)
+            s2D%smpl_ninpl = max(2,nint(avg_dist_inpl*real(pftcc_glob%get_nrots())/180.))
+            s2D%smpl_ncls  = nint(real(params_glob%ncls) * (1.-overlap)**2)
+            s2D%smpl_ncls  = max(1,min(s2D%smpl_ncls, ceiling(params_glob%prob_athres/180.*real(params_glob%ncls))))
+        endif
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
