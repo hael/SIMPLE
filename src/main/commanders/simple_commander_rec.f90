@@ -61,6 +61,8 @@ contains
             return
         endif
         call build%init_params_and_build_spproj(cline, params)
+        call build%spproj%update_projinfo(cline)
+        call build%spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
