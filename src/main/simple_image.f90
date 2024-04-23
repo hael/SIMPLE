@@ -3815,7 +3815,7 @@ contains
                 end do
                 !$omp end parallel do
             case('stdev')
-                !$omp parallel do collapse(2) default(shared) private(i,j,k,pixels,avg,sdev) schedule(static) proc_bind(close)
+                !$omp parallel do collapse(2) default(shared) private(i,j,pixels,avg,sdev) schedule(static) proc_bind(close)
                 do i=1,self%ldim(1)
                     do j=1,self%ldim(2)
                         pixels = self%win2arr(i, j, 1, winsz)
@@ -4211,6 +4211,7 @@ contains
         integer :: i, j, ir(2), jr(2), isz, jsz, npix
         if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
         call sdevimg%new(self%ldim, self%smpd)
+        !$omp parallel do private(i,j,ir,jr,isz,jsz,npix,avg) default(shared) proc_bind(close)
         do i = 1,self%ldim(1)
             ir(1) = max(1,            i - winsz)
             ir(2) = min(self%ldim(1), i + winsz)
@@ -4224,6 +4225,7 @@ contains
                 sdevimg%rmat(i,j,1) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1)) 
             end do
         end do
+        !$omp end parallel do
         if( present(asdev) )then
             asdev = sum(sdevimg%rmat(:self%ldim(1),:self%ldim(2),1)) / real(self%ldim(1) * self%ldim(2))
         endif
