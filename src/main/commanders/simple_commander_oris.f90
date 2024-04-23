@@ -602,12 +602,13 @@ contains
                 endif
             enddo
         enddo
+        print *, 'TRUTH COMPOSITION TABLE: (from Truth vol 1 to Truth vol ', int2str(nstates), ') '
         do istate = 1, nstates
-            diluted(istate,:) = diluted(istate,:) * 100. / real(truth_nptcls(istate))
+            print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', (diluted(:, state_order(istate)) * 100. / real(truth_nptcls(istate)))
         enddo
         print *, 'TRUTH COMPOSITION TABLE: (from Truth vol 1 to Truth vol ', int2str(nstates), ') '
         do istate = 1, nstates
-            print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', diluted(:, state_order(istate))
+            print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', (diluted(:, state_order(istate)) * 100. / real(est_states(istate)))
         enddo
         ! cleanup
         call build%kill_general_tbox
