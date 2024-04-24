@@ -17,8 +17,8 @@ type :: histogram
     logical              :: exists = .false.
   contains
     ! Initialization
-    procedure, private :: new_1, new_2, new_3, new_4
-    generic            :: new => new_1, new_2, new_3, new_4
+    procedure, private :: new_1, new_2, new_3, new_4, new_5
+    generic            :: new => new_1, new_2, new_3, new_4, new_5
     procedure          :: reset
     procedure          :: zero
     procedure          :: quantize
@@ -27,6 +27,7 @@ type :: histogram
     ! Arithmetics
     procedure          :: add
     procedure          :: div
+    procedure          :: update
     ! Descriptors
     procedure          :: npeaks
     procedure          :: find_hill, find_next_valley
@@ -132,6 +133,31 @@ contains
         enddo
         self%ntot = sum(self%counts)
     end subroutine new_4
+
+    subroutine new_5( self, rvec )
+        class(histogram),  intent(inout) :: self
+        real, allocatable, intent(in)    :: rvec(:) ! are the desired bins centers
+        real    :: minmax(2), diff
+        integer :: i,nbins
+        if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
+        nbins = size(rvec)
+        call self%new_1(nbins)
+        minmax(1) = minval(rvec)
+        minmax(2) = maxval(rvec)
+        diff      = minmax(2) - minmax(1)
+        if( diff < TINY ) THROW_HARD('Invalid bounds!')
+        minmax(1) = minmax(1) - diff / real(self%nbins-1) / 2.0
+        minmax(2) = minmax(2) + diff / real(self%nbins-1) / 2.0
+        diff      = minmax(2) - minmax(1)
+        self%xrange = diff
+        self%dx     = self%xrange / real(self%nbins)
+        self%x(1)   = minmax(1)
+        do i = 2,self%nbins
+            self%x(i) = self%x(1) + real(i-1)*self%dx
+        enddo
+        self%x(self%nbins+1) = minmax(2)
+        call self%zero
+    end subroutine new_5
 
     pure subroutine reset( self)
         class(histogram), intent(inout) :: self
@@ -258,6 +284,17 @@ contains
             self%ntot    = sum(self%counts)
         endif
     end subroutine div
+
+    subroutine update( self, v )
+        class(histogram), intent(inout) :: self
+        real,             intent(in)    :: v
+        integer :: bin
+        bin = self%get_bin(v)
+        if( bin < 1 )          return
+        if( bin > self%nbins ) return
+        self%counts(bin) = self%counts(bin) + 1.
+        self%ntot        = sum(self%counts)
+    end subroutine update
 
     !> Calculators
 
@@ -440,11 +477,11 @@ contains
         call CDataSet__new(dataSet)
         call CDataSet__SetDrawMarker(dataSet, C_FALSE)
         call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
-        call CDataSet_addpoint(dataSet, self%x(1)-self%dx/2., 0.)
+        call CDataSet_addpoint(dataSet, self%x(1), 0.)
         do i = 1,self%nbins
             call CDataSet_addpoint(dataSet, self%x(i)+self%dx/2., self%counts(i))
         end do
-        call CDataSet_addpoint(dataSet, self%x(self%nbins)+self%dx/2., 0.)
+        call CDataSet_addpoint(dataSet, self%x(self%nbins)+self%dx, 0.)
         call CPlot2D__AddDataSet(fig, dataset)
         call CDataSet__delete(dataset)
         title%str = 'X'//C_NULL_CHAR

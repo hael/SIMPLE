@@ -9,9 +9,12 @@ use simple_sp_project,         only: sp_project
 use simple_qsys_env,           only: qsys_env
 use simple_starproject_stream, only: starproject_stream
 use simple_guistats,           only: guistats
+use simple_moviewatcher,       only: moviewatcher
+use simple_stream_chunk,       only: micproj_record
 use simple_qsys_funs
 use simple_commander_preprocess
 use simple_progress
+use simple_timer
 implicit none
 
 public :: commander_stream_preprocess
@@ -53,7 +56,6 @@ integer,               parameter :: WAITTIME        = 3    ! movie folder watche
 contains
 
     subroutine exec_stream_preprocess( self, cline )
-        use simple_moviewatcher, only: moviewatcher
         class(commander_stream_preprocess), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
@@ -109,8 +111,8 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         call params%new(cline)
-        params_glob%split_mode = 'stream'
-        params_glob%ncunits    = params%nparts
+        params%split_mode = 'stream'
+        params%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
         ! master project file
@@ -581,9 +583,7 @@ contains
     end subroutine exec_stream_preprocess
 
     subroutine exec_stream_pick_extract( self, cline )
-        use simple_moviewatcher, only: moviewatcher
-        use simple_stream_chunk, only: micproj_record
-        use simple_timer
+        use simple_histogram,    only: histogram
         class(commander_stream_pick_extract), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(make_pickrefs_commander)          :: xmake_pickrefs
@@ -598,10 +598,11 @@ contains
         type(moviewatcher)                     :: project_buff
         type(sp_project)                       :: spproj_glob, stream_spproj
         type(starproject_stream)               :: starproj_stream
+        type(histogram)                        :: histogram_moldiams
         character(len=LONGSTRLEN), allocatable :: projects(:)
         character(len=:),          allocatable :: output_dir, output_dir_extract, output_dir_picker
         character(len=LONGSTRLEN)              :: cwd_job, latest_boxfile
-        integer                                :: nptcls_limit_for_references ! Limit to # of particles picked, not extracted, to generate refrences
+        real,                      allocatable :: moldiams(:)
         integer                                :: pick_extract_set_counter    ! Internal counter of projects to be processed
         integer                                :: nmics_sel, nmics_rej, nmics_rejected_glob
         integer                                :: nmics, nprojects, stacksz, prev_stacksz, iter, last_injection, iproj
@@ -609,22 +610,22 @@ contains
         logical                                :: l_templates_provided, l_projects_left, l_haschanged, l_multipick, l_extract
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
-        call cline%set('oritype',   'mic')
-        call cline%set('mkdir',     'yes')
-        call cline%set('picker',    'new')
-        if( .not. cline%defined('outdir')     ) call cline%set('outdir',            '')
-        if( .not. cline%defined('walltime')   ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
+        call cline%set('oritype', 'mic')
+        call cline%set('mkdir',   'yes')
+        call cline%set('picker',  'new')
+        if( .not. cline%defined('outdir')          ) call cline%set('outdir',           '')
+        if( .not. cline%defined('walltime')        ) call cline%set('walltime',         29.0*60.0) ! 29 minutes
         ! micrograph selection
         if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
         ! picking
-        if( .not. cline%defined('lp_pick')     ) call cline%set('lp_pick',         PICK_LP_DEFAULT)
-        if( .not. cline%defined('pick_roi')    ) call cline%set('pick_roi',        'no')
-        if( .not. cline%defined('backgr_subtr')) call cline%set('backgr_subtr',    'no')
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          PICK_LP_DEFAULT)
+        if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',         'no')
+        if( .not. cline%defined('backgr_subtr')    ) call cline%set('backgr_subtr',     'no')
         ! extraction
-        if( .not. cline%defined('pcontrast')     ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('extractfrommov')) call cline%set('extractfrommov',  'no')
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',        'black')
+        if( .not. cline%defined('extractfrommov')  ) call cline%set('extractfrommov',   'no')
         ! write cmdline for GUI
         call cline%writeline(".cline")
         ! sanity check for restart
@@ -637,8 +638,8 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         call params%new(cline)
-        params_glob%split_mode = 'stream'
-        params_glob%ncunits    = params%nparts
+        params%split_mode = 'stream'
+        params%ncunits    = params%nparts
         call simple_getcwd(cwd_job)
         call cline%set('mkdir', 'no')
         ! picking
@@ -646,18 +647,20 @@ contains
         if( l_multipick )then
             l_extract            = .false.
             l_templates_provided = .false.
-            call cline%set('picker','new')
             write(logfhandle,'(A)')'>>> PERFORMING MULTI-DIAMETER PICKING'
+            moldiams = equispaced_vals(params%moldiam, params%moldiam_max, params%nmoldiams)
+            call histogram_moldiams%new(moldiams)
+            deallocate(moldiams)
         else
             l_extract            = .true.
             l_templates_provided = cline%defined('pickrefs')
             if( l_templates_provided )then
+                if( .not.file_exists(params%pickrefs) ) THROW_HARD('Could not find: '//trim(params%pickrefs))
                 write(logfhandle,'(A)')'>>> PERFORMING REFERENCE-BASED PICKING'
             else if( .not.cline%defined('moldiam') )then
                 THROW_HARD('MOLDIAM required for picker=new reference-free picking')
                 write(logfhandle,'(A)')'>>> PERFORMING SINGLE DIAMETER PICKING'
             endif
-
         endif
         ! master project file
         call spproj_glob%read( params%projfile )
@@ -708,21 +711,20 @@ contains
         call qenv%new(1,stream=.true.)
         ! prepares picking references
         if( l_templates_provided )then
-            if( trim(params%picker).eq.'old' )then
-                cline_make_pickrefs = cline
-                call cline_make_pickrefs%set('prg','make_pickrefs')
-                call cline_make_pickrefs%set('stream','no')
-                call cline_make_pickrefs%delete('ncls')
-                call cline_make_pickrefs%delete('mskdiam')
-                call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
-                call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
-                write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-                call qsys_cleanup
-            endif
+            cline_make_pickrefs = cline
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call cline_make_pickrefs%set('stream','no')
+            call cline_make_pickrefs%delete('ncls')
+            call cline_make_pickrefs%delete('moldiam')
+            call cline_make_pickrefs%delete('mskdiam')
+            call xmake_pickrefs%execute_shmem(cline_make_pickrefs)
+            call cline%set('pickrefs', '../'//trim(PICKREFS_FBODY)//trim(params%ext))
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+            call qsys_cleanup
         endif
         ! command line for execution
         cline_pick_extract = cline
-        call cline_pick_extract%set('prg', 'pick_extract')
+        call cline_pick_extract%set('prg','pick_extract')
         call cline_pick_extract%set('dir','../')
         if( l_extract )then
             call cline_pick_extract%set('extract','yes')
@@ -738,7 +740,6 @@ contains
         n_added               = 0   ! global number of micrographs added to processing stack
         l_projects_left       = .false.
         l_haschanged          = .false.
-        nptcls_limit_for_references = 20000 ! obviously will have to be an input
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -805,10 +806,10 @@ contains
             if( n_imported > 0 )then
                 n_imported = spproj_glob%os_mic%get_noris()
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPS PROCESSED & IMPORTED   : ',n_imported
-                if( l_extract )then
-                    write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
-                else
-                    write(logfhandle,'(A,I8)')   '>>> # PARTICLES PICKED                  : ',nptcls_glob
+                if( l_extract ) write(logfhandle,'(A,I8)')   '>>> # PARTICLES EXTRACTED               : ',nptcls_glob
+                if( l_multipick )then
+                    call histogram_moldiams%plot('moldiams')
+                    write(logfhandle,'(A,F8.2)') '>>> ESTIMATED MOLECULAR DIAMETER        : ',histogram_moldiams%mean()
                 endif
                 write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ',qenv%get_navail_computing_units(),'/ ',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I8)') '>>> # DESELECTED MICROGRAPHS/FAILED JOBS: ',n_failed_jobs
@@ -847,14 +848,6 @@ contains
                         call write_migrographs_starfile
                         l_haschanged = .false.
                     endif
-                endif
-            endif
-            ! multi-picking
-            if( l_multipick )then
-                if( nptcls_glob > nptcls_limit_for_references )then
-                    !!!!!!
-                    ! diameter estimation, single picking & clustering happens here
-                    !!!!!!
                 endif
             endif
             ! guistats
@@ -1013,14 +1006,26 @@ contains
                         ! records & project
                         do imic = 1,spprojs(iproj)%os_mic%get_noris()
                             j = j + 1
-                            nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
-                            nptcls_glob = nptcls_glob + nptcls ! global update
                             micproj_records(j)%projname = trim(abs_fname)
                             micproj_records(j)%micind   = imic
-                            micproj_records(j)%nptcls   = nptcls
+                            if( l_multipick )then
+                                micproj_records(j)%nptcls = 0
+                            else
+                                nptcls      = nint(spprojs(iproj)%os_mic%get(imic,'nptcls'))
+                                nptcls_glob = nptcls_glob + nptcls ! global update
+                                micproj_records(j)%nptcls = nptcls
+                            endif
                             call spproj_glob%os_mic%transfer_ori(j, spprojs(iproj)%os_mic, imic)
                         enddo
                     enddo
+                    if( l_multipick )then
+                        ! update molecular diameters
+                        do j = n_old+1,spproj_glob%os_mic%get_noris()
+                            if( spproj_glob%os_mic%isthere(j, 'moldiam') )then
+                                call histogram_moldiams%update(spproj_glob%os_mic%get(j, 'moldiam'))
+                            endif
+                        enddo
+                    endif
                 endif
                 ! cleanup
                 do iproj = 1,n_spprojs
@@ -1193,8 +1198,6 @@ contains
     end subroutine exec_stream_pick_extract
 
     subroutine exec_stream_assign_optics( self, cline )
-        use simple_moviewatcher, only: moviewatcher
-        use simple_timer
         class(commander_stream_assign_optics), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)                       :: params
@@ -1268,11 +1271,11 @@ contains
                 call sleep(WAITTIME) ! may want to increase as 3s default
             endif
             call update_user_params(cline)
-            if(params_glob%updated .eq. 'yes') then
+            if(params%updated .eq. 'yes') then
                 call starproj_stream%stream_export_optics(spproj, params%outdir)
                 ! guistats
                 call gui_stats%set('groups', 'optics_group_assigned', spproj%os_optics%get_noris(), primary=.true.)
-                params_glob%updated = 'no'
+                params%updated = 'no'
             end if
             call gui_stats%write_json
         end do
@@ -1286,10 +1289,7 @@ contains
     end subroutine exec_stream_assign_optics
 
     subroutine exec_stream_cluster2D( self, cline )
-        use simple_moviewatcher, only: moviewatcher
-        use simple_stream_chunk, only: micproj_record
         use simple_commander_cluster2D_stream_dev
-        use simple_timer
         class(commander_stream_cluster2D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
@@ -1346,8 +1346,8 @@ contains
         call cline%set('mkdir', 'no')
         if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))
         ! limit to # of chunks
-        if( .not. cline%defined('maxnchunks') .or. params_glob%maxnchunks < 1 )then
-            params_glob%maxnchunks = huge(params_glob%maxnchunks)
+        if( .not. cline%defined('maxnchunks') .or. params%maxnchunks < 1 )then
+            params%maxnchunks = huge(params%maxnchunks)
         endif
         call cline%delete('maxnchunks')
         ! restart
@@ -1357,8 +1357,7 @@ contains
             call cleanup_root_folder
         endif
         ! Only required for compatibility with old version (chunk)
-        params%nthr2D      = params%nthr
-        params_glob%nthr2D = params%nthr
+        params%nthr2D = params%nthr
         ! initialise progress monitor
         call progressfile_init()
         ! master project file
@@ -1446,7 +1445,7 @@ contains
             else
                 call import_chunks_into_pool_dev(nchunks_imported)
                 nchunks_imported_glob = nchunks_imported_glob + nchunks_imported
-                l_nchunks_maxed       = nchunks_imported_glob >= params_glob%maxnchunks
+                l_nchunks_maxed       = nchunks_imported_glob >= params%maxnchunks
                 call classify_pool_dev
                 call classify_new_chunks_dev(micproj_records)
             endif
@@ -1496,10 +1495,8 @@ contains
                 ! Updates global parameters once and init 2D
                 if( n_old == 0 )then
                     params%smpd      = spprojs(1)%os_mic%get(1,'smpd')
-                    params_glob%smpd = params%smpd
                     call spprojs(1)%read_segment('stk', trim(projectnames(1)))
                     params%box      = nint(spprojs(1)%os_stk%get(1,'box'))
-                    params_glob%box = params%box
                     call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
                     call cline%delete('ncls')
                 endif
