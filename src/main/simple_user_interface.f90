@@ -3244,7 +3244,7 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &2, 5, 0, 1, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        &2, 6, 0, 1, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
         pick_extract%gui_submenu_list = "data,picking,extract,compute"
         pick_extract%advanced = .false.
         ! image input/output
@@ -3263,9 +3263,10 @@ contains
         call pick_extract%set_input('parm_ios', 4, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
         call pick_extract%set_gui_params('parm_ios', 4, submenu="data")
-        call pick_extract%set_input('parm_ios', 5, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ', 'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '')
+        call pick_extract%set_input('parm_ios', 5, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5', .false., 5.)
         call pick_extract%set_gui_params('parm_ios', 5, submenu="picking")
-        pick_extract%parm_ios(5)%required = .false.
+        call pick_extract%set_input('parm_ios', 6, 'moldiam_max', 'num', 'Upper bound molecular diameter', 'Upper bound molecular diameter in multipick', 'e.g. 200', .false., 200.)
+        call pick_extract%set_gui_params('parm_ios', 6, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls

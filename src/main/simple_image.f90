@@ -4234,23 +4234,25 @@ contains
     function avg_loc_sdev( self, winsz ) result( asdev )
         class(image), intent(in) :: self
         integer,      intent(in) :: winsz
-        real    :: avg, sdevs(self%ldim(1),self%ldim(2)), asdev
-        integer :: i, j, ir(2), jr(2), isz, jsz, npix
+        real(dp) :: sum_sdevs
+        real     :: avg, asdev
+        integer  :: i, j, ir(2), jr(2), isz, jsz, npix
         if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
+        sum_sdevs = 0.d0
         do i = 1,self%ldim(1)
             ir(1) = max(1,            i - winsz)
             ir(2) = min(self%ldim(1), i + winsz)
             isz   = ir(2) - ir(1) + 1
             do j = 1,self%ldim(2)
-                jr(1)      = max(1,            j - winsz)
-                jr(2)      = min(self%ldim(2), j + winsz)
-                jsz        = jr(2) - jr(1) + 1
-                npix       = isz * jsz
-                avg        = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
-                sdevs(i,j) = sqrt(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0) / real(npix - 1))
+                jr(1)     = max(1,            j - winsz)
+                jr(2)     = min(self%ldim(2), j + winsz)
+                jsz       = jr(2) - jr(1) + 1
+                npix      = isz * jsz
+                avg       = sum(self%rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                sum_sdevs = sum_sdevs + sqrt(real(sum((self%rmat(ir(1):ir(2),jr(1):jr(2),1) - avg)**2.0),dp) / real(npix-1,dp))
             end do
         end do
-        asdev = sum(sdevs) / real(self%ldim(1) * self%ldim(2))
+        asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2),dp))
     end function avg_loc_sdev
 
     !>  \brief rmsd for calculating the RMSD of a map

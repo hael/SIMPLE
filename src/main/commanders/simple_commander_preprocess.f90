@@ -2120,6 +2120,7 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
+        real    :: moldiam_opt
         integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
         logical :: l_extract, l_multipick
         ! set oritype
@@ -2128,12 +2129,11 @@ contains
         call params%new(cline)
         if( params%stream.ne.'yes' ) THROW_HARD('streaming only application')
         l_extract   = trim(params%extract).eq.'yes'
-        l_multipick = cline%defined('multi_moldiams')
+        l_multipick = params%nmoldiams > 1
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nintgs() == 0 ) THROW_HARD('no micrograph to process!')
-        params%smpd      = spproj%os_mic%get(1,'smpd')
-        params_glob%smpd = params%smpd
+        params%smpd = spproj%os_mic%get(1,'smpd')
         call cline%set('smpd',params%smpd)
         ! output directories
         output_dir_picker  = trim(DIR_PICKER)
@@ -2197,10 +2197,11 @@ contains
             if( .not.file_exists(micname)) cycle
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
-            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls)
+            call piter%iterate(cline, params%smpd, micname, output_dir_picker, boxfile, nptcls, moldiam_opt=moldiam_opt)
             call o_mic%set('nptcls', real(nptcls))
             if( nptcls > 0 )then
                 call o_mic%set('boxfile', trim(boxfile))
+                if( l_multipick ) call o_mic%set('moldiam', moldiam_opt)
             else
                 call o_mic%set_state(0)
             endif

@@ -45,6 +45,7 @@ contains
             call gaupick_multi(params_glob%pcontrast, SMPD_SHRINK1, moldiams, boxfile, offset=OFFSET, moldiam_opt=mmoldiam_opt)
             if( present(moldiam_opt) ) moldiam_opt = mmoldiam_opt
             deallocate(moldiams)
+            nptcls      = 1 ! arbitrary, needs be > 0
             boxfile_out = trim(boxfile)
         else if( .not. (params_glob%multi_moldiams  .eq. '') )then
             ! multiple moldiam pick that uses multiple gaussians, generates .box file outputs
