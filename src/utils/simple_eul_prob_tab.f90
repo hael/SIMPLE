@@ -242,19 +242,19 @@ contains
         real    :: sorted_tab(self%nptcls, params_glob%nspace, self%nstates), projs_athres,&
                    &proj_dist(params_glob%nspace, self%nstates), dists_sorted(params_glob%nspace, self%nstates)
         logical :: ptcl_avail(self%nptcls, self%nstates)
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(istate,iproj,i)
+        ! sorting each columns
         do istate = 1, self%nstates
+            sorted_tab(:,:,istate) = transpose(self%loc_tab(:,:,istate)%dist)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iproj,i)
             do iproj = 1, params_glob%nspace
                 stab_inds(:,iproj,istate) = (/(i,i=1,self%nptcls)/)
                 call hpsort(sorted_tab(:,iproj,istate), stab_inds(:,iproj,istate))
             enddo
+            !$omp end parallel do
         enddo
-        !$omp end parallel do
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,projs_athres,assigned_iproj,assigned_ptcl,iproj)
         do istate = 1, self%nstates
-            ! sorting each columns
             projs_athres             = calc_athres('dist', state=istate)
-            sorted_tab(  :,:,istate) = transpose(self%loc_tab(:,:,istate)%dist)
             ! first row is the current best proj distribution
             proj_dist_inds(:,istate) = 1
             proj_dist(     :,istate) = sorted_tab(1,:,istate)
