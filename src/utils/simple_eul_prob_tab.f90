@@ -465,7 +465,6 @@ contains
     ! PUBLIC UTILITITES
 
     subroutine calc_num2sample( num_all, field_str, num_smpl, state)
-        use simple_builder, only: build_glob
         integer,           intent(in)  :: num_all
         character(len=*),  intent(in)  :: field_str
         integer,           intent(out) :: num_smpl
@@ -476,7 +475,6 @@ contains
     end subroutine calc_num2sample
 
     function calc_athres( field_str, state ) result( athres )
-        use simple_builder, only: build_glob
         character(len=*),  intent(in) :: field_str
         integer, optional, intent(in) :: state
         real, allocatable :: vals(:)
@@ -491,6 +489,7 @@ contains
     elemental function eulprob_dist_switch( corr ) result(dist)
         real, intent(in) :: corr
         real :: dist
+        dist = corr
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 if( corr < 0. )then
@@ -512,6 +511,7 @@ contains
     elemental function eulprob_corr_switch( dist ) result(corr)
         real, intent(in) :: dist
         real :: corr
+        corr = dist
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
                 corr = 1 - dist
@@ -521,7 +521,6 @@ contains
     end function eulprob_corr_switch
 
     function angle_sampling_1( pvec, field_str, state ) result( which )
-        use simple_builder, only: build_glob
         real,              intent(in) :: pvec(:)        !< probabilities
         character(len=*),  intent(in) :: field_str
         integer, optional, intent(in) :: state

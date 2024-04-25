@@ -569,7 +569,8 @@ contains
         else
             perm_cnt = 0
             call generate_perm(1)
-            max_sum = 0.
+            max_sum  = 0.
+            max_perm = 1
             do iperm = 1, perm_cnt
                 state_order    = all_perms(:, iperm)
                 correct_states = 0
@@ -606,7 +607,7 @@ contains
         do istate = 1, nstates
             print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', (diluted(:, state_order(istate)) * 100. / real(truth_nptcls(istate)))
         enddo
-        print *, 'TRUTH COMPOSITION TABLE: (from Truth vol 1 to Truth vol ', int2str(nstates), ') '
+        print *, 'TRUTH COMPOSITION TABLE (ref paper metrics): (from Truth vol 1 to Truth vol ', int2str(nstates), ') '
         do istate = 1, nstates
             print *, 'Reconstructed vol ', int2str(state_order(istate)), ': ', (diluted(:, state_order(istate)) * 100. / real(est_states(istate)))
         enddo
