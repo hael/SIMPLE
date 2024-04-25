@@ -237,40 +237,45 @@ contains
     ! (for each state) ptcl -> proj assignment using the global normalized dist value table
     subroutine proj_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        integer :: i, iproj, istate, assigned_iproj, assigned_ptcl, proj_dist_inds(params_glob%nspace),&
-                   &stab_inds(self%nptcls, params_glob%nspace), inds_sorted(params_glob%nspace)
-        real    :: sorted_tab(self%nptcls, params_glob%nspace), projs_athres,&
-                   &proj_dist(params_glob%nspace), dists_sorted(params_glob%nspace)
-        logical :: ptcl_avail(self%nptcls)
+        integer :: i, iproj, istate, assigned_iproj, assigned_ptcl, proj_dist_inds(params_glob%nspace, self%nstates),&
+                   &stab_inds(self%nptcls, params_glob%nspace, self%nstates), inds_sorted(params_glob%nspace, self%nstates)
+        real    :: sorted_tab(self%nptcls, params_glob%nspace, self%nstates), projs_athres,&
+                   &proj_dist(params_glob%nspace, self%nstates), dists_sorted(params_glob%nspace, self%nstates)
+        logical :: ptcl_avail(self%nptcls, self%nstates)
+        !$omp parallel do collapse(2) default(shared) proc_bind(close) schedule(static) private(istate,iproj,i)
+        do istate = 1, self%nstates
+            do iproj = 1, params_glob%nspace
+                stab_inds(:,iproj,istate) = (/(i,i=1,self%nptcls)/)
+                call hpsort(sorted_tab(:,iproj,istate), stab_inds(:,iproj,istate))
+            enddo
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,projs_athres,assigned_iproj,assigned_ptcl)
         do istate = 1, self%nstates
             ! sorting each columns
-            projs_athres = calc_athres('dist', state=istate)
-            sorted_tab   = transpose(self%loc_tab(:,:,istate)%dist)
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iproj,i)
-            do iproj = 1, params_glob%nspace
-                stab_inds(:,iproj) = (/(i,i=1,self%nptcls)/)
-                call hpsort(sorted_tab(:,iproj), stab_inds(:,iproj))
-            enddo
-            !$omp end parallel do
+            projs_athres             = calc_athres('dist', state=istate)
+            sorted_tab(  :,:,istate) = transpose(self%loc_tab(:,:,istate)%dist)
             ! first row is the current best proj distribution
-            proj_dist_inds = 1
-            proj_dist      = sorted_tab(1,:)
-            ptcl_avail     = .true.
-            do while( any(ptcl_avail) )
+            proj_dist_inds(:,istate) = 1
+            proj_dist(     :,istate) = sorted_tab(1,:,istate)
+            ptcl_avail(    :,istate) = .true.
+            do while( any(ptcl_avail(:,istate)) )
                 ! sampling the proj distribution to choose next iproj to assign
-                assigned_iproj = angle_sampling(proj_dist, dists_sorted, inds_sorted, projs_athres)
-                assigned_ptcl  = stab_inds(proj_dist_inds(assigned_iproj), assigned_iproj)
-                ptcl_avail(assigned_ptcl)            = .false.
+                assigned_iproj = angle_sampling(proj_dist(:,istate), dists_sorted(:,istate), inds_sorted(:,istate), projs_athres)
+                assigned_ptcl  = stab_inds(proj_dist_inds(assigned_iproj,istate), assigned_iproj, istate)
+                ptcl_avail(assigned_ptcl,istate)     = .false.
                 self%state_tab(istate,assigned_ptcl) = self%loc_tab(assigned_iproj,assigned_ptcl,istate)
                 ! update the proj_dist and proj_dist_inds
                 do iproj = 1, params_glob%nspace
-                    do while( proj_dist_inds(iproj) < self%nptcls .and. .not.(ptcl_avail(stab_inds(proj_dist_inds(iproj), iproj))))
-                        proj_dist_inds(iproj) = proj_dist_inds(iproj) + 1
-                        proj_dist(iproj)      = sorted_tab(proj_dist_inds(iproj), iproj)
+                    do while( proj_dist_inds(iproj,istate) < self%nptcls .and. &
+                              .not.(ptcl_avail(stab_inds(proj_dist_inds(iproj,istate),iproj,istate),istate)))
+                        proj_dist_inds(iproj,istate) = proj_dist_inds(iproj,istate) + 1
+                        proj_dist(     iproj,istate) = sorted_tab(proj_dist_inds(iproj,istate), iproj, istate)
                     enddo
                 enddo
             enddo
         enddo
+        !$omp end parallel do
     end subroutine proj_assign
 
     ! state normalization (same energy) of the state_tab
