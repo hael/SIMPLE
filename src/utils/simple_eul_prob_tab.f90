@@ -250,7 +250,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,projs_athres,assigned_iproj,assigned_ptcl)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(istate,projs_athres,assigned_iproj,assigned_ptcl,iproj)
         do istate = 1, self%nstates
             ! sorting each columns
             projs_athres             = calc_athres('dist', state=istate)
