@@ -680,6 +680,7 @@ contains
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
         integer, parameter :: MLREG_ITER     = 3 ! in [2;5]
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES ! in [1;NSTAGES+1]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -714,6 +715,7 @@ contains
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',   'ptcl3D')
         if( .not. cline%defined('pgrp')         ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start')   ) call cline%set('pgrp_start',    'c1')
+        if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
@@ -735,6 +737,7 @@ contains
         call cline%delete('lpstart')
         call cline%delete('lpstop')
         call cline%delete('lp')
+        call cline%delete('shift_stage')
         frac_maxits_incr = 0
         maxits_glob      = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
@@ -746,6 +749,10 @@ contains
         if( l_lpset )then
             params%lpstop  = params%lp
             params%lpstart = params%lp
+        endif
+        if( params%shift_stage < 1 .or. params%shift_stage > NSTAGES+1 )then
+            params%shift_stage = min(NSTAGES+1,max(1,params%shift_stage))
+            THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
         endif
         ! read project
         call spproj%read(params%projfile)
@@ -927,9 +934,9 @@ contains
             call cline_refine3D%set('maxits_glob', maxits_glob)
             call cline_refine3D%set('lp_iters',    maxits)
             ! projection directions & shift
-            if( it < NSTAGES )then
+            if( it < params%shift_stage )then
                 call cline_refine3D%set('nspace', NSPACE1)
-                call cline_refine3D%set('trs',      0.)
+                call cline_refine3D%set('trs',    0.)
             else
                 call cline_refine3D%set('nspace', NSPACE2)
                 call cline_refine3D%set('trs',    trslim)

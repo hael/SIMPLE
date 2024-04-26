@@ -301,6 +301,7 @@ type :: parameters
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: reliongroups=0
+    integer :: shift_stage=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: stepsz=1            !< size of step{1}
@@ -733,6 +734,7 @@ contains
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
         call check_iarg('pspecsz',        self%pspecsz)
+        call check_iarg('shift_stage',    self%shift_stage)
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
         call check_iarg('stepsz',         self%stepsz)
