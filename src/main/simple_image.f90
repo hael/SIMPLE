@@ -2724,10 +2724,11 @@ contains
         call tmp%kill
     end function calc_shiftcen
 
-    function calc_shiftcen_serial( self, lp, msk ) result( xyz )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lp
-        real,         intent(in)    :: msk
+    function calc_shiftcen_serial( self, lp, msk, hp ) result( xyz )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: lp
+        real,           intent(in)    :: msk
+        real, optional, intent(in)    :: hp
         real    :: xyz(3)
         integer :: ithr
         ! get thread index
@@ -2737,7 +2738,11 @@ contains
             thread_safe_tmp_imgs(ithr)%rmat = self%rmat
             thread_safe_tmp_imgs(ithr)%ft   = .false.
             call thread_safe_tmp_imgs(ithr)%fft()
-            call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+            if( present(hp) )then
+                call thread_safe_tmp_imgs(ithr)%bp(hp, lp)
+            else
+                call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+            endif
             call thread_safe_tmp_imgs(ithr)%ifft()
             call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
             where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.

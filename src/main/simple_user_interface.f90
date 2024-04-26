@@ -1517,11 +1517,12 @@ contains
         &'Center volume',&             ! descr_short
         &'is a program for centering a volume and mapping the shift parameters back to the particle images',& ! descr_long
         &'simple_exec',&               ! executable
-        &1, 3, 0, 0, 1, 0, 1, .false.) ! # entries in each group, requires sp_project
+        &2, 3, 0, 0, 1, 0, 1, .false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call center%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to center', &
-        & 'input volume e.g. vol.mrc', .true., '')
+        & 'input volume e.g. vol.mrc', .false., '')
+        call center%set_input('img_ios', 2, stk)
         ! parameter input/output
         call center%set_input('parm_ios', 1, smpd)
         call center%set_input('parm_ios', 2, oritab)

@@ -119,7 +119,6 @@ contains
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1 ! 2D
         allocate(imgs(n), masks(n))
-        diams = 0.
         do i = 1,n
             call imgs(i)%new(ldim, params%smpd)
             call imgs(i)%read(params%stk, i)
