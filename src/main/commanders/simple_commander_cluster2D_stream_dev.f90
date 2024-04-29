@@ -935,14 +935,6 @@ contains
         ! update info for gui
         call spproj%projinfo%set(1,'nptcls_tot',     real(nptcls_glob))
         call spproj%projinfo%set(1,'nptcls_rejected',real(nptcls_rejected_glob))
-        ! poolstats
-        call pool_stats%set('2D', 'ptcls',    nptcls_glob,          primary=.true.)
-        call pool_stats%set('2D', 'rejected', nptcls_rejected_glob, primary=.true.)
-        call pool_stats%set('2D', 'iter',     pool_iter,            primary=.true.)
-        call pool_stats%set('2D', 'ncls',     ncls_glob                           )
-        call pool_stats%set('2D', 'max_res',  current_resolution,   primary=.true.)
-        call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, pool_iter - 1)
-        call pool_stats%write(POOLSTATS_FILE)
         ! flagging stacks to be skipped
         if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
         allocate(pool_stacks_mask(nstks_tot), source=.false.)
@@ -965,6 +957,18 @@ contains
             nptcls_sel       = sum(nptcls_per_stk)
             pool_stacks_mask = nptcls_per_stk > 0
         endif
+        ! poolstats
+        call pool_stats%set('particles', 'particles_processed', nptcls_glob,          primary=.true.)
+        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_sel)           // '_(' // int2str(ceiling(100.0 * real(nptcls_sel)           / real(nptcls_glob))) // '%)')
+        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
+        call pool_stats%set('2D', 'iteration',                  pool_iter - 1,        primary=.true.)
+        call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
+        call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
+        call pool_stats%set('2D', 'maximum_resolution',         current_resolution,   primary=.true.)
+        if(pool_iter > 1) call pool_stats%set_now('2D', 'iteration_time')
+        call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, pool_iter - 1)
+        call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, pool_iter - 1)
+        call pool_stats%write(POOLSTATS_FILE)
         nstks2update = count(pool_stacks_mask)
         ! transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
