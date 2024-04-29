@@ -41,7 +41,7 @@ enddo
 ! PCA test
 print *, 'PCA eigenvalues/eigenvectors:'
 call pca_obj%new(NS, NP, NC)
-call pca_obj%master(data_ori)
+call pca_obj%master(data_cen)
 print *, 'Feature vecs using PCA:'
 do j = 1, NS
     E_zn(:,j) = pca_obj%get_feat(j)
@@ -51,7 +51,7 @@ do j = 1, NC
 enddo
 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
 do j = 1, NS
-    call pca_obj%generate(j, tmpvec)
+    call pca_obj%generate(j, avg, tmpvec)
     data_pca(:,j) = tmpvec
 end do
 !$omp end parallel do
