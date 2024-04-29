@@ -14,6 +14,7 @@ data_ori(3,:) = [-1, 0, 4, 10]
 print *, 'Original data:'
 print *, data_ori(1,:)
 print *, data_ori(2,:)
+print *, data_ori(3,:)
 avg           = sum(data_ori, dim=2) / real(NS)
 data_cen(1,:) = data_ori(1,:) - avg(1)
 data_cen(2,:) = data_ori(2,:) - avg(2)
@@ -38,6 +39,7 @@ enddo
 do j = 1, NC
     print *, E_zn(j, :)
 enddo
+print *, '---------------------------------------------------'
 ! PCA test
 print *, 'PCA eigenvalues/eigenvectors:'
 call pca_obj%new(NS, NP, NC)
@@ -56,6 +58,27 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using PCA:'
+print *, data_pca(1,:)
+print *, data_pca(2,:)
+print *, '---------------------------------------------------'
+! PCA (transpose) test
+print *, 'PCA_T eigenvalues/eigenvectors:'
+call pca_obj%new(NS, NP, NC)
+call pca_obj%master_T(data_cen)
+print *, 'Feature vecs using PCA_T:'
+do j = 1, NS
+    E_zn(:,j) = pca_obj%get_feat(j)
+enddo
+do j = 1, NC
+    print *, E_zn(j, :)
+enddo
+!$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
+do j = 1, NS
+    call pca_obj%generate(j, avg, tmpvec)
+    data_pca(:,j) = tmpvec
+end do
+!$omp end parallel do
+print *, 'Pre-imaged data using PCA_T:'
 print *, data_pca(1,:)
 print *, data_pca(2,:)
 end program simple_test_ppca_kpca

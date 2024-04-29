@@ -26,12 +26,12 @@ type pca
     procedure, private :: generate_1, generate_2
     generic            :: generate => generate_1, generate_2
     ! CALCULATORS
-    procedure          :: master
+    procedure          :: master, master_T
     ! DESTRUCTOR
     procedure          :: kill
 end type
 
-logical :: L_PRINT = .false.
+logical :: L_PRINT = .true.
 
 contains
 
@@ -107,10 +107,15 @@ contains
         class(pca), intent(inout) :: self
         real,       intent(in)    :: pcavecs_cen(self%D,self%N)
         real    :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
-        integer :: i
+        integer :: i, inds(self%N)
         eig_vecs = pcavecs_cen
         call svdcmp(eig_vecs, eig_vals, tmp)
         eig_vals  = eig_vals**2 / real(self%D)
+        inds      = (/(i,i=1,self%N)/)
+        call hpsort(eig_vals, inds)
+        call reverse(eig_vals)
+        call reverse(inds)
+        eig_vecs  = eig_vecs(:, inds)
         self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
         if( L_PRINT )then
             print *, 'eigenvalues:'
@@ -122,6 +127,38 @@ contains
         endif
         self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
     end subroutine master
+
+    subroutine master_T( self, pcavecs_cen )
+        class(pca), intent(inout) :: self
+        real,       intent(in)    :: pcavecs_cen(self%D,self%N)
+        real    :: eig_vecs(  self%D,self%N), eig_vals(  self%N), tmp(  self%N,self%N), pcavecs_T(self%N,self%D),&
+                   eig_vecs_T(self%N,self%D), eig_vals_T(self%D), tmp_T(self%D, self%D)
+        integer :: i, inds(self%D), min_ND
+        pcavecs_T  = transpose(pcavecs_cen)
+        eig_vecs_T = pcavecs_T
+        call svdcmp(eig_vecs_T, eig_vals_T, tmp_T)
+        inds      = (/(i,i=1,self%N)/)
+        call hpsort(eig_vals_T, inds)
+        call reverse(eig_vals_T)
+        call reverse(inds)
+        eig_vecs_T = eig_vecs_T(:, inds)
+        tmp_T      = tmp_T(:, inds)
+        eig_vals   = 0.
+        eig_vecs   = 0.
+        min_ND     = min(self%N, self%D)
+        eig_vals(1:min_ND)           = eig_vals_T**2 / real(self%D)
+        eig_vecs(1:min_ND, 1:min_ND) = tmp_T(1:min_ND, 1:min_ND)
+        self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
+        if( L_PRINT )then
+            print *, 'eigenvalues:'
+            print *, eig_vals
+            print *, 'eigenvectors:'
+            do i = 1, self%Q
+                print *, eig_vecs(:,i)
+            enddo
+        endif
+        self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
+    end subroutine master_T
 
     ! DESTRUCTOR
 
