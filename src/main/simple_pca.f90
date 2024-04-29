@@ -137,17 +137,17 @@ contains
         pcavecs_T  = transpose(pcavecs_cen)
         eig_vecs_T = pcavecs_T
         call svdcmp(eig_vecs_T, eig_vals_T, tmp_T)
-        inds      = (/(i,i=1,self%N)/)
+        inds      = (/(i,i=1,self%D)/)
         call hpsort(eig_vals_T, inds)
         call reverse(eig_vals_T)
         call reverse(inds)
         eig_vecs_T = eig_vecs_T(:, inds)
-        tmp_T      = tmp_T(:, inds)
+        tmp_T      =      tmp_T(:, inds)
         eig_vals   = 0.
         eig_vecs   = 0.
         min_ND     = min(self%N, self%D)
-        eig_vals(1:min_ND)           = eig_vals_T**2 / real(self%D)
-        eig_vecs(1:min_ND, 1:min_ND) = tmp_T(1:min_ND, 1:min_ND)
+        eig_vals(  1:min_ND) = eig_vals_T(  1:min_ND)**2 / real(self%D)
+        eig_vecs(:,1:min_ND) =      tmp_T(:,1:min_ND)
         self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
         if( L_PRINT )then
             print *, 'eigenvalues:'
