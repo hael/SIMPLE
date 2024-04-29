@@ -7,41 +7,41 @@
 # variables.
 
 
-# Override CMakeDetermineFortranCompiler default fortran of f95
-if(NOT $ENV{FC} STREQUAL "")
-    set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
-else()
-    set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
-endif()
+### Override CMakeDetermineFortranCompiler default fortran of f95
+#if(NOT $ENV{FC} STREQUAL "")
+#    set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
+#else()
+#    set(CMAKE_Fortran_COMPILER_NAMES gfortran ifx nvfortran ifort pgfortran mpif90 mpiifx mpifort)
+#endif()
 
-## Override preprocessor in CMakeDetermineCompiler default cpp
-if(NOT $ENV{CPP} STREQUAL "")
-    set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
-else()
-    find_file(CMAKE_CPP_COMPILER_NAMES
-        NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
-        PATHS /sw/bin /usr/local/bin /opt/local/bin /usr/bin
-        #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
-        DOC "GNU cpp preprocessor "
-        #  [NO_DEFAULT_PATH]
-        #  [NO_CMAKE_ENVIRONMENT_PATH]
-        #  [NO_CMAKE_PATH]
-        # NO_SYSTEM_ENVIRONMENT_PATH
-        #  [NO_CMAKE_SYSTEM_PATH]
-        #  [CMAKE_FIND_ROOT_PATH_BOTH |
-        #   ONLY_CMAKE_FIND_ROOT_PATH |
-        #   NO_CMAKE_FIND_ROOT_PATH]
-    )
-    if(NOT EXISTS ${CMAKE_CPP_COMPILER_NAMES})
-        set(CMAKE_CPP_COMPILER_NAMES cpp-5)
-    endif()
-    set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
-endif()
+### Override preprocessor in CMakeDetermineCompiler default cpp
+#if(NOT $ENV{CPP} STREQUAL "")
+#    set(CMAKE_CPP_COMPILER_NAMES $ENV{CPP})
+#else()
+#    find_file(CMAKE_CPP_COMPILER_NAMES
+#        NAMES cpp- cpp-6 cpp6 cpp-5 cpp5 cpp-4.9 cpp
+#        PATHS /sw/bin /usr/local/bin /opt/local/bin /usr/bin
+#        #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
+#        DOC "GNU cpp preprocessor "
+#        #  [NO_DEFAULT_PATH]
+#        #  [NO_CMAKE_ENVIRONMENT_PATH]
+#        #  [NO_CMAKE_PATH]
+#        # NO_SYSTEM_ENVIRONMENT_PATH
+#        #  [NO_CMAKE_SYSTEM_PATH]
+#        #  [CMAKE_FIND_ROOT_PATH_BOTH |
+#        #   ONLY_CMAKE_FIND_ROOT_PATH |
+#        #   NO_CMAKE_FIND_ROOT_PATH]
+#    )
+#    if(NOT EXISTS ${CMAKE_CPP_COMPILER_NAMES})
+#        set(CMAKE_CPP_COMPILER_NAMES cpp-5)
+#    endif()
+#    set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
+#endif()
 
 enable_language(Fortran C CXX)
-#include(CMakeDetermineFortranCompiler)
-#include(CMakeDetermineCompiler)
-# include(CMakeFortranInformation)
+include(CMakeDetermineFortranCompiler)
+include(CMakeDetermineCompiler)
+include(CMakeFortranInformation)
 
 # Try to identify the ABI and configure it into CMakeFortranCompiler.cmake
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerABI.cmake)
@@ -50,7 +50,8 @@ enable_language(Fortran C CXX)
 # Test Fortran 2008 support by using a F2008 specific construct.
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008")
-    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCompilerF08.f90 "
+    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCompilerF08.f90 
+    "
         ! BLOCK should be rejected without F2008.
         PROGRAM main
         IMPLICIT NONE
@@ -58,8 +59,7 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08)
            INTEGER :: i
         END BLOCK
         END PROGRAM
-    "
-    )
+    ")
     try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_F08 ${CMAKE_BINARY_DIR}
         ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCompilerF08.f90
         OUTPUT_VARIABLE OUTPUT
@@ -85,7 +85,8 @@ endif()
 # Test Fortran 2008 support by using a F2008 specific construct.
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 Unicode 10646")
-    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90 "
+    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90 
+    "
         program test_iso_10646_support
             use iso_fortran_env ,only: output_unit, error_unit
             implicit none
@@ -100,8 +101,8 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
                 write(error_unit,'(A)') 'JSON-Fortran may be configured to enable UCS4 support.'
                 write(output_unit,'(A)') 'UCS4_SUPPORTED'
             end if
-        end program test_iso_10646_support"
-    )
+        end program test_iso_10646_support
+    ")
     try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 ${CMAKE_BINARY_DIR}
         ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranUnicodeSupport.f90
         OUTPUT_VARIABLE OUTPUT
@@ -127,7 +128,8 @@ endif()
 # Test Fortran 2008 support for compiler_version and compiler_options.
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 iso_fortran_env compiler_version and compiler_options")
-    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90 "
+    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90 
+    "
         program test_iso_support
         use iso_fortran_env
         implicit none
@@ -156,8 +158,8 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
         endif
         write(error_unit,'(A)') 'Your compiler supports ISO_FORTRAN_ENV compiler_options() '
         write(error_unit,'(A)') ' Compiler options: '// trim(str)
-        end program test_iso_support" 
-    )
+        end program test_iso_support
+    ")
     try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV ${CMAKE_BINARY_DIR}
         ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90
         OUTPUT_VARIABLE OUTPUT
@@ -170,7 +172,7 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
         )
         set(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV 1)
     else()
-         message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports ISO_FORTRAN_ENV compiler_version/options -- no")
+        message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports ISO_FORTRAN_ENV compiler_version/options -- no")
         file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
             "Determining if the Fortran compiler supports Fortran2008 ISO_FORTRAN_ENV compiler_version failed with "
             "the following output:\n${OUTPUT}\n\n"
@@ -183,7 +185,8 @@ endif()
 # Test Fortran preprocessor support for variadic macros
 if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
     message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports variadic macros")
-    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCPPCompilerVariadic.f90 "
+    file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCPPCompilerVariadic.f90 
+    "
         #define c99_count(...)    _c99_count1 ( , ##__VA_ARGS__)/* */
         #define _c99_count1(...)  _c99_count2 (__VA_ARGS__,10,9,8,7,6,5,4,3,2,1,0)
         #define _c99_count2(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,n,...) n
@@ -192,8 +195,8 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC)
         integer,parameter :: nv=c99_count (__VA_ARGS__);
         character(255)::p_tokens= #__VA_ARGS__ ;
         i = 5
-        end program dummyprog"
-    )
+        end program dummyprog
+    ")
     try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_VARIADIC ${CMAKE_BINARY_DIR}
         ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCPPCompilerVariadic.f90
          OUTPUT_VARIABLE OUTPUT
@@ -223,10 +226,11 @@ endif()
 
 # Disable in-source builds to prevent source tree corruption.
 if(" ${CMAKE_SOURCE_DIR}" STREQUAL " ${CMAKE_BINARY_DIR}")
-    message(FATAL_ERROR "
+    message(FATAL_ERROR 
+    "
         FATAL: In-source builds are not allowed.
-               You should create separate directory for build files."
-    )
+               You should create separate directory for build files.
+    ")
 endif()
 
 # Look at system to see what if any options are available because
@@ -398,47 +402,47 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 #  set(cstd   "-c1x" )
 #  set(cppstd "--c++14")
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
-  # ifort
-  # set(FC "ifx" CACHE PATH "IntelLLVM Fortran compiler")
-  set(preproc  "-fpp -D IFX")
-  set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
-  set(checks   "-check bounds -check uninit")
-  set(warn     "-warn all")
-  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
-  #set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
-  set(forspeed "-O3 -fp-model fast=2 -inline all")
-  set(forpar   " ")
-  set(target   "-no-prec-div -fPIC -xHost -traceback ")
-  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
-      set(target "${target} -std08")
-  else()
-      set(target "${target} -std03")
-  endif()
-  set(common   "${preproc} ${dialect} ${checks} ${target}")
-  # else()
-  #   message(" Fortran compiler not supported. Set FC environment variable")
-  if(NOT "$ENV{MKLROOT}" STREQUAL "")
-      set(MKLROOT $ENV{MKLROOT})
-  else()
-      message( "MKLROOT must be set using INTEL mklvars ")
-  endif()
-  if(NOT "$ENV{INTEL_DIR}" STREQUAL "")
-      set(INTEL_DIR $ENV{INTEL_DIR})
-      set(INTEL_TARGET_ARCH $ENV{INTEL_TARGET_ARCH})
-      set(INTEL_TARGET_PLATFORM $ENV{INTEL_TARGET_PLATFORM})
-  else()
-      message( "INTEL_DIR must be set using INTEL compilervars ")
-  endif()
-  if(CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
-      if(NOT "$ENV{I_MPI_ROOT}" STREQUAL "")
-          set(I_MPI_ROOT $ENV{I_MPI_ROOT})
-      else()
-          message( "I_MPI_ROOT must be set using INTEL mpivars ")
-      endif()
-  endif()
-  option(INTEL_OMP_OVERRIDE "Allow intel compiler to override limits when compiling OpenMP" OFF)
-  set(cstd "-std=c11" )
-  set(cppstd "-std=c++14" )
+    # ifort
+    # set(FC "ifx" CACHE PATH "IntelLLVM Fortran compiler")
+    set(preproc  "-fpp -D IFX")
+    set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 5268 -diag-disable 6477 -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
+    set(checks   "-check bounds -check uninit")
+    set(warn     "-warn all")
+    set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
+    #set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
+    set(forspeed "-O3 -fp-model fast=2 -inline all")
+    set(forpar   " ")
+    set(target   "-no-prec-div -fPIC -xHost -traceback ")
+    if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
+        set(target "${target} -std08")
+    else()
+        set(target "${target} -std03")
+    endif()
+    set(common   "${preproc} ${dialect} ${checks} ${target}")
+    # else()
+    #   message(" Fortran compiler not supported. Set FC environment variable")
+    if(NOT "$ENV{MKLROOT}" STREQUAL "")
+        set(MKLROOT $ENV{MKLROOT})
+    else()
+        message( "MKLROOT must be set using INTEL mklvars ")
+    endif()
+    if(NOT "$ENV{INTEL_DIR}" STREQUAL "")
+        set(INTEL_DIR $ENV{INTEL_DIR})
+        set(INTEL_TARGET_ARCH $ENV{INTEL_TARGET_ARCH})
+        set(INTEL_TARGET_PLATFORM $ENV{INTEL_TARGET_PLATFORM})
+    else()
+        message( "INTEL_DIR must be set using INTEL compilervars ")
+    endif()
+    if(CMAKE_Fortran_COMPILER STREQUAL "mpiif*")
+        if(NOT "$ENV{I_MPI_ROOT}" STREQUAL "")
+            set(I_MPI_ROOT $ENV{I_MPI_ROOT})
+        else()
+            message( "I_MPI_ROOT must be set using INTEL mpivars ")
+        endif()
+    endif()
+    option(INTEL_OMP_OVERRIDE "Allow intel compiler to override limits when compiling OpenMP" OFF)
+    set(cstd "-std=c11" )
+    set(cppstd "-std=c++14" )
 endif()
 
 #option(LARGE_FILE_SUPPORT  "GNU -- Link with library directory for large file support (-mcmodel=large)" ON)
@@ -534,40 +538,46 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" BT)
 #################################################################
 # CONFIGURATION TYPES & BUILD MODE
 #################################################################
-set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO )
+set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-      "Choose the type of build, options are: NONE DEBUG RELEASE RELWITHDEBINFO"
-      FORCE)
+        "Choose the type of build, options are: NONE DEBUG RELEASE RELWITHDEBINFO"
+        FORCE
+    )
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE RELWITHDEBINFO TESTING)
 endif(NOT CMAKE_BUILD_TYPE)
 
 if(BT STREQUAL "RELEASE")
     set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
         "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-        FORCE)
+        FORCE
+    )
 elseif(BT STREQUAL "DEBUG")
-   set (CMAKE_BUILD_TYPE DEBUG CACHE STRING
-     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-     FORCE)
+    set(CMAKE_BUILD_TYPE DEBUG CACHE STRING
+        "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
+        FORCE
+    )
 elseif(BT STREQUAL "RELWITHDEBINFO")
-   set (CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
-     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
-     FORCE)
+    set(CMAKE_BUILD_TYPE RELWITHDEBINFO CACHE STRING
+        "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO  or TESTING."
+        FORCE
+    )
 elseif(BT STREQUAL "TESTING")
-   set (CMAKE_BUILD_TYPE TESTING CACHE STRING
-     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-     FORCE)
+    set(CMAKE_BUILD_TYPE TESTING CACHE STRING
+        "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
+        FORCE
+    )
 elseif(NOT BT)
-   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
-     "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
-     FORCE)
-   message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
+    set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
+        "Choose the type of build, options are DEBUG, RELEASE, RELWITHDEBINFO or TESTING."
+        FORCE
+    )
+    message(STATUS "CMAKE_BUILD_TYPE not given, defaulting to RELEASE")
 else()
-   message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
+    message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
 endif(BT STREQUAL "RELEASE")
 
 
 if(LINUX)
-   option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
+    option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
 endif()
