@@ -11,6 +11,8 @@ real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS)
 data_ori(1,:) = [ 1, 2, 3, 4]
 data_ori(2,:) = [ 3, 1, 5, 8]
 data_ori(3,:) = [-1, 0, 4, 10]
+! data_ori(4,:) = [ 0, 0, 7, 10]
+! data_ori(5,:) = [-2, 0, 1, 10]
 print *, 'Original data:'
 print *, data_ori(1,:)
 print *, data_ori(2,:)
