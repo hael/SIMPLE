@@ -169,8 +169,7 @@ contains
                 end if
             end if
             if(spproj_glob%os_mic%isthere('thumb')) then
-                call gui_stats%set('latest', '', trim(adjustl(CWD_GLOB))//'/'//&
-                    &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
+                call gui_stats%set('latest', '', trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
             end if
         endif
         ! output directories
@@ -297,8 +296,7 @@ contains
                     end if
                 end if
                 if(spproj_glob%os_mic%isthere('thumb')) then
-                    call gui_stats%set('latest', '', trim(adjustl(CWD_GLOB))//'/'//&
-                        &trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
+                    call gui_stats%set('latest', '', trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(),'thumb'))), thumbnail=.true.)
                 end if
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
@@ -1306,6 +1304,7 @@ contains
         integer                                :: nchunks_imported_glob, nchunks_imported, nprojects, iter, last_injection
         integer                                :: n_imported, n_added, nptcls_glob, n_failed_jobs, ncls_in, nmic_star
         logical                                :: l_haschanged, l_nchunks_maxed
+        real                                   :: nptcls_pool
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
         call cline%set('autoscale',    'yes')
@@ -1380,6 +1379,9 @@ contains
         l_nchunks_maxed       = .false.
         ! guistats init
         call gui_stats%init
+        call gui_stats%set('particles', 'particles_imported',          0,            primary=.true.)
+        call gui_stats%set('2D',        'iteration',                   0,            primary=.true.)
+        call gui_stats%set('compute',   'compute_in_use',      int2str(0) // '/' // int2str(params%nparts), primary=.true.)
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 ! termination
@@ -1406,17 +1408,12 @@ contains
                 write(logfhandle,'(A,I8)')       '>>> # MICROGRAPHS IMPORTED : ',n_imported
                 write(logfhandle,'(A,I8)')       '>>> # PARTICLES IMPORTED   : ',nptcls_glob
                 ! guistats
-                ! call gui_stats%set('micrographs', 'movies', int2str(n_imported) // '/' // int2str(stacksz + spproj_glob%os_mic%get_noris()), primary=.true.)
-                call gui_stats%set('micrographs', 'ptcls', nptcls_glob, primary=.true.)
+                call gui_stats%set('particles', 'particles_imported', int2str(nptcls_glob), primary=.true.)
+                call gui_stats%set_now('particles', 'last_particles_imported')
                 ! update progress monitor
                 call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
                 last_injection = simple_gettime()
-                ! guistats
-                ! call gui_stats%set_now('micrographs', 'last_new_movie')
-                ! if(spproj_glob%os_mic%isthere('thumb')) then
-                !     call gui_stats%set('micrographs', 'latest_micrograph', trim(adjustl(cwd_job)) // '/' // trim(adjustl(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'thumb'))), thumbnail=.true.)
-                ! end if
                 l_haschanged = .true.
                 ! remove this?
                 if( n_imported < 1000 .and. l_haschanged )then
@@ -1451,7 +1448,11 @@ contains
             endif
             call sleep(WAITTIME)
             ! guistats
-            if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE)
+            if(file_exists(POOLSTATS_FILE)) then
+                call gui_stats%merge(POOLSTATS_FILE)
+                call gui_stats%get('particles', 'particles_processed', nptcls_pool)
+                if(nptcls_pool > 0.0) call gui_stats%set('particles', 'particles_processed', int2str(floor(nptcls_pool)) // ' (' // int2str(ceiling(100.0 * real(nptcls_pool) / real(nptcls_glob))) // '%)')
+            end if
             call gui_stats%write_json
         end do
         ! termination
@@ -1459,7 +1460,7 @@ contains
         call update_user_params(cline)
         ! final stats
         if(file_exists(POOLSTATS_FILE)) call gui_stats%merge(POOLSTATS_FILE, delete = .true.)
-        call gui_stats%hide('micrographs', 'compute')
+        call gui_stats%hide('compute', 'compute_in_use')
         call gui_stats%write_json
         call gui_stats%kill
         ! cleanup

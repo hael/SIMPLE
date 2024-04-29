@@ -26,7 +26,10 @@ contains
     procedure :: set_now
     procedure :: hide
     procedure :: generate_2D_thumbnail
+    procedure :: generate_2D_jpeg
     ! getters
+    generic   :: get => get_1
+    procedure :: get_1
     procedure :: get_keyline
     ! writers
     procedure :: write
@@ -275,6 +278,24 @@ contains
         self%updated = .true.
     end subroutine set_now
 
+    subroutine get_1( self, section, key, val)
+        class(guistats),  intent(inout)        :: self
+        character(len=*), intent(in)           :: section
+        character(len=*), intent(in)           :: key
+        real, intent(inout)                    :: val
+        integer                                :: line
+        val = 0.0
+        do line = 2, self%stats%get_noris()
+            if(self%stats%isthere(line, "key") \
+            .and. trim(adjustl(self%stats%get_static(line, "key"))) .eq. key \
+            .and. self%stats%isthere(line, "sect") \
+            .and. trim(adjustl(self%stats%get_static(line, "sect"))) .eq. section) then
+                val = self%stats%get(line, "val")
+                exit
+            end if
+        enddo
+    end subroutine get_1
+
     subroutine hide( self, section, key )
         class(guistats),  intent(inout) :: self
         character(len=*), intent(in)    :: section
@@ -301,12 +322,12 @@ contains
             if(stats_len > 0) then
                 call tmporis%new(stats_len, .false.)
                 call tmporis%read(fname)
-                do i = 1, stats_len
+                do i = 2, stats_len
                     if(tmporis%isthere(i, "sect")) then
                         call self%ensure_section(trim(adjustl(tmporis%get_static(i, 'sect'))))
                         if(tmporis%isthere(i, "key")) then
                             keyline = self%get_keyline(trim(adjustl(tmporis%get_static(i, 'sect'))), trim(adjustl(tmporis%get_static(i, 'key'))))
-                            call self%stats%transfer_ori(i, tmporis, keyline)
+                            call self%stats%transfer_ori(keyline, tmporis, i)
                          endif
                     endif
                 enddo
@@ -477,5 +498,36 @@ contains
         if(allocated(inds)) deallocate(inds)
         if(allocated(classres)) deallocate(classres)
     end subroutine generate_2D_thumbnail
+
+    subroutine generate_2D_jpeg( self, section, key, oris2D, last_iter )
+        class(guistats),  intent(inout) :: self
+        type(oris),       intent(inout) :: oris2D
+        integer,          intent(in)    :: last_iter
+        character(len=*), intent(in)    :: section
+        character(len=*), intent(in)    :: key
+        type(image)                     :: clsstk, img
+        character(len=LONGSTRLEN)       :: cavgs, cwd
+        integer                         :: ncls, i, n, ldim_stk(3), ldim_img(3), nptcls
+        call simple_getcwd(cwd)
+        cavgs = trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.mrc'
+        if(.not. file_exists(trim(adjustl(cavgs)))) return
+        ncls = oris2D%get_noris()
+        if(ncls <= 0) return
+        call find_ldim_nptcls(trim(adjustl(cavgs)), ldim_stk, nptcls)
+        ldim_img(1) = ldim_stk(1)
+        ldim_img(2) = ldim_stk(2) * ldim_stk(3)
+        ldim_img(3) = 1
+        ldim_stk(3) = 1
+        call clsstk%new(ldim_stk, 1.0)
+        call img%new(ldim_img, 1.0)
+        do i=1, ncls 
+            call clsstk%read(trim(adjustl(cavgs)), i)
+            call img%tile(clsstk, 1, i) 
+        end do
+        call img%write_jpg(trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.jpg')
+        call self%set(section, key, trim(adjustl(cwd)) // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.jpg', thumbnail = .true.)
+        call img%kill()
+        call clsstk%kill()
+    end subroutine generate_2D_jpeg
 
 end module simple_guistats
