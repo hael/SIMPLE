@@ -1,12 +1,34 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
+#set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+#include(FortranOverride)
+
 project(SIMPLE
         VERSION 3.0.0
         DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://github.com/hael/SIMPLE)"
         HOMEPAGE_URL "https://github.com/hael/SIMPLE"
         LANGUAGES Fortran C CXX)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+enable_testing()
+#return()
+
+#check_fortran_source_compiles("program test
+#error stop
+#end program"
+#HAVE_ERROR_STOP
+#SRC_EXT .F90)
+
+# Find packages 
+find_package(OpenMP)
+message(STATUS "OpenMP encontrado ${OpenMP_Fortran_FOUND}")
+message(STATUS "Version de OpenMP ${OpenMP_VERSION}")
+message(STATUS "version flags ${OpenMP_Fortran_FLAGS}")
+if(OpenMP_Fortran_FOUND)
+    #target_link_libraries(MyTarget PUBLIC OpenMP::OpenMP_Fortran)
+endif()
+find_package(FFTW)
+
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${PROJECT_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
 
 ## CMAKE CONFIGURATION TYPES & BUILDS
