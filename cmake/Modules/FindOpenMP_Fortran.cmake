@@ -29,7 +29,11 @@
 # Modified by Michael Eager 2018 Monash University
 #
 
-#find_package(OpenMP)
+find_package(OpenMP REQUIRED COMPONENTS Fortran)
+message(STATUS "OpenMP FOUND ${OpenMP_FOUND}")
+message(STATUS "OpenMP VERSION ${OpenMP_VERSION}")
+message(STATUS "OpenMP Fortran FOUND ${OpenMP_Fortran_FOUND}")
+message(STATUS "OpenMP Fortran Flags ${OpenMP_Fortran_FLAGS}")
 #if(OpenMP_Fortran_FOUND)
 #    target_link_libraries(MyTarget PUBLIC OpenMP::OpenMP_Fortran)
 #endif()
@@ -112,7 +116,8 @@ if(NOT OPENMP_FOUND)
           end"
     )
     file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenMP.f90
-        "${OpenMP_Fortran_TEST_SOURCE}")
+        "${OpenMP_Fortran_TEST_SOURCE}"
+    )
     # check fortran compiler. also determine number of processors
     foreach(FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
         set(SAFE_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
@@ -126,7 +131,8 @@ if(NOT OPENMP_FOUND)
                 COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
                 CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS} -DCMAKE_LINKER_STATIC_FLAGS=""
                 COMPILE_OUTPUT_VARIABLE OUTPUT
-                RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+                RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL
+            )
         else()
             message(STATUS "OpenMP testing : ${CMAKE_REQUIRED_FLAGS}")
             try_run(OpenMP_RUN_FAILED OpenMP_FLAG_DETECTED ${CMAKE_BINARY_DIR}
@@ -134,7 +140,8 @@ if(NOT OPENMP_FOUND)
                 COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
                 CMAKE_FLAGS -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_FUNCTION_DEFINITIONS} -DCMAKE_LINKER_STATIC_FLAGS=""
                 COMPILE_OUTPUT_VARIABLE OUTPUT
-                RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL)
+                RUN_OUTPUT_VARIABLE OMP_NUM_PROCS_INTERNAL
+            )
         endif(APPLE)
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")
             message(STATUS "OpenMP compilation output : ${OUTPUT}")
@@ -143,7 +150,8 @@ if(NOT OPENMP_FOUND)
         if(OpenMP_FLAG_DETECTED)
             file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
                 "Determining if the Fortran compiler supports OpenMP passed with "
-                "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
+                "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n"
+            )
             set(OpenMP_FLAG_DETECTED 1)
             # IF (OpenMP_RUN_FAILED)
             #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
@@ -158,14 +166,16 @@ if(NOT OPENMP_FOUND)
                 string(REGEX REPLACE ".* \([0-9]+\)$" "\\1" OMP_NUM_PROCS_INTERNAL "${OMP_NUM_PROCS_INTERNAL}")
                 message(STATUS "OMP NUM PROCS OUTPUT set to ${OMP_NUM_PROCS_INTERNAL}" )
                 set(OMP_NUM_PROCS ${OMP_NUM_PROCS_INTERNAL} CACHE
-                    STRING "Number of processors OpenMP may use" FORCE)
+                    STRING "Number of processors OpenMP may use" FORCE
+                )
                 set(OpenMP_Fortran_FLAGS_INTERNAL "${FLAG}")
             endif()
             break()
         else()
             file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
                 "Determining if the Fortran compiler supports OpenMP failed with "
-                "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n")
+                "the following output:\n${OMP_NUM_PROCS_INTERNAL}\n\n"
+            )
             set(OpenMP_FLAG_DETECTED 0)
         endif(OpenMP_FLAG_DETECTED)
     endforeach(FLAG ${OpenMP_Fortran_FLAG_CANDIDATES})
@@ -200,7 +210,8 @@ file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranOpenM
         program TestOpenMPVersion
             include 'omp_lib.h' !    only include when _OPENMP defined
             write(*,'(I6)',ADVANCE='NO') openmp_version
-        end program TestOpenMPVersion"
+        end program TestOpenMPVersion
+    "
 )
 
 # message(STATUS " TESTING  ")
@@ -218,7 +229,8 @@ message(STATUS " OpenMP version runtime output: ${OMP_VERSION_INTERNAL}")
 if(OpenMP_Version_DETECTED)
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
         "Determining the Fortran compiler version of OpenMP passed with "
-        "the following output:\n${OMP_VERSION_INTERNAL}\n\n")
+        "the following output:\n${OMP_VERSION_INTERNAL}\n\n"
+    )
     set(OpenMP_Version_DETECTED 1)
     # IF (OpenMP_RUN_FAILED)
     #     MESSAGE (FATAL_ERROR "OpenMP found, but test code did not run")
@@ -241,12 +253,14 @@ if(OpenMP_Version_DETECTED)
         string(REGEX REPLACE ".*\(2[0-9]*\)$" "\\1" OMP_VERSION_INTERNAL "${OMP_VERSION_INTERNAL}")
         message(STATUS " OMP VERSION OUTPUT set to ${OMP_VERSION_INTERNAL}" )
         set(OpenMP_Fortran_VERSION ${OMP_VERSION_INTERNAL} CACHE
-            STRING " OpenMP version in Fortran header " FORCE)
+            STRING " OpenMP version in Fortran header " FORCE
+        )
     endif()
 else()
     file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
         "Determining the Fortran compiler version of OpenMP failed with "
-        "the following output:\n${OMP_VERSION_INTERNAL}\n\n")
+        "the following output:\n${OMP_VERSION_INTERNAL}\n\n"
+    )
     set(OpenMP_Version_DETECTED 0)
 endif(OpenMP_Version_DETECTED)
 unset(OpenMP_Version_DETECTED CACHE)
