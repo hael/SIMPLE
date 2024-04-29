@@ -16,9 +16,9 @@ print *, data_ori(1,:)
 print *, data_ori(2,:)
 print *, data_ori(3,:)
 avg           = sum(data_ori, dim=2) / real(NS)
-data_cen(1,:) = data_ori(1,:) - avg(1)
-data_cen(2,:) = data_ori(2,:) - avg(2)
-data_cen(3,:) = data_ori(3,:) - avg(3)
+do j = 1, NP
+     data_cen(j,:) = data_ori(j,:) - avg(j)
+enddo
 call prob_pca%new(NS, NP, NC)
 call prob_pca%master(data_cen, MAXPCAITS)
 print *, 'PPCA eigenvalues:'
@@ -30,8 +30,9 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using PPCA:'
-print *, data_pca(1,:)
-print *, data_pca(2,:)
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
 print *, 'Feature vecs using PPCA:'
 do j = 1, NS
     E_zn(:,j) = prob_pca%get_feat(j)
@@ -58,8 +59,9 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using PCA:'
-print *, data_pca(1,:)
-print *, data_pca(2,:)
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
 print *, '---------------------------------------------------'
 ! PCA (transpose) test
 print *, 'PCA_T eigenvalues/eigenvectors:'
@@ -79,6 +81,7 @@ do j = 1, NS
 end do
 !$omp end parallel do
 print *, 'Pre-imaged data using PCA_T:'
-print *, data_pca(1,:)
-print *, data_pca(2,:)
+do j = 1, NP
+    print *, data_pca(j,:)
+enddo
 end program simple_test_ppca_kpca
