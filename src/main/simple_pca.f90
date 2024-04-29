@@ -106,7 +106,8 @@ contains
     subroutine master( self, pcavecs_cen )
         class(pca), intent(inout) :: self
         real,       intent(in)    :: pcavecs_cen(self%D,self%N)
-        real :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
+        real    :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
+        integer :: i
         eig_vecs = pcavecs_cen
         call svdcmp(eig_vecs, eig_vals, tmp)
         eig_vals  = eig_vals**2 / real(self%D)
