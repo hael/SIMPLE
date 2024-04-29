@@ -31,7 +31,7 @@ type pca
     procedure          :: kill
 end type
 
-logical :: L_PRINT = .true.
+logical :: L_PRINT = .false.
 
 contains
 
@@ -83,11 +83,12 @@ contains
     end function get_feat
 
     !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_1( self, i, dat )
+    subroutine generate_1( self, i, avg, dat )
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: i
+        real,       intent(in)    :: avg(self%D)
         real,       intent(inout) :: dat(self%D)
-        dat = self%data(:,i)
+        dat = avg + self%data(:,i)
     end subroutine generate_1
 
     !>  \brief  is for sampling the generative model at a given image index
@@ -96,21 +97,16 @@ contains
         integer,    intent(in)    :: i
         real,       intent(in)    :: avg(self%D)
         real,       intent(inout) :: dat(self%D), var
-        
+        var = sum(self%data(:,i)**2) / real(self%D)
+        dat = dat + avg
     end subroutine generate_2
 
     ! CALCULATORS
 
-    subroutine master( self, pcavecs )
+    subroutine master( self, pcavecs_cen )
         class(pca), intent(inout) :: self
-        real,       intent(in)    :: pcavecs(self%D,self%N)
-        real    :: avg(self%D), eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N), pcavecs_cen(self%D,self%N)
-        integer :: i
-        avg         = sum(pcavecs, dim=2) / real(self%N)
-        pcavecs_cen = pcavecs
-        do i = 1, self%D
-            pcavecs_cen(i,:) = pcavecs_cen(i,:) - avg(i)
-        enddo
+        real,       intent(in)    :: pcavecs_cen(self%D,self%N)
+        real :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
         eig_vecs = pcavecs_cen
         call svdcmp(eig_vecs, eig_vals, tmp)
         eig_vals  = eig_vals**2 / real(self%D)
@@ -124,9 +120,6 @@ contains
             enddo
         endif
         self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
-        do i = 1, self%D
-            self%data(i,:) = self%data(i,:) + avg(i)
-        enddo
     end subroutine master
 
     ! DESTRUCTOR
