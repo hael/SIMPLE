@@ -25,23 +25,16 @@ type, extends(pca) :: ppca_inmem
     logical           :: existence=.false.
   contains
     ! CONSTRUCTOR
-    procedure          :: new        => new_inmem
+    procedure          :: new      => new_inmem
     ! GETTERS
-    procedure          :: get_N
-    procedure          :: get_D
-    procedure          :: get_Q
-    procedure          :: get_var
-    procedure          :: get_feat   => get_feat_inmem
-    procedure          :: get_feats_ptr
-    procedure          :: generate_1 => generate_inmem_1
-    procedure          :: generate_2 => generate_inmem_2
-    generic            :: generate   => generate_1, generate_2
+    procedure          :: get_feat => get_feat_inmem
+    procedure          :: generate => generate_inmem
     ! CALCULATORS
-    procedure          :: master     => master_inmem
+    procedure          :: master   => master_inmem
     procedure, private :: init
     procedure, private :: em_opt
     ! DESTRUCTOR
-    procedure          :: kill       => kill_inmem
+    procedure          :: kill     => kill_inmem
 end type
 
 logical :: L_PRINT = .false.
@@ -49,13 +42,6 @@ logical :: L_PRINT = .false.
 contains
 
     ! CONSTRUCTORS
-
-     !>  \brief  is a constructor
-    function constructor( N, D, Q ) result( self )
-        integer, intent(in) :: N, D, Q
-        type(ppca_inmem)    :: self
-        call self%new( N, D, Q )
-    end function constructor
 
     !>  \brief  is a constructor
     subroutine new_inmem( self, N, D, Q )
@@ -75,27 +61,6 @@ contains
 
     ! GETTERS
 
-    pure integer function get_N( self )
-        class(ppca_inmem), intent(in) :: self
-        get_N = self%N
-    end function get_N
-
-    pure integer function get_D( self )
-        class(ppca_inmem), intent(in) :: self
-        get_D = self%D
-    end function get_D
-
-    pure integer function get_Q( self )
-        class(ppca_inmem), intent(in) :: self
-        get_Q = self%Q
-    end function get_Q
-
-    pure real function get_var( self, j )
-        class(ppca_inmem), intent(in) :: self
-        integer,           intent(in) :: j
-        get_var = sum((self%E_zn(1,j,:) - sum(self%E_zn(1,j,:))/real(self%Q))**2)
-    end function get_var
-
     !>  \brief  is for getting a feature vector
     function get_feat_inmem( self, i ) result( feat )
         class(ppca_inmem), intent(inout) :: self
@@ -112,24 +77,13 @@ contains
     end function get_feats_ptr
 
     !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_inmem_1( self, i, avg, dat )
+    subroutine generate_inmem( self, i, avg, dat )
         class(ppca_inmem), intent(inout) :: self
         integer,           intent(in)    :: i
         real,              intent(in)    :: avg(self%D)
         real,              intent(inout) :: dat(self%D)
         dat = avg + [matmul(self%W,transpose(self%E_zn(:,:,i)))]
-    end subroutine generate_inmem_1
-
-    !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_inmem_2( self, i, avg, dat, var )
-        class(ppca_inmem), intent(inout) :: self
-        integer,           intent(in)    :: i
-        real,              intent(in)    :: avg(self%D)
-        real,              intent(inout) :: dat(self%D), var
-        dat = [matmul(self%W,transpose(self%E_zn(:,:,i)))]
-        var = sum(dat**2) / real(self%D)
-        dat = dat + avg
-    end subroutine generate_inmem_2
+    end subroutine generate_inmem
 
     ! CALCULATORS
 

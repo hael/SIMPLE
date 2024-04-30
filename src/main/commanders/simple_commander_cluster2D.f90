@@ -2001,15 +2001,17 @@ contains
 
     subroutine exec_ppca_denoise_classes( self, cline )
         use simple_imgproc,       only: make_pcavecs
-        use simple_ppca_inmem,    only: ppca_inmem
         use simple_image,         only: image
         use simple_classaverager, only: transform_ptcls
+        use simple_pca,           only: pca
+        use simple_pca_svd,       only: pca_svd
+        use simple_ppca_inmem,    only: ppca_inmem
         class(ppca_denoise_classes_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         integer,          parameter   :: MAXPCAITS = 15
+        class(pca),       pointer     :: pca_ptr  => null()
         type(parameters)              :: params
         type(builder)                 :: build
-        type(ppca_inmem)              :: prob_pca
         type(image),      allocatable :: imgs(:)
         type(image)                   :: cavg
         type(oris)                    :: os
@@ -2074,6 +2076,13 @@ contains
         fname_oris           = 'oris_denoised.txt'
         cnt1 = 0
         cnt2 = 0
+        ! pca allocation
+        select case(trim(params_glob%pca_mode))
+            case('ppca')
+                allocate(ppca_inmem :: pca_ptr)
+            case('pca_svd')
+                allocate(pca_svd    :: pca_ptr)
+        end select
         do i = 1, ncls
             call progress_gfortran(i,ncls)
             call transform_ptcls(spproj, params%oritype, cls_inds(i), imgs, pinds, phflip=l_phflip, cavg=cavg)
@@ -2096,23 +2105,23 @@ contains
             endif
             if( allocated(tmpvec) ) deallocate(tmpvec)
             if( l_transp_pca )then
-                call prob_pca%new(npix, nptcls, params%neigs)
-                call prob_pca%master(pcavecs, MAXPCAITS)
+                call pca_ptr%new(npix, nptcls, params%neigs)
+                call pca_ptr%master(pcavecs, MAXPCAITS)
                 allocate(tmpvec(nptcls))
                 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, npix
-                    call prob_pca%generate(j, avg, tmpvec)
+                    call pca_ptr%generate(j, avg, tmpvec)
                     pcavecs(:,j) = tmpvec
                 end do
                 !$omp end parallel do
                 pcavecs = transpose(pcavecs)
             else
-                call prob_pca%new(nptcls, npix, params%neigs)
-                call prob_pca%master(pcavecs, MAXPCAITS)
+                call pca_ptr%new(nptcls, npix, params%neigs)
+                call pca_ptr%master(pcavecs, MAXPCAITS)
                 allocate(tmpvec(npix))
                 !$omp parallel do private(j,tmpvec) default(shared) proc_bind(close) schedule(static)
                 do j = 1, nptcls
-                    call prob_pca%generate(j, avg, tmpvec)
+                    call pca_ptr%generate(j, avg, tmpvec)
                     pcavecs(:,j) = tmpvec
                 end do
                 !$omp end parallel do
