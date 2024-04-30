@@ -1,174 +1,66 @@
-! PCA using standard SVD
+! abstract strategy3D base class
 module simple_pca
-include 'simple_lib.f08'
-use simple_defs ! singleton
 implicit none
 
 public :: pca
 private
 
-type pca
-    private
-    integer           :: N          !< nr of data vectors
-    integer           :: D          !< nr of components in each data vec
-    integer           :: Q          !< nr of components in each latent vec
-    real, allocatable :: E_zn(:,:)  !< expectations (feature vecs)
-    real, allocatable :: data(:,:)  !< projected data on feature vecs
-    logical           :: existence=.false.
+type, abstract :: pca
+    integer :: N          !< nr of data vectors
+    integer :: D          !< nr of components in each data vec
+    integer :: Q          !< nr of components in each latent vec
   contains
-    ! CONSTRUCTOR
-    procedure          :: new
-    ! GETTERS
-    procedure          :: get_N
-    procedure          :: get_D
-    procedure          :: get_Q
-    procedure          :: get_feat
-    procedure, private :: generate_1, generate_2
-    generic            :: generate => generate_1, generate_2
-    ! CALCULATORS
-    procedure          :: master, master_T
-    ! DESTRUCTOR
-    procedure          :: kill
-end type
+    procedure(generic_new),        deferred :: new
+    procedure(generic_get_feat),   deferred :: get_feat
+    procedure(generic_generate_1), deferred :: generate_1
+    procedure(generic_generate_2), deferred :: generate_2
+    procedure(generic_master),     deferred :: master
+    procedure(generic_kill),       deferred :: kill
+end type pca
 
-logical :: L_PRINT = .true.
+abstract interface
 
-contains
-
-    ! CONSTRUCTORS
-
-     !>  \brief  is a constructor
-    function constructor( N, D, Q ) result( self )
-        integer, intent(in) :: N, D, Q
-        type(pca) :: self
-        call self%new( N, D, Q )
-    end function constructor
-
-    !>  \brief  is a constructor
-    subroutine new( self, N, D, Q )
+    subroutine generic_new( self, N, D, Q )
+        import :: pca
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: N, D, Q
-        call self%kill
-        self%N = N
-        self%D = D
-        self%Q = Q
-        ! allocate principal subspace and feature vectors
-        allocate( self%E_zn(self%Q,self%N), self%data(self%D,self%N), source=0.)
-        self%existence = .true.
-    end subroutine new
+    end subroutine generic_new
 
-    ! GETTERS
-
-    pure integer function get_N( self )
-        class(pca), intent(in) :: self
-        get_N = self%N
-    end function get_N
-
-    pure integer function get_D( self )
-        class(pca), intent(in) :: self
-        get_D = self%D
-    end function get_D
-
-    pure integer function get_Q( self )
-        class(pca), intent(in) :: self
-        get_Q = self%Q
-    end function get_Q
-
-    !>  \brief  is for getting a feature vector
-    function get_feat( self, i ) result( feat )
+    function generic_get_feat( self, i ) result( feat )
+        import :: pca
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: i
         real,       allocatable   :: feat(:)
-        allocate(feat(self%Q), source=self%E_zn(:,i))
-    end function get_feat
+    end function generic_get_feat
 
-    !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_1( self, i, avg, dat )
+    subroutine generic_generate_1( self, i, avg, dat )
+        import :: pca
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: i
         real,       intent(in)    :: avg(self%D)
         real,       intent(inout) :: dat(self%D)
-        dat = avg + self%data(:,i)
-    end subroutine generate_1
+    end subroutine generic_generate_1
 
-    !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_2( self, i, avg, dat, var )
+    subroutine generic_generate_2( self, i, avg, dat, var )
+        import :: pca
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: i
         real,       intent(in)    :: avg(self%D)
         real,       intent(inout) :: dat(self%D), var
-        var = sum(self%data(:,i)**2) / real(self%D)
-        dat = dat + avg
-    end subroutine generate_2
+    end subroutine generic_generate_2
 
-    ! CALCULATORS
+    subroutine generic_master( self, pcavecs, maxpcaits )
+        import :: pca
+        class(pca),        intent(inout) :: self
+        real,              intent(in)    :: pcavecs(self%D,self%N)
+        integer, optional, intent(in)    :: maxpcaits
+    end subroutine generic_master
 
-    subroutine master( self, pcavecs_cen )
+    subroutine generic_kill( self )
+        import :: pca
         class(pca), intent(inout) :: self
-        real,       intent(in)    :: pcavecs_cen(self%D,self%N)
-        real    :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
-        integer :: i, inds(self%N)
-        eig_vecs = pcavecs_cen
-        call svdcmp(eig_vecs, eig_vals, tmp)
-        eig_vals  = eig_vals**2 / real(self%D)
-        inds      = (/(i,i=1,self%N)/)
-        call hpsort(eig_vals, inds)
-        call reverse(eig_vals)
-        call reverse(inds)
-        eig_vecs  = eig_vecs(:, inds)
-        self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
-        if( L_PRINT )then
-            print *, 'eigenvalues:'
-            print *, eig_vals
-            print *, 'eigenvectors:'
-            do i = 1, self%Q
-                print *, eig_vecs(:,i)
-            enddo
-        endif
-        self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
-    end subroutine master
+    end subroutine generic_kill
 
-    subroutine master_T( self, pcavecs_cen )
-        class(pca), intent(inout) :: self
-        real,       intent(in)    :: pcavecs_cen(self%D,self%N)
-        real    :: eig_vecs(  self%D,self%N), eig_vals(  self%N), tmp(  self%N,self%N), pcavecs_T(self%N,self%D),&
-                   eig_vecs_T(self%N,self%D), eig_vals_T(self%D), tmp_T(self%D, self%D)
-        integer :: i, inds(self%D), min_ND
-        pcavecs_T  = transpose(pcavecs_cen)
-        eig_vecs_T = pcavecs_T
-        call svdcmp(eig_vecs_T, eig_vals_T, tmp_T)
-        inds      = (/(i,i=1,self%D)/)
-        call hpsort(eig_vals_T, inds)
-        call reverse(eig_vals_T)
-        call reverse(inds)
-        eig_vecs_T = eig_vecs_T(:, inds)
-        tmp_T      =      tmp_T(:, inds)
-        eig_vals   = 0.
-        eig_vecs   = 0.
-        min_ND     = min(self%N, self%D)
-        eig_vals(  1:min_ND) = eig_vals_T(  1:min_ND)**2 / real(self%D)
-        eig_vecs(:,1:min_ND) =      tmp_T(:,1:min_ND)
-        self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
-        if( L_PRINT )then
-            print *, 'eigenvalues:'
-            print *, eig_vals
-            print *, 'eigenvectors:'
-            do i = 1, self%Q
-                print *, eig_vecs(:,i)
-            enddo
-        endif
-        self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
-    end subroutine master_T
-
-    ! DESTRUCTOR
-
-    !>  \brief  is a destructor
-    subroutine kill( self )
-        class(pca), intent(inout) :: self
-        if( self%existence )then
-            deallocate( self%E_zn, self%data )
-            self%existence = .false.
-        endif
-    end subroutine kill
+end interface
 
 end module simple_pca
