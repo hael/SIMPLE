@@ -15,23 +15,18 @@ type, extends(pca) :: pca_svd
     logical           :: existence=.false.
   contains
     ! CONSTRUCTOR
-    procedure :: new        => new_svd
+    procedure :: new      => new_svd
     ! GETTERS
-    procedure :: get_N
-    procedure :: get_D
-    procedure :: get_Q
-    procedure :: get_feat   => get_feat_svd
-    procedure :: generate_1 => generate_svd_1
-    procedure :: generate_2 => generate_svd_2
-    generic   :: generate   => generate_1, generate_2
+    procedure :: get_feat => get_feat_svd
+    procedure :: generate => generate_svd
     ! CALCULATORS
-    procedure :: master     => master_svd
-    procedure :: master_T
+    procedure :: master   => master_svd
+    procedure, private :: master_ori, master_T
     ! DESTRUCTOR
-    procedure :: kill       => kill_svd
+    procedure :: kill     => kill_svd
 end type
 
-logical :: L_PRINT = .true.
+logical :: L_PRINT = .false.
 
 contains
 
@@ -76,23 +71,13 @@ contains
     end function get_feat_svd
 
     !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_svd_1( self, i, avg, dat )
+    subroutine generate_svd( self, i, avg, dat )
         class(pca_svd), intent(inout) :: self
         integer,        intent(in)    :: i
         real,           intent(in)    :: avg(self%D)
         real,           intent(inout) :: dat(self%D)
         dat = avg + self%data(:,i)
-    end subroutine generate_svd_1
-
-    !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_svd_2( self, i, avg, dat, var )
-        class(pca_svd), intent(inout) :: self
-        integer,        intent(in)    :: i
-        real,           intent(in)    :: avg(self%D)
-        real,           intent(inout) :: dat(self%D), var
-        var = sum(self%data(:,i)**2) / real(self%D)
-        dat = dat + avg
-    end subroutine generate_svd_2
+    end subroutine generate_svd
 
     ! CALCULATORS
 
@@ -100,6 +85,16 @@ contains
         class(pca_svd),    intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
         integer, optional, intent(in)    :: maxpcaits                   ! redundant for the simple_pca interface
+        if( self%D >= self%N )then
+            call self%master_ori(pcavecs)
+        else
+            call self%master_T(pcavecs)
+        endif
+    end subroutine master_svd
+
+    subroutine master_ori( self, pcavecs )
+        class(pca_svd),    intent(inout) :: self
+        real,              intent(in)    :: pcavecs(self%D,self%N)
         real    :: eig_vecs(self%D,self%N), eig_vals(self%N), tmp(self%N,self%N)
         integer :: i, inds(self%N)
         eig_vecs = pcavecs
@@ -120,15 +115,15 @@ contains
             enddo
         endif
         self%data = matmul(eig_vecs(:,1:self%Q), self%E_zn)
-    end subroutine master_svd
+    end subroutine master_ori
 
-    subroutine master_T( self, pcavecs_cen )
+    subroutine master_T( self, pcavecs )
         class(pca_svd), intent(inout) :: self
-        real,           intent(in)    :: pcavecs_cen(self%D,self%N)
+        real,           intent(in)    :: pcavecs(self%D,self%N)
         real    :: eig_vecs(  self%D,self%N), eig_vals(  self%N), tmp(  self%N,self%N), pcavecs_T(self%N,self%D),&
                    eig_vecs_T(self%N,self%D), eig_vals_T(self%D), tmp_T(self%D, self%D)
         integer :: i, inds(self%D), min_ND
-        pcavecs_T  = transpose(pcavecs_cen)
+        pcavecs_T  = transpose(pcavecs)
         eig_vecs_T = pcavecs_T
         call svdcmp(eig_vecs_T, eig_vals_T, tmp_T)
         inds      = (/(i,i=1,self%D)/)
@@ -142,7 +137,7 @@ contains
         min_ND     = min(self%N, self%D)
         eig_vals(  1:min_ND) = eig_vals_T(  1:min_ND)**2 / real(self%D)
         eig_vecs(:,1:min_ND) =      tmp_T(:,1:min_ND)
-        self%E_zn = transpose(matmul(transpose(pcavecs_cen), eig_vecs(:,1:self%Q)))
+        self%E_zn = transpose(matmul(transpose(pcavecs), eig_vecs(:,1:self%Q)))
         if( L_PRINT )then
             print *, 'eigenvalues:'
             print *, eig_vals

@@ -10,12 +10,11 @@ type, abstract :: pca
     integer :: D          !< nr of components in each data vec
     integer :: Q          !< nr of components in each latent vec
   contains
-    procedure(generic_new),        deferred :: new
-    procedure(generic_get_feat),   deferred :: get_feat
-    procedure(generic_generate_1), deferred :: generate_1
-    procedure(generic_generate_2), deferred :: generate_2
-    procedure(generic_master),     deferred :: master
-    procedure(generic_kill),       deferred :: kill
+    procedure(generic_new),      deferred :: new
+    procedure(generic_get_feat), deferred :: get_feat
+    procedure(generic_generate), deferred :: generate
+    procedure(generic_master),   deferred :: master
+    procedure(generic_kill),     deferred :: kill
 end type pca
 
 abstract interface
@@ -33,21 +32,13 @@ abstract interface
         real,       allocatable   :: feat(:)
     end function generic_get_feat
 
-    subroutine generic_generate_1( self, i, avg, dat )
+    subroutine generic_generate( self, i, avg, dat )
         import :: pca
         class(pca), intent(inout) :: self
         integer,    intent(in)    :: i
         real,       intent(in)    :: avg(self%D)
         real,       intent(inout) :: dat(self%D)
-    end subroutine generic_generate_1
-
-    subroutine generic_generate_2( self, i, avg, dat, var )
-        import :: pca
-        class(pca), intent(inout) :: self
-        integer,    intent(in)    :: i
-        real,       intent(in)    :: avg(self%D)
-        real,       intent(inout) :: dat(self%D), var
-    end subroutine generic_generate_2
+    end subroutine generic_generate
 
     subroutine generic_master( self, pcavecs, maxpcaits )
         import :: pca
