@@ -1,11 +1,11 @@
 program simple_test_ppca_kpca
 include 'simple_lib.f08'
 use simple_ppca_inmem, only: ppca_inmem
-use simple_pca,        only: pca
+use simple_pca_svd,    only: pca_svd
 implicit none
 integer, parameter :: NP = 3, NS = 4, NC = 2, MAXPCAITS = 15
 type(ppca_inmem)   :: prob_pca
-type(pca)          :: pca_obj
+type(pca_svd)      :: pca_obj
 integer :: j
 real    :: data_ori(NP, NS), avg(NP), tmpvec(NP), data_pca(NP, NS), E_zn(NC, NS), data_cen(NP, NS), var
 data_ori(1,:) = [ 1, 2, 3, 4]

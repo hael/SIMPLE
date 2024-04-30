@@ -10,16 +10,14 @@
 !
 module simple_ppca_inmem
 use simple_defs ! singleton
+use simple_pca, only: pca
 implicit none
 
 public :: ppca_inmem
 private
 
-type ppca_inmem
+type, extends(pca) :: ppca_inmem
     private
-    integer           :: N           !< nr of data vectors
-    integer           :: D           !< nr of components in each data vec
-    integer           :: Q           !< nr of components in each latent vec
     real, allocatable :: W(:,:)      !< principal subspace, defined by the W columns
     real, allocatable :: E_zn(:,:,:) !< expectations (feature vecs)
     real, allocatable :: W_1(:,:), W_2(:,:), W_3(:,:), Wt(:,:)
@@ -27,22 +25,23 @@ type ppca_inmem
     logical           :: existence=.false.
   contains
     ! CONSTRUCTOR
-    procedure          :: new
+    procedure          :: new        => new_inmem
     ! GETTERS
     procedure          :: get_N
     procedure          :: get_D
     procedure          :: get_Q
     procedure          :: get_var
-    procedure          :: get_feat
+    procedure          :: get_feat   => get_feat_inmem
     procedure          :: get_feats_ptr
-    procedure, private :: generate_1, generate_2
-    generic            :: generate => generate_1, generate_2
+    procedure          :: generate_1 => generate_inmem_1
+    procedure          :: generate_2 => generate_inmem_2
+    generic            :: generate   => generate_1, generate_2
     ! CALCULATORS
-    procedure          :: master
+    procedure          :: master     => master_inmem
     procedure, private :: init
     procedure, private :: em_opt
     ! DESTRUCTOR
-    procedure          :: kill
+    procedure          :: kill       => kill_inmem
 end type
 
 logical :: L_PRINT = .false.
@@ -59,7 +58,7 @@ contains
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, N, D, Q )
+    subroutine new_inmem( self, N, D, Q )
         class(ppca_inmem), intent(inout) :: self
         integer,           intent(in)    :: N, D, Q
         call self%kill
@@ -72,7 +71,7 @@ contains
         self%M(self%Q,self%Q), self%Minv(self%Q,self%Q), self%MinvWt(self%Q,self%D),&
         self%X(self%D,1), self%E_znzn(self%Q,self%Q), source=0.)
         self%existence = .true.
-    end subroutine new
+    end subroutine new_inmem
 
     ! GETTERS
 
@@ -98,12 +97,12 @@ contains
     end function get_var
 
     !>  \brief  is for getting a feature vector
-    function get_feat( self, i ) result( feat )
+    function get_feat_inmem( self, i ) result( feat )
         class(ppca_inmem), intent(inout) :: self
         integer,           intent(in)    :: i
         real,              allocatable   :: feat(:)
         allocate(feat(self%Q), source=self%E_zn(1,:,i))
-    end function get_feat
+    end function get_feat_inmem
 
     !>  \brief  is for getting a pointer to the features (that become exposed)
     function get_feats_ptr( self ) result( ptr )
@@ -113,16 +112,16 @@ contains
     end function get_feats_ptr
 
     !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_1( self, i, avg, dat )
+    subroutine generate_inmem_1( self, i, avg, dat )
         class(ppca_inmem), intent(inout) :: self
         integer,           intent(in)    :: i
         real,              intent(in)    :: avg(self%D)
         real,              intent(inout) :: dat(self%D)
         dat = avg + [matmul(self%W,transpose(self%E_zn(:,:,i)))]
-    end subroutine generate_1
+    end subroutine generate_inmem_1
 
     !>  \brief  is for sampling the generative model at a given image index
-    subroutine generate_2( self, i, avg, dat, var )
+    subroutine generate_inmem_2( self, i, avg, dat, var )
         class(ppca_inmem), intent(inout) :: self
         integer,           intent(in)    :: i
         real,              intent(in)    :: avg(self%D)
@@ -130,14 +129,14 @@ contains
         dat = [matmul(self%W,transpose(self%E_zn(:,:,i)))]
         var = sum(dat**2) / real(self%D)
         dat = dat + avg
-    end subroutine generate_2
+    end subroutine generate_inmem_2
 
     ! CALCULATORS
 
-    subroutine master( self, pcavecs, maxpcaits )
+    subroutine master_inmem( self, pcavecs, maxpcaits )
         class(ppca_inmem), intent(inout) :: self
         real,              intent(in)    :: pcavecs(self%D,self%N)
-        integer,           intent(in)    :: maxpcaits
+        integer, optional, intent(in)    :: maxpcaits
         integer :: k, file_stat, err
         real    :: p, p_prev
         p = 0.
@@ -159,7 +158,7 @@ contains
             endif
             if( (abs(p-p_prev) < 0.1) .or. k == maxpcaits ) exit
         end do
-    end subroutine master
+    end subroutine master_inmem
 
     subroutine init( self )
         use simple_rnd, only: mnorm_smp, ran3
@@ -234,7 +233,7 @@ contains
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
-    subroutine kill( self )
+    subroutine kill_inmem( self )
         class(ppca_inmem), intent(inout) :: self
         if( self%existence )then
             deallocate( self%W, self%E_zn, self%W_1,&
@@ -242,6 +241,6 @@ contains
             self%MinvWt, self%X, self%E_znzn )
             self%existence = .false.
         endif
-    end subroutine kill
+    end subroutine kill_inmem
 
 end module simple_ppca_inmem
