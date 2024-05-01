@@ -3,12 +3,12 @@ add_executable(${SIMPLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exe
 add_executable(${SINGLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
 add_executable(${STREAM_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
 add_executable(${SIMPLE_PRIVATE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
-set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
-# target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SIMPLE_EXE}         LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SINGLE_EXE}         LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${STREAM_EXE}         LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
+#set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
+# target_link_libraries(${SIMPLE_MAIN_TARGETS} ${EXTRA_LIBS})
+target_link_libraries(${SIMPLE_EXE} PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${SINGLE_EXE} PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${STREAM_EXE} PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${SIMPLE_PRIVATE_EXE} PUBLIC ${EXTRA_LIBS})
 if(USE_OPENMPI AND USE_MPI)
     set_target_properties(${SIMPLE_MAIN_TARGETS}
         PROPERTIES
@@ -40,11 +40,11 @@ install(TARGETS ${SIMPLE_MAIN_TARGETS}
 )
 
 # ENABLE TESTING
-if(${PROJECT_NAME}_BUILD_TESTS)
-    if(VERBOSE)
-        include(CTest)
-    endif()
-endif()
+#if(${PROJECT_NAME}_BUILD_TESTS)
+#    if(VERBOSE)
+#        include(CTest)
+#    endif()
+#endif()
 
 # Set up how to compile the tests
 file(GLOB TESTDIRS
