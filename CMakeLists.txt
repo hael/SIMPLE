@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-#set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 #include(FortranOverride)
 
 project(SIMPLE
@@ -9,7 +9,9 @@ project(SIMPLE
         HOMEPAGE_URL "https://github.com/hael/SIMPLE"
         LANGUAGES Fortran C CXX)
 
+# CTest
 enable_testing()
+include(SimpleTest)
 #return()
 
 #check_fortran_source_compiles("program test
@@ -94,6 +96,8 @@ set(SIMPLE_EXE simple_exec)
 set(SINGLE_EXE single_exec)
 set(STREAM_EXE simple_stream)
 set(SIMPLE_PRIVATE_EXE simple_private_exec)
+set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
+
 # Define the library name lib<name>.so
 #set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 set(SIMPLELIB "${${PROJECT_NAME}_VERSION}")
@@ -103,11 +107,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 include_directories(${CMAKE_BINARY_DIR}/lib/simple)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# INCLUDES
+# Includes
 #include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
-# Configurations RELEASE, DEBUG 
+# Configurations Release, Debug 
 ############################################################
 # Add definition macros unique to compilation
 ############################################################
@@ -131,7 +135,7 @@ endif()
 #    NO_EXTERNAL_INSTALL     # skip installation of external project
 #    )
 
-# CREATE libSIMPLE<VERSION>
+# Create libSIMPLE<VERSION>
 add_subdirectory(src lib)
 list(APPEND EXTRA_LIBS
     ${SIMPLELIB}
@@ -141,21 +145,21 @@ list(APPEND EXTRA_LIBS
 link_directories(lib)
 message(STATUS "EXTRA_LIBS ${EXTRA_LIBS}")
 
-# ADD SCRIPTS
+# Add scripts 
 # The script folder contains some handy perl scripts for running SIMPLE
 add_subdirectory(scripts)
 
-# INSTALL NICE
+# Install NICE
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nice)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nice)
 endif()
 
-# INSTALL GUI
+# Install GUI
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
     add_subdirectory(gui ${CMAKE_INSTALL_BINDIR}/gui)
 endif()
 
-# STATIC LIBRARIES
+# Static libraries 
 # Try to search first static libraries
 if(NOT ${BUILD_SHARED_LIBS})
     set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_FIND_LIBRARY_SUFFIXES} .a")
@@ -166,11 +170,11 @@ add_custom_target(distclean
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/distclean.cmake
 )
 
-# here we save a version file
+# Here we save a version file
 set(VERSION_FILE "${CMAKE_INSTALL_LIBDIR}/simple/CMake/${PROJECT_NAME}ConfigVersion.cmake")
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.cmake.in" ${VERSION_FILE} @ONLY )
 
-# modules / depends
+# Modules / depends
 file(GLOB_RECURSE SIMPLE_CMAKE_FILES
     LIST_DIRECTORIES false
     RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" 
@@ -244,7 +248,7 @@ if(VERBOSE) #only for the fool-hardy
     include(CMakeGraphVizOptions)
 endif()
 
-# ADD PRODUCTION EXECUTABLES
+# Add production executables 
 # The source for the SIMPLE binary and have it placed in the bin folder
 add_subdirectory(production bin)
 
@@ -255,4 +259,10 @@ endif()
 
 # Add message at end of installation
 add_subdirectory(${CMAKE_SOURCE_DIR}/cmake/PostInstall)
+
+# End of the CMakeLists.txt file
+if(CPACK_GENERATOR)
+    # include(CPack) will happen inside the following call
+    add_subdirectory(SimplePackaging)
+endif()
 
