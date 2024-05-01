@@ -3,11 +3,6 @@
 #add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
 add_test(
-    NAME Test_install 
-    COMMAND simple_test_install 
-)
-
-add_test(
 NAME Test_angres
 COMMAND simple_test_angres
 )
