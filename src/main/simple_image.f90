@@ -211,6 +211,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
+    procedure          :: ICM
     procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
@@ -4017,6 +4018,70 @@ contains
         !$omp end parallel do
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
+
+    subroutine ICM( self, beta, msk, sdev_noise )
+        use simple_neighs
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: beta
+        real, optional, intent(in)    :: msk
+        real, optional, intent(in)    :: sdev_noise
+        integer, parameter :: MAXITS  = 10
+        integer :: n_8(3,8), nsz, i, j, k, m, n
+        real    :: mmsk, pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin
+        if( self%is_3d() ) THROW_HARD('2D images only; ICM')
+        if( self%ft )      THROW_HARD('Real space only; ICM')
+        mmsk = real(self%ldim(1)) / 2. - 6.
+        if( present(msk) ) mmsk = msk
+        if( present(sdev_noise) )then
+            if( sdev_noise > SMALL )then
+                sigma = sdev_noise
+            else
+                sigma = self%noisesdev(mmsk) ! estimation of noise
+            endif
+        else
+            sigma = self%noisesdev(mmsk) ! estimation of noise
+        endif
+        sigma2 = sigma * sigma
+        sigma2 = 5. ! 4 now
+        do i = 1, MAXITS
+            do n = 1,self%ldim(2)
+                do m = 1,self%ldim(1)
+                    pix  = self%rmat(n,m,1)
+                    pix2 = pix * pix
+                    call neigh_8(self%ldim, [n,m,1], n_8, nsz)
+                    pot_term = 0.
+                    do j = 1, nsz
+                        pot_term = pot_term + pot(self%rmat(n_8(j,1),n_8(j,2),n_8(j,3)),0.)
+                    end do
+                    xmin = 0.
+                    min  = pix2 / (2. * sigma2) + beta * pot_term
+                    ! Every shade of gray is tested to find the a local minimum of the energy corresponding to a Gibbs distribution
+                    do k = 0,255
+                        x = real(k)
+                        pot_term = 0.
+                        do j = 1, nsz
+                            pot_term = pot_term + pot(self%rmat(n_8(j,1),n_8(j,2),n_8(j,3)),x)
+                        end do
+                        proba = ((pix - x)*(pix - x)) / (2.0 * sigma2) + beta * pot_term
+                        if( min > proba )then
+                            min  = proba
+                            xmin = x
+                        endif
+                    end do
+                    self%rmat(n,m,1) = xmin
+                end do
+            end do
+        end do
+
+        contains
+
+            ! potential function corresponding to a gaussian markovian model (quadratic function)
+            real function pot(x, y)
+                real, intent(in) :: x, y
+                pot = (x - y)**2.
+            end function pot
+
+    end subroutine ICM
 
     subroutine lpgau2D( self, freq )
         class(image), intent(inout) :: self
