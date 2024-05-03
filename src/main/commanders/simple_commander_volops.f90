@@ -95,6 +95,7 @@ contains
                 call build%img%shift2Dserial(shvec(i,1:2))
                 call build%img%ifft
                 call build%img%write(params%outstk,i)
+                if( cline%defined('oritab') ) call build%spproj_field%map3dshift22d(-shvec(i,:), state=1)
             enddo
             call build%img%kill_thread_safe_tmp_imgs
         else
@@ -102,14 +103,19 @@ contains
             allocate(shvec(params%nstates,3))
             do istate=1,params%nstates
                 call build%vol%read(params%vols(istate))
-                shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
+                if( cline%defined('hp') )then
+                    shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk, hp=params%hp)
+                else
+                    shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
+                endif
+                call build%vol%read(params%vols(istate))
                 call build%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
                 call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
                 ! transfer the 3D shifts to 2D
                 if( cline%defined('oritab') ) call build%spproj_field%map3dshift22d(-shvec(istate,:), state=istate)
             end do
-            if( cline%defined('oritab') ) call build%spproj_field%write(params%outfile, [1,build%spproj_field%get_noris()])
         endif
+        if( cline%defined('oritab') ) call build%spproj_field%write(params%outfile, [1,build%spproj_field%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol

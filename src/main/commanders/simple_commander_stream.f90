@@ -681,18 +681,20 @@ contains
             call del_file(TERM_STREAM)
             call cline%delete('dir_exec')
             call import_previous_mics( micproj_records )
-            nptcls_glob = sum(micproj_records(:)%nptcls)
-            nmic_star   = spproj_glob%os_mic%get_noris()
-            call gui_stats%set('micrographs', 'micrographs_imported', int2str(nmic_star),              primary=.true.)
-            call gui_stats%set('micrographs', 'micrographs_picked',   int2str(nmic_star) // ' (100%)', primary=.true.)
-            if(spproj_glob%os_mic%isthere("nptcls")) then
-                call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
-            end if
-            call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
-            if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
-                latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
-                if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
-            end if
+            if( allocated(micproj_records) )then
+                nptcls_glob = sum(micproj_records(:)%nptcls)
+                nmic_star   = spproj_glob%os_mic%get_noris()
+                call gui_stats%set('micrographs', 'micrographs_imported', int2str(nmic_star),              primary=.true.)
+                call gui_stats%set('micrographs', 'micrographs_picked',   int2str(nmic_star) // ' (100%)', primary=.true.)
+                if(spproj_glob%os_mic%isthere("nptcls")) then
+                    call gui_stats%set('micrographs', 'avg_number_picks', ceiling(spproj_glob%os_mic%get_avg("nptcls")), primary=.true.)
+                end if
+                call gui_stats%set('particles', 'total_extracted_particles', nptcls_glob, primary=.true.)
+                if(spproj_glob%os_mic%isthere('intg') .and. spproj_glob%os_mic%isthere('boxfile')) then
+                    latest_boxfile = trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'boxfile'))
+                    if(file_exists(trim(latest_boxfile))) call gui_stats%set('latest', '', trim(spproj_glob%os_mic%get_static(spproj_glob%os_mic%get_noris(), 'intg')), thumbnail=.true., boxfile=trim(latest_boxfile))
+                end if
+            endif
         endif
         ! output directories
         output_dir = trim(PATH_HERE)//trim(DIR_STREAM)
@@ -729,6 +731,8 @@ contains
         else
             call cline_pick_extract%set('extract','no')
         endif
+        ! ugly single use flag for backwards compatibility, will need to go
+        call cline_pick_extract%set('newstream','yes')
         ! Infinite loop
         last_injection        = simple_gettime()
         prev_stacksz          = 0
@@ -764,7 +768,9 @@ contains
                     nmics_rejected_glob = nmics_rejected_glob + nmics_rej
                     if( cnt == min(params%nparts, nprojects) ) exit
                 enddo
-                write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
+                if( nmics > 0 )then
+                    write(logfhandle,'(A,I4,A,A)')'>>> ',nmics,' NEW MICROGRAPHS ADDED; ',cast_time_char(simple_gettime())
+                endif
                 l_projects_left = cnt .ne. nprojects
                 ! guistats
                 call gui_stats%set('micrographs', 'micrographs_imported', int2str(project_buff%n_history * NMOVS_SET), primary=.true.)
@@ -996,6 +1002,7 @@ contains
                     ! update records and global project
                     j = n_old
                     do iproj = 1,n_spprojs
+                        if( spprojs(iproj)%os_mic%get_noris() == 0 ) cycle
                         ! move project to appropriate directory
                         fname     = trim(output_dir)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
                         new_fname = trim(DIR_STREAM_COMPLETED)//trim(completed_jobs_clines(iproj)%get_carg('projfile'))
@@ -1115,6 +1122,7 @@ contains
                 character(len=:),          allocatable :: fname
                 logical,                   allocatable :: mics_mask(:)
                 integer :: n_spprojs, iproj, nmics, imic, jmic, iostat,id, nsel_mics, irec
+                pick_extract_set_counter = 0
                 ! previously completed projects
                 call simple_list_files_regexp(DIR_STREAM_COMPLETED, '\.simple$', completed_fnames)
                 if( .not.allocated(completed_fnames) )then
@@ -1176,7 +1184,6 @@ contains
                     call spprojs(iproj)%kill
                 enddo
                 ! update global set counter
-                pick_extract_set_counter = 0
                 do iproj = 1,n_spprojs
                     fname = basename_safe(completed_fnames(iproj))
                     fname = trim(get_fbody(trim(fname),trim(METADATA_EXT),separator=.false.))
@@ -1477,7 +1484,7 @@ contains
                 type(sp_project),     allocatable :: spprojs(:)
                 type(micproj_record), allocatable :: old_records(:)
                 character(len=:),     allocatable :: fname, abs_fname
-                integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls
+                integer :: iproj, n_spprojs, n_old, irec, n_completed, nptcls, nmics, imic, n_ptcls, first
                 n_imported = 0
                 n_ptcls    = 0
                 if( .not.allocated(projectnames) ) return
@@ -1489,15 +1496,18 @@ contains
                 ! because pick_extract purges state=0 and nptcls=0 mics,
                 ! all mics can be assumed associated with particles
                 nmics = 0
+                first = 0
                 do iproj = 1,n_spprojs
                     call spprojs(iproj)%read_segment('mic', trim(projectnames(iproj)))
                     nmics = nmics + spprojs(iproj)%os_mic%get_noris()
+                    if( (first == 0) .and. (nmics > 0) ) first = iproj
                 enddo
+                if( nmics == 0 ) return
                 ! Updates global parameters once and init 2D
                 if( n_old == 0 )then
-                    params%smpd      = spprojs(1)%os_mic%get(1,'smpd')
-                    call spprojs(1)%read_segment('stk', trim(projectnames(1)))
-                    params%box      = nint(spprojs(1)%os_stk%get(1,'box'))
+                    params%smpd = spprojs(first)%os_mic%get(1,'smpd')
+                    call spprojs(first)%read_segment('stk', trim(projectnames(first)))
+                    params%box  = nint(spprojs(first)%os_stk%get(1,'box'))
                     call init_cluster2D_stream_dev(cline, spproj_glob, params%box, micspproj_fname)
                     call cline%delete('ncls')
                 endif

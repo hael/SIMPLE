@@ -441,10 +441,14 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            if( params_glob%l_lpset )then
-                call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
-            else
+            if( trim(params_glob%force_eo).eq.'yes' )then
                 call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
+            else
+                if( params_glob%l_lpset )then
+                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
+                else
+                    call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
+                endif
             endif
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)

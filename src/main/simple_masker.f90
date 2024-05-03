@@ -318,7 +318,7 @@ contains
             loc     = maxloc(ccsizes,dim=1)
             ! estimate its diameter
             call cc_img(i)%diameter_cc(loc, diams(i))
-            if( diams(i) > 2.*params_glob%msk )then
+            if( diams(i) > 2.*(params_glob%msk+real(ngrow)) )then
                 ! incorrect component was chosen, fall back on spherical mask
                 diams(i)    = 2.*(params_glob%msk-edge-COSMSKHALFWIDTH)
                 shifts(i,:) = 0.

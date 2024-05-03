@@ -596,8 +596,7 @@ contains
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
-        real, parameter   :: fudge = 1.0
-        real              :: cc, scale, pad_factor, invtau2
+        real              :: fudge, cc, scale, pad_factor, invtau2
         integer           :: h, k, m, sh, phys(3), sz, reslim_ind
         logical           :: l_combined
         l_combined = trim(params_glob%combine_eo).eq.'yes'
@@ -610,6 +609,7 @@ contains
         sig2 = 0.0
         scale = real(params_glob%box_crop) / real(params_glob%box_croppd)
         pad_factor = 1.0 / scale**3
+        fudge = params_glob%tau
         ! SSNR
         do k = 1,sz
             cc = max(0.001,fsc(k))

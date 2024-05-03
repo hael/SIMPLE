@@ -2703,14 +2703,18 @@ contains
     end function box_cen_arg
 
     !>  \brief is for estimating the center of an image based on center of mass
-    function calc_shiftcen( self, lp, msk ) result( xyz )
+    function calc_shiftcen( self, lp, msk, hp ) result( xyz )
         class(image),   intent(inout) :: self
         real,           intent(in)    :: lp
-        real, optional, intent(in)    :: msk
+        real, optional, intent(in)    :: msk, hp
         type(image) :: tmp
         real        :: xyz(3), rmsk
         call tmp%copy(self)
-        call tmp%bp(0., lp)
+        if( present(hp) )then
+            call tmp%bp(hp, lp)
+        else
+            call tmp%bp(0., lp)
+        endif
         call tmp%ifft()
         if( present(msk) )then
             rmsk = msk

@@ -679,7 +679,7 @@ contains
         integer, parameter :: MAXITS1=100, MAXITS2=30, MAXITS_SHORT1=15, MAXITS_SHORT2=25
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=2000
         integer, parameter :: SYMSEARCH_ITER = 3
-        integer, parameter :: MLREG_ITER     = 3 ! in [2;5]
+        integer, parameter :: MLREG_ITER     = 2 ! in [2;5]
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES ! in [1;NSTAGES+1]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
@@ -1054,7 +1054,7 @@ contains
             call spproj%write_segment_inside('out',params%projfile)
             ! post-processing
             do state = 1, params%nstates
-                call cline_postprocess%set('lp',    params%lpstop)
+                call cline_postprocess%delete('lp') ! so as to obtain optimal filtration
                 call cline_postprocess%set('state', real(state))
                 call xpostprocess%execute(cline_postprocess)
             enddo
