@@ -846,7 +846,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_strategy2D3D_common, only: prepimgbatch, prepimg4align, calcrefvolshift_and_mapshifts2ptcls,killimgbatch,&
-                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch
+                                             &read_and_filter_refvols, preprefvol, discrete_read_imgbatch, set_bp_range
         use simple_polarft_corrcalc,    only: polarft_corrcalc
         use simple_eul_prob_tab,        only: eul_prob_tab
         use simple_euclid_sigma2,       only: euclid_sigma2
@@ -882,6 +882,7 @@ contains
             &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
         endif
         ! more prep
+        call set_bp_range( cline )
         call pftcc%new(params%nspace * params%nstates, [1,nptcls], params%kfromto)
         call eulprob_obj_part%new(pinds)
         call prepimgbatch(nptcls)
@@ -904,10 +905,14 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
-            if( params%l_lpset )then
-                call read_and_filter_refvols( cline, params%vols(s), params%vols(s))
+            if( trim(params_glob%force_eo).eq.'yes' )then
+                call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
             else
-                call read_and_filter_refvols( cline, params%vols_even(s), params%vols_odd(s))
+                if( params_glob%l_lpset )then
+                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
+                else
+                    call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
+                endif
             endif
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)

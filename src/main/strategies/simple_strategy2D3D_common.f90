@@ -175,6 +175,19 @@ contains
                 params_glob%kfromto(2) = min(params_glob%kfromto(2),&
                     &calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
+            ! FSC values are read anyway
+            do s=1,params_glob%nstates
+                if( params_glob%nstates > 1 )then
+                    fsc_fname = trim(CLUSTER3D_FSC)
+                else
+                    fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
+                endif
+                if( file_exists(fsc_fname) )then
+                    fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
+                    build_glob%fsc(s,:) = fsc_arr(:)
+                    deallocate(fsc_arr)
+                endif
+            enddo
         else
             ! check all fsc_state*.bin exist
             all_fsc_bin_exist = .true.
@@ -550,6 +563,12 @@ contains
             ! call vol_ptr%apply_filter(filter)
             !!!!!!!!!!!!!!!!!!!!!! PUT BACK ORIGTINAL LOW-PASS FILTER FOR TESTING NANOX
             call vol_ptr%bp(0., params_glob%lp)
+            if( trim(params_glob%force_optlp).eq.'yes' )then
+                if( any(build_glob%fsc(s,:) > 0.25) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter,merged=.true.)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
         else if( params_glob%l_nonuniform )then
             ! filtering done in read_and_filter_refvols
         else

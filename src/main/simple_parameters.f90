@@ -36,8 +36,9 @@ type :: parameters
     character(len=3)          :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
-    
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
+    character(len=3)          :: force_optlp='no'
+    character(len=3)          :: force_eo='no'
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
@@ -88,7 +89,8 @@ type :: parameters
     character(len=3)          :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: stoch_update='no'    !< update of random sampling in each iteration
-    character(len=3)          :: stream='no'          !< sream (real time) execution mode(yes|no){no}
+    character(len=3)          :: newstream='no'       !< new streaming version
+    character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)          :: taper_edges='no'     !< self-explanatory
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
@@ -525,6 +527,8 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
+        call check_carg('force_optlp',    self%force_optlp)
+        call check_carg('force_eo',       self%force_eo)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
@@ -554,6 +558,7 @@ contains
         call check_carg('multi_moldiams', self%multi_moldiams)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
+        call check_carg('newstream',      self%newstream)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('nonuniform',     self%nonuniform)

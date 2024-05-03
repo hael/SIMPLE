@@ -44,12 +44,20 @@ contains
     end function fsc2optlp
 
     !> \brief  converts the FSC to the optimal low-pass filter
-    subroutine fsc2optlp_sub( filtsz, corrs, filt )
+    subroutine fsc2optlp_sub( filtsz, corrs, filt, merged )
         integer, intent(in)  :: filtsz        !< sz of filter
         real,    intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
         real,    intent(out) :: filt(filtsz)  !< output filter coefficients
+        logical, optional, intent(in) :: merged
+        logical :: l_merged
+        l_merged = .false.
+        if( present(merged) ) l_merged = merged
         filt = 0.
-        where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
+        if( l_merged )then
+            where( corrs > 0. ) filt = corrs
+        else
+            where( corrs > 0. ) filt = 2. * corrs / (corrs + 1.)
+        endif
         where( filt  > 0.99999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
 
