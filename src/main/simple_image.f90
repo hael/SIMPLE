@@ -247,6 +247,7 @@ contains
     procedure          :: sqeuclid
     procedure, private :: sqeuclid_matrix_1, sqeuclid_matrix_2
     generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
+    procedure          :: euclid_norm
     procedure          :: opt_filter_costfun
     procedure          :: opt_filter_costfun_workshare
     procedure          :: fsc, fsc_scaled
@@ -307,6 +308,8 @@ contains
     procedure, private :: norm4viz
     procedure          :: norm_ext
     procedure          :: norm_noise
+    procedure          :: quantize_fwd
+    procedure          :: quantize_bwd
     procedure          :: zero_edgeavg
     procedure          :: roavg
     procedure          :: rtsq
@@ -4023,31 +4026,25 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
 
-    subroutine ICM( self, beta, msk, sdev_noise )
+    ! can be made nonuniform if we first calculate local noise variances
+    subroutine ICM( self, lambda )
         use simple_neighs
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: beta
-        real, optional, intent(in)    :: msk
-        real, optional, intent(in)    :: sdev_noise
-        integer, parameter :: MAXITS  = 10
-        integer :: n_8(3,8), nsz, i, j, k, m, n
-        real    :: mmsk, pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: lambda
+        integer, parameter :: MAXITS    = 10
+        integer, parameter :: NQUANTA   = 256
+        real,    parameter :: EUCL_CONV = 3e-3
+        integer     :: n_8(3,8), nsz, i, j, k, m, n
+        real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
+        type(image) :: self_prev
         if( self%is_3d() ) THROW_HARD('2D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
-        mmsk = real(self%ldim(1)) / 2. - 6.
-        if( present(msk) ) mmsk = msk
-        if( present(sdev_noise) )then
-            if( sdev_noise > SMALL )then
-                sigma = sdev_noise
-            else
-                sigma = self%noisesdev(mmsk) ! estimation of noise
-            endif
-        else
-            sigma = self%noisesdev(mmsk) ! estimation of noise
-        endif
-        sigma2 = sigma * sigma
+        call self%quantize_fwd(NQUANTA, transl_tab)
+        call self_prev%copy(self)
         sigma2 = 5. ! 4 now
         do i = 1, MAXITS
+            !$omp parallel do schedule(static) default(shared) private(n,m,pix,pix2,n_8,nsz,pot_term,j,xmin,min,k,x,proba)&
+            !$omp proc_bind(close) collapse(2)
             do n = 1,self%ldim(2)
                 do m = 1,self%ldim(1)
                     pix  = self%rmat(n,m,1)
@@ -4055,18 +4052,18 @@ contains
                     call neigh_8(self%ldim, [n,m,1], n_8, nsz)
                     pot_term = 0.
                     do j = 1, nsz
-                        pot_term = pot_term + pot(self%rmat(n_8(j,1),n_8(j,2),n_8(j,3)),0.)
+                        pot_term = pot_term + pot(self%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),0.)
                     end do
                     xmin = 0.
-                    min  = pix2 / (2. * sigma2) + beta * pot_term
+                    min  = pix2 / (2. * sigma2) + lambda * pot_term
                     ! Every shade of gray is tested to find the a local minimum of the energy corresponding to a Gibbs distribution
-                    do k = 0,255
+                    do k = 0,NQUANTA - 1
                         x = real(k)
                         pot_term = 0.
                         do j = 1, nsz
-                            pot_term = pot_term + pot(self%rmat(n_8(j,1),n_8(j,2),n_8(j,3)),x)
+                            pot_term = pot_term + pot(self%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),x)
                         end do
-                        proba = ((pix - x)*(pix - x)) / (2.0 * sigma2) + beta * pot_term
+                        proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
                         if( min > proba )then
                             min  = proba
                             xmin = x
@@ -4075,14 +4072,24 @@ contains
                     self%rmat(n,m,1) = xmin
                 end do
             end do
+            !$omp end parallel do
+            eucl = self%euclid_norm(self_prev)
+            if( eucl < EUCL_CONV ) exit
+
+            print *, 'eucl = ', eucl
+
+            call self_prev%copy(self)
         end do
+        ! call self%quantize_bwd(NQUANTA, transl_tab) !!!!!!!!!!!! 4 NOW
 
         contains
 
-            ! potential function corresponding to a gaussian markovian model (quadratic function)
+            ! potential function corresponding to a Gaussian Markov model (quadratic function)
             real function pot(x, y)
                 real, intent(in) :: x, y
-                pot = (x - y)**2.
+                real :: diff
+                diff = x - y
+                pot = diff * diff
             end function pot
 
     end subroutine ICM
@@ -5168,6 +5175,13 @@ contains
         class(image), intent(inout) :: sqdiff_img
         sqdiff_img%rmat = (self1%rmat - self2%rmat)**2.0
     end subroutine sqeuclid_matrix_2
+
+    function euclid_norm( self1, self2 ) result( r )
+        class(image), intent(inout) :: self1, self2
+        real :: r
+        r = sqrt(sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+        &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0)) / real(product(self1%ldim))
+    end function euclid_norm
 
     subroutine opt_filter_costfun( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
         class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
@@ -7402,6 +7416,41 @@ contains
             if( var > 0. ) self%rmat = self%rmat / sdev_noise
         endif
     end subroutine norm_noise
+
+    subroutine quantize_fwd( self, nquanta, transl_tab )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nquanta
+        real,         intent(inout) :: transl_tab(nquanta)
+        real, allocatable :: pixvals(:)
+        integer :: i, j, k, ind
+        real    :: dist
+        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
+        call quantize_vec(pixvals, nquanta, transl_tab)
+        do k = 1,self%ldim(3)
+            do j = 1,self%ldim(2)
+                do i = 1,self%ldim(1)
+                    call find(transl_tab, nquanta, self%rmat(i,j,k), ind, dist)
+                    self%rmat(i,j,k) = real(ind - 1)
+                end do
+            end do
+        end do
+    end subroutine quantize_fwd
+
+    subroutine quantize_bwd( self, nquanta, transl_tab )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nquanta
+        real,         intent(inout) :: transl_tab(nquanta)
+        integer :: i, j, k, ind
+        real    :: dist
+        do k = 1,self%ldim(3)
+            do j = 1,self%ldim(2)
+                do i = 1,self%ldim(1)
+                    call find(transl_tab, nquanta, self%rmat(i,j,k), ind, dist)
+                    self%rmat(i,j,k) = transl_tab(ind)
+                end do
+            end do
+        end do
+    end subroutine quantize_bwd
 
     !>  \brief  putting the edge around the image to zero (necessary for avoiding FT artefacts)
     subroutine zero_edgeavg( self )

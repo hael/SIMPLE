@@ -393,6 +393,8 @@ contains
                         else
                             call nlmean_imgfile(params%stk, params%outstk, params%smpd)
                         endif
+                    case('icm')
+                        call icm_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
                 end select
@@ -992,6 +994,11 @@ contains
         ! produce local standard deviations
         if( params%loc_sdev .eq. 'yes' )then
             call loc_sdev_imgfile(params%stk, params%outstk, nint(params%winsz), params%smpd)
+            goto 999
+        endif
+        ! quantize
+        if( params%nquanta > 0 )then
+            call quantize_imgfile(params%stk, params%outstk, params%nquanta, params%smpd)
             goto 999
         endif
         ! create frame averages

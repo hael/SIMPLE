@@ -89,7 +89,6 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(automask2D_commander)                  :: xautomask2D
 type(fsc_commander)                         :: xfsc
-type(whiten_and_filter_commander)           :: xwhiten_and_filter
 type(nununiform_filter2D_commander)         :: xnununiform_filter2D
 type(nununiform_filter3D_commander)         :: xnununiform_filter3D
 type(cavg_filter2D_commander)               :: xcavg_filter2D
@@ -287,8 +286,6 @@ select case(trim(prg))
         call xautomask2D%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    case( 'whiten_and_filter' )
-        call xwhiten_and_filter%execute(cline)
     case( 'nununiform_filter2D' )
         call xnununiform_filter2D%execute(cline)
     case( 'nununiform_filter3D' )
@@ -383,7 +380,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
-call simple_print_git_version('d7551ef2')
+call simple_print_git_version('b2e5115d')
 ! end timer and print
 rt_exec = toc(t0)
 call simple_print_timer(rt_exec)

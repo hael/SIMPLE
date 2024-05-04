@@ -236,6 +236,31 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
 
+    subroutine quantize_vec( vec, nquanta, transl_tab )
+        real,    intent(inout) :: vec(:)
+        integer, intent(in)    :: nquanta
+        real,    intent(inout) :: transl_tab(nquanta)
+        real, allocatable      :: vec_norm(:), transl_tab_here(:)
+        real    :: smin, smax, delta, hist(nquanta), dist
+        integer :: i, n, ind
+        n     = size(vec)
+        smin  = minval(vec)
+        smax  = maxval(vec)
+        delta = smax - smin
+        allocate(vec_norm(n), source=vec)
+        vec_norm        = (vec_norm - smin)/delta
+        transl_tab_here = equispaced_vals(0., 1., nquanta)
+        hist            = 0.
+        transl_tab      = 0.
+        do i = 1, n
+            call find(transl_tab_here, nquanta, vec_norm(i), ind, dist)
+            transl_tab(ind) = transl_tab(ind) + vec(i)
+            hist(ind)       = hist(ind) + 1.
+            vec(i)          = real(ind - 1) ! range becomes [0,nquanta - 1]
+        end do
+        where( hist > SMALL ) transl_tab = transl_tab / hist
+    end subroutine quantize_vec
+
     subroutine detect_peak_thres_1( n, n_ub, level, x, t )
         integer, intent(in)    :: n, n_ub, level
         real,    intent(in)    :: x(n)
