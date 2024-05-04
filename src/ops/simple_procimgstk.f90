@@ -504,6 +504,31 @@ contains
         call tv%kill
     end subroutine tvfilter_imgfile
 
+    subroutine icm_imgfile( fname2process, fname, smpd, lambda )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: smpd, lambda
+        type(stack_io)               :: stkio_r, stkio_w
+        type(image)                  :: img
+        integer                      :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'icm_imgfile' )
+        call stkio_r%open(fname2process, smpd, 'read')
+        call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> APPLYING ICM REGULARIZATION TO IMAGES'
+        do i=1,n
+            print *, i
+            call progress(i,n)
+            call stkio_r%read(i, img)
+            call img%icm(lambda)
+            call stkio_w%write(i, img)
+        end do
+        call stkio_r%close
+        call stkio_w%close
+        call img%kill
+    end subroutine icm_imgfile
+
     subroutine nlmean_imgfile( fname2process, fname, smpd, noise_sdev )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
@@ -651,6 +676,32 @@ contains
         call stkio_w%close
         call img%kill
     end subroutine loc_sdev_imgfile
+
+    subroutine quantize_imgfile( fname2proc, fname, nquanta, smpd )
+        character(len=*), intent(in) :: fname2proc, fname
+        integer,          intent(in) :: nquanta
+        real,             intent(in) :: smpd
+        type(stack_io)               :: stkio_r, stkio_w
+        type(image)                  :: img
+        integer                      :: n, i, ldim(3)
+        real                         :: transl_tab(nquanta)
+        call find_ldim_nptcls(fname2proc, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
+        call stkio_r%open(fname2proc, smpd, 'read')
+        call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> QUANTIZATION OF IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call stkio_r%read(i, img)
+            call img%quantize_fwd( nquanta, transl_tab )
+            call stkio_w%write(i, img)
+        end do
+        call stkio_r%close
+        call stkio_w%close
+        call img%kill
+    end subroutine quantize_imgfile
 
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul )
         character(len=*),  intent(in)    :: fname2shift, fname
