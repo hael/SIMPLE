@@ -4943,7 +4943,7 @@ contains
                 end do
             end do
             !$omp end parallel do
-            if( sxx > 0. .and. syy > 0. )then
+            if( sxx > TINY .and. syy > TINY )then
                 r = sxy / sqrt(sxx * syy)
             else
                 r = 0.
@@ -4959,7 +4959,7 @@ contains
             sxx   = sum(diff1 * diff1)
             syy   = sum(diff2 * diff2)
             sxy   = sum(diff1 * diff2)
-            if( sxx > 0. .and. syy > 0. )then
+            if( sxx > TINY .and. syy > TINY )then
                 r = sxy / sqrt(sxx * syy)
             else
                 r = 0.
@@ -4984,7 +4984,7 @@ contains
         sxx   = sum(diff1 * diff1, mask=mask)
         syy   = sum(diff2 * diff2, mask=mask)
         sxy   = sum(diff1 * diff2, mask=mask)
-        if( sxx > 0. .and. syy > 0. )then
+        if( sxx > TINY .and. syy > TINY )then
             r = sxy / sqrt(sxx * syy)
         else
             r = 0.
