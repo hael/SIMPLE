@@ -211,7 +211,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: ICM
+    procedure          :: ICM, ICM3D
     procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
@@ -4093,6 +4093,76 @@ contains
             end function pot
 
     end subroutine ICM
+
+    ! can be made nonuniform if we first calculate local noise variances
+    subroutine ICM3D( self, lambda )
+        use simple_neighs
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: lambda
+        integer, parameter :: MAXITS    = 10
+        integer, parameter :: NQUANTA   = 256
+        real,    parameter :: EUCL_CONV = 3e-3
+        integer     :: n_4(3,6), nsz, i, j, k, m, n, l
+        real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
+        type(image) :: self_prev
+        if( self%is_2d() ) THROW_HARD('3D images only; ICM')
+        if( self%ft )      THROW_HARD('Real space only; ICM')
+        call self%quantize_fwd(NQUANTA, transl_tab)
+        call self_prev%copy(self)
+        sigma2 = 5. ! 4 now
+        do i = 1, MAXITS
+            !$omp parallel do schedule(static) default(shared) private(n,m,l,pix,pix2,n_4,nsz,pot_term,j,xmin,min,k,x,proba)&
+            !$omp proc_bind(close) collapse(3)
+            do n = 1,self%ldim(3)
+                do m = 1,self%ldim(2)
+                    do l = 1,self%ldim(1)
+                        pix  = self%rmat(n,m,l)
+                        pix2 = pix * pix
+                        call neigh_4_3D(self%ldim, [n,m,l], n_4, nsz)
+                        pot_term = 0.
+                        do j = 1, nsz
+                            pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
+                        end do
+                        xmin = 0.
+                        min  = pix2 / (2. * sigma2) + lambda * pot_term
+                        ! Every shade of gray is tested to find the a local minimum of the energy corresponding to a Gibbs distribution
+                        do k = 0,NQUANTA - 1
+                            x = real(k)
+                            pot_term = 0.
+                            do j = 1, nsz
+                                pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
+                            end do
+                            proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
+                            if( min > proba )then
+                                min  = proba
+                                xmin = x
+                            endif
+                        end do
+                        self%rmat(n,m,l) = xmin
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            eucl = self%euclid_norm(self_prev)
+            if( eucl < EUCL_CONV ) exit
+
+            print *, 'eucl = ', eucl
+
+            call self_prev%copy(self)
+        end do
+        ! call self%quantize_bwd(NQUANTA, transl_tab) !!!!!!!!!!!! 4 NOW
+
+        contains
+
+            ! potential function corresponding to a Gaussian Markov model (quadratic function)
+            real function pot(x, y)
+                real, intent(in) :: x, y
+                real :: diff
+                diff = x - y
+                pot = diff * diff
+            end function pot
+
+    end subroutine ICM3D
 
     subroutine lpgau2D( self, freq )
         class(image), intent(inout) :: self

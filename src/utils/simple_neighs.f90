@@ -1160,73 +1160,204 @@ contains
         integer, intent(inout) :: neigh_4(3,6)
         integer, intent(out)   :: nsz
         integer :: i, j, k
+        logical :: i_ok, j_ok, k_ok
         i       = px(1)
         j       = px(2)
         k       = px(3)
+        i_ok    = (i-1 > 0 .and. i+1 <= ldim(1))
+        j_ok    = (j-1 > 0 .and. j+1 <= ldim(2))
+        k_ok    = (k-1 > 0 .and. k+1 <= ldim(3))
         neigh_4 = 0
-        if( i == 1 .and. j == 1 .and. k == 1) then
+        if( i-1 < 1 .and. j-1 < 1 .and. k-1 < 1 )then
             neigh_4(1:3,1) = [i,j,k+1]
             neigh_4(1:3,2) = [i,j+1,k]
             neigh_4(1:3,3) = [i+1,j,k]
             nsz = 3
             return
-        elseif( i == 1 .and. j == 1) then
-            neigh_4(1:3,1) = [i,j,k+1]
-            neigh_4(1:3,2) = [i,j,k-1]
-            neigh_4(1:3,3) = [i,j+1,k]
-            neigh_4(1:3,4) = [i+1,j,k]
-            nsz = 4
-            return
-        elseif( i == 1 .and. k == 1) then
-            neigh_4(1:3,1) = [i,j,k+1]
-            neigh_4(1:3,3) = [i,j+1,k]
-            neigh_4(1:3,3) = [i,j-1,k]
-            neigh_4(1:3,4) = [i+1,j,k]
-            nsz = 4
-            return
-        elseif( j == 1 .and. k == 1) then
-            neigh_4(1:3,1) = [i,j,k+1]
-            neigh_4(1:3,2) = [i,j+1,k]
-            neigh_4(1:3,3) = [i+1,j,k]
-            neigh_4(1:3,4) = [i-1,j,k]
-            nsz = 4
-            return
-        endif
-        if( i+1 == ldim(1) .and. j+1 == ldim(2) .and. k+1 == ldim(3)) then
+        elseif( i+1 > ldim(1) .and. j+1 > ldim(2) .and. k+1 > ldim(3) )then
             neigh_4(1:3,1) = [i,j,k-1]
             neigh_4(1:3,2) = [i,j-1,k]
             neigh_4(1:3,3) = [i-1,j,k]
             nsz = 3
             return
-        elseif( i+1 == ldim(1) .and. j+1 == ldim(2)) then
-            neigh_4(1:3,1) = [i,j,k+1]
-            neigh_4(1:3,2) = [i,j,k-1]
-            neigh_4(1:3,3) = [i,j-1,k]
-            neigh_4(1:3,4) = [i-1,j,k]
-            nsz = 4
-            return
-        elseif( i+1 == ldim(1) .and. k+1 == ldim(3)) then
+        elseif( i-1 < 1 .and. j-1 < 1 .and. k+1 > ldim(3) )then
             neigh_4(1:3,1) = [i,j,k-1]
-            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            nsz = 3
+            return
+        elseif( i+1 > ldim(1) .and. j-1 < 1 .and. k-1 < 1 ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i-1,j,k]
+            nsz = 3
+            return
+        elseif( i-1 < 1 .and. j+1 > ldim(2) .and. k-1 < 1 ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            nsz = 3
+            return
+        elseif( i+1 > ldim(1) .and. j-1 < 1 .and. k+1 > ldim(3) ) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i-1,j,k]
+            nsz = 3
+            return
+        elseif(i-1 < 1 .and. j+1 > ldim(2) .and. k+1 > ldim(3) ) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            nsz = 3
+            return
+        elseif(i+1 > ldim(1) .and. j+1 > ldim(2) .and. k-1 < 1 ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i-1,j,k]
+            nsz = 3
+            return
+        elseif( i-1 < 1 .and. k-1 < 1 .and. j_ok )then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+        elseif( i-1 < 1 .and. k+1 > ldim(3) .and. j_ok )then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+        elseif( i+1 > ldim(1) .and. k+1 > ldim(3) .and. j_ok )then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j+1,k]
             neigh_4(1:3,3) = [i,j-1,k]
             neigh_4(1:3,4) = [i-1,j,k]
             nsz = 4
             return
-        elseif( j+1 == ldim(2) .and. k+1 == ldim(3)) then
+        elseif( i+1 > ldim(1) .and. k-1 < 1 .and. j_ok )then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        elseif( j-1 < 1 .and. k-1 < 1 .and. i_ok )then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        elseif( j+1 > ldim(2) .and. k-1 < 1 .and. i_ok )then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        elseif( j+1 > ldim(2) .and. k+1 > ldim(3) .and. i_ok )then
             neigh_4(1:3,1) = [i,j,k-1]
             neigh_4(1:3,2) = [i,j-1,k]
             neigh_4(1:3,3) = [i+1,j,k]
             neigh_4(1:3,4) = [i-1,j,k]
             nsz = 4
             return
+        elseif( j-1 < 1 .and. k+1 > ldim(3) .and. i_ok )then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        elseif( i-1 < 1 .and. j-1 < 1 .and. k_ok )then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+        else if ( j+1 > ldim(2) .and. i+1 > ldim(1) .and. k_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        else if ( j-1 < 1  .and. i+1 >ldim(1) .and. k_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+        else if ( j+1 > ldim(2) .and. i-1 < 1 .and. k_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+        else if( j-1 < 1 .and. i_ok .and. k_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            neigh_4(1:3,5) = [i-1,j,k]
+            nsz = 5
+            return
+        else if ( j+1 > ldim(2) .and. i_ok .and. k_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            neigh_4(1:3,5) = [i-1,j,k]
+            nsz = 5
+            return
+        else if ( i-1 < 1 .and. j_ok .and. k_ok  ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i,j-1,k]
+            neigh_4(1:3,5) = [i+1,j,k]
+            nsz = 5
+            return
+        else if ( i+1 > ldim(1) .and. j_ok .and. k_ok  ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i,j-1,k]
+            neigh_4(1:3,5) = [i-1,j,k]
+            nsz = 5
+            return
+        else if ( k-1 < 1 .and. i_ok .and. j_ok ) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            neigh_4(1:3,5) = [i-1,j,k]
+            nsz = 5
+            return
+        else if ( k+1 > ldim(3) .and. i_ok .and. j_ok) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            neigh_4(1:3,5) = [i-1,j,k]
+            nsz = 5
+            return
+        else if(i_ok .and. j_ok .and. k_ok) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i,j-1,k]
+            neigh_4(1:3,5) = [i+1,j,k]
+            neigh_4(1:3,6) = [i-1,j,k]
+            nsz = 6
+            return
         endif
-        neigh_4(1:3,1) = [i,j,k+1]
-        neigh_4(1:3,2) = [i,j,k-1]
-        neigh_4(1:3,3) = [i,j+1,k]
-        neigh_4(1:3,4) = [i,j-1,k]
-        neigh_4(1:3,5) = [i+1,j,k]
-        neigh_4(1:3,6) = [i-1,j,k]
-        nsz = 6
     end subroutine neigh_4_3D_1
 
     ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self
