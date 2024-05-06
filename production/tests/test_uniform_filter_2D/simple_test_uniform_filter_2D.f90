@@ -4,22 +4,49 @@ program simple_test_uni_filt2D
     use simple_builder,            only: builder
     use simple_parameters,         only: parameters
     use simple_commander_resolest, only: uniform_filter2D_commander
+    use simple_commander_volops,   only: reproject_commander
     use simple_image,              only: image
     use simple_opt_filter,         only: uni_filt2D
     implicit none
-    type(parameters)                  :: p
-    type(cmdline)                     :: cline, cline_opt
-    type(image)                       :: img_clean, img_noisy, noise_img
+    type(parameters)                 :: p
+    type(cmdline)                    :: cline, cline_opt, cline_projection
+    type(image)                      :: img_clean, img_noisy, noise_img
     type(uniform_filter2D_commander) :: opt_commander
-    integer                           :: nptcls, iptcl, noise_n, noise_i
-    real                              :: ave, sdev, maxv, minv, noise_lvl
-    real,    parameter                :: LP_LOWRES_PHASE = 7., NOISE_MIN = .3, NOISE_MAX = 1., NOISE_DEL = 0.1
-    integer, parameter                :: NSEARCH = 100, SMOOTH_EXT = 8
-    character(len=LONGSTRLEN)         :: cwd=''
+    type(reproject_commander)        :: xreproject
+    character(len=:), allocatable    :: cmd
+    integer                          :: nptcls, iptcl, noise_n, noise_i, rc
+    real                             :: ave, sdev, maxv, minv, noise_lvl
+    real,    parameter               :: LP_LOWRES_PHASE = 7., NOISE_MIN = .3, NOISE_MAX = 1., NOISE_DEL = 0.1
+    integer, parameter               :: NSEARCH = 100, SMOOTH_EXT = 8
+    character(len=LONGSTRLEN)        :: cwd=''
+    logical                          :: mrc_exists
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'Usage: simple_test_uni_filt2D smpd=xx nthr=yy stk=stk.mrc'
+        write(logfhandle,'(a)') 'Error! Usage: simple_test_uni_filt2D smpd=xx nthr=yy stk=stk.mrc'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
-        stop
+        write(logfhandle,'(a)') 'Running example with 1xyz reprojections stack for testing'
+        inquire(file="1JYX.mrc", exist=mrc_exists)
+        if( .not. mrc_exists )then
+            write(*, *) 'Downloading the example dataset...'
+            cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+            call execute_command_line(cmd, exitstat=rc)
+            write(*, *) 'Converting .pdb to .mrc...'
+            cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+            call execute_command_line(cmd, exitstat=rc)
+            cmd = 'rm 1JYX.pdb'
+            call execute_command_line(cmd, exitstat=rc)
+            write(*, *) 'Projecting 1JYX.mrc...'
+            call cline_projection%set('vol1'      , '1JYX.mrc')
+            call cline_projection%set('smpd'      , 1.)
+            call cline_projection%set('pgrp'      , 'c1')
+            call cline_projection%set('mskdiam'   , 180.)
+            call cline_projection%set('nspace'    , 6.)
+            call cline_projection%set('nthr'      , 16.)
+            call xreproject%execute(cline_projection)
+        endif
+        call cline%set('smpd'   , 1.)
+        call cline%set('nthr'   , 16.)
+        call cline%set('stk'    , 'reprojs.mrcs')
+        call cline%set('mskdiam', 180.)
     else
         call cline%parse_oldschool
     endif
