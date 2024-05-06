@@ -457,6 +457,8 @@ contains
                             call tvfilt%kill
                         case('nlmean')
                             call build%vol%NLmean3D()
+                        case('icm')
+                            call build%vol%ICM3D(params%lambda)
                         case DEFAULT
                             THROW_HARD('Unknown filter!')
                     end select
