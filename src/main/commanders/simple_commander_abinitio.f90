@@ -708,6 +708,7 @@ contains
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',        'no')
         if( .not. cline%defined('sigma_est')    ) call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
+        if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',    'yes')
         if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
         if( .not. cline%defined('stoch_update') ) call cline%set('stoch_update', 'yes')
         if( .not. cline%defined('center')       ) call cline%set('center',        'no')
