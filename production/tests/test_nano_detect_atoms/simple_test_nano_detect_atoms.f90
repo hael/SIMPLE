@@ -129,7 +129,7 @@ module nano_detect_atoms
         integer, allocatable :: inds_offset(:,:,:)
         type(image) :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
-        real :: smpd, thres
+        real :: smpd, thres, temp_thres
         real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:)
 
     contains
@@ -146,6 +146,8 @@ module nano_detect_atoms
         procedure :: find_centers
         procedure :: write_pdb
         procedure :: write_boximgs
+        procedure :: write_positions
+        procedure :: refine_threshold
         procedure :: compare_pick
         procedure :: kill
 
@@ -394,13 +396,14 @@ module nano_detect_atoms
     subroutine cluster_filter(self,dist_thres)
         class(nano_picker), intent(inout) :: self
         real,               intent(in)    :: dist_thres
-        real, allocatable    :: deltas(:), pos_scores(:)
-        real                 :: dist, min_dist, max_box_score, score, avg_d, sdev_d
+        real, allocatable    :: deltas(:), pos_scores(:), upper_half_deltas(:), lower_half_deltas(:)
+        real                 :: E, dist, min_dist, avg_d, sdev_d, max_box_score, score
         integer, allocatable :: pos_inds(:), rhos_higher_inds(:), rhos(:), cluster_inds(:), clusters(:), this_clusters_boxes(:)
         integer              :: nbox, ibox, jbox, n_rhos_higher, xoff, yoff, zoff
         integer              :: ipeak, npeaks, nclusters, icluster, box_cluster, box_index(3), this_clusters_size, box_id(1)
         logical, allocatable :: mask(:)
         logical              :: is_peak
+        E = 2.7182818284590452353602874713527
         pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
         nbox       = size(pos_inds)
@@ -413,7 +416,7 @@ module nano_detect_atoms
             ! find distances to all other boxes
             do jbox = 1, nbox
                 dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                if (dist < dist_thres) rhos(ibox) = rhos(ibox) + 1
+                if (dist < dist_thres) rhos(ibox) = rhos(ibox) + E**((dist / dist_thres)**2)
             end do
         end do
         ! second loop finds min distance between each box and the boxes with higher rho values than it (delta value)
@@ -469,8 +472,8 @@ module nano_detect_atoms
             deallocate(this_clusters_boxes)
         end do
         ! update box scores
-        npeaks = count(mask)
-        pos_inds   = pack(pos_inds,   mask=mask)
+        npeaks   = count(mask)
+        pos_inds = pack(pos_inds, mask=mask)
         !$omp parallel do schedule(static) collapse(3) default(shared) private(xoff,yoff,zoff,is_peak,ipeak)
         do xoff = 1, self%nxyz_offset(1)
             do yoff = 1, self%nxyz_offset(2)
@@ -590,17 +593,23 @@ module nano_detect_atoms
 
     ! changing self%positions
     ! no longer writes the file
-    subroutine find_centers(self)
+    subroutine find_centers(self, thres)
         class(nano_picker), intent(inout) :: self
+        real, optional,     intent(in)    :: thres
         integer,     allocatable :: pos_inds(:)
         real,        allocatable :: coords(:,:)
         type(image), allocatable :: atms_array(:)
         integer :: nbox, iimg, pos(3)
         ! make array of images containing the images of identified atoms and extract coordinates of peaks
-        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        if (.not. present(thres)) then
+            pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        else
+            pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= thres)
+        end if
         nbox = size(pos_inds, dim=1)
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
+        if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
         allocate(self%convolved_atoms(nbox))
         call self%simulated_atom%fft()
         do iimg = 1, nbox
@@ -608,9 +617,12 @@ module nano_detect_atoms
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
+            call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
             call atms_array(iimg)%fft()
             self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
+            call self%convolved_atoms(iimg)%write('boximgs_ft/boximg_ft_'//trim(int2str(iimg))//'.mrc')
             call self%convolved_atoms(iimg)%ifft()
+            call self%convolved_atoms(iimg)%write('boximgs_convolved/boximg_conv_'//trim(int2str(iimg))//'.mrc')
             call atms_array(iimg)%ifft()
             ! want coordinates of atoms to be at the center of the images
             call self%convolved_atoms(iimg)%norm_minmax
@@ -665,6 +677,91 @@ module nano_detect_atoms
         end do
         deallocate(pos_inds)
     end subroutine write_boximgs
+
+    subroutine write_positions(self,filename)
+        class(nano_picker), intent(inout) :: self
+        character(len=*),   intent(in)    :: filename
+        integer,     allocatable :: pos_inds(:)
+        real,        allocatable :: coords(:,:)
+        integer                  :: nbox, ipos, i, j
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        nbox = size(pos_inds)
+        allocate(coords(nbox,3))
+        do ipos = 1, nbox
+            coords(ipos,:) = self%positions(pos_inds(ipos),:)
+        end do
+        open(unit=25, file=filename, status='replace', action='write')
+        do i = 1, nbox
+            do j = 1, 3
+                if (j /= 1) write(25, '(A)', advance='no') ', '
+                write(25, '(F10.3)', advance='no') coords(i, j)
+            end do
+            write(25, *)
+        end do
+        close(25)
+    end subroutine write_positions
+
+    subroutine refine_threshold(self, num_thres, ref_pdb_name, ref_img_name, max_thres)
+        class(nano_picker), intent(inout) :: self
+        integer,            intent(in)    :: num_thres
+        character(len=*),   intent(in)    :: ref_pdb_name, ref_img_name
+        real, optional,     intent(in)    :: max_thres
+        type(nanoparticle)       :: nano_ref, nano_exp
+        type(image)              :: ref_NP,   exp_NP
+        type(parameters), target :: params
+        real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step
+        integer                  :: i, optimal_index(1), num_pos
+        integer, allocatable     :: pos_inds(:)
+        if (present(max_thres)) then
+            max_thres_here = max_thres
+        else
+            max_thres_here = 0.5
+        end if
+        step = (max_thres_here - self%thres) / (num_thres - 1)
+        self%temp_thres = self%thres ! save old threshold here
+        ! set up array of potential thresholds
+        do i = 1, num_thres
+            thresholds(i) = self%thres + step * (i-1)
+        end do
+        ! simulate nanoparticle with initial pdb file (for reference / comparison)
+        ! params_glob has to be set because of the way simple_nanoparticle is set up
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd = self%smpd
+        call nano_ref%new(trim(ref_img_name))
+        call nano_ref%set_atomic_coords(trim(ref_pdb_name))
+        call nano_ref%simulate_atoms(simatms=ref_NP)
+        ! iterate through following steps:
+        ! 1. remove boxes with correlations below each threshold
+        ! 2. call find centers and write_pdb
+        ! 3. use the resulting pdb file to simulate nanoparticle
+        ! 4. calculate correlation between this simulated nanoparticle and original? simulated nanoparticle
+        ! 5. save correlations in array, at end will find maximum and return corresponding threshold
+        ! additional considerations:
+        ! 6. should we consider number of positions produced for each threshold?
+        ! 7. should we do thresholding and distance filtering in the same subroutine?
+        ! 8. instead of fixing thresholds at even distances over an interval, should we run Otsu's method multiple times?
+        do i = 1, num_thres
+            call self%find_centers(thres = thresholds(i))
+            call self%write_pdb('sim_centers')
+            call nano_exp%new(trim(ref_img_name))
+            call nano_exp%set_atomic_coords('sim_centers.pdb')
+            call nano_exp%simulate_atoms(simatms=exp_NP)
+            thres_corrs(i) = ref_NP%real_corr(exp_NP)
+            call nano_exp%kill
+        end do
+        optimal_index = maxloc(thres_corrs)
+        do i = 1, num_thres
+            print *, thresholds(i), thres_corrs(i)
+        end do
+        self%thres = thresholds(optimal_index(1))
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        num_pos = size(pos_inds)
+        print *, 'OPTIMAL THRESHOLD = ', self%thres
+        print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
+        print *, 'NUMBER POSITIONS = ', num_pos
+        call nano_ref%kill
+    end subroutine refine_threshold
 
     ! input both pdbfile_* with .pdb extension
     subroutine compare_pick(self, pdbfile_ref, pdbfile_exp )
@@ -744,117 +841,21 @@ program simple_test_nano_detect_atoms
     call nano%simulate_atoms(simatms=simulated_NP)
     call simulated_NP%write(trim(filename_sim))
 
-    print *, 'SIMULATED DATA'
-    print *, 'affinity propagation: '
-    !run picker workflow for simulated NP
-    subStart = real(time())
-    call test_sim%new(smpd, element, filename_sim, peak_thres_level)
-    call test_sim%simulate_atom
-    call test_sim%setup_iterators(offset)
-    call test_sim%match_boxes
-    call test_sim%identify_threshold
-    call test_sim%find_centers
-    call test_sim%aff_prop_filter
-    call test_sim%write_pdb('simulated_centers')
-    call test_sim%compare_pick(trim(pdbfile_ref),'simulated_centers.pdb')
-    subStop = real(time())
-    print *, 'TEST 1 RUNTIME = ', (subStop - subStart), ' s'
-
     print *, '-----'
 
-    print *, 'density peak clustering: '
-    subStart = real(time())
-    call test_sim2%new(smpd, element, filename_sim, peak_thres_level)
-    call test_sim2%simulate_atom
-    call test_sim2%setup_iterators(offset)
-    call test_sim2%match_boxes
-    call test_sim2%identify_threshold
-    call test_sim2%find_centers
-    call test_sim2%cluster_filter(dist_thres)
-    call test_sim2%write_pdb('simulated_centers_2')
-    call test_sim2%compare_pick(trim(pdbfile_ref),'simulated_centers_2.pdb')
-    subStop = real(time())
-    print *, 'TEST 2 RUNTIME = ', (subStop - subStart), ' s'
-
-    print *, '-----'
-
-    print *, 'distance filter: '
-    subStart = real(time())
-    call test_sim3%new(smpd, element, filename_sim, peak_thres_level)
-    call test_sim3%simulate_atom
-    call test_sim3%setup_iterators(offset)
-    call test_sim3%match_boxes
-    call test_sim3%identify_threshold
-    call test_sim3%find_centers
-    call test_sim3%distance_filter(dist_thres)
-    call test_sim3%write_pdb('simulated_centers_3')
-    call test_sim3%compare_pick(trim(pdbfile_ref),'simulated_centers_3.pdb')
-    subStop = real(time())
-    print *, 'TEST 3 RUNTIME = ', (subStop - subStart), ' s'
-
-    print *, ' '
-
-    print *, 'EXPERIMENTAL DATA'
-    print *, 'affinity propagation: '
-    ! run picker workflow for experimental data
-    subStart = real(time())
-    call test_exp%new(smpd, element, filename_exp, peak_thres_level)
-    call test_exp%simulate_atom
-    call test_exp%setup_iterators(offset)
-    call test_exp%match_boxes
-    call test_exp%identify_threshold
-    call test_exp%find_centers
-    call test_exp%aff_prop_filter
-    call test_exp%write_pdb('experimental_centers')
-    call test_exp%compare_pick(trim(pdbfile_ref),'experimental_centers.pdb')
-    subStop = real(time())
-    print *, 'TEST 4 RUNTIME = ', (subStop - subStart), ' s'
-
-    print *, '-----'
-
-    print *, 'density peak clustering: '
-    subStart = real(time())
-    call test_exp2%new(smpd, element, filename_exp, peak_thres_level)
-    call test_exp2%simulate_atom
-    call test_exp2%setup_iterators(offset)
-    call test_exp2%match_boxes
-    call test_exp2%identify_threshold
-    call test_exp2%find_centers
-    call test_exp2%cluster_filter(dist_thres)
-    call test_exp2%write_pdb('experimental_centers_2')
-    call test_exp2%compare_pick(trim(pdbfile_ref),'experimental_centers_2.pdb')
-    subStop = real(time())
-    print *, 'TEST 5 RUNTIME = ', (subStop - subStart), ' s'
-
-    print *, '-----'
-
-    print *, 'distance filter: '
-    subStart = real(time())
-    call test_exp3%new(smpd, element, filename_exp, peak_thres_level)
-    call test_exp3%simulate_atom
-    call test_exp3%setup_iterators(offset)
-    call test_exp3%match_boxes
-    call test_exp3%identify_threshold
-    call test_exp3%find_centers
-    call test_exp3%distance_filter(dist_thres)
-    call test_exp3%write_pdb('experimental_centers_3')
-    call test_exp3%compare_pick(trim(pdbfile_ref),'experimental_centers_3.pdb')
-    subStop = real(time())
-    print *, 'TEST 6 RUNTIME = ', (subStop - subStart), ' s'
-
-    print *, '-----'
-
-    print *, 'distance filter with adjusted threshold: '
+    print *, 'distance filter : '
     subStart = real(time())
     call test_exp4%new(smpd, element, filename_exp, peak_thres_level)
     call test_exp4%simulate_atom
     call test_exp4%setup_iterators(offset)
     call test_exp4%match_boxes
-    call test_exp4%identify_threshold(0.155)
+    call test_exp4%identify_threshold
     call test_exp4%find_centers
     call test_exp4%distance_filter(dist_thres)
+    call test_exp4%refine_threshold(49,pdbfile_ref,filename_sim,max_thres=0.75)
     call test_exp4%write_pdb('experimental_centers_4')
     call test_exp4%compare_pick(trim(pdbfile_ref),'experimental_centers_4.pdb')
+    !call test_exp4%write_boximgs()
     subStop = real(time())
     print *, 'TEST 7 RUNTIME = ', (subStop - subStart), ' s'
 
