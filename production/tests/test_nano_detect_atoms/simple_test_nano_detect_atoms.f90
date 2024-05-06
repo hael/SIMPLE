@@ -130,7 +130,7 @@ module nano_detect_atoms
         type(image) :: simulated_atom, nano_img
         type(image), allocatable :: convolved_atoms(:)
         real :: smpd, thres, temp_thres
-        real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:)
+        real, allocatable :: box_scores(:,:,:), loc_sdevs(:,:,:), positions(:,:), initial_positions(:,:)
 
     contains
         procedure :: new
@@ -143,11 +143,13 @@ module nano_detect_atoms
         procedure :: cluster_filter
         procedure :: aff_prop_filter
         procedure :: remove_outliers
+        procedure :: set_positions
         procedure :: find_centers
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions
         procedure :: refine_threshold
+        procedure :: refine_threshold_otsu
         procedure :: compare_pick
         procedure :: kill
 
@@ -173,6 +175,7 @@ module nano_detect_atoms
         call nano%get_img(self%nano_img)
         self%ldim = self%nano_img%get_ldim()
         self%peak_thres_level = peak_thres_level
+        self%temp_thres = 0.
     end subroutine new
 
     subroutine simulate_atom(self)
@@ -492,6 +495,7 @@ module nano_detect_atoms
         !$omp end parallel do  
     end subroutine cluster_filter
 
+    ! implementation of affinity propagation clustering
     subroutine aff_prop_filter(self)
         class(nano_picker), intent(inout) :: self
         type(aff_prop) :: apcls
@@ -591,38 +595,42 @@ module nano_detect_atoms
         !$omp end parallel do
     end subroutine remove_outliers
 
+    ! sets initial_positions to whatever the positions are at the time this subroutine is called
+    ! included because of an issue with writing over positions in find_centers when calling find_centers iterativelys 
+    subroutine set_positions(self)
+        class(nano_picker), intent(inout) :: self
+        allocate(self%initial_positions(size(self%positions,dim=1),3))
+        self%initial_positions = self%positions
+    end subroutine set_positions
+
     ! changing self%positions
     ! no longer writes the file
-    subroutine find_centers(self, thres)
+    subroutine find_centers(self)
         class(nano_picker), intent(inout) :: self
-        real, optional,     intent(in)    :: thres
         integer,     allocatable :: pos_inds(:)
         real,        allocatable :: coords(:,:)
         type(image), allocatable :: atms_array(:)
         integer :: nbox, iimg, pos(3)
         ! make array of images containing the images of identified atoms and extract coordinates of peaks
-        if (.not. present(thres)) then
-            pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
-        else
-            pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= thres)
-        end if
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         nbox = size(pos_inds, dim=1)
+        !print *, self%thres, nbox
         allocate(coords(nbox,3))
         allocate(atms_array(nbox))
         if (allocated(self%convolved_atoms)) deallocate(self%convolved_atoms)
         allocate(self%convolved_atoms(nbox))
         call self%simulated_atom%fft()
         do iimg = 1, nbox
-            pos = self%positions(pos_inds(iimg),:)
+            pos = self%initial_positions(pos_inds(iimg),:)
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
-            call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
+            !call atms_array(iimg)%write('boximgs/boximg_'//trim(int2str(iimg))//'.mrc')
             call atms_array(iimg)%fft()
             self%convolved_atoms(iimg) = atms_array(iimg)%conjg() * self%simulated_atom
-            call self%convolved_atoms(iimg)%write('boximgs_ft/boximg_ft_'//trim(int2str(iimg))//'.mrc')
+            !call self%convolved_atoms(iimg)%write('boximgs_ft/boximg_ft_'//trim(int2str(iimg))//'.mrc')
             call self%convolved_atoms(iimg)%ifft()
-            call self%convolved_atoms(iimg)%write('boximgs_convolved/boximg_conv_'//trim(int2str(iimg))//'.mrc')
+            !call self%convolved_atoms(iimg)%write('boximgs_convolved/boximg_conv_'//trim(int2str(iimg))//'.mrc')
             call atms_array(iimg)%ifft()
             ! want coordinates of atoms to be at the center of the images
             call self%convolved_atoms(iimg)%norm_minmax
@@ -705,13 +713,14 @@ module nano_detect_atoms
         class(nano_picker), intent(inout) :: self
         integer,            intent(in)    :: num_thres
         character(len=*),   intent(in)    :: ref_pdb_name, ref_img_name
-        real, optional,     intent(in)    :: max_thres
+        real,    optional,  intent(in)    :: max_thres
         type(nanoparticle)       :: nano_ref, nano_exp
         type(image)              :: ref_NP,   exp_NP
         type(parameters), target :: params
         real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step
         integer                  :: i, optimal_index(1), num_pos
         integer, allocatable     :: pos_inds(:)
+        print *, 'REFINE_THRESHOLD'
         if (present(max_thres)) then
             max_thres_here = max_thres
         else
@@ -742,7 +751,8 @@ module nano_detect_atoms
         ! 7. should we do thresholding and distance filtering in the same subroutine?
         ! 8. instead of fixing thresholds at even distances over an interval, should we run Otsu's method multiple times?
         do i = 1, num_thres
-            call self%find_centers(thres = thresholds(i))
+            self%thres = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
+            call self%find_centers
             call self%write_pdb('sim_centers')
             call nano_exp%new(trim(ref_img_name))
             call nano_exp%set_atomic_coords('sim_centers.pdb')
@@ -751,9 +761,9 @@ module nano_detect_atoms
             call nano_exp%kill
         end do
         optimal_index = maxloc(thres_corrs)
-        do i = 1, num_thres
-            print *, thresholds(i), thres_corrs(i)
-        end do
+        ! do i = 1, num_thres
+        !     print *, thresholds(i), thres_corrs(i)
+        ! end do
         self%thres = thresholds(optimal_index(1))
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         num_pos = size(pos_inds)
@@ -762,6 +772,61 @@ module nano_detect_atoms
         print *, 'NUMBER POSITIONS = ', num_pos
         call nano_ref%kill
     end subroutine refine_threshold
+
+    ! this subroutine is similar to refine_threshold in that its aim is to find an optimal correlation threshold
+    ! it differs in that it uses Otsu's method to find a set of potential thresholds instead of iterating over a pre-defined range
+    subroutine refine_threshold_otsu(self, num_thres, ref_pdb_name, ref_img_name)
+        class(nano_picker), intent(inout) :: self
+        integer,            intent(in)    :: num_thres
+        character(len=*),   intent(in)    :: ref_pdb_name, ref_img_name
+        type(nanoparticle)       :: nano_ref, nano_exp
+        type(image)              :: ref_NP,   exp_NP
+        type(parameters), target :: params
+        real                     :: starting_thres(num_thres), thresholds(num_thres), thres_corrs(num_thres), step
+        integer                  :: i, j, optimal_index(1), num_pos
+        integer, allocatable     :: pos_inds(:)
+        print *, 'REFINE_THRESHOLD_OTSU'
+        ! simulate nanoparticle with initial pdb file (for reference / comparison)
+        ! params_glob has to be set because of the way simple_nanoparticle is set up
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd = self%smpd
+        call nano_ref%new(trim(ref_img_name))
+        call nano_ref%set_atomic_coords(trim(ref_pdb_name))
+        call nano_ref%simulate_atoms(simatms=ref_NP)
+        ! set intial threshold
+        if (self%temp_thres > 0.) then
+            starting_thres(1) = self%temp_thres - 0.1
+        else
+            starting_thres(1) = self%thres - 0.1
+        end if
+        step = (0.3 - starting_thres(1)) / (num_thres - 1)
+        do j = 2, num_thres
+            starting_thres(j) = starting_thres(1) + step * (j-1)
+        end do
+        do i = 1, num_thres
+            call self%identify_threshold(min_thres=starting_thres(i))
+            thresholds(i) = self%thres 
+            call self%find_centers
+            call self%write_pdb('sim_centers_otsu')
+            call nano_exp%new(trim(ref_img_name))
+            call nano_exp%set_atomic_coords('sim_centers_otsu.pdb')
+            call nano_exp%simulate_atoms(simatms=exp_NP)
+            thres_corrs(i) = ref_NP%real_corr(exp_NP)
+            call nano_exp%kill
+        end do
+        optimal_index = maxloc(thres_corrs)
+        ! do i = 1, num_thres
+        !     print *, thresholds(i), thres_corrs(i)
+        ! end do
+        self%thres = thresholds(optimal_index(1))
+        pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        num_pos = size(pos_inds)
+        print *, 'OPTIMAL THRESHOLD = ', self%thres
+        print *, 'OPTIMAL CORRELATION = ', thres_corrs(optimal_index(1))
+        print *, 'NUMBER POSITIONS = ', num_pos
+        call nano_ref%kill
+    end subroutine refine_threshold_otsu
 
     ! input both pdbfile_* with .pdb extension
     subroutine compare_pick(self, pdbfile_ref, pdbfile_exp )
@@ -841,18 +906,18 @@ program simple_test_nano_detect_atoms
     call nano%simulate_atoms(simatms=simulated_NP)
     call simulated_NP%write(trim(filename_sim))
 
-    print *, '-----'
-
-    print *, 'distance filter : '
     subStart = real(time())
     call test_exp4%new(smpd, element, filename_exp, peak_thres_level)
     call test_exp4%simulate_atom
     call test_exp4%setup_iterators(offset)
     call test_exp4%match_boxes
     call test_exp4%identify_threshold
+    call test_exp4%set_positions
     call test_exp4%find_centers
     call test_exp4%distance_filter(dist_thres)
-    call test_exp4%refine_threshold(49,pdbfile_ref,filename_sim,max_thres=0.75)
+    call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
+    print *, '-----'
+    call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
     call test_exp4%write_pdb('experimental_centers_4')
     call test_exp4%compare_pick(trim(pdbfile_ref),'experimental_centers_4.pdb')
     !call test_exp4%write_boximgs()
