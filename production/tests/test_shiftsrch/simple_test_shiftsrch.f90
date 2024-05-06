@@ -7,24 +7,52 @@ use simple_image,             only: image
 use simple_parameters,        only: parameters
 use simple_polarizer,         only: polarizer
 use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
+use simple_commander_volops,  only: reproject_commander
 implicit none
-type(cmdline)          :: cline
-type(builder)          :: b
-type(parameters)       :: p
-type(polarft_corrcalc) :: pftcc
-type(polarizer)        :: img_copy
-type(pftcc_shsrch_grad):: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+type(cmdline)                 :: cline, cline_projection
+type(builder)                 :: b
+type(parameters)              :: p
+type(polarft_corrcalc)        :: pftcc
+type(polarizer)               :: img_copy
+type(pftcc_shsrch_grad)       :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+type(reproject_commander)     :: xreproject
+character(len=:), allocatable :: cmd
 logical                :: be_verbose=.false.
 real,    parameter     :: SHMAG=1.0
 integer, parameter     :: N_PTCLS = 9
 real,    allocatable   :: corrs(:), norm_const(:, :)
 real                   :: corrmax, corr, cxy(3), lims(2,2)
-integer                :: xsh, ysh, xbest, ybest, i, irot
+integer                :: xsh, ysh, xbest, ybest, i, irot, rc
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
+logical                :: mrc_exists
 if( command_argument_count() < 3 )then
-    write(logfhandle,'(a)',advance='no') 'simple_test_shiftsrch stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
+    write(logfhandle,'(a)',advance='no') 'Error! Usage: simple_test_shiftsrch stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
-    stop
+    write(logfhandle,'(a)') ' Running using 1JXY instead'
+    inquire(file="1JYX.mrc", exist=mrc_exists)
+    if( .not. mrc_exists )then
+        write(*, *) 'Downloading the example dataset...'
+        cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+        write(*, *) 'Converting .pdb to .mrc...'
+        cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+        call execute_command_line(cmd, exitstat=rc)
+        cmd = 'rm 1JYX.pdb'
+        call execute_command_line(cmd, exitstat=rc)
+        write(*, *) 'Projecting 1JYX.mrc...'
+        call cline_projection%set('vol1'      , '1JYX.mrc')
+        call cline_projection%set('smpd'      , 1.)
+        call cline_projection%set('pgrp'      , 'c1')
+        call cline_projection%set('mskdiam'   , 180.)
+        call cline_projection%set('nspace'    , 6.)
+        call cline_projection%set('nthr'      , 16.)
+        call xreproject%execute(cline_projection)
+        call cline%set('stk'    , 'reprojs.mrcs')
+        call cline%set('smpd'   , 1.)
+        call cline%set('nthr'   , 16.)
+        call cline%set('stk'    , 'reprojs.mrcs')
+        call cline%set('mskdiam', 180.)
+    endif
 endif
 call cline%parse_oldschool
 call cline%checkvar('stk',      1)
@@ -113,8 +141,8 @@ do i=5,5
                 xbest   = xsh
                 ybest   = ysh
             endif
-        end do
-    end do
+        enddo
+    enddo
     print *, xbest, ybest, corrmax
-end do
+enddo
 end program simple_test_shiftsrch

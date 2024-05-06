@@ -11,14 +11,28 @@ program simple_test_uni_filt3D
     type(cmdline)                     :: cline, cline_opt
     type(image)                       :: vol_clean, vol_noisy, noise_vol
     type(uniform_filter3D_commander)  :: opt_commander
-    integer                           :: noise_n, noise_i, ifoo
+    integer                           :: noise_n, noise_i, ifoo, rc
+    character(len=:), allocatable :: cmd
     real                              :: ave, sdev, maxv, minv, noise_lvl
     real,    parameter                :: NOISE_MIN = 2., NOISE_MAX = 6., NOISE_DEL = 1.
     character(len=LONGSTRLEN)         :: cwd=''
+    logical                           :: mrc_exists
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'Usage: simple_test_uni_filt3D smpd=xx nthr=yy vol1=vol1.mrc'
-        write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
-        stop
+        write(logfhandle,'(a)') 'Error! Usage: simple_test_uni_filt3D smpd=xx nthr=yy vol1=vol1.mrc'
+        write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. '
+        write(logfhandle,'(a)') 'Running example 1xyz for testing'
+        inquire(file="1JYX.mrc", exist=mrc_exists)
+        if( .not. mrc_exists )then
+            write(*, *) 'Downloading the example dataset...'
+            cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'
+            call execute_command_line(cmd, exitstat=rc)
+            write(*, *) 'Converting .pdb to .mrc...'
+            cmd = 'e2pdb2mrc.py 1JYX.pdb 1JYX.mrc'
+            call execute_command_line(cmd, exitstat=rc)
+            cmd = 'rm 1JYX.pdb'
+        endif
+        call cline%set('smpd'   , 1.)
+        call cline%set('nthr'   , 16.)
     else
         call cline%parse_oldschool
     endif
@@ -28,7 +42,7 @@ program simple_test_uni_filt3D
     call cline%check
     call p%new(cline)
     call find_ldim_nptcls(p%vols(1), p%ldim, ifoo)
-    ! setting the opt_2D filter cline
+    ! setting the opt_3D filter cline
     cline_opt = cline
     call cline_opt%delete('vol')
     call cline_opt%set('frc',   'temp.bin')
