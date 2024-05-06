@@ -205,17 +205,19 @@ contains
         real    :: sum_dist_all, min_dist, max_dist
         integer :: i, istate
         do istate = 1,self%nstates
-            ! normalize so prob of each ptcl is between [0,1] for all projs
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
-            do i = 1, self%nptcls
-                sum_dist_all = sum(self%loc_tab(:,i,istate)%dist)
-                if( sum_dist_all < TINY )then
-                    self%loc_tab(:,i,istate)%dist = 0.
-                else
-                    self%loc_tab(:,i,istate)%dist = self%loc_tab(:,i,istate)%dist / sum_dist_all
-                endif
-            enddo
-            !$omp end parallel do
+            if( params_glob%l_prob_norm )then
+                ! normalize so prob of each ptcl is between [0,1] for all projs
+                !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,sum_dist_all)
+                do i = 1, self%nptcls
+                    sum_dist_all = sum(self%loc_tab(:,i,istate)%dist)
+                    if( sum_dist_all < TINY )then
+                        self%loc_tab(:,i,istate)%dist = 0.
+                    else
+                        self%loc_tab(:,i,istate)%dist = self%loc_tab(:,i,istate)%dist / sum_dist_all
+                    endif
+                enddo
+                !$omp end parallel do
+            endif
             ! min/max normalization to obtain values between 0 and 1
             max_dist = 0.
             min_dist = huge(min_dist)
