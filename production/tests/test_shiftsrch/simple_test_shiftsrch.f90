@@ -26,9 +26,10 @@ integer                :: xsh, ysh, xbest, ybest, i, irot, rc
 real, allocatable      :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
 logical                :: mrc_exists
 if( command_argument_count() < 3 )then
-    write(logfhandle,'(a)',advance='no') 'Error! Usage: simple_test_shiftsrch stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
+    write(logfhandle,'(a)',advance='no') 'ERROR! Usage: simple_test_shiftsrch stk=<particles.ext> mskdiam=<mask radius(in pixels)>'
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
-    write(logfhandle,'(a)') ' Running using 1JXY instead'
+    write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
+    write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     inquire(file="1JYX.mrc", exist=mrc_exists)
     if( .not. mrc_exists )then
         write(*, *) 'Downloading the example dataset...'

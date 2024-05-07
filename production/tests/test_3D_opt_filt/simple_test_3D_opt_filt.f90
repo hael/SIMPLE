@@ -18,7 +18,7 @@ character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real, parameter               :: LP_LOWRES_PHASE = 7.
 if( command_argument_count() < 4 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     inquire(file="1JYX.mrc", exist=mrc_exists)

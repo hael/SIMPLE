@@ -18,9 +18,9 @@ program simple_test_uni_filt3D
     character(len=LONGSTRLEN)         :: cwd=''
     logical                           :: mrc_exists
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'Error! Usage: simple_test_uni_filt3D smpd=xx nthr=yy vol1=vol1.mrc'
-        write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. '
-        write(logfhandle,'(a)') 'Running example 1xyz for testing'
+        write(logfhandle,'(a)') 'ERROR! Usage: simple_test_uniform_filt3D smpd=xx nthr=yy vol1=vol1.mrc'
+        write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
+        write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
         inquire(file="1JYX.mrc", exist=mrc_exists)
         if( .not. mrc_exists )then
             write(*, *) 'Downloading the example dataset...'
@@ -33,6 +33,7 @@ program simple_test_uni_filt3D
         endif
         call cline%set('smpd'   , 1.)
         call cline%set('nthr'   , 16.)
+        call cline%set('vol1'   , '1JYX.mrc')
     else
         call cline%parse_oldschool
     endif

@@ -12,8 +12,9 @@ integer :: stab_inds(N_P, N_R), ref_dist_inds(N_R), cnt, cur_map(N_P), imp_map(N
 logical :: ptcl_avail(N_P)
 real    :: tab(N_P, N_R), ref_dist(N_R), sorted_dist(N_R), sorted_tab(N_P, N_R), rnd_list(N_P), sorted_vec(N_P)
 if( command_argument_count() < 2 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_ref_assign smpd=xx nthr=yy'
-    stop
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_ref_assign smpd=xx nthr=yy'
+    write(logfhandle,'(a)') 'Example: simple_test_ref_assign smpd=1. nthr=4'
+    write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
 else
     call cline%parse_oldschool
 endif
