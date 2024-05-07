@@ -54,10 +54,10 @@ add_test(
 NAME Test_cc_gradient
 COMMAND simple_test_cc_gradient
 )
-#add_test(
-#NAME Test_cont_inplane
-#COMMAND simple_test_cont_inplane
-#)
+add_test(
+NAME Test_cont_inplane
+COMMAND simple_test_cont_inplane
+)
 add_test(
 NAME Test_corrs2weights
 COMMAND simple_test_corrs2weights
@@ -70,6 +70,12 @@ add_test(
 NAME Test_CTF
 COMMAND simple_test_ctf
 )
+if(USE_CUDA)
+    add_test(
+    NAME Test_CUDA
+    COMMAND simple_test_cuda
+    )
+endif()
 #add_test(
 #NAME Test_eo_diff
 #COMMAND simple_eo_diff
@@ -98,14 +104,14 @@ add_test(
 NAME Test_fileio
 COMMAND simple_test_fileio
 )
-#add_test(
-#NAME Test_find_boundaries
-#COMMAND simple_find_boundaries
-#)
-#add_test(
-#NAME Test_fit_lattice
-#COMMAND simple_fit_lattice
-#)
+add_test(
+NAME Test_find_boundaries
+COMMAND simple_test_find_boundaries
+)
+add_test(
+NAME Test_fit_lattice
+COMMAND simple_test_fit_lattice
+)
 add_test(
 NAME Test_fplane_proj
 COMMAND simple_test_fplane_proj
@@ -158,10 +164,10 @@ add_test(
 NAME Test_mask
 COMMAND simple_test_mask
 )
-#add_test(
-#NAME Test_masscen_nano
-#COMMAND simple_masscen_nano
-#)
+add_test(
+NAME Test_masscen_nano
+COMMAND simple_test_masscen_nano
+)
 add_test(
 NAME Test_maxnloc
 COMMAND simple_test_maxnloc
@@ -175,11 +181,11 @@ if(USE_MPI)
    NAME Test_MPI
    COMMAND simple_test_mpi
    )
+endif()
 add_test(
 NAME Test_multinomal
 COMMAND simple_test_multinomal
 )
-endif()
 #add_test(
 #NAME Test_nano_detect_atoms
 #COMMAND simple_nano_detect_atoms
@@ -188,6 +194,12 @@ add_test(
 NAME Test_neigh
 COMMAND simple_test_neigh
 )
+if(USE_OPENACC)
+   add_test(
+   NAME Test_OpenACC
+   COMMAND simple_test_openacc
+   )
+endif()
 add_test(
 NAME Test_OpenMP
 COMMAND simple_test_openmp
@@ -196,10 +208,10 @@ add_test(
 NAME Test_opt_genetic
 COMMAND simple_test_opt_genetic
 )
-#add_test(
-#NAME Test_opt_lp
-#COMMAND simple_test_opt_lp
-#)
+add_test(
+NAME Test_opt_lp
+COMMAND simple_test_opt_lp
+)
 #add_test(
 #NAME Test_order2D_byresol
 #COMMAND simple_test_order2D_byresol
@@ -236,10 +248,10 @@ add_test(
 NAME Test_ppca_kpca
 COMMAND simple_test_ppca_kpca
 )
-#add_test(
-#NAME Test_radial_cc
-#COMMAND simple_test_radial_cc_
-#)
+add_test(
+NAME Test_radial_cc
+COMMAND simple_test_radial_cc_
+)
 add_test(
 NAME Test_rad_med
 COMMAND simple_test_rad_med
@@ -248,10 +260,10 @@ add_test(
 NAME Test_rank_weights
 COMMAND simple_test_rank_weights
 )
-#add_test(
-#NAME Test_ref_assign
-#COMMAND simple_test_ref_assign
-#)
+add_test(
+NAME Test_ref_assign
+COMMAND simple_test_ref_assign
+)
 add_test(
 NAME Test_replace_substr
 COMMAND simple_test_replace_substr
