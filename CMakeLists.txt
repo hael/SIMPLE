@@ -55,6 +55,8 @@ OPTION(USE_PROFILING               "Enable symbol generation without debug suppo
 option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
 option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
 option(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
+option(USE_CUDA                    "Use CUDA for parallelization." OFF )
+option(USE_OPENACC                 "Use OpenACC for parallelization." OFF )
 option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
 option(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
 option(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
