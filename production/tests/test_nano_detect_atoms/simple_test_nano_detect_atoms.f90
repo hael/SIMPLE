@@ -3,6 +3,7 @@ module nano_picker_utils
     use simple_image
     use simple_atoms
     use simple_parameters
+    use simple_srch_sort_loc, only : hpsort
 
     implicit none
 
@@ -46,7 +47,7 @@ module nano_picker_utils
             min_dist = minval(dists)
             distances(i) = min_dist
             closest_coord = coords_2(:,min_loc(1))
-            write(22,'(7(f8.3))') coords_1(1,i), coords_1(2,i), coords_1(3,i), closest_coord(1), closest_coord(2), closest_coord(3), min_dist
+            write(22,'(7(f8.3,a))') coords_1(1,i), ',', coords_1(2,i), ',', coords_1(3,i), ',', closest_coord(1), ',', closest_coord(2), ',', closest_coord(3), ',', min_dist
             deallocate(dists)
         end do
 
@@ -148,6 +149,8 @@ module nano_detect_atoms
         procedure :: write_pdb
         procedure :: write_boximgs
         procedure :: write_positions
+        procedure :: write_NP_image
+        procedure :: write_corr_dist
         procedure :: refine_threshold
         procedure :: refine_threshold_otsu
         procedure :: compare_pick
@@ -621,7 +624,7 @@ module nano_detect_atoms
         allocate(self%convolved_atoms(nbox))
         call self%simulated_atom%fft()
         do iimg = 1, nbox
-            pos = self%initial_positions(pos_inds(iimg),:)
+            pos = self%positions(pos_inds(iimg),:)
             call atms_array(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call self%convolved_atoms(iimg)%new([self%boxsize,self%boxsize,self%boxsize],self%smpd)
             call window_slim_3D(self%nano_img, pos, self%boxsize, atms_array(iimg))
@@ -709,6 +712,52 @@ module nano_detect_atoms
         close(25)
     end subroutine write_positions
 
+    subroutine write_NP_image(self,ref_img_name,sim_img_name)
+        class(nano_picker), intent(inout) :: self
+        character(len=*),   intent(in)    :: ref_img_name, sim_img_name
+        type(nanoparticle) :: nano
+        type(image) :: nano_img
+        type(parameters), target :: params
+        params_glob => params
+        params_glob%element = self%element
+        params_glob%smpd = self%smpd
+        call self%write_pdb('simulate_NP')
+        call nano%new(trim(ref_img_name))
+        call nano%set_atomic_coords('simulate_NP.pdb')
+        call nano%simulate_atoms(simatms=nano_img)
+        call nano_img%write(sim_img_name)
+        call nano%kill
+    end subroutine write_NP_image
+
+    subroutine write_corr_dist(self,csv_name)
+        class(nano_picker), intent(inout) :: self
+        character(len=*),   intent(in)    :: csv_name
+        real,    allocatable :: pos_scores(:), lower_half_scores(:), upper_half_scores(:)
+        integer, allocatable :: pos_inds(:)
+        real                 :: Q1, mid, Q3, IQR, mean
+        integer              :: i
+        pos_inds   = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
+        pos_scores = pack(self%box_scores(:,:,:),   mask=self%box_scores(:,:,:) >= self%thres)
+        mid = median(pos_scores)
+        lower_half_scores = pack(pos_scores(:), pos_scores(:) < mid)
+        upper_half_scores = pack(pos_scores(:), pos_scores(:) > mid)
+        Q1   = median(lower_half_scores)
+        Q3   = median(upper_half_scores)
+        IQR  = Q3 - Q1
+        mean = sum(pos_scores) / size(pos_scores)
+        print *, 'SUMMARY STATISTICS OF CORRELATION SCORES'
+        print *, 'Q1 = ', Q1
+        print *, 'MEDIAN = ', mid
+        print *, 'Q3 = ', Q3
+        print *, 'IQR = ', IQR
+        print *, 'MEAN = ', mean
+        open(unit=99,file=trim(csv_name))
+        do i = 1, size(pos_scores)
+            write(99,'(1x,f4.3)') pos_scores(i)
+        end do
+        close(99)
+    end subroutine write_corr_dist
+
     subroutine refine_threshold(self, num_thres, ref_pdb_name, ref_img_name, max_thres)
         class(nano_picker), intent(inout) :: self
         integer,            intent(in)    :: num_thres
@@ -720,6 +769,11 @@ module nano_detect_atoms
         real                     :: thresholds(num_thres), thres_corrs(num_thres), max_thres_here, step
         integer                  :: i, optimal_index(1), num_pos
         integer, allocatable     :: pos_inds(:)
+        if (.not. allocated(self%initial_positions)) then
+            print *, 'ERROR'
+            print *, 'Please run set_positions before running refine_threshold'
+            return
+        end if
         print *, 'REFINE_THRESHOLD'
         if (present(max_thres)) then
             max_thres_here = max_thres
@@ -752,6 +806,7 @@ module nano_detect_atoms
         ! 8. instead of fixing thresholds at even distances over an interval, should we run Otsu's method multiple times?
         do i = 1, num_thres
             self%thres = thresholds(i) ! need to set self%thres because it is called in multiple subroutines
+            self%positions = self%initial_positions
             call self%find_centers
             call self%write_pdb('sim_centers')
             call nano_exp%new(trim(ref_img_name))
@@ -765,6 +820,8 @@ module nano_detect_atoms
         !     print *, thresholds(i), thres_corrs(i)
         ! end do
         self%thres = thresholds(optimal_index(1))
+        self%positions = self%initial_positions
+        call self%find_centers ! call again to set positions to the optimal
         pos_inds = pack(self%inds_offset(:,:,:),  mask=self%box_scores(:,:,:) >= self%thres)
         num_pos = size(pos_inds)
         print *, 'OPTIMAL THRESHOLD = ', self%thres
@@ -916,10 +973,14 @@ program simple_test_nano_detect_atoms
     call test_exp4%find_centers
     call test_exp4%distance_filter(dist_thres)
     call test_exp4%refine_threshold(100,pdbfile_ref,filename_sim,max_thres=0.75)
-    print *, '-----'
-    call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
+    ! print *, '-----'
+    ! call test_exp4%refine_threshold_otsu(100,pdbfile_ref,filename_sim)
+    call test_exp4%remove_outliers(3.)
     call test_exp4%write_pdb('experimental_centers_4')
     call test_exp4%compare_pick(trim(pdbfile_ref),'experimental_centers_4.pdb')
+    ! OUTPUT FILES
+    call test_exp4%write_NP_image(filename_sim,'result.mrc')
+    call test_exp4%write_corr_dist('correlation_scores.csv')
     !call test_exp4%write_boximgs()
     subStop = real(time())
     print *, 'TEST 7 RUNTIME = ', (subStop - subStart), ' s'
