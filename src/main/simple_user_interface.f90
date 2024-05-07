@@ -107,6 +107,7 @@ type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
 type(simple_program), target :: gen_pspecs_and_thumbs
+type(simple_program), target :: icm3D
 type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
@@ -390,6 +391,7 @@ contains
         call new_fractionate_movies
         call new_fsc
         call new_gen_pspecs_and_thumbs
+        call new_icm3D
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
@@ -505,6 +507,7 @@ contains
         call push2prg_ptr_array(fractionate_movies)
         call push2prg_ptr_array(fsc)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
+        call push2prg_ptr_array(icm3D)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(initial_3Dmodel)
@@ -664,6 +667,8 @@ contains
                 ptr2prg => fsc
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
+            case('icm3D')
+                ptr2prg => icm3D
             case('info_image')
                 ptr2prg => info_image
             case('info_stktab')
@@ -850,6 +855,7 @@ contains
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
+        write(logfhandle,'(A)') icm3D%name
         write(logfhandle,'(A)') initial_3Dmodel%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
@@ -2370,6 +2376,33 @@ contains
         ! <empty>
         ! computer controls
     end subroutine new_import_starproject
+
+    subroutine new_icm3D
+        ! PROGRAM SPECIFICATION
+        call icm3D%new(&
+        &'icm3D',&                                                                  ! name
+        &'ICM 3D filter',&                                                          ! descr_short
+        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! descr_long
+        &'simple_exec',&                                                            ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                                              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call icm3D%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call icm3D%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call icm3D%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call icm3D%set_input('filt_ctrls',1, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
+        ! mask controls
+        ! call icm3D%set_input('mask_ctrls', 1, mskdiam)
+        ! call icm3D%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call icm3D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_icm3D
 
     subroutine new_info_image
         ! PROGRAM SPECIFICATION

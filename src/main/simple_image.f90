@@ -211,12 +211,15 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: ICM, ICM3D
+    procedure          :: ICM
+    procedure, private :: ICM3D_1, ICM3D_2
+    generic            :: ICM3D => ICM3D_1, ICM3D_2
     procedure          :: lpgau2D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: loc_sdev
     procedure          :: avg_loc_sdev
+    procedure          :: loc_var3D
     procedure          :: rmsd
     procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
@@ -4092,7 +4095,7 @@ contains
     end subroutine ICM
 
     ! can be made nonuniform if we first calculate local noise variances
-    subroutine ICM3D( self, lambda )
+    subroutine ICM3D_1( self, lambda )
         use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
@@ -4150,7 +4153,68 @@ contains
                 pot = diff * diff
             end function pot
 
-    end subroutine ICM3D
+    end subroutine ICM3D_1
+
+    ! can be made nonuniform if we first calculate local noise variances
+    subroutine ICM3D_2( self, noise_var, lambda )
+        use simple_neighs
+        class(image), intent(inout) :: self, noise_var  
+        real,         intent(in)    :: lambda
+        integer, parameter :: MAXITS    = 3
+        integer, parameter :: NQUANTA   = 256
+        integer     :: n_4(3,6), nsz, i, j, k, m, n, l
+        real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
+        if( self%is_2d() ) THROW_HARD('3D images only; ICM')
+        if( self%ft )      THROW_HARD('Real space only; ICM')
+        call self%quantize_fwd(NQUANTA, transl_tab)
+        do i = 1, MAXITS
+            !$omp parallel do schedule(static) default(shared) private(n,m,l,pix,pix2,sigma2,n_4,nsz,pot_term,j,xmin,min,k,x,proba)&
+            !$omp proc_bind(close) collapse(3)
+            do n = 1,self%ldim(3)
+                do m = 1,self%ldim(2)
+                    do l = 1,self%ldim(1)
+                        pix    = self%rmat(n,m,l)
+                        pix2   = pix * pix
+                        sigma2 = noise_var%rmat(n,m,l)
+                        call neigh_4_3D(self%ldim, [n,m,l], n_4, nsz)
+                        pot_term = 0.
+                        do j = 1, nsz
+                            pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
+                        end do
+                        xmin = 0.
+                        min  = pix2 / (2. * sigma2) + lambda * pot_term
+                        ! Every shade of gray is tested to find the a local minimum of the energy corresponding to a Gibbs distribution
+                        do k = 0,NQUANTA - 1
+                            x = real(k)
+                            pot_term = 0.
+                            do j = 1, nsz
+                                pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
+                            end do
+                            proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
+                            if( min > proba )then
+                                min  = proba
+                                xmin = x
+                            endif
+                        end do
+                        self%rmat(n,m,l) = xmin
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        end do
+        call self%quantize_bwd(NQUANTA, transl_tab)
+
+        contains
+
+            ! potential function corresponding to a Gaussian Markov model (quadratic function)
+            real function pot(x, y)
+                real, intent(in) :: x, y
+                real :: diff
+                diff = x - y
+                pot = diff * diff
+            end function pot
+
+    end subroutine ICM3D_2
 
     subroutine lpgau2D( self, freq )
         class(image), intent(inout) :: self
@@ -4393,6 +4457,43 @@ contains
         end do
         asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2),dp))
     end function avg_loc_sdev
+
+    subroutine loc_var3D( self, varimg, avar )
+        use simple_neighs
+        class(image),   intent(in)    :: self
+        class(image),   intent(inout) :: varimg
+        real, optional, intent(inout) :: avar
+        real    :: avg, ep, val, var
+        integer :: i, j, k, l, nsz, n_4(3,6)
+        if( self%ldim(3) == 1 ) THROW_HARD('not for 2d')
+        call varimg%new(self%ldim, self%smpd)
+        !$omp parallel do private(i,j,k,l,n_4,nsz,avg,ep,val,var) default(shared) proc_bind(close)
+        do i = 1,self%ldim(1)
+            do j = 1,self%ldim(2)
+                do k = 1,self%ldim(3)
+                    call neigh_4_3D(self%ldim, [i,j,k], n_4, nsz)
+                    avg = 0.
+                    do l = 1,nsz
+                        avg = avg + self%rmat(n_4(1,l),n_4(2,l),n_4(3,l))
+                    end do
+                    avg = avg / real(nsz)
+                    ep  = 0.
+                    var = 0.
+                    do l = 1,nsz
+                        val = self%rmat(n_4(1,l),n_4(2,l),n_4(3,l))
+                        ep  = ep  + val
+                        var = var + val * val
+                    end do
+                    var = (var-ep**2./real(nsz))/(real(nsz)-1.) ! corrected two-pass formula
+                    varimg%rmat(i,j,k) = var 
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( present(avar) )then
+            avar = sum(varimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(product(self%ldim))
+        endif
+    end subroutine loc_var3D
 
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
@@ -7384,18 +7485,23 @@ contains
         if( didft ) call self%fft()
     end subroutine mirror
 
-    subroutine norm( self  )
-        class(image), intent(inout) :: self
+    subroutine norm( self, a_s )
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: a_s(2)
         integer :: npix
         real    :: ave, var, ep
         npix   = product(self%ldim)
         ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        self%rmat = self%rmat - ave
         ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
         var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
         if( is_a_number(var) )then
-            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
+            if( var > 0. ) self%rmat = self%rmat / (sqrt(var))
+        endif
+        if( present(a_s) )then
+            self%rmat = self%rmat * a_s(2)
+            self%rmat = self%rmat + a_s(1)
         endif
     end subroutine norm
 

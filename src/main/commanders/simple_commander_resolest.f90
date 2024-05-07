@@ -17,6 +17,7 @@ public :: nununiform_filter3D_commander
 public :: nununiform_filter2D_commander
 public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
+public :: icm3D_commander
 public :: cavg_filter2D_commander
 public :: score_cavgs_commander
 public :: prune_cavgs_commander
@@ -47,6 +48,11 @@ type, extends(commander_base) :: uniform_filter3D_commander
   contains
     procedure :: execute      => exec_uniform_filter3D
 end type uniform_filter3D_commander
+
+type, extends(commander_base) :: icm3D_commander
+  contains
+    procedure :: execute      => exec_icm3D
+end type icm3D_commander
 
 type, extends(commander_base) :: cavg_filter2D_commander
   contains
@@ -175,7 +181,7 @@ contains
         call even%kill
         call mskvol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_nununiform_filter3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_NONUNIFORM_FILTER3D NORMAL STOP ****')
     end subroutine exec_nununiform_filter3D
 
     subroutine exec_uniform_filter3D(self, cline)
@@ -229,8 +235,41 @@ contains
         call   even%kill
         call mskvol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_uniform_filter3D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_UNIFORM_FILTER3D NORMAL STOP ****')
     end subroutine exec_uniform_filter3D
+
+    subroutine exec_icm3D( self, cline )
+        class(icm3D_commander), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        type(parameters)  :: params
+        type(image)       :: even, odd, noise, noise_var
+        real              :: avar, ave, sdev, maxv, minv
+        character(len=90) :: file_tag
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call odd %new([params%box,params%box,params%box], params%smpd)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd %read(params%vols(1))
+        call even%read(params%vols(2))
+        call noise%copy(even)
+        call noise%subtr(odd)
+        call noise%loc_var3D(noise_var, avar)
+        call noise_var%norm([5.,2.])
+
+        call noise_var%stats(ave, sdev, maxv, minv)
+
+        print *, 'ave  = ', ave
+        print *, 'sdev = ', sdev
+        print *, 'maxv = ', maxv
+        print *, 'minv = ', minv
+
+        file_tag = 'icm_3D_filter'
+
+
+        call even%icm3D(noise_var, params%lambda)
+        call even%write(trim(file_tag)//'_even.mrc')
+        call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
+    end subroutine exec_icm3D
 
     subroutine exec_nununiform_filter2D( self, cline )
         use simple_opt_filter, only: nonuni_filt2D_sub
