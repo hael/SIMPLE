@@ -11,8 +11,9 @@ character(len=:), allocatable :: cmd
 integer                       :: ldim_refs(3), ifoo, ldim1(3), n_shells, i, rc
 logical                       :: mrc_exists
 if( command_argument_count() /= 2 )then
-    write(logfhandle,'(a)') 'Error! Usage: simple_test_radial_cc img1.mrc img2.mrc', NEW_LINE('a')
-    write(logfhandle,'(a)') 'Running testing using 1JYX,pdb instead', NEW_LINE('a')
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_radial_cc img1.mrc img2.mrc'
+    write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
+    write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     if( .not. mrc_exists )then
         write(*, *) 'Downloading the example dataset...'
         cmd = 'curl -s -o 1JYX.pdb https://files.rcsb.org/download/1JYX.pdb'

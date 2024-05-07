@@ -19,7 +19,7 @@ real,             allocatable :: cur_fil(:), vec_noise(:), xhist(:), yest(:)
 integer,          allocatable :: yhist(:)
 real,             pointer     :: rmat_img_noisy(:,:,:), rmat_img_filt(:,:,:)
 if( command_argument_count() < 4 )then
-    write(logfhandle,'(a)') 'Usage: simple_test_2D_opt_filt smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
+    write(logfhandle,'(a)') 'ERROR! Usage: simple_test_opt_lp smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
     write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
     write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
     inquire(file="1JYX.mrc", exist=mrc_exists)

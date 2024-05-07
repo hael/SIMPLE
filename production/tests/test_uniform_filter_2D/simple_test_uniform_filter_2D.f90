@@ -21,9 +21,9 @@ program simple_test_uni_filt2D
     character(len=LONGSTRLEN)        :: cwd=''
     logical                          :: mrc_exists
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'Error! Usage: simple_test_uni_filt2D smpd=xx nthr=yy stk=stk.mrc'
+        write(logfhandle,'(a)') 'ERROR! Usage: simple_test_uniform_filt2D smpd=xx nthr=yy stk=stk.mrc'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
-        write(logfhandle,'(a)') 'Running example with 1xyz reprojections stack for testing'
+        write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
         inquire(file="1JYX.mrc", exist=mrc_exists)
         if( .not. mrc_exists )then
             write(*, *) 'Downloading the example dataset...'
