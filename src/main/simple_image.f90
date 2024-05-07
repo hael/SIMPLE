@@ -4031,7 +4031,7 @@ contains
         use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
-        integer, parameter :: MAXITS    = 10
+        integer, parameter :: MAXITS    = 5
         integer, parameter :: NQUANTA   = 256
         real,    parameter :: EUCL_CONV = 3e-3
         integer     :: n_8(3,8), nsz, i, j, k, m, n
@@ -4075,12 +4075,9 @@ contains
             !$omp end parallel do
             eucl = self%euclid_norm(self_prev)
             if( eucl < EUCL_CONV ) exit
-
-            print *, 'eucl = ', eucl
-
             call self_prev%copy(self)
         end do
-        ! call self%quantize_bwd(NQUANTA, transl_tab) !!!!!!!!!!!! 4 NOW
+        call self%quantize_bwd(NQUANTA, transl_tab)
 
         contains
 
@@ -4099,16 +4096,13 @@ contains
         use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
-        integer, parameter :: MAXITS    = 10
+        integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
-        real,    parameter :: EUCL_CONV = 3e-3
         integer     :: n_4(3,6), nsz, i, j, k, m, n, l
         real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
-        type(image) :: self_prev
         if( self%is_2d() ) THROW_HARD('3D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
         call self%quantize_fwd(NQUANTA, transl_tab)
-        call self_prev%copy(self)
         sigma2 = 5. ! 4 now
         do i = 1, MAXITS
             !$omp parallel do schedule(static) default(shared) private(n,m,l,pix,pix2,n_4,nsz,pot_term,j,xmin,min,k,x,proba)&
@@ -4143,14 +4137,8 @@ contains
                 end do
             end do
             !$omp end parallel do
-            eucl = self%euclid_norm(self_prev)
-            if( eucl < EUCL_CONV ) exit
-
-            print *, 'eucl = ', eucl
-
-            call self_prev%copy(self)
         end do
-        ! call self%quantize_bwd(NQUANTA, transl_tab) !!!!!!!!!!!! 4 NOW
+        call self%quantize_bwd(NQUANTA, transl_tab)
 
         contains
 
@@ -4360,7 +4348,7 @@ contains
         real, optional, intent(inout) :: asdev
         real    :: avg
         integer :: i, j, ir(2), jr(2), isz, jsz, npix
-        if( self%ldim(3) /= 1 ) THROW_HARD('not yet implemented for 3d')
+        if( self%ldim(3) /= 1 ) THROW_HARD('not for 3d')
         call sdevimg%new(self%ldim, self%smpd)
         !$omp parallel do private(i,j,ir,jr,isz,jsz,npix,avg) default(shared) proc_bind(close)
         do i = 1,self%ldim(1)
@@ -7509,13 +7497,15 @@ contains
     subroutine quantize_bwd( self, nquanta, transl_tab )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nquanta
-        real,         intent(inout) :: transl_tab(nquanta)
+        real,         intent(in) :: transl_tab(nquanta)
+        real    :: pixvals(nquanta)
         integer :: i, j, k, ind
         real    :: dist
+        pixvals = real((/(k,k=1,nquanta)/)) - 1.0
         do k = 1,self%ldim(3)
             do j = 1,self%ldim(2)
                 do i = 1,self%ldim(1)
-                    call find(transl_tab, nquanta, self%rmat(i,j,k), ind, dist)
+                    call find(pixvals, nquanta, self%rmat(i,j,k), ind, dist)
                     self%rmat(i,j,k) = transl_tab(ind)
                 end do
             end do

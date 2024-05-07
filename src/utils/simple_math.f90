@@ -258,7 +258,7 @@ contains
             hist(ind)       = hist(ind) + 1.
             vec(i)          = real(ind - 1) ! range becomes [0,nquanta - 1]
         end do
-        where( hist > SMALL ) transl_tab = transl_tab / hist
+        where( hist > TINY ) transl_tab = transl_tab / hist
     end subroutine quantize_vec
 
     subroutine detect_peak_thres_1( n, n_ub, level, x, t )
