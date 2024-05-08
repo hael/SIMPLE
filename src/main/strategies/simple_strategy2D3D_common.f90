@@ -736,7 +736,6 @@ contains
                 ibatch      = i - batchlims(1) + 1
                 call build_glob%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
-                m = m+1
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
                 call prev_oris%get_ori(iptcl, orientation)
                 if( orientation%get_updatecnt() > 1 )then
