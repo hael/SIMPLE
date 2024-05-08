@@ -18,7 +18,7 @@ use simple_euclid_sigma2
 use simple_qsys_funs
 implicit none
 
-public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander
+public :: initial_3Dmodel_commander, abinitio_3Dmodel_commander, batch_abinitio_3Dmodel_commander
 private
 #include "simple_local_flags.inc"
 
@@ -31,6 +31,11 @@ type, extends(commander_base) :: abinitio_3Dmodel_commander
     contains
     procedure :: execute => exec_abinitio_3Dmodel
 end type abinitio_3Dmodel_commander
+
+type, extends(commander_base) :: batch_abinitio_3Dmodel_commander
+    contains
+    procedure :: execute => exec_batch_abinitio_3Dmodel
+end type batch_abinitio_3Dmodel_commander
 
 character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
 character(len=STDLEN), parameter :: REC_PPROC_FBODY      = trim(REC_FBODY)//trim(PPROC_SUFFIX)
@@ -687,7 +692,7 @@ contains
         type(postprocess_commander)         :: xpostprocess
         type(symaxis_search_commander)      :: xsymsrch
         ! command lines
-        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D
+        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D, cline_reconstruct3D_mlreg
         type(cmdline)                 :: cline_postprocess, cline_symsrch
         ! other
         type(parameters)              :: params
@@ -847,10 +852,11 @@ contains
         l_autoscale      = .false.
         call spproj%kill ! not needed anymore
         ! command-lines
-        cline_refine3D      = cline
-        cline_reconstruct3D = cline
-        cline_postprocess   = cline
-        cline_symsrch       = cline
+        cline_refine3D            = cline
+        cline_reconstruct3D       = cline
+        cline_postprocess         = cline
+        cline_symsrch             = cline
+        cline_reconstruct3D_mlreg = cline_reconstruct3D
         call cline_refine3D%set('prg',                'refine3D')
         call cline_refine3D%set('projfile',      params%projfile)
         call cline_refine3D%set('center',                   'no')
@@ -872,6 +878,11 @@ contains
             call cline_symsrch%set('hp',       params%hp)
             call cline_symsrch%set('center',   'yes')
         endif
+        call cline_reconstruct3D_mlreg%set('prg',         'reconstruct3D')
+        call cline_reconstruct3D_mlreg%set('objfun',      'euclid')
+        call cline_reconstruct3D_mlreg%set('needs_sigma', 'yes')
+        call cline_reconstruct3D_mlreg%set('sigma_est',   params%sigma_est)
+        call cline_reconstruct3D_mlreg%set('ml_reg',      'yes')
         ! Frequency marching
         iter = 0
         do it = 1,NSTAGES
@@ -948,8 +959,12 @@ contains
             ! ML volume regularization
             if( params%l_ml_reg .and. it >= MLREG_ITER )then
                 call cline_refine3D%set('ml_reg', 'yes')
-                if( it == MLREG_ITER )then
-                    call cline_refine3D%delete('continue')
+                if( it == MLREG_ITER .or. params%box_crop > prev_box_crop )then
+                    call cline_reconstruct3D_mlreg%set('which_iter', iter)
+                    call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
+                    call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
+                    call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
+                    call cline_refine3D%set('continue',  'yes')
                     do state = 1,params%nstates
                         vol_str = 'vol'//trim(int2str(state))
                         call cline_refine3D%delete(vol_str)
@@ -994,8 +1009,12 @@ contains
         endif
         if( params%l_ml_reg .and. it >= MLREG_ITER )then
             call cline_refine3D%set('ml_reg', 'yes')
-            if( it == MLREG_ITER )then
-                call cline_refine3D%delete('continue')
+            if( it == MLREG_ITER .or. params%box_crop > prev_box_crop )then
+                call cline_reconstruct3D_mlreg%set('which_iter', iter)
+                call cline_reconstruct3D_mlreg%set('box_crop',   params%box_crop)
+                call cline_reconstruct3D_mlreg%set('smpd_crop',  params%smpd_crop)
+                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D_mlreg)
+                call cline_refine3D%set('continue',  'yes')
                 do state = 1,params%nstates
                     vol_str = 'vol'//trim(int2str(state))
                     call cline_refine3D%delete(vol_str)
@@ -1146,5 +1165,312 @@ contains
             end subroutine symmetrize
 
     end subroutine exec_abinitio_3Dmodel
+
+    !> for generation of an initial 3d model from particles
+    subroutine exec_batch_abinitio_3Dmodel( self, cline )
+        use simple_convergence, only: convergence
+        class(batch_abinitio_3Dmodel_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        real,    parameter :: SCALEFAC      = 0.667
+        real,    parameter :: CENLP_DEFAULT = 30.
+        real,    parameter :: LP_DEFAULT    = 6.
+        real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
+        integer, parameter :: MINBOX  = 88
+        integer, parameter :: NSTAGES = 6
+        integer, parameter :: ITERS_PER_STAGE = 20
+        integer, parameter :: BATCHSZ = 500
+        integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-1
+        ! commanders
+        type(refine3D_commander_distr)      :: xrefine3D_distr
+        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        type(postprocess_commander)         :: xpostprocess
+        ! command lines
+        type(cmdline)                 :: cline_refine3D, cline_reconstruct3D
+        type(cmdline)                 :: cline_postprocess
+        ! other
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(convergence)             :: conv
+        type(image)                   :: final_vol, reprojs
+        type(ran_tabu)                :: rt
+        character(len=:), allocatable :: vol_type, str_state, vol, vol_pproc, vol_pproc_mirr
+        integer,          allocatable :: vec(:), states(:), batches(:)
+        character(len=LONGSTRLEN)     :: vol_str
+        real    :: lps(NSTAGES), smpds(NSTAGES)
+        integer :: boxs(NSTAGES)
+        real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
+        integer :: iter, it, prev_box_crop, maxits, state, i,j, final_nptcls, nptcls_sel
+        integer :: ind, startind, stopind, nptcls_batch
+        logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set
+        call cline%set('ml_reg',       'no')
+        call cline%set('stoch_update', 'no')
+        call cline%set('pgrp',         'c1')
+        call cline%set('oritype',      'ptcl3D')
+        call cline%set('refine',       'prob')
+        call cline%set('mkdir',        'yes')
+        call cline%set('sigma_est',    'global')
+        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
+        if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',    'yes')
+        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
+        if( .not. cline%defined('center')       ) call cline%set('center',        'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
+        ! resolution limit strategy
+        l_lpset       = .false.
+        l_lpstop_set  = cline%defined('lpstop')
+        l_lpstart_set = cline%defined('lpstart')
+        if( cline%defined('lp') )then
+            if( l_lpstart_set .or. l_lpstop_set )then
+                THROW_HARD('One of LP or LPSTART & LPSTOP must be defined!')
+            endif
+            l_lpset = .true.
+        else
+            if( .not.l_lpstart_set ) call cline%set('lpstart',LPSTART_DEFAULT)
+            if( .not.l_lpstop_set  ) call cline%set('lpstop', LPSTOP_DEFAULT)
+        endif
+        ! make master parameters
+        call params%new(cline)
+        call cline%set('mkdir', 'no')
+        call cline%delete('lpstart')
+        call cline%delete('lpstop')
+        call cline%delete('lp')
+        call cline%delete('shift_stage')
+        if( l_lpset )then
+            params%lpstop  = params%lp
+            params%lpstart = params%lp
+        endif
+        if( params%shift_stage < 1 .or. params%shift_stage > NSTAGES+1 )then
+            params%shift_stage = min(NSTAGES+1,max(1,params%shift_stage))
+            THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
+        endif
+        ! read project
+        call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo', params%projfile)
+        if( .not. cline%defined('vol1') )then
+            ! randomize projection directions
+            select case(trim(params%oritype))
+                case('ptcl3D')
+                    if( spproj%os_ptcl3D%get_noris() < 1 )then
+                        THROW_HARD('Particles could not be found in the project')
+                    endif
+                    vol_type = 'vol'
+                    call spproj%os_ptcl3D%rnd_oris
+                    call spproj%os_ptcl3D%set_all2single('sampled',  0.)
+                    call spproj%os_ptcl3D%set_all2single('updatecnt',0.)
+                    if( spproj%os_ptcl3D%get_nevenodd() == 0 ) call spproj%os_ptcl3D%partition_eo
+                    call spproj%write_segment_inside(params%oritype, params%projfile)
+                case DEFAULT
+                    THROW_HARD('Unsupported ORITYPE; exec_abinitio_3Dmodel')
+            end select
+        endif
+        write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', params%lpstart
+        write(logfhandle,'(A,F5.1)') '>>> HARD     RESOLUTION LIMIT (IN A): ', params%lpstop
+        if( trim(params%center).eq.'yes' )then
+            write(logfhandle,'(A,F5.1)') '>>> CENTERING  LOW-PASS LIMIT (IN A): ', params%cenlp
+        endif
+        ! centering & symmetry resolution limit
+        call mskdiam2lplimits(params%mskdiam, symlp, dummy, cenlp)
+        if( .not. cline%defined('cenlp') )then
+            params%cenlp = cenlp
+            call cline%set('cenlp', params%cenlp)
+        endif
+        ! dimensions defaults
+        params%box       = spproj%get_box()
+        params%smpd_crop = params%smpd
+        params%box_crop  = params%box
+        ! command-lines
+        cline_refine3D            = cline
+        cline_reconstruct3D       = cline
+        cline_postprocess         = cline
+        call cline_refine3D%set('prg',                'refine3D')
+        call cline_refine3D%set('projfile',      params%projfile)
+        call cline_refine3D%set('center',                   'no')
+        call cline_refine3D%set('pgrp',              params%pgrp)
+        call cline_refine3D%set('lp_iters',                 9999)
+        call cline_refine3D%set('ml_reg',                   'no')
+        call cline_refine3D%set('vol1',     'recvol_state01.mrc')
+        call cline_reconstruct3D%set('prg',      'reconstruct3D')
+        call cline_reconstruct3D%set('box',     real(params%box))
+        call cline_reconstruct3D%set('projfile', params%projfile)
+        call cline_reconstruct3D%set('ml_reg',              'no')
+        call cline_reconstruct3D%set('needs_sigma',         'no')
+        call cline_reconstruct3D%set('objfun',              'cc')
+        call cline_reconstruct3D%set('pgrp',         params%pgrp)
+        call cline_postprocess%set('prg',          'postprocess')
+        call cline_postprocess%set('projfile',   params%projfile)
+        call cline_postprocess%set('imgkind',           vol_type)
+        ! Frequency marching plan
+        startind = calc_fourier_index(params%lpstart, params%box, params%smpd)
+        stopind  = calc_fourier_index(params%lpstop,  params%box, params%smpd)
+        do it = 1,NSTAGES
+            ! resolution limit
+            ind     = startind + nint(real(it-1) * real(stopind-startind) /real(NSTAGES-1))
+            lps(it) = calc_lowpass_lim(ind, params%box, params%smpd)
+            if( it == 1 )       lps(it) = params%lpstart
+            if( it == NSTAGES ) lps(it) = params%lpstop
+            ! dimensions
+            lp_target   = lps(it) * SCALEFAC
+            smpd_target = max(params%smpd, lp_target/2.)
+            call autoscale(params%box, params%smpd, smpd_target, boxs(it), smpds(it), scale, minbox=MINBOX)
+        enddo
+        ! Batch plan
+        states = nint(spproj%os_ptcl3D%get_all('state'))
+        nptcls_sel   = count(states==1)
+        final_nptcls = min(nptcls_sel,ITERS_PER_STAGE * (BATCHSZ * NSTAGES))
+        allocate(vec(nptcls_sel),source=0)
+        do i = 1,final_nptcls,NSTAGES
+            do j = 1,NSTAGES
+                if( i+j-1 > final_nptcls ) exit
+                vec(i+j-1) = j
+            enddo
+        enddo
+        rt = ran_tabu(nptcls_sel)
+        call rt%shuffle(vec)
+        call rt%kill
+        batches = states
+        j = 0
+        do i = 1,params%nptcls
+            if( batches(i) == 1 )then
+                j = j + 1
+                batches(i) = vec(j)
+            endif
+        enddo
+        deallocate(vec)
+        params%batchfrac = 1. / ITERS_PER_STAGE
+        call cline_refine3D%set('batchfrac', params%batchfrac)
+        ! Main loop
+        iter = 0
+        do it = 1,NSTAGES
+            write(logfhandle,'(A)') '>>>'
+            ! dimensions & resolution limit
+            params%box_crop  = boxs(it)
+            params%smpd_crop = smpds(it)
+            params%lp        = lps(it)
+            ! particles sampling
+            allocate(vec(params%nptcls),source=0)
+            where( (batches>0) .and. (batches<=it) ) vec = 1
+            nptcls_batch = count(vec==1)
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call spproj%os_ptcl3D%set_all('state',   real(vec))
+            call spproj%os_ptcl3D%set_all2single('sampled', 0.)
+            if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
+            call spproj%write_segment_inside('ptcl3D', params%projfile)
+            deallocate(vec)
+            write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
+            write(logfhandle,'(A,I6)'         )'>>> PARTICLES PER BATCH: ',nptcls_batch / ITERS_PER_STAGE
+            write(logfhandle,'(A,I3,A1,I3)'   )'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',params%box_crop
+            ! Starting reconstruction
+            if( it == 1 )then
+                call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
+                call cline_reconstruct3D%set('box_crop',  params%box_crop)
+                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+            endif
+            ! Stage updates
+            call cline_refine3D%set('startit', iter+1)
+            call cline_refine3D%set('maxits',  ITERS_PER_STAGE)
+            if( it < params%shift_stage )then
+                call cline_refine3D%set('nspace', NSPACE1)
+                call cline_refine3D%set('trs',    0.)
+            else
+                trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
+                call cline_refine3D%set('nspace', NSPACE2)
+                call cline_refine3D%set('trs',    trslim)
+            end if
+            if( it == NSTAGES )then
+                call cline_refine3D%set('maxits', 2*ITERS_PER_STAGE)
+                call cline_refine3D%set('nspace', NSPACE3)
+            endif
+            ! execution
+            call exec_refine3D(iter)
+            ! Reconstruction
+            if( it < NSTAGES .and. boxs(it+1) /= boxs(it) )then
+                call cline_reconstruct3D%set('smpd_crop', smpds(it+1))
+                call cline_reconstruct3D%set('box_crop',  boxs(it+1))
+                call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+            endif
+        enddo
+        ! for visualization
+        do state = 1, params%nstates
+            str_state = int2str_pad(state,2)
+            call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+            call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+            call final_vol%generate_orthogonal_reprojs(reprojs)
+            call reprojs%write_jpg('orthogonal_reprojs_state'//trim(str_state)//'.jpg')
+            call final_vol%kill
+            call reprojs%kill
+        enddo
+        ! Final reconstruction at original scale
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
+        write(logfhandle,'(A)') '>>>'
+        call cline_reconstruct3D%set('ml_reg',      'no')
+        call cline_reconstruct3D%set('needs_sigma', 'no')
+        call cline_reconstruct3D%set('objfun',      'cc')
+        call cline_reconstruct3D%delete('smpd_crop')
+        call cline_reconstruct3D%delete('box_crop')
+        call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+        call spproj%read_segment('out',params%projfile)
+        do state = 1, params%nstates
+            str_state = int2str_pad(state,2)
+            vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            call spproj%add_vol2os_out(vol, params%smpd, state, vol_type)
+            if( trim(params%oritype).eq.'ptcl3D' )then
+                call spproj%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), state, params%box)
+            endif
+        enddo
+        call spproj%write_segment_inside('out',params%projfile)
+        ! post-processing
+        do state = 1, params%nstates
+            call cline_postprocess%delete('lp') ! so as to obtain optimal filtration
+            call cline_postprocess%set('state', real(state))
+            call xpostprocess%execute(cline_postprocess)
+        enddo
+        do state = 1, params%nstates
+            str_state      = int2str_pad(state,2)
+            vol            = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            vol_pproc      = add2fbody(vol,params%ext,PPROC_SUFFIX)
+            vol_pproc_mirr = add2fbody(vol,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
+            if( file_exists(vol)            ) call simple_rename(vol,            trim(REC_FBODY)           //trim(str_state)//trim(params%ext))
+            if( file_exists(vol_pproc)      ) call simple_rename(vol_pproc,      trim(REC_PPROC_FBODY)     //trim(str_state)//trim(params%ext))
+            if( file_exists(vol_pproc_mirr) ) call simple_rename(vol_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//trim(str_state)//trim(params%ext))
+        enddo
+        ! restore states
+        call spproj%read_segment('ptcl3D', params%projfile)
+        call spproj%os_ptcl3D%set_all('state', real(states))
+        call spproj%write_segment_inside('ptcl3D', params%projfile)
+        ! cleanup
+        call spproj%kill
+        call qsys_cleanup
+        call simple_end('**** SIMPLE_ABINITIO_3DMODEL NORMAL STOP ****')
+        contains
+
+            subroutine exec_refine3D( iter )
+                integer,          intent(out) :: iter
+                character(len=:), allocatable :: stage
+                call cline_refine3D%delete('endit')
+                call cline_refine3D%set('smpd_crop', params%smpd_crop)
+                call cline_refine3D%set('box_crop',  params%box_crop)
+                call cline_refine3D%set('lp',        params%lp)
+                call xrefine3D_distr%execute_shmem(cline_refine3D)
+                call conv%read(l_err)
+                iter = nint(conv%get('iter'))
+                call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
+                call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
+                call del_file(trim(DIST_FBODY)      //'.dat')
+                call del_file(trim(ASSIGNMENT_FBODY)//'.dat')
+                if( it < NSTAGES )then
+                    stage = '_stage_'//int2str(it)
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        vol       = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+                        vol_pproc = add2fbody(vol,params%ext,PPROC_SUFFIX)
+                        if( file_exists(vol)      ) call simple_copy_file(vol,       add2fbody(vol,      params%ext,stage))
+                        if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
+                    enddo
+                endif
+            end subroutine exec_refine3D
+
+    end subroutine exec_batch_abinitio_3Dmodel
 
 end module simple_commander_abinitio

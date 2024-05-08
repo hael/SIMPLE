@@ -869,17 +869,26 @@ contains
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         allocate(ptcl_mask(params%fromp:params%top))
-        if( params%l_frac_update )then
+        if( params%batchfrac < 0.99 )then
             if( build%spproj_field%has_been_sampled() )then
                 call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
                 &nptcls, pinds, ptcl_mask)
             else
-                call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
-                &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
+                THROW_HARD('error')
             endif
         else
-            call build%spproj_field%sample4update_all([params%fromp,params%top],&
-            &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
+            if( params%l_frac_update )then
+                if( build%spproj_field%has_been_sampled() )then
+                    call build%spproj_field%sample4update_reprod([params%fromp,params%top],&
+                    &nptcls, pinds, ptcl_mask)
+                else
+                    call build%spproj_field%sample4update_rnd([params%fromp,params%top],&
+                    &params%update_frac, nptcls, pinds, ptcl_mask, .false.) ! no increment of sampled
+                endif
+            else
+                call build%spproj_field%sample4update_all([params%fromp,params%top],&
+                &nptcls, pinds, ptcl_mask, .false.) ! no increement of sampled
+            endif
         endif
         ! more prep
         call set_bp_range( cline )
@@ -982,17 +991,22 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         if( params%startit == 1 ) call build%spproj_field%clean_updatecnt_sampled
         allocate(ptcl_mask(1:params%nptcls))
-        if( params%l_frac_update )then
-            if( params%l_stoch_update )then
-                call build%spproj_field%sample4update_rnd([1,params%nptcls],&
-                &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-            else
-                call build%spproj_field%sample4update_rnd2([1,params%nptcls],&
-                &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
-            endif            
-        else                                                    ! we sample all state > 0
-            call build%spproj_field%sample4update_all([1,params%nptcls],&
-            &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+        if( params%batchfrac < 0.99 )then
+            call build%spproj_field%sample4update_rnd2([params%fromp,params%top],&
+            &params%batchfrac, nptcls, pinds, ptcl_mask, .true.)
+        else
+            if( params%l_frac_update )then
+                if( params%l_stoch_update )then
+                    call build%spproj_field%sample4update_rnd([1,params%nptcls],&
+                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+                else
+                    call build%spproj_field%sample4update_rnd2([1,params%nptcls],&
+                    &params%update_frac, nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+                endif
+            else                                                    ! we sample all state > 0
+                call build%spproj_field%sample4update_all([1,params%nptcls],&
+                &nptcls, pinds, ptcl_mask, .true.) ! sampled incremented
+            endif
         endif
         ! increment update counter
         call build%spproj_field%incr_updatecnt([1,params%nptcls], ptcl_mask)

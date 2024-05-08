@@ -51,7 +51,7 @@ character(len=STDLEN), parameter :: DIR_STREAM_COMPLETED = trim(PATH_HERE)//'spp
 character(len=STDLEN), parameter :: USER_PARAMS     = 'stream_user_params.txt'                   
 integer,               parameter :: NMOVS_SET       = 5                                          ! number of movies processed at once (>1)
 integer,               parameter :: LONGTIME        = 60                                        ! time lag after which a movie/project is processed
-integer,               parameter :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
+integer,               parameter :: WAITTIME        = 10   ! movie folder watched every WAITTIME seconds
 
 contains
 

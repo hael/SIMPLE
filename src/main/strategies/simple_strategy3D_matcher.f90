@@ -71,12 +71,13 @@ contains
         real,                  allocatable :: resarr(:)
         integer,               allocatable :: batches(:,:)
         type(convergence) :: conv
+        type(oris)        :: prev_oris
         type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer :: iptcl, fnr, ithr, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
-        logical :: doprint, do_extr
+        logical :: doprint, do_extr, l_batch_update
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -106,6 +107,10 @@ contains
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds, ptcl_mask )
+            if( params_glob%batchfrac < 0.99 )then
+                call prev_oris%copy(build_glob%spproj_field,.true.)
+                call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
+            endif
         else
             if( params_glob%l_frac_update )then
                 if( params_glob%l_stoch_update )then
@@ -166,6 +171,7 @@ contains
                         call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
                 end select
         end select
+
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -361,7 +367,12 @@ contains
                         params_glob%it_history, nptcls2update, pinds, ptcl_mask)
                     endif
                 endif
-                call calc_3Drec( cline, nptcls2update, pinds, which_iter )
+                if( params_glob%batchfrac < 0.99 )then
+                    call calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
+                    call prev_oris%kill
+                else
+                    call calc_3Drec( cline, nptcls2update, pinds, which_iter )
+                endif
                 call eucl_sigma%kill
                 call killimgbatch
                 if( L_BENCH_GLOB ) rt_rec = toc(t_rec)

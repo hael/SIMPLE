@@ -31,6 +31,8 @@ type :: fplane
     procedure :: does_exist
     ! SETTERS
     procedure :: gen_planes
+    ! MODIFIERS
+    procedure :: neg
     ! DESTRUCTOR
     procedure :: kill
 end type fplane
@@ -147,6 +149,12 @@ contains
             enddo
         enddo
     end subroutine gen_planes
+
+    subroutine neg( self )
+        class(fplane),    intent(inout) :: self
+        self%cmplx_plane = -self%cmplx_plane
+        self%ctfsq_plane = -self%ctfsq_plane
+    end subroutine neg
 
     !>  \brief  is a destructor
     subroutine kill( self )
