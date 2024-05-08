@@ -508,25 +508,33 @@ contains
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lambda
         type(stack_io)               :: stkio_r, stkio_w
-        type(image)                  :: img
+        type(image), allocatable     :: imgs(:)
         integer                      :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'icm_imgfile' )
+        ! read images
+        allocate(imgs(n))
         call stkio_r%open(fname2process, smpd, 'read')
-        call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
-        call img%new(ldim,smpd)
-        write(logfhandle,'(a)') '>>> APPLYING ICM REGULARIZATION TO IMAGES'
         do i=1,n
-            print *, i
-            call progress(i,n)
-            call stkio_r%read(i, img)
-            call img%icm(lambda)
-            call stkio_w%write(i, img)
+            call imgs(i)%new(ldim,smpd)
+            call stkio_r%read(i, imgs(i))
         end do
         call stkio_r%close
+        write(logfhandle,'(a)') '>>> APPLYING ICM REGULARIZATION TO IMAGES'
+        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
+        do i=1,n
+            call imgs(i)%icm(lambda)
+        end do
+        !$omp end parallel do
+        ! write images
+        call stkio_w%open(fname, smpd, 'write', box=ldim(1))
+        do i=1,n
+            call stkio_w%write(i, imgs(i))
+            call imgs(i)%kill
+        end do
         call stkio_w%close
-        call img%kill
+        deallocate(imgs)
     end subroutine icm_imgfile
 
     subroutine nlmean_imgfile( fname2process, fname, smpd, noise_sdev )

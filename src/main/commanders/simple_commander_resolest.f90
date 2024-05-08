@@ -242,7 +242,7 @@ contains
         class(icm3D_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, noise, noise_var
+        type(image)       :: even, odd, noise
         real              :: avar, ave, sdev, maxv, minv
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -253,21 +253,11 @@ contains
         call even%read(params%vols(2))
         call noise%copy(even)
         call noise%subtr(odd)
-        call noise%loc_var3D(noise_var, avar)
-        call noise_var%norm([5.,2.])
-
-        call noise_var%stats(ave, sdev, maxv, minv)
-
-        print *, 'ave  = ', ave
-        print *, 'sdev = ', sdev
-        print *, 'maxv = ', maxv
-        print *, 'minv = ', minv
-
         file_tag = 'icm_3D_filter'
-
-
-        call even%icm3D(noise_var, params%lambda)
-        call even%write(trim(file_tag)//'_even.mrc')
+        call even%add(odd)
+        call even%mul(0.5)
+        call even%icm3D(noise, params%lambda)
+        call even%write(trim(file_tag)//'_avg.mrc')
         call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
     end subroutine exec_icm3D
 

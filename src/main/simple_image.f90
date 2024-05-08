@@ -211,7 +211,8 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean, NLmean3D
-    procedure          :: ICM
+    procedure, private :: ICM_1, ICM_2
+     generic           :: ICM   => ICM_1, ICM_2
     procedure, private :: ICM3D_1, ICM3D_2
     generic            :: ICM3D => ICM3D_1, ICM3D_2
     procedure          :: lpgau2D
@@ -219,7 +220,7 @@ contains
     procedure          :: minmax
     procedure          :: loc_sdev
     procedure          :: avg_loc_sdev
-    procedure          :: loc_var3D
+    procedure          :: loc_var, loc_var3D
     procedure          :: rmsd
     procedure, private :: stats_1, stats_2
     generic            :: stats => stats_1, stats_2
@@ -4029,8 +4030,8 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean3D
 
-    ! can be made nonuniform if we first calculate local noise variances
-    subroutine ICM( self, lambda )
+    ! uniform noise variance (sigma2 constant, set to 5)
+    subroutine ICM_1( self, lambda )
         use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
@@ -4046,16 +4047,14 @@ contains
         call self_prev%copy(self)
         sigma2 = 5. ! 4 now
         do i = 1, MAXITS
-            !$omp parallel do schedule(static) default(shared) private(n,m,pix,pix2,n_8,nsz,pot_term,j,xmin,min,k,x,proba)&
-            !$omp proc_bind(close) collapse(2)
             do n = 1,self%ldim(2)
                 do m = 1,self%ldim(1)
-                    pix  = self%rmat(n,m,1)
+                    pix  = self_prev%rmat(n,m,1)
                     pix2 = pix * pix
                     call neigh_8(self%ldim, [n,m,1], n_8, nsz)
                     pot_term = 0.
                     do j = 1, nsz
-                        pot_term = pot_term + pot(self%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),0.)
+                        pot_term = pot_term + pot(self_prev%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),0.)
                     end do
                     xmin = 0.
                     min  = pix2 / (2. * sigma2) + lambda * pot_term
@@ -4064,7 +4063,7 @@ contains
                         x = real(k)
                         pot_term = 0.
                         do j = 1, nsz
-                            pot_term = pot_term + pot(self%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),x)
+                            pot_term = pot_term + pot(self_prev%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),x)
                         end do
                         proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
                         if( min > proba )then
@@ -4075,12 +4074,12 @@ contains
                     self%rmat(n,m,1) = xmin
                 end do
             end do
-            !$omp end parallel do
             eucl = self%euclid_norm(self_prev)
             if( eucl < EUCL_CONV ) exit
             call self_prev%copy(self)
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
+        call self_prev%kill
 
         contains
 
@@ -4092,20 +4091,88 @@ contains
                 pot = diff * diff
             end function pot
 
-    end subroutine ICM
+    end subroutine ICM_1
 
-    ! can be made nonuniform if we first calculate local noise variances
+    ! nonuniform
+    subroutine ICM_2( self, noise, lambda )
+        use simple_neighs
+        class(image), intent(inout) :: self, noise
+        real,         intent(in)    :: lambda
+        integer, parameter :: MAXITS    = 5
+        integer, parameter :: NQUANTA   = 256
+        real,    parameter :: EUCL_CONV = 3e-3
+        integer     :: n_8(3,8), nsz, i, j, k, m, n
+        real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
+        type(image) :: self_prev, noise_var
+        if( self%is_3d() ) THROW_HARD('2D images only; ICM')
+        if( self%ft )      THROW_HARD('Real space only; ICM')
+        call noise%loc_var(noise_var)
+        call noise_var%norm([5.,2.])
+        call self%quantize_fwd(NQUANTA, transl_tab)
+        call self_prev%copy(self)
+        do i = 1, MAXITS
+            do n = 1,self%ldim(2)
+                do m = 1,self%ldim(1)
+                    pix    = self_prev%rmat(n,m,1)
+                    pix2   = pix * pix
+                    sigma2 = noise_var%rmat(n,m,1)
+                    call neigh_8(self%ldim, [n,m,1], n_8, nsz)
+                    pot_term = 0.
+                    do j = 1, nsz
+                        pot_term = pot_term + pot(self_prev%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),0.)
+                    end do
+                    xmin = 0.
+                    min  = pix2 / (2. * sigma2) + lambda * pot_term
+                    ! Every shade of gray is tested to find the a local minimum of the energy corresponding to a Gibbs distribution
+                    do k = 0,NQUANTA - 1
+                        x = real(k)
+                        pot_term = 0.
+                        do j = 1, nsz
+                            pot_term = pot_term + pot(self_prev%rmat(n_8(1,j),n_8(2,j),n_8(3,j)),x)
+                        end do
+                        proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
+                        if( min > proba )then
+                            min  = proba
+                            xmin = x
+                        endif
+                    end do
+                    self%rmat(n,m,1) = xmin
+                end do
+            end do
+            eucl = self%euclid_norm(self_prev)
+            if( eucl < EUCL_CONV ) exit
+            call self_prev%copy(self)
+        end do
+        call self%quantize_bwd(NQUANTA, transl_tab)
+        call self_prev%kill
+        call noise_var%kill
+
+        contains
+
+            ! potential function corresponding to a Gaussian Markov model (quadratic function)
+            real function pot(x, y)
+                real, intent(in) :: x, y
+                real :: diff
+                diff = x - y
+                pot = diff * diff
+            end function pot
+
+    end subroutine ICM_2
+
+    ! uniform noise variance (sigma2 constant, set to 5)
     subroutine ICM3D_1( self, lambda )
         use simple_neighs
         class(image), intent(inout) :: self
         real,         intent(in)    :: lambda
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
+        type(image) :: self_prev
         integer     :: n_4(3,6), nsz, i, j, k, m, n, l
         real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
         if( self%is_2d() ) THROW_HARD('3D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
         call self%quantize_fwd(NQUANTA, transl_tab)
+        call self_prev%copy(self)
         sigma2 = 5. ! 4 now
         do i = 1, MAXITS
             !$omp parallel do schedule(static) default(shared) private(n,m,l,pix,pix2,n_4,nsz,pot_term,j,xmin,min,k,x,proba)&
@@ -4113,12 +4180,12 @@ contains
             do n = 1,self%ldim(3)
                 do m = 1,self%ldim(2)
                     do l = 1,self%ldim(1)
-                        pix  = self%rmat(n,m,l)
+                        pix  = self_prev%rmat(n,m,l)
                         pix2 = pix * pix
                         call neigh_4_3D(self%ldim, [n,m,l], n_4, nsz)
                         pot_term = 0.
                         do j = 1, nsz
-                            pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
+                            pot_term = pot_term + pot(self_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
                         end do
                         xmin = 0.
                         min  = pix2 / (2. * sigma2) + lambda * pot_term
@@ -4127,7 +4194,7 @@ contains
                             x = real(k)
                             pot_term = 0.
                             do j = 1, nsz
-                                pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
+                                pot_term = pot_term + pot(self_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
                             end do
                             proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
                             if( min > proba )then
@@ -4140,8 +4207,12 @@ contains
                 end do
             end do
             !$omp end parallel do
+            eucl = self%euclid_norm(self_prev)
+            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl 
+            call self_prev%copy(self)
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
+        call self_prev%kill
 
         contains
 
@@ -4155,31 +4226,35 @@ contains
 
     end subroutine ICM3D_1
 
-    ! can be made nonuniform if we first calculate local noise variances
-    subroutine ICM3D_2( self, noise_var, lambda )
+    ! nonuniform
+    subroutine ICM3D_2( self, noise, lambda )
         use simple_neighs
-        class(image), intent(inout) :: self, noise_var  
+        class(image), intent(inout) :: self, noise
         real,         intent(in)    :: lambda
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
+        type(image) :: self_prev, noise_var
         integer     :: n_4(3,6), nsz, i, j, k, m, n, l
         real        :: pot_term, pix, pix2, min, proba, sigma, sigma2, x, xmin, transl_tab(NQUANTA), eucl
         if( self%is_2d() ) THROW_HARD('3D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
+        call noise%loc_var3D(noise_var)
+        call noise_var%norm([5.,2.])
         call self%quantize_fwd(NQUANTA, transl_tab)
+        call self_prev%copy(self)
         do i = 1, MAXITS
             !$omp parallel do schedule(static) default(shared) private(n,m,l,pix,pix2,sigma2,n_4,nsz,pot_term,j,xmin,min,k,x,proba)&
             !$omp proc_bind(close) collapse(3)
             do n = 1,self%ldim(3)
                 do m = 1,self%ldim(2)
                     do l = 1,self%ldim(1)
-                        pix    = self%rmat(n,m,l)
+                        pix    = self_prev%rmat(n,m,l)
                         pix2   = pix * pix
                         sigma2 = noise_var%rmat(n,m,l)
                         call neigh_4_3D(self%ldim, [n,m,l], n_4, nsz)
                         pot_term = 0.
                         do j = 1, nsz
-                            pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
+                            pot_term = pot_term + pot(self_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),0.)
                         end do
                         xmin = 0.
                         min  = pix2 / (2. * sigma2) + lambda * pot_term
@@ -4188,7 +4263,7 @@ contains
                             x = real(k)
                             pot_term = 0.
                             do j = 1, nsz
-                                pot_term = pot_term + pot(self%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
+                                pot_term = pot_term + pot(self_prev%rmat(n_4(1,j),n_4(2,j),n_4(3,j)),x)
                             end do
                             proba = ((pix - x)*(pix - x)) / (2. * sigma2) + lambda * pot_term
                             if( min > proba )then
@@ -4201,8 +4276,13 @@ contains
                 end do
             end do
             !$omp end parallel do
+            eucl = self%euclid_norm(self_prev)
+            write(logfhandle,'(A,I2,A,F8.4)') 'ICM Iteration ', i, ', Euclidean distance ', eucl
+            call self_prev%copy(self)
         end do
         call self%quantize_bwd(NQUANTA, transl_tab)
+        call self_prev%kill
+        call noise_var%kill
 
         contains
 
@@ -4457,6 +4537,39 @@ contains
         end do
         asdev = real(sum_sdevs / real(self%ldim(1) * self%ldim(2),dp))
     end function avg_loc_sdev
+
+    subroutine loc_var( self, varimg, avar )
+        use simple_neighs
+        class(image),   intent(in)    :: self
+        class(image),   intent(inout) :: varimg
+        real, optional, intent(inout) :: avar
+        real    :: avg, ep, val, var
+        integer :: i, j, k, l, nsz, n_4(3,8)
+        if( self%ldim(3) /= 1 ) THROW_HARD('not for 3d')
+        call varimg%new(self%ldim, self%smpd)
+        do i = 1,self%ldim(1)
+            do j = 1,self%ldim(2)
+                call neigh_8(self%ldim, [i,j,1], n_4, nsz)
+                avg = 0.
+                do l = 1,nsz
+                    avg = avg + self%rmat(n_4(1,l),n_4(2,l),n_4(3,l))
+                end do
+                avg = avg / real(nsz)
+                ep  = 0.
+                var = 0.
+                do l = 1,nsz
+                    val = self%rmat(n_4(1,l),n_4(2,l),n_4(3,l))
+                    ep  = ep  + val
+                    var = var + val * val
+                end do
+                var = (var-ep**2./real(nsz))/(real(nsz)-1.) ! corrected two-pass formula
+                varimg%rmat(i,j,k) = var
+            end do
+        end do
+        if( present(avar) )then
+            avar = sum(varimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(product(self%ldim))
+        endif
+    end subroutine loc_var
 
     subroutine loc_var3D( self, varimg, avar )
         use simple_neighs
