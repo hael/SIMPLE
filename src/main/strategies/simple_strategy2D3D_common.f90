@@ -13,7 +13,7 @@ implicit none
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, set_bp_range, set_bp_range2D, prepimg4align,&
 &prep2Dref, preprecvols, killrecvols, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&preprefvol, grid_ptcl, calc_3Drec, norm_struct_facts, discrete_read_imgbatch
+&preprefvol, grid_ptcl, calc_3Drec, calc_3Dbatchrec, norm_struct_facts, discrete_read_imgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -631,11 +631,8 @@ contains
         type(fplane),    allocatable :: fpls(:)
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
-        type(kbinterpol) :: kbwin
         real             :: shift(2), sdev_noise
         integer          :: batchlims(2), iptcl, i, i_batch, ibatch
-        ! make the gridding prepper
-        kbwin = build_glob%eorecvols(1)%get_kbwin()
         ! init volumes
         call preprecvols
         ! prep batch imgs
@@ -677,6 +674,87 @@ contains
         deallocate(fpls,ctfparms)
         call orientation%kill
     end subroutine calc_3Drec
+
+    !> volumetric 3d reconstruction
+    subroutine calc_3Dbatchrec( cline, nptcls2update, pinds, prev_oris, which_iter )
+        use simple_fplane, only: fplane
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls2update
+        integer,           intent(in)    :: pinds(nptcls2update)
+        class(oris),       intent(in)    :: prev_oris
+        integer, optional, intent(in)    :: which_iter
+        type(fplane),    allocatable :: fpls(:), prev_fpls(:)
+        type(ctfparams), allocatable :: ctfparms(:)
+        type(ori)        :: orientation
+        real             :: shift(2), sdev_noise
+        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
+        integer,          allocatable :: pops(:)
+        integer :: istate
+        if( params_glob%l_ml_reg )then
+            THROW_HARD('BATCH ML_REG NOT IMPLEMENTED YET!')
+        endif
+        ! init volumes
+        call build_glob%spproj_field%get_pops(pops, 'state')
+        do istate = 1, params_glob%nstates
+            if( pops(istate) > 0)then
+                call build_glob%eorecvols(istate)%new(build_glob%spproj)
+                call build_glob%eorecvols(istate)%reset_all
+                call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//int2str_pad(istate,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
+                call build_glob%eorecvols(istate)%expand_exp
+            endif
+        end do
+        deallocate(pops)
+        ! prep batch imgs
+        call prepimgbatch(MAXIMGBATCHSZ)
+        ! allocate arrays
+        allocate(prev_fpls(MAXIMGBATCHSZ),fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
+        ! gridding batch loop
+        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+            call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
+            !$omp parallel do default(shared) private(i,iptcl,ibatch,shift,sdev_noise) schedule(static) proc_bind(close)
+            do i=batchlims(1),batchlims(2)
+                iptcl  = pinds(i)
+                ibatch = i - batchlims(1) + 1
+                if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
+                call build_glob%imgbatch(ibatch)%norm_noise(build_glob%lmsk, sdev_noise)
+                call build_glob%imgbatch(ibatch)%fft
+                ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                shift = build_glob%spproj_field%get_2Dshift(iptcl)
+                call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
+                if( prev_oris%get_updatecnt(iptcl) > 1 )then
+                    if( .not.prev_fpls(ibatch)%does_exist() ) call prev_fpls(ibatch)%new(build_glob%imgbatch(1))
+                    shift = prev_oris%get_2Dshift(iptcl)
+                    call prev_fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), shift, iptcl=iptcl)
+                    call prev_fpls(ibatch)%neg
+                endif
+            end do
+            !$omp end parallel do
+            ! gridding
+            do i=batchlims(1),batchlims(2)
+                iptcl       = pinds(i)
+                ibatch      = i - batchlims(1) + 1
+                call build_glob%spproj_field%get_ori(iptcl, orientation)
+                if( orientation%isstatezero() ) cycle
+                m = m+1
+                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
+                call prev_oris%get_ori(iptcl, orientation)
+                if( orientation%get_updatecnt() > 1 )then
+                    call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
+                endif
+            end do
+        end do
+        ! normalise structure factors
+        call norm_struct_facts( cline, which_iter)
+        ! destruct
+        call killrecvols()
+        do ibatch=1,MAXIMGBATCHSZ
+            call fpls(ibatch)%kill
+            call prev_fpls(ibatch)%kill
+        end do
+        deallocate(prev_fpls,fpls,ctfparms)
+        call orientation%kill
+    end subroutine calc_3Dbatchrec
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
