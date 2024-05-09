@@ -192,6 +192,7 @@ type(simple_program), target :: write_classes
 ! declare common params here, with name same as flag
 type(simple_input_param) :: algorithm
 type(simple_input_param) :: angerr
+type(simple_input_param) :: astigthreshold
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
@@ -1018,6 +1019,7 @@ contains
         call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(ctfresthreshold,'ctfresthreshold','num',  'CTF Resolution rejection threshold', 'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{50}', 'CTF resolution threshold(in Angstroms){50}', .false., 50.0)
         call set_param(icefracthreshold,'icefracthreshold','num','Ice Fraction rejection threshold', 'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', 'Ice fraction threshold{1.0}', .false., 1.0)
+        call set_param(astigthreshold,  'astigthreshold'  ,'num','Astigmatism rejection threshold', 'Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}', 'Astigmatism threshold{10.0}', .false., 10.0)
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
@@ -3325,7 +3327,7 @@ contains
         &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
-        &2, 6, 0, 1, 3, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
+        &2, 6, 0, 1, 4, 0, 3, .true.)                                                    ! # entries in each group, requires sp_project
         pick_extract%gui_submenu_list = "data,picking,extract,compute"
         pick_extract%advanced = .false.
         ! image input/output
@@ -3367,6 +3369,11 @@ contains
         pick_extract%filt_ctrls(3)%descr_placeholder = 'Ice fraction threshold{1.0}'
         pick_extract%filt_ctrls(3)%rval_default      = ICEFRAC_THRESHOLD_STREAM
         call pick_extract%set_gui_params('filt_ctrls', 3, submenu="data")
+        call pick_extract%set_input('filt_ctrls', 4, astigthreshold)
+        pick_extract%filt_ctrls(4)%descr_long        = 'Micrographs with an astigmatism (%) above the threshold will be ignored from further processing{10.0}'
+        pick_extract%filt_ctrls(4)%descr_placeholder = 'Astigmatism threshold{10.0}'
+        pick_extract%filt_ctrls(4)%rval_default      = ASTIG_THRESHOLD_STREAM
+        call pick_extract%set_gui_params('filt_ctrls', 4, submenu="data")
         ! mask controls
         ! <empty>
         ! computer controls

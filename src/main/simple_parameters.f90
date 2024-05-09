@@ -329,6 +329,7 @@ type :: parameters
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
+    real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=10.          !< angular threshold(in degrees)
     real    :: batchfrac=1.0
@@ -767,6 +768,7 @@ contains
         call check_rarg('angerr',         self%angerr)
         call check_rarg('ares',           self%ares)
         call check_rarg('astigerr',       self%astigerr)
+        call check_rarg('astigthreshold', self%astigthreshold)
         call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)

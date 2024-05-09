@@ -187,6 +187,8 @@ real, parameter    :: CTFRES_THRESHOLD         = 50.0  !< Ctfres rejection thres
 real, parameter    :: CTFRES_THRESHOLD_STREAM  = 10.0  !< Stream ctfres rejection threshold (Angstroms)
 real, parameter    :: ICEFRAC_THRESHOLD        = 1.0   !< Icefrac rejection threshold
 real, parameter    :: ICEFRAC_THRESHOLD_STREAM = 1.0   !< Stream icefrac rejection threshold
+real, parameter    :: ASTIG_THRESHOLD          = 10.0  !< Astigmatism rejection threshold
+real, parameter    :: ASTIG_THRESHOLD_STREAM   = 10.0  !< Stream astigmatism rejection threshold
 real, parameter    :: FRAC_SKIP_REJECTION      = 0.8   !< When the number of classes to reject is too high rejection is skipped
 real, parameter    :: PICK_LP_DEFAULT          = 20.   !< Picking resolution limit
 
