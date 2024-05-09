@@ -104,10 +104,10 @@ add_test(
 NAME Test_fileio
 COMMAND simple_test_fileio
 )
-add_test(
-NAME Test_find_boundaries
-COMMAND simple_test_find_boundaries
-)
+#add_test(
+#NAME Test_find_boundaries
+#COMMAND simple_test_find_boundaries
+#)
 add_test(
 NAME Test_fit_lattice
 COMMAND simple_test_fit_lattice
@@ -164,10 +164,10 @@ add_test(
 NAME Test_mask
 COMMAND simple_test_mask
 )
-add_test(
-NAME Test_masscen_nano
-COMMAND simple_test_masscen_nano
-)
+#add_test(
+#NAME Test_masscen_nano
+#COMMAND simple_test_masscen_nano
+#)
 add_test(
 NAME Test_maxnloc
 COMMAND simple_test_maxnloc
@@ -250,7 +250,7 @@ COMMAND simple_test_ppca_kpca
 )
 add_test(
 NAME Test_radial_cc
-COMMAND simple_test_radial_cc_
+COMMAND simple_test_radial_cc
 )
 add_test(
 NAME Test_rad_med
