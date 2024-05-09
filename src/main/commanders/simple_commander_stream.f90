@@ -1402,7 +1402,7 @@ contains
                 nprojects = 0
             else
                 ! watch & update global records
-                call project_buff%watch(nprojects, projects, max_nmovies=5*params%nparts)
+                call project_buff%watch(nprojects, projects, max_nmovies=10*params%nparts)
             endif
             ! update global records
             if( nprojects > 0 )then
