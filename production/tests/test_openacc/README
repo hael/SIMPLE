@@ -1,0 +1,13 @@
+gf90 -acc -stdpar -Minfo=accel simple_test_openacc.f90 -o simple_test_openacc.exe
+nvfortran -acc -stdpar -Minfo=accel simple_test_openacc.f90 -o simple_test_openacc.exe
+
+OpenACC saxpy time =  0.032 seconds.
+Parallel saxpy time =  0.035 seconds.
+Sequential saxpy time =  2.799 seconds.
+
+gfortran -fopenacc simple_test_openacc.f90 -o simple_test_openacc.exe
+
+OpenACC saxpy time =  2.522 seconds.
+Parallel saxpy time =  1.654 seconds.
+Sequential saxpy time =  2.308 seconds.
+
