@@ -24,6 +24,20 @@ elseif(USE_OPENMP)
         LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
         JOB_POOL_COMPILE NUM_JOBS
     )
+elseif(USE_CUDA)
+    set_target_properties(${SIMPLE_MAIN_TARGETS}
+        PROPERTIES
+        COMPILE_FLAGS "${CUDA_Fortran_FLAGS}"
+        LINK_FLAGS "${CUDA_Fortran_FLAGS}"
+        JOB_POOL_COMPILE NUM_JOBS
+    )
+elseif(USE_OPENACC)
+    set_target_properties(${SIMPLE_MAIN_TARGETS}
+        PROPERTIES
+        COMPILE_FLAGS "${OPENACC_Fortran_FLAGS}"
+        LINK_FLAGS "${OPENACC_Fortran_FLAGS}"
+        JOB_POOL_COMPILE NUM_JOBS
+    )
 elseif(USE_MPI)
     set_target_properties(${SIMPLE_MAIN_TARGETS}
         PROPERTIES
@@ -56,10 +70,21 @@ set(DONT_CHECK_RANGE "-fno-range-check")
 if(NOT USE_MPI)
     list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
 endif()
-list(REMOVE_ITEM TESTDIRS "tests/test_mpimp_benchmark")
+if(NOT USE_CUDA)
+    list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
+endif()
+if(NOT USE_OPENACC)
+    list(REMOVE_ITEM TESTDIRS "tests/test_openacc")
+endif()
 
 if(USE_MPI AND USE_OPENMP)
     set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}")
+elseif(USE_MPI)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${MPI_Fortran_FLAGS}")
+elseif(USE_CUDA)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${CUDA_Fortran_FLAGS}")
+elseif(USE_OPENACC)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OPENACC_Fortran_FLAGS}")
 elseif(USE_MPI)
     set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${MPI_Fortran_FLAGS}")
 elseif(USE_OPENMP)
