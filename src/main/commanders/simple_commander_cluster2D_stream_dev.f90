@@ -61,8 +61,7 @@ integer                                :: glob_chunk_id
 character(len=:),          allocatable :: orig_projfile
 real                                   :: conv_score=0., conv_mi_class=0., conv_frac=0., current_resolution=0.
 integer                                :: nptcls_glob=0, nptcls_rejected_glob=0, ncls_rejected_glob=0
-integer                                :: origproj_time!, n_spprojs_glob = 0
-logical                                :: initiated       = .false.
+logical                                :: stream2D_active = .false.
 integer                                :: numlen
 ! GUI-related
 character(len=:),          allocatable :: projfile4gui
@@ -229,10 +228,7 @@ contains
         ! updates command-lines with resolution limits
         call set_resolution_limits( cline )
         ! module variables
-        ! n_spprojs_glob = 0
-        ! if( allocated(spprojs_mask_glob) ) deallocate(spprojs_mask_glob)
-        origproj_time  = simple_gettime()
-        initiated      = .true.
+        stream2D_active = .true.
     end subroutine init_cluster2D_stream_dev
 
     ! remove previous files from folder to restart
@@ -263,6 +259,7 @@ contains
     ! deals with chunk completion, rejection, reset
     subroutine update_chunks_dev
         integer :: ichunk
+        if( .not. stream2D_active ) return
         do ichunk = 1,params_glob%nchunks
             if( chunks(ichunk)%available ) cycle
             if( chunks(ichunk)%has_converged() )then
@@ -288,6 +285,7 @@ contains
         type(micproj_record), intent(inout) :: micproj_records(:)
         integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
         integer :: first2import, last2import, n2import
+        if( .not. stream2D_active ) return
         n_avail_chunks = count(chunks(:)%available)
         ! cannot import yet
         if( n_avail_chunks == 0 ) return
@@ -349,7 +347,8 @@ contains
         integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls
         logical :: l_maxed
         nchunks_imported = 0
-        if( .not.pool_available ) return
+        if( .not. stream2D_active )            return
+        if( .not.pool_available )              return
         if( .not.allocated(converged_chunks) ) return
         nchunks2import = size(converged_chunks)
         if( nchunks2import == 0 ) return
@@ -559,6 +558,7 @@ contains
     end subroutine import_chunks_into_pool_dev
 
     subroutine update_pool_status_dev
+        if( .not. stream2D_active ) return
         if( .not.pool_available )then
             pool_available = file_exists(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
             if( pool_available .and. (pool_iter >= 1) )then
@@ -576,7 +576,8 @@ contains
         integer,                   allocatable :: pops(:)
         character(len=STDLEN) :: fname
         integer               :: i, it, jptcl, iptcl, istk, nstks
-        if( .not.pool_available )return
+        if( .not. stream2D_active ) return
+        if( .not.pool_available )   return
         call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         ! iteration info
         fname = trim(POOL_DIR)//trim(STATS_FILE)
@@ -651,7 +652,8 @@ contains
         real                 :: ndev_here
         integer              :: nptcls_rejected, ncls_rejected, ncls2reject, iptcl
         integer              :: icls, cnt
-        if( .not.pool_available ) return
+        if( .not. stream2D_active ) return
+        if( .not.pool_available )   return
         if( trim(params_glob%reject_cls).ne.'yes' ) return
         ! rejection frequency
         if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
@@ -734,7 +736,8 @@ contains
         logical, allocatable :: cls_mask(:)
         integer              :: nptcls_rejected, ncls_rejected, iptcl
         integer              :: icls, jcls, i, nl
-        if( .not.pool_available )return
+        if( .not. stream2D_active ) return
+        if( .not.pool_available )   return
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         if( .not.file_exists(STREAM_REJECT_CLS) ) return
         nl = nlines(STREAM_REJECT_CLS)
@@ -891,7 +894,8 @@ contains
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl
         integer(timer_int_kind) :: t_tot
-        if( .not.pool_available )return
+        if( .not. stream2D_active ) return
+        if( .not.pool_available )   return
         if( L_BENCH ) t_tot  = tic()
         !poolstats init
         call pool_stats%init
@@ -1147,8 +1151,10 @@ contains
         if( pool_iter >= 1 ) call rank_cavgs
         ! cleanup
         call simple_rmdir(SIGMAS_DIR)
+        call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        call del_file(projfile4gui)
         if( .not.debug_here )then
-            ! call qsys_cleanup
+            call qsys_cleanup
         endif
     end subroutine terminate_stream2D_dev
 
@@ -1352,8 +1358,7 @@ contains
         glob_chunk_id = params%nchunks
         ! Pool execution init
         call qenv_pool%new(params%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
-        origproj_time = simple_gettime()
-        initiated     = .true.
+        stream2D_active = .true.
         ! Particles/stacks, number of chunks
         allocate(stk_all_nptcls(nstks),stk_nptcls(nstks),source=0)
         ntot_chunks = 0
