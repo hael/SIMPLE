@@ -617,6 +617,7 @@ contains
         if( .not. cline%defined('reject_mics')     ) call cline%set('reject_mics',      'yes')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold',  CTFRES_THRESHOLD_STREAM)
         if( .not. cline%defined('icefracthreshold')) call cline%set('icefracthreshold', ICEFRAC_THRESHOLD_STREAM)
+        if( .not. cline%defined('astigthreshold'  )) call cline%set('astigthreshold',   ASTIG_THRESHOLD_STREAM)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          PICK_LP_DEFAULT)
         if( .not. cline%defined('pick_roi')        ) call cline%set('pick_roi',         'no')
@@ -1070,6 +1071,10 @@ contains
                         if( tmp_proj%os_mic%isthere(imic, 'icefrac') )then
                             if( tmp_proj%os_mic%get(imic,'icefrac') > (params%icefracthreshold-0.001) ) states(imic) = 0
                         end if
+                        if( states(imic) == 0 ) cycle
+                        if( tmp_proj%os_mic%isthere(imic, 'astig') )then
+                            if( tmp_proj%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) states(imic) = 0
+                        end if
                     enddo
                     nmics     = count(states==1)
                     nselected = nmics
@@ -1150,6 +1155,10 @@ contains
                         if( .not.mics_mask(jmic) ) cycle
                         if( spprojs(iproj)%os_mic%isthere(imic, 'icefrac') )then
                             if( spprojs(iproj)%os_mic%get(imic,'icefrac') > (params%icefracthreshold-0.001) ) mics_mask(jmic) = .false.
+                        end if
+                        if( .not.mics_mask(jmic) ) cycle
+                        if( spprojs(iproj)%os_mic%isthere(imic, 'astig') )then
+                            if( spprojs(iproj)%os_mic%get(imic,'astig') > (params%astigthreshold-0.001) ) mics_mask(jmic) = .false.
                         end if
                     enddo
                 enddo
@@ -1555,7 +1564,7 @@ contains
     subroutine update_user_params( cline_here )
         type(cmdline), intent(inout) :: cline_here
         type(oris) :: os
-        real       :: tilt_thres, beamtilt
+        real       :: tilt_thres, beamtilt, astigthreshold, ctfresthreshold, icefracthreshold
         call os%new(1, is_ptcl=.false.)
         if( file_exists(USER_PARAMS) )then
             call os%read(USER_PARAMS)
@@ -1588,6 +1597,51 @@ contains
                     write(logfhandle,'(A)')'>>> OPTICS ASSIGNMENT UDPATED TO IGNORE BEAMTILT'   
                 else
                     write(logfhandle,'(A,F8.2)')'>>> OPTICS UPDATE INVALID BEAMTILT VALUE: ',beamtilt
+                endif
+            endif
+            if( os%isthere(1,'astigthreshold') ) then
+                astigthreshold = os%get(1,'astigthreshold')
+                if( abs(astigthreshold-params_glob%astigthreshold) > 0.001) then
+                     if(astigthreshold < 0.01)then
+                         write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD TOO LOW: ',astigthreshold
+                     else if(astigthreshold > 100.0) then
+                         write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM TOO HIGH: ',astigthreshold
+                     else
+                         params_glob%astigthreshold = astigthreshold
+                         params_glob%updated    = 'yes'
+                         call cline_here%set('astigthreshold', params_glob%astigthreshold)
+                         write(logfhandle,'(A,F8.2)')'>>> ASTIGMATISM THRESHOLD UPDATED TO: ',astigthreshold
+                     endif
+                endif
+            endif
+            if( os%isthere(1,'ctfresthreshold') ) then
+                ctfresthreshold = os%get(1,'ctfresthreshold')
+                if( abs(ctfresthreshold-params_glob%ctfresthreshold) > 0.001) then
+                     if(ctfresthreshold < 0.01)then
+                         write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD TOO LOW: ',ctfresthreshold
+                     else if(ctfresthreshold > 100.0) then
+                         write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION TOO HIGH: ',ctfresthreshold
+                     else
+                         params_glob%ctfresthreshold = ctfresthreshold
+                         params_glob%updated    = 'yes'
+                         call cline_here%set('ctfresthreshold', params_glob%ctfresthreshold)
+                         write(logfhandle,'(A,F8.2)')'>>> CTF RESOLUTION THRESHOLD UPDATED TO: ',ctfresthreshold
+                     endif
+                endif
+            endif
+            if( os%isthere(1,'icefracthreshold') ) then
+                icefracthreshold = os%get(1,'icefracthreshold')
+                if( abs(icefracthreshold-params_glob%icefracthreshold) > 0.001) then
+                     if(icefracthreshold < 0.01)then
+                         write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD TOO LOW: ',icefracthreshold
+                     else if(icefracthreshold > 100.0) then
+                         write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION TOO HIGH: ',icefracthreshold
+                     else
+                         params_glob%icefracthreshold = icefracthreshold
+                         params_glob%updated    = 'yes'
+                         call cline_here%set('icefracthreshold', params_glob%icefracthreshold)
+                         write(logfhandle,'(A,F8.2)')'>>> ICE FRACTION THRESHOLD UPDATED TO: ',icefracthreshold
+                     endif
                 endif
             endif
             call del_file(USER_PARAMS)
