@@ -4544,7 +4544,7 @@ contains
         class(image),   intent(inout) :: varimg
         real, optional, intent(inout) :: avar
         real    :: avg, ep, val, var
-        integer :: i, j, k, l, nsz, n_4(3,8)
+        integer :: i, j, l, nsz, n_4(3,8)
         if( self%ldim(3) /= 1 ) THROW_HARD('not for 3d')
         call varimg%new(self%ldim, self%smpd)
         do i = 1,self%ldim(1)
@@ -4563,7 +4563,7 @@ contains
                     var = var + val * val
                 end do
                 var = (var-ep**2./real(nsz))/(real(nsz)-1.) ! corrected two-pass formula
-                varimg%rmat(i,j,k) = var
+                varimg%rmat(i,j,1) = var
             end do
         end do
         if( present(avar) )then
