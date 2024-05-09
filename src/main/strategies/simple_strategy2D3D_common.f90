@@ -519,7 +519,11 @@ contains
                     THROW_WARN('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
                 endif
             else
-                call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+                if( cline%defined('lpstop') )then
+                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol, params_glob%lpstop)
+                else
+                    call nonuni_filt3D(build_glob%vol_odd, build_glob%vol, mskvol)
+                endif
             endif
             ! e/o masking is performed in preprefvol
             call mskvol%kill
