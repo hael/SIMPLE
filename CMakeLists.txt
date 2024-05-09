@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-#include(FortranOverride)
+include(FortranOverride)
 
 project(SIMPLE
         VERSION 3.0.0
@@ -22,17 +22,17 @@ include(SimpleTest)
 #SRC_EXT .F90)
 
 # Find packages 
-find_package(OpenMP)
-message(STATUS "OpenMP encontrado ${OpenMP_Fortran_FOUND}")
-message(STATUS "Version de OpenMP ${OpenMP_VERSION}")
-message(STATUS "version flags ${OpenMP_Fortran_FLAGS}")
-if(OpenMP_Fortran_FOUND)
-    #target_link_libraries(MyTarget PUBLIC OpenMP::OpenMP_Fortran)
-endif()
-find_package(FFTW)
+#find_package(OpenMP)
+#message(STATUS "OpenMP found ${OpenMP_Fortran_FOUND}")
+#message(STATUS "OpenMP Version ${OpenMP_VERSION}")
+#message(STATUS "version flags ${OpenMP_Fortran_FLAGS}")
+#if(OpenMP_Fortran_FOUND)
+#    #target_link_libraries(MyTarget PUBLIC OpenMP::OpenMP_Fortran)
+#endif()
+#find_package(FFTW)
 
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${PROJECT_SOURCE_DIR}/cmake/Modules/")
-include(FortranOverride)
+#set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${PROJECT_SOURCE_DIR}/cmake/Modules/")
+#include(FortranOverride)
 
 ## CMAKE CONFIGURATION TYPES & BUILDS
 #set(CMAKE_CONFIGURATION_TYPES DEBUG RELEASE RELWITHDEBINFO)
@@ -40,7 +40,7 @@ include(FortranOverride)
 # Options by default
 option(BUILD_SHARED_LIBS           "Build the simple library as shared or static (default)." OFF)
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples." ON)
-option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON )
+option(USE_OPENMP                  "Use OpenMP for parallelization - debugging may disable OpemMP." ON)
 option(USE_LIBTIFF                 "Use libtiff." ON)
 option(GUI                         "Install the GUI." ON)
 option(BUILD_DOCS                  "Enable the generation of PDF manuals and doxygen API documentation." ON)
@@ -52,9 +52,9 @@ option(USE_PROFILING               "Enable symbol generation without debug suppo
 option(USE_LINK_TIME_OPTIMISATION  "Enable link-time optimization." OFF)
 option(COVERALLS                   "Generate coveralls data." OFF) #coveralls.io
 option(USE_CODE_COVERAGE           "Added code coverage flags." OFF)
-option(USE_CUDA                    "Use CUDA for parallelization." OFF )
-option(USE_OPENACC                 "Use OpenACC for parallelization." OFF )
-option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF )
+option(USE_CUDA                    "Use CUDA for parallelization." OFF)
+option(USE_OPENACC                 "Use OpenACC for parallelization." OFF)
+option(USE_MPI                     "Use OpenMPI for parallelization - in developement." OFF)
 option(USE_FAST_MATH_OPTIMISATION  "Optimize code for fastmath." OFF)
 option(USE_PROFILE_OPTIMISATION    "Optimize code for PFO. (GNU: -fpfo )." OFF)
 option(USE_AUTO_PARALLELISE        "Optimize code for parallel systems. [Intel and PGI only]." OFF)
