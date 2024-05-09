@@ -687,7 +687,7 @@ contains
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
         real             :: shift(2), sdev_noise
-        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
+        integer          :: batchlims(2), iptcl, i, i_batch, ibatch, m,n
         integer,          allocatable :: pops(:)
         integer :: istate
         if( params_glob%l_ml_reg )then
@@ -709,6 +709,7 @@ contains
         ! allocate arrays
         allocate(prev_fpls(MAXIMGBATCHSZ),fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
         ! gridding batch loop
+        m = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
@@ -739,10 +740,12 @@ contains
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
                 call prev_oris%get_ori(iptcl, orientation)
                 if( orientation%get_updatecnt() > 1 )then
+                    m = m+1
                     call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
                 endif
             end do
         end do
+        print *,'tot neg ',params_glob%part, nptcls2update, m
         ! normalise structure factors
         call norm_struct_facts( cline, which_iter)
         ! destruct
