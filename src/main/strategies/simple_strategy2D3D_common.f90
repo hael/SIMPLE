@@ -516,7 +516,6 @@ contains
                     call build_glob%vol_odd%fft
                     call build_glob%vol%apply_filter(filter)
                     call build_glob%vol_odd%apply_filter(filter)
-                    THROW_WARN('lpstop required as upper Fourier index boundary for the nonuniform filter in frequency limited refinement')
                 endif
             else
                 if( cline%defined('lpstop') )then
