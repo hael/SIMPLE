@@ -242,7 +242,7 @@ contains
         real,    intent(inout) :: transl_tab(nquanta)
         real, allocatable      :: vec_norm(:), transl_tab_here(:)
         real    :: smin, smax, delta, hist(nquanta), dist
-        integer :: i, n, ind
+        integer :: i, j, n, ind
         n     = size(vec)
         smin  = minval(vec)
         smax  = maxval(vec)
@@ -259,6 +259,19 @@ contains
             vec(i)          = real(ind - 1) ! range becomes [0,nquanta - 1]
         end do
         where( hist > TINY ) transl_tab = transl_tab / hist
+        ! linearly interpolating bins that where not populated
+        do i = 2,nquanta-1
+            if( hist(i) < TINY )then
+                do j = i+1,nquanta
+                    if( hist(j) > TINY )exit
+                enddo
+                ind = j
+                delta = (transl_tab(ind)-transl_tab(i-1))/real(ind-i+1)
+                do j = i,ind-1
+                    transl_tab(j) = transl_tab(j-1) + delta
+                enddo
+            endif
+        enddo
     end subroutine quantize_vec
 
     subroutine detect_peak_thres_1( n, n_ub, level, x, t )
