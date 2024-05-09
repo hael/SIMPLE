@@ -1176,11 +1176,11 @@ contains
         real,    parameter :: LP_DEFAULT    = 6.
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         integer, parameter :: MINBOX  = 88
-        integer, parameter :: NSTAGES = 6
+        integer, parameter :: NSTAGES = 15
         integer, parameter :: ITERS_PER_STAGE = 20
         integer, parameter :: BATCHSZ = 500
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
-        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-1
+        integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-5
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -1201,7 +1201,7 @@ contains
         integer :: boxs(NSTAGES)
         real    :: smpd_target, lp_target, scale, trslim, cenlp, symlp, dummy
         integer :: iter, it, prev_box_crop, maxits, state, i,j, final_nptcls, nptcls_sel
-        integer :: ind, startind, stopind, nptcls_batch
+        integer :: ind, startind, stopind, nptcls_batch, ini_nptcls, nptcls
         logical :: l_lpset, l_err, l_lpstop_set, l_lpstart_set
         call cline%set('ml_reg',       'no')
         call cline%set('stoch_update', 'no')
@@ -1210,11 +1210,12 @@ contains
         call cline%set('refine',       'prob')
         call cline%set('mkdir',        'yes')
         call cline%set('sigma_est',    'global')
-        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',      'yes')
-        if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',    'yes')
-        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres',    10.)
-        if( .not. cline%defined('center')       ) call cline%set('center',        'no')
-        if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
+        if( .not. cline%defined('prob_sh')      ) call cline%set('prob_sh',     'yes')
+        if( .not. cline%defined('prob_norm')    ) call cline%set('prob_norm',   'yes')
+        if( .not. cline%defined('prob_athres')  ) call cline%set('prob_athres', 10.)
+        if( .not. cline%defined('center')       ) call cline%set('center',      'no')
+        if( .not. cline%defined('objfun')       ) call cline%set('objfun',      'euclid')
+        if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
@@ -1239,10 +1240,11 @@ contains
             params%lpstop  = params%lp
             params%lpstart = params%lp
         endif
-        if( params%shift_stage < 1 .or. params%shift_stage > NSTAGES+1 )then
+        if( params%shift_stage < 1 .or. params%shift_stage > NSTAGES )then
             params%shift_stage = min(NSTAGES+1,max(1,params%shift_stage))
             THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
         endif
+        trslim = max(MINSHIFT, AHELIX_WIDTH / params%smpd)
         ! read project
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1315,15 +1317,15 @@ contains
             call autoscale(params%box, params%smpd, smpd_target, boxs(it), smpds(it), scale, minbox=MINBOX)
         enddo
         ! Batch plan
-        states = nint(spproj%os_ptcl3D%get_all('state'))
+        states       = nint(spproj%os_ptcl3D%get_all('state'))
         nptcls_sel   = count(states==1)
-        final_nptcls = min(nptcls_sel,ITERS_PER_STAGE * (BATCHSZ * NSTAGES))
+        final_nptcls = min(nptcls_sel,max(200000, BATCHSZ * ITERS_PER_STAGE * NSTAGES))
+        ini_nptcls   = min(nptcls_sel, BATCHSZ * ITERS_PER_STAGE)
+        ! TODO: when nptcls_sel > 200000
         allocate(vec(nptcls_sel),source=0)
-        do i = 1,final_nptcls,NSTAGES
-            do j = 1,NSTAGES
-                if( i+j-1 > final_nptcls ) exit
-                vec(i+j-1) = j
-            enddo
+        do it = NSTAGES,1,-1
+            nptcls = ini_nptcls + nint(real((it-1)*(final_nptcls-ini_nptcls)) / real(NSTAGES-1))
+            vec(1:nptcls) = it
         enddo
         rt = ran_tabu(nptcls_sel)
         call rt%shuffle(vec)
@@ -1367,16 +1369,19 @@ contains
                 call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
             endif
             ! Stage updates
-            call cline_refine3D%set('startit', iter+1)
-            call cline_refine3D%set('maxits',  ITERS_PER_STAGE)
-            if( it < params%shift_stage )then
-                call cline_refine3D%set('nspace', NSPACE1)
-                call cline_refine3D%set('trs',    0.)
+            call cline_refine3D%set('maxits', ITERS_PER_STAGE)
+            if( it >= params%shift_stage )then
+                call cline_refine3D%set('trs', trslim)
             else
-                trslim = max(2.0, AHELIX_WIDTH / params%smpd / 2.0)
+                call cline_refine3D%set('trs', 0.)
+            endif
+            if( params%lp > 10. )then
+                call cline_refine3D%set('nspace', NSPACE1)
+            elseif ( params%lp > 8. )then
                 call cline_refine3D%set('nspace', NSPACE2)
-                call cline_refine3D%set('trs',    trslim)
-            end if
+            else
+                call cline_refine3D%set('nspace', NSPACE3)
+            endif
             if( it == NSTAGES )then
                 call cline_refine3D%set('maxits', 2*ITERS_PER_STAGE)
                 call cline_refine3D%set('nspace', NSPACE3)
@@ -1394,7 +1399,7 @@ contains
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
             call final_vol%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
-            call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(params%ext))
+            call final_vol%read(trim(VOL_FBODY)//trim(str_state)//trim(PPROC_SUFFIX)//trim(params%ext))
             call final_vol%generate_orthogonal_reprojs(reprojs)
             call reprojs%write_jpg('orthogonal_reprojs_state'//trim(str_state)//'.jpg')
             call final_vol%kill
@@ -1446,15 +1451,17 @@ contains
         contains
 
             subroutine exec_refine3D( iter )
-                integer,          intent(out) :: iter
-                character(len=:), allocatable :: stage
+                integer,          intent(inout) :: iter
+                character(len=:), allocatable   :: stage
+                integer :: i, enditer
                 call cline_refine3D%delete('endit')
                 call cline_refine3D%set('smpd_crop', params%smpd_crop)
                 call cline_refine3D%set('box_crop',  params%box_crop)
                 call cline_refine3D%set('lp',        params%lp)
+                call cline_refine3D%set('startit',   iter+1)
                 call xrefine3D_distr%execute_shmem(cline_refine3D)
                 call conv%read(l_err)
-                iter = nint(conv%get('iter'))
+                enditer = nint(conv%get('iter'))
                 call del_files(DIST_FBODY,      params_glob%nparts,ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params_glob%nparts,ext='.dat')
                 call del_file(trim(DIST_FBODY)      //'.dat')
@@ -1469,6 +1476,11 @@ contains
                         if( file_exists(vol_pproc)) call simple_copy_file(vol_pproc, add2fbody(vol_pproc,params%ext,stage))
                     enddo
                 endif
+                do i = iter+1,enditer-1
+                    call del_file(trim(FSC_FBODY)//int2str_pad(1,2)//'_iter'//int2str_pad(i,3)//'.pdf')
+                    call del_file('RESOLUTION_STATE'//int2str_pad(1,2)//'_ITER'//int2str_pad(i,3))
+                enddo
+                iter = enditer
             end subroutine exec_refine3D
 
     end subroutine exec_batch_abinitio_3Dmodel

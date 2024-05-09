@@ -107,10 +107,7 @@ contains
             ! generation of random sample and incr of updatecnts delegated to prob_align
             call build_glob%spproj_field%sample4update_reprod([params_glob%fromp,params_glob%top],&
             &nptcls2update, pinds, ptcl_mask )
-            if( params_glob%batchfrac < 0.99 )then
-                call prev_oris%copy(build_glob%spproj_field,.true.)
-                call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], ptcl_mask)
-            endif
+            if( params_glob%batchfrac < 0.99 ) call prev_oris%copy(build_glob%spproj_field,.true.)
         else
             if( params_glob%l_frac_update )then
                 if( params_glob%l_stoch_update )then
