@@ -18,6 +18,7 @@ public :: nununiform_filter2D_commander
 public :: uniform_filter2D_commander
 public :: uniform_filter3D_commander
 public :: icm3D_commander
+public :: icm2D_commander
 public :: cavg_filter2D_commander
 public :: score_cavgs_commander
 public :: prune_cavgs_commander
@@ -53,6 +54,11 @@ type, extends(commander_base) :: icm3D_commander
   contains
     procedure :: execute      => exec_icm3D
 end type icm3D_commander
+
+type, extends(commander_base) :: icm2D_commander
+  contains
+    procedure :: execute      => exec_icm2D
+end type icm2D_commander
 
 type, extends(commander_base) :: cavg_filter2D_commander
   contains
@@ -357,6 +363,49 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_uniform_filter2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
+
+    subroutine exec_icm2D( self, cline )
+        class(icm2D_commander), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        character(len=:), allocatable :: file_tag
+        type(image),      allocatable :: odd(:), even(:), noise(:)
+        type(parameters) :: params
+        integer          :: iptcl
+        ! init
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
+        params%ldim(3) = 1 ! because we operate on stacks
+        file_tag = 'icm_2D_filter'
+        ! allocate
+        allocate(odd(params%nptcls), even(params%nptcls), noise(params%nptcls))
+        ! construct & read
+        do iptcl = 1, params%nptcls
+            call odd  (iptcl)%new( params%ldim, params%smpd, .false.)
+            call odd  (iptcl)%read(params%stk,  iptcl)
+            call even (iptcl)%new( params%ldim, params%smpd, .false.)
+            call even (iptcl)%read(params%stk2, iptcl)
+            call noise(iptcl)%copy(even(iptcl))
+            call noise(iptcl)%subtr(odd(iptcl))
+            call even (iptcl)%add(odd(iptcl))
+            call even (iptcl)%mul(0.5)
+        enddo
+        ! filter
+        !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
+        do iptcl = 1, params%nptcls
+            call even(iptcl)%icm(noise(iptcl), params%lambda)
+        enddo
+        !$omp end parallel do
+        ! write output and destruct
+        do iptcl = 1, params%nptcls
+            call even (iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
+            call odd  (iptcl)%kill()
+            call even (iptcl)%kill()
+            call noise(iptcl)%kill()
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
+    end subroutine exec_icm2D
 
     subroutine exec_cavg_filter2D( self, cline )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimgbatch, prepimg4align
