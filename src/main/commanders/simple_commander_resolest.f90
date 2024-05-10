@@ -248,8 +248,8 @@ contains
         class(icm3D_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, noise
-        real              :: avar, ave, sdev, maxv, minv
+        type(image)       :: even, odd, noise, avg
+        real, allocatable :: fsc(:), res(:)
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -259,12 +259,40 @@ contains
         call even%read(params%vols(2))
         call noise%copy(even)
         call noise%subtr(odd)
+        call avg%copy(even)
+        call avg%add(odd)
+        call avg%mul(0.5)
         file_tag = 'icm_3D_filter'
-        call even%add(odd)
-        call even%mul(0.5)
-        call even%icm3D(noise, params%lambda)
-        call even%write(trim(file_tag)//'_avg.mrc')
+        res = avg%get_res()
+        allocate(fsc(fdim(params%box)-1),source=0.)
+        call apply(avg,  noise, trim(file_tag)//'_avg')
+        call apply(even, noise, trim(file_tag)//'_even')
+        call apply(odd,  noise, trim(file_tag)//'_odd')
         call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
+        contains
+
+            subroutine apply(vol, noisevol, string)
+                class(image),     intent(inout) :: vol, noisevol
+                character(len=*), intent(in)    :: string
+                real, allocatable :: pspec(:), pspec_icm(:)
+                type(image)       :: vol_icm
+                call vol_icm%copy(vol)
+                call vol_icm%icm3D(noisevol, params%lambda)
+                call vol_icm%write(trim(string)//'.mrc')
+                call vol%mask(real(params%box/2)-COSMSKHALFWIDTH-1,'soft')
+                call vol_icm%mask(real(params%box/2)-COSMSKHALFWIDTH-1,'soft')
+                call vol%fft
+                call vol_icm%fft
+                call vol%fsc(vol_icm, fsc)
+                call plot_fsc(size(fsc), fsc, res, params%smpd, trim(string)//'_fsc')
+                call vol%spectrum('power',pspec,.false.)
+                call vol_icm%spectrum('power',pspec_icm, .false.)
+                pspec_icm = sqrt(pspec_icm / pspec)
+                call plot_fsc(size(pspec_icm), pspec_icm, res, params%smpd, trim(string)//'_modulation')
+                call vol_icm%kill
+                deallocate(pspec, pspec_icm)
+            end subroutine apply
+
     end subroutine exec_icm3D
 
     subroutine exec_nununiform_filter2D( self, cline )
@@ -369,7 +397,9 @@ contains
         class(cmdline),         intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: odd(:), even(:), noise(:)
+        logical,          allocatable :: mask(:)
         type(parameters) :: params
+        real             :: minmax(2)
         integer          :: iptcl
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -378,7 +408,7 @@ contains
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'icm_2D_filter'
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), noise(params%nptcls))
+        allocate(odd(params%nptcls), even(params%nptcls), noise(params%nptcls), mask(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd  (iptcl)%new( params%ldim, params%smpd, .false.)
@@ -388,12 +418,14 @@ contains
             call noise(iptcl)%copy(even(iptcl))
             call noise(iptcl)%subtr(odd(iptcl))
             call even (iptcl)%add(odd(iptcl))
-            call even (iptcl)%mul(0.5)
+            minmax      = even(iptcl)%minmax()
+            mask(iptcl) = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
+            if( mask(iptcl) ) call even(iptcl)%mul(0.5)
         enddo
         ! filter
         !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
         do iptcl = 1, params%nptcls
-            call even(iptcl)%icm(noise(iptcl), params%lambda)
+            if( mask(iptcl) ) call even(iptcl)%icm(noise(iptcl), params%lambda)
         enddo
         !$omp end parallel do
         ! write output and destruct

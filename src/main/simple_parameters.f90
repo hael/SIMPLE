@@ -38,12 +38,12 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: force_optlp='no'
-    character(len=3)          :: force_eo='no'
     character(len=3)          :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)          :: gridding='no'        !< to test gridding correction
     character(len=3)          :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
+    character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
@@ -247,6 +247,7 @@ type :: parameters
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
+    integer :: icm_stage=0
     integer :: iptcl=1
     integer :: istart=0
     integer :: it_history=0        !< iteration history for sampling particles for 3D reconstruction
@@ -443,6 +444,7 @@ type :: parameters
     logical :: l_kweight      = .false.
     logical :: l_kweight_shift= .true.
     logical :: l_kweight_rot  = .false.
+    logical :: l_icm          = .false.
     logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_ml_reg       = .true.
@@ -532,12 +534,12 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
         call check_carg('force_optlp',    self%force_optlp)
-        call check_carg('force_eo',       self%force_eo)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('gridding',       self%gridding)
+        call check_carg('icm',            self%icm)
         call check_carg('imgkind',        self%imgkind)
         call check_carg('incrreslim',     self%incrreslim)
         call check_carg('interpfun',      self%interpfun)
@@ -697,6 +699,7 @@ contains
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fromf',          self%fromf)
         call check_iarg('grow',           self%grow)
+        call check_iarg('icm_stage',      self%icm_stage)
         call check_iarg('it_history',     self%it_history)
         call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('lp_iters',       self%lp_iters)
@@ -1346,8 +1349,10 @@ contains
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
-        ! set nonuniform flag
+        ! set reference filtering flag
         if( cline%defined('nonuniform') ) self%l_nonuniform = trim(self%nonuniform).eq.'yes'
+        if( cline%defined('icm') ) self%l_icm = (trim(self%icm).eq.'yes')
+        if( self%l_icm .and. self%l_nonuniform ) THROW_HARD('Nonuniform & ICM filters are exclusive!')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
@@ -1541,7 +1546,7 @@ contains
         if( self%l_ml_reg )then
             self%l_ml_reg = self%l_needs_sigma .or. self%cc_objfun==OBJFUN_EUCLID
         endif
-        if( self%l_nonuniform ) self%l_ml_reg = .false.
+        if( self%l_nonuniform .or. self%l_icm ) self%l_ml_reg = .false.
         ! resolution limit
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor

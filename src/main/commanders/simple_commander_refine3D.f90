@@ -914,14 +914,14 @@ contains
         ! read reference volumes and create polar projections
         do s=1,params%nstates
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params%vols(s), do_center, xyz)
-            if( trim(params_glob%force_eo).eq.'yes' )then
-                call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
-            else
-                if( params_glob%l_lpset )then
-                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
-                else
+            if( params_glob%l_lpset )then
+                if( params_glob%l_icm )then
                     call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
+                else
+                    call read_and_filter_refvols( cline, params_glob%vols(s), params_glob%vols(s) )
                 endif
+            else
+                call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
             endif
             ! PREPARE E/O VOLUMES
             call preprefvol(cline, s, do_center, xyz, .false.)
