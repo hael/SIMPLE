@@ -489,11 +489,16 @@ contains
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
-        type(image)       :: mskvol
+        type(image)       :: mskvol, noise
         real, allocatable :: filter(:)
-        ! ensure correct build_glob%vol dimensions
-        call build_glob%vol%read_and_crop(    fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
-        call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        ! Read & ensure correct volumes dimensions
+        call build_glob%vol%read_and_crop(fname_even, params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        if( trim(fname_even) == trim(fname_odd) )then
+            call build_glob%vol_odd%copy(build_glob%vol)
+        else
+            call build_glob%vol_odd%read_and_crop(fname_odd,  params_glob%box, params_glob%smpd, params_glob%box_crop, params_glob%smpd_crop)
+        endif
+        ! filtering
         if( params_glob%l_nonuniform )then
             if( params_glob%l_filemsk )then
                 call mskvol%read_and_crop(params_glob%mskfile, params_glob%box, params_glob%smpd,&
@@ -528,6 +533,14 @@ contains
             call mskvol%kill
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
+        else if( params_glob%l_icm .and. params_glob%l_lpset )then
+            call noise%copy(build_glob%vol)
+            call noise%subtr(build_glob%vol_odd)
+            call build_glob%vol%add(build_glob%vol_odd)
+            call build_glob%vol%mul(0.5)
+            call build_glob%vol%icm3D(noise, params_glob%lambda)
+            call build_glob%vol_odd%copy(build_glob%vol)
+            call noise%kill
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
@@ -690,7 +703,7 @@ contains
         type(ctfparams), allocatable :: ctfparms(:)
         type(ori)        :: orientation
         real             :: shift(2), sdev_noise
-        integer          :: batchlims(2), iptcl, i, i_batch, ibatch, m,n
+        integer          :: batchlims(2), iptcl, i, i_batch, ibatch
         integer,          allocatable :: pops(:)
         integer :: istate
         if( params_glob%l_ml_reg )then
@@ -712,7 +725,6 @@ contains
         ! allocate arrays
         allocate(prev_fpls(MAXIMGBATCHSZ),fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
         ! gridding batch loop
-        m = 0
         do i_batch=1,nptcls2update,MAXIMGBATCHSZ
             batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
             call discrete_read_imgbatch( nptcls2update, pinds, batchlims)
@@ -743,12 +755,10 @@ contains
                 call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
                 call prev_oris%get_ori(iptcl, orientation)
                 if( orientation%get_updatecnt() > 1 )then
-                    m = m+1
                     call grid_ptcl(prev_fpls(ibatch), build_glob%pgrpsyms, orientation)
                 endif
             end do
         end do
-        print *,'tot neg ',params_glob%part, nptcls2update, m
         ! normalise structure factors
         call norm_struct_facts( cline, which_iter)
         ! destruct

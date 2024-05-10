@@ -686,6 +686,7 @@ contains
         integer, parameter :: SYMSEARCH_ITER = 3
         integer, parameter :: MLREG_ITER     = 2 ! in [2;5]
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES ! in [1;NSTAGES+1]
+        integer, parameter :: ICM_STAGE_DEFAULT   = 2       ! in [1;NSTAGES+1]
         ! commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
@@ -722,6 +723,9 @@ contains
         if( .not. cline%defined('pgrp')         ) call cline%set('pgrp',          'c1')
         if( .not. cline%defined('pgrp_start')   ) call cline%set('pgrp_start',    'c1')
         if( .not. cline%defined('shift_stage')  ) call cline%set('shift_stage', SHIFT_STAGE_DEFAULT)
+        if( .not. cline%defined('icm')          ) call cline%set('icm',           'no')
+        if( .not. cline%defined('icm_stage')    ) call cline%set('icm_stage', ICM_STAGE_DEFAULT)
+        if( .not. cline%defined('lambda')       ) call cline%set('lambda',          1.)
         ! resolution limit strategy
         l_lpset       = .false.
         l_lpstop_set  = cline%defined('lpstop')
@@ -744,6 +748,8 @@ contains
         call cline%delete('lpstop')
         call cline%delete('lp')
         call cline%delete('shift_stage')
+        call cline%delete('icm_stage')
+        call cline%delete('icm')
         frac_maxits_incr = 0
         maxits_glob      = MAXITS_SHORT1 * (NSTAGES - 2) + MAXITS_SHORT2 * 2 + MAXITS2
         if( params%l_frac_update .and. (.not.params%l_stoch_update) )then
@@ -759,6 +765,13 @@ contains
         if( params%shift_stage < 1 .or. params%shift_stage > NSTAGES+1 )then
             params%shift_stage = min(NSTAGES+1,max(1,params%shift_stage))
             THROW_WARN('SHIFT_STAGE out of range, defaulting to: '//int2str(params%shift_stage))
+        endif
+        if( params%l_icm .and. (params%icm_stage < 1 .or. params%icm_stage > NSTAGES+1) )then
+            params%icm_stage = min(NSTAGES+1,max(1,params%icm_stage))
+            THROW_WARN('ICM_STAGE out of range, defaulting to: '//int2str(params%icm_stage))
+        endif
+        if( params%l_ml_reg .and. params%l_icm )then
+            THROW_HARD('ML_REG & ICM are exclusive!')
         endif
         ! read project
         call spproj%read(params%projfile)
@@ -953,6 +966,11 @@ contains
                 call cline_refine3D%set('nspace', NSPACE2)
                 call cline_refine3D%set('trs',    trslim)
             end if
+            ! ICM filtering
+            if( params%l_icm .and. (it >= params%icm_stage) )then
+                call cline_refine3D%set('icm',   'yes')
+                call cline_refine3D%set('lambda', params%lambda)
+            endif
             if( params%l_stoch_update )then
                 call cline_refine3D%set('it_history', min(3,it)) ! particles sampled in most recent past iterations also included in rec
             endif
@@ -1022,6 +1040,10 @@ contains
             endif
         else
             call cline_refine3D%set('ml_reg', 'no')
+        endif
+        if( params%l_icm .and. (it >= params%icm_stage) )then
+            call cline_refine3D%set('icm',   'yes')
+            call cline_refine3D%set('lambda', params%lambda)
         endif
         ! Final step
         call cline_refine3D%set('box_crop',   params%box_crop)
@@ -1177,7 +1199,7 @@ contains
         real,    parameter :: LPSTART_DEFAULT = 30., LPSTOP_DEFAULT=LP_DEFAULT
         integer, parameter :: MINBOX  = 88
         integer, parameter :: NSTAGES = 15
-        integer, parameter :: ITERS_PER_STAGE = 20
+        integer, parameter :: ITERS_PER_STAGE = 5
         integer, parameter :: BATCHSZ = 500
         integer, parameter :: NSPACE1=500, NSPACE2=1000, NSPACE3=1500
         integer, parameter :: SHIFT_STAGE_DEFAULT = NSTAGES-5
@@ -1320,7 +1342,7 @@ contains
         states       = nint(spproj%os_ptcl3D%get_all('state'))
         nptcls_sel   = count(states==1)
         final_nptcls = min(nptcls_sel,max(200000, BATCHSZ * ITERS_PER_STAGE * NSTAGES))
-        ini_nptcls   = min(nptcls_sel, BATCHSZ * ITERS_PER_STAGE)
+        ini_nptcls   = min(nptcls_sel, 10000)
         ! TODO: when nptcls_sel > 200000
         allocate(vec(nptcls_sel),source=0)
         do it = NSTAGES,1,-1
@@ -1339,8 +1361,6 @@ contains
             endif
         enddo
         deallocate(vec)
-        params%batchfrac = 1. / ITERS_PER_STAGE
-        call cline_refine3D%set('batchfrac', params%batchfrac)
         ! Main loop
         iter = 0
         do it = 1,NSTAGES
@@ -1356,7 +1376,7 @@ contains
             call spproj%read_segment('ptcl3D', params%projfile)
             call spproj%os_ptcl3D%set_all('state',   real(vec))
             call spproj%os_ptcl3D%set_all2single('sampled', 0.)
-            if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
+            ! if( it == 1 ) call spproj%os_ptcl3D%set_all('updatecnt', real(vec))
             call spproj%write_segment_inside('ptcl3D', params%projfile)
             deallocate(vec)
             write(logfhandle,'(A,I3,A12,F6.1)')'>>> STAGE ',it,' WITH LP  : ',params%lp
@@ -1367,9 +1387,22 @@ contains
                 call cline_reconstruct3D%set('smpd_crop', params%smpd_crop)
                 call cline_reconstruct3D%set('box_crop',  params%box_crop)
                 call xreconstruct3D_distr%execute_shmem(cline_reconstruct3D)
+                vol = trim(VOL_FBODY)//int2str_pad(1,2)//'_part'
+                do i = 1,params%nparts
+                    call del_file(trim(vol)//int2str_pad(i,params%numlen)//'_even'//trim(params%ext))
+                    call del_file(trim(vol)//int2str_pad(i,params%numlen)//'_odd'//trim(params%ext))
+                enddo
             endif
             ! Stage updates
-            call cline_refine3D%set('maxits', ITERS_PER_STAGE)
+            if( it <= 2 )then
+                params%batchfrac = 0.5
+                call cline_refine3D%set('batchfrac', params%batchfrac)
+                call cline_refine3D%set('maxits', 10)
+            else
+                params%batchfrac = 1. / ITERS_PER_STAGE
+                call cline_refine3D%set('batchfrac', params%batchfrac)
+                call cline_refine3D%set('maxits', ITERS_PER_STAGE)
+            endif
             if( it >= params%shift_stage )then
                 call cline_refine3D%set('trs', trslim)
             else

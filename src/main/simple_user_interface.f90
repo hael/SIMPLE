@@ -233,6 +233,7 @@ type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
 type(simple_input_param) :: icefracthreshold
+type(simple_input_param) :: icm
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: kweight
@@ -1177,6 +1178,7 @@ contains
         call set_param(crowded,        'crowded',      'binary', 'Picking in crowded micrographs?', 'Picking in crowded micrographs?(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(nran,           'nran',         'num',    'Number of random samples', 'Number of entries to randomly sample', '# random samples', .false., 0.)        
         call set_param(pickrefs,       'pickrefs',     'file',   'Stack of class-averages/reprojections for picking', 'Stack of class-averages/reprojections for picking', 'e.g. pickrefs.mrc', .false., '')
+        call set_param(icm,            'icm',          'binary', 'Whether to perform ICM filtering of reference(s)', 'Whether to perform ICM filtering of reference(s)(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2566,7 +2568,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model&
         & from particles',&                                                           ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 1, 0, 4, 6, 1, 2, .true.)
+        &0, 1, 0, 4, 7, 1, 2, .true.)
         abinitio_3Dmodel%gui_submenu_list = "model,filter,mask,compute"
         abinitio_3Dmodel%advanced = .false.                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2608,6 +2610,7 @@ contains
         call abinitio_3Dmodel%set_gui_params('filt_ctrls', 6, submenu="filter")
         abinitio_3Dmodel%filt_ctrls(6)%descr_placeholder = '(yes|no){no}'
         abinitio_3Dmodel%filt_ctrls(6)%cval_default      = 'no'
+        call abinitio_3Dmodel%set_input('filt_ctrls', 7, icm)
         ! mask controls
         call abinitio_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
         call abinitio_3Dmodel%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
