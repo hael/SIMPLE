@@ -3,21 +3,13 @@ add_executable(${SIMPLE_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/si
 add_executable(${SINGLE_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
 add_executable(${STREAM_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
 add_executable(${SIMPLE_PRIVATE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
-#set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
+set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
 # target_link_libraries(${SIMPLE_MAIN_TARGETS} ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_EXE} PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SINGLE_EXE} PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${STREAM_EXE} PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_PRIVATE_EXE} PUBLIC ${EXTRA_LIBS})
-if(USE_OPENMPI AND USE_MPI)
-    set_target_properties(${SIMPLE_MAIN_TARGETS}
-        PROPERTIES
-        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
-        LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
-        JOB_POOL_COMPILE NUM_JOBS
-    )
-    target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${MPI_Fortran_LIBRARIES})
-elseif(USE_OPENMP)
+if(USE_OPENMP)
     set_target_properties(${SIMPLE_MAIN_TARGETS}
         PROPERTIES
         COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
@@ -46,6 +38,14 @@ elseif(USE_MPI)
         JOB_POOL_COMPILE NUM_JOBS
     )
     target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
+elseif(USE_OPENMPI AND USE_MPI)
+    set_target_properties(${SIMPLE_MAIN_TARGETS}
+        PROPERTIES
+        COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
+        LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
+        JOB_POOL_COMPILE NUM_JOBS
+    )
+    target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${MPI_Fortran_LIBRARIES})
 endif()
 install(TARGETS ${SIMPLE_MAIN_TARGETS}
     ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
@@ -59,7 +59,7 @@ file(GLOB TESTDIRS
     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     "tests/test_*"
 )
-set(DONT_CHECK_RANGE "-fno-range-check")
+
 if(NOT USE_MPI)
     list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
 endif()
@@ -70,6 +70,7 @@ if(NOT USE_OPENACC)
     list(REMOVE_ITEM TESTDIRS "tests/test_openacc")
 endif()
 
+set(DONT_CHECK_RANGE "-fno-range-check")
 if(USE_MPI AND USE_OPENMP)
     set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}")
 elseif(USE_MPI)
@@ -100,21 +101,7 @@ foreach(TESTNAME ${TESTDIRS})
     else()
         add_executable(${TESTEXE} ${TESTSOURCES})
         target_link_libraries(${TESTEXE} ${EXTRA_LIBS})
-        if(USE_MPI AND USE_OPENMP)
-            target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
-            set_target_properties(${TESTEXE} PROPERTIES
-                COMPILE_FLAGS  "${EXTRA_FFLAGS}"
-                LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
-                LANGUAGE Fortran
-            )
-        elseif(USE_MPI)
-            target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
-            set_target_properties(${TESTEXE} PROPERTIES
-                COMPILE_FLAGS  "${EXTRA_FFLAGS}"
-                LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
-                LANGUAGE Fortran
-            )
-        elseif(USE_OPENMP)
+        if(USE_OPENMP)
             set_target_properties(${TESTEXE} PROPERTIES
                 COMPILE_FLAGS "${EXTRA_FFLAGS}"
                 LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
@@ -130,6 +117,20 @@ foreach(TESTNAME ${TESTDIRS})
             set_target_properties(${TESTEXE} PROPERTIES
                 COMPILE_FLAGS "${EXTRA_FFLAGS}"
                 LINK_FLAGS "${OPENACC_Fortran_FLAGS}"
+                LANGUAGE Fortran
+            )
+        elseif(USE_MPI)
+            target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
+            set_target_properties(${TESTEXE} PROPERTIES
+                COMPILE_FLAGS  "${EXTRA_FFLAGS}"
+                LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
+                LANGUAGE Fortran
+            )
+        elseif(USE_MPI AND USE_OPENMP)
+            target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
+            set_target_properties(${TESTEXE} PROPERTIES
+                COMPILE_FLAGS  "${EXTRA_FFLAGS}"
+                LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
                 LANGUAGE Fortran
             )
         endif()
