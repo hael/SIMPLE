@@ -38,7 +38,6 @@
 #    set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
 #endif()
 
-enable_language(Fortran C CXX)
 include(CMakeDetermineFortranCompiler)
 include(CMakeDetermineCompiler)
 include(CMakeFortranInformation)
