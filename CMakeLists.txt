@@ -7,13 +7,16 @@ project(SIMPLE
         VERSION 3.0.0
         DESCRIPTION "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)"
         HOMEPAGE_URL "https://simplecryoem.com"
-        LANGUAGES Fortran C CXX
+        LANGUAGES Fortran C CXX CUDA
 ) 
+enable_language(Fortran C CXX CUDA)
 
 # CTest
 enable_testing()
 include(SimpleTest)
 #return()
+
+find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
 
 #check_fortran_source_compiles("program test
 #error stop
