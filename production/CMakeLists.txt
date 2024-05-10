@@ -1,7 +1,7 @@
 # Add the source files
-add_executable(${SIMPLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
-add_executable(${SINGLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
-add_executable(${STREAM_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
+add_executable(${SIMPLE_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
+add_executable(${SINGLE_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
+add_executable(${STREAM_EXE}         "${CMAKE_CURRENT_SOURCE_DIR}/simple_stream/simple_stream.f90")
 add_executable(${SIMPLE_PRIVATE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
 #set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${STREAM_EXE} ${SIMPLE_PRIVATE_EXE})
 # target_link_libraries(${SIMPLE_MAIN_TARGETS} ${EXTRA_LIBS})
@@ -16,7 +16,7 @@ if(USE_OPENMPI AND USE_MPI)
         LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
         JOB_POOL_COMPILE NUM_JOBS
     )
-    target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC  ${MPI_Fortran_LIBRARIES})
+    target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${MPI_Fortran_LIBRARIES})
 elseif(USE_OPENMP)
     set_target_properties(${SIMPLE_MAIN_TARGETS}
         PROPERTIES
@@ -52,13 +52,6 @@ install(TARGETS ${SIMPLE_MAIN_TARGETS}
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     CONFIGURATIONS DEBUG|RELEASE
 )
-
-# ENABLE TESTING
-#if(${PROJECT_NAME}_BUILD_TESTS)
-#    if(VERBOSE)
-#        include(CTest)
-#    endif()
-#endif()
 
 # Set up how to compile the tests
 file(GLOB TESTDIRS
@@ -120,11 +113,23 @@ foreach(TESTNAME ${TESTDIRS})
                 COMPILE_FLAGS  "${EXTRA_FFLAGS}"
                 LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
                 LANGUAGE Fortran
-             )
+            )
         elseif(USE_OPENMP)
             set_target_properties(${TESTEXE} PROPERTIES
                 COMPILE_FLAGS "${EXTRA_FFLAGS}"
                 LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
+                LANGUAGE Fortran
+            )
+        elseif(USE_CUDA)
+            set_target_properties(${TESTEXE} PROPERTIES
+                COMPILE_FLAGS "${EXTRA_FFLAGS}"
+                LINK_FLAGS "${CUDA_Fortran_FLAGS}"
+                LANGUAGE Fortran
+            )
+        elseif(USE_OPENACC)
+            set_target_properties(${TESTEXE} PROPERTIES
+                COMPILE_FLAGS "${EXTRA_FFLAGS}"
+                LINK_FLAGS "${OPENACC_Fortran_FLAGS}"
                 LANGUAGE Fortran
             )
         endif()
@@ -138,7 +143,7 @@ foreach(TESTNAME ${TESTDIRS})
                  install(FILES ${TXTNAME}
                      DESTINATION ${CMAKE_INSTALL_PREFIX}/tests/${TESTNAME}
                      CONFIGURATIONS DEBUG|RELEASE
-                     PERMISSIONS  OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
+                     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
                  )
              endforeach()
         endif()
