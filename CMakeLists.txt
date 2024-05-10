@@ -14,6 +14,8 @@ enable_testing()
 include(SimpleTest)
 #return()
 
+find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
+
 #check_fortran_source_compiles("program test
 #error stop
 #end program"
